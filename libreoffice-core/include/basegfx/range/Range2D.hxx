@@ -19,7 +19,6 @@
 
 #pragma once
 
-#include <basegfx/basegfxdllapi.h>
 #include <basegfx/range/basicrange.hxx>
 #include <basegfx/tuple/Tuple2D.hxx>
 
@@ -164,6 +163,13 @@ public:
     {
         maRangeX.grow(fValue);
         maRangeY.grow(fValue);
+    }
+
+    /// grow set by axis aware values from rTuple
+    void grow(const Tuple2D<TYPE>& rTuple)
+    {
+        maRangeX.grow(rTuple.getX());
+        maRangeY.grow(rTuple.getY());
     }
 
     /// clamp value on range

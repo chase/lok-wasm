@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SW_SOURCE_CORE_INC_UNOFIELD_HXX
 #define INCLUDED_SW_SOURCE_CORE_INC_UNOFIELD_HXX
 
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/container/XEnumeration.hpp>
 #include <com/sun/star/util/XUpdatable.hpp>
@@ -39,7 +38,6 @@ class SwSetExpField;
 typedef ::cppu::WeakImplHelper
 <   css::beans::XPropertySet
 ,   css::lang::XServiceInfo
-,   css::lang::XUnoTunnel
 ,   css::lang::XComponent
 > SwXFieldMaster_Base;
 
@@ -56,7 +54,7 @@ private:
     SwXFieldMaster(SwFieldType& rType, SwDoc * pDoc);
 
     /// descriptor
-    SwXFieldMaster(SwDoc* pDoc, SwFieldIds nResId);
+    SwXFieldMaster(SwDoc& rDoc, SwFieldIds nResId);
 
 public:
 
@@ -68,12 +66,6 @@ public:
     static OUString LocalizeFormula(const SwSetExpField& rField, const OUString& rFormula, bool bQuery);
 
     SwFieldType* GetFieldType(bool bDontCreate = false) const;
-
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& rIdentifier) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -116,7 +108,6 @@ typedef ::cppu::WeakImplHelper
 <   css::text::XDependentTextField
 ,   css::lang::XServiceInfo
 ,   css::beans::XPropertySet
-,   css::lang::XUnoTunnel
 ,   css::util::XUpdatable
 > SwXTextField_Base;
 
@@ -142,18 +133,12 @@ private:
 public:
     SwServiceType GetServiceId() const;
 
-    static void TransmuteLeadToInputField(SwSetExpField & rField);
+    static void TransmuteLeadToInputField(SwSetExpField & rField, sal_uInt16 const*const pSubType);
 
     /// @return an SwXTextField, either an already existing one or a new one
     static rtl::Reference<SwXTextField>
         CreateXTextField(SwDoc * pDoc, SwFormatField const* pFormat,
                 SwServiceType nServiceId = SwServiceType::Invalid);
-
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& rIdentifier) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

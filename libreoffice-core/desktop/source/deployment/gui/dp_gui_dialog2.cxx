@@ -77,7 +77,7 @@ using namespace ::com::sun::star::system;
 namespace dp_gui {
 
 constexpr OUStringLiteral USER_PACKAGE_MANAGER = u"user";
-constexpr OUStringLiteral SHARED_PACKAGE_MANAGER = u"shared";
+constexpr OUString SHARED_PACKAGE_MANAGER = u"shared"_ustr;
 constexpr OUStringLiteral BUNDLED_PACKAGE_MANAGER = u"bundled";
 
 // ExtBoxWithBtns_Impl
@@ -88,7 +88,7 @@ class ExtBoxWithBtns_Impl : public ExtensionBox_Impl
     ExtMgrDialog*   m_pParent;
 
     void            SetButtonStatus( const TEntry_Impl& rEntry );
-    OString         ShowPopupMenu( const Point &rPos, const tools::Long nPos );
+    OUString        ShowPopupMenu( const Point &rPos, const tools::Long nPos );
 
 public:
     explicit ExtBoxWithBtns_Impl(std::unique_ptr<weld::ScrolledWindow> xScroll);
@@ -200,7 +200,7 @@ bool ExtBoxWithBtns_Impl::Command(const CommandEvent& rCEvt)
 
     const Point aMousePos(rCEvt.GetMousePosPixel());
     const auto nPos = PointToPos(aMousePos);
-    OString sCommand = ShowPopupMenu(aMousePos, nPos);
+    OUString sCommand = ShowPopupMenu(aMousePos, nPos);
 
     if (sCommand == "CMD_ENABLE")
         m_pParent->enablePackage( GetEntryData( nPos )->m_xPackage, true );
@@ -221,7 +221,7 @@ bool ExtBoxWithBtns_Impl::Command(const CommandEvent& rCEvt)
     return true;
 }
 
-OString ExtBoxWithBtns_Impl::ShowPopupMenu( const Point & rPos, const tools::Long nPos )
+OUString ExtBoxWithBtns_Impl::ShowPopupMenu( const Point & rPos, const tools::Long nPos )
 {
     if ( nPos >= static_cast<tools::Long>(getItemCount()) )
         return "CMD_NONE";
@@ -777,7 +777,7 @@ IMPL_LINK_NOARG(ExtMgrDialog, HandleCloseBtn, weld::Button&, void)
 
 IMPL_LINK( ExtMgrDialog, startProgress, void*, _bLockInterface, void )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     bool bLockInterface = static_cast<bool>(_bLockInterface);
 
     if ( m_bStartProgress && !m_bHasProgress )
@@ -816,7 +816,7 @@ IMPL_LINK( ExtMgrDialog, startProgress, void*, _bLockInterface, void )
 
 void ExtMgrDialog::showProgress( bool _bStart )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     bool bStart = _bStart;
 
@@ -842,7 +842,7 @@ void ExtMgrDialog::updateProgress( const tools::Long nProgress )
 {
     if ( m_nProgress != nProgress )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
         m_nProgress = nProgress;
         m_aIdle.Start();
     }
@@ -852,7 +852,7 @@ void ExtMgrDialog::updateProgress( const tools::Long nProgress )
 void ExtMgrDialog::updateProgress( const OUString &rText,
                                    const uno::Reference< task::XAbortChannel > &xAbortChannel)
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     m_xAbortChannel = xAbortChannel;
     m_sProgressText = rText;
@@ -1080,7 +1080,7 @@ IMPL_LINK_NOARG(UpdateRequiredDialog, HandleCancelBtn, weld::Button&, void)
 
 IMPL_LINK( UpdateRequiredDialog, startProgress, void*, _bLockInterface, void )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     bool bLockInterface = static_cast<bool>(_bLockInterface);
 
     if ( m_bStartProgress && !m_bHasProgress )
@@ -1106,7 +1106,7 @@ IMPL_LINK( UpdateRequiredDialog, startProgress, void*, _bLockInterface, void )
 
 void UpdateRequiredDialog::showProgress( bool _bStart )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     bool bStart = _bStart;
 
@@ -1132,7 +1132,7 @@ void UpdateRequiredDialog::updateProgress( const tools::Long nProgress )
 {
     if ( m_nProgress != nProgress )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
         m_nProgress = nProgress;
         m_aIdle.Start();
     }
@@ -1142,7 +1142,7 @@ void UpdateRequiredDialog::updateProgress( const tools::Long nProgress )
 void UpdateRequiredDialog::updateProgress( const OUString &rText,
                                            const uno::Reference< task::XAbortChannel > &xAbortChannel)
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     m_xAbortChannel = xAbortChannel;
     m_sProgressText = rText;
@@ -1172,7 +1172,7 @@ void UpdateRequiredDialog::updatePackageInfo( const uno::Reference< deployment::
 
 IMPL_LINK_NOARG(UpdateRequiredDialog, HandleUpdateBtn, weld::Button&, void)
 {
-    ::osl::ClearableMutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     std::vector< uno::Reference< deployment::XPackage > > vUpdateEntries;
     sal_Int32 nCount = m_xExtensionBox->GetEntryCount();
@@ -1183,7 +1183,7 @@ IMPL_LINK_NOARG(UpdateRequiredDialog, HandleUpdateBtn, weld::Button&, void)
         vUpdateEntries.push_back( pEntry->m_xPackage );
     }
 
-    aGuard.clear();
+    aGuard.unlock();
 
     m_pManager->getCmdQueue()->checkForUpdates( std::move(vUpdateEntries) );
 }
@@ -1191,7 +1191,7 @@ IMPL_LINK_NOARG(UpdateRequiredDialog, HandleUpdateBtn, weld::Button&, void)
 
 IMPL_LINK_NOARG(UpdateRequiredDialog, HandleCloseBtn, weld::Button&, void)
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     if ( !isBusy() )
     {
@@ -1302,7 +1302,7 @@ bool UpdateRequiredDialog::checkDependencies( const uno::Reference< deployment::
 
 bool UpdateRequiredDialog::hasActiveEntries()
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     bool bRet = false;
     tools::Long nCount = m_xExtensionBox->GetEntryCount();
@@ -1323,7 +1323,7 @@ bool UpdateRequiredDialog::hasActiveEntries()
 
 void UpdateRequiredDialog::disableAllEntries()
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
     incBusy();
 

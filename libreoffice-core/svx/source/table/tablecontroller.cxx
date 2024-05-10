@@ -563,7 +563,7 @@ void SvxTableController::onInsert( sal_uInt16 nSId, const SfxItemSet* pArgs )
 
     RemoveSelection();
 
-    static const OUStringLiteral sSize( u"Size" );
+    static constexpr OUString sSize( u"Size"_ustr );
     const bool bUndo(rModel.IsUndoEnabled());
 
     switch( nSId )
@@ -935,14 +935,13 @@ void SvxTableController::onFormatTable(const SfxRequest& rReq)
     SfxItemSet aNewAttr(rModel.GetItemPool());
 
     // merge drawing layer text distance items into SvxBoxItem used by the dialog
-    SvxBoxItem aBoxItem(TextDistancesToSvxBoxItem(aNewAttr));
-
-    SvxBoxInfoItem aBoxInfoItem( aNewAttr.Get( SDRATTR_TABLE_BORDER_INNER ) );
+    auto xBoxItem(std::make_shared<SvxBoxItem>(TextDistancesToSvxBoxItem(aNewAttr)));
+    auto xBoxInfoItem(std::make_shared<SvxBoxInfoItem>(aNewAttr.Get(SDRATTR_TABLE_BORDER_INNER)));
 
     MergeAttrFromSelectedCells(aNewAttr, false);
-    FillCommonBorderAttrFromSelectedCells( aBoxItem, aBoxInfoItem );
-    aNewAttr.Put( aBoxItem );
-    aNewAttr.Put( aBoxInfoItem );
+    FillCommonBorderAttrFromSelectedCells(*xBoxItem, *xBoxInfoItem);
+    aNewAttr.Put(*xBoxItem);
+    aNewAttr.Put(*xBoxInfoItem);
 
     // Fill in shadow properties.
     const SfxItemSet& rTableItemSet = rTableObj.GetMergedItemSet();
@@ -959,11 +958,11 @@ void SvxTableController::onFormatTable(const SfxRequest& rReq)
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     VclPtr<SfxAbstractTabDialog> xDlg( pFact->CreateSvxFormatCellsDialog(
         rReq.GetFrameWeld(),
-        &aNewAttr,
+        aNewAttr,
         rModel, false) );
 
     // Even Cancel Button is returning positive(101) value,
-    xDlg->StartExecuteAsync([xDlg, this, aBoxItem, aBoxInfoItem](int nResult){
+    xDlg->StartExecuteAsync([xDlg, this, xBoxItem, xBoxInfoItem](int nResult){
         if (nResult == RET_OK)
         {
             SfxItemSet aNewSet(*(xDlg->GetOutputItemSet()));
@@ -975,14 +974,14 @@ void SvxTableController::onFormatTable(const SfxRequest& rReq)
             //unchanged state back to their input properties
             if (aNewSet.GetItemState(SDRATTR_TABLE_BORDER, false) != SfxItemState::SET)
             {
-                aNewSet.Put(aBoxItem);
+                aNewSet.Put(*xBoxItem);
             }
             if (aNewSet.GetItemState(SDRATTR_TABLE_BORDER_INNER, false) != SfxItemState::SET)
             {
-                aNewSet.Put(aBoxInfoItem);
+                aNewSet.Put(*xBoxInfoItem);
             }
 
-            SvxBoxItemToTextDistances(aBoxItem, aNewSet);
+            SvxBoxItemToTextDistances(*xBoxItem, aNewSet);
 
             if (checkTableObject() && mxTable.is())
             {
@@ -1119,7 +1118,7 @@ void SvxTableController::SetTableStyle( const SfxItemSet* pArgs )
     if(!pArgs || (SfxItemState::SET != pArgs->GetItemState(SID_TABLE_STYLE, false)))
         return;
 
-    const SfxStringItem* pArg = dynamic_cast< const SfxStringItem* >( &pArgs->Get( SID_TABLE_STYLE ) );
+    const SfxStringItem* pArg = &pArgs->Get( SID_TABLE_STYLE );
     if( !(pArg && mxTable.is()) )
         return;
 
@@ -2380,8 +2379,8 @@ void SvxTableController::updateSelectionOverlay()
 
     if(SfxViewShell* pViewShell = SfxViewShell::Current())
     {
-        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_SELECTION_AREA, aSelection.toString().getStr());
-        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, aSelection.toString().getStr());
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_SELECTION_AREA, aSelection.toString());
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, aSelection.toString());
     }
 }
 
@@ -2398,10 +2397,10 @@ void SvxTableController::destroySelectionOverlay()
         // Clear the LOK text selection so far provided by this table.
         if(SfxViewShell* pViewShell = SfxViewShell::Current())
         {
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_SELECTION_AREA, "EMPTY");
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_START, "EMPTY");
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_END, "EMPTY");
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, "EMPTY");
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_SELECTION_AREA, "EMPTY"_ostr);
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_START, "EMPTY"_ostr);
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_END, "EMPTY"_ostr);
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, "EMPTY"_ostr);
         }
     }
 }

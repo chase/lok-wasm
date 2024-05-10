@@ -101,11 +101,12 @@
 #include <memory>
 #include <utility>
 
-constexpr OUStringLiteral SC_LOCALE = u"Locale";
+constexpr OUString SC_LOCALE = u"Locale"_ustr;
 constexpr OUStringLiteral SC_CURRENCYSYMBOL = u"CurrencySymbol";
 constexpr OUStringLiteral SC_REPEAT_ROW = u"repeat-row";
 constexpr OUStringLiteral SC_FILTER = u"filter";
 constexpr OUStringLiteral SC_PRINT_RANGE = u"print-range";
+constexpr OUStringLiteral SC_HIDDEN = u"hidden";
 
 using namespace com::sun::star;
 using namespace ::xmloff::token;
@@ -336,11 +337,8 @@ SvXMLImportContext *ScXMLImport::CreateFastContext( sal_Int32 nElement,
 
     case XML_ELEMENT( OFFICE, XML_DOCUMENT ):
     {
-        uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-            GetModel(), uno::UNO_QUERY_THROW);
         // flat OpenDocument file format
-        pContext = new ScXMLFlatDocContext_Impl( *this,
-            xDPS->getDocumentProperties());
+        pContext = new ScXMLFlatDocContext_Impl( *this, GetScModel()->getDocumentProperties());
         break;
     }
 
@@ -397,7 +395,7 @@ ScXMLImport::~ScXMLImport() noexcept
     //call SvXMLImport dtor contents before deleting pSolarMutexGuard
     cleanup();
 
-    pSolarMutexGuard.reset();
+    moSolarMutexGuard.reset();
 }
 
 void ScXMLImport::initialize( const css::uno::Sequence<css::uno::Any>& aArguments )
@@ -453,10 +451,8 @@ SvXMLImportContext *ScXMLImport::CreateMetaContext(
 
     if (getImportFlags() & SvXMLImportFlags::META)
     {
-        uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-            GetModel(), uno::UNO_QUERY_THROW);
         uno::Reference<document::XDocumentProperties> const xDocProps(
-            (IsStylesOnlyMode()) ? nullptr : xDPS->getDocumentProperties());
+            (IsStylesOnlyMode()) ? nullptr : GetScModel()->getDocumentProperties());
         pContext = new SvXMLMetaDocumentContext(*this, xDocProps);
     }
 
@@ -722,7 +718,7 @@ void ScXMLImport::SetViewSettings(const uno::Sequence<beans::PropertyValue>& aVi
     if (!(nHeight && nWidth && GetModel().is()))
         return;
 
-    ScModelObj* pDocObj(comphelper::getFromUnoTunnel<ScModelObj>( GetModel() ));
+    ScModelObj* pDocObj( GetScModel() );
     if (!pDocObj)
         return;
 
@@ -738,10 +734,7 @@ void ScXMLImport::SetViewSettings(const uno::Sequence<beans::PropertyValue>& aVi
 
 void ScXMLImport::SetConfigurationSettings(const uno::Sequence<beans::PropertyValue>& aConfigProps)
 {
-    if (!GetModel().is())
-        return;
-
-    uno::Reference <lang::XMultiServiceFactory> xMultiServiceFactory(GetModel(), uno::UNO_QUERY);
+    rtl::Reference<ScModelObj> xMultiServiceFactory(GetScModel());
     if (!xMultiServiceFactory.is())
         return;
 
@@ -981,7 +974,7 @@ void ScXMLImport::SetStyleToRanges()
 
     if (!sPrevStyleName.isEmpty())
     {
-        uno::Reference <beans::XPropertySet> xProperties (xSheetCellRanges, uno::UNO_QUERY);
+        uno::Reference <beans::XPropertySet> xProperties (mxSheetCellRanges);
         if (xProperties.is())
         {
             XMLTableStylesContext *pStyles(static_cast<XMLTableStylesContext *>(GetAutoStyles()));
@@ -1000,19 +993,19 @@ void ScXMLImport::SetStyleToRanges()
                 sal_uInt64 nKey = 0;
                 if ((aAny >>= nKey) && nKey)
                 {
-                    ScFormatSaveData* pFormatSaveData = comphelper::getFromUnoTunnel<ScModelObj>(GetModel())->GetFormatSaveData();
+                    ScFormatSaveData* pFormatSaveData = GetScModel()->GetFormatSaveData();
                     pFormatSaveData->maIDToName.insert(std::pair<sal_uInt64, OUString>(nKey, sPrevStyleName));
                 }
 
                 // store first cell of first range for each style, once per sheet
-                uno::Sequence<table::CellRangeAddress> aAddresses(xSheetCellRanges->getRangeAddresses());
+                uno::Sequence<table::CellRangeAddress> aAddresses(mxSheetCellRanges->getRangeAddresses());
                 pStyle->ApplyCondFormat(aAddresses);
                 if ( aAddresses.hasElements() )
                 {
                     const table::CellRangeAddress& rRange = aAddresses[0];
                     if ( rRange.Sheet != pStyle->GetLastSheet() )
                     {
-                        ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetModel())->GetSheetSaveData();
+                        ScSheetSaveData* pSheetData = GetScModel()->GetSheetSaveData();
                         pSheetData->AddCellStyle( sPrevStyleName,
                             ScAddress( static_cast<SCCOL>(rRange.StartColumn), static_cast<SCROW>(rRange.StartRow), static_cast<SCTAB>(rRange.Sheet) ) );
                         pStyle->SetLastSheet(rRange.Sheet);
@@ -1032,13 +1025,11 @@ void ScXMLImport::SetStyleToRanges()
     }
     if (GetModel().is())
     {
-        uno::Reference <lang::XMultiServiceFactory> xMultiServiceFactory(GetModel(), uno::UNO_QUERY);
-        if (xMultiServiceFactory.is())
-            xSheetCellRanges.set(uno::Reference <sheet::XSheetCellRangeContainer>(
-            xMultiServiceFactory->createInstance("com.sun.star.sheet.SheetCellRanges"),
-            uno::UNO_QUERY));
+        rtl::Reference<ScModelObj> xMultiServiceFactory(GetScModel());
+        mxSheetCellRanges = &dynamic_cast<ScCellRangesObj&>(
+            *xMultiServiceFactory->createInstance("com.sun.star.sheet.SheetCellRanges"));
     }
-    OSL_ENSURE(xSheetCellRanges.is(), "didn't get SheetCellRanges");
+    OSL_ENSURE(mxSheetCellRanges.is(), "didn't get SheetCellRanges");
 }
 
 void ScXMLImport::SetStyleToRanges(const ScRangeList& rRanges, const OUString* pStyleName,
@@ -1075,15 +1066,13 @@ void ScXMLImport::SetStyleToRanges(const ScRangeList& rRanges, const OUString* p
             sPrevCurrency.clear();
     }
 
-    if (!xSheetCellRanges.is() && GetModel().is())
+    if (!mxSheetCellRanges.is() && GetModel().is())
     {
-        uno::Reference <lang::XMultiServiceFactory> xMultiServiceFactory(GetModel(), uno::UNO_QUERY);
-        if (xMultiServiceFactory.is())
-            xSheetCellRanges.set(uno::Reference <sheet::XSheetCellRangeContainer>(xMultiServiceFactory->createInstance("com.sun.star.sheet.SheetCellRanges"), uno::UNO_QUERY));
-        OSL_ENSURE(xSheetCellRanges.is(), "didn't get SheetCellRanges");
-
+        rtl::Reference<ScModelObj> xMultiServiceFactory(GetScModel());
+        mxSheetCellRanges = &dynamic_cast<ScCellRangesObj&>(*xMultiServiceFactory->createInstance("com.sun.star.sheet.SheetCellRanges"));
+        OSL_ENSURE(mxSheetCellRanges.is(), "didn't get SheetCellRanges");
     }
-    static_cast<ScCellRangesObj*>(xSheetCellRanges.get())->SetNewRanges(rRanges);
+    mxSheetCellRanges->SetNewRanges(rRanges);
 }
 
 bool ScXMLImport::SetNullDateOnUnitConverter()
@@ -1126,7 +1115,7 @@ void SAL_CALL ScXMLImport::setTargetDocument( const css::uno::Reference< css::la
     if (!pDoc)
         throw lang::IllegalArgumentException();
 
-    if (ScDocShell* pDocSh = static_cast<ScDocShell*>(pDoc->GetDocumentShell()))
+    if (ScDocShell* pDocSh = pDoc->GetDocumentShell())
         pDocSh->SetInitialLinkUpdate( pDocSh->GetMedium());
 
     mpDocImport.reset(new ScDocumentImport(*pDoc));
@@ -1144,7 +1133,7 @@ void SAL_CALL ScXMLImport::startDocument()
     SvXMLImport::startDocument();
     if (pDoc && !pDoc->IsImportingXML())
     {
-        comphelper::getFromUnoTunnel<ScModelObj>(GetModel())->BeforeXMLLoading();
+        GetScModel()->BeforeXMLLoading();
         bSelfImportingXMLSet = true;
     }
 
@@ -1159,7 +1148,7 @@ void SAL_CALL ScXMLImport::startDocument()
         if (GetModel().is())
         {
             // store initial namespaces, to find the ones that were added from the file later
-            ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetModel())->GetSheetSaveData();
+            ScSheetSaveData* pSheetData = GetScModel()->GetSheetSaveData();
             const SvXMLNamespaceMap& rNamespaces = GetNamespaceMap();
             pSheetData->StoreInitialNamespaces(rNamespaces);
         }
@@ -1170,8 +1159,7 @@ void SAL_CALL ScXMLImport::startDocument()
             xImportInfo.is() ? xImportInfo->getPropertySetInfo() : nullptr);
     if (xPropertySetInfo.is())
     {
-        OUString const sOrganizerMode(
-            "OrganizerMode");
+        static constexpr OUString sOrganizerMode(u"OrganizerMode"_ustr);
         if (xPropertySetInfo->hasPropertyByName(sOrganizerMode))
         {
             bool bStyleOnly(false);
@@ -1203,6 +1191,8 @@ sal_Int32 ScXMLImport::GetRangeType(std::u16string_view sRangeType)
                 nRangeType |= sheet::NamedRangeFlag::FILTER_CRITERIA;
             else if (sTemp == SC_PRINT_RANGE)
                 nRangeType |= sheet::NamedRangeFlag::PRINT_AREA;
+            else if (sTemp == SC_HIDDEN)
+                nRangeType |= sheet::NamedRangeFlag::HIDDEN;
         }
         else if (i < sRangeType.size())
             sBuffer.append(sRangeType[i]);
@@ -1216,7 +1206,7 @@ void ScXMLImport::SetLabelRanges()
     if (maMyLabelRanges.empty())
         return;
 
-    uno::Reference <beans::XPropertySet> xPropertySet (GetModel(), uno::UNO_QUERY);
+    rtl::Reference<ScModelObj> xPropertySet (GetScModel());
     if (!xPropertySet.is())
         return;
 
@@ -1276,6 +1266,7 @@ public:
         if ( nUnoType & sheet::NamedRangeFlag::PRINT_AREA )         nNewType |= ScRangeData::Type::PrintArea;
         if ( nUnoType & sheet::NamedRangeFlag::COLUMN_HEADER )      nNewType |= ScRangeData::Type::ColHeader;
         if ( nUnoType & sheet::NamedRangeFlag::ROW_HEADER )         nNewType |= ScRangeData::Type::RowHeader;
+        if ( nUnoType & sheet::NamedRangeFlag::HIDDEN )             nNewType |= ScRangeData::Type::Hidden;
 
         // Insert a new name.
         ScAddress aPos;
@@ -1365,29 +1356,26 @@ void SAL_CALL ScXMLImport::endDocument()
         {
             mpDocImport->finalize();
 
-            uno::Reference<document::XViewDataSupplier> xViewDataSupplier(GetModel(), uno::UNO_QUERY);
-            if (xViewDataSupplier.is())
+            rtl::Reference<ScModelObj> xViewDataSupplier(GetScModel());
+            uno::Reference<container::XIndexAccess> xIndexAccess(xViewDataSupplier->getViewData());
+            if (xIndexAccess.is() && xIndexAccess->getCount() > 0)
             {
-                uno::Reference<container::XIndexAccess> xIndexAccess(xViewDataSupplier->getViewData());
-                if (xIndexAccess.is() && xIndexAccess->getCount() > 0)
+                uno::Sequence< beans::PropertyValue > aSeq;
+                if (xIndexAccess->getByIndex(0) >>= aSeq)
                 {
-                    uno::Sequence< beans::PropertyValue > aSeq;
-                    if (xIndexAccess->getByIndex(0) >>= aSeq)
+                    for (const auto& rProp : std::as_const(aSeq))
                     {
-                        for (const auto& rProp : std::as_const(aSeq))
+                        OUString sName(rProp.Name);
+                        if (sName == SC_ACTIVETABLE)
                         {
-                            OUString sName(rProp.Name);
-                            if (sName == SC_ACTIVETABLE)
+                            OUString sTabName;
+                            if(rProp.Value >>= sTabName)
                             {
-                                OUString sTabName;
-                                if(rProp.Value >>= sTabName)
+                                SCTAB nTab(0);
+                                if (pDoc->GetTable(sTabName, nTab))
                                 {
-                                    SCTAB nTab(0);
-                                    if (pDoc->GetTable(sTabName, nTab))
-                                    {
-                                        pDoc->SetVisibleTab(nTab);
-                                        break;
-                                    }
+                                    pDoc->SetVisibleTab(nTab);
+                                    break;
                                 }
                             }
                         }
@@ -1420,7 +1408,7 @@ void SAL_CALL ScXMLImport::endDocument()
         {
             // set "valid stream" flags after loading (before UpdateRowHeights, so changed formula results
             // in UpdateRowHeights can already clear the flags again)
-            ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetModel())->GetSheetSaveData();
+            ScSheetSaveData* pSheetData = GetScModel()->GetSheetSaveData();
 
             SCTAB nTabCount = pDoc->GetTableCount();
             for (SCTAB nTab=0; nTab<nTabCount; ++nTab)
@@ -1432,7 +1420,8 @@ void SAL_CALL ScXMLImport::endDocument()
         }
 
         // There are rows with optimal height which need to be updated
-        if (pDoc && !maRecalcRowRanges.empty())
+        if (pDoc && !maRecalcRowRanges.empty() && pDoc->GetDocumentShell()
+            && pDoc->GetDocumentShell()->GetRecalcRowHeightsMode())
         {
             bool bLockHeight = pDoc->IsAdjustHeightLocked();
             if (bLockHeight)
@@ -1440,7 +1429,7 @@ void SAL_CALL ScXMLImport::endDocument()
                 pDoc->UnlockAdjustHeight();
             }
 
-            ScSizeDeviceProvider aProv(static_cast<ScDocShell*>(pDoc->GetDocumentShell()));
+            ScSizeDeviceProvider aProv(pDoc->GetDocumentShell());
             ScDocRowHeightUpdater aUpdater(*pDoc, aProv.GetDevice(), aProv.GetPPTX(), aProv.GetPPTY(), &maRecalcRowRanges);
             aUpdater.update();
 
@@ -1461,19 +1450,17 @@ void SAL_CALL ScXMLImport::endDocument()
                 if (!pPage)
                     continue;
                 bool bNegativePage = pDoc->IsNegativePage(nTab);
-                const size_t nCount = pPage->GetObjCount();
-                for (size_t i = 0; i < nCount; ++i)
+                for (const rtl::Reference<SdrObject>& pObj : *pPage)
                 {
-                    SdrObject* pObj = pPage->GetObj(i);
                     ScDrawObjData* pData
-                        = ScDrawLayer::GetObjDataTab(pObj, nTab);
+                        = ScDrawLayer::GetObjDataTab(pObj.get(), nTab);
                     // Existence of pData means, that it is a cell anchored object
                     if (pData)
                     {
                         // Finish and correct import based on full size (no hidden row/col) and LTR
-                        pDrawLayer->InitializeCellAnchoredObj(pObj, *pData);
+                        pDrawLayer->InitializeCellAnchoredObj(pObj.get(), *pData);
                         // Adapt object to hidden row/col and RTL
-                        pDrawLayer->RecalcPos(pObj, *pData, bNegativePage,
+                        pDrawLayer->RecalcPos(pObj.get(), *pData, bNegativePage,
                                               true /*bUpdateNoteCaptionPos*/);
                     }
                 }
@@ -1482,11 +1469,9 @@ void SAL_CALL ScXMLImport::endDocument()
 
         aTables.FixupOLEs();
     }
-    if (GetModel().is())
+    if (GetScModel())
     {
-        uno::Reference<document::XActionLockable> xActionLockable(GetModel(), uno::UNO_QUERY);
-        if (xActionLockable.is())
-            xActionLockable->removeActionLock();
+        GetScModel()->removeActionLock();
     }
     SvXMLImport::endDocument();
 
@@ -1496,7 +1481,7 @@ void SAL_CALL ScXMLImport::endDocument()
     }
 
     if(pDoc && bSelfImportingXMLSet)
-        comphelper::getFromUnoTunnel<ScModelObj>(GetModel())->AfterXMLLoading();
+        GetScModel()->AfterXMLLoading();
 }
 
 // XEventListener
@@ -1529,8 +1514,8 @@ void ScXMLImport::LockSolarMutex()
 
     if (nSolarMutexLocked == 0)
     {
-        OSL_ENSURE(!pSolarMutexGuard, "Solar Mutex is locked");
-        pSolarMutexGuard.reset(new SolarMutexGuard());
+        OSL_ENSURE(!moSolarMutexGuard, "Solar Mutex is locked");
+        moSolarMutexGuard.emplace();
     }
     ++nSolarMutexLocked;
 }
@@ -1542,19 +1527,19 @@ void ScXMLImport::UnlockSolarMutex()
         nSolarMutexLocked--;
         if (nSolarMutexLocked == 0)
         {
-            OSL_ENSURE(pSolarMutexGuard, "Solar Mutex is always unlocked");
-            pSolarMutexGuard.reset();
+            OSL_ENSURE(moSolarMutexGuard, "Solar Mutex is always unlocked");
+            moSolarMutexGuard.reset();
         }
     }
 }
 
-sal_Int32 ScXMLImport::GetByteOffset() const
+sal_Int64 ScXMLImport::GetByteOffset() const
 {
-    sal_Int32 nOffset = -1;
+    sal_Int64 nOffset = -1;
     uno::Reference<xml::sax::XLocator> xLocator = GetLocator();
     uno::Reference<io::XSeekable> xSeek( xLocator, uno::UNO_QUERY );        //! should use different interface
     if ( xSeek.is() )
-        nOffset = static_cast<sal_Int32>(xSeek->getPosition());
+        nOffset = xSeek->getPosition();
     return nOffset;
 }
 
@@ -1677,6 +1662,11 @@ ScMyImpDetectiveOpArray* ScXMLImport::GetDetectiveOpArray()
     if (!pDetectiveOpArray)
         pDetectiveOpArray.reset(new ScMyImpDetectiveOpArray());
     return pDetectiveOpArray.get();
+}
+
+ScModelObj* ScXMLImport::GetScModel() const
+{
+    return static_cast<ScModelObj*>(GetModel().get());
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT bool TestImportFODS(SvStream &rStream)

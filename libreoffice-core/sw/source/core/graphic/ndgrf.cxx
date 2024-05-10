@@ -76,21 +76,6 @@ SwGrfNode::SwGrfNode(
     ReRead(rGrfName, rFltName, pGraphic, false);
 }
 
-SwGrfNode::SwGrfNode( SwNode& rWhere,
-                      const GraphicObject& rGrfObj,
-                      SwGrfFormatColl *pGrfColl,
-                      SwAttrSet const * pAutoAttr ) :
-    SwNoTextNode( rWhere, SwNodeType::Grf, pGrfColl, pAutoAttr ),
-    maGrfObj(rGrfObj),
-    mbInBaseLinkSwapIn(true),
-    // #i73788#
-    mbLinkedInputStreamReady( false ),
-    mbIsStreamReadOnly( false )
-{
-    mbInSwapIn = mbChangeTwipSize  =
-        mbFrameInPaint = mbScaleImageMap = false;
-}
-
 /** Create new SW/G reader.
  *
  * Use this ctor if you want to read a linked graphic.
@@ -122,7 +107,7 @@ SwGrfNode::SwGrfNode( SwNode& rWhere,
             FStatHelper::IsDocument( aUrl.GetMainURL( INetURLObject::DecodeMechanism::NONE ) ))
         {
             // file exists, so create connection without an update
-            static_cast<SwBaseLink*>( mxLink.get() )->Connect();
+            mxLink->Connect();
         }
     }
 }
@@ -179,7 +164,7 @@ bool SwGrfNode::ReRead(
                 if( nNewType != mxLink->GetObjType() )
                 {
                     mxLink->Disconnect();
-                    static_cast<SwBaseLink*>( mxLink.get() )->SetObjType( nNewType );
+                    mxLink->SetObjType( nNewType );
                 }
             }
 
@@ -213,7 +198,7 @@ bool SwGrfNode::ReRead(
                 else if ( bNewGrf )
                 {
                     //TODO refLink->setInputStream(getInputStream());
-                    static_cast<SwBaseLink*>( mxLink.get() )->SwapIn();
+                    mxLink->SwapIn();
                 }
             }
             onGraphicChanged();
@@ -242,7 +227,7 @@ bool SwGrfNode::ReRead(
                 onGraphicChanged();
                 bReadGrf = true;
                 // create connection without update, as we have the graphic
-                static_cast<SwBaseLink*>( mxLink.get() )->Connect();
+                mxLink->Connect();
             }
             else
             {
@@ -252,7 +237,7 @@ bool SwGrfNode::ReRead(
                 onGraphicChanged();
                 if ( bNewGrf )
                 {
-                    static_cast<SwBaseLink*>( mxLink.get() )->SwapIn();
+                    mxLink->SwapIn();
                 }
             }
         }
@@ -421,14 +406,6 @@ SwGrfNode * SwNodes::MakeGrfNode( SwNode & rWhere,
     return pNode;
 }
 
-SwGrfNode * SwNodes::MakeGrfNode( SwNode & rWhere,
-                                const GraphicObject& rGrfObj,
-                                SwGrfFormatColl* pGrfColl )
-{
-    OSL_ENSURE( pGrfColl, "MakeGrfNode: Formatpointer is 0." );
-    return new SwGrfNode( rWhere, rGrfObj, pGrfColl, nullptr );
-}
-
 Size SwGrfNode::GetTwipSize() const
 {
     if( !mnGrfSize.Width() && !mnGrfSize.Height() )
@@ -449,7 +426,7 @@ bool SwGrfNode::SwapIn(bool bWaitForData)
 
     bool bRet = false;
     mbInSwapIn = true;
-    SwBaseLink* pLink = static_cast<SwBaseLink*>( mxLink.get() );
+    SwBaseLink* pLink = mxLink.get();
 
     if( pLink )
     {
@@ -470,8 +447,7 @@ bool SwGrfNode::SwapIn(bool bWaitForData)
 
                 maGrfObj.SetGraphic( Graphic() );
                 onGraphicChanged();
-                SwMsgPoolItem aMsgHint( RES_GRAPHIC_PIECE_ARRIVED );
-                CallSwClientNotify(sw::LegacyModifyHint(&aMsgHint, &aMsgHint));
+                CallSwClientNotify(sw::GraphicPieceArrivedHint());
             }
         }
         else
@@ -603,8 +579,7 @@ void SwGrfNode::ReleaseLink()
 
     {
         mbInSwapIn = true;
-        SwBaseLink* pLink = static_cast<SwBaseLink*>( mxLink.get() );
-        pLink->SwapIn( true, true );
+        mxLink->SwapIn( true, true );
         mbInSwapIn = false;
     }
 
@@ -861,8 +836,7 @@ void SwGrfNode::ApplyInputStream(
             mxInputStream = xInputStream;
             mbIsStreamReadOnly = bIsStreamReadOnly;
             mbLinkedInputStreamReady = true;
-            SwMsgPoolItem aMsgHint( RES_LINKED_GRAPHIC_STREAM_ARRIVED );
-            CallSwClientNotify(sw::LegacyModifyHint(&aMsgHint, &aMsgHint));
+            CallSwClientNotify(sw::LinkedGraphicStreamArrivedHint());
         }
     }
 }

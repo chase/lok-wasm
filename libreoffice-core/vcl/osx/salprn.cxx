@@ -190,8 +190,7 @@ bool AquaSalInfoPrinter::SetPrinterData( ImplJobSetup* io_pSetupData )
         io_pSetupData->SetOrientation( mePageOrientation );
 
         io_pSetupData->SetPaperBin( 0 );
-        io_pSetupData->SetDriverData( static_cast<sal_uInt8*>(std::malloc( 4 )) );
-        io_pSetupData->SetDriverDataLen( 4 );
+        io_pSetupData->SetDriverData( std::make_unique<sal_uInt8[]>(4), 4 );
     }
     else
         bSuccess = false;
@@ -264,6 +263,16 @@ sal_uInt16 AquaSalInfoPrinter::GetPaperBinCount( const ImplJobSetup* )
 OUString AquaSalInfoPrinter::GetPaperBinName( const ImplJobSetup*, sal_uInt16 )
 {
     return OUString();
+}
+
+sal_uInt16 AquaSalInfoPrinter::GetPaperBinBySourceIndex( const ImplJobSetup*, sal_uInt16 )
+{
+    return 0xffff;
+}
+
+sal_uInt16  AquaSalInfoPrinter::GetSourceIndexByPaperBin(const ImplJobSetup*, sal_uInt16)
+{
+    return 0;
 }
 
 sal_uInt32 AquaSalInfoPrinter::GetCapabilities( const ImplJobSetup*, PrinterCapType i_nType )

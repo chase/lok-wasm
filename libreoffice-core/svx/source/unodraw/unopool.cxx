@@ -39,15 +39,8 @@
 using namespace ::com::sun::star;
 using namespace ::cppu;
 
-SvxUnoDrawPool::SvxUnoDrawPool(SdrModel* pModel, sal_Int32 nServiceId)
-: PropertySetHelper( SvxPropertySetInfoPool::getOrCreate( nServiceId ) ), mpModel( pModel )
-{
-    init();
-}
-
-/* deprecated */
-SvxUnoDrawPool::SvxUnoDrawPool(SdrModel* pModel)
-: PropertySetHelper( SvxPropertySetInfoPool::getOrCreate( SVXUNO_SERVICEID_COM_SUN_STAR_DRAWING_DEFAULTS ) ), mpModel( pModel )
+SvxUnoDrawPool::SvxUnoDrawPool(SdrModel* pModel, rtl::Reference<comphelper::PropertySetInfo> const & xDefaults)
+: SvxUnoDrawPool_Base(), PropertySetHelper( xDefaults ), mpModel( pModel )
 {
     init();
 }
@@ -190,7 +183,7 @@ void SvxUnoDrawPool::_setPropertyValues( const comphelper::PropertyMapEntry** pp
 
     DBG_ASSERT( pPool, "I need a SfxItemPool!" );
     if( nullptr == pPool )
-        throw beans::UnknownPropertyException( "no pool, no properties..", static_cast<cppu::OWeakObject*>(this));
+        throw beans::UnknownPropertyException( "no pool, no properties..", getXWeak());
 
     while( *ppEntries )
         putAny( pPool, *ppEntries++, *pValues++ );
@@ -204,7 +197,7 @@ void SvxUnoDrawPool::_getPropertyValues( const comphelper::PropertyMapEntry** pp
 
     DBG_ASSERT( pPool, "I need a SfxItemPool!" );
     if( nullptr == pPool )
-        throw beans::UnknownPropertyException( "no pool, no properties..", static_cast<cppu::OWeakObject*>(this));
+        throw beans::UnknownPropertyException( "no pool, no properties..", getXWeak());
 
     while( *ppEntries )
         getAny( pPool, *ppEntries++, *pValue++ );
@@ -315,11 +308,6 @@ uno::Any SvxUnoDrawPool::_getPropertyDefault( const comphelper::PropertyMapEntry
 
 uno::Any SAL_CALL SvxUnoDrawPool::queryInterface( const uno::Type & rType )
 {
-    return OWeakAggObject::queryInterface( rType );
-}
-
-uno::Any SAL_CALL SvxUnoDrawPool::queryAggregation( const uno::Type & rType )
-{
     uno::Any aAny;
 
     if( rType == cppu::UnoType<lang::XServiceInfo>::get())
@@ -333,7 +321,7 @@ uno::Any SAL_CALL SvxUnoDrawPool::queryAggregation( const uno::Type & rType )
     else if( rType == cppu::UnoType<beans::XMultiPropertySet>::get())
         aAny <<= uno::Reference< beans::XMultiPropertySet >(this);
     else
-        aAny = OWeakAggObject::queryAggregation( rType );
+        aAny = OWeakObject::queryInterface( rType );
 
     return aAny;
 }
@@ -341,7 +329,6 @@ uno::Any SAL_CALL SvxUnoDrawPool::queryAggregation( const uno::Type & rType )
 uno::Sequence< uno::Type > SAL_CALL SvxUnoDrawPool::getTypes()
 {
     static const uno::Sequence aTypes {
-        cppu::UnoType<uno::XAggregation>::get(),
         cppu::UnoType<lang::XServiceInfo>::get(),
         cppu::UnoType<lang::XTypeProvider>::get(),
         cppu::UnoType<beans::XPropertySet>::get(),

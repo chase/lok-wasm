@@ -652,8 +652,8 @@ BaseContent::getPropertyValues(
 
             if ( rProp.Name == "ContentType" )
             {
-                rValue <<= (m_bFolder ? OUString(TaskManager::FolderContentType)
-                    : OUString(TaskManager::FileContentType));
+                rValue <<= (m_bFolder ? TaskManager::FolderContentType
+                    : TaskManager::FileContentType);
             }
             else if ( rProp.Name == "IsFolder" )
             {
@@ -685,7 +685,7 @@ BaseContent::setPropertyValues(
         return Sequence< Any >( Values.getLength() );
     }
 
-    static const OUStringLiteral Title(u"Title");
+    static constexpr OUString Title(u"Title"_ustr);
 
     // Special handling for files which have to be inserted
     if( m_nState & JustInserted )
@@ -1042,7 +1042,7 @@ void BaseContent::insert( sal_Int32 nMyCommandIdentifier,
                         OUString(getTitle(m_aUncPath)),
                         rtl_UriDecodeWithCharset,
                         RTL_TEXTENCODING_UTF8),
-                    static_cast<cppu::OWeakObject*>(this),
+                    getXWeak(),
                     m_pMyShell,nMyCommandIdentifier);
             uno::Reference<task::XInteractionRequest> const& xReq(aRequestImpl.getRequest());
 

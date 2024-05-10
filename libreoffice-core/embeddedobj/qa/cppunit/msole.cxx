@@ -26,6 +26,10 @@
 #include <unotools/ucbstreamhelper.hxx>
 #include <vcl/outdev.hxx>
 
+#ifdef _WIN32
+#include <systools/win32/comtools.hxx>
+#endif
+
 using namespace ::com::sun::star;
 
 namespace
@@ -38,14 +42,21 @@ public:
         : UnoApiXmlTest("/embeddedobj/qa/cppunit/data/")
     {
     }
-
-    void registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx) override;
 };
-}
 
-void Test::registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx)
+bool IsPaintClassNotRegistered()
 {
-    XmlTestTools::registerODFNamespaces(pXmlXpathCtx);
+#ifdef _WIN32
+    sal::systools::CoInitializeGuard g(0);
+    // Check if MS Paint's {0003000A-0000-0000-C000-000000000046} is registered
+    CLSID clsidPaint{ 0x0003000A, 0000, 0000, { 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 } };
+    LPOLESTR pProgId = nullptr;
+    if (ProgIDFromCLSID(clsidPaint, &pProgId) == REGDB_E_CLASSNOTREG)
+        return true;
+    CoTaskMemFree(pProgId);
+#endif
+    return false;
+}
 }
 
 namespace
@@ -84,6 +95,9 @@ CPPUNIT_TEST_FIXTURE(Test, testSaveOnThread)
     {
         return;
     }
+
+    if (IsPaintClassNotRegistered())
+        return;
 
     DBG_TESTSOLARMUTEX();
     OUString aURL = createFileURL(u"reqif-ole2.xhtml");

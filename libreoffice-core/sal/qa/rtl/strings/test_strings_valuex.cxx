@@ -11,7 +11,6 @@
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
 #include <rtl/ustring.hxx>
-#include <iostream>
 
 namespace test::strings {
 
@@ -42,8 +41,8 @@ namespace {
 
 template< typename T >
 void testBoolean() {
-    CPPUNIT_ASSERT_EQUAL( T( "false" ), T::boolean( false ) );
-    CPPUNIT_ASSERT_EQUAL( T( "true" ), T::boolean( true ) );
+    CPPUNIT_ASSERT_EQUAL( T( "false" ), T(T::boolean( false )) );
+    CPPUNIT_ASSERT_EQUAL( T( "true" ), T(T::boolean( true )) );
 }
 
 }

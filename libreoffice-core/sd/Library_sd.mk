@@ -109,6 +109,7 @@ $(eval $(call gb_Library_use_externals,sd,\
 		avahi \
 	) \
 	icu_headers \
+	frozen \
 ))
 
 ifneq ($(DBUS_HAVE_GLIB),)
@@ -188,6 +189,8 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
     sd/source/filter/eppt/pptx-epptbase \
     sd/source/filter/eppt/pptx-epptooxml \
     sd/source/filter/eppt/pptx-animations \
+    sd/source/filter/eppt/pptx-animations-cond \
+    sd/source/filter/eppt/pptx-animations-nodectx \
     sd/source/filter/eppt/pptx-grouptable \
     sd/source/filter/eppt/pptx-stylesheet \
     sd/source/filter/eppt/pptx-text \
@@ -197,8 +200,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
     sd/source/filter/ppt/pptinanimations \
     sd/source/filter/ppt/propread \
 	sd/source/filter/grf/sdgrffilter \
-	sd/source/filter/html/HtmlOptionsDialog \
-	sd/source/filter/html/buttonset \
 	sd/source/filter/html/htmlex \
 	sd/source/filter/html/sdhtmlfilter \
 	sd/source/filter/pdf/sdpdffilter \
@@ -235,7 +236,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/dlg/SpellDialogChildWindow \
 	sd/source/ui/dlg/TemplateScanner \
 	sd/source/ui/dlg/animobjs \
-	sd/source/ui/dlg/assclass \
 	sd/source/ui/dlg/diactrl \
 	sd/source/ui/dlg/filedlg \
 	sd/source/ui/dlg/gluectrl \
@@ -348,7 +348,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/presenter/PresenterCanvas \
 	sd/source/ui/presenter/PresenterHelper \
 	sd/source/ui/presenter/PresenterPreviewCache \
-	sd/source/ui/presenter/PresenterTextView \
 	sd/source/ui/presenter/SlideRenderer \
 	sd/source/ui/sidebar/AllMasterPagesSelector \
 	sd/source/ui/sidebar/CurrentMasterPagesSelector \
@@ -408,7 +407,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/slidesorter/model/SlsPageEnumerationProvider \
 	sd/source/ui/slidesorter/model/SlsVisualState \
 	sd/source/ui/slidesorter/shell/SlideSorter \
-	sd/source/ui/slidesorter/shell/SlideSorterService \
 	sd/source/ui/slidesorter/shell/SlideSorterViewShell \
 	sd/source/ui/slidesorter/view/SlideSorterView \
 	sd/source/ui/slidesorter/view/SlsFramePainter \
@@ -431,7 +429,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/tools/IconCache \
 	sd/source/ui/tools/IdleDetection \
 	sd/source/ui/tools/PreviewRenderer \
-	sd/source/ui/tools/PropertySet \
 	sd/source/ui/tools/SdGlobalResourceContainer \
 	sd/source/ui/tools/SlotStateListener \
 	sd/source/ui/tools/TimerBasedTaskExecution \

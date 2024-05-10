@@ -5811,6 +5811,7 @@ wp
 wp14
 wpJustification
 wpSpaceWidth
+wpc
 wpg
 wps
 wrap

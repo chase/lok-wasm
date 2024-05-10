@@ -181,13 +181,13 @@ tools::Rectangle AccessibleBrowseBox::implGetBoundingBox()
 {
     vcl::Window* pParent = mpBrowseBox->GetAccessibleParentWindow();
     OSL_ENSURE( pParent, "implGetBoundingBox - missing parent window" );
-    return mpBrowseBox->GetWindowExtentsRelative( pParent );
+    return mpBrowseBox->GetWindowExtentsRelative( *pParent );
 }
 
 
-tools::Rectangle AccessibleBrowseBox::implGetBoundingBoxOnScreen()
+AbsoluteScreenPixelRectangle AccessibleBrowseBox::implGetBoundingBoxOnScreen()
 {
-    return mpBrowseBox->GetWindowExtentsRelative( nullptr );
+    return mpBrowseBox->GetWindowExtentsAbsolute();
 }
 
 // internal helper methods
@@ -204,25 +204,20 @@ css::uno::Reference< css::accessibility::XAccessible > AccessibleBrowseBox::impl
 css::uno::Reference< css::accessibility::XAccessible >
 AccessibleBrowseBox::implGetHeaderBar(AccessibleBrowseBoxObjType eObjType)
 {
-    css::uno::Reference< css::accessibility::XAccessible > xRet;
-    rtl::Reference< AccessibleBrowseBoxHeaderBar >* pxMember = nullptr;
-
     if( eObjType == AccessibleBrowseBoxObjType::RowHeaderBar )
-        pxMember = &mxRowHeaderBar;
-    else if( eObjType == AccessibleBrowseBoxObjType::ColumnHeaderBar )
-        pxMember = &mxColumnHeaderBar;
-
-    if( pxMember )
     {
-        if( !pxMember->is() )
-        {
-            rtl::Reference<AccessibleBrowseBoxHeaderBar> pHeaderBar = new AccessibleBrowseBoxHeaderBar(
-                m_aCreator, *mpBrowseBox, eObjType );
-            *pxMember = pHeaderBar;
-        }
-        xRet = pxMember->get();
+        if (!mxRowHeaderBar.is())
+            mxRowHeaderBar = new AccessibleBrowseBoxHeaderBar(m_aCreator, *mpBrowseBox, eObjType);
+        return mxRowHeaderBar;
     }
-    return xRet;
+    else if( eObjType == AccessibleBrowseBoxObjType::ColumnHeaderBar )
+    {
+        if (!mxColumnHeaderBar.is())
+            mxColumnHeaderBar = new AccessibleBrowseBoxHeaderBar(m_aCreator, *mpBrowseBox, eObjType);
+        return mxColumnHeaderBar;
+    }
+
+    return css::uno::Reference<css::accessibility::XAccessible>();
 }
 
 css::uno::Reference< css::accessibility::XAccessible >
@@ -292,6 +287,7 @@ void AccessibleBrowseBoxAccess::dispose()
         m_xContext->dispose();
         m_xContext.clear();
     }
+    m_xParent.clear();
 }
 
 

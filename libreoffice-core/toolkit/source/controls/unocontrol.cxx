@@ -36,7 +36,7 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <toolkit/awt/vclxwindow.hxx>
 #include <controls/accessiblecontrolcontext.hxx>
 
@@ -157,13 +157,13 @@ OUString UnoControl::GetComponentServiceName() const
     return OUString();
 }
 
-Reference< XWindowPeer >    UnoControl::ImplGetCompatiblePeer()
+Reference< XVclWindowPeer >    UnoControl::ImplGetCompatiblePeer()
 {
     DBG_ASSERT( !mbCreatingCompatiblePeer, "ImplGetCompatiblePeer - recursive?" );
 
     mbCreatingCompatiblePeer = true;
 
-    Reference< XWindowPeer > xCompatiblePeer = getPeer();
+    Reference< XVclWindowPeer > xCompatiblePeer = getVclWindowPeer();
 
     if ( !xCompatiblePeer.is() )
     {
@@ -172,7 +172,7 @@ Reference< XWindowPeer >    UnoControl::ImplGetCompatiblePeer()
         if( bVis )
             maComponentInfos.bVisible = false;
 
-        Reference< XWindowPeer >    xCurrentPeer = getPeer();
+        Reference< XVclWindowPeer >    xCurrentPeer = getVclWindowPeer();
         setPeer( nullptr );
 
         // queryInterface ourself, to allow aggregation
@@ -196,7 +196,7 @@ Reference< XWindowPeer >    UnoControl::ImplGetCompatiblePeer()
             mbCreatingCompatiblePeer = false;
             throw;
         }
-        xCompatiblePeer = getPeer();
+        xCompatiblePeer = getVclWindowPeer();
         setPeer( xCurrentPeer );
 
         if ( xCompatiblePeer.is() && mxGraphics.is() )
@@ -345,13 +345,13 @@ UnoControl::DisposeAccessibleContext(Reference<XComponent> const& xContextComp)
 
 void UnoControl::dispose(  )
 {
-    Reference< XWindowPeer > xPeer;
+    Reference< XVclWindowPeer > xPeer;
     Reference<XComponent> xAccessibleComp;
     {
         ::osl::MutexGuard aGuard( GetMutex() );
         if( mbDisposePeer )
         {
-            xPeer = mxPeer;
+            xPeer = mxVclWindowPeer;
         }
         setPeer( nullptr );
         xAccessibleComp.set(maAccessibleContext, UNO_QUERY);
@@ -619,8 +619,7 @@ void UnoControl::ImplModelPropertiesChanged( const Sequence< PropertyChangeEvent
 
         // Doesn't work for Container!
         getPeer()->dispose();
-        mxPeer.clear();
-        mxVclWindowPeer = nullptr;
+        mxVclWindowPeer.clear();
         mbRefreshingPeer = true;
         Reference< XWindowPeer >    xP( xParent, UNO_QUERY );
         xThis->createPeer( Reference< XToolkit > (), xP );
@@ -1075,10 +1074,7 @@ void UnoControl::createPeer( const Reference< XToolkit >& rxToolkit, const Refer
     ::osl::ClearableMutexGuard aGuard( GetMutex() );
     if ( !mxModel.is() )
     {
-        RuntimeException aException;
-        aException.Message = "createPeer: no model!";
-        aException.Context = static_cast<XAggregation*>(static_cast<cppu::OWeakAggObject*>(this));
-        throw aException;
+        throw RuntimeException("createPeer: no model!", getXWeak());
     }
 
     if( getPeer().is() )
@@ -1278,7 +1274,9 @@ void UnoControl::createPeer( const Reference< XToolkit >& rxToolkit, const Refer
     PrepareWindowDescriptor(aDescr);
 
     // create the peer
-    setPeer( xToolkit->createWindow( aDescr ) );
+    Reference<XWindowPeer> xTemp = xToolkit->createWindow( aDescr );
+    mxVclWindowPeer.set(xTemp, UNO_QUERY);
+    assert(mxVclWindowPeer);
 
     // release the mutex guard (and work with copies of our members)
     // this is necessary as our peer may lock the SolarMutex (actually, all currently known peers do), so calling
@@ -1345,7 +1343,13 @@ void UnoControl::createPeer( const Reference< XToolkit >& rxToolkit, const Refer
 Reference< XWindowPeer > UnoControl::getPeer()
 {
     ::osl::MutexGuard aGuard( GetMutex() );
-    return mxPeer;
+    return mxVclWindowPeer;
+}
+
+Reference< XVclWindowPeer > UnoControl::getVclWindowPeer()
+{
+    ::osl::MutexGuard aGuard( GetMutex() );
+    return mxVclWindowPeer;
 }
 
 sal_Bool UnoControl::setModel( const Reference< XControlModel >& rxModel )

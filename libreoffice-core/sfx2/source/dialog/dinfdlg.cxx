@@ -19,6 +19,7 @@
 
 #include <svl/eitem.hxx>
 #include <tools/datetime.hxx>
+#include <tools/duration.hxx>
 #include <tools/debug.hxx>
 #include <tools/urlobj.hxx>
 #include <utility>
@@ -58,7 +59,7 @@
 #include <com/sun/star/util/DateTimeWithTimezone.hpp>
 #include <com/sun/star/util/DateWithTimezone.hpp>
 #include <com/sun/star/util/Duration.hpp>
-#include <com/sun/star/document/XDocumentProperties.hpp>
+#include <com/sun/star/document/XDocumentProperties2.hpp>
 #include <com/sun/star/document/CmisProperty.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
@@ -159,7 +160,7 @@ OUString ConvertDateTime_Impl( std::u16string_view rName,
 {
      Date aD(uDT);
      tools::Time aT(uDT);
-     static const OUStringLiteral aDelim( u", " );
+     static constexpr OUString aDelim( u", "_ustr );
      OUString aStr = rWrapper.getDate( aD )
                    + aDelim
                    + rWrapper.getTime( aT );
@@ -179,6 +180,7 @@ SfxDocumentInfoItem::SfxDocumentInfoItem()
     , m_isAutoloadEnabled(false)
     , m_EditingCycles(0)
     , m_EditingDuration(0)
+    , m_nFileSize(-1)
     , m_bHasTemplate( true )
     , m_bDeleteUserData( false )
     , m_bUseUserData( true )
@@ -189,7 +191,7 @@ SfxDocumentInfoItem::SfxDocumentInfoItem()
 SfxDocumentInfoItem::SfxDocumentInfoItem( const OUString& rFile,
         const uno::Reference<document::XDocumentProperties>& i_xDocProps,
         const uno::Sequence<document::CmisProperty>& i_cmisProps,
-        bool bIs, bool _bIs )
+        bool bIs, bool _bIs, sal_Int64 _nFileSize )
     : SfxStringItem( SID_DOCINFO, rFile )
     , m_AutoloadDelay( i_xDocProps->getAutoloadSecs() )
     , m_AutoloadURL( i_xDocProps->getAutoloadURL() )
@@ -209,11 +211,22 @@ SfxDocumentInfoItem::SfxDocumentInfoItem( const OUString& rFile,
                     i_xDocProps->getKeywords()) )
     , m_Subject( i_xDocProps->getSubject() )
     , m_Title( i_xDocProps->getTitle() )
+    , m_nFileSize( _nFileSize )
     , m_bHasTemplate( true )
     , m_bDeleteUserData( false )
     , m_bUseUserData( bIs )
     , m_bUseThumbnailSave( _bIs )
 {
+    Reference< document::XDocumentProperties2 > xDocProps2(i_xDocProps, UNO_QUERY);
+    m_Contributor = ::comphelper::string::convertCommaSeparated(xDocProps2->getContributor());
+    m_Coverage = xDocProps2->getCoverage();
+    m_Identifier = xDocProps2->getIdentifier();
+    m_Publisher = ::comphelper::string::convertCommaSeparated(xDocProps2->getPublisher());
+    m_Relation = ::comphelper::string::convertCommaSeparated(xDocProps2->getRelation());
+    m_Rights = xDocProps2->getRights();
+    m_Source = xDocProps2->getSource();
+    m_Type = xDocProps2->getType();
+
     try
     {
         Reference< beans::XPropertyContainer > xContainer = i_xDocProps->getUserDefinedProperties();
@@ -259,8 +272,17 @@ SfxDocumentInfoItem::SfxDocumentInfoItem( const SfxDocumentInfoItem& rItem )
     , m_EditingDuration( rItem.getEditingDuration() )
     , m_Description( rItem.getDescription() )
     , m_Keywords( rItem.getKeywords() )
+    , m_Contributor(rItem.getContributor())
+    , m_Coverage(rItem.getCoverage())
+    , m_Identifier(rItem.getIdentifier())
+    , m_Publisher(rItem.getPublisher())
+    , m_Relation(rItem.getRelation())
+    , m_Rights(rItem.getRights())
+    , m_Source(rItem.getSource())
+    , m_Type(rItem.getType())
     , m_Subject( rItem.getSubject() )
     , m_Title( rItem.getTitle() )
+    , m_nFileSize ( rItem.m_nFileSize )
     , m_bHasTemplate( rItem.m_bHasTemplate )
     , m_bDeleteUserData( rItem.m_bDeleteUserData )
     , m_bUseUserData( rItem.m_bUseUserData )
@@ -305,6 +327,14 @@ bool SfxDocumentInfoItem::operator==( const SfxPoolItem& rItem) const
          m_EditingDuration      == rInfoItem.m_EditingDuration   &&
          m_Description          == rInfoItem.m_Description       &&
          m_Keywords             == rInfoItem.m_Keywords          &&
+         m_Contributor          == rInfoItem.m_Contributor       &&
+         m_Coverage             == rInfoItem.m_Coverage          &&
+         m_Identifier           == rInfoItem.m_Identifier        &&
+         m_Publisher            == rInfoItem.m_Publisher         &&
+         m_Relation             == rInfoItem.m_Relation          &&
+         m_Rights               == rInfoItem.m_Rights            &&
+         m_Source               == rInfoItem.m_Source            &&
+         m_Type                 == rInfoItem.m_Type              &&
          m_Subject              == rInfoItem.m_Subject           &&
          m_Title                == rInfoItem.m_Title             &&
          comphelper::ContainerUniquePtrEquals(m_aCustomProperties, rInfoItem.m_aCustomProperties) &&
@@ -349,8 +379,18 @@ void SfxDocumentInfoItem::UpdateDocumentInfo(
     i_xDocProps->setDescription(getDescription());
     i_xDocProps->setKeywords(
         ::comphelper::string::convertCommaSeparated(getKeywords()));
-    i_xDocProps->setSubject(getSubject());
-    i_xDocProps->setTitle(getTitle());
+
+    Reference<document::XDocumentProperties2> xDocProps2(i_xDocProps, UNO_QUERY);
+    xDocProps2->setContributor(::comphelper::string::convertCommaSeparated(getContributor()));
+    xDocProps2->setCoverage(getCoverage());
+    xDocProps2->setIdentifier(getIdentifier());
+    xDocProps2->setPublisher(::comphelper::string::convertCommaSeparated(getPublisher()));
+    xDocProps2->setRelation(::comphelper::string::convertCommaSeparated(getRelation()));
+    xDocProps2->setRights(getRights());
+    xDocProps2->setSource(getSource());
+    xDocProps2->setType(getType());
+    xDocProps2->setSubject(getSubject());
+    xDocProps2->setTitle(getTitle());
 
     // this is necessary in case of replaying a recorded macro:
     // in this case, the macro may contain the 4 old user-defined DocumentInfo
@@ -584,6 +624,14 @@ SfxDocumentDescPage::SfxDocumentDescPage(weld::Container* pPage, weld::DialogCon
     , m_xTitleEd(m_xBuilder->weld_entry("title"))
     , m_xThemaEd(m_xBuilder->weld_entry("subject"))
     , m_xKeywordsEd(m_xBuilder->weld_entry("keywords"))
+    , m_xContributorEd(m_xBuilder->weld_entry("contributor"))
+    , m_xCoverageEd(m_xBuilder->weld_entry("coverage"))
+    , m_xIdentifierEd(m_xBuilder->weld_entry("identifier"))
+    , m_xPublisherEd(m_xBuilder->weld_entry("publisher"))
+    , m_xRelationEd(m_xBuilder->weld_entry("relation"))
+    , m_xRightsEd(m_xBuilder->weld_entry("rights"))
+    , m_xSourceEd(m_xBuilder->weld_entry("source"))
+    , m_xTypeEd(m_xBuilder->weld_entry("type"))
     , m_xCommentEd(m_xBuilder->weld_text_view("comments"))
 {
     m_xCommentEd->set_size_request(m_xKeywordsEd->get_preferred_size().Width(),
@@ -605,8 +653,18 @@ bool SfxDocumentDescPage::FillItemSet(SfxItemSet *rSet)
     const bool bTitleMod = m_xTitleEd->get_value_changed_from_saved();
     const bool bThemeMod = m_xThemaEd->get_value_changed_from_saved();
     const bool bKeywordsMod = m_xKeywordsEd->get_value_changed_from_saved();
+    const bool bContributorMod = m_xContributorEd->get_value_changed_from_saved();
+    const bool bCoverageMod = m_xCoverageEd->get_value_changed_from_saved();
+    const bool bIdentifierMod = m_xIdentifierEd->get_value_changed_from_saved();
+    const bool bPublisherMod = m_xPublisherEd->get_value_changed_from_saved();
+    const bool bRelationMod = m_xRelationEd->get_value_changed_from_saved();
+    const bool bRightsMod = m_xRightsEd->get_value_changed_from_saved();
+    const bool bSourceMod = m_xSourceEd->get_value_changed_from_saved();
+    const bool bTypeMod = m_xTypeEd->get_value_changed_from_saved();
     const bool bCommentMod = m_xCommentEd->get_value_changed_from_saved();
-    if ( !( bTitleMod || bThemeMod || bKeywordsMod || bCommentMod ) )
+    if (!(bTitleMod || bThemeMod || bKeywordsMod || bTitleMod || bThemeMod || bKeywordsMod
+          || bContributorMod || bCoverageMod || bIdentifierMod || bPublisherMod || bRelationMod
+          || bRightsMod || bSourceMod || bTypeMod || bCommentMod))
     {
         return false;
     }
@@ -639,12 +697,45 @@ bool SfxDocumentDescPage::FillItemSet(SfxItemSet *rSet)
     {
         pInfo->setKeywords( m_xKeywordsEd->get_text() );
     }
+    if (bContributorMod)
+    {
+        pInfo->setContributor(m_xContributorEd->get_text());
+    }
+    if (bCoverageMod)
+    {
+        pInfo->setCoverage(m_xCoverageEd->get_text());
+    }
+    if (bIdentifierMod)
+    {
+        pInfo->setIdentifier(m_xIdentifierEd->get_text());
+    }
+    if (bPublisherMod)
+    {
+        pInfo->setPublisher(m_xPublisherEd->get_text());
+    }
+    if (bRelationMod)
+    {
+        pInfo->setRelation(m_xRelationEd->get_text());
+    }
+    if (bRightsMod)
+    {
+        pInfo->setRights(m_xRightsEd->get_text());
+    }
+    if (bSourceMod)
+    {
+        pInfo->setSource(m_xSourceEd->get_text());
+    }
+    if (bTypeMod)
+    {
+        pInfo->setType(m_xTypeEd->get_text());
+    }
     if ( bCommentMod )
     {
         pInfo->setDescription( m_xCommentEd->get_text() );
     }
     rSet->Put( *pInfo );
-    if ( pInfo != m_pInfoItem )
+    // ptr compare OK, pInfo was created above as temporary data holder
+    if ( !areSfxPoolItemPtrsEqual(pInfo, m_pInfoItem) )
     {
         delete pInfo;
     }
@@ -659,11 +750,27 @@ void SfxDocumentDescPage::Reset(const SfxItemSet *rSet)
     m_xTitleEd->set_text(m_pInfoItem->getTitle());
     m_xThemaEd->set_text(m_pInfoItem->getSubject());
     m_xKeywordsEd->set_text(m_pInfoItem->getKeywords());
+    m_xContributorEd->set_text(m_pInfoItem->getContributor());
+    m_xCoverageEd->set_text(m_pInfoItem->getCoverage());
+    m_xIdentifierEd->set_text(m_pInfoItem->getIdentifier());
+    m_xPublisherEd->set_text(m_pInfoItem->getPublisher());
+    m_xRelationEd->set_text(m_pInfoItem->getRelation());
+    m_xRightsEd->set_text(m_pInfoItem->getRights());
+    m_xSourceEd->set_text(m_pInfoItem->getSource());
+    m_xTypeEd->set_text(m_pInfoItem->getType());
     m_xCommentEd->set_text(m_pInfoItem->getDescription());
 
     m_xTitleEd->save_value();
     m_xThemaEd->save_value();
     m_xKeywordsEd->save_value();
+    m_xContributorEd->save_value();
+    m_xCoverageEd->save_value();
+    m_xIdentifierEd->save_value();
+    m_xPublisherEd->save_value();
+    m_xRelationEd->save_value();
+    m_xRightsEd->save_value();
+    m_xSourceEd->save_value();
+    m_xTypeEd->save_value();
     m_xCommentEd->save_value();
 
     const SfxBoolItem* pROItem = SfxItemSet::GetItem<SfxBoolItem>(rSet, SID_DOC_READONLY, false);
@@ -672,6 +779,14 @@ void SfxDocumentDescPage::Reset(const SfxItemSet *rSet)
         m_xTitleEd->set_editable(false);
         m_xThemaEd->set_editable(false);
         m_xKeywordsEd->set_editable(false);
+        m_xContributorEd->set_editable(false);
+        m_xCoverageEd->set_editable(false);
+        m_xIdentifierEd->set_editable(false);
+        m_xPublisherEd->set_editable(false);
+        m_xRelationEd->set_editable(false);
+        m_xRightsEd->set_editable(false);
+        m_xSourceEd->set_editable(false);
+        m_xTypeEd->set_editable(false);
         m_xCommentEd->set_editable(false);
     }
 }
@@ -721,7 +836,7 @@ SfxDocumentPage::SfxDocumentPage(weld::Container* pPage, weld::DialogController*
     // [i96288] Check if the document signature command is enabled
     // on the main list enable/disable the pushbutton accordingly
     SvtCommandOptions aCmdOptions;
-    if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "Signature" ) )
+    if ( aCmdOptions.LookupDisabled( "Signature" ) )
         m_xSignatureBtn->set_sensitive(false);
 }
 
@@ -745,8 +860,7 @@ IMPL_LINK_NOARG(SfxDocumentPage, DeleteHdl, weld::Button&, void)
     m_xCreateValFt->set_label( ConvertDateTime_Impl( aName, uDT, rLocaleWrapper ) );
     m_xChangeValFt->set_label( "" );
     m_xPrintValFt->set_label( "" );
-    const tools::Time aTime( 0 );
-    m_xTimeLogValFt->set_label( rLocaleWrapper.getDuration( aTime ) );
+    m_xTimeLogValFt->set_label( rLocaleWrapper.getDuration( tools::Duration() ) );
     m_xDocNoValFt->set_label(OUString('1'));
     bHandleDelete = true;
 }
@@ -775,9 +889,7 @@ IMPL_LINK_NOARG(SfxDocumentPage, ChangePassHdl, weld::Button&, void)
     {
         if (!pShell)
             break;
-        SfxItemSet* pMedSet = pShell->GetMedium()->GetItemSet();
-        if (!pMedSet)
-            break;
+        SfxItemSet& rMedSet = pShell->GetMedium()->GetItemSet();
         std::shared_ptr<const SfxFilter> pFilter = pShell->GetMedium()->GetFilter();
         if (!pFilter)
             break;
@@ -789,26 +901,26 @@ IMPL_LINK_NOARG(SfxDocumentPage, ChangePassHdl, weld::Button&, void)
             VclAbstractDialogFactory * pFact = VclAbstractDialogFactory::Create();
             m_xPasswordDialog = pFact->CreatePasswordToOpenModifyDialog(GetFrameWeld(), maxPwdLen, false);
             m_xPasswordDialog->AllowEmpty(); // needed to remove password
-            m_xPasswordDialog->StartExecuteAsync([this, pFilter, pMedSet, pShell](sal_Int32 nResult)
+            m_xPasswordDialog->StartExecuteAsync([this, pFilter, &rMedSet, pShell](sal_Int32 nResult)
             {
                 if (nResult == RET_OK)
                 {
-                    sfx2::SetPassword(pFilter, pMedSet, m_xPasswordDialog->GetPasswordToOpen(),
+                    sfx2::SetPassword(pFilter, &rMedSet, m_xPasswordDialog->GetPasswordToOpen(),
                                       m_xPasswordDialog->GetPasswordToOpen(), true);
                     tools::JsonWriter payloadJson;
                     payloadJson.put("password", m_xPasswordDialog->GetPasswordToOpen());
                     payloadJson.put("isToModify", false);
 
-                    SfxViewShell *vShell = SfxViewShell::Current();
-                    if (vShell)
-                        vShell->libreOfficeKitViewCallback(LOK_CALLBACK_DOCUMENT_PASSWORD_RESET, payloadJson.extractAsOString().getStr());
+                    SfxViewShell *pViewShell = SfxViewShell::Current();
+                    if (pViewShell)
+                        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_DOCUMENT_PASSWORD_RESET, payloadJson.finishAndGetAsOString());
 
                     pShell->SetModified();
                 }
                 m_xPasswordDialog->disposeOnce();
             });
         } else {
-            sfx2::RequestPassword(pFilter, OUString(), pMedSet, GetFrameWeld()->GetXWindow());
+            sfx2::RequestPassword(pFilter, OUString(), &rMedSet, GetFrameWeld()->GetXWindow());
             pShell->SetModified();
         }
     }
@@ -858,10 +970,7 @@ void SfxDocumentPage::ImplCheckPasswordState()
     {
         if (!pShell)
             break;
-        SfxItemSet* pMedSet = pShell->GetMedium()->GetItemSet();
-        if (!pMedSet)
-            break;
-        const SfxUnoAnyItem* pEncryptionDataItem = SfxItemSet::GetItem<SfxUnoAnyItem>(pMedSet, SID_ENCRYPTIONDATA, false);
+        const SfxUnoAnyItem* pEncryptionDataItem = pShell->GetMedium()->GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
         uno::Sequence< beans::NamedValue > aEncryptionData;
         if (pEncryptionDataItem)
             pEncryptionDataItem->GetValue() >>= aEncryptionData;
@@ -1011,9 +1120,13 @@ void SfxDocumentPage::Reset( const SfxItemSet* rSet )
 
     // determine size and type
     OUString aSizeText( m_aUnknownSize );
-    if ( aURL.GetProtocol() == INetProtocol::File ||
-         aURL.isAnyKnownWebDAVScheme() )
-        aSizeText = CreateSizeText( SfxContentHelper::GetSize( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ) ) );
+    // we might already know the size as an optional argument passed to .uno:SetDocumentProperties
+    sal_Int64 nSize = rInfoItem.getFileSize();
+    // otherwise, for some protocols we can reliably query for it
+    if (nSize == -1 && (aURL.GetProtocol() == INetProtocol::File || aURL.isAnyKnownWebDAVScheme()))
+        nSize = SfxContentHelper::GetSize( aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
+    if (nSize != -1)
+        aSizeText = CreateSizeText( nSize );
     m_xShowSizeFT->set_label( aSizeText );
 
     OUString aDescription = SvFileInformationManager::GetDescription( INetURLObject(rMainURL) );
@@ -1034,7 +1147,7 @@ void SfxDocumentPage::Reset( const SfxItemSet* rSet )
         if (!sExtension.isEmpty())
         {
             sExtension = sExtension.toAsciiLowerCase();
-            if (sExtension.equalsAscii("txt") || sExtension.equalsAscii("csv"))
+            if (sExtension == "txt" || sExtension == "csv")
                 m_xChangePassBtn->set_sensitive(false);
         }
     }
@@ -1078,8 +1191,10 @@ void SfxDocumentPage::Reset( const SfxItemSet* rSet )
     const tools::Long nTime = rInfoItem.getEditingDuration();
     if ( bUseUserData )
     {
-        const tools::Time aT( nTime/3600, (nTime%3600)/60, nTime%60 );
-        m_xTimeLogValFt->set_label( rLocaleWrapper.getDuration( aT ) );
+        assert(SAL_MIN_INT32 <= nTime/86400 && nTime/86400 <= SAL_MAX_INT32);
+        const tools::Duration aD( static_cast<sal_Int32>(nTime)/86400,
+                (nTime%86400)/3600, (nTime%3600)/60, nTime%60, 0);
+        m_xTimeLogValFt->set_label( rLocaleWrapper.getDuration( aD ) );
         m_xDocNoValFt->set_label( OUString::number(
             rInfoItem.getEditingCycles() ) );
     }
@@ -1216,10 +1331,7 @@ SfxDocumentInfoDialog::SfxDocumentInfoDialog(weld::Window* pParent, const SfxIte
     AddTabPage("general", SfxDocumentPage::Create, nullptr);
     AddTabPage("description", SfxDocumentDescPage::Create, nullptr);
 
-    if (!comphelper::LibreOfficeKit::isActive())
-        AddTabPage("customprops", SfxCustomPropertiesPage::Create, nullptr);
-    else
-        RemoveTabPage("customprops");
+    AddTabPage("customprops", SfxCustomPropertiesPage::Create, nullptr);
 
     if (rInfoItem.isCmisDocument())
         AddTabPage("cmisprops", SfxCmisPropertiesPage::Create, nullptr);
@@ -1232,7 +1344,7 @@ SfxDocumentInfoDialog::SfxDocumentInfoDialog(weld::Window* pParent, const SfxIte
         RemoveTabPage("security");
 }
 
-void SfxDocumentInfoDialog::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SfxDocumentInfoDialog::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     if (rId == "general")
         static_cast<SfxDocumentPage&>(rPage).EnableUseUserData();
@@ -1589,13 +1701,13 @@ void CustomPropertiesWindow::CreateNewLine()
         // for ui-testing. Distinguish the elements in the lines
         sal_uInt16 nSize = m_aCustomPropertiesLines.size();
         pNewLine->m_xNameBox->set_buildable_name(
-            pNewLine->m_xNameBox->get_buildable_name() + OString::number(nSize));
+            pNewLine->m_xNameBox->get_buildable_name() + OUString::number(nSize));
         pNewLine->m_xTypeBox->set_buildable_name(
-            pNewLine->m_xTypeBox->get_buildable_name() + OString::number(nSize));
+            pNewLine->m_xTypeBox->get_buildable_name() + OUString::number(nSize));
         pNewLine->m_xValueEdit->set_buildable_name(
-            pNewLine->m_xValueEdit->get_buildable_name() + OString::number(nSize));
+            pNewLine->m_xValueEdit->get_buildable_name() + OUString::number(nSize));
         pNewLine->m_xRemoveButton->set_buildable_name(
-            pNewLine->m_xRemoveButton->get_buildable_name() + OString::number(nSize));
+            pNewLine->m_xRemoveButton->get_buildable_name() + OUString::number(nSize));
     }
 
     pNewLine->DoTypeHdl(*pNewLine->m_xTypeBox);

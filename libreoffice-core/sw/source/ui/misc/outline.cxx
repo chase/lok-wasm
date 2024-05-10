@@ -118,8 +118,8 @@ SwNumNamesDlg::SwNumNamesDlg(weld::Window *pParent)
     , m_xFormBox(m_xBuilder->weld_tree_view("form"))
     , m_xOKBtn(m_xBuilder->weld_button("ok"))
 {
-    for (size_t i = 0; i < SAL_N_ELEMENTS(OUTLINE_STYLE); ++i)
-        m_xFormBox->append_text(SwResId(OUTLINE_STYLE[i]));
+    for (auto const& aID : OUTLINE_STYLE)
+        m_xFormBox->append_text(SwResId(aID));
 
     m_xFormEdit->connect_changed(LINK(this, SwNumNamesDlg, ModifyHdl));
     m_xFormBox->connect_changed(LINK(this, SwNumNamesDlg, SelectHdl));
@@ -196,7 +196,7 @@ SwOutlineTabDialog::~SwOutlineTabDialog()
 {
 }
 
-void SwOutlineTabDialog::PageCreated(const OString& rPageId, SfxTabPage& rPage)
+void SwOutlineTabDialog::PageCreated(const OUString& rPageId, SfxTabPage& rPage)
 {
     if (rPageId == "position")
     {
@@ -227,11 +227,11 @@ IMPL_LINK_NOARG(SwOutlineTabDialog, FormHdl, weld::Toggleable&, void)
         const SwNumRulesWithName *pRules = m_pChapterNumRules->GetRules(i);
         if (!pRules)
             continue;
-        m_xMenuButton->set_item_label("form" + OString::number(i + 1), pRules->GetName());
+        m_xMenuButton->set_item_label("form" + OUString::number(i + 1), pRules->GetName());
     }
 }
 
-IMPL_LINK(SwOutlineTabDialog, MenuSelectHdl, const OString&, rIdent, void)
+IMPL_LINK(SwOutlineTabDialog, MenuSelectHdl, const OUString&, rIdent, void)
 {
     sal_uInt8 nLevelNo = 0;
 
@@ -271,7 +271,7 @@ IMPL_LINK(SwOutlineTabDialog, MenuSelectHdl, const OString&, rIdent, void)
             const OUString aName(aDlg.GetName());
             m_pChapterNumRules->ApplyNumRules( SwNumRulesWithName(
                     *m_xNumRule, aName ), aDlg.GetCurEntryPos() );
-            m_xMenuButton->set_item_label("form" + OString::number(aDlg.GetCurEntryPos() + 1), aName);
+            m_xMenuButton->set_item_label("form" + OUString::number(aDlg.GetCurEntryPos() + 1), aName);
         }
         return;
     }
@@ -283,7 +283,7 @@ IMPL_LINK(SwOutlineTabDialog, MenuSelectHdl, const OString&, rIdent, void)
         {
             pRules->ResetNumRule(m_rWrtSh, *m_xNumRule);
             m_xNumRule->SetRuleType( OUTLINE_RULE );
-            SfxTabPage* pOutlinePage = GetTabPage("numbering");
+            SfxTabPage* pOutlinePage = GetTabPage(u"numbering");
             assert(pOutlinePage);
             static_cast<SwOutlineSettingsTabPage*>(pOutlinePage)->SetNumRule(m_xNumRule.get());
         }
@@ -581,16 +581,11 @@ IMPL_LINK( SwOutlineSettingsTabPage, CollSelect, weld::ComboBox&, rBox, void )
     for( i = 0; i < MAXLEVEL; ++i)
         m_pCollNames[i] = m_aSaveCollNames[i];
 
-    if(aCollName == m_aNoFormatName)
-        m_pCollNames[nTmpLevel].clear();
-    else
-    {
-        m_pCollNames[nTmpLevel] = aCollName;
-                // template already in use?
-        for( i = 0; i < MAXLEVEL; ++i)
-            if(i != nTmpLevel && m_pCollNames[i] == aCollName )
-                m_pCollNames[i].clear();
-    }
+    m_pCollNames[nTmpLevel] = aCollName;
+            // template already in use?
+    for( i = 0; i < MAXLEVEL; ++i)
+        if(i != nTmpLevel && m_pCollNames[i] == aCollName )
+            m_pCollNames[i].clear();
 
     // search the oldname and put it into the current entries
     if( !sOldName.isEmpty() )

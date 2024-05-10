@@ -292,7 +292,7 @@ int INetURLObject::SubString::compare(SubString const & rOther,
 
 struct INetURLObject::SchemeInfo
 {
-    rtl::OUStringConstExpr m_sScheme;
+    OUString m_sScheme;
     char const * m_pPrefix;
     bool m_bAuthority;
     bool m_bUser;
@@ -318,36 +318,36 @@ struct INetURLObject::PrefixInfo
 inline INetURLObject::SchemeInfo const &
 INetURLObject::getSchemeInfo(INetProtocol eTheScheme)
 {
-    static constexpr OUStringLiteral EMPTY = u"";
-    static constexpr OUStringLiteral FTP = u"ftp";
-    static constexpr OUStringLiteral HTTP = u"http";
-    static constexpr OUStringLiteral FILE1 = u"file"; // because FILE is already defined
-    static constexpr OUStringLiteral MAILTO = u"mailto";
-    static constexpr OUStringLiteral VND_WEBDAV = u"vnd.sun.star.webdav";
-    static constexpr OUStringLiteral PRIVATE = u"private";
-    static constexpr OUStringLiteral VND_HELP = u"vnd.sun.star.help";
-    static constexpr OUStringLiteral HTTPS = u"https";
-    static constexpr OUStringLiteral SLOT = u"slot";
-    static constexpr OUStringLiteral MACRO = u"macro";
-    static constexpr OUStringLiteral JAVASCRIPT = u"javascript";
-    static constexpr OUStringLiteral DATA = u"data";
-    static constexpr OUStringLiteral CID = u"cid";
-    static constexpr OUStringLiteral VND_HIER = u"vnd.sun.star.hier";
-    static constexpr OUStringLiteral UNO = u".uno";
-    static constexpr OUStringLiteral COMPONENT = u".component";
-    static constexpr OUStringLiteral VND_PKG = u"vnd.sun.star.pkg";
-    static constexpr OUStringLiteral LDAP = u"ldap";
-    static constexpr OUStringLiteral DB = u"db";
-    static constexpr OUStringLiteral VND_CMD = u"vnd.sun.star.cmd";
-    static constexpr OUStringLiteral TELNET = u"telnet";
-    static constexpr OUStringLiteral VND_EXPAND = u"vnd.sun.star.expand";
-    static constexpr OUStringLiteral VND_TDOC = u"vnd.sun.star.tdoc";
-    static constexpr OUStringLiteral SMB = u"smb";
-    static constexpr OUStringLiteral HID = u"hid";
-    static constexpr OUStringLiteral SFTP = u"sftp";
-    static constexpr OUStringLiteral VND_CMIS = u"vnd.libreoffice.cmis";
+    static constexpr OUString EMPTY = u""_ustr;
+    static constexpr OUString FTP = u"ftp"_ustr;
+    static constexpr OUString HTTP = u"http"_ustr;
+    static constexpr OUString FILE1 = u"file"_ustr; // because FILE is already defined
+    static constexpr OUString MAILTO = u"mailto"_ustr;
+    static constexpr OUString VND_WEBDAV = u"vnd.sun.star.webdav"_ustr;
+    static constexpr OUString PRIVATE = u"private"_ustr;
+    static constexpr OUString VND_HELP = u"vnd.sun.star.help"_ustr;
+    static constexpr OUString HTTPS = u"https"_ustr;
+    static constexpr OUString SLOT = u"slot"_ustr;
+    static constexpr OUString MACRO = u"macro"_ustr;
+    static constexpr OUString JAVASCRIPT = u"javascript"_ustr;
+    static constexpr OUString DATA = u"data"_ustr;
+    static constexpr OUString CID = u"cid"_ustr;
+    static constexpr OUString VND_HIER = u"vnd.sun.star.hier"_ustr;
+    static constexpr OUString UNO = u".uno"_ustr;
+    static constexpr OUString COMPONENT = u".component"_ustr;
+    static constexpr OUString VND_PKG = u"vnd.sun.star.pkg"_ustr;
+    static constexpr OUString LDAP = u"ldap"_ustr;
+    static constexpr OUString DB = u"db"_ustr;
+    static constexpr OUString VND_CMD = u"vnd.sun.star.cmd"_ustr;
+    static constexpr OUString TELNET = u"telnet"_ustr;
+    static constexpr OUString VND_EXPAND = u"vnd.sun.star.expand"_ustr;
+    static constexpr OUString VND_TDOC = u"vnd.sun.star.tdoc"_ustr;
+    static constexpr OUString SMB = u"smb"_ustr;
+    static constexpr OUString HID = u"hid"_ustr;
+    static constexpr OUString SFTP = u"sftp"_ustr;
+    static constexpr OUString VND_CMIS = u"vnd.libreoffice.cmis"_ustr;
 
-    static o3tl::enumarray<INetProtocol, SchemeInfo> const map = {
+    static o3tl::enumarray<INetProtocol, SchemeInfo> constexpr map = {
         // [-loplugin:redundantfcast]:
         SchemeInfo{
             EMPTY, "", false, false, false, false, false, false, false, false},
@@ -809,6 +809,17 @@ bool INetURLObject::setAbsURIRef(std::u16string_view rTheAbsURIRef,
                 eMechanism = EncodeMechanism::All;
                 nFragmentDelimiter = 0x80000000;
             }
+            else if (eStyle & FSysStyle::Dos
+                && pEnd - p1 >= 6
+                && p1[0] == '\\' && p1[1] == '\\' && p1[2] == '?' && p1[3] == '\\'
+                && rtl::isAsciiAlpha(p1[4])
+                && p1[5] == ':'
+                && (pEnd - p1 == 6 || p1[6] == '/' || p1[6] == '\\'))
+            {
+                m_eScheme = INetProtocol::File; // 8th, 9th
+                eMechanism = EncodeMechanism::All;
+                nFragmentDelimiter = 0x80000000;
+            }
             else if (pEnd - p1 >= 2 && p1[0] == '/' && p1[1] == '/')
             {
                 p1 += 2;
@@ -828,6 +839,14 @@ bool INetURLObject::setAbsURIRef(std::u16string_view rTheAbsURIRef,
                      && p1[1] == '\\')
             {
                 p1 += 2;
+                if (pEnd - p1 >= 6 && p1[0] == '?' && p1[1] == '\\' && p1[5] == '\\'
+                    && rtl::toAsciiLowerCase(p1[2]) == 'u'
+                    && rtl::toAsciiLowerCase(p1[3]) == 'n'
+                    && rtl::toAsciiLowerCase(p1[4]) == 'c')
+                {
+                    p1 += 6; // "\\?\UNC\Servername\..."
+                }
+
                 sal_Int32 n = rtl_ustr_indexOfChar_WithLength(
                     p1, pEnd - p1, '\\');
                 sal_Unicode const * pe = n == -1 ? pEnd : p1 + n;
@@ -916,7 +935,7 @@ bool INetURLObject::setAbsURIRef(std::u16string_view rTheAbsURIRef,
         }
 
         if (m_eScheme != INetProtocol::Generic) {
-            aSynScheme = static_cast<const OUString&>(getSchemeInfo().m_sScheme);
+            aSynScheme = getSchemeInfo().m_sScheme;
         }
         m_aScheme.set(m_aAbsURIRef, aSynScheme, m_aAbsURIRef.getLength());
         m_aAbsURIRef.append(':');
@@ -1161,6 +1180,16 @@ bool INetURLObject::setAbsURIRef(std::u16string_view rTheAbsURIRef,
                         && pPos[1] == '\\')
                     {
                         sal_Unicode const * p1 = pPos + 2;
+                        sal_Unicode const * pHostPortTentativeBegin = p1;
+                        if (pEnd - p1 >= 6 && p1[0] == '?' && p1[1] == '\\' && p1[5] == '\\'
+                            && rtl::toAsciiLowerCase(p1[2]) == 'u'
+                            && rtl::toAsciiLowerCase(p1[3]) == 'n'
+                            && rtl::toAsciiLowerCase(p1[4]) == 'c')
+                        {
+                            p1 += 6; // "\\?\UNC\Servername\..."
+                            pHostPortTentativeBegin = p1;
+                        }
+
                         sal_Unicode const * pe = p1;
                         while (pe < pEnd && *pe != '\\' &&
                                *pe != nFragmentDelimiter)
@@ -1175,7 +1204,7 @@ bool INetURLObject::setAbsURIRef(std::u16string_view rTheAbsURIRef,
                            )
                         {
                             m_aAbsURIRef.append("//");
-                            pHostPortBegin = pPos + 2;
+                            pHostPortBegin = pHostPortTentativeBegin;
                             pHostPortEnd = pe;
                             pPos = pe;
                             nSegmentDelimiter = '\\';
@@ -1193,18 +1222,26 @@ bool INetURLObject::setAbsURIRef(std::u16string_view rTheAbsURIRef,
                     //  becomes
                     //    "file:///" ALPHA ":" ["/" *path] ["#" *UCS4]
                     //  replacing "\" by "/" within <*path>
-                    if (eStyle & FSysStyle::Dos
-                        && pEnd - pPos >= 2
-                        && rtl::isAsciiAlpha(pPos[0])
-                        && pPos[1] == ':'
-                        && (pEnd - pPos == 2
-                            || pPos[2] == '/'
-                            || pPos[2] == '\\'))
+                    if (eStyle & FSysStyle::Dos)
                     {
-                        m_aAbsURIRef.append("//");
-                        nAltSegmentDelimiter = '\\';
-                        bSkippedInitialSlash = true;
-                        break;
+                        sal_Unicode const* p1 = pPos;
+                        if (pEnd - p1 >= 4 && p1[0] == '\\' && p1[1] == '\\' && p1[2] == '?'
+                            && p1[3] == '\\')
+                            p1 += 4; // "\\?\c:\..."
+
+                        if (pEnd - p1 >= 2
+                            && rtl::isAsciiAlpha(p1[0])
+                            && p1[1] == ':'
+                            && (pEnd - p1 == 2
+                                || p1[2] == '/'
+                                || p1[2] == '\\'))
+                        {
+                            pPos = p1;
+                            m_aAbsURIRef.append("//");
+                            nAltSegmentDelimiter = '\\';
+                            bSkippedInitialSlash = true;
+                            break;
+                        }
                     }
 
                     // 9th Production (any):
@@ -1581,12 +1618,35 @@ bool INetURLObject::convertRelToAbs(OUString const & rTheRelURIRef,
                 q += 2;
                 sal_Int32 n = rtl_ustr_indexOfChar_WithLength(
                     q, pEnd - q, '\\');
-                sal_Unicode const * qe = n == -1 ? pEnd : q + n;
-                if (parseHostOrNetBiosName(
-                        q, qe, EncodeMechanism::All, RTL_TEXTENCODING_DONTKNOW,
-                        true, nullptr))
+                if (n == 1 && q[0] == '?')
                 {
-                    bFSys = true; // 1st
+                    // "\\?\c:\..." or "\\?\UNC\servername\..."
+                    q += 2;
+                    if (pEnd - q >= 2
+                        && rtl::isAsciiAlpha(q[0])
+                        && q[1] == ':'
+                        && (pEnd - q == 2 || q[2] == '/' || q[2] == '\\'))
+                    {
+                        bFSys = true; // 2nd, 3rd
+                    }
+                    else if (pEnd - q >= 4
+                        && q[3] == '\\'
+                        && rtl::toAsciiLowerCase(q[0]) == 'u'
+                        && rtl::toAsciiLowerCase(q[1]) == 'n'
+                        && rtl::toAsciiLowerCase(q[2]) == 'c')
+                    {
+                        q += 4; // Check if it's 1st below
+                    }
+                }
+                if (!bFSys)
+                {
+                    sal_Unicode const * qe = n == -1 ? pEnd : q + n;
+                    if (parseHostOrNetBiosName(
+                            q, qe, EncodeMechanism::All, RTL_TEXTENCODING_DONTKNOW,
+                            true, nullptr))
+                    {
+                        bFSys = true; // 1st
+                    }
                 }
             }
             if (bFSys)
@@ -1669,7 +1729,7 @@ bool INetURLObject::convertRelToAbs(OUString const & rTheRelURIRef,
     // is empty ("") in that case, so take the scheme from m_aAbsURIRef
     if (m_eScheme != INetProtocol::Generic)
     {
-        aSynAbsURIRef.append(getSchemeInfo().m_sScheme.asView());
+        aSynAbsURIRef.append(getSchemeInfo().m_sScheme);
     }
     else
     {
@@ -2062,15 +2122,13 @@ bool INetURLObject::convertAbsToRel(OUString const & rTheAbsURIRef,
     // to the new relative URL:
     if (aSubject.m_aQuery.isPresent())
     {
-        aSynRelURIRef.append('?');
-        aSynRelURIRef.append(aSubject.decode(aSubject.m_aQuery,
-                                         eDecodeMechanism, eCharset));
+        aSynRelURIRef.append("?"
+            + aSubject.decode(aSubject.m_aQuery, eDecodeMechanism, eCharset));
     }
     if (aSubject.m_aFragment.isPresent())
     {
-        aSynRelURIRef.append('#');
-        aSynRelURIRef.append(aSubject.decode(aSubject.m_aFragment,
-            eDecodeMechanism, eCharset));
+        aSynRelURIRef.append("#"
+            + aSubject.decode(aSubject.m_aFragment, eDecodeMechanism, eCharset));
     }
 
     rTheRelURIRef = aSynRelURIRef.makeStringAndClear();
@@ -2985,7 +3043,8 @@ bool INetURLObject::parsePath(INetProtocol eScheme,
         case INetProtocol::Https:
         case INetProtocol::Smb:
         case INetProtocol::Cmis:
-            if (pPos < pEnd && *pPos != '/' && *pPos != nFragmentDelimiter)
+            if (pPos < pEnd && *pPos != '/' && *pPos != nQueryDelimiter
+                && *pPos != nFragmentDelimiter)
                 goto failed;
             while (pPos < pEnd && *pPos != nQueryDelimiter
                    && *pPos != nFragmentDelimiter)
@@ -3353,8 +3412,9 @@ bool INetURLObject::insertName(std::u16string_view rTheName,
     }
 
     OUStringBuffer aNewPath(256);
-    aNewPath.append(pPathBegin, pPrefixEnd - pPathBegin);
-    aNewPath.append('/');
+    aNewPath.append(
+        OUString::Concat(std::u16string_view(pPathBegin, pPrefixEnd - pPathBegin))
+        + "/");
     encodeText(aNewPath, rTheName, PART_PCHAR,
                eMechanism, eCharset, true);
     if (bInsertSlash) {
@@ -3546,7 +3606,7 @@ INetURLObject::getAbbreviated(
     // is empty ("") in that case, so take the scheme from m_aAbsURIRef
     if (m_eScheme != INetProtocol::Generic)
     {
-        aBuffer.append(getSchemeInfo().m_sScheme.asView());
+        aBuffer.append(getSchemeInfo().m_sScheme);
     }
     else
     {
@@ -3606,9 +3666,7 @@ INetURLObject::getAbbreviated(
                 OUStringBuffer aResult(aBuffer);
                 if (pSuffixEnd != pBegin)
                     aResult.append("...");
-                aResult.append(aSegment);
-                aResult.append(aTrailer);
-                aResult.append(aRest);
+                aResult.append(aSegment + aTrailer + aRest);
                 if (rStringWidth->
                             queryStringWidth(aResult.makeStringAndClear())
                         <= nWidth)
@@ -3643,12 +3701,10 @@ INetURLObject::getAbbreviated(
                                     eMechanism,
                                     eCharset));
                 pPrefixBegin = p;
-                OUStringBuffer aResult(aBuffer);
-                aResult.append(aSegment);
+                OUStringBuffer aResult(aBuffer + aSegment);
                 if (pPrefixBegin != pEnd)
                     aResult.append("...");
-                aResult.append(aTrailer);
-                aResult.append(aRest);
+                aResult.append(aTrailer + aRest);
                 if (rStringWidth->
                             queryStringWidth(aResult.makeStringAndClear())
                         <= nWidth)
@@ -3680,13 +3736,11 @@ INetURLObject::getAbbreviated(
                               eCharset));
     if (m_aQuery.isPresent())
     {
-        aBuffer.append('?');
-        aBuffer.append(decode(m_aQuery, eMechanism, eCharset));
+        aBuffer.append("?" + decode(m_aQuery, eMechanism, eCharset));
     }
     if (m_aFragment.isPresent())
     {
-        aBuffer.append('#');
-        aBuffer.append(decode(m_aFragment, eMechanism, eCharset));
+        aBuffer.append("#" + decode(m_aFragment, eMechanism, eCharset));
     }
     if (!aBuffer.isEmpty())
     {
@@ -3781,7 +3835,7 @@ bool INetURLObject::ConcatData(INetProtocol eTheScheme,
     if (HasError() || m_eScheme == INetProtocol::Generic)
         return false;
     m_aAbsURIRef.setLength(0);
-    m_aAbsURIRef.append(getSchemeInfo().m_sScheme.asView());
+    m_aAbsURIRef.append(getSchemeInfo().m_sScheme);
     m_aAbsURIRef.append(':');
     if (getSchemeInfo().m_bAuthority)
     {
@@ -3979,8 +4033,7 @@ OUString INetURLObject::GetHostPort(DecodeMechanism eMechanism,
     OUStringBuffer aHostPort(decode(m_aHost, eMechanism, eCharset));
     if (m_aPort.isPresent())
     {
-        aHostPort.append(':');
-        aHostPort.append(decode(m_aPort, eMechanism, eCharset));
+        aHostPort.append(":" + decode(m_aPort, eMechanism, eCharset));
     }
     return aHostPort.makeStringAndClear();
 }
@@ -4361,8 +4414,7 @@ OUString INetURLObject::getFSysPath(FSysStyle eStyle,
             if (pDelimiter)
                 *pDelimiter = '/';
 
-            OUStringBuffer aSynFSysPath;
-            aSynFSysPath.append("//");
+            OUStringBuffer aSynFSysPath("//");
             if (m_aHost.isPresent() && m_aHost.getLength() > 0)
                 aSynFSysPath.append(decode(m_aHost, DecodeMechanism::WithCharset,
                                        RTL_TEXTENCODING_UTF8));
@@ -4392,10 +4444,9 @@ OUString INetURLObject::getFSysPath(FSysStyle eStyle,
             OUStringBuffer aSynFSysPath(64);
             if (m_aHost.isPresent() && m_aHost.getLength() > 0)
             {
-                aSynFSysPath.append("\\\\");
-                aSynFSysPath.append(decode(m_aHost, DecodeMechanism::WithCharset,
-                                       RTL_TEXTENCODING_UTF8));
-                aSynFSysPath.append('\\');
+                aSynFSysPath.append("\\\\"
+                    + decode(m_aHost, DecodeMechanism::WithCharset, RTL_TEXTENCODING_UTF8)
+                    + "\\");
             }
             sal_Unicode const * p
                 = m_aAbsURIRef.getStr() + m_aPath.getBegin();

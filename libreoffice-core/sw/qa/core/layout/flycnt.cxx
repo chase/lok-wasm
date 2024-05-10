@@ -84,8 +84,8 @@ void Test::Create1x2SplitFly()
     pWrtShell->EndAllAction();
     // Allow the text frame to split:
     pWrtShell->StartAllAction();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    auto& rFlys = *pDoc->GetSpzFrameFormats();
+    auto pFly = rFlys[0];
     SwAttrSet aSet(pFly->GetAttrSet());
     aSet.Put(SwFormatFlySplit(true));
     pDoc->SetAttr(aSet, *pFly);
@@ -303,7 +303,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyEnable)
 
 CPPUNIT_TEST_FIXTURE(Test, testSplitFlyDisable)
 {
-    // Given a document with a floating talbe, table split on 2 pages:
+    // Given a document with a floating table, table split on 2 pages:
     Create1x2SplitFly();
     SwDoc* pDoc = getSwDoc();
     SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
@@ -440,7 +440,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyWidow)
     // - Expected: 6
     // - Actual  : 7
     // i.e. widow control was disabled, layout didn't match Word.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uLong>(6), pText1->GetThisLines());
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(6), pText1->GetThisLines());
     auto pPage2 = dynamic_cast<SwPageFrame*>(pPage1->GetNext());
     CPPUNIT_ASSERT(pPage2);
     const SwSortedObjs& rPage2Objs = *pPage2->GetSortedObjs();
@@ -457,7 +457,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyWidow)
     SwFrame* pCell2 = pRow2->GetLower();
     auto pText2 = dynamic_cast<SwTextFrame*>(pCell2->GetLower());
     // And then similarly this was 1, not 2.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uLong>(2), pText2->GetThisLines());
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(2), pText2->GetThisLines());
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testSplitFlyCompat14)
@@ -1235,8 +1235,8 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyPerFrameWrapOnAllPages)
     // Given a document where we want to wrap on all pages, around a split floating table:
     createSwDoc("floattable-wrap-on-all-pages.docx");
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    sw::SpzFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = rFlys[0];
     SfxItemSet aSet(pFly->GetAttrSet());
     SwFormatWrapTextAtFlyStart aItem(true);
     aSet.Put(aItem);

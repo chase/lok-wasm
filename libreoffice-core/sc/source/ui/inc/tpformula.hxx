@@ -33,6 +33,8 @@ public:
     Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rCoreSet);
     virtual ~ScTpFormulaOptions() override;
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool FillItemSet(SfxItemSet* rCoreSet) override;
     virtual void Reset(const SfxItemSet* rCoreSet) override;
     virtual DeactivateRC DeactivatePage(SfxItemSet* pSet) override;
@@ -80,6 +82,7 @@ private:
 
     std::unique_ptr<weld::ComboBox> mxLbOOXMLRecalcOptions;
     std::unique_ptr<weld::ComboBox> mxLbODFRecalcOptions;
+    std::unique_ptr<weld::ComboBox> mxLbRowHeightReCalcOptions;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -43,6 +43,7 @@
 #include <sfx2/objsh.hxx>
 #include <sfx2/tplpitem.hxx>
 #include <sfx2/sfxresid.hxx>
+#include <svl/itemset.hxx>
 
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/strings.hrc>
@@ -107,17 +108,6 @@ IMPL_LINK(SfxCommonTemplateDialog_Impl, OnAsyncExecuteDrop, void*, pStyleList, v
         ActionSelect("new", m_aStyleList);
 }
 
-SfxTemplatePanelControl::SfxTemplatePanelControl(SfxBindings* pBindings, weld::Widget* pParent)
-    : PanelLayout(pParent, "TemplatePanel", "sfx/ui/templatepanel.ui")
-    , pImpl(new SfxTemplateDialog_Impl(pBindings, this))
-{
-    OSL_ASSERT(pBindings!=nullptr);
-}
-
-SfxTemplatePanelControl::~SfxTemplatePanelControl()
-{
-}
-
 namespace SfxTemplate
 {
     // converts from SFX_STYLE_FAMILY Ids to 1-6
@@ -133,6 +123,82 @@ namespace SfxTemplate
             case SfxStyleFamily::Table:  return 6;
             default:                     return 0xffff;
         }
+    }
+    // converts from 1-6 to SFX_STYLE_FAMILY Ids
+    static SfxStyleFamily NIdToSfxFamilyId(sal_uInt16 nId)
+    {
+        switch (nId)
+        {
+            case 1:
+                return SfxStyleFamily::Char;
+            case 2:
+                return SfxStyleFamily::Para;
+            case 3:
+                return SfxStyleFamily::Frame;
+            case 4:
+                return SfxStyleFamily::Page;
+            case 5:
+                return SfxStyleFamily::Pseudo;
+            case 6:
+                return SfxStyleFamily::Table;
+            default:
+                return SfxStyleFamily::All;
+        }
+    }
+}
+
+SfxTemplatePanelControl::SfxTemplatePanelControl(SfxBindings* pBindings, weld::Widget* pParent)
+    : PanelLayout(pParent, "TemplatePanel", "sfx/ui/templatepanel.ui")
+    , m_aSpotlightParaStyles(SID_SPOTLIGHT_PARASTYLES, *pBindings, *this)
+    , m_aSpotlightCharStyles(SID_SPOTLIGHT_CHARSTYLES, *pBindings, *this)
+    , pImpl(new SfxTemplateDialog_Impl(pBindings, this))
+{
+    OSL_ASSERT(pBindings!=nullptr);
+}
+
+SfxTemplatePanelControl::~SfxTemplatePanelControl()
+{
+    m_aSpotlightParaStyles.dispose();
+    m_aSpotlightCharStyles.dispose();
+}
+
+void SfxTemplatePanelControl::NotifyItemUpdate(const sal_uInt16 nSId, const SfxItemState eState,
+                                               const SfxPoolItem* pState)
+{
+    switch (nSId)
+    {
+        case SID_SPOTLIGHT_PARASTYLES:
+            if (eState >= SfxItemState::DEFAULT)
+            {
+                const SfxBoolItem* pItem = dynamic_cast<const SfxBoolItem*>(pState);
+                if (pItem)
+                {
+                    bool bValue = pItem->GetValue();
+                    if (bValue || (!bValue && pImpl->m_aStyleList.IsHighlightParaStyles()))
+                    {
+                        pImpl->m_aStyleList.SetHighlightParaStyles(bValue);
+                        pImpl->FamilySelect(SfxTemplate::SfxFamilyIdToNId(SfxStyleFamily::Para),
+                                            pImpl->m_aStyleList, true);
+                    }
+                }
+            }
+            break;
+        case SID_SPOTLIGHT_CHARSTYLES:
+            if (eState >= SfxItemState::DEFAULT)
+            {
+                const SfxBoolItem* pItem = dynamic_cast<const SfxBoolItem*>(pState);
+                if (pItem)
+                {
+                    bool bValue = pItem->GetValue();
+                    if (bValue || (!bValue && pImpl->m_aStyleList.IsHighlightCharStyles()))
+                    {
+                        pImpl->m_aStyleList.SetHighlightCharStyles(bValue);
+                        pImpl->FamilySelect(SfxTemplate::SfxFamilyIdToNId(SfxStyleFamily::Char),
+                                            pImpl->m_aStyleList, true);
+                    }
+                }
+            }
+            break;
     }
 }
 
@@ -176,6 +242,7 @@ SfxCommonTemplateDialog_Impl::SfxCommonTemplateDialog_Impl(SfxBindings* pB, weld
     , m_pDeletionWatcher(nullptr)
     , m_aStyleList(pBuilder, pB, this, pC, "treeview", "flatview")
     , mxPreviewCheckbox(pBuilder->weld_check_button("showpreview"))
+    , mxHighlightCheckbox(pBuilder->weld_check_button("highlightstyles"))
     , mxFilterLb(pBuilder->weld_combo_box("filter"))
     , nActFamily(0xffff)
     , nActFilter(0)
@@ -262,7 +329,13 @@ void SfxCommonTemplateDialog_Impl::Initialize()
 
     mxFilterLb->connect_changed(LINK(this, SfxCommonTemplateDialog_Impl, FilterSelectHdl));
     mxPreviewCheckbox->connect_toggled(LINK(this, SfxCommonTemplateDialog_Impl, PreviewHdl));
+    mxHighlightCheckbox->connect_toggled(LINK(this, SfxCommonTemplateDialog_Impl, HighlightHdl));
+
     m_aStyleList.Initialize();
+
+    SfxStyleFamily eFam = SfxTemplate::NIdToSfxFamilyId(nActFamily);
+    mxHighlightCheckbox->set_visible(m_aStyleList.HasStylesHighlighterFeature()
+                                && (eFam == SfxStyleFamily::Para || eFam == SfxStyleFamily::Char));
 }
 
 IMPL_LINK(SfxCommonTemplateDialog_Impl, UpdateStyles_Hdl, StyleFlags, nFlags, void)
@@ -271,7 +344,7 @@ IMPL_LINK(SfxCommonTemplateDialog_Impl, UpdateStyles_Hdl, StyleFlags, nFlags, vo
 
     if (nFlags & StyleFlags::UpdateFamily) // Update view type list (Hierarchical, All, etc.
     {
-        CheckItem(OString::number(nActFamily)); // check Button in Toolbox
+        CheckItem(OUString::number(nActFamily)); // check Button in Toolbox
 
         mxFilterLb->freeze();
         mxFilterLb->clear();
@@ -320,6 +393,21 @@ IMPL_LINK(SfxCommonTemplateDialog_Impl, UpdateStyles_Hdl, StyleFlags, nFlags, vo
 
 SfxCommonTemplateDialog_Impl::~SfxCommonTemplateDialog_Impl()
 {
+    // Set the UNO's in an 'off' state. FN_PARAM_1 is used to prevent the sidebar from trying to
+    // reopen while it is being closed here.
+    if (m_aStyleList.IsHighlightParaStyles())
+    {
+        SfxDispatcher &rDispatcher = *SfxGetpApp()->GetDispatcher_Impl();
+        SfxFlagItem aParam(FN_PARAM_1);
+        rDispatcher.ExecuteList(SID_SPOTLIGHT_PARASTYLES, SfxCallMode::SYNCHRON, { &aParam });
+    }
+    if (m_aStyleList.IsHighlightCharStyles())
+    {
+        SfxDispatcher &rDispatcher = *SfxGetpApp()->GetDispatcher_Impl();
+        SfxFlagItem aParam(FN_PARAM_1);
+        rDispatcher.ExecuteList(SID_SPOTLIGHT_CHARSTYLES, SfxCallMode::SYNCHRON, { &aParam });
+    }
+
     if ( bIsWater )
         Execute_Impl(SID_STYLE_WATERCAN, "", "", 0, m_aStyleList);
     m_aStyleListClear.Call(nullptr);
@@ -425,19 +513,19 @@ bool SfxCommonTemplateDialog_Impl::Execute_Impl(
 
     DeletionWatcher aDeleted(*this);
     sal_uInt16 nModi = pModifier ? *pModifier : 0;
-    const SfxPoolItem* pItem = rDispatcher.Execute(
+    const SfxPoolItemHolder aResult(rDispatcher.Execute(
         nId, SfxCallMode::SYNCHRON | SfxCallMode::RECORD,
-        pItems, nModi );
+        pItems, nModi));
 
     // Dialog can be destroyed while in Execute() because started
     // subdialogs are not modal to it (#i97888#).
-    if ( !pItem || aDeleted )
+    if ( nullptr == aResult.getItem() || aDeleted )
         return false;
 
     if ((nId == SID_STYLE_NEW || SID_STYLE_EDIT == nId)
         && rStyleList.EnableExecute())
     {
-        const SfxUInt16Item *pFilterItem = dynamic_cast< const SfxUInt16Item* >(pItem);
+        const SfxUInt16Item* pFilterItem(dynamic_cast<const SfxUInt16Item*>(aResult.getItem()));
         assert(pFilterItem);
         SfxStyleSearchBits nFilterFlags = static_cast<SfxStyleSearchBits>(pFilterItem->GetValue()) & ~SfxStyleSearchBits::UserDefined;
         if(nFilterFlags == SfxStyleSearchBits::Auto)       // User Template?
@@ -460,6 +548,7 @@ bool SfxCommonTemplateDialog_Impl::Execute_Impl(
 // Handler Listbox of Filter
 void SfxCommonTemplateDialog_Impl::EnableHierarchical(bool const bEnable, StyleList& rStyleList)
 {
+    OUString aSelectedEntry = rStyleList.GetSelectedEntry();
     if (bEnable)
     {
         if (!rStyleList.IsHierarchical())
@@ -476,19 +565,17 @@ void SfxCommonTemplateDialog_Impl::EnableHierarchical(bool const bEnable, StyleL
         // If bHierarchical, then the family can have changed
         // minus one since hierarchical is inserted at the start
         m_bWantHierarchical = false; // before FilterSelect
-        FilterSelect(mxFilterLb->get_active() - 1, rStyleList.IsHierarchical() );
+        FilterSelect(mxFilterLb->get_active() - 1);
     }
+    SelectStyle(aSelectedEntry, false, rStyleList);
 }
 
 // Other filters; can be switched by the users or as a result of new or
 // editing, if the current document has been assigned a different filter.
 void SfxCommonTemplateDialog_Impl::FilterSelect(
-    sal_uInt16 nEntry, // Idx of the new Filters
-    bool bForce) // Force update, even if the new filter is equal to the current
+    sal_uInt16 nEntry // Idx of the new Filters
+    )
 {
-    if (nEntry == nActFilter && !bForce)
-        return;
-
     nActFilter = nEntry;
     m_aStyleList.FilterSelect(nActFilter, true);
 }
@@ -517,18 +604,31 @@ IMPL_LINK(SfxCommonTemplateDialog_Impl, FilterSelectHdl, weld::ComboBox&, rBox, 
 }
 
 // Select-Handler for the Toolbox
-void SfxCommonTemplateDialog_Impl::FamilySelect(sal_uInt16 nEntry, StyleList&, bool bPreviewRefresh)
+void SfxCommonTemplateDialog_Impl::FamilySelect(sal_uInt16 nEntry, StyleList&, bool bRefresh)
 {
     assert((0 < nEntry && nEntry <= MAX_FAMILIES) || 0xffff == nEntry);
-    if( nEntry != nActFamily || bPreviewRefresh )
+    if( nEntry != nActFamily || bRefresh )
     {
-        CheckItem(OString::number(nActFamily), false);
+        CheckItem(OUString::number(nActFamily), false);
         nActFamily = nEntry;
-        m_aStyleList.FamilySelect(nEntry);
+        m_aStyleList.FamilySelect(nEntry, bRefresh);
+
+        SfxStyleFamily eFam = SfxTemplate::NIdToSfxFamilyId(nActFamily);
+        mxHighlightCheckbox->set_visible(m_aStyleList.HasStylesHighlighterFeature()
+                                && (eFam == SfxStyleFamily::Para || eFam == SfxStyleFamily::Char));
+        if (mxHighlightCheckbox->is_visible())
+        {
+            bool bActive = false;
+            if (eFam == SfxStyleFamily::Para)
+                bActive = m_aStyleList.IsHighlightParaStyles();
+            else if (eFam == SfxStyleFamily::Char)
+                bActive = m_aStyleList.IsHighlightCharStyles();
+            mxHighlightCheckbox->set_active(bActive);
+        }
     }
 }
 
-void SfxCommonTemplateDialog_Impl::ActionSelect(const OString& rEntry, StyleList& rStyleList)
+void SfxCommonTemplateDialog_Impl::ActionSelect(const OUString& rEntry, StyleList& rStyleList)
 {
     if (rEntry == "watercan")
     {
@@ -632,9 +732,17 @@ IMPL_LINK_NOARG(SfxCommonTemplateDialog_Impl, PreviewHdl, weld::Toggleable&, voi
     officecfg::Office::Common::StylesAndFormatting::Preview::set(bCustomPreview, batch );
     batch->commit();
 
-    m_aStyleList.EnablePreview(bCustomPreview);
-
     FamilySelect(nActFamily, m_aStyleList, true);
+}
+
+IMPL_LINK_NOARG(SfxCommonTemplateDialog_Impl, HighlightHdl, weld::Toggleable&, void)
+{
+    SfxDispatcher &rDispatcher = *SfxGetpApp()->GetDispatcher_Impl();
+    SfxStyleFamily eFam = SfxTemplate::NIdToSfxFamilyId(nActFamily);
+    if (eFam == SfxStyleFamily::Para)
+       rDispatcher.Execute(SID_SPOTLIGHT_PARASTYLES, SfxCallMode::SYNCHRON);
+    else if (eFam == SfxStyleFamily::Char)
+       rDispatcher.Execute(SID_SPOTLIGHT_CHARSTYLES, SfxCallMode::SYNCHRON);
 }
 
 IMPL_LINK_NOARG(SfxCommonTemplateDialog_Impl, UpdateStyleDependents_Hdl, void*, void)
@@ -715,13 +823,13 @@ void SfxTemplateDialog_Impl::Initialize()
 
 void SfxTemplateDialog_Impl::EnableFamilyItem(sal_uInt16 nId, bool bEnable)
 {
-    m_xActionTbL->set_item_sensitive(OString::number(nId), bEnable);
+    m_xActionTbL->set_item_sensitive(OUString::number(nId), bEnable);
 }
 
 // Insert element into dropdown filter "Frame Styles", "List Styles", etc.
 void SfxTemplateDialog_Impl::InsertFamilyItem(sal_uInt16 nId, const SfxStyleFamilyItem &rItem)
 {
-    OString sHelpId;
+    OUString sHelpId;
     switch( rItem.GetFamily() )
     {
         case SfxStyleFamily::Char:     sHelpId = ".uno:CharStyle"; break;
@@ -733,7 +841,7 @@ void SfxTemplateDialog_Impl::InsertFamilyItem(sal_uInt16 nId, const SfxStyleFami
         default: OSL_FAIL("unknown StyleFamily"); break;
     }
 
-    OString sId(OString::number(nId));
+    OUString sId(OUString::number(nId));
     m_xActionTbL->set_item_visible(sId, true);
     m_xActionTbL->set_item_icon_name(sId, rItem.GetImage());
     m_xActionTbL->set_item_tooltip_text(sId, rItem.GetText());
@@ -763,14 +871,14 @@ SfxTemplateDialog_Impl::~SfxTemplateDialog_Impl()
     m_xActionTbR.reset();
 }
 
-void SfxTemplateDialog_Impl::EnableItem(const OString& rMesId, bool bCheck)
+void SfxTemplateDialog_Impl::EnableItem(const OUString& rMesId, bool bCheck)
 {
     if (rMesId == "watercan" && !bCheck && IsCheckedItem("watercan"))
         Execute_Impl(SID_STYLE_WATERCAN, "", "", 0, m_aStyleList);
     m_xActionTbR->set_item_sensitive(rMesId, bCheck);
 }
 
-void SfxTemplateDialog_Impl::CheckItem(const OString &rMesId, bool bCheck)
+void SfxTemplateDialog_Impl::CheckItem(const OUString &rMesId, bool bCheck)
 {
     if (rMesId == "watercan")
     {
@@ -781,19 +889,19 @@ void SfxTemplateDialog_Impl::CheckItem(const OString &rMesId, bool bCheck)
         m_xActionTbL->set_item_active(rMesId, bCheck);
 }
 
-bool SfxTemplateDialog_Impl::IsCheckedItem(const OString& rMesId)
+bool SfxTemplateDialog_Impl::IsCheckedItem(const OUString& rMesId)
 {
     if (rMesId == "watercan")
         return m_xActionTbR->get_item_active("watercan");
     return m_xActionTbL->get_item_active(rMesId);
 }
 
-IMPL_LINK( SfxTemplateDialog_Impl, ToolBoxLSelect, const OString&, rEntry, void)
+IMPL_LINK( SfxTemplateDialog_Impl, ToolBoxLSelect, const OUString&, rEntry, void)
 {
     FamilySelect(rEntry.toUInt32(), m_aStyleList);
 }
 
-IMPL_LINK(SfxTemplateDialog_Impl, ToolBoxRSelect, const OString&, rEntry, void)
+IMPL_LINK(SfxTemplateDialog_Impl, ToolBoxRSelect, const OUString&, rEntry, void)
 {
     if (rEntry == "newmenu")
         m_xActionTbR->set_menu_item_active(rEntry, !m_xActionTbR->get_menu_item_active(rEntry));
@@ -819,7 +927,7 @@ void SfxTemplateDialog_Impl::FillToolMenu()
     m_xToolMenu->append("load", sLabel);
 }
 
-IMPL_LINK(SfxTemplateDialog_Impl, ToolMenuSelectHdl, const OString&, rMenuId, void)
+IMPL_LINK(SfxTemplateDialog_Impl, ToolMenuSelectHdl, const OUString&, rMenuId, void)
 {
     if (rMenuId.isEmpty())
         return;
@@ -865,7 +973,7 @@ sal_Int8 SfxTemplateDialog_Impl::AcceptToolbarDrop(const AcceptDropEvent& rEvt, 
     if (nIndex >= m_nActionTbLVisible)
         nIndex = m_nActionTbLVisible - 1;
 
-    OString sIdent = m_xActionTbL->get_item_ident(nIndex);
+    OUString sIdent = m_xActionTbL->get_item_ident(nIndex);
     if (!sIdent.isEmpty() && !m_xActionTbL->get_item_active(sIdent))
         ToolBoxLSelect(sIdent);
 

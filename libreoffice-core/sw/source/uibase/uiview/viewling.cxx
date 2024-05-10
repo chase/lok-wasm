@@ -65,6 +65,7 @@
 #include <com/sun/star/frame/XFrame.hpp>
 #include <com/sun/star/frame/XPopupMenuController.hpp>
 #include <com/sun/star/awt/PopupMenuDirection.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -347,7 +348,7 @@ void SwView::SpellError(LanguageType eLang)
     if ( LANGUAGE_NONE == eLang )
         ErrorHandler::HandleError( ERRCODE_SVX_LINGU_NOLANGUAGE );
     else
-        ErrorHandler::HandleError( *new StringErrorInfo( ERRCODE_SVX_LINGU_LANGUAGENOTEXISTS, aErr ) );
+        ErrorHandler::HandleError( ErrCodeMsg( ERRCODE_SVX_LINGU_LANGUAGENOTEXISTS, aErr ) );
 
     while( nWaitCnt )
     {
@@ -724,11 +725,11 @@ bool SwView::ExecSpellPopup(const Point& rPt)
                 aEvent.SourceWindow = VCLUnoHelper::GetInterface( m_pEditWin );
                 aEvent.ExecutePosition.X = aPixPos.X();
                 aEvent.ExecutePosition.Y = aPixPos.Y();
-                css::uno::Reference<css::awt::XPopupMenu> xMenu;
+                rtl::Reference<VCLXPopupMenu> xMenu;
 
                 OUString sMenuName = bUseGrammarContext ?
                     OUString("private:resource/GrammarContextMenu") : OUString("private:resource/SpellContextMenu");
-                auto xMenuInterface = xPopup->CreateMenuInterface();
+                rtl::Reference<VCLXPopupMenu> xMenuInterface = xPopup->CreateMenuInterface();
                 if (TryContextMenuInterception(xMenuInterface, sMenuName, xMenu, aEvent))
                 {
                     //! happy hacking for context menu modifying extensions of this
@@ -741,15 +742,13 @@ bool SwView::ExecSpellPopup(const Point& rPt)
                         OUString aCommand = xMenu->getCommand(nId);
                         if (aCommand.isEmpty() )
                         {
-                            if (!ExecuteMenuCommand(xMenu, *GetViewFrame(), nId))
+                            if (!ExecuteMenuCommand(xMenu, GetViewFrame(), nId))
                                 xPopup->Execute(nId);
                         }
                         else
                         {
-                            SfxViewFrame *pSfxViewFrame = GetViewFrame();
-                            uno::Reference< frame::XFrame > xFrame;
-                            if ( pSfxViewFrame )
-                                xFrame = pSfxViewFrame->GetFrame().GetFrameInterface();
+                            SfxViewFrame& rSfxViewFrame = GetViewFrame();
+                            uno::Reference<frame::XFrame> xFrame = rSfxViewFrame.GetFrame().GetFrameInterface();
                             css::util::URL aURL;
                             uno::Reference< frame::XDispatchProvider > xDispatchProvider( xFrame, UNO_QUERY );
 
@@ -790,7 +789,7 @@ bool SwView::ExecSpellPopup(const Point& rPt)
 
                                 std::stringstream aStream;
                                 boost::property_tree::write_json(aStream, aRoot, true);
-                                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU, aStream.str().c_str());
+                                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU, OString(aStream.str()));
                             }
                         }
                         else

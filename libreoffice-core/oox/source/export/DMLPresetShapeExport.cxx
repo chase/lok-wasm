@@ -43,47 +43,45 @@ DMLPresetShapeExporter::DMLPresetShapeExporter(DrawingML* pDMLExporter,
         = xShapeProps->getPropertyValue("CustomShapeGeometry")
               .get<uno::Sequence<beans::PropertyValue>>();
 
-    for (sal_uInt32 i = 0; i < aCustomShapeGeometry.size(); i++)
+    for (auto const& rCustomShapeGeometryItem : aCustomShapeGeometry)
     {
-        if (aCustomShapeGeometry[i].Name == "Type")
+        if (rCustomShapeGeometryItem.Name == "Type")
         {
-            m_sPresetShapeType = aCustomShapeGeometry[i].Value.get<OUString>();
+            m_sPresetShapeType = rCustomShapeGeometryItem.Value.get<OUString>();
         }
-        if (aCustomShapeGeometry[i].Name == "Handles")
+        if (rCustomShapeGeometryItem.Name == "Handles")
         {
             m_bHasHandleValues = true;
             m_HandleValues
-                = aCustomShapeGeometry[i]
-                      .Value
+                = rCustomShapeGeometryItem.Value
                       .get<css::uno::Sequence<css::uno::Sequence<css::beans::PropertyValue>>>();
         }
-        if (aCustomShapeGeometry[i].Name == "AdjustmentValues")
+        if (rCustomShapeGeometryItem.Name == "AdjustmentValues")
         {
             m_AdjustmentValues
-                = aCustomShapeGeometry[i]
-                      .Value
+                = rCustomShapeGeometryItem.Value
                       .get<css::uno::Sequence<css::drawing::EnhancedCustomShapeAdjustmentValue>>();
         }
-        if (aCustomShapeGeometry[i].Name == "MirroredX")
+        if (rCustomShapeGeometryItem.Name == "MirroredX")
         {
-            m_bIsFlipped.first = aCustomShapeGeometry[i].Value.get<bool>();
+            m_bIsFlipped.first = rCustomShapeGeometryItem.Value.get<bool>();
         }
-        if (aCustomShapeGeometry[i].Name == "MirroredY")
+        if (rCustomShapeGeometryItem.Name == "MirroredY")
         {
-            m_bIsFlipped.second = aCustomShapeGeometry[i].Value.get<bool>();
+            m_bIsFlipped.second = rCustomShapeGeometryItem.Value.get<bool>();
         }
-        //if (aCustomShapeGeometry[i].Name == "Equations")
+        //if (rCustomShapeGeometryItem.Name == "Equations")
         //{
-        //    m_Equations = aCustomShapeGeometry[i].Value.get<css::uno::Sequence<OUString>>();
+        //    m_Equations = rCustomShapeGeometryItem.Value.get<css::uno::Sequence<OUString>>();
         //}
-        //if (aCustomShapeGeometry[i].Name == "Path")
+        //if (rCustomShapeGeometryItem.Name == "Path")
         //{
-        //    m_Path = aCustomShapeGeometry[i]
+        //    m_Path = rCustomShapeGeometryItem
         //                 .Value.get<css::uno::Sequence<css::beans::PropertyValue>>();
         //}
-        //if (aCustomShapeGeometry[i].Name == "ViewBox")
+        //if (rCustomShapeGeometryItem.Name == "ViewBox")
         //{
-        //    m_ViewBox = aCustomShapeGeometry[i].Value.get<css::awt::Rectangle>();
+        //    m_ViewBox = rCustomShapeGeometryItem.Value.get<css::awt::Rectangle>();
         //}
     }
 };
@@ -429,7 +427,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * 50000);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "blockArc")
@@ -451,9 +449,9 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal3 = std::lround(
                 50000 - (*aPointR.nCurrVal / (*aPointR.nMaxVal - *aPointR.nMinVal) * 50000));
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
-                   && WriteAV(u"adj3", OUString(u"val " + OUString::number(nVal3)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj3"_ustr, OUString(u"val " + OUString::number(nVal3)))
                    && EndAVListWriting();
         }
         if (sShapeType == "borderCallout1")
@@ -483,7 +481,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * 25000);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "bracketPair")
@@ -498,7 +496,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * 50000);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "callout1")
@@ -656,8 +654,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal2 = std::lround((*aPointY.nMaxVal - *aPointY.nCurrVal)
                                             / (*aPointY.nMaxVal - *aPointY.nMinVal) * nMaxVal2);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
                    && EndAVListWriting();
         }
         if (sShapeType == "downArrowCallout")
@@ -696,10 +694,10 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal4 = std::lround((*aBoxHeight.nCurrVal - *aBoxHeight.nMinVal)
                                             / (21600 - *aBoxHeight.nMinVal) * 100000);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
-                   && WriteAV(u"adj3", OUString(u"val " + OUString::number(nVal3)))
-                   && WriteAV(u"adj4", OUString(u"val " + OUString::number(nVal4)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj3"_ustr, OUString(u"val " + OUString::number(nVal3)))
+                   && WriteAV(u"adj4"_ustr, OUString(u"val " + OUString::number(nVal4)))
                    && EndAVListWriting();
         }
         if (sShapeType == "ellipse")
@@ -921,8 +919,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * nMaxVal);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"vf", OUString(u"val " + OUString::number(115470)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"vf"_ustr, OUString(u"val " + OUString::number(115470)))
                    && EndAVListWriting();
         }
         if (sShapeType == "homePlate")
@@ -966,8 +964,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal2 = std::lround((*aPointX.nCurrVal - *aPointX.nMinVal)
                                             / (*aPointX.nMaxVal - *aPointX.nMinVal) * nMaxVal2);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
                    && EndAVListWriting();
         }
         if (sShapeType == "leftArrowCallout")
@@ -1005,10 +1003,10 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal4 = std::lround((*aBoxWidth.nMaxVal - *aBoxWidth.nCurrVal)
                                             / (*aBoxWidth.nMaxVal - *aBoxWidth.nMinVal) * 100000);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
-                   && WriteAV(u"adj3", OUString(u"val " + OUString::number(nVal3)))
-                   && WriteAV(u"adj4", OUString(u"val " + OUString::number(nVal4)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj3"_ustr, OUString(u"val " + OUString::number(nVal3)))
+                   && WriteAV(u"adj4"_ustr, OUString(u"val " + OUString::number(nVal4)))
                    && EndAVListWriting();
         }
         if (sShapeType == "leftBrace")
@@ -1047,8 +1045,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal2 = std::lround((*aPointX.nCurrVal - *aPointX.nMinVal)
                                             / (*aPointX.nMaxVal - *aPointX.nMinVal) * nMaxVal2);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
                    && EndAVListWriting();
         }
         if (sShapeType == "leftRightArrowCallout")
@@ -1086,10 +1084,10 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal4 = std::lround((*aBoxHeight.nCurrVal - *aBoxHeight.nMinVal)
                                             / (10800 - *aBoxHeight.nMinVal) * 100000);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
-                   && WriteAV(u"adj3", OUString(u"val " + OUString::number(nVal3)))
-                   && WriteAV(u"adj4", OUString(u"val " + OUString::number(nVal4)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj3"_ustr, OUString(u"val " + OUString::number(nVal3)))
+                   && WriteAV(u"adj4"_ustr, OUString(u"val " + OUString::number(nVal4)))
                    && EndAVListWriting();
         }
         if (sShapeType == "leftRightCircularArrow")
@@ -1185,7 +1183,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * 50000);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "parallelogram")
@@ -1202,7 +1200,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * nMaxVal);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "pentagon")
@@ -1242,7 +1240,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * 50000);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "quadArrow")
@@ -1291,8 +1289,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal2 = std::lround((*aPointX.nMaxVal - *aPointX.nCurrVal)
                                             / (*aPointX.nMaxVal - *aPointX.nMinVal) * nMaxVal2);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
                    && EndAVListWriting();
         }
         if (sShapeType == "rightArrowCallout")
@@ -1331,10 +1329,10 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal4 = std::lround((*aBoxWidth.nCurrVal - *aBoxWidth.nMinVal)
                                             / (21600 - *aBoxWidth.nMinVal) * 100000);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
-                   && WriteAV(u"adj3", OUString(u"val " + OUString::number(nVal3)))
-                   && WriteAV(u"adj4", OUString(u"val " + OUString::number(nVal4)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj3"_ustr, OUString(u"val " + OUString::number(nVal3)))
+                   && WriteAV(u"adj4"_ustr, OUString(u"val " + OUString::number(nVal4)))
                    && EndAVListWriting();
         }
         if (sShapeType == "rightBrace")
@@ -1387,7 +1385,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             m_pDMLexporter->WriteShapeTransformation(m_xShape, XML_a, IsXFlipped(), IsYFlipped(),
                                                      false, false);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "rtTriangle")
@@ -1518,7 +1516,7 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal1
                 = std::lround(*aPoint1.nCurrVal / (*aPoint1.nMaxVal - *aPoint1.nMinVal) * nMaxVal);
             return StartAVListWriting()
-                   && WriteAV(u"adj", OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj"_ustr, OUString(u"val " + OUString::number(nVal1)))
                    && EndAVListWriting();
         }
         if (sShapeType == "upArrowCallout")
@@ -1556,10 +1554,10 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal4 = std::lround((*aBoxHeight.nCurrVal - *aBoxHeight.nMinVal)
                                             / (10800 - *aBoxHeight.nMinVal) * 100000);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
-                   && WriteAV(u"adj3", OUString(u"val " + OUString::number(nVal3)))
-                   && WriteAV(u"adj4", OUString(u"val " + OUString::number(nVal4)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj3"_ustr, OUString(u"val " + OUString::number(nVal3)))
+                   && WriteAV(u"adj4"_ustr, OUString(u"val " + OUString::number(nVal4)))
                    && EndAVListWriting();
         }
         if (sShapeType == "upDownArrow")
@@ -1582,8 +1580,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal2 = std::lround((*aPointY.nCurrVal - *aPointY.nMinVal)
                                             / (*aPointY.nMaxVal - *aPointY.nMinVal) * nMaxVal2);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
                    && EndAVListWriting();
         }
         if (sShapeType == "upArrow")
@@ -1606,8 +1604,8 @@ bool DMLPresetShapeExporter::WriteShapeWithAVlist()
             tools::Long nVal2 = std::lround((*aPointY.nCurrVal - *aPointY.nMinVal)
                                             / (*aPointY.nMaxVal - *aPointY.nMinVal) * nMaxVal2);
             return StartAVListWriting()
-                   && WriteAV(u"adj1", OUString(u"val " + OUString::number(nVal1)))
-                   && WriteAV(u"adj2", OUString(u"val " + OUString::number(nVal2)))
+                   && WriteAV(u"adj1"_ustr, OUString(u"val " + OUString::number(nVal1)))
+                   && WriteAV(u"adj2"_ustr, OUString(u"val " + OUString::number(nVal2)))
                    && EndAVListWriting();
         }
         if (sShapeType == "upDownArrowCallout")

@@ -118,6 +118,9 @@ void ScDocShell::PostPaint( const ScRangeList& rRanges, PaintPartFlags nPart, sa
         SCROW nRow1 = rRange.aStart.Row(), nRow2 = rRange.aEnd.Row();
         SCTAB nTab1 = rRange.aStart.Tab(), nTab2 = std::min<SCTAB>(nMaxTab, rRange.aEnd.Tab());
 
+        if (nTab1 < 0 || nTab2 < 0)
+            continue;
+
         if (!m_pDocument->ValidCol(nCol1))
         {
             nMaxWidthAffectedHint = -1; // Hint no longer valid
@@ -196,7 +199,7 @@ void ScDocShell::PostPaint( const ScRangeList& rRanges, PaintPartFlags nPart, sa
     // the document size too - cell size affects that, obviously)
     if ((nPart & (PaintPartFlags::Top | PaintPartFlags::Left)) && comphelper::LibreOfficeKit::isActive())
     {
-        ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>(this->GetModel());
+        ScModelObj* pModel = GetModel();
         for (auto nTab : aTabsInvalidated)
             SfxLokHelper::notifyPartSizeChangedAllViews(pModel, nTab);
     }
@@ -427,14 +430,12 @@ void ScDocShell::InitOptions(bool bForLoading)      // called from InitNew and L
     //  Settings from the SpellCheckCfg get into Doc- and ViewOptions
 
     LanguageType nDefLang, nCjkLang, nCtlLang;
-    bool bAutoSpell;
-    ScModule::GetSpellSettings( nDefLang, nCjkLang, nCtlLang, bAutoSpell );
+    ScModule::GetSpellSettings( nDefLang, nCjkLang, nCtlLang );
     ScModule* pScMod = SC_MOD();
 
     ScDocOptions  aDocOpt  = pScMod->GetDocOptions();
     ScFormulaOptions aFormulaOpt = pScMod->GetFormulaOptions();
     ScViewOptions aViewOpt = pScMod->GetViewOptions();
-    aDocOpt.SetAutoSpell( bAutoSpell );
 
     if (!utl::ConfigManager::IsFuzzing())
     {
@@ -703,7 +704,7 @@ void ScDocShell::CompareDocument( ScDocument& rOtherDoc )
         if (pThisMed)
             aThisFile = pThisMed->GetName();
         OUString aOtherFile;
-        SfxObjectShell* pOtherSh = rOtherDoc.GetDocumentShell();
+        ScDocShell* pOtherSh = rOtherDoc.GetDocumentShell();
         if (pOtherSh)
         {
             const SfxMedium* pOtherMed = pOtherSh->GetMedium();
@@ -718,10 +719,8 @@ void ScDocShell::CompareDocument( ScDocument& rOtherDoc )
             //  (only if comparing different documents)
 
             using namespace ::com::sun::star;
-            uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-                GetModel(), uno::UNO_QUERY_THROW);
             uno::Reference<document::XDocumentProperties> xDocProps(
-                xDPS->getDocumentProperties());
+                GetModel()->getDocumentProperties());
             OSL_ENSURE(xDocProps.is(), "no DocumentProperties");
             OUString aDocUser = xDocProps->getModifiedBy();
 

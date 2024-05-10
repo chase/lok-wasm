@@ -336,13 +336,34 @@ rtl::Reference<LogicalFontInstance> FreetypeFontFace::CreateFontInstance(const v
     return new FreetypeFontInstance(*this, rFSD);
 }
 
+namespace
+{
+hb_blob_t* CreateHbBlob(FreetypeFontFile* pFontFile)
+{
+    auto pFileName = pFontFile->GetFileName().getStr();
+    int nFD;
+    int n;
+    if (sscanf(pFileName, "/:FD:/%d%n", &nFD, &n) == 1 && pFileName[n] == '\0')
+    {
+        if (pFontFile->Map())
+            return hb_blob_create(
+                reinterpret_cast<const char*>(pFontFile->GetBuffer()), pFontFile->GetFileSize(),
+                HB_MEMORY_MODE_READONLY, pFontFile,
+                [](void* data) { static_cast<FreetypeFontFile*>(data)->Unmap(); });
+        pFontFile->Unmap();
+        return hb_blob_get_empty();
+    }
+    return hb_blob_create_from_file(pFileName);
+}
+}
+
 hb_face_t* FreetypeFontFace::GetHbFace() const
 {
     if (!mpHbFace)
     {
-        auto* pFileName = mpFreetypeFontInfo->GetFontFileName().getStr();
+        auto pFontFile = mpFreetypeFontInfo->GetFontFile();
         auto nIndex = mpFreetypeFontInfo->GetFontFaceIndex();
-        hb_blob_t* pHbBlob = hb_blob_create_from_file(pFileName);
+        auto pHbBlob = CreateHbBlob(pFontFile);
         mpHbFace = hb_face_create(pHbBlob, nIndex);
         hb_blob_destroy(pHbBlob);
     }
@@ -392,13 +413,10 @@ FreetypeFont::FreetypeFont(FreetypeFontInstance& rFontInstance, std::shared_ptr<
     mnSin( 0 ),
     mnPrioAntiAlias(nDefaultPrioAntiAlias),
     mxFontInfo(std::move(xFI)),
-    mnLoadFlags( 0 ),
     maFaceFT( nullptr ),
     maSizeFT( nullptr ),
     mbFaceOk( false )
 {
-    int nPrioEmbedded = nDefaultPrioEmbedded;
-
     maFaceFT = mxFontInfo->GetFaceFT();
 
     const vcl::font::FontSelectPattern& rFSD = rFontInstance.GetFontSelectPattern();
@@ -440,12 +458,6 @@ FreetypeFont::FreetypeFont(FreetypeFontInstance& rFontInstance, std::shared_ptr<
     /*FT_Error rc = */ FT_Set_Pixel_Sizes( maFaceFT, mnWidth, rFSD.mnHeight );
 
     mbFaceOk = true;
-
-    // TODO: query GASP table for load flags
-    mnLoadFlags = FT_LOAD_DEFAULT | FT_LOAD_IGNORE_TRANSFORM;
-
-    if( ((mnCos != 0) && (mnSin != 0)) || (nPrioEmbedded <= 0) )
-        mnLoadFlags |= FT_LOAD_NO_BITMAP;
 }
 
 namespace
@@ -489,7 +501,7 @@ FreetypeFont::~FreetypeFont()
     mxFontInfo->ReleaseFaceFT();
 }
 
-void FreetypeFont::GetFontMetric(ImplFontMetricDataRef const & rxTo) const
+void FreetypeFont::GetFontMetric(FontMetricDataRef const & rxTo) const
 {
     rxTo->FontAttributes::operator =(mxFontInfo->GetFontAttributes());
 
@@ -592,44 +604,6 @@ void FreetypeFont::ApplyGlyphTransform(bool bVertical, FT_Glyph pGlyphFT ) const
         pBmpGlyphFT->left += (aVector.x + 32) >> 6;
         pBmpGlyphFT->top  += (aVector.y + 32) >> 6;
     }
-}
-
-bool FreetypeFont::GetGlyphBoundRect(sal_GlyphId nID, tools::Rectangle& rRect, bool bVertical) const
-{
-    FT_Activate_Size( maSizeFT );
-
-    FT_Error rc = FT_Load_Glyph(maFaceFT, nID, mnLoadFlags);
-
-    if (rc != FT_Err_Ok)
-        return false;
-
-    if (mrFontInstance.NeedsArtificialBold())
-        FT_GlyphSlot_Embolden(maFaceFT->glyph);
-
-    FT_Glyph pGlyphFT;
-    rc = FT_Get_Glyph(maFaceFT->glyph, &pGlyphFT);
-    if (rc != FT_Err_Ok)
-        return false;
-
-    ApplyGlyphTransform(bVertical, pGlyphFT);
-
-    FT_BBox aBbox;
-    FT_Glyph_Get_CBox( pGlyphFT, FT_GLYPH_BBOX_PIXELS, &aBbox );
-    FT_Done_Glyph( pGlyphFT );
-
-    tools::Rectangle aRect(aBbox.xMin, -aBbox.yMax, aBbox.xMax, -aBbox.yMin);
-    if (mnCos != 0x10000 && mnSin != 0)
-    {
-        const double nCos = mnCos / 65536.0;
-        const double nSin = mnSin / 65536.0;
-        rRect.SetLeft(  nCos*aRect.Left() + nSin*aRect.Top() );
-        rRect.SetTop( -nSin*aRect.Left() - nCos*aRect.Top() );
-        rRect.SetRight(  nCos*aRect.Right() + nSin*aRect.Bottom() );
-        rRect.SetBottom( -nSin*aRect.Right() - nCos*aRect.Bottom() );
-    }
-    else
-        rRect = aRect;
-    return true;
 }
 
 bool FreetypeFont::GetAntialiasAdvice() const

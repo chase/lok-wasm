@@ -130,7 +130,7 @@ namespace
 {
 
 /// read a component (file + filter version)
-ErrCode ReadThroughComponent(
+ErrCodeMsg ReadThroughComponent(
     uno::Reference<io::XInputStream> const & xInputStream,
     uno::Reference<XComponent> const & xModelComponent,
     const OUString& rStreamName,
@@ -219,7 +219,7 @@ ErrCode ReadThroughComponent(
 
         if( !rStreamName.isEmpty() )
         {
-            return *new TwoStringErrorInfo(
+            return ErrCodeMsg(
                             (bMustBeSuccessful ? ERR_FORMAT_FILE_ROWCOL
                                                     : WARN_FORMAT_FILE_ROWCOL),
                             rStreamName, sErr,
@@ -228,7 +228,7 @@ ErrCode ReadThroughComponent(
         else
         {
             OSL_ENSURE( bMustBeSuccessful, "Warnings are not supported" );
-            return *new StringErrorInfo( ERR_FORMAT_ROWCOL, sErr,
+            return ErrCodeMsg( ERR_FORMAT_ROWCOL, sErr,
                              DialogMask::ButtonsOk | DialogMask::MessageError );
         }
     }
@@ -266,7 +266,7 @@ ErrCode ReadThroughComponent(
 }
 
 // read a component (storage version)
-ErrCode ReadThroughComponent(
+ErrCodeMsg ReadThroughComponent(
     uno::Reference<embed::XStorage> const & xStorage,
     uno::Reference<XComponent> const & xModelComponent,
     const char* pStreamName,
@@ -314,8 +314,8 @@ ErrCode ReadThroughComponent(
 
         Any aAny = xProps->getPropertyValue("Encrypted");
 
-        auto b = o3tl::tryAccess<bool>(aAny);
-        bool bEncrypted = b && *b;
+        std::optional<const bool> b = o3tl::tryAccess<bool>(aAny);
+        bool bEncrypted = b.has_value() && *b;
 
         uno::Reference <io::XInputStream> xInputStream = xStream->getInputStream();
 
@@ -412,9 +412,9 @@ static void lcl_AdjustOutlineStylesForOOo(SwDoc& _rDoc)
             aCreatedDefaultOutlineStyles[ i ]->AssignToListLevelOfOutlineStyle(i);
 
             // apply outline numbering rule, if none is set.
-            const SfxPoolItem& rItem =
+            const SwNumRuleItem& rItem =
                 aCreatedDefaultOutlineStyles[ i ]->GetFormatAttr( RES_PARATR_NUMRULE, false );
-            if ( static_cast<const SwNumRuleItem&>(rItem).GetValue().isEmpty() )
+            if ( rItem.GetValue().isEmpty() )
             {
                 SwNumRuleItem aItem( pOutlineRule->GetName() );
                 aCreatedDefaultOutlineStyles[ i ]->SetFormatAttr( aItem );
@@ -464,7 +464,7 @@ static void lcl_ConvertSdrOle2ObjsToSdrGrafObjs(SwDoc& _rDoc)
     }
 }
 
-ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, const OUString & rName )
+ErrCodeMsg XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, const OUString & rName )
 {
     // needed for relative URLs, but in clipboard copy/paste there may be none
     // and also there is the SwXMLTextBlocks special case
@@ -604,7 +604,7 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
         if( xParentSet.is() )
         {
             uno::Reference< beans::XPropertySetInfo > xPropSetInfo( xParentSet->getPropertySetInfo() );
-            static const OUStringLiteral sPropName(u"BuildId" );
+            static constexpr OUString sPropName(u"BuildId"_ustr );
             if( xPropSetInfo.is() && xPropSetInfo->hasPropertyByName(sPropName) )
             {
                 xInfoSet->setPropertyValue( sPropName, xParentSet->getPropertyValue(sPropName) );
@@ -617,15 +617,11 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
 
     if (pDocSh->GetMedium())
     {
-        SfxItemSet* pSet = pDocSh->GetMedium()->GetItemSet();
-        if (pSet)
+        const SfxUnoAnyItem* pItem =
+            pDocSh->GetMedium()->GetItemSet().GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
+        if (pItem)
         {
-            const SfxUnoAnyItem* pItem =
-                pSet->GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
-            if (pItem)
-            {
-                pItem->GetValue() >>= xStatusIndicator;
-            }
+            pItem->GetValue() >>= xStatusIndicator;
         }
     }
 
@@ -720,10 +716,10 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
     OUString StreamPath;
     if( SfxObjectCreateMode::EMBEDDED == rDoc.GetDocShell()->GetCreateMode() )
     {
-        if ( pMedDescrMedium && pMedDescrMedium->GetItemSet() )
+        if (pMedDescrMedium)
         {
             const SfxStringItem* pDocHierarchItem =
-                pMedDescrMedium->GetItemSet()->GetItem(SID_DOC_HIERARCHICALNAME);
+                pMedDescrMedium->GetItemSet().GetItem(SID_DOC_HIERARCHICALNAME);
             if ( pDocHierarchItem )
                 StreamPath = pDocHierarchItem->GetValue();
         }
@@ -739,12 +735,12 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
     }
 
     rtl::Reference<SwDoc> aHoldRef(&rDoc); // prevent deletion
-    ErrCode nRet = ERRCODE_NONE;
+    ErrCodeMsg nRet = ERRCODE_NONE;
 
     // save redline mode into import info property set
-    static const OUStringLiteral sShowChanges(u"ShowChanges");
-    static const OUStringLiteral sRecordChanges(u"RecordChanges");
-    static const OUStringLiteral sRedlineProtectionKey(u"RedlineProtectionKey");
+    static constexpr OUString sShowChanges(u"ShowChanges"_ustr);
+    static constexpr OUString sRecordChanges(u"RecordChanges"_ustr);
+    static constexpr OUString sRedlineProtectionKey(u"RedlineProtectionKey"_ustr);
     xInfoSet->setPropertyValue( sShowChanges,
         Any(IDocumentRedlineAccess::IsShowChanges(rDoc.getIDocumentRedlineAccess().GetRedlineFlags())) );
     xInfoSet->setPropertyValue( sRecordChanges,
@@ -810,13 +806,13 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
     // read storage streams
 
     // #i103539#: always read meta.xml for generator
-    ErrCode const nWarn = ReadThroughComponent(
+    ErrCodeMsg const nWarn = ReadThroughComponent(
         xStorage, xModelComp, "meta.xml", xContext,
         (bOASIS ? "com.sun.star.comp.Writer.XMLOasisMetaImporter"
                 : "com.sun.star.comp.Writer.XMLMetaImporter"),
         aEmptyArgs, rName, false );
 
-    ErrCode nWarn2 = ERRCODE_NONE;
+    ErrCodeMsg nWarn2 = ERRCODE_NONE;
     if( !(IsOrganizerMode() || IsBlockMode() || m_aOption.IsFormatsOnly() ||
           m_bInsertMode) )
     {
@@ -950,7 +946,7 @@ ErrCode XMLReader::Read( SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, con
         if( xModelSet.is() )
         {
             uno::Reference< beans::XPropertySetInfo > xModelSetInfo( xModelSet->getPropertySetInfo() );
-            static const OUStringLiteral sName(u"BuildId" );
+            static constexpr OUString sName(u"BuildId"_ustr );
             if( xModelSetInfo.is() && xModelSetInfo->hasPropertyByName(sName) )
             {
                 xModelSet->setPropertyValue( sName, xInfoSet->getPropertyValue(sName) );
@@ -983,7 +979,7 @@ size_t XMLReader::GetSectionList( SfxMedium& rMedium,
         try
         {
             xml::sax::InputSource aParserInput;
-            static const OUStringLiteral sDocName( u"content.xml" );
+            static constexpr OUString sDocName( u"content.xml"_ustr );
             aParserInput.sSystemId = sDocName;
 
             uno::Reference < io::XStream > xStm = xStg2->openStreamElement( sDocName, embed::ElementModes::READ );

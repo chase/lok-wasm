@@ -44,7 +44,7 @@ enum ColorConfigEntry : int
     WRITERTEXTGRID      ,
     WRITERFIELDSHADINGS ,
     WRITERIDXSHADINGS         ,
-    WRITERDIRECTCURSOR        ,
+    WRITERDIRECTCURSOR        , // unused
     WRITERSCRIPTINDICATOR,
     WRITERSECTIONBOUNDARIES,
     WRITERHEADERFOOTERMARK,
@@ -58,6 +58,8 @@ enum ColorConfigEntry : int
     CALCPAGEBREAKMANUAL,
     CALCPAGEBREAKAUTOMATIC,
     CALCHIDDENROWCOL    ,
+    CALCTEXTOVERFLOW    ,
+    CALCCOMMENTS        ,
     CALCDETECTIVE       ,
     CALCDETECTIVEERROR       ,
     CALCREFERENCE       ,
@@ -67,6 +69,7 @@ enum ColorConfigEntry : int
     CALCTEXT,
     CALCPROTECTEDBACKGROUND,
     DRAWGRID            ,
+    BASICEDITOR,
     BASICIDENTIFIER,
     BASICCOMMENT   ,
     BASICNUMBER    ,
@@ -95,7 +98,7 @@ struct ColorConfigValue
         { return nColor != rCmp.nColor || bIsVisible != rCmp.bIsVisible;}
 };
 
-class SVT_DLLPUBLIC ColorConfig final :
+class SAL_WARN_UNUSED SVT_DLLPUBLIC ColorConfig final :
     public utl::detail::Options
 {
     friend class ColorConfig_Impl;
@@ -109,7 +112,7 @@ public:
     // instead of the automatic color
     ColorConfigValue        GetColorValue(ColorConfigEntry eEntry, bool bSmart = true) const;
     static Color            GetDefaultColor(ColorConfigEntry eEntry);
-    const OUString&         GetCurrentSchemeName() const;
+    static const OUString& GetCurrentSchemeName();
 };
 
 class SVT_DLLPUBLIC EditableColorConfig

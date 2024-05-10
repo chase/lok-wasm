@@ -80,15 +80,15 @@ namespace BooleanComparisonMode = ::com::sun::star::sdb::BooleanComparisonMode;
 
 constexpr OUStringLiteral STR_SELECT = u"SELECT ";
 constexpr OUStringLiteral STR_FROM = u" FROM ";
-constexpr OUStringLiteral STR_WHERE = u" WHERE ";
+constexpr OUString STR_WHERE = u" WHERE "_ustr;
 constexpr OUStringLiteral STR_GROUP_BY = u" GROUP BY ";
 constexpr OUStringLiteral STR_HAVING = u" HAVING ";
 constexpr OUStringLiteral STR_ORDER_BY = u" ORDER BY ";
-constexpr OUStringLiteral STR_AND = u" AND ";
-constexpr OUStringLiteral STR_OR = u" OR ";
+constexpr OUString STR_AND = u" AND "_ustr;
+constexpr OUString STR_OR = u" OR "_ustr;
 constexpr OUStringLiteral STR_LIKE = u" LIKE ";
-constexpr OUStringLiteral L_BRACKET = u"(";
-constexpr OUStringLiteral R_BRACKET = u")";
+constexpr OUString L_BRACKET = u"("_ustr;
+constexpr OUString R_BRACKET = u")"_ustr;
 constexpr OUStringLiteral COMMA = u",";
 
 namespace
@@ -245,7 +245,7 @@ OSingleSelectQueryComposer::OSingleSelectQueryComposer(const Reference< XNameAcc
     {
         Any aValue;
         Reference<XInterface> xDs = dbaccess::getDataSource(_xConnection);
-        if ( dbtools::getDataSourceSetting(xDs,static_cast <OUString> (PROPERTY_BOOLEANCOMPARISONMODE),aValue) )
+        if ( dbtools::getDataSourceSetting(xDs,PROPERTY_BOOLEANCOMPARISONMODE,aValue) )
         {
             OSL_VERIFY( aValue >>= m_nBoolCompareMode );
         }
@@ -511,9 +511,9 @@ OUString OSingleSelectQueryComposer::impl_getColumnRealName_throw(const Referenc
             {
                 if(sTableName.indexOf('.') != -1)
                 {
-                    OUString aCatlog,aSchema,aTable;
-                    ::dbtools::qualifiedNameComponents(m_xMetaData,sTableName,aCatlog,aSchema,aTable,::dbtools::EComposeRule::InDataManipulation);
-                    sTableName = ::dbtools::composeTableName( m_xMetaData, aCatlog, aSchema, aTable, true, ::dbtools::EComposeRule::InDataManipulation );
+                    OUString aCatalog,aSchema,aTable;
+                    ::dbtools::qualifiedNameComponents(m_xMetaData,sTableName,aCatalog,aSchema,aTable,::dbtools::EComposeRule::InDataManipulation);
+                    sTableName = ::dbtools::composeTableName( m_xMetaData, aCatalog, aSchema, aTable, true, ::dbtools::EComposeRule::InDataManipulation );
                 }
                 else if (!sTableName.isEmpty())
                     sTableName = ::dbtools::quoteName(aQuote,sTableName);
@@ -1660,9 +1660,9 @@ void OSingleSelectQueryComposer::setConditionByColumn( const Reference< XPropert
             xColumn->getPropertyValue(PROPERTY_TABLENAME)   >>= sTableName;
             if(sTableName.indexOf('.') != -1)
             {
-                OUString aCatlog,aSchema,aTable;
-                ::dbtools::qualifiedNameComponents(m_xMetaData,sTableName,aCatlog,aSchema,aTable,::dbtools::EComposeRule::InDataManipulation);
-                sTableName = ::dbtools::composeTableName( m_xMetaData, aCatlog, aSchema, aTable, true, ::dbtools::EComposeRule::InDataManipulation );
+                OUString aCatalog,aSchema,aTable;
+                ::dbtools::qualifiedNameComponents(m_xMetaData,sTableName,aCatalog,aSchema,aTable,::dbtools::EComposeRule::InDataManipulation);
+                sTableName = ::dbtools::composeTableName( m_xMetaData, aCatalog, aSchema, aTable, true, ::dbtools::EComposeRule::InDataManipulation );
             }
             else
                 sTableName = ::dbtools::quoteName(aQuote,sTableName);

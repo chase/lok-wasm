@@ -23,20 +23,16 @@
 
 #include <sal/config.h>
 
-#include <cstddef>
 #include <cstdlib>
 
 #include <osl/module.hxx>
 #include <rtl/textenc.h>
-#include <rtl/ustring.h>
-#include <rtl/ustring.hxx>
+#include <rtl/tencinfo.h>
 #include <sal/log.hxx>
-#include <sal/macros.h>
 #include <sal/types.h>
 
 #include "convertsimple.hxx"
 #include "gettextencodingdata.hxx"
-#include "tcvtbyte.hxx"
 #include "tcvtutf8.hxx"
 #include "tenchelp.hxx"
 

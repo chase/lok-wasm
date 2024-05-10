@@ -452,7 +452,8 @@ static SwRowFrame* GetRowFrame( SwTableLine& rLine )
     return nullptr;
 }
 
-bool SwTable::InsertCol( SwDoc& rDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool bBehind )
+bool SwTable::InsertCol( SwDoc& rDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCnt,
+    bool bBehind, bool bInsertDummy )
 {
     OSL_ENSURE( !rBoxes.empty() && nCnt, "No valid Box List" );
     SwTableNode* pTableNd = const_cast<SwTableNode*>(rBoxes[0]->GetSttNd()->FindTableNode());
@@ -461,7 +462,7 @@ bool SwTable::InsertCol( SwDoc& rDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCnt,
 
     bool bRes = true;
     if( IsNewModel() )
-        bRes = NewInsertCol( rDoc, rBoxes, nCnt, bBehind );
+        bRes = NewInsertCol( rDoc, rBoxes, nCnt, bBehind, bInsertDummy );
     else
     {
         // Find all Boxes/Lines
@@ -513,7 +514,7 @@ bool SwTable::InsertCol( SwDoc& rDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCnt,
 }
 
 bool SwTable::InsertRow_( SwDoc* pDoc, const SwSelBoxes& rBoxes,
-                        sal_uInt16 nCnt, bool bBehind )
+                        sal_uInt16 nCnt, bool bBehind, bool bInsertDummy )
 {
     OSL_ENSURE( pDoc && !rBoxes.empty() && nCnt, "No valid Box List" );
     SwTableNode* pTableNd = const_cast<SwTableNode*>(rBoxes[0]->GetSttNd()->FindTableNode());
@@ -596,9 +597,12 @@ bool SwTable::InsertRow_( SwDoc* pDoc, const SwSelBoxes& rBoxes,
                 SvxPrintItem aSetTracking(RES_PRINT, false);
                 SwPosition aPos(*pNewTableLine->GetTabBoxes()[0]->GetSttNd());
                 SwCursor aCursor( aPos, nullptr );
-                SwPaM aPaM(*pNewTableLine->GetTabBoxes()[0]->GetSttNd(), SwNodeOffset(1));
-                pDoc->getIDocumentContentOperations().InsertString( aPaM,
+                if ( bInsertDummy )
+                {
+                    SwPaM aPaM(*pNewTableLine->GetTabBoxes()[0]->GetSttNd(), SwNodeOffset(1));
+                    pDoc->getIDocumentContentOperations().InsertString( aPaM,
                         OUStringChar(CH_TXT_TRACKED_DUMMY_CHAR) );
+                }
                 pDoc->SetRowNotTracked( aCursor, aSetTracking, /*bAll=*/false, /*bIns=*/true );
             }
         }
@@ -2029,12 +2033,7 @@ void SwTable::CopyHeadlineIntoTable( SwTableNode& rTableNd )
     if( aFndBox.GetLines().empty() )
         return;
 
-    {
-        // Convert Table formulas to their relative representation
-        SwTableFormulaUpdate aMsgHint( this );
-        aMsgHint.m_eFlags = TBL_RELBOXNAME;
-        GetFrameFormat()->GetDoc()->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
-    }
+    SwitchFormulasToRelativeRepresentation();
 
     CpyTabFrames aCpyFormat;
     CpyPara aPara( &rTableNd, 1, aCpyFormat );
@@ -2117,12 +2116,7 @@ bool SwTable::MakeCopy( SwDoc& rInsDoc, const SwPosition& rPos,
     // Destroy the already created Frames
     pTableNd->DelFrames();
 
-    {
-        // Convert the Table formulas to their relative representation
-        SwTableFormulaUpdate aMsgHint( this );
-        aMsgHint.m_eFlags = TBL_RELBOXNAME;
-        pSrcDoc->getIDocumentFieldsAccess().UpdateTableFields( &aMsgHint );
-    }
+    const_cast<SwTable*>(this)->SwitchFormulasToRelativeRepresentation();
 
     SwTableNumFormatMerge aTNFM(*pSrcDoc, rInsDoc);
 
@@ -3209,7 +3203,7 @@ SwFrameFormat* SwShareBoxFormat::GetFormat( const SfxPoolItem& rItem ) const
     const SfxPoolItem* pItem;
     sal_uInt16 nWhich = rItem.Which();
     SwFrameFormat *pRet = nullptr, *pTmp;
-    const SfxPoolItem& rFrameSz = m_pOldFormat->GetFormatAttr( RES_FRM_SIZE, false );
+    const SwFormatFrameSize& rFrameSz = m_pOldFormat->GetFormatAttr( RES_FRM_SIZE, false );
     for( auto n = m_aNewFormats.size(); n; )
         if( SfxItemState::SET == ( pTmp = m_aNewFormats[ --n ])->
             GetItemState( nWhich, false, &pItem ) && *pItem == rItem &&

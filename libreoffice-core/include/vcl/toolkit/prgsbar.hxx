@@ -52,6 +52,13 @@
 
 class UNLESS_MERGELIBS(VCL_DLLPUBLIC) ProgressBar final : public vcl::Window
 {
+public:
+    enum class BarStyle
+    {
+        Progress,
+        Level,
+    };
+
 private:
     Point               maPos;
     tools::Long                mnPrgsWidth;
@@ -59,14 +66,18 @@ private:
     sal_uInt16          mnPercent;
     sal_uInt16          mnPercentCount;
     bool                mbCalcNew;
+    BarStyle            meBarStyle;
 
     using Window::ImplInit;
     SAL_DLLPRIVATE void             ImplInit();
     SAL_DLLPRIVATE void             ImplInitSettings( bool bFont, bool bForeground, bool bBackground );
     SAL_DLLPRIVATE void ImplDrawProgress(vcl::RenderContext& rRenderContext, sal_uInt16 nNewPerc);
 
+protected:
+    virtual void        DumpAsPropertyTree(tools::JsonWriter&) override;
+
 public:
-                        ProgressBar( vcl::Window* pParent, WinBits nWinBits );
+                        ProgressBar( vcl::Window* pParent, WinBits nWinBits, BarStyle eBarStyle );
 
     virtual void        Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) override;
     virtual void        Resize() override;

@@ -25,6 +25,7 @@
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/datatransfer/clipboard/XFlushableClipboard.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <vcl/window.hxx>
 #include <vcl/mnemonic.hxx>
 #include <vcl/svapp.hxx>
@@ -44,7 +45,7 @@ using namespace ::comphelper;
 
 
 VCLXAccessibleTextComponent::VCLXAccessibleTextComponent( VCLXWindow* pVCLXWindow )
-    :VCLXAccessibleComponent( pVCLXWindow )
+    :ImplInheritanceHelper( pVCLXWindow )
 {
     VclPtr<vcl::Window> pWindow = GetWindow();
     if ( pWindow )
@@ -59,6 +60,14 @@ void VCLXAccessibleTextComponent::SetText( const OUString& sText )
     {
         m_sText = sText;
         NotifyAccessibleEvent( AccessibleEventId::TEXT_CHANGED, aOldValue, aNewValue );
+    }
+
+    // check whether accessible name has also changed, since text is (often) used as name as well
+    const OUString sName = getAccessibleName();
+    if (sName != m_sOldName)
+    {
+        NotifyAccessibleEvent(AccessibleEventId::NAME_CHANGED, Any(m_sOldName), Any(sName));
+        m_sOldName = sName;
     }
 }
 
@@ -115,18 +124,6 @@ void VCLXAccessibleTextComponent::disposing()
 
     m_sText.clear();
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleTextComponent, VCLXAccessibleComponent, VCLXAccessibleTextComponent_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleTextComponent, VCLXAccessibleComponent, VCLXAccessibleTextComponent_BASE )
 
 
 // XAccessibleText

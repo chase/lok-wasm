@@ -37,7 +37,7 @@
 #include <toolkit/awt/vclxwindows.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
 #include <toolkit/helper/convert.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <rtl/math.hxx>
 #include <sal/log.hxx>
 #include <utility>
@@ -129,7 +129,7 @@ public:
                                         mxAccessibleContext;
     css::uno::Reference< css::awt::XGraphics >
                                         mxViewGraphics;
-    css::uno::Reference< css::awt::XStyleSettings >
+    rtl::Reference< toolkit::WindowStyleSettings >
                                         mxWindowStyleSettings;
 
 public:
@@ -249,9 +249,8 @@ void VCLXWindowImpl::disposing()
     maTopWindowListeners.disposeAndClear( aEvent );
     maWindow2Listeners.disposeAndClear( aEvent );
 
-    ::toolkit::WindowStyleSettings* pStyleSettings = static_cast< ::toolkit::WindowStyleSettings* >( mxWindowStyleSettings.get() );
-    if ( pStyleSettings != nullptr )
-        pStyleSettings->dispose();
+    if ( mxWindowStyleSettings )
+        mxWindowStyleSettings->dispose();
     mxWindowStyleSettings.clear();
 }
 
@@ -427,7 +426,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
 {
     if (mpImpl->mbDisposing)
         return;
-    css::uno::Reference< css::uno::XInterface > xThis( static_cast<cppu::OWeakObject*>(this) );
+    css::uno::Reference< css::uno::XInterface > xThis( getXWeak() );
 
     switch ( rVclWindowEvent.GetId() )
     {
@@ -448,7 +447,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getPaintListeners().getLength() )
             {
                 css::awt::PaintEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 aEvent.UpdateRect = AWTRectangle( *static_cast<tools::Rectangle*>(rVclWindowEvent.GetData()) );
                 aEvent.Count = 0;
                 mpImpl->getPaintListeners().windowPaint( aEvent );
@@ -460,7 +459,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getWindowListeners().getLength() )
             {
                 css::awt::WindowEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 ImplInitWindowEvent( aEvent, rVclWindowEvent.GetWindow() );
                 mpImpl->getWindowListeners().windowMoved( aEvent );
             }
@@ -471,7 +470,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getWindowListeners().getLength() )
             {
                 css::awt::WindowEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 ImplInitWindowEvent( aEvent, rVclWindowEvent.GetWindow() );
                 mpImpl->getWindowListeners().windowResized( aEvent );
             }
@@ -482,7 +481,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getWindowListeners().getLength() )
             {
                 css::awt::WindowEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 ImplInitWindowEvent( aEvent, rVclWindowEvent.GetWindow() );
                 mpImpl->getWindowListeners().windowShown( aEvent );
             }
@@ -491,7 +490,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getTopWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getTopWindowListeners().windowOpened( aEvent );
             }
         }
@@ -501,7 +500,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getWindowListeners().getLength() )
             {
                 css::awt::WindowEvent aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 ImplInitWindowEvent( aEvent, rVclWindowEvent.GetWindow() );
                 mpImpl->getWindowListeners().windowHidden( aEvent );
             }
@@ -510,7 +509,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getTopWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getTopWindowListeners().windowClosed( aEvent );
             }
         }
@@ -548,7 +547,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             }
 
             css::lang::EventObject aEvent;
-            aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+            aEvent.Source = getXWeak();
             if (rVclWindowEvent.GetId() == VclEventId::WindowActivate)
                 mpImpl->getTopWindowListeners().windowActivated( aEvent );
             else
@@ -560,13 +559,13 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getDockableWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getDockableWindowListeners().notifyEach( &XDockableWindowListener::closed, aEvent );
             }
             if ( mpImpl->getTopWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getTopWindowListeners().windowClosing( aEvent );
             }
         }
@@ -585,7 +584,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 if ( mpImpl->getFocusListeners().getLength() )
                 {
                     css::awt::FocusEvent aEvent;
-                    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                    aEvent.Source = getXWeak();
                     aEvent.FocusFlags = static_cast<sal_Int16>(rVclWindowEvent.GetWindow()->GetGetFocusFlags());
                     aEvent.Temporary = false;
                     mpImpl->getFocusListeners().focusGained( aEvent );
@@ -607,7 +606,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 if ( mpImpl->getFocusListeners().getLength() )
                 {
                     css::awt::FocusEvent aEvent;
-                    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                    aEvent.Source = getXWeak();
                     aEvent.FocusFlags = static_cast<sal_Int16>(rVclWindowEvent.GetWindow()->GetGetFocusFlags());
                     aEvent.Temporary = false;
 
@@ -622,7 +621,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                             pNext = pNextC;
 
                         pNext->GetComponentInterface();
-                        aEvent.NextFocus = static_cast<cppu::OWeakObject*>(pNext->GetWindowPeer());
+                        aEvent.NextFocus = cppu::getXWeak(pNext->GetWindowPeer());
                     }
                     mpImpl->getFocusListeners().focusLost( aEvent );
                 }
@@ -634,7 +633,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getTopWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getTopWindowListeners().windowMinimized( aEvent );
             }
         }
@@ -644,7 +643,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getTopWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getTopWindowListeners().windowNormalized( aEvent );
             }
         }
@@ -756,7 +755,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 if( pData )
                 {
                     css::awt::DockingEvent aEvent;
-                    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                    aEvent.Source = getXWeak();
                     aEvent.TrackingRectangle = AWTRectangle( pData->maTrackRect );
                     aEvent.MousePos.X = pData->maMousePos.X();
                     aEvent.MousePos.Y = pData->maMousePos.Y();
@@ -777,7 +776,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 if( pData )
                 {
                     css::awt::DockingEvent aEvent;
-                    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                    aEvent.Source = getXWeak();
                     aEvent.TrackingRectangle = AWTRectangle( pData->maTrackRect );
                     aEvent.MousePos.X = pData->maMousePos.X();
                     aEvent.MousePos.Y = pData->maMousePos.Y();
@@ -808,7 +807,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 if( pData )
                 {
                     css::awt::EndDockingEvent aEvent;
-                    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                    aEvent.Source = getXWeak();
                     aEvent.WindowRectangle = AWTRectangle( pData->maWindowRect );
                     aEvent.bFloating = pData->mbFloating;
                     aEvent.bCancelled = pData->mbCancelled;
@@ -824,7 +823,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 sal_Bool *p_bFloating = static_cast<sal_Bool*>(rVclWindowEvent.GetData());
 
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
 
                 Reference< XDockableWindowListener > xFirstListener;
                 ::comphelper::OInterfaceIteratorHelper3 aIter( mpImpl->getDockableWindowListeners() );
@@ -842,7 +841,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
             if ( mpImpl->getDockableWindowListeners().getLength() )
             {
                 css::lang::EventObject aEvent;
-                aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                aEvent.Source = getXWeak();
                 mpImpl->getDockableWindowListeners().notifyEach( &XDockableWindowListener::toggleFloatingMode, aEvent );
             }
         }
@@ -856,7 +855,7 @@ void VCLXWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
                 if( pData )
                 {
                     css::awt::EndPopupModeEvent aEvent;
-                    aEvent.Source = static_cast<cppu::OWeakObject*>(this);
+                    aEvent.Source = getXWeak();
                     aEvent.FloatingPosition.X = pData->maFloatingPos.X();
                     aEvent.FloatingPosition.Y = pData->maFloatingPos.Y();
                     aEvent.bTearoff = pData->mbTearoff;
@@ -903,10 +902,6 @@ Size VCLXWindow::ImplCalcWindowSize( const Size& rOutSz ) const
 }
 
 
-// css::lang::XUnoTunnel
-UNO3_GETIMPLEMENTATION2_IMPL(VCLXWindow, VCLXDevice);
-
-
 // css::lang::Component
 void VCLXWindow::dispose(  )
 {
@@ -925,7 +920,6 @@ void VCLXWindow::dispose(  )
     {
         pWindow->RemoveEventListener( LINK( this, VCLXWindow, WindowEventListener ) );
         pWindow->SetWindowPeer( nullptr, nullptr );
-        pWindow->SetAccessible( nullptr );
 
         SetOutputDevice( nullptr );
         pWindow.disposeAndClear();
@@ -1150,7 +1144,7 @@ void VCLXWindow::setPointer( const css::uno::Reference< css::awt::XPointer >& rx
 {
     SolarMutexGuard aGuard;
 
-    VCLXPointer* pPointer = comphelper::getFromUnoTunnel<VCLXPointer>( rxPointer );
+    VCLXPointer* pPointer = dynamic_cast<VCLXPointer*>( rxPointer.get() );
     if ( pPointer && GetWindow() )
         GetWindow()->SetPointer( pPointer->GetPointer() );
 }
@@ -1349,12 +1343,12 @@ void VCLXWindow::GetPropertyIds( std::vector< sal_uInt16 >& _out_rIds )
     return ImplGetPropertyIds( _out_rIds, mpImpl->mbWithDefaultProps );
 }
 
-::comphelper::OInterfaceContainerHelper3<css::awt::XVclContainerListener>& VCLXWindow::GetContainerListeners()
+ListenerMultiplexerBase<css::awt::XVclContainerListener>& VCLXWindow::GetContainerListeners()
 {
     return mpImpl->getContainerListeners();
 }
 
-::comphelper::OInterfaceContainerHelper3<css::awt::XTopWindowListener>& VCLXWindow::GetTopWindowListeners()
+ListenerMultiplexerBase<css::awt::XTopWindowListener>& VCLXWindow::GetTopWindowListeners()
 {
     return mpImpl->getTopWindowListeners();
 }
@@ -1536,9 +1530,9 @@ void VCLXWindow::setProperty( const OUString& PropertyName, const css::uno::Any&
             {
                 INetURLObject aHelpURL( aURL );
                 if ( aHelpURL.GetProtocol() == INetProtocol::Hid )
-                    pWindow->SetHelpId( OUStringToOString( aHelpURL.GetURLPath(), RTL_TEXTENCODING_UTF8 ) );
+                    pWindow->SetHelpId( aHelpURL.GetURLPath() );
                 else
-                    pWindow->SetHelpId( OUStringToOString( aURL, RTL_TEXTENCODING_UTF8 ) );
+                    pWindow->SetHelpId( aURL );
             }
         }
         break;
@@ -1953,6 +1947,21 @@ css::uno::Any VCLXWindow::getProperty( const OUString& PropertyName )
     css::uno::Any aProp;
     if ( GetWindow() )
     {
+        if (PropertyName == "ParentIs100thmm")
+        {
+            bool bParentIs100thmm = false;
+            VclPtr<vcl::Window> pWindow = GetWindow();
+            if (pWindow)
+            {
+                pWindow = pWindow->GetParent();
+                if(pWindow && MapUnit::Map100thMM == pWindow->GetMapMode().GetMapUnit())
+                {
+                    bParentIs100thmm = true;
+                }
+            }
+            aProp <<= bParentIs100thmm;
+            return aProp;
+        }
         WindowType eWinType = GetWindow()->GetType();
         sal_uInt16 nPropType = GetPropertyId( PropertyName );
         switch ( nPropType )
@@ -2031,10 +2040,7 @@ css::uno::Any VCLXWindow::getProperty( const OUString& PropertyName )
             }
             break;
             case BASEPROPERTY_HELPURL:
-            {
-                OUString aHelpId( OStringToOUString( GetWindow()->GetHelpId(), RTL_TEXTENCODING_UTF8 ) );
-                aProp <<= aHelpId;
-            }
+                aProp <<= GetWindow()->GetHelpId();
             break;
             case BASEPROPERTY_FONTDESCRIPTOR:
             {

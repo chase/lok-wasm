@@ -37,7 +37,7 @@
 using namespace css;
 using namespace css::uno;
 
-constexpr OStringLiteral SIDEBARGRADIENT = "sidebargradient";
+constexpr OUString SIDEBARGRADIENT = u"sidebargradient"_ustr;
 
 namespace svx::sidebar {
 
@@ -180,7 +180,7 @@ void AreaPropertyPanelBase::Initialize()
     mxBmpImport->connect_clicked( LINK(this, AreaPropertyPanelBase, ClickImportBitmapHdl));
 }
 
-IMPL_LINK_NOARG(AreaPropertyPanelBase, ToolbarHdl_Impl, const OString&, void)
+IMPL_LINK_NOARG(AreaPropertyPanelBase, ToolbarHdl_Impl, const OUString&, void)
 {
     mxBTNGradient->set_menu_item_active(SIDEBARGRADIENT, !mxBTNGradient->get_menu_item_active(SIDEBARGRADIENT));
 }
@@ -488,9 +488,10 @@ void AreaPropertyPanelBase::FillStyleChanged(bool bUpdateModel)
                     mxLbFillGradFrom->SelectEntry(Color(aGradient.GetColorStops().front().getStopColor()));
                     mxLbFillGradTo->SelectEntry(Color(aGradient.GetColorStops().back().getStopColor()));
 
-                    // MCGR: preserve in-between ColorStops if given
-                    if (aGradient.GetColorStops().size() > 2)
-                        maColorStops = basegfx::BColorStops(aGradient.GetColorStops().begin() + 1, aGradient.GetColorStops().end() - 1);
+                    // MCGR: preserve ColorStops if given
+                    // tdf#155901 We need offset of first and last stop, so include them.
+                    if (aGradient.GetColorStops().size() >= 2)
+                        maColorStops = aGradient.GetColorStops();
                     else
                         maColorStops.clear();
 
@@ -501,7 +502,7 @@ void AreaPropertyPanelBase::FillStyleChanged(bool bUpdateModel)
             }
             else
             {
-                if (pSh && pSh->GetItem(SID_GRADIENT_LIST))
+                if (pSh->GetItem(SID_GRADIENT_LIST))
                 {
                     SvxFillAttrBox::Fill(*mxLbFillAttr,
                                          pSh->GetItem(SID_GRADIENT_LIST)->GetGradientList());
@@ -515,9 +516,10 @@ void AreaPropertyPanelBase::FillStyleChanged(bool bUpdateModel)
                         mxLbFillGradFrom->SelectEntry(Color(aGradient.GetColorStops().front().getStopColor()));
                         mxLbFillGradTo->SelectEntry(Color(aGradient.GetColorStops().back().getStopColor()));
 
-                        // MCGR: preserve in-between ColorStops if given
-                        if (aGradient.GetColorStops().size() > 2)
-                            maColorStops = basegfx::BColorStops(aGradient.GetColorStops().begin() + 1, aGradient.GetColorStops().end() - 1);
+                        // MCGR: preserve ColorStops if given
+                        // tdf#155901 We need offset of first and last stop, so include them.
+                        if (aGradient.GetColorStops().size() >= 2)
+                            maColorStops = aGradient.GetColorStops();
                         else
                             maColorStops.clear();
 
@@ -1064,10 +1066,14 @@ void AreaPropertyPanelBase::updateFillUseBackground(bool bDisabled, bool bDefaul
         if (pState)
         {
             const XFillUseSlideBackgroundItem* pItem = static_cast<const XFillUseSlideBackgroundItem*>(pState);
-            // When XFillUseSlideBackgroundItem is true, select "Use Background Fill". When false, select "None"
+            // When XFillUseSlideBackgroundItem is set, select "Use Background Fill".
+            // When false, select "None" (only if "Use background fill" was selected beforehand)
             int nPos = pItem->GetValue() ? USE_BACKGROUND : NONE;
-            mxLbFillType->set_active(nPos);
-            FillStyleChanged(false);
+            if ((nPos == NONE && mxLbFillType->get_active() == USE_BACKGROUND) || nPos == USE_BACKGROUND)
+            {
+                mxLbFillType->set_active(nPos);
+                FillStyleChanged(false);
+            }
         }
     }
 }
@@ -1369,16 +1375,48 @@ basegfx::BColorStops AreaPropertyPanelBase::createColorStops()
 {
     basegfx::BColorStops aColorStops;
 
-    aColorStops.emplace_back(0.0, mxLbFillGradFrom->GetSelectEntryColor().getBColor());
-
-    if(!maColorStops.empty())
+    if (maColorStops.size() >= 2)
     {
-        aColorStops.insert(aColorStops.begin(), maColorStops.begin(), maColorStops.end());
+        aColorStops = maColorStops;
+        aColorStops.front() = basegfx::BColorStop(maColorStops.front().getStopOffset(),
+                                                  mxLbFillGradFrom->GetSelectEntryColor().getBColor());
+        aColorStops.back() = basegfx::BColorStop(maColorStops.back().getStopOffset(),
+                                                 mxLbFillGradTo->GetSelectEntryColor().getBColor());
+    }
+    else
+    {
+        aColorStops.emplace_back(0.0, mxLbFillGradFrom->GetSelectEntryColor().getBColor());
+        aColorStops.emplace_back(1.0, mxLbFillGradTo->GetSelectEntryColor().getBColor());
     }
 
-    aColorStops.emplace_back(1.0, mxLbFillGradTo->GetSelectEntryColor().getBColor());
-
     return aColorStops;
+}
+
+void AreaPropertyPanelBase::HandleContextChange(
+    const vcl::EnumContext& rContext)
+{
+    if (maContext.GetApplication() == rContext.GetApplication())
+        return;
+
+    maContext = rContext;
+
+    switch (maContext.GetApplication())
+    {
+        case vcl::EnumContext::Application::Impress:
+            if (!msUseBackgroundText.isEmpty())
+            {
+                mxLbFillType->insert_text(USE_BACKGROUND, msUseBackgroundText);
+                msUseBackgroundText = OUString();
+            }
+        break;
+        default:
+            if (msUseBackgroundText.isEmpty())
+            {
+                msUseBackgroundText = mxLbFillType->get_text(USE_BACKGROUND);
+                mxLbFillType->remove(USE_BACKGROUND);
+            }
+        break;
+    }
 }
 
 } // end of namespace svx::sidebar

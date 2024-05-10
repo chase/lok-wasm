@@ -28,6 +28,8 @@
 #include <memory>
 #include <string_view>
 #include <vector>
+#include <stack>
+#include <variant>
 
 #include <pdf/ResourceDict.hxx>
 #include <pdf/BitmapID.hxx>
@@ -35,7 +37,6 @@
 
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
-#include <com/sun/star/uno/Sequence.h>
 #include <osl/file.hxx>
 #include <rtl/cipher.h>
 #include <rtl/strbuf.hxx>
@@ -113,9 +114,6 @@ class PDFObjectElement;
 
 namespace pdf
 {
-constexpr sal_Int32 g_nInheritedPageWidth = 595;  // default A4 in inch/72
-constexpr sal_Int32 g_nInheritedPageHeight = 842; // default A4 in inch/72
-
 struct PDFPage
 {
     VclPtr<PDFWriterImpl>       m_pWriter;
@@ -327,7 +325,7 @@ public:
         return m_aColorBitmap;
     }
 
-    void setOutline(basegfx::B2DPolyPolygon aOutline) { m_aOutline = aOutline; }
+    void setOutline(const basegfx::B2DPolyPolygon& rOutline) { m_aOutline = rOutline; }
     const basegfx::B2DPolyPolygon& getOutline() const { return m_aOutline; }
 
     void addCode( sal_Ucs i_cCode )
@@ -441,8 +439,10 @@ struct PDFEmbeddedFile
 {
     /// ID of the file.
     sal_Int32 m_nObject;
+    OUString m_aSubType;
     /// Contents of the file.
     BinaryDataContainer m_aDataContainer;
+    std::unique_ptr<PDFOutputStream> m_pStream;
 
     PDFEmbeddedFile()
         : m_nObject(0)
@@ -478,11 +478,13 @@ struct PDFScreen : public PDFAnnotation
     /// alternative text description
     OUString m_AltText;
     sal_Int32 m_nStructParent;
+    OUString m_MimeType;
 
-    PDFScreen(OUString const& rAltText)
+    PDFScreen(OUString const& rAltText, OUString const& rMimeType)
         : m_nTempFileObject(0)
         , m_AltText(rAltText)
         , m_nStructParent(-1)
+        , m_MimeType(rMimeType)
     {
     }
 };
@@ -565,26 +567,21 @@ struct PDFStructureAttribute
     {}
 };
 
-struct PDFStructureElementKid // for Kids entries
-{
-    sal_Int32 const nObject;  // an object number if nMCID is -1,
-                        // else the page object relevant to MCID
-    sal_Int32 const nMCID;    // an MCID if >= 0
-
-    explicit PDFStructureElementKid( sal_Int32 nObj ) : nObject( nObj ), nMCID( -1 ) {}
-    PDFStructureElementKid( sal_Int32 MCID, sal_Int32 nPage ) : nObject( nPage ), nMCID( MCID ) {}
-};
+struct ObjReference { sal_Int32 const nObject; };
+struct ObjReferenceObj { sal_Int32 const nObject; };
+struct MCIDReference { sal_Int32 const nPageObj; sal_Int32 const nMCID; };
+typedef ::std::variant<ObjReference, ObjReferenceObj, MCIDReference> PDFStructureElementKid;
 
 struct PDFStructureElement
 {
     sal_Int32                                           m_nObject;
-    PDFWriter::StructElement                            m_eType;
+    ::std::optional<PDFWriter::StructElement>           m_oType;
     OString                                        m_aAlias;
     sal_Int32                                           m_nOwnElement; // index into structure vector
     sal_Int32                                           m_nParentElement; // index into structure vector
     sal_Int32                                           m_nFirstPageObject;
     bool                                                m_bOpenMCSeq;
-    std::list< sal_Int32 >                              m_aChildren; // indexes into structure vector
+    std::vector< sal_Int32 >                            m_aChildren; // indexes into structure vector
     std::list< PDFStructureElementKid >                 m_aKids;
     std::map<PDFWriter::StructAttribute, PDFStructureAttribute >
                                                         m_aAttributes;
@@ -599,7 +596,6 @@ struct PDFStructureElement
 
     PDFStructureElement()
             : m_nObject( 0 ),
-              m_eType( PDFWriter::NonStructElement ),
               m_nOwnElement( -1 ),
               m_nParentElement( -1 ),
               m_nFirstPageObject( 0 ),
@@ -609,20 +605,10 @@ struct PDFStructureElement
 
 };
 
-struct PDFAddStream
-{
-    OUString           m_aMimeType;
-    PDFOutputStream*        m_pStream;
-    sal_Int32               m_nStreamObject;
-    bool                    m_bCompress;
-
-    PDFAddStream() : m_pStream( nullptr ), m_nStreamObject( 0 ), m_bCompress( true ) {}
-};
-
 // helper structure for drawLayout and friends
 struct PDFGlyph
 {
-    DevicePoint const m_aPos;
+    basegfx::B2DPoint const m_aPos;
     const GlyphItem* m_pGlyph;
     const LogicalFontInstance* m_pFont;
     sal_Int32 const   m_nNativeWidth;
@@ -630,7 +616,7 @@ struct PDFGlyph
     sal_uInt8 const   m_nMappedGlyphId;
     int const         m_nCharPos;
 
-    PDFGlyph( const DevicePoint& rPos,
+    PDFGlyph( const basegfx::B2DPoint& rPos,
               const GlyphItem* pGlyph,
               const LogicalFontInstance* pFont,
               sal_Int32 nNativeWidth,
@@ -682,7 +668,16 @@ struct GraphicsState
 
 enum class Mode { DEFAULT, NOWRITE };
 
-}
+struct PDFDocumentAttachedFile
+{
+    OUString maFilename;
+    OUString maMimeType;
+    OUString maDescription;
+    sal_Int32 mnEmbeddedFileObjectId;
+    sal_Int32 mnObjectId;
+};
+
+} // end pdf namespace
 
 class PDFWriterImpl final : public VirtualDevice, public PDFObjectContainer
 {
@@ -737,6 +732,9 @@ private:
     std::vector<PDFScreen> m_aScreens;
     /// Contains embedded files.
     std::vector<PDFEmbeddedFile> m_aEmbeddedFiles;
+
+    std::vector<PDFDocumentAttachedFile> m_aDocumentAttachedFiles;
+
     /* makes correctly encoded for export to PDF URLS
     */
     css::uno::Reference< css::util::XURLTransformer > m_xTrans;
@@ -757,6 +755,7 @@ private:
     /* current object in the structure hierarchy
      */
     sal_Int32                           m_nCurrentStructElement;
+    std::stack<sal_Int32> m_StructElementStack;
     /* structure parent tree */
     std::vector< OString >         m_aStructParentTree;
     /* emit structure marks currently (aka. NonStructElement or not)
@@ -821,11 +820,20 @@ private:
     std::unique_ptr<ZCodec>                 m_pCodec;
     std::unique_ptr<SvMemoryStream>         m_pMemStream;
 
-    std::vector< PDFAddStream >             m_aAdditionalStreams;
     std::set< PDFWriter::ErrorCode >        m_aErrors;
 
     ::comphelper::Hash                      m_DocDigest;
 
+    sal_uInt64 getCurrentFilePosition()
+    {
+        sal_uInt64 nPosition{};
+        if (osl::File::E_None != m_aFile.getPos(nPosition))
+        {
+            m_aFile.close();
+            m_bOpen = false;
+        }
+        return nPosition;
+    }
 /*
 variables for PDF security
 i12626
@@ -922,7 +930,7 @@ i12626
     /* writes a font descriptor and returns its object id (or 0) */
     sal_Int32 emitFontDescriptor(const vcl::font::PhysicalFontFace*, FontSubsetInfo const &, sal_Int32 nSubsetID, sal_Int32 nStream);
     /* writes a ToUnicode cmap, returns the corresponding stream object */
-    sal_Int32 createToUnicodeCMap( sal_uInt8 const * pEncoding, const sal_Ucs* pCodeUnits, const sal_Int32* pCodeUnitsPerGlyph,
+    sal_Int32 createToUnicodeCMap( sal_uInt8 const * pEncoding, const std::vector<sal_Ucs>& CodeUnits, const sal_Int32* pCodeUnitsPerGlyph,
                                    const sal_Int32* pEncToUnicodeIndex, uint32_t nGlyphs );
 
     /* get resource dict object number */
@@ -1003,8 +1011,6 @@ i12626
     bool finalizeSignature();
     // writes xref and trailer
     bool emitTrailer();
-    // emit additional streams collected; also create there object numbers
-    bool emitAdditionalStreams();
     // emits info dict (if applicable)
     sal_Int32 emitInfoDict( );
 
@@ -1040,7 +1046,7 @@ i12626
     bool updateObject( sal_Int32 n ) override;
 
     /// See vcl::PDFObjectContainer::writeBuffer().
-    bool writeBuffer( const void* pBuffer, sal_uInt64 nBytes ) override;
+    bool writeBufferBytes( const void* pBuffer, sal_uInt64 nBytes ) override;
     void beginCompression();
     void endCompression();
     void beginRedirect( SvStream* pStream, const tools::Rectangle& );
@@ -1049,7 +1055,8 @@ i12626
     void endPage();
 
     void beginStructureElementMCSeq();
-    void endStructureElementMCSeq();
+    enum class EndMode { Default, OnlyStruct };
+    void endStructureElementMCSeq(EndMode = EndMode::Default);
     /** checks whether a non struct element lies in the ancestor hierarchy
         of the current structure element
 
@@ -1101,6 +1108,7 @@ i12626
     static void computeDocumentIdentifier( std::vector< sal_uInt8 >& o_rIdentifier,
                                            const vcl::PDFWriter::PDFDocInfo& i_rDocInfo,
                                            const OString& i_rCString1,
+                                           const css::util::DateTime& rCreationMetaDate,
                                            OString& o_rCString2
                                           );
     static sal_Int32 computeAccessPermissions( const vcl::PDFWriter::PDFEncryptionProperties& i_rProperties,
@@ -1244,8 +1252,8 @@ public:
 
     /* actual drawing functions */
     void drawText( const Point& rPos, const OUString& rText, sal_Int32 nIndex, sal_Int32 nLen, bool bTextLines = true );
-    void drawTextArray( const Point& rPos, const OUString& rText, KernArraySpan pDXArray, o3tl::span<const sal_Bool> pKashidaArray, sal_Int32 nIndex, sal_Int32 nLen );
-    void drawStretchText( const Point& rPos, sal_uLong nWidth, const OUString& rText,
+    void drawTextArray( const Point& rPos, const OUString& rText, KernArraySpan pDXArray, std::span<const sal_Bool> pKashidaArray, sal_Int32 nIndex, sal_Int32 nLen );
+    void drawStretchText( const Point& rPos, sal_Int32 nWidth, const OUString& rText,
                           sal_Int32 nIndex, sal_Int32 nLen  );
     void drawText( const tools::Rectangle& rRect, const OUString& rOrigStr, DrawTextFlags nStyle );
     void drawTextLine( const Point& rPos, tools::Long nWidth, FontStrikeout eStrikeout, FontLineStyle eUnderline, FontLineStyle eOverline, bool bUnderlineAbove );
@@ -1303,7 +1311,7 @@ public:
     void      setLinkPropertyId( sal_Int32 nLinkId, sal_Int32 nPropertyId );
 
     // screens
-    sal_Int32 createScreen(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText);
+    sal_Int32 createScreen(const tools::Rectangle& rRect, sal_Int32 nPageNr, OUString const& rAltText, OUString const& rMimeType);
     void setScreenURL(sal_Int32 nScreenId, const OUString& rURL);
     void setScreenStream(sal_Int32 nScreenId, const OUString& rURL);
 
@@ -1316,7 +1324,9 @@ public:
     // notes
     void createNote( const tools::Rectangle& rRect, const PDFNote& rNote, sal_Int32 nPageNr );
     // structure elements
-    sal_Int32 beginStructureElement( PDFWriter::StructElement eType, std::u16string_view rAlias );
+    sal_Int32 ensureStructureElement();
+    void initStructureElement(sal_Int32 id, PDFWriter::StructElement eType, std::u16string_view rAlias);
+    void beginStructureElement(sal_Int32 id);
     void endStructureElement();
     bool setCurrentStructureElement( sal_Int32 nElement );
     bool setStructureAttribute( enum PDFWriter::StructAttribute eAttr, enum PDFWriter::StructAttributeValue eVal );
@@ -1332,8 +1342,11 @@ public:
     // controls
     sal_Int32 createControl( const PDFWriter::AnyWidget& rControl, sal_Int32 nPageNr = -1 );
 
-    // additional streams
-    void addStream( const OUString& rMimeType, PDFOutputStream* pStream );
+    // attached file
+    void addDocumentAttachedFile(OUString const& rFileName, OUString const& rMimeType, OUString const& rDescription, std::unique_ptr<PDFOutputStream> rStream);
+
+    sal_Int32 addEmbeddedFile(BinaryDataContainer const & rDataContainer);
+    sal_Int32 addEmbeddedFile(std::unique_ptr<PDFOutputStream> rStream, OUString const& rMimeType);
 
     // helper: eventually begin marked content sequence and
     // emit a comment in debug case

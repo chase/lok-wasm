@@ -87,10 +87,10 @@ class SvxZoomSliderItem;
 #define SID_SCDOCOPTIONS        TypedWhichId<ScTpCalcItem>(SC_VIEW_START + 40)
 
 // cursor movements as properties:
-#define SID_CURRENTCELL         (SC_VIEW_START + 41)
-#define SID_CURRENTTAB          (SC_VIEW_START + 42)
-#define SID_CURRENTDOC          (SC_VIEW_START + 43)
-#define SID_CURRENTOBJECT       (SC_VIEW_START + 44)
+#define SID_CURRENTCELL         TypedWhichId<SfxStringItem>(SC_VIEW_START + 41)
+#define SID_CURRENTTAB          TypedWhichId<SfxUInt16Item>(SC_VIEW_START + 42)
+#define SID_CURRENTDOC          TypedWhichId<SfxStringItem>(SC_VIEW_START + 43)
+#define SID_CURRENTOBJECT       TypedWhichId<SfxStringItem>(SC_VIEW_START + 44)
 
 // slot-IDs for special toolbox functions:
 #define SID_NUMBER_CURRENCY     (SC_VIEW_START + 45)
@@ -145,7 +145,7 @@ class SvxZoomSliderItem;
 
 #define SID_RENAME_OBJECT               (SC_VIEW_START + 88)
 #define SID_FOCUS_INPUTLINE             (SC_VIEW_START + 89)
-#define SID_SELECT_TABLES               (SC_VIEW_START + 90)
+#define SID_SELECT_TABLES               TypedWhichId<SfxIntegerListItem>(SC_VIEW_START + 90)
 
 // new entry "Filter..." in DP popup menu
 #define SID_DP_FILTER                   (SC_VIEW_START + 91)
@@ -178,9 +178,9 @@ class SvxZoomSliderItem;
 #define FID_FILTER_OK           (SC_MESSAGE_START + 8)
 #define FID_INPUTLINE_MATRIX    (SC_MESSAGE_START + 11)
 #define SID_DLG_RETOK           (SC_MESSAGE_START + 12)
-#define SID_STATUS_DOCPOS       (SC_MESSAGE_START + 14)
-#define SID_STATUS_PAGESTYLE    (SC_MESSAGE_START + 15)
-#define SID_STATUS_SELMODE      (SC_MESSAGE_START + 16)
+#define SID_STATUS_DOCPOS       TypedWhichId<SfxStringItem>(SC_MESSAGE_START + 14)
+#define SID_STATUS_PAGESTYLE    TypedWhichId<SfxStringItem>(SC_MESSAGE_START + 15)
+#define SID_STATUS_SELMODE      TypedWhichId<SfxUInt16Item>(SC_MESSAGE_START + 16)
 #define SID_DLG_MATRIX          (SC_MESSAGE_START + 18)
 
 #define SID_STATUS_SELMODE_ERG  (SC_MESSAGE_START + 22)
@@ -195,9 +195,9 @@ class SvxZoomSliderItem;
 
 #define FID_INPUTLINE_BLOCK     (SC_MESSAGE_START + 29)
 
-#define SID_STATUS_SUM          (SC_MESSAGE_START + 30)
+#define SID_STATUS_SUM          TypedWhichId<SfxStringItem>(SC_MESSAGE_START + 30)
 
-#define SID_ENTER_STRING        (SC_MESSAGE_START + 37)
+#define SID_ENTER_STRING        TypedWhichId<SfxStringItem>(SC_MESSAGE_START + 37)
 #define SID_ROWCOL_SELCOUNT     (SC_MESSAGE_START + 38)
 #define SID_AUTO_SUM            (SC_MESSAGE_START + 39)
 
@@ -233,8 +233,8 @@ class SvxZoomSliderItem;
 #define SID_ZTEST_DIALOG                    (SC_MESSAGE_START + 81)
 #define SID_CHI_SQUARE_TEST_DIALOG          (SC_MESSAGE_START + 82)
 #define SID_SEARCH_RESULTS_DIALOG           (SC_MESSAGE_START + 83)
-#define SID_WINDOW_FIX_ROW                  (SC_MESSAGE_START + 84)
-#define SID_WINDOW_FIX_COL                  (SC_MESSAGE_START + 85)
+#define SID_WINDOW_FIX_ROW                  TypedWhichId<SfxInt32Item>(SC_MESSAGE_START + 84)
+#define SID_WINDOW_FIX_COL                  TypedWhichId<SfxInt32Item>(SC_MESSAGE_START + 85)
 #define SID_COLUMN_OPERATIONS               (SC_MESSAGE_START + 86)
 #define SID_ROW_OPERATIONS                  (SC_MESSAGE_START + 87)
 #define SID_FOURIER_ANALYSIS_DIALOG         (SC_MESSAGE_START + 88)
@@ -255,14 +255,14 @@ class SvxZoomSliderItem;
 #ifndef EDIT_MENU_START // duplicated in sfx2/sfxsids.hrc
 #define EDIT_MENU_START         (FILE_MENU_END)
 #endif
-#define FID_DELETE_CELL         (EDIT_MENU_START + 2)
+#define FID_DELETE_CELL         TypedWhichId<SfxStringItem>(EDIT_MENU_START + 2)
 #define FID_DELETE_TABLE        (EDIT_MENU_START + 3)
 #define FID_FILL_TO_BOTTOM      (EDIT_MENU_START + 4)
 #define FID_FILL_TO_RIGHT       (EDIT_MENU_START + 5)
 #define FID_FILL_TO_TOP         (EDIT_MENU_START + 6)
 #define FID_FILL_TO_LEFT        (EDIT_MENU_START + 7)
-#define FID_FILL_TAB            (EDIT_MENU_START + 8)
-#define FID_FILL_SERIES         (EDIT_MENU_START + 9)
+#define FID_FILL_TAB            TypedWhichId<SfxStringItem>(EDIT_MENU_START + 8)
+#define FID_FILL_SERIES         TypedWhichId<SfxStringItem>(EDIT_MENU_START + 9)
 #define FID_FILL_SINGLE_EDIT    (EDIT_MENU_START + 10)
 #define SID_HFEDIT              (EDIT_MENU_START + 15)
 
@@ -276,8 +276,9 @@ class SvxZoomSliderItem;
 
 #define FID_TOGGLEINPUTLINE     TypedWhichId<SfxBoolItem>(VIEW_MENU_START + 1)
 #define FID_TOGGLEHEADERS       (VIEW_MENU_START + 2)
-#define FID_SCALE               (VIEW_MENU_START + 4)
+#define FID_SCALE               TypedWhichId<SvxZoomItem>(VIEW_MENU_START + 4)
 #define FID_TOGGLESYNTAX        (VIEW_MENU_START + 5)
+#define FID_TOGGLECOLROWHIGHLIGHTING (VIEW_MENU_START + 6)
 #define FID_PAGEBREAKMODE       (VIEW_MENU_START + 7)
 #define FID_FUNCTION_BOX        (VIEW_MENU_START + 8)
 #define FID_NORMALVIEWMODE      (VIEW_MENU_START + 9)
@@ -292,11 +293,11 @@ class SvxZoomSliderItem;
 #define FID_INS_COLBRK          (INSERT_MENU_START + 2)
 #define FID_DEL_ROWBRK          (INSERT_MENU_START + 3)
 #define FID_DEL_COLBRK          (INSERT_MENU_START + 4)
-#define FID_INS_CELL_CONTENTS   (INSERT_MENU_START + 5)
-#define FID_INS_CELL            (INSERT_MENU_START + 6)
+#define FID_INS_CELL_CONTENTS   TypedWhichId<SfxStringItem>(INSERT_MENU_START + 5)
+#define FID_INS_CELL            TypedWhichId<SfxStringItem>(INSERT_MENU_START + 6)
 #define FID_INS_ROW             (INSERT_MENU_START + 7)
 #define FID_INS_COLUMN          (INSERT_MENU_START + 8)
-#define FID_INS_TABLE           (INSERT_MENU_START + 9)
+#define FID_INS_TABLE           TypedWhichId<SfxStringItem>(INSERT_MENU_START + 9)
 #define SID_INS_FUNCTION        (INSERT_MENU_START + 10)
 #define FID_DEFINE_NAME         (INSERT_MENU_START + 11)
 #define FID_INSERT_NAME         (INSERT_MENU_START + 12)
@@ -316,15 +317,15 @@ class SvxZoomSliderItem;
 #define FORMAT_MENU_START       (INSERT_MENU_END)
 #define FID_CELL_FORMAT         (FORMAT_MENU_START)
 #define FID_ROW_HEIGHT          TypedWhichId<SfxUInt16Item>(FORMAT_MENU_START + 1)
-#define FID_ROW_OPT_HEIGHT      (FORMAT_MENU_START + 2)
+#define FID_ROW_OPT_HEIGHT      TypedWhichId<SfxUInt16Item>(FORMAT_MENU_START + 2)
 #define FID_ROW_HIDE            (FORMAT_MENU_START + 3)
 #define FID_ROW_SHOW            (FORMAT_MENU_START + 4)
 #define FID_COL_WIDTH           TypedWhichId<SfxUInt16Item>(FORMAT_MENU_START + 5)
-#define FID_COL_OPT_WIDTH       (FORMAT_MENU_START + 6)
+#define FID_COL_OPT_WIDTH       TypedWhichId<SfxUInt16Item>(FORMAT_MENU_START + 6)
 #define FID_COL_HIDE            (FORMAT_MENU_START + 7)
 #define FID_COL_SHOW            (FORMAT_MENU_START + 8)
 #define FID_TABLE_HIDE          (FORMAT_MENU_START + 9)
-#define FID_TABLE_SHOW          (FORMAT_MENU_START + 10)
+#define FID_TABLE_SHOW          TypedWhichId<SfxStringItem>(FORMAT_MENU_START + 10)
 #define FID_MERGE_ON            (FORMAT_MENU_START + 15)
 #define FID_MERGE_OFF           (FORMAT_MENU_START + 16)
 #define SID_FORMATPAGE          (FORMAT_MENU_START + 17)
@@ -352,7 +353,7 @@ class SvxZoomSliderItem;
 
 #define DATA_MENU_START         (EXTRA_MENU_END)
 #define SID_DEFINE_DBNAME       (DATA_MENU_START)
-#define SID_SELECT_DB           (DATA_MENU_START + 1)
+#define SID_SELECT_DB           TypedWhichId<SfxStringItem>(DATA_MENU_START + 1)
 #define SID_SORT                (DATA_MENU_START + 2)
 #define SID_FILTER              (DATA_MENU_START + 3)
 #define SID_SPECIAL_FILTER      (DATA_MENU_START + 4)
@@ -373,15 +374,15 @@ class SvxZoomSliderItem;
 #define SID_SORT_ASCENDING      (DATA_MENU_START + 24)
 #define SID_OUTLINE_HIDE        (DATA_MENU_START + 25)
 #define SID_OUTLINE_SHOW        (DATA_MENU_START + 26)
-#define SID_OUTLINE_MAKE        (DATA_MENU_START + 27)
-#define SID_OUTLINE_REMOVE      (DATA_MENU_START + 28)
+#define SID_OUTLINE_MAKE        TypedWhichId<SfxStringItem>(DATA_MENU_START + 27)
+#define SID_OUTLINE_REMOVE      TypedWhichId<SfxStringItem>(DATA_MENU_START + 28)
 
 #define DATA_MENU_END           (DATA_MENU_START + 29)
 
 #define TAB_POPUP_START         (DATA_MENU_END)
 #define FID_TAB_MENU_RENAME     (TAB_POPUP_START)
-#define FID_TAB_RENAME          (TAB_POPUP_START+1)
-#define FID_TAB_MOVE            (TAB_POPUP_START+2)
+#define FID_TAB_RENAME          TypedWhichId<SfxStringItem>(TAB_POPUP_START+1)
+#define FID_TAB_MOVE            TypedWhichId<SfxStringItem>(TAB_POPUP_START+2)
 #define FID_TAB_SELECTALL       (TAB_POPUP_START+3)
 #define FID_TAB_APPEND          (TAB_POPUP_START+4)
 #define FID_TAB_INDEX           (TAB_POPUP_START+5)
@@ -402,7 +403,7 @@ class SvxZoomSliderItem;
 #define SID_ALIGNTOP            (OBJBAR_FORMAT_START+10)
 #define SID_ALIGNBOTTOM         (OBJBAR_FORMAT_START+11)
 #define SID_ALIGNCENTERVER      (OBJBAR_FORMAT_START+12)
-#define SID_SELECT_SCENARIO     (OBJBAR_FORMAT_START+13)
+#define SID_SELECT_SCENARIO     TypedWhichId<SfxStringItem>(OBJBAR_FORMAT_START+13)
 
 #define SID_V_ALIGNCELL         (OBJBAR_FORMAT_START+14)
 #define SID_H_ALIGNCELL         (OBJBAR_FORMAT_START+15)
@@ -524,15 +525,15 @@ static_assert(SID_PREVIEW_END < SID_KEYFUNC_START, "calc slots ids trampling inf
 
 #define SID_RANGE_ROW           TypedWhichId<SfxInt32Item>(SID_NEW_SLOTS+20)
 #define SID_RANGE_COL           TypedWhichId<SfxInt16Item>(SID_NEW_SLOTS+21)
-#define SID_RANGE_TABLE         (SID_NEW_SLOTS+22)
+#define SID_RANGE_TABLE         TypedWhichId<SfxInt16Item>(SID_NEW_SLOTS+22)
 // empty, was SID_RANGE_VALUE
-#define SID_RANGE_FORMULA       (SID_NEW_SLOTS+24)
-#define SID_RANGE_TEXTVALUE     (SID_NEW_SLOTS+26)
+#define SID_RANGE_FORMULA       TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+24)
+#define SID_RANGE_TEXTVALUE     TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+26)
 #define SID_TABLE_ACTIVATE      (SID_NEW_SLOTS+27)
 
 #define SID_DEFINE_PRINTAREA        (SID_NEW_SLOTS+31)
 #define SID_DELETE_PRINTAREA        (SID_NEW_SLOTS+32)
-#define SID_CHANGE_PRINTAREA        (SID_NEW_SLOTS+33)
+#define SID_CHANGE_PRINTAREA        TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+33)
 #define SID_OPENDLG_EDIT_PRINTAREA  (SID_NEW_SLOTS+34)
 
 #define SID_OLE_ACTIVATE        (SID_NEW_SLOTS+36)
@@ -550,13 +551,13 @@ static_assert(SID_PREVIEW_END < SID_KEYFUNC_START, "calc slots ids trampling inf
 #define FID_SEARCH_COUNT        (SID_NEW_SLOTS+45)
 
 #define SID_SC_SETTEXT          (SID_NEW_SLOTS+46)
-#define SID_RANGE_ADDRESS       (SID_NEW_SLOTS+47)
-#define SID_NUMBER_FORMAT       (SID_NEW_SLOTS+49)
+#define SID_RANGE_ADDRESS       TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+47)
+#define SID_NUMBER_FORMAT       TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+49)
 
 #define SID_OLE_SELECT          (SID_NEW_SLOTS+50)
 
 #define FID_CURRENTVALIDATION   (SID_NEW_SLOTS+51)
-#define SID_RANGE_NOTETEXT      (SID_NEW_SLOTS+52)
+#define SID_RANGE_NOTETEXT      TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+52)
 #define FID_INSERT_FILE         (SID_NEW_SLOTS+53)
 
 #define FID_VALIDATION          (SID_NEW_SLOTS+54)
@@ -593,7 +594,7 @@ static_assert(SID_PREVIEW_END < SID_KEYFUNC_START, "calc slots ids trampling inf
 #define FID_RESET_PRINTZOOM     (SID_NEW_SLOTS+82)
 
 #define SID_TABLES_COUNT        (SID_NEW_SLOTS+83)
-#define SID_ACTIVE_OBJ_NAME     (SID_NEW_SLOTS+84)
+#define SID_ACTIVE_OBJ_NAME     TypedWhichId<SfxStringItem>(SID_NEW_SLOTS+84)
 #define SID_OBJECT_LEFT         (SID_NEW_SLOTS+85)
 #define SID_OBJECT_TOP          (SID_NEW_SLOTS+86)
 #define SID_OBJECT_WIDTH        (SID_NEW_SLOTS+87)
@@ -639,7 +640,7 @@ static_assert(SID_PREVIEW_END < SID_KEYFUNC_START, "calc slots ids trampling inf
 // Sidebar -------------------------------------------------------------
 
 #define SID_PROPERTY_PANEL_CELLTEXT_DLG (SC_SIDEBAR_PROPERTY_BEGIN+0)
-#define SID_NUMBER_TYPE_FORMAT          (SC_SIDEBAR_PROPERTY_BEGIN+1)
+#define SID_NUMBER_TYPE_FORMAT          TypedWhichId<SfxUInt16Item>(SC_SIDEBAR_PROPERTY_BEGIN+1)
 
 // resources
 

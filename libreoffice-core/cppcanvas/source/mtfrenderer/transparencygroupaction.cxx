@@ -83,8 +83,8 @@ namespace cppcanvas::internal
                     Size of the transparency group object, in current
                     state coordinate system.
                 */
-                TransparencyGroupAction( MtfAutoPtr&&                   rGroupMtf,
-                                         GradientAutoPtr&&              rAlphaGradient,
+                TransparencyGroupAction( std::unique_ptr< GDIMetaFile >&& rGroupMtf,
+                                         std::optional< Gradient >&&    rAlphaGradient,
                                          const ::basegfx::B2DPoint&     rDstPoint,
                                          const ::basegfx::B2DVector&    rDstSize,
                                          const CanvasSharedPtr&         rCanvas,
@@ -104,8 +104,8 @@ namespace cppcanvas::internal
                 virtual sal_Int32 getActionCount() const override;
 
             private:
-                MtfAutoPtr                                          mpGroupMtf;
-                GradientAutoPtr                                     mpAlphaGradient;
+                std::unique_ptr< GDIMetaFile >                      mpGroupMtf;
+                std::optional< Gradient >                           mpAlphaGradient;
 
                 const ::basegfx::B2DSize                            maDstSize;
 
@@ -135,8 +135,8 @@ namespace cppcanvas::internal
                                                       aLocalTransformation );
             }
 
-            TransparencyGroupAction::TransparencyGroupAction( MtfAutoPtr&&                  rGroupMtf,
-                                                              GradientAutoPtr&&             rAlphaGradient,
+            TransparencyGroupAction::TransparencyGroupAction( std::unique_ptr< GDIMetaFile >&& rGroupMtf,
+                                                              std::optional< Gradient >&&   rAlphaGradient,
                                                               const ::basegfx::B2DPoint&    rDstPoint,
                                                               const ::basegfx::B2DVector&   rDstSize,
                                                               const CanvasSharedPtr&        rCanvas,
@@ -222,7 +222,7 @@ namespace cppcanvas::internal
                     // is disabled, text will still be drawn with some
                     // antialiased pixels on HiDPI displays. So, expand the
                     // size of the VirtualDevice slightly to capture any of
-                    // the pixles drawn past the edges of the destination
+                    // the pixels drawn past the edges of the destination
                     // bounds.
                     bool        bHasTextActions = false;
                     MetaAction* pCurrAct;
@@ -274,8 +274,8 @@ namespace cppcanvas::internal
                     // render our content into an appropriately sized
                     // VirtualDevice with alpha channel
                     ScopedVclPtrInstance<VirtualDevice> aVDev(
-                        *::Application::GetDefaultDevice(), DeviceFormat::DEFAULT, DeviceFormat::DEFAULT );
-                    aVDev->SetOutputSizePixel( aBitmapSizePixel );
+                        *::Application::GetDefaultDevice(), DeviceFormat::WITH_ALPHA );
+                    aVDev->SetOutputSizePixel( aBitmapSizePixel, true, true );
                     aVDev->SetMapMode();
 
                     if( rSubset.mnSubsetBegin != 0 ||
@@ -502,8 +502,8 @@ namespace cppcanvas::internal
 
         }
 
-        std::shared_ptr<Action> TransparencyGroupActionFactory::createTransparencyGroupAction( MtfAutoPtr&&                 rGroupMtf,
-                                                                                       GradientAutoPtr&&            rAlphaGradient,
+        std::shared_ptr<Action> TransparencyGroupActionFactory::createTransparencyGroupAction( std::unique_ptr< GDIMetaFile >&& rGroupMtf,
+                                                                                       std::optional< Gradient >&&  rAlphaGradient,
                                                                                        const ::basegfx::B2DPoint&   rDstPoint,
                                                                                        const ::basegfx::B2DVector&  rDstSize,
                                                                                        const CanvasSharedPtr&       rCanvas,

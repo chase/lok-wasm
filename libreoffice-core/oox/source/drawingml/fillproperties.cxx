@@ -27,6 +27,7 @@
 #include <vcl/BitmapFilter.hxx>
 #include <vcl/BitmapMonochromeFilter.hxx>
 #include <docmodel/uno/UnoComplexColor.hxx>
+#include <docmodel/uno/UnoGradientTools.hxx>
 #include <basegfx/utils/gradienttools.hxx>
 
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -47,6 +48,11 @@
 #include <oox/token/tokens.hxx>
 #include <osl/diagnose.h>
 #include <sal/log.hxx>
+
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
+
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::drawing;
@@ -105,9 +111,9 @@ std::optional<Quotients> CropQuotientsFromSrcRect(geometry::IntegerRectangle2D a
     aSrcRect.X2 = std::max(aSrcRect.X2, sal_Int32(0));
     aSrcRect.Y1 = std::max(aSrcRect.Y1, sal_Int32(0));
     aSrcRect.Y2 = std::max(aSrcRect.Y2, sal_Int32(0));
-    if (aSrcRect.X1 + aSrcRect.X2 >= 100'000 || aSrcRect.Y1 + aSrcRect.Y2 >= 100'000)
+    if (aSrcRect.X1 + aSrcRect.X2 >= MAX_PERCENT || aSrcRect.Y1 + aSrcRect.Y2 >= MAX_PERCENT)
         return {}; // Cropped everything
-    return getQuotients(aSrcRect, 100'000.0, 100'000.0);
+    return getQuotients(aSrcRect, MAX_PERCENT, MAX_PERCENT);
 }
 
 // ECMA-376 Part 1 20.1.8.30 fillRect (Fill Rectangle)
@@ -118,8 +124,8 @@ std::optional<Quotients> CropQuotientsFromFillRect(geometry::IntegerRectangle2D 
     aFillRect.Y1 = std::min(aFillRect.Y1, sal_Int32(0));
     aFillRect.Y2 = std::min(aFillRect.Y2, sal_Int32(0));
     // Negative divisor and negative relative offset give positive value wanted in lclCropGraphic
-    return getQuotients(aFillRect, -100'000.0 + aFillRect.X1 + aFillRect.X2,
-                        -100'000.0 + aFillRect.Y1 + aFillRect.Y2);
+    return getQuotients(aFillRect, -MAX_PERCENT + aFillRect.X1 + aFillRect.X2,
+                        -MAX_PERCENT + aFillRect.Y1 + aFillRect.Y2);
 }
 
 // Crops a piece of the bitmap. lclCropGraphic doesn't handle growing.
@@ -203,7 +209,7 @@ Reference<XGraphic> lclApplyBlackWhiteEffect(const BlipFillProperties& aBlipProp
         ::Graphic aReturnGraphic;
 
         BitmapEx aBitmapEx(aGraphic.GetBitmapEx());
-        AlphaMask aMask(aBitmapEx.GetAlpha());
+        AlphaMask aMask(aBitmapEx.GetAlphaMask());
 
         BitmapEx aTmpBmpEx(aBitmapEx.GetBitmap());
         BitmapFilter::Filter(aTmpBmpEx, BitmapMonochromeFilter{ nThreshold });
@@ -547,7 +553,7 @@ void FillProperties::pushToPropMap(ShapePropertyMap& rPropMap, const GraphicHelp
                 }
 
                 // push gradient or named gradient to property map
-                if (rPropMap.setProperty(ShapeProperty::FillGradient, aGradient.getAsGradient2()))
+                if (rPropMap.setProperty(ShapeProperty::FillGradient, model::gradient::createUnoGradient2(aGradient)))
                 {
                     eFillStyle = FillStyle_GRADIENT;
                 }
@@ -556,7 +562,7 @@ void FillProperties::pushToPropMap(ShapePropertyMap& rPropMap, const GraphicHelp
                 if (!aTransparencyStops.empty())
                 {
                     aGradient.SetColorStops(aTransparencyStops);
-                    rPropMap.setProperty(ShapeProperty::GradientTransparency, aGradient.getAsGradient2());
+                    rPropMap.setProperty(ShapeProperty::GradientTransparency, model::gradient::createUnoGradient2(aGradient));
                 }
             }
         break;
@@ -624,13 +630,13 @@ void FillProperties::pushToPropMap(ShapePropertyMap& rPropMap, const GraphicHelp
                         {
                             text::GraphicCrop aGraphCrop( 0, 0, 0, 0 );
                             if ( aFillRect.X1 )
-                                aGraphCrop.Left = static_cast< sal_Int32 >( ( static_cast< double >( aOriginalSize.Width ) * aFillRect.X1 ) / 100000 );
+                                aGraphCrop.Left = o3tl::convert(aFillRect.X1, aOriginalSize.Width, MAX_PERCENT);
                             if ( aFillRect.Y1 )
-                                aGraphCrop.Top = static_cast< sal_Int32 >( ( static_cast< double >( aOriginalSize.Height ) * aFillRect.Y1 ) / 100000 );
+                                aGraphCrop.Top = o3tl::convert(aFillRect.Y1, aOriginalSize.Height, MAX_PERCENT);
                             if ( aFillRect.X2 )
-                                aGraphCrop.Right = static_cast< sal_Int32 >( ( static_cast< double >( aOriginalSize.Width ) * aFillRect.X2 ) / 100000 );
+                                aGraphCrop.Right = o3tl::convert(aFillRect.X2, aOriginalSize.Width, MAX_PERCENT);
                             if ( aFillRect.Y2 )
-                                aGraphCrop.Bottom = static_cast< sal_Int32 >( ( static_cast< double >( aOriginalSize.Height ) * aFillRect.Y2 ) / 100000 );
+                                aGraphCrop.Bottom = o3tl::convert(aFillRect.Y2, aOriginalSize.Height, MAX_PERCENT);
 
                             bool bHasCropValues = aGraphCrop.Left != 0 || aGraphCrop.Right !=0 || aGraphCrop.Top != 0 || aGraphCrop.Bottom != 0;
                             // Negative GraphicCrop values means "crop" here.
@@ -817,22 +823,20 @@ void GraphicProperties::pushToPropMap( PropertyMap& rPropMap, const GraphicHelpe
             {
                 text::GraphicCrop aGraphCrop( 0, 0, 0, 0 );
                 if ( oClipRect.X1 )
-                    aGraphCrop.Left = rtl::math::round( ( static_cast< double >( aOriginalSize.Width ) * oClipRect.X1 ) / 100000 );
+                    aGraphCrop.Left = o3tl::convert(oClipRect.X1, aOriginalSize.Width, MAX_PERCENT);
                 if ( oClipRect.Y1 )
-                    aGraphCrop.Top = rtl::math::round( ( static_cast< double >( aOriginalSize.Height ) * oClipRect.Y1 ) / 100000 );
+                    aGraphCrop.Top = o3tl::convert(oClipRect.Y1, aOriginalSize.Height, MAX_PERCENT);
                 if ( oClipRect.X2 )
-                    aGraphCrop.Right = rtl::math::round( ( static_cast< double >( aOriginalSize.Width ) * oClipRect.X2 ) / 100000 );
+                    aGraphCrop.Right = o3tl::convert(oClipRect.X2, aOriginalSize.Width, MAX_PERCENT);
                 if ( oClipRect.Y2 )
-                    aGraphCrop.Bottom = rtl::math::round( ( static_cast< double >( aOriginalSize.Height ) * oClipRect.Y2 ) / 100000 );
+                    aGraphCrop.Bottom = o3tl::convert(oClipRect.Y2, aOriginalSize.Height, MAX_PERCENT);
                 rPropMap.setProperty(PROP_GraphicCrop, aGraphCrop);
 
-                bool bHasCropValues = aGraphCrop.Left != 0 || aGraphCrop.Right !=0 || aGraphCrop.Top != 0 || aGraphCrop.Bottom != 0;
-                // Positive GraphicCrop values means "crop" here.
-                bool bNeedCrop = aGraphCrop.Left >= 0 && aGraphCrop.Right >= 0 && aGraphCrop.Top >= 0 && aGraphCrop.Bottom >= 0;
-
-                if(mbIsCustomShape && bHasCropValues && bNeedCrop)
+                if(mbIsCustomShape)
                 {
-                    xGraphic = lclCropGraphic(xGraphic, CropQuotientsFromSrcRect(oClipRect));
+                    // Positive GraphicCrop values means "crop" here.
+                    if (aGraphCrop.Left > 0 || aGraphCrop.Right > 0 || aGraphCrop.Top > 0 || aGraphCrop.Bottom > 0)
+                        xGraphic = lclCropGraphic(xGraphic, CropQuotientsFromSrcRect(oClipRect));
                 }
             }
         }
@@ -867,7 +871,9 @@ void GraphicProperties::pushToPropMap( PropertyMap& rPropMap, const GraphicHelpe
 
         if ( maBlipProps.moAlphaModFix.has_value() )
         {
-            rPropMap.setProperty(PROP_Transparency, static_cast<sal_Int16>(100 - (maBlipProps.moAlphaModFix.value() / PER_PERCENT)));
+            rPropMap.setProperty(
+                mbIsCustomShape ? PROP_FillTransparence : PROP_Transparency,
+                static_cast<sal_Int16>(100 - (maBlipProps.moAlphaModFix.value() / PER_PERCENT)));
         }
     }
     rPropMap.setProperty(PROP_GraphicColorMode, eColorMode);
@@ -991,101 +997,64 @@ OUString ArtisticEffectProperties::getEffectString( sal_Int32 nToken )
     return OUString();
 }
 
-sal_Int32 ArtisticEffectProperties::getEffectToken( const OUString& sName )
+constexpr auto constEffectTokenForEffectNameMap = frozen::make_unordered_map<std::u16string_view, sal_Int32>(
 {
     // effects
-    if( sName == "artisticBlur" )
-        return XML_artisticBlur;
-    else if( sName == "artisticCement" )
-        return XML_artisticCement;
-    else if( sName == "artisticChalkSketch" )
-        return XML_artisticChalkSketch;
-    else if( sName == "artisticCrisscrossEtching" )
-        return XML_artisticCrisscrossEtching;
-    else if( sName == "artisticCutout" )
-        return XML_artisticCutout;
-    else if( sName == "artisticFilmGrain" )
-        return XML_artisticFilmGrain;
-    else if( sName == "artisticGlass" )
-        return XML_artisticGlass;
-    else if( sName == "artisticGlowDiffused" )
-        return XML_artisticGlowDiffused;
-    else if( sName == "artisticGlowEdges" )
-        return XML_artisticGlowEdges;
-    else if( sName == "artisticLightScreen" )
-        return XML_artisticLightScreen;
-    else if( sName == "artisticLineDrawing" )
-        return XML_artisticLineDrawing;
-    else if( sName == "artisticMarker" )
-        return XML_artisticMarker;
-    else if( sName == "artisticMosiaicBubbles" )
-        return XML_artisticMosiaicBubbles;
-    else if( sName == "artisticPaintStrokes" )
-        return XML_artisticPaintStrokes;
-    else if( sName == "artisticPaintBrush" )
-        return XML_artisticPaintBrush;
-    else if( sName == "artisticPastelsSmooth" )
-        return XML_artisticPastelsSmooth;
-    else if( sName == "artisticPencilGrayscale" )
-        return XML_artisticPencilGrayscale;
-    else if( sName == "artisticPencilSketch" )
-        return XML_artisticPencilSketch;
-    else if( sName == "artisticPhotocopy" )
-        return XML_artisticPhotocopy;
-    else if( sName == "artisticPlasticWrap" )
-        return XML_artisticPlasticWrap;
-    else if( sName == "artisticTexturizer" )
-        return XML_artisticTexturizer;
-    else if( sName == "artisticWatercolorSponge" )
-        return XML_artisticWatercolorSponge;
-    else if( sName == "brightnessContrast" )
-        return XML_brightnessContrast;
-    else if( sName == "colorTemperature" )
-        return XML_colorTemperature;
-    else if( sName == "saturation" )
-        return XML_saturation;
-    else if( sName == "sharpenSoften" )
-        return XML_sharpenSoften;
+    { u"artisticBlur", XML_artisticBlur },
+    { u"artisticCement", XML_artisticCement },
+    { u"artisticChalkSketch", XML_artisticChalkSketch },
+    { u"artisticCrisscrossEtching", XML_artisticCrisscrossEtching },
+    { u"artisticCutout", XML_artisticCutout },
+    { u"artisticFilmGrain", XML_artisticFilmGrain },
+    { u"artisticGlass", XML_artisticGlass },
+    { u"artisticGlowDiffused", XML_artisticGlowDiffused },
+    { u"artisticGlowEdges", XML_artisticGlowEdges },
+    { u"artisticLightScreen", XML_artisticLightScreen },
+    { u"artisticLineDrawing", XML_artisticLineDrawing },
+    { u"artisticMarker", XML_artisticMarker },
+    { u"artisticMosiaicBubbles", XML_artisticMosiaicBubbles },
+    { u"artisticPaintStrokes", XML_artisticPaintStrokes },
+    { u"artisticPaintBrush", XML_artisticPaintBrush },
+    { u"artisticPastelsSmooth", XML_artisticPastelsSmooth },
+    { u"artisticPencilGrayscale", XML_artisticPencilGrayscale },
+    { u"artisticPencilSketch", XML_artisticPencilSketch },
+    { u"artisticPhotocopy", XML_artisticPhotocopy },
+    { u"artisticPlasticWrap", XML_artisticPlasticWrap },
+    { u"artisticTexturizer", XML_artisticTexturizer },
+    { u"artisticWatercolorSponge", XML_artisticWatercolorSponge },
+    { u"brightnessContrast", XML_brightnessContrast },
+    { u"colorTemperature", XML_colorTemperature },
+    { u"saturation", XML_saturation },
+    { u"sharpenSoften", XML_sharpenSoften },
 
     // attributes
-    else if( sName == "visible" )
-        return XML_visible;
-    else if( sName == "trans" )
-        return XML_trans;
-    else if( sName == "crackSpacing" )
-        return XML_crackSpacing;
-    else if( sName == "pressure" )
-        return XML_pressure;
-    else if( sName == "numberOfShades" )
-        return XML_numberOfShades;
-    else if( sName == "grainSize" )
-        return XML_grainSize;
-    else if( sName == "intensity" )
-        return XML_intensity;
-    else if( sName == "smoothness" )
-        return XML_smoothness;
-    else if( sName == "gridSize" )
-        return XML_gridSize;
-    else if( sName == "pencilSize" )
-        return XML_pencilSize;
-    else if( sName == "size" )
-        return XML_size;
-    else if( sName == "brushSize" )
-        return XML_brushSize;
-    else if( sName == "scaling" )
-        return XML_scaling;
-    else if( sName == "detail" )
-        return XML_detail;
-    else if( sName == "bright" )
-        return XML_bright;
-    else if( sName == "contrast" )
-        return XML_contrast;
-    else if( sName == "colorTemp" )
-        return XML_colorTemp;
-    else if( sName == "sat" )
-        return XML_sat;
-    else if( sName == "amount" )
-        return XML_amount;
+    { u"visible", XML_visible },
+    { u"trans", XML_trans },
+    { u"crackSpacing", XML_crackSpacing },
+    { u"pressure", XML_pressure },
+    { u"numberOfShades", XML_numberOfShades },
+    { u"grainSize", XML_grainSize },
+    { u"intensity", XML_intensity },
+    { u"smoothness", XML_smoothness },
+    { u"gridSize", XML_gridSize },
+    { u"pencilSize", XML_pencilSize },
+    { u"size", XML_size },
+    { u"brushSize", XML_brushSize },
+    { u"scaling", XML_scaling },
+    { u"detail", XML_detail },
+    { u"bright", XML_bright },
+    { u"contrast", XML_contrast },
+    { u"colorTemp", XML_colorTemp },
+    { u"sat", XML_sat },
+    { u"amount", XML_amount }
+});
+
+sal_Int32 ArtisticEffectProperties::getEffectToken(const OUString& sName)
+{
+    auto const aIterator = constEffectTokenForEffectNameMap.find(sName);
+
+    if (aIterator != constEffectTokenForEffectNameMap.end())
+        return aIterator->second;
 
     SAL_WARN( "oox.drawingml", "ArtisticEffectProperties::getEffectToken - unexpected token name: " << sName );
     return XML_none;

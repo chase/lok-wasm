@@ -22,11 +22,13 @@
 #include <com/sun/star/text/WritingMode.hpp>
 #include <svl/style.hxx>
 #include <svx/fmmodel.hxx>
+#include <unotools/charclass.hxx>
 #include <vcl/prntypes.hxx>
 #include <xmloff/autolayout.hxx>
 
 #include <vector>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 #include "sddllapi.h"
@@ -51,7 +53,6 @@ struct SpellCallbackInfo;
 class SdCustomShowList;
 class SdUndoGroup;
 class SdrObject;
-class CharClass;
 class Idle;
 class ImageMap;
 class Outliner;
@@ -161,8 +162,8 @@ private:
     ::sd::DrawDocShellRef   mxAllocedDocShRef;   // => AllocModel()
     bool                mbAllocDocSh;       // => AllocModel()
     DocumentType        meDocType;
-    std::unique_ptr<CharClass>
-                        mpCharClass;
+    std::optional<CharClass>
+                        moCharClass;
 
     ::std::unique_ptr<ImpDrawPageListWatcher> mpDrawPageListWatcher;
     ::std::unique_ptr<ImpMasterPageListWatcher> mpMasterPageListWatcher;
@@ -189,7 +190,7 @@ private:
 
     sal_Int32 mnImagePreferredDPI;
 
-    SAL_DLLPRIVATE virtual css::uno::Reference< css::uno::XInterface > createUnoModel() override;
+    SAL_DLLPRIVATE virtual css::uno::Reference< css::frame::XModel > createUnoModel() override;
 
 public:
 
@@ -344,8 +345,8 @@ public:
         page, or preserve the old name
      */
 
-    SAL_DLLPRIVATE bool InsertBookmarkAsPage(const std::vector<OUString> &rBookmarkList,
-                                  std::vector<OUString> *pExchangeList,
+    bool InsertBookmarkAsPage(const std::vector<OUString> &rBookmarkList,
+                              std::vector<OUString> *pExchangeList,
                               bool bLink, bool bReplace, sal_uInt16 nPgPos,
                               bool bNoDialogs, ::sd::DrawDocShell* pBookmarkDocSh,
                               bool bCopy, bool bMergeMasterPages,
@@ -463,7 +464,7 @@ public:
 
     static     SdAnimationInfo* GetShapeUserData(SdrObject& rObject, bool bCreate = false );
 
-    SAL_DLLPRIVATE CharClass*          GetCharClass() const { return mpCharClass.get(); }
+    SAL_DLLPRIVATE const std::optional<CharClass>& GetCharClass() const { return moCharClass; }
 
     SAL_DLLPRIVATE void                UpdateAllLinks();
 

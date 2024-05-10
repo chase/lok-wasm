@@ -31,7 +31,7 @@
 #include <drawdoc.hxx>
 #include <strings.hrc>
 #include <sdresid.hxx>
-
+#include <Outliner.hxx>
 #include <memory>
 
 using namespace ::com::sun::star;
@@ -63,7 +63,7 @@ AccessibleOutlineView::AccessibleOutlineView (
         return;
 
     OutlinerView* pOutlineView = pShellView->GetViewByWindow( pSdWindow );
-    SdrOutliner& rOutliner = pShellView->GetOutliner();
+    SdOutliner& rOutliner = pShellView->GetOutliner();
 
     if( pOutlineView )
     {
@@ -206,7 +206,7 @@ void SAL_CALL
     {
         // The current page changed. Update the children accordingly.
         UpdateChildren();
-        CommitChange(AccessibleEventId::PAGE_CHANGED,rEventObject.NewValue, rEventObject.OldValue);
+        CommitChange(AccessibleEventId::PAGE_CHANGED,rEventObject.NewValue, rEventObject.OldValue, -1);
     }
     else if ( rEventObject.PropertyName == "VisibleArea" )
     {

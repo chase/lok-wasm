@@ -22,6 +22,7 @@
 
 #include <sal/types.h>
 #include <vcl/dllapi.h>
+#include <config_vclplug.h>
 
 class SalFrame;
 
@@ -155,8 +156,9 @@ struct SystemGraphicsData
     sal_uIntPtr     hDrawable;      // a drawable
     void*           pVisual;        // the visual in use
     int             nScreen;        // the current screen of the drawable
-    void*           pXRenderFormat; // render format for drawable
-    void*           pSurface;       // the cairo surface when using svp-based backends
+#endif
+#if USE_HEADLESS_CODE
+    void*           pSurface;       // the cairo surface when using svp-based backends, which includes gtk[3|4]
 #endif
     SystemGraphicsData()
         : nSize( sizeof( SystemGraphicsData ) )
@@ -174,7 +176,8 @@ struct SystemGraphicsData
         , hDrawable( 0 )
         , pVisual( nullptr )
         , nScreen( 0 )
-        , pXRenderFormat( nullptr )
+#endif
+#if USE_HEADLESS_CODE
         , pSurface( nullptr )
 #endif
     { }

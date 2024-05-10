@@ -145,6 +145,14 @@ public:
      */
     virtual void initializeForTiledRendering(const css::uno::Sequence<css::beans::PropertyValue>& rArguments) = 0;
 
+    // MACRO: {
+
+    /**
+     * Sets the author for the document
+     */
+    virtual void setAuthor(OUString sAuthor) = 0;
+    // MACRO: }
+
     /**
      * Posts a keyboard event on the document.
      *
@@ -165,12 +173,6 @@ public:
      * @see lok::Document::setTextSelection().
      */
     virtual void setTextSelection(int nType, int nX, int nY) = 0;
-
-    /*
-    * Gets the info of hyperlink under the mouse position if any.
-    * @see lok::Document::hyperlinkInfoAtPosition().
-    */
-    virtual OUString hyperlinkInfoAtPosition(int x, int y) = 0;
 
     /**
      * Gets the selection as a transferable for later processing
@@ -229,7 +231,7 @@ public:
     virtual OString getSheetGeometryData(bool /*bColumns*/, bool /*bRows*/, bool /*bSizes*/,
                                          bool /*bHidden*/, bool /*bFiltered*/, bool /*bGroups*/)
     {
-        return "";
+        return ""_ostr;
     }
 
     /**
@@ -390,6 +392,18 @@ public:
      * @param pViewShell the view to get the options from, if nullptr the current view shell is used
      */
     virtual OString getViewRenderState(SfxViewShell* = nullptr) { return rtl::OString(); }
+
+    // MACRO: {
+
+    /**
+    * Accept/reject a series of track change ids
+    */
+    virtual void batchUpdateTrackChange( const css::uno::Sequence<sal_uInt32>& /*rArguments*/, bool /*accept*/) {}
+
+    /// MACRO-1392: Request layout updates for redlines
+    virtual void updateRedlines( const css::uno::Sequence<sal_uInt32>& /*rArguments*/) {}
+
+    // MACRO: }
 };
 } // namespace vcl
 

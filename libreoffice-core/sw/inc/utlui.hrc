@@ -22,8 +22,9 @@
 
 #include <unotools/resmgr.hxx>
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 
+// see sw/inc/comcore.hxx
 const TranslateId RID_SHELLRES_AUTOFMTSTRS[] =
 {
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Remove empty paragraphs"),
@@ -40,15 +41,18 @@ const TranslateId RID_SHELLRES_AUTOFMTSTRS[] =
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Replace dashes"),
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Replace 1st... with 1^st..."),
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Combine single line paragraphs"),
-    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Text body\" Style"),
-    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Text body indent\" Style"),
-    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Hanging indent\" Style"),
-    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Text body indent\" Style"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Body Text\" Style"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Body Text, Indented\" Style"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Hanging Indent\" Style"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Body Text, Indented\" Style"),
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Heading $(ARG1)\" Style"),
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Set \"Bullet\" or \"Numbering\" Style"),
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Combine paragraphs"),
     NC_("RID_SHELLRES_AUTOFMTSTRS", "Add non breaking space"),
-    NC_("RID_SHELLRES_AUTOFMTSTRS", "Transliterates RTL Hungarian text to Old Hungarian script")
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Transliterates RTL Hungarian text to Old Hungarian script"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "DOI citation recognition"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Automatic /italic/"),
+    NC_("RID_SHELLRES_AUTOFMTSTRS", "Automatic -strikethrough-"),
 };
 
 #endif

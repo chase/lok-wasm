@@ -71,7 +71,7 @@
 #include <unotxdoc.hxx>
 #include <rootfrm.hxx>
 #include <officecfg/Office/Writer.hxx>
-#include <test/idletask.hxx>
+#include <vcl/idletask.hxx>
 
 namespace
 {
@@ -155,7 +155,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf79236)
     SwDoc* pDoc = getSwDoc();
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
     //Getting some paragraph style
-    SwTextFormatColl* pTextFormat = pDoc->FindTextFormatCollByName(u"Text Body");
+    SwTextFormatColl* pTextFormat = pDoc->FindTextFormatCollByName(u"Body Text"_ustr);
     const SwAttrSet& rAttrSet = pTextFormat->GetAttrSet();
     std::unique_ptr<SfxItemSet> pNewSet = rAttrSet.Clone();
     sal_uInt16 initialCount = pNewSet->Count();
@@ -176,7 +176,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf79236)
     //Setting the updated item set on the style
     pDoc->ChgFormat(*pTextFormat, *pNewSet);
     //Checking the Changes
-    SwTextFormatColl* pTextFormat2 = pDoc->FindTextFormatCollByName(u"Text Body");
+    SwTextFormatColl* pTextFormat2 = pDoc->FindTextFormatCollByName(u"Body Text"_ustr);
     const SwAttrSet& rAttrSet2 = pTextFormat2->GetAttrSet();
     const SvxAdjustItem& rAdjustItem2 = rAttrSet2.GetAdjust();
     SvxAdjust Adjust2 = rAdjustItem2.GetAdjust();
@@ -184,7 +184,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf79236)
     CPPUNIT_ASSERT_EQUAL(SvxAdjust::Right, Adjust2);
     //Undo the changes
     rUndoManager.Undo();
-    SwTextFormatColl* pTextFormat3 = pDoc->FindTextFormatCollByName(u"Text Body");
+    SwTextFormatColl* pTextFormat3 = pDoc->FindTextFormatCollByName(u"Body Text"_ustr);
     const SwAttrSet& rAttrSet3 = pTextFormat3->GetAttrSet();
     const SvxAdjustItem& rAdjustItem3 = rAttrSet3.GetAdjust();
     SvxAdjust Adjust3 = rAdjustItem3.GetAdjust();
@@ -192,7 +192,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf79236)
     CPPUNIT_ASSERT_EQUAL(SvxAdjust::Left, Adjust3);
     //Redo the changes
     rUndoManager.Redo();
-    SwTextFormatColl* pTextFormat4 = pDoc->FindTextFormatCollByName(u"Text Body");
+    SwTextFormatColl* pTextFormat4 = pDoc->FindTextFormatCollByName(u"Body Text"_ustr);
     const SwAttrSet& rAttrSet4 = pTextFormat4->GetAttrSet();
     const SvxAdjustItem& rAdjustItem4 = rAttrSet4.GetAdjust();
     SvxAdjust Adjust4 = rAdjustItem4.GetAdjust();
@@ -200,7 +200,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf79236)
     CPPUNIT_ASSERT_EQUAL(SvxAdjust::Right, Adjust4);
     //Undo the changes
     rUndoManager.Undo();
-    SwTextFormatColl* pTextFormat5 = pDoc->FindTextFormatCollByName(u"Text Body");
+    SwTextFormatColl* pTextFormat5 = pDoc->FindTextFormatCollByName(u"Body Text"_ustr);
     const SwAttrSet& rAttrSet5 = pTextFormat5->GetAttrSet();
     const SvxAdjustItem& rAdjustItem5 = rAttrSet5.GetAdjust();
     SvxAdjust Adjust5 = rAdjustItem5.GetAdjust();
@@ -356,6 +356,37 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTextSearch)
     // check of the end result
     CPPUNIT_ASSERT_EQUAL(OUString("mCelqy xWorpqd mThzq mis ma mtasq"),
                          pCursor->GetPointNode().GetTextNode()->GetText());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf147583_backwardSearch)
+{
+    createSwDoc("tdf147583_backwardSearch.odt");
+    uno::Reference<util::XSearchable> xSearch(mxComponent, uno::UNO_QUERY);
+    uno::Reference<util::XSearchDescriptor> xSearchDes = xSearch->createSearchDescriptor();
+    uno::Reference<util::XPropertyReplace> xProp(xSearchDes, uno::UNO_QUERY);
+
+    uno::Reference<container::XIndexAccess> xIndex;
+    const sal_Int32 nParas = getParagraphs();
+
+    //specifying the search attributes
+    uno::Reference<beans::XPropertySet> xPropSet(xSearchDes, uno::UNO_QUERY_THROW);
+    xSearchDes->setPropertyValue("SearchRegularExpression", uno::Any(true)); // regex
+    xSearchDes->setSearchString("$"); // the end of the paragraph pilcrow marker
+
+    // xSearchDes->setPropertyValue("SearchBackwards", uno::Any(false));
+    // xIndex.set(xSearch->findAll(xSearchDes), uno::UNO_SET_THROW);
+    // // all paragraphs (including the unselected last one) should be found
+    // CPPUNIT_ASSERT_EQUAL(nParas, xIndex->getCount());
+
+    xSearchDes->setPropertyValue("SearchBackwards", uno::Any(true));
+    xIndex.set(xSearch->findAll(xSearchDes), uno::UNO_SET_THROW);
+    // all paragraphs (except the troublesome last one) are found
+    CPPUNIT_ASSERT_EQUAL(nParas - 1, xIndex->getCount());
+
+    xSearchDes->setSearchString("^$"); // empty paragraphs
+    xIndex.set(xSearch->findAll(xSearchDes), uno::UNO_SET_THROW);
+    // should actually be 10 (including the empty para with the comment marker, and the last para)
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(8), xIndex->getCount());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf69282)
@@ -684,7 +715,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testSearchWithTransliterate)
         pDoc->getIDocumentContentOperations().InsertString(aPaM, "This is Other PARAGRAPH");
     }
     i18nutil::SearchOptions2 SearchOpt;
-    SearchOpt.algorithmType = css::util::SearchAlgorithms_ABSOLUTE;
     SearchOpt.searchFlag = css::util::SearchFlags::ALL_IGNORE_CASE;
     SearchOpt.searchString = "other";
     SearchOpt.replaceString.clear();
@@ -728,8 +758,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf73660)
     pWrtShell->Insert("Now we have enough text let's test search for all the cases");
     //searching for all 5 strings entered with soft-hyphen, search string contains no soft-hyphen
     i18nutil::SearchOptions2 searchOpt;
-    searchOpt.algorithmType = css::util::SearchAlgorithms_REGEXP;
     searchOpt.searchFlag = css::util::SearchFlags::NORM_WORD_ONLY;
+    searchOpt.AlgorithmType2 = css::util::SearchAlgorithms2::REGEXP;
     //case 1
     searchOpt.searchString = "First";
     CPPUNIT_ASSERT_EQUAL(
@@ -1314,9 +1344,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf74230)
     CPPUNIT_ASSERT(pXmlDoc);
     //asserting XPath in loaded XML DOM
     assertXPath(pXmlDoc, "//office:styles/style:default-style[@style:family='graphic']/"
-                         "style:graphic-properties[@svg:stroke-color='#3465a4']");
+                         "style:graphic-properties[@svg:stroke-color='#3465a4']"_ostr);
     assertXPath(pXmlDoc, "//office:styles/style:default-style[@style:family='graphic']/"
-                         "style:graphic-properties[@draw:fill-color='#729fcf']");
+                         "style:graphic-properties[@draw:fill-color='#729fcf']"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf80663)
@@ -1797,6 +1827,35 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf88899)
     CPPUNIT_ASSERT_EQUAL(OUString("11/10/14 03:03 AM"), xTextField->getPresentation(false));
 }
 
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf151605)
+{
+    createSwDoc("tdf151605.odt");
+
+    // disable IncludeHiddenText
+    std::shared_ptr<comphelper::ConfigurationChanges> batch(
+        comphelper::ConfigurationChanges::create());
+    officecfg::Office::Writer::FilterFlags::ASCII::IncludeHiddenText::set(false, batch);
+    officecfg::Office::Writer::Content::Display::ShowWarningHiddenSection::set(false, batch);
+    batch->commit();
+
+    dispatchCommand(mxComponent, ".uno:SelectAll", {});
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+
+    uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+        { { "SelectedFormat", uno::Any(static_cast<sal_uInt32>(SotClipboardFormatId::STRING)) } });
+
+    // Paste as Unformatted text
+    dispatchCommand(mxComponent, ".uno:ClipboardFormatItems", aPropertyValues);
+
+    CPPUNIT_ASSERT_EQUAL(OUString("Before"), getParagraph(1)->getString());
+    CPPUNIT_ASSERT_EQUAL(OUString("After"), getParagraph(2)->getString());
+
+    // re-enable it
+    officecfg::Office::Writer::FilterFlags::ASCII::IncludeHiddenText::set(true, batch);
+    officecfg::Office::Writer::Content::Display::ShowWarningHiddenSection::set(true, batch);
+    batch->commit();
+}
+
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf90362)
 {
     createSwDoc("tdf90362.fodt");
@@ -1834,11 +1893,13 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testUndoDelAsCharTdf107512)
     pShell->ClearMark();
     SwFormatAnchor anchor(RndStdIds::FLY_AS_CHAR);
     frameSet.Put(anchor);
-    GraphicObject grf;
+    Graphic grf;
     pShell->SttEndDoc(true);
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet));
+    CPPUNIT_ASSERT(rIDCO.InsertGraphic(*pShell->GetCursor(), OUString(), OUString(), &grf,
+                                       &frameSet, &grfSet, nullptr));
     pShell->SttEndDoc(false);
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet));
+    CPPUNIT_ASSERT(rIDCO.InsertGraphic(*pShell->GetCursor(), OUString(), OUString(), &grf,
+                                       &frameSet, &grfSet, nullptr));
     CPPUNIT_ASSERT_EQUAL(size_t(2), pDoc->GetFlyCount(FLYCNTTYPE_GRF));
     SvxCharHiddenItem hidden(true, RES_CHRATR_HIDDEN);
     pShell->SelectTextModel(1, 4);
@@ -2021,8 +2082,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testUndoDelAsChar)
     SfxItemSet grfSet(pDoc->GetAttrPool(), svl::Items<RES_GRFATR_BEGIN, RES_GRFATR_END - 1>);
     SwFormatAnchor anchor(RndStdIds::FLY_AS_CHAR);
     frameSet.Put(anchor);
-    GraphicObject grf;
-    CPPUNIT_ASSERT(rIDCO.InsertGraphicObject(*pShell->GetCursor(), grf, &frameSet, &grfSet));
+    Graphic grf;
+    CPPUNIT_ASSERT(rIDCO.InsertGraphic(*pShell->GetCursor(), OUString(), OUString(), &grf,
+                                       &frameSet, &grfSet, nullptr));
     CPPUNIT_ASSERT_EQUAL(size_t(1), pDoc->GetFlyCount(FLYCNTTYPE_GRF));
     pShell->SetMark();
     pShell->Left(1, SwCursorSkipMode::Chars);
@@ -2049,7 +2111,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf86639)
     createSwDoc("tdf86639.rtf");
     SwDoc* pDoc = getSwDoc();
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
-    SwTextFormatColl* pColl = pDoc->FindTextFormatCollByName(u"Heading");
+    SwTextFormatColl* pColl = pDoc->FindTextFormatCollByName(u"Heading"_ustr);
     pWrtShell->SetTextFormatColl(pColl);
     OUString aExpected = pColl->GetAttrSet().GetFont().GetFamilyName();
     // This was Calibri, should be Liberation Sans.
@@ -2101,7 +2163,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testEmbeddedDataSource)
     xConnection->close();
 
     // Reload: should still have a component and a data source, too.
-    reload("writer8", "embedded-data-source.odt");
+    saveAndReload("writer8");
     CPPUNIT_ASSERT(mxComponent.is());
     CPPUNIT_ASSERT(xDatabaseContext->hasByName("calc-data-source"));
 
@@ -2189,10 +2251,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf127635)
 
     SwXTextDocument* pXTextDocument = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     CPPUNIT_ASSERT(pXTextDocument);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, ' ', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'b', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"a b");
 
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
     pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 2, /*bBasicCall=*/false);
@@ -2209,10 +2268,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf127635)
                            pDoc->getIDocumentRedlineAccess().IsRedlineOn());
     CPPUNIT_ASSERT(pWrtShell->GetLayout()->IsHideRedlines());
 
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, ' ', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'd', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"c d");
 
     SwEditShell* const pEditShell(pDoc->GetEditShell());
     // accept all redlines
@@ -2328,9 +2384,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf34957)
     // regardless of whether it was already kept with the previous paragraph,
     // or whether the following paragraph actually fit on the same page (MAB 3.6 - 5.0)
     CPPUNIT_ASSERT_EQUAL(OUString("Row 1"),
-                         parseDump("/root/page[2]/body/tab[1]/row[2]/cell[1]/txt"));
+                         parseDump("/root/page[2]/body/tab[1]/row[2]/cell[1]/txt"_ostr));
     CPPUNIT_ASSERT_EQUAL(OUString("Row 1"),
-                         parseDump("/root/page[4]/body/tab[1]/row[2]/cell[1]/txt"));
+                         parseDump("/root/page[4]/body/tab[1]/row[2]/cell[1]/txt"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf89954)
@@ -2341,18 +2397,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf89954)
     pWrtShell->EndPara();
     SwXTextDocument* pXTextDocument = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     CPPUNIT_ASSERT(pXTextDocument);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 't', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'e', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 's', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 't', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, '.', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"test.");
 
     SwNodeIndex aNodeIndex(pDoc->GetNodes().GetEndOfContent(), -1);
     // Placeholder character for the comment anchor was ^A (CH_TXTATR_BREAKWORD), not <fff9> (CH_TXTATR_INWORD).
     // As a result, autocorrect did not turn the 't' input into 'T'.
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Tes\uFFF9t. Test."),
-                         aNodeIndex.GetNode().GetTextNode()->GetText());
+    CPPUNIT_ASSERT_EQUAL(u"Tes\uFFF9t. Test."_ustr, aNodeIndex.GetNode().GetTextNode()->GetText());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf89720)
@@ -2423,7 +2473,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf138873)
     CPPUNIT_ASSERT_EQUAL(OUString("A DDD C"), getParagraph(1)->getString());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(OUString("A B C"), getParagraph(1)->getString());
 
@@ -2431,10 +2480,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf138873)
     pWrtShell->Right(SwCursorSkipMode::Chars, /*bSelect=*/true, 2, /*bBasicCall=*/false);
 
     dispatchCommand(mxComponent, ".uno:Copy", {});
-    Scheduler::ProcessEventsToIdle();
 
     dispatchCommand(mxComponent, ".uno:Paste", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Without the fix in place, this test would have failed with
     // - Expected: A B C
@@ -2764,17 +2811,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest7, testTdf149089)
 {
     createSwDoc("tdf149089.odt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    sal_Int32 nPorLen1 = getXPath(pXmlDoc, "(//SwLinePortion)[1]", "length").toInt32();
-    sal_Int32 nPorLen2 = getXPath(pXmlDoc, "(//SwLinePortion)[2]", "length").toInt32();
-    sal_Int32 nPorLen3 = getXPath(pXmlDoc, "(//SwLinePortion)[3]", "length").toInt32();
+    sal_Int32 nPorLen1 = getXPath(pXmlDoc, "(//SwLinePortion)[1]"_ostr, "length"_ostr).toInt32();
+    sal_Int32 nPorLen2 = getXPath(pXmlDoc, "(//SwLinePortion)[2]"_ostr, "length"_ostr).toInt32();
+    sal_Int32 nPorLen3 = getXPath(pXmlDoc, "(//SwLinePortion)[3]"_ostr, "length"_ostr).toInt32();
     // Two SwTextPortion and one SwKernPortion
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3), nPorLen1); // SwTextPortion "&#x4E00;&#x4E00; "
     CPPUNIT_ASSERT_EQUAL(sal_Int32(12), nPorLen2); // SwTextPortion "BUG 11111111"
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), nPorLen3); // SwKernPortion
 
-    sal_Int32 nPorWidth1 = getXPath(pXmlDoc, "(//SwLinePortion)[1]", "width").toInt32();
-    sal_Int32 nPorWidth2 = getXPath(pXmlDoc, "(//SwLinePortion)[2]", "width").toInt32();
-    sal_Int32 nPorWidth3 = getXPath(pXmlDoc, "(//SwLinePortion)[3]", "width").toInt32();
+    sal_Int32 nPorWidth1 = getXPath(pXmlDoc, "(//SwLinePortion)[1]"_ostr, "width"_ostr).toInt32();
+    sal_Int32 nPorWidth2 = getXPath(pXmlDoc, "(//SwLinePortion)[2]"_ostr, "width"_ostr).toInt32();
+    sal_Int32 nPorWidth3 = getXPath(pXmlDoc, "(//SwLinePortion)[3]"_ostr, "width"_ostr).toInt32();
     sal_Int32 nGridWidth1 = nPorWidth1 / 3;
     sal_Int32 nGridWidth2 = (nPorWidth2 + nPorWidth3) / 7;
     CPPUNIT_ASSERT_EQUAL(nGridWidth1, nGridWidth2);

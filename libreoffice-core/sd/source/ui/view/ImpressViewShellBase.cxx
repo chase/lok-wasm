@@ -20,6 +20,7 @@
 #include <ImpressViewShellBase.hxx>
 
 #include <DrawDocShell.hxx>
+#include <DrawController.hxx>
 #include <app.hrc>
 #include <framework/FrameworkHelper.hxx>
 #include <framework/ImpressModule.hxx>
@@ -38,9 +39,9 @@ namespace sd {
 
 SfxViewFactory* ImpressViewShellBase::s_pFactory;
 SfxViewShell* ImpressViewShellBase::CreateInstance (
-    SfxViewFrame *pFrame, SfxViewShell *pOldView)
+    SfxViewFrame& rFrame, SfxViewShell *pOldView)
 {
-    ImpressViewShellBase* pBase = new ImpressViewShellBase(pFrame, pOldView);
+    ImpressViewShellBase* pBase = new ImpressViewShellBase(rFrame, pOldView);
     pBase->LateInit(comphelper::LibreOfficeKit::isActive() ? framework::FrameworkHelper::msImpressViewURL : "");
     return pBase;
 }
@@ -55,9 +56,9 @@ void ImpressViewShellBase::InitFactory()
 }
 
 ImpressViewShellBase::ImpressViewShellBase (
-    SfxViewFrame* _pFrame,
+    SfxViewFrame& _rFrame,
     SfxViewShell* pOldShell)
-    : ViewShellBase (_pFrame, pOldShell)
+    : ViewShellBase (_rFrame, pOldShell)
 {
     MasterPageObserver::Instance().RegisterDocument (*GetDocShell()->GetDoc());
 }
@@ -87,8 +88,7 @@ void ImpressViewShellBase::Execute (SfxRequest& rRequest)
 
 void ImpressViewShellBase::InitializeFramework()
 {
-    css::uno::Reference<css::frame::XController>
-        xController (GetController());
+    rtl::Reference<sd::DrawController> xController(GetDrawController());
     sd::framework::ImpressModule::Initialize(xController);
 }
 

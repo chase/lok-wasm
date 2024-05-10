@@ -19,11 +19,12 @@
 
 #include <sal/config.h>
 
-#include <com/sun/star/awt/XWindowPeer.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/Frame.hpp>
 #include <com/sun/star/frame/XFrame2.hpp>
 #include <com/sun/star/frame/XSynchronousFrameLoader.hpp>
+#include <com/sun/star/task/InteractionHandler.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
 #include <com/sun/star/util/XCloseable.hpp>
@@ -132,18 +133,18 @@ IFrameWindow_Impl::IFrameWindow_Impl( vcl::Window *pParent, bool bHasBorder )
 #define WID_FRAME_MARGIN_WIDTH          7
 #define WID_FRAME_MARGIN_HEIGHT         8
 
-o3tl::span<const SfxItemPropertyMapEntry> lcl_GetIFramePropertyMap_Impl()
+std::span<const SfxItemPropertyMapEntry> lcl_GetIFramePropertyMap_Impl()
 {
     static const SfxItemPropertyMapEntry aIFramePropertyMap_Impl[] =
     {
-        { u"FrameIsAutoBorder",    WID_FRAME_IS_AUTO_BORDER,   cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameIsAutoScroll",    WID_FRAME_IS_AUTO_SCROLL,   cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameIsBorder",        WID_FRAME_IS_BORDER,        cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameIsScrollingMode", WID_FRAME_IS_SCROLLING_MODE,cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameMarginHeight",    WID_FRAME_MARGIN_HEIGHT,    cppu::UnoType<sal_Int32>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameMarginWidth",     WID_FRAME_MARGIN_WIDTH,     cppu::UnoType<sal_Int32>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameName",            WID_FRAME_NAME,             cppu::UnoType<OUString>::get(), PROPERTY_UNBOUND, 0 },
-        { u"FrameURL",             WID_FRAME_URL,              cppu::UnoType<OUString>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameIsAutoBorder"_ustr,    WID_FRAME_IS_AUTO_BORDER,   cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameIsAutoScroll"_ustr,    WID_FRAME_IS_AUTO_SCROLL,   cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameIsBorder"_ustr,        WID_FRAME_IS_BORDER,        cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameIsScrollingMode"_ustr, WID_FRAME_IS_SCROLLING_MODE,cppu::UnoType<bool>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameMarginHeight"_ustr,    WID_FRAME_MARGIN_HEIGHT,    cppu::UnoType<sal_Int32>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameMarginWidth"_ustr,     WID_FRAME_MARGIN_WIDTH,     cppu::UnoType<sal_Int32>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameName"_ustr,            WID_FRAME_NAME,             cppu::UnoType<OUString>::get(), PROPERTY_UNBOUND, 0 },
+        { u"FrameURL"_ustr,             WID_FRAME_URL,              cppu::UnoType<OUString>::get(), PROPERTY_UNBOUND, 0 },
     };
     return aIFramePropertyMap_Impl;
 }
@@ -220,9 +221,11 @@ sal_Bool SAL_CALL IFrameObject::load(
                 mxFrame->setCreator( xFramesSupplier );
         }
 
+        uno::Reference<task::XInteractionHandler> xInteractionHandler(task::InteractionHandler::createWithParent(mxContext, xParentWindow));
         uno::Sequence < beans::PropertyValue > aProps{
             comphelper::makePropertyValue("PluginMode", sal_Int16(2)),
             comphelper::makePropertyValue("ReadOnly", true),
+            comphelper::makePropertyValue("InteractionHandler", xInteractionHandler),
             comphelper::makePropertyValue("Referer", sReferer)
         };
         uno::Reference < frame::XDispatch > xDisp = mxFrame->queryDispatch( aTargetURL, "_self", 0 );

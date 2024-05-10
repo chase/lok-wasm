@@ -29,6 +29,7 @@ Option Explicit
 &apos;&apos;&apos;		The SF_Calc module is focused on :
 &apos;&apos;&apos;			- management (copy, insert, move, ...) of sheets within a Calc document
 &apos;&apos;&apos;			- exchange of data between Basic data structures and Calc ranges of values
+&apos;&apos;&apos;			- copying and importing massive amounts of data
 &apos;&apos;&apos;
 &apos;&apos;&apos;		The current module is closely related to the &quot;UI&quot; service of the ScriptForge library
 &apos;&apos;&apos;
@@ -63,9 +64,9 @@ Option Explicit
 &apos;&apos;&apos;					or an object produced by .Range()
 &apos;&apos;&apos;				The sheet name is optional (default = active sheet). Surrounding quotes and $ signs are optional
 &apos;&apos;&apos;					~.~, ~							The current selection in the active sheet
-&apos;&apos;&apos;					&apos;$SheetX&apos;.D2 or $D$2			A single cell
-&apos;&apos;&apos;					&apos;$SheetX&apos;.D2:F6, D2:D10			Multiple cells
-&apos;&apos;&apos;					&apos;$SheetX&apos;.A:A or 3:5			All cells in the same column or row up to the last active cell
+&apos;&apos;&apos;					$&apos;SheetX&apos;.D2 or $D$2			A single cell
+&apos;&apos;&apos;					$SheetX.D2:F6, D2:D10			Multiple cells
+&apos;&apos;&apos;					$&apos;SheetX&apos;.A:A or 3:5			All cells in the same column or row up to the last active cell
 &apos;&apos;&apos;					SheetX.*						All cells up to the last active cell
 &apos;&apos;&apos;					myRange							A range name at spreadsheet level
 &apos;&apos;&apos;					~.yourRange, SheetX.someRange	A range name at sheet level
@@ -74,10 +75,10 @@ Option Explicit
 &apos;&apos;&apos;
 &apos;&apos;&apos;			Several methods may receive a &quot;FilterFormula&quot; as argument.
 &apos;&apos;&apos;			A FilterFormula may be associated with a FilterScope: &quot;row&quot;, &quot;column&quot; or &quot;cell&quot;.
-&apos;&apos;&apos;			These arguments determines on which rows/columns/cells of a range the method should be applied
+&apos;&apos;&apos;			These arguments determine on which rows/columns/cells of a range the method should be applied
 &apos;&apos;&apos;			Examples:
-&apos;&apos;&apos;				oDoc.ClearAll(&quot;A1:J10&quot;, FilterFormula := &quot;=(A1&lt;=0)&quot;, FilterScope := &quot;CELL&quot;)		&apos;	Clear all negative values
-&apos;&apos;&apos;				oDoc.ClearAll(&quot;A2:J10&quot;, FilterFormula := &quot;=(A2&lt;&gt;A1)&quot;, FilterScope := &quot;COLUMN&quot;)	&apos;	Clear when identical to above cell
+&apos;&apos;&apos;				oDoc.ClearAll(&quot;A1:J10&quot;, FilterFormula := &quot;=(A1&lt;=0)&quot;, FilterScope := &quot;CELL&quot;)	&apos;	Clear all negative values
+&apos;&apos;&apos;				oDoc.ClearAll(&quot;SheetX.A1:J10&quot;, &quot;=SUM(SheetX.A1:A10)&gt;100&quot;, &quot;COLUMN&quot;)			&apos;	Clear all columns whose sum is greater than 500
 &apos;&apos;&apos;
 &apos;&apos;&apos;				FilterFormula:	a Calc formula that returns TRUE or FALSE
 &apos;&apos;&apos;								the formula is expressed in terms of
@@ -673,16 +674,17 @@ Try:
 		Next i
 	
 		&apos;	Compute the final range position
-		If lCountDeleted &lt; .Width Then sCompact = Offset(Range, 0, 0, 0, .Width - lCountDeleted)
-
-		&apos;	Push to the right the cells that migrated leftwards irrelevantly
-		If Not WholeColumn Then
-			If Len(sCompact) &gt; 0 Then
+		If lCountDeleted &gt; 0 Then
+			sCompact = Offset(Range, 0, 0, 0, .Width - lCountDeleted)
+			&apos;	Push to the right the cells that migrated leftwards irrelevantly
+			If Not WholeColumn Then
 				sShiftRange = Offset(sCompact, 0, .Width - lCountDeleted, , lCountDeleted)
-			Else
-				sShiftRange = .RangeName
+				ShiftRight(sShiftRange, WholeColumn := False)
 			End If
-			ShiftRight(sShiftRange, WholeColumn := False)
+			&apos;	Conventionally, if all columns are deleted, the returned range is the zero-length string
+			If .Width = lCountDeleted Then sCompact = &quot;&quot;
+		Else		&apos;	Initial range is left unchanged
+			sCompact = .RangeName
 		End If
 
 	End With
@@ -724,7 +726,6 @@ Public Function CompactUp(Optional ByVal Range As Variant _
 &apos;&apos;&apos;			&apos;	The rows having a &quot;X&quot; in column G are completely suppressed
 
 Dim sCompact As String			&apos;	Return value
-Dim oCompact As Object			&apos;	Return value as an _Address type
 Dim lCountDeleted As Long		&apos;	Count the deleted rows
 Dim vCompactRanges As Variant	&apos;	Array of ranges to be compacted based on the formula
 Dim oSourceAddress As Object	&apos;	Alias of Range as _Address
@@ -768,16 +769,17 @@ Try:
 		Next i
 	
 		&apos;	Compute the final range position
-		If lCountDeleted &lt; .Height Then sCompact = Offset(Range, 0, 0, .Height - lCountDeleted, 0)
-
-		&apos;	Push downwards the cells that migrated upwards irrelevantly
-		If Not WholeRow Then
-			If Len(sCompact) &gt; 0 Then
+		If lCountDeleted &gt; 0 Then
+			sCompact = Offset(Range, 0, 0, .Height - lCountDeleted, 0)
+			&apos;	Push downwards the cells that migrated upwards irrelevantly
+			If Not WholeRow Then
 				sShiftRange = Offset(sCompact, .Height - lCountDeleted, 0, lCountDeleted)
-			Else
-				sShiftRange = .RangeName
+				ShiftDown(sShiftRange, WholeRow := False)
 			End If
-			ShiftDown(sShiftRange, WholeRow := False)
+			&apos;	Conventionally, if all rows are deleted, the returned range is the zero-length string
+			If .Height = lCountDeleted Then sCompact = &quot;&quot;
+		Else		&apos;	Initial range is left unchanged
+			sCompact = .RangeName
 		End If
 
 	End With
@@ -2110,6 +2112,7 @@ Public Function Methods() As Variant
 					, &quot;OpenRangeSelector&quot; _
 					, &quot;Printf&quot; _
 					, &quot;PrintOut&quot; _
+					, &quot;RemoveDuplicates&quot; _
 					, &quot;RemoveSheet&quot; _
 					, &quot;RenameSheet&quot; _
 					, &quot;SetArray&quot; _
@@ -2548,6 +2551,7 @@ Public Function Properties() As Variant
 					, &quot;DocumentProperties&quot; _
 					, &quot;DocumentType&quot; _
 					, &quot;ExportFilters&quot; _
+					, &quot;FileSystem&quot; _
 					, &quot;FirstCell&quot; _
 					, &quot;FirstColumn&quot; _
 					, &quot;FirstRow&quot; _
@@ -2556,6 +2560,7 @@ Public Function Properties() As Variant
 					, &quot;IsBase&quot; _
 					, &quot;IsCalc&quot; _
 					, &quot;IsDraw&quot; _
+					, &quot;IsFormDocument&quot; _
 					, &quot;IsImpress&quot; _
 					, &quot;IsMath&quot; _
 					, &quot;IsWriter&quot; _
@@ -2569,16 +2574,143 @@ Public Function Properties() As Variant
 					, &quot;Sheet&quot; _
 					, &quot;SheetName&quot; _
 					, &quot;Sheets&quot; _
+					, &quot;StyleFamilies&quot; _
 					, &quot;Subject&quot; _
 					, &quot;Title&quot; _
 					, &quot;Width&quot; _
 					, &quot;XCellRange&quot; _
 					, &quot;XComponent&quot; _
+					, &quot;XDocumentSettings&quot; _
 					, &quot;XSheetCellCursor&quot; _
 					, &quot;XSpreadsheet&quot; _
 					)
 
 End Function	&apos;	SFDocuments.SF_Calc.Properties
+
+REM -----------------------------------------------------------------------------
+Public Function RemoveDuplicates(Optional ByVal Range As Variant _
+									, Optional ByVal Columns As Variant _
+									, Optional ByVal Header As Variant _
+									, Optional ByVal CaseSensitive As Variant _
+									, Optional ByVal Mode As Variant _
+									) As String
+&apos;&apos;&apos;	Remove duplicate values from a range of values.
+&apos;&apos;&apos;	The comparison between rows is done on a subset of the columns in the range.
+&apos;&apos;&apos;	The resulting range replaces the input range, in which, either:
+&apos;&apos;&apos;		all duplicate rows are cleared from their content
+&apos;&apos;&apos;		all duplicate rows are suppressed and rows below are pushed upwards.
+&apos;&apos;&apos;	Anyway, the first copy of each set of duplicates is kept and the initial sequence is preserved.
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		Range: the range, as a string, from which the duplicate rows should be removed
+&apos;&apos;&apos;		Columns: an array of column numbers to compare; items are in the interval [1 .. range width]
+&apos;&apos;&apos;			Default = the first column in the range
+&apos;&apos;&apos;		Header: when True, the first row is a header row. Default = False.
+&apos;&apos;&apos;		CaseSensitive: for string comparisons. Default = False.
+&apos;&apos;&apos;		Mode: either &quot;CLEAR&quot; or &quot;COMPACT&quot; (Default)
+&apos;&apos;&apos;			For large ranges, the &quot;COMPACT&quot; mode is probably significantly slower.
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;		The resulting range as a string
+&apos;&apos;&apos;	Examples:
+&apos;&apos;&apos;		oCalc.RemoveDuplicates(&quot;Sheet1.B2:K11&quot;, Array(1, 2), Header := True, CaseSensitive := True)
+
+Dim sRemove As String				&apos;	Return value
+Dim oRangeAddress As Object			&apos;	Parsed range as an _Address object
+Dim sMirrorRange As String			&apos;	Mirror of initial range
+Dim lRandom As Long					&apos;	Random number to build the worksheet name
+Dim sWorkSheet As String			&apos;	Name of worksheet
+Dim vRows() As Variant				&apos;	Array of row numbers
+Dim sRowsRange As String			&apos;	Range of the last column of the worksheet
+Dim sFullMirrorRange As String		&apos;	Mirrored data + rows column
+Dim sLastRowsRange As String		&apos;	Same as sRowsRange without the first cell
+Dim sDuplicates As String			&apos;	Formula identifying a duplicate row
+Dim lColumn As Long					&apos;	Single column number
+Dim sColumn As String				&apos;	Single column name
+Dim sFilter As String				&apos;	Filter formula for final compaction or clearing
+
+Const cstThisSub = &quot;SFDocuments.Calc.RemoveDuplicates&quot;
+Const cstSubArgs = &quot;Range, [Columns], [Header=False], [CaseSensitive=False], [Mode=&quot;&quot;COMPACT&quot;&quot;|&quot;&quot;CLEAR&quot;&quot;]&quot;
+
+	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
+	sRemove = &quot;&quot;
+
+Check:
+	If IsMissing(Columns) Or IsEmpty(Columns) Then Columns = Array(1)
+	If Not IsArray(Columns) Then Columns = Array(Columns)
+	If IsMissing(Header) Or IsEmpty(Header) Then Header = False
+	If IsMissing(CaseSensitive) Or IsEmpty(CaseSensitive) Then CaseSensitive = False
+	If IsMissing(Mode) Or IsEmpty(Mode) Then Mode = &quot;COMPACT&quot;
+	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
+		If Not _IsStillAlive(True) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(Range, &quot;Range&quot;, V_STRING) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._ValidateArray(Columns, &quot;Columns&quot;, 1, ScriptForge.V_NUMERIC, True) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(Header, &quot;Header&quot;, ScriptForge.V_BOOLEAN) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(CaseSensitive, &quot;CaseSensitive&quot;, ScriptForge.V_BOOLEAN) Then GoTo Finally
+		If Not ScriptForge.SF_Utils._Validate(Mode, &quot;Mode&quot;, V_STRING, Array(&quot;COMPACT&quot;, &quot;CLEAR&quot;)) Then GoTo Finally
+	End If
+
+Try:
+	&apos;	Let&apos;s assume the initial range is &quot;$Sheet1.$B$11:$K$110&quot; (100 rows, 10 columns, no header)
+	&apos;	Ignore header, consider only the effective data
+	If Header Then Set oRangeAddress = _Offset(Range, 1, 0, Height(Range) - 1, 0) Else Set oRangeAddress = _ParseAddress(Range)
+
+	&apos;**	Step 1: create a worksheet and copy the range in A1
+		lRandom = ScriptForge.SF_Session.ExecuteCalcFunction(&quot;RANDBETWEEN.NV&quot;, 1, 999999)
+		sWorkSheet = &quot;SF_WORK_&quot; &amp; Right(&quot;000000&quot; &amp; lRandom, 6)
+		InsertSheet(sWorkSheet)
+		&apos;	sMirrorRange = &quot;$SF_WORK.$A$1:$J$100&quot;
+		sMirrorRange = CopyToCell(oRangeAddress, &quot;$&quot; &amp; sWorkSheet &amp; &quot;.$A$1&quot;)
+
+	&apos;**	Step 2: add a column in the mirror with the row numbers in the initial range
+		&apos;	vRows = [11..110]
+		With oRangeAddress.XCellRange
+			vRows = ScriptForge.RangeInit(CLng(.RangeAddress.StartRow + 1), CLng(.RangeAddress.EndRow + 1))
+		End With
+		&apos;	sRowsRange = &quot;$SF_WORK.$K$1:$K$100&quot;
+		sRowsRange = SetArray(Offset(sMirrorRange, , Width(sMirrorRange), 1, 1), vRows())
+
+	&apos;**	Step 3: sort the mirrored data, including the row numbers column
+		&apos;	sFullMirrorRange = &quot;$SF_WORK.$A$1:$K$100&quot;
+		sFullMirrorRange = Offset(sMirrorRange, , , , Width(sMirrorRange) + 1)
+		SortRange(sFullMirrorRange, SortKeys := Columns, CaseSensitive := CaseSensitive)
+
+	&apos;**	Step 4: Filter out the row numbers containing duplicates
+		&apos;	sLastRowRange = &quot;$SF_WORK.$K$2:$K$100&quot;
+		sLastRowsRange = Offset(sRowsRange, 1, , Height(sRowsRange) - 1)
+		&apos;	If Columns = (1, 3) =&gt; sDuplicates = &quot;=AND(TRUE;$A2=$A1;$C2=$C1)
+		sDuplicates = &quot;=AND(TRUE&quot;
+		For Each lColumn In Columns
+			sColumn = _GetColumnName(lColumn)
+			If CaseSensitive Then
+				sDuplicates = sDuplicates &amp; &quot;;$&quot; &amp; sColumn &amp; &quot;2=$&quot; &amp; sColumn &amp; &quot;1&quot;
+			Else
+				sDuplicates = sDuplicates &amp; &quot;;UPPER($&quot; &amp; sColumn &amp; &quot;2)=UPPER($&quot; &amp; sColumn &amp; &quot;1)&quot;
+			End If
+		Next lColumn
+		sDuplicates = sDuplicates &amp; &quot;)&quot;
+		ClearValues(sLastRowsRange, sDuplicates, &quot;ROW&quot;)
+
+	&apos;**	Step 5: Compact or clear the rows in the initial range that are not retained in the final row numbers list
+		&apos;	sFilter = &quot;=ISNA(MATCH(ROW();$SF_WORK.$K$1:$K$100;0))&quot;
+		sFilter = &quot;=ISNA(MATCH(ROW();&quot; &amp; sRowsRange &amp; &quot;;0))&quot;
+		Select Case UCase(Mode)
+			Case &quot;COMPACT&quot;
+				sRemove = CompactUp(oRangeAddress.RangeName, WholeRow := False, FilterFormula := sFilter)
+				If Header Then sRemove = Offset(sRemove, -1, 0, Height(sRemove) + 1)
+			Case &quot;CLEAR&quot;
+				ClearValues(oRangeAddress.RangeName, FilterFormula := sFilter, FilterScope := &quot;ROW&quot;)
+				If Header Then sRemove = _ParseAddress(Range).RangeName Else sRemove = oRangeAddress.RangeName
+		End Select	
+
+	&apos;**	Housekeeping
+		RemoveSheet(sWorkSheet)
+
+Finally:
+	RemoveDuplicates = sRemove
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Function
+Catch:
+	GoTo Finally
+End Function	&apos;	SFDocuments.SF_Calc.RemoveDuplicates
 
 REM -----------------------------------------------------------------------------
 Public Function RemoveSheet(Optional ByVal SheetName As Variant) As Boolean
@@ -3303,7 +3435,11 @@ Public Function SortRange(Optional ByVal Range As Variant _
 								, Optional ByVal CaseSensitive As Variant _
 								, Optional ByVal SortColumns As Variant _
 								) As Variant
-&apos;&apos;&apos;	Sort the given range on maximum 3 columns/rows. The sorting order may vary by column/row
+&apos;&apos;&apos;	Sort the given range on any number of columns/rows. The sorting order may vary by column/row
+&apos;&apos;&apos;	If the number of sort keys is &gt; 3 then the range is sorted several times, by groups of 3 keys,
+&apos;&apos;&apos;	starting from the last key. In this context the algorithm used by Calc to sort ranges
+&apos;&apos;&apos;	is presumed STABLE, i.e. it maintains the relative order of records with equal keys.
+&apos;&apos;&apos;	
 &apos;&apos;&apos;	Args:
 &apos;&apos;&apos;		Range: the range to sort as a string
 &apos;&apos;&apos;		SortKeys: a scalar (if 1 column/row) or an array of column/row numbers starting from 1
@@ -3327,13 +3463,19 @@ Public Function SortRange(Optional ByVal Range As Variant _
 Dim sSort As String					&apos;	Return value
 Dim oRangeAddress As _Address		&apos;	Parsed range
 Dim oRange As Object				&apos;	com.sun.star.table.XCellRange
+Dim oSortRange As Object			&apos;	The area to sort as an _Address object
 Dim oDestRange As Object			&apos;	Destination as a range
 Dim oDestAddress As Object			&apos;	com.sun.star.table.CellRangeAddress
 Dim oDestCell As Object				&apos;	com.sun.star.table.CellAddress
 Dim vSortDescriptor As Variant		&apos;	Array of com.sun.star.beans.PropertyValue
 Dim vSortFields As Variant			&apos;	Array of com.sun.star.table.TableSortField
 Dim sOrder As String				&apos;	Item in SortOrder
-Dim i As Long
+Dim lSort As Long					&apos;	Counter for sub-sorts
+Dim lKeys As Long					&apos;	UBound of SortKeys
+Dim lKey As Long					&apos;	Actual index in SortKeys
+Dim i As Long, j As Long
+Const cstMaxKeys = 3				&apos;	Maximum number of keys allowed in a single sorting step
+
 Const cstThisSub = &quot;SFDocuments.Calc.SortRange&quot;
 Const cstSubArgs = &quot;Range, SortKeys, [TargetRange=&quot;&quot;&quot;&quot;], [SortOrder=&quot;&quot;ASC&quot;&quot;], [DestinationCell=&quot;&quot;&quot;&quot;], [ContainsHeader=False], [CaseSensitive=False], [SortColumns=False]&quot;
 
@@ -3366,47 +3508,64 @@ Check:
 		If Not ScriptForge.SF_Utils._Validate(SortColumns, &quot;SortColumns&quot;, ScriptForge.V_BOOLEAN) Then GoTo Finally
 	End If
 	Set oRangeAddress = _ParseAddress(Range)
-	If Len(DestinationCell) &gt; 0 Then Set oDestRange = _ParseAddress(DestinationCell)
+	If Len(DestinationCell) &gt; 0 Then Set oDestRange = _ParseAddress(DestinationCell) Else Set oDestRange = Nothing
 
 Try:
-	&apos;	Initialize the sort descriptor
+	&apos;	Initialize a generic sort descriptor
 	Set oRange = oRangeAddress.XCellRange
-	vSortDescriptor = oRange.createSortDescriptor
+	vSortDescriptor = oRange.createSortDescriptor	&apos;	Makes a generic sort descriptor for ranges
 	vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;IsSortColumns&quot;, SortColumns)
 	vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;ContainsHeader&quot;, ContainsHeader)
 	vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;BindFormatsToContent&quot;, True)
-	If Len(DestinationCell) = 0 Then
-		vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;CopyOutputData&quot;, False)
-	Else
-		Set oDestAddress = oDestRange.XCellRange.RangeAddress
-		Set oDestCell = New com.sun.star.table.CellAddress
-		With oDestAddress
-			oDestCell.Sheet = .Sheet
-			oDestCell.Column = .StartColumn
-			oDestCell.Row = .StartRow
-		End With
-		vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;CopyOutputData&quot;, True)
-		vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;OutputPosition&quot;, oDestCell)
-	End If
 	vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;IsUserListEnabled&quot;, False)
 
-	&apos;	Define the sorting keys
-	vSortFields = Array()
-	ReDim vSortFields(0 To UBound(SortKeys))
-	For i = 0 To UBound(SortKeys)
-		vSortFields(i) = New com.sun.star.table.TableSortField
-		If i &gt; UBound(SortOrder) Then sOrder = &quot;&quot; Else sOrder = SortOrder(i)
-		If Len(sOrder) = 0 Then sOrder = &quot;ASC&quot;
-		With vSortFields(i)
-			.Field = SortKeys(i) - 1
-			.IsAscending = ( UCase(sOrder) = &quot;ASC&quot; )
-			.IsCaseSensitive = CaseSensitive
-		End With
-	Next i
+	&apos;	Sort by keys group
+	&apos;	If keys = (1, 2, 3, 4, 5) then groups = (4, 5), (1, 2, 3)
+	lKeys = UBound(SortKeys)
+	lSort = Int(lKeys / cstMaxKeys)
+	Set oSortRange = oRangeAddress
 
-	&apos;	Associate the keys and the descriptor, and sort
-	vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;SortFields&quot;, vSortFields)
-	oRange.sort(vSortDescriptor)
+	For j = lSort To 0 Step -1		&apos;	Sort first on last sort keys
+
+		&apos;	The 1st sort must consider the destination area. Next sorts are done on the destination area
+		If Len(DestinationCell) = 0 Or j &lt; lSort Then
+			vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;CopyOutputData&quot;, False)
+			vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;OutputPosition&quot;, Nothing)
+		Else
+			Set oDestAddress = oDestRange.XCellRange.RangeAddress
+			Set oDestCell = New com.sun.star.table.CellAddress
+			With oDestAddress
+				oDestCell.Sheet = .Sheet
+				oDestCell.Column = .StartColumn
+				oDestCell.Row = .StartRow
+			End With
+			vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;CopyOutputData&quot;, True)
+			vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;OutputPosition&quot;, oDestCell)
+		End If
+
+		&apos;	Define the sorting keys
+		vSortFields = DimArray(lKeys Mod cstMaxKeys)
+		For i = 0 To UBound(vSortFields)
+			vSortFields(i) = New com.sun.star.table.TableSortField
+			lKey = j * cstMaxKeys + i
+			If lKey &gt; UBound(SortOrder) Then sOrder = &quot;&quot; Else sOrder = SortOrder(lKey)
+			If Len(sOrder) = 0 Then sOrder = &quot;ASC&quot;
+			With vSortFields(i)
+				.Field = SortKeys(lKey) - 1
+				.IsAscending = ( UCase(sOrder) = &quot;ASC&quot; )
+				.IsCaseSensitive = CaseSensitive
+			End With
+		Next i
+		lKeys = lKeys - UBound(vSortFields) - 1
+
+		&apos;	Associate the keys and the descriptor, and sort
+		vSortDescriptor = ScriptForge.SF_Utils._SetPropertyValue(vSortDescriptor, &quot;SortFields&quot;, vSortFields)
+		oSortRange.XCellRange.sort(vSortDescriptor)
+
+		&apos;	Next loop, if any, is done on the destination area
+		If Len(DestinationCell) &gt; 0 And j = lSort And lSort &gt; 0 Then Set oSortRange = _Offset(oDestRange, 0, 0, oRangeAddress.Height, oRangeAddress.Width)
+
+	Next j
 
 	&apos;	Compute the changed area
 	If Len(DestinationCell) = 0 Then
@@ -3463,6 +3622,11 @@ Property Get ExportFilters() As Variant
 End Property	&apos;	SFDocuments.SF_Calc.ExportFilters
 
 REM -----------------------------------------------------------------------------
+Property Get FileSystem() As String
+	FileSystem = [_Super].GetProperty(&quot;FileSystem&quot;)
+End Property	&apos;	SFDocuments.SF_Calc.FileSystem
+
+REM -----------------------------------------------------------------------------
 Property Get ImportFilters() As Variant
 	ImportFilters = [_Super].GetProperty(&quot;ImportFilters&quot;)
 End Property	&apos;	SFDocuments.SF_Calc.ImportFilters
@@ -3481,6 +3645,11 @@ REM ----------------------------------------------------------------------------
 Property Get IsDraw() As Boolean
 	IsDraw = [_Super].GetProperty(&quot;IsDraw&quot;)
 End Property	&apos;	SFDocuments.SF_Calc.IsDraw
+
+REM -----------------------------------------------------------------------------
+Property Get IsFormDocument() As Boolean
+	IsFormDocument = [_Super].GetProperty(&quot;IsFormDocument&quot;)
+End Property	&apos;	SFDocuments.SF_Writer.IsFormDocument
 
 REM -----------------------------------------------------------------------------
 Property Get IsImpress() As Boolean
@@ -3513,6 +3682,11 @@ Property Get Readonly() As Variant
 End Property	&apos;	SFDocuments.SF_Calc.Readonly
 
 REM -----------------------------------------------------------------------------
+Property Get StyleFamilies() As Variant
+	StyleFamilies = [_Super].GetProperty(&quot;StyleFamilies&quot;)
+End Property	&apos;	SFDocuments.SF_Calc.StyleFamilies
+
+REM -----------------------------------------------------------------------------
 Property Get Subject() As Variant
 	Subject = [_Super].GetProperty(&quot;Subject&quot;)
 End Property	&apos;	SFDocuments.SF_Calc.Subject
@@ -3537,6 +3711,11 @@ Property Get XComponent() As Variant
 	XComponent = [_Super].GetProperty(&quot;XComponent&quot;)
 End Property	&apos;	SFDocuments.SF_Calc.XComponent
 
+REM -----------------------------------------------------------------------------
+Property Get XDocumentSettings() As Variant
+	XDocumentSettings = [_Super].GetProperty(&quot;XDocumentSettings&quot;)
+End Property	&apos;	SFDocuments.SF_Calc.XDocumentSettings
+
 REM ========================================================== SUPERCLASS METHODS
 
 REM -----------------------------------------------------------------------------
@@ -3558,6 +3737,20 @@ Public Function CreateMenu(Optional ByVal MenuHeader As Variant _
 End Function	&apos;	SFDocuments.SF_Calc.CreateMenu
 
 REM -----------------------------------------------------------------------------
+Public Sub DeleteStyles(Optional ByVal Family As Variant _
+								, Optional ByRef StylesList As Variant _
+								)
+	[_Super].DeleteStyles(Family, StylesList)
+End Sub			&apos;	SFDocuments.SF_Calc.DeleteStyles
+
+REM -----------------------------------------------------------------------------
+Public Sub Echo(Optional ByVal EchoOn As Variant _
+						, Optional ByVal Hourglass As Variant _
+						)
+	[_Super].Echo(EchoOn, Hourglass)
+End Sub		   &apos;   SFDocuments.SF_Calc.Echo
+
+REM -----------------------------------------------------------------------------
 Public Function ExportAsPDF(Optional ByVal FileName As Variant _
 							, Optional ByVal Overwrite As Variant _
 							, Optional ByVal Pages As Variant _
@@ -3566,6 +3759,14 @@ Public Function ExportAsPDF(Optional ByVal FileName As Variant _
 							) As Boolean
 	ExportAsPDF = [_Super].ExportAsPDF(FileName, Overwrite, Pages, Password, Watermark)
 End Function   &apos;   SFDocuments.SF_Calc.ExportAsPDF
+
+REM -----------------------------------------------------------------------------
+Public Sub ImportStylesFromFile(Optional FileName As Variant _
+								, Optional ByRef Families As Variant _
+								, Optional ByVal Overwrite As variant _
+								) As Variant
+	[_Super]._ImportStylesFromFile(FileName, Families, Overwrite)
+End Sub	&apos;	SFDocuments.SF_Calc.ImportStylesFromFile
 
 REM -----------------------------------------------------------------------------
 Public Function RemoveMenu(Optional ByVal MenuHeader As Variant) As Boolean
@@ -3611,6 +3812,29 @@ Public Function SetPrinter(Optional ByVal Printer As Variant _
 							) As Boolean
 	SetPrinter = [_Super].SetPrinter(Printer, Orientation, PaperFormat)
 End Function	&apos;   SFDocuments.SF_Calc.SetPrinter
+
+REM -----------------------------------------------------------------------------
+Public Function Styles(Optional ByVal Family As Variant _
+							, Optional ByVal NamePattern As variant _
+							, Optional ByVal Used As variant _
+							, Optional ByVal UserDefined As Variant _
+							, Optional ByVal ParentStyle As Variant _
+							, Optional ByVal Category As Variant _
+							) As Variant
+	Styles = [_Super].Styles(Family, NamePattern, Used, UserDefined, ParentStyle, Category)
+End Function	&apos;   SFDocuments.SF_Calc.Styles
+
+REM -----------------------------------------------------------------------------
+Public Function Toolbars(Optional ByVal ToolbarName As Variant) As Variant
+	Toolbars = [_Super].Toolbars(ToolbarName)
+End Function	&apos;	SFDocuments.SF_Calc.Toolbars
+
+REM -----------------------------------------------------------------------------
+Public Function XStyle(Optional ByVal Family As Variant _
+							, Optional ByVal StyleName As variant _
+							) As Object
+	Set XStyle = [_Super].XStyle(Family, StyleName)
+End Function	&apos;	SFDocuments.SF_Calc.XStyle
 
 REM =========================================================== PRIVATE FUNCTIONS
 
@@ -4212,8 +4436,8 @@ Private Function _ParseAddress(ByVal psAddress As String) As Object
 &apos;&apos;&apos;	Parse and validate a sheet or range reference
 &apos;&apos;&apos;	Syntax to parse:
 &apos;&apos;&apos;		[Sheet].[Range]
-&apos;&apos;&apos;			Sheet 	=&gt; [&apos;][$]sheet[&apos;] or document named range or ~
-&apos;&apos;&apos;			Range	=&gt; A1:D10, A1, A:D, 10:10 ($ ignored), or sheet named range or ~
+&apos;&apos;&apos;			Sheet 	=&gt; [$][&apos;]sheet[&apos;] or document named range or ~
+&apos;&apos;&apos;			Range	=&gt; A1:D10, A1, A:D, 10:10 ($ ignored), or sheet named range or ~ or *
 &apos;&apos;&apos;	Returns:
 &apos;&apos;&apos;		An object of type _Address
 &apos;&apos;&apos;	Exceptions:

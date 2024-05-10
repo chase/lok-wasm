@@ -84,16 +84,7 @@ static sal_uInt16 getUInt16BE( const sal_uInt8*& pBuffer )
  *  PrintFont implementations
  */
 PrintFontManager::PrintFont::PrintFont()
-:   m_eFamilyStyle(FAMILY_DONTKNOW)
-,   m_eItalic(ITALIC_DONTKNOW)
-,   m_eWidth(WIDTH_DONTKNOW)
-,   m_eWeight(WEIGHT_DONTKNOW)
-,   m_ePitch(PITCH_DONTKNOW)
-,   m_aEncoding(RTL_TEXTENCODING_DONTKNOW)
-,   m_nAscend(0)
-,   m_nDescend(0)
-,   m_nLeading(0)
-,   m_nDirectory(0)
+:   m_nDirectory(0)
 ,   m_nCollectionEntry(0)
 ,   m_nVariationEntry(0)
 {
@@ -162,6 +153,8 @@ std::vector<fontID> PrintFontManager::addFontFile( std::u16string_view rFileUrl 
     std::vector<fontID> aFontIds = findFontFileIDs( nDirID, aName );
     if( aFontIds.empty() )
     {
+        addFontconfigFile(OUStringToOString(aPath.GetFull(), osl_getThreadTextEncoding()));
+
         std::vector<PrintFont> aNewFonts = analyzeFontFile(nDirID, aName);
         for (auto & font : aNewFonts)
         {
@@ -183,14 +176,12 @@ std::vector<PrintFontManager::PrintFont> PrintFontManager::analyzeFontFile( int 
     OString aFullPath = aDir + "/" + rFontFile;
 
     bool bSupported;
-    bool bHack = false;
     int nFD;
     int n;
     if (sscanf(aFullPath.getStr(), "/:FD:/%d%n", &nFD, &n) == 1 && aFullPath.getStr()[n] == '\0')
     {
         // Hack, pathname that actually means we will use a pre-opened file descriptor
         bSupported = true;
-        bHack = true;
     }
     else
     {
@@ -226,25 +217,22 @@ std::vector<PrintFontManager::PrintFont> PrintFontManager::analyzeFontFile( int 
         {
             SAL_INFO("vcl.fonts", "ttc: " << aFullPath << " contains " << nLength << " fonts");
 
-            if (!bHack)
+            sal_uInt64 fileSize = 0;
+            // MACRO: Just use stat, that checks if the file exists and retrieves the file without a lock
+            struct stat statbuf;
+            if (stat(aFullPath.getStr(), &statbuf) >= 0)
             {
-                sal_uInt64 fileSize = 0;
-                // MACRO: Just use stat, that checks if the file exists and retrieves the file without a lock
-                struct stat statbuf;
-                if (stat(aFullPath.getStr(), &statbuf) >= 0)
-                {
-                    fileSize = statbuf.st_size;
-                }
-
-                //Feel free to calc the exact max possible number of fonts a file
-                //could contain given its physical size. But this will clamp it to
-                //a sane starting point
-                //http://processingjs.nihongoresources.com/the_smallest_font/
-                //https://github.com/grzegorzrolek/null-ttf
-                const int nMaxFontsPossible = fileSize / 528;
-                if (nLength > nMaxFontsPossible)
-                    nLength = nMaxFontsPossible;
+                fileSize = statbuf.st_size;
             }
+
+            //Feel free to calc the exact max possible number of fonts a file
+            //could contain given its physical size. But this will clamp it to
+            //a sane starting point
+            //http://processingjs.nihongoresources.com/the_smallest_font/
+            //https://github.com/grzegorzrolek/null-ttf
+            const int nMaxFontsPossible = fileSize / 528;
+            if (nLength > nMaxFontsPossible)
+                nLength = nMaxFontsPossible;
 
             for( int i = 0; i < nLength; i++ )
             {
@@ -275,11 +263,11 @@ fontID PrintFontManager::findFontFileID(int nDirID, const OString& rFontFile, in
 {
     fontID nID = 0;
 
-    std::unordered_map< OString, ::std::set< fontID > >::const_iterator set_it = m_aFontFileToFontID.find( rFontFile );
+    auto set_it = m_aFontFileToFontID.find( rFontFile );
     if( set_it == m_aFontFileToFontID.end() )
         return nID;
 
-    for (auto const& elem : set_it->second)
+    for (fontID elem : set_it->second)
     {
         auto it = m_aFonts.find(elem);
         if( it == m_aFonts.end() )
@@ -303,7 +291,7 @@ std::vector<fontID> PrintFontManager::findFontFileIDs( int nDirID, const OString
 {
     std::vector<fontID> aIds;
 
-    std::unordered_map< OString, ::std::set< fontID > >::const_iterator set_it = m_aFontFileToFontID.find( rFontFile );
+    auto set_it = m_aFontFileToFontID.find( rFontFile );
     if( set_it == m_aFontFileToFontID.end() )
         return aIds;
 
@@ -321,7 +309,9 @@ std::vector<fontID> PrintFontManager::findFontFileIDs( int nDirID, const OString
     return aIds;
 }
 
-OUString PrintFontManager::convertSfntName( const NameRecord& rNameRecord )
+namespace {
+
+OUString convertSfntName( const NameRecord& rNameRecord )
 {
     OUString aValue;
     if(
@@ -430,12 +420,14 @@ OUString PrintFontManager::convertSfntName( const NameRecord& rNameRecord )
                 eEncoding = RTL_TEXTENCODING_UTF8;
                 break;
             default:
-                if (o3tl::starts_with(aName, "Khmer OS") ||
-                    o3tl::starts_with(aName, "YoavKtav Black")) // tdf#152278
+                if (o3tl::starts_with(aName, "Khmer OS") || // encoding '20' (Khmer) isn't implemented
+                    o3tl::starts_with(aName, "YoavKtav")) // tdf#152278
                 {
                     eEncoding = RTL_TEXTENCODING_UTF8;
                 }
-                SAL_WARN_IF(eEncoding == RTL_TEXTENCODING_DONTKNOW, "vcl.fonts", "Unimplemented mac encoding " << rNameRecord.encodingID << " to unicode conversion for fontname " << aName);
+                SAL_WARN_IF(eEncoding == RTL_TEXTENCODING_DONTKNOW, "vcl.fonts", "mac encoding " <<
+                            rNameRecord.encodingID << " in font '" << aName << "'" <<
+                            (rNameRecord.encodingID > 32 ? " is invalid" : " has unimplemented conversion"));
                 break;
         }
         if (eEncoding != RTL_TEXTENCODING_DONTKNOW)
@@ -445,35 +437,9 @@ OUString PrintFontManager::convertSfntName( const NameRecord& rNameRecord )
     return aValue;
 }
 
-//fdo#33349.There exists an archaic Berling Antiqua font which has a "Times New
-//Roman" name field in it. We don't want the "Times New Roman" name to take
-//precedence in this case. We take Berling Antiqua as a higher priority name,
-//and erase the "Times New Roman" name
-namespace
-{
-    bool isBadTNR(std::u16string_view rName, ::std::set< OUString >& rSet)
-    {
-        bool bRet = false;
-        if ( rName == u"Berling Antiqua" )
-        {
-            ::std::set< OUString >::iterator aEnd = rSet.end();
-            ::std::set< OUString >::iterator aI = rSet.find("Times New Roman");
-            if (aI != aEnd)
-            {
-                bRet = true;
-                rSet.erase(aI);
-            }
-        }
-        return bRet;
-    }
-}
-
-void PrintFontManager::analyzeSfntFamilyName( void const * pTTFont, ::std::vector< OUString >& rNames )
+OUString analyzeSfntFamilyName(void const * pTTFont)
 {
     OUString aFamily;
-
-    rNames.clear();
-    ::std::set< OUString > aSet;
 
     std::vector<NameRecord> aNameRecords;
     GetTTNameRecords( static_cast<TrueTypeFont const *>(pTTFont), aNameRecords );
@@ -514,23 +480,17 @@ void PrintFontManager::analyzeSfntFamilyName( void const * pTTFont, ::std::vecto
                     nMatch = 1000;
             }
             OUString aName = convertSfntName( aNameRecords[i] );
-            aSet.insert( aName );
-            if (aName.isEmpty())
-                continue;
-            if( nMatch > nLastMatch || isBadTNR(aName, aSet) )
+            if (!(aName.isEmpty()) && nMatch > nLastMatch)
             {
                 nLastMatch = nMatch;
                 aFamily = aName;
             }
         }
     }
-    if( !aFamily.isEmpty() )
-    {
-        rNames.push_back( aFamily );
-        for (auto const& elem : aSet)
-            if( elem != aFamily )
-                rNames.push_back(elem);
-    }
+
+    return aFamily;
+}
+
 }
 
 bool PrintFontManager::analyzeSfntFile( PrintFont& rFont ) const
@@ -540,125 +500,74 @@ bool PrintFontManager::analyzeSfntFile( PrintFont& rFont ) const
     OString aFile = getFontFile( rFont );
     TrueTypeFont* pTTFont = nullptr;
 
+    auto& rDFA = rFont.m_aFontAttributes;
+    rDFA.SetQuality(512);
+
     auto const e = OpenTTFontFile( aFile.getStr(), rFont.m_nCollectionEntry, &pTTFont );
     if( e == SFErrCodes::Ok )
     {
         TTGlobalFontInfo aInfo;
         GetTTGlobalFontInfo( pTTFont, & aInfo );
 
-        ::std::vector< OUString > aNames;
-        analyzeSfntFamilyName( pTTFont, aNames );
-
-        // set family name from XLFD if possible
-        if (rFont.m_aFamilyName.isEmpty())
+        if (rDFA.GetFamilyName().isEmpty())
         {
-            if( !aNames.empty() )
+            OUString aFamily = analyzeSfntFamilyName(pTTFont);
+            if (aFamily.isEmpty())
             {
-                rFont.m_aFamilyName = aNames.front();
-                aNames.erase(aNames.begin());
-            }
-            else
-            {
-                 sal_Int32   dotIndex;
-
                  // poor font does not have a family name
                  // name it to file name minus the extension
-                 dotIndex = rFont.m_aFontFile.lastIndexOf( '.' );
+                 sal_Int32 dotIndex = rFont.m_aFontFile.lastIndexOf('.');
                  if ( dotIndex == -1 )
                      dotIndex = rFont.m_aFontFile.getLength();
+                 aFamily = OStringToOUString(rFont.m_aFontFile.subView(0, dotIndex), aEncoding);
+            }
 
-                 rFont.m_aFamilyName = OStringToOUString(rFont.m_aFontFile.subView(0, dotIndex), aEncoding);
-            }
-        }
-        for (auto const& aAlias : aNames)
-        {
-            if (!aAlias.isEmpty())
-            {
-                if (rFont.m_aFamilyName != aAlias)
-                {
-                    auto al_it = std::find(rFont.m_aAliases.begin(), rFont.m_aAliases.end(), aAlias);
-                    if( al_it == rFont.m_aAliases.end() )
-                        rFont.m_aAliases.push_back(aAlias);
-                }
-            }
+            rDFA.SetFamilyName(aFamily);
         }
 
         if( !aInfo.usubfamily.isEmpty() )
-            rFont.m_aStyleName = aInfo.usubfamily;
+            rDFA.SetStyleName(aInfo.usubfamily);
 
-        SAL_WARN_IF( aInfo.psname.isEmpty(), "vcl.fonts", "No PostScript name in font:" << aFile );
-
-        rFont.m_aPSName = !aInfo.psname.isEmpty() ?
-            OStringToOUString(aInfo.psname, aEncoding) :
-            rFont.m_aFamilyName; // poor font does not have a postscript name
-
-        rFont.m_eFamilyStyle = matchFamilyName(rFont.m_aFamilyName);
+        rDFA.SetFamilyType(matchFamilyName(rDFA.GetFamilyName()));
 
         switch( aInfo.weight )
         {
-            case FW_THIN:           rFont.m_eWeight = WEIGHT_THIN; break;
-            case FW_EXTRALIGHT: rFont.m_eWeight = WEIGHT_ULTRALIGHT; break;
-            case FW_LIGHT:          rFont.m_eWeight = WEIGHT_LIGHT; break;
-            case FW_MEDIUM:     rFont.m_eWeight = WEIGHT_MEDIUM; break;
-            case FW_SEMIBOLD:       rFont.m_eWeight = WEIGHT_SEMIBOLD; break;
-            case FW_BOLD:           rFont.m_eWeight = WEIGHT_BOLD; break;
-            case FW_EXTRABOLD:      rFont.m_eWeight = WEIGHT_ULTRABOLD; break;
-            case FW_BLACK:          rFont.m_eWeight = WEIGHT_BLACK; break;
+            case FW_THIN:       rDFA.SetWeight(WEIGHT_THIN); break;
+            case FW_EXTRALIGHT: rDFA.SetWeight(WEIGHT_ULTRALIGHT); break;
+            case FW_LIGHT:      rDFA.SetWeight(WEIGHT_LIGHT); break;
+            case FW_MEDIUM:     rDFA.SetWeight(WEIGHT_MEDIUM); break;
+            case FW_SEMIBOLD:   rDFA.SetWeight(WEIGHT_SEMIBOLD); break;
+            case FW_BOLD:       rDFA.SetWeight(WEIGHT_BOLD); break;
+            case FW_EXTRABOLD:  rDFA.SetWeight(WEIGHT_ULTRABOLD); break;
+            case FW_BLACK:      rDFA.SetWeight(WEIGHT_BLACK); break;
 
             case FW_NORMAL:
-            default:        rFont.m_eWeight = WEIGHT_NORMAL; break;
+            default:            rDFA.SetWeight(WEIGHT_NORMAL); break;
         }
 
         switch( aInfo.width )
         {
-            case FWIDTH_ULTRA_CONDENSED:    rFont.m_eWidth = WIDTH_ULTRA_CONDENSED; break;
-            case FWIDTH_EXTRA_CONDENSED:    rFont.m_eWidth = WIDTH_EXTRA_CONDENSED; break;
-            case FWIDTH_CONDENSED:          rFont.m_eWidth = WIDTH_CONDENSED; break;
-            case FWIDTH_SEMI_CONDENSED: rFont.m_eWidth = WIDTH_SEMI_CONDENSED; break;
-            case FWIDTH_SEMI_EXPANDED:      rFont.m_eWidth = WIDTH_SEMI_EXPANDED; break;
-            case FWIDTH_EXPANDED:           rFont.m_eWidth = WIDTH_EXPANDED; break;
-            case FWIDTH_EXTRA_EXPANDED: rFont.m_eWidth = WIDTH_EXTRA_EXPANDED; break;
-            case FWIDTH_ULTRA_EXPANDED: rFont.m_eWidth = WIDTH_ULTRA_EXPANDED; break;
+            case FWIDTH_ULTRA_CONDENSED:    rDFA.SetWidthType(WIDTH_ULTRA_CONDENSED); break;
+            case FWIDTH_EXTRA_CONDENSED:    rDFA.SetWidthType(WIDTH_EXTRA_CONDENSED); break;
+            case FWIDTH_CONDENSED:          rDFA.SetWidthType(WIDTH_CONDENSED); break;
+            case FWIDTH_SEMI_CONDENSED:     rDFA.SetWidthType(WIDTH_SEMI_CONDENSED); break;
+            case FWIDTH_SEMI_EXPANDED:      rDFA.SetWidthType(WIDTH_SEMI_EXPANDED); break;
+            case FWIDTH_EXPANDED:           rDFA.SetWidthType(WIDTH_EXPANDED); break;
+            case FWIDTH_EXTRA_EXPANDED:     rDFA.SetWidthType(WIDTH_EXTRA_EXPANDED); break;
+            case FWIDTH_ULTRA_EXPANDED:     rDFA.SetWidthType(WIDTH_ULTRA_EXPANDED); break;
 
             case FWIDTH_NORMAL:
-            default:                        rFont.m_eWidth = WIDTH_NORMAL; break;
+            default:                        rDFA.SetWidthType(WIDTH_NORMAL); break;
         }
 
-        rFont.m_ePitch = aInfo.pitch ? PITCH_FIXED : PITCH_VARIABLE;
-        rFont.m_eItalic = aInfo.italicAngle == 0 ? ITALIC_NONE : ( aInfo.italicAngle < 0 ? ITALIC_NORMAL : ITALIC_OBLIQUE );
+        rDFA.SetPitch(aInfo.pitch ? PITCH_FIXED : PITCH_VARIABLE);
+        rDFA.SetItalic(aInfo.italicAngle == 0 ? ITALIC_NONE : (aInfo.italicAngle < 0 ? ITALIC_NORMAL : ITALIC_OBLIQUE));
         // #104264# there are fonts that set italic angle 0 although they are
         // italic; use macstyle bit here
         if( aInfo.italicAngle == 0 && (aInfo.macStyle & 2) )
-            rFont.m_eItalic = ITALIC_NORMAL;
+            rDFA.SetItalic(ITALIC_NORMAL);
 
-        rFont.m_aEncoding = aInfo.microsoftSymbolEncoded ? RTL_TEXTENCODING_SYMBOL : RTL_TEXTENCODING_UCS2;
-
-        if( aInfo.ascender && aInfo.descender )
-        {
-            rFont.m_nLeading   = aInfo.linegap;
-            rFont.m_nAscend    = aInfo.ascender;
-            rFont.m_nDescend   = -aInfo.descender;
-        }
-        else if( aInfo.typoAscender && aInfo.typoDescender )
-        {
-            rFont.m_nLeading   = aInfo.typoLineGap;
-            rFont.m_nAscend    = aInfo.typoAscender;
-            rFont.m_nDescend   = -aInfo.typoDescender;
-        }
-        else if( aInfo.winAscent && aInfo.winDescent )
-        {
-            rFont.m_nAscend    = aInfo.winAscent;
-            rFont.m_nDescend   = aInfo.winDescent;
-            rFont.m_nLeading   = rFont.m_nAscend + rFont.m_nDescend - 1000;
-        }
-
-        // last try: font bounding box
-        if( rFont.m_nAscend == 0 )
-            rFont.m_nAscend = aInfo.yMax;
-        if( rFont.m_nDescend == 0 )
-            rFont.m_nDescend = -aInfo.yMin;
-        if( rFont.m_nLeading == 0 )
-            rFont.m_nLeading = 15 * (rFont.m_nAscend+rFont.m_nDescend) / 100;
+        rDFA.SetMicrosoftSymbolEncoded(aInfo.microsoftSymbolEncoded);
 
         CloseTTFont( pTTFont );
         bSuccess = true;
@@ -745,30 +654,6 @@ void PrintFontManager::getFontList( ::std::vector< fontID >& rFontIDs )
 
     for (auto const& font : m_aFonts)
         rFontIDs.push_back(font.first);
-}
-
-void PrintFontManager::fillPrintFontInfo(const PrintFont& rFont, FastPrintFontInfo& rInfo)
-{
-    rInfo.m_aFamilyName     = rFont.m_aFamilyName;
-    rInfo.m_aStyleName      = rFont.m_aStyleName;
-    rInfo.m_eFamilyStyle    = rFont.m_eFamilyStyle;
-    rInfo.m_eItalic         = rFont.m_eItalic;
-    rInfo.m_eWidth          = rFont.m_eWidth;
-    rInfo.m_eWeight         = rFont.m_eWeight;
-    rInfo.m_ePitch          = rFont.m_ePitch;
-    rInfo.m_aEncoding       = rFont.m_aEncoding;
-    rInfo.m_aAliases        = rFont.m_aAliases;
-}
-
-bool PrintFontManager::getFontFastInfo( fontID nFontID, FastPrintFontInfo& rInfo ) const
-{
-    const PrintFont* pFont = getFont( nFontID );
-    if( pFont )
-    {
-        rInfo.m_nID = nFontID;
-        fillPrintFontInfo( *pFont, rInfo );
-    }
-    return pFont != nullptr;
 }
 
 int PrintFontManager::getFontFaceNumber( fontID nFontID ) const
@@ -865,39 +750,9 @@ FontFamily PrintFontManager::matchFamilyName( std::u16string_view rFamily )
 OString PrintFontManager::getFontFile(const PrintFont& rFont) const
 {
     std::unordered_map< int, OString >::const_iterator it = m_aAtomToDir.find(rFont.m_nDirectory);
+    assert(it != m_aAtomToDir.end());
     OString aPath = it->second + "/" + rFont.m_aFontFile;
     return aPath;
-}
-
-OUString PrintFontManager::getPSName( fontID nFontID )
-{
-    PrintFont* pFont = getFont( nFontID );
-    if (pFont && pFont->m_aPSName.isEmpty())
-    {
-        analyzeSfntFile(*pFont);
-    }
-
-    return pFont ? pFont->m_aPSName : OUString();
-}
-
-int PrintFontManager::getFontAscend( fontID nFontID )
-{
-    PrintFont* pFont = getFont( nFontID );
-    if (pFont && pFont->m_nAscend == 0 && pFont->m_nDescend == 0)
-    {
-        analyzeSfntFile(*pFont);
-    }
-    return pFont ? pFont->m_nAscend : 0;
-}
-
-int PrintFontManager::getFontDescend( fontID nFontID )
-{
-    PrintFont* pFont = getFont( nFontID );
-    if (pFont && pFont->m_nAscend == 0 && pFont->m_nDescend == 0)
-    {
-        analyzeSfntFile(*pFont);
-    }
-    return pFont ? pFont->m_nDescend : 0;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

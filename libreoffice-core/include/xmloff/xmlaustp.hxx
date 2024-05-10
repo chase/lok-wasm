@@ -30,7 +30,7 @@
 class SvXMLExportPropertyMapper;
 class SvXMLNamespaceMap;
 class SvXMLAutoStylePoolP_Impl;
-class SvXMLAttributeList;
+namespace comphelper { class AttributeList; }
 class SvXMLExport;
 class SvXMLUnitConverter;
 struct XMLPropertyState;
@@ -51,12 +51,12 @@ class XMLOFF_DLLPUBLIC SvXMLAutoStylePoolP : public salhelper::SimpleReferenceOb
     friend class Test;
     friend class SvXMLAutoStylePoolP_Impl;
 
-    std::unique_ptr<SvXMLAutoStylePoolP_Impl>    pImpl;
+    std::unique_ptr<SvXMLAutoStylePoolP_Impl>    m_pImpl;
 
 protected:
 
     virtual void exportStyleAttributes(
-            SvXMLAttributeList& rAttrList,
+            comphelper::AttributeList& rAttrList,
             XmlStyleFamily nFamily,
             const ::std::vector< XMLPropertyState >& rProperties,
             const SvXMLExportPropertyMapper& rPropExp,
@@ -109,9 +109,6 @@ public:
     void RegisterNames(
         css::uno::Sequence<sal_Int32> const & aFamilies,
         css::uno::Sequence<OUString> const & aNames );
-
-    /// retrieve the names of the properties used in the styles
-    css::uno::Sequence<OUString> GetPropertyNames();
 
     /// Add an item set to the pool and return its generated name.
     OUString Add( XmlStyleFamily nFamily, ::std::vector< XMLPropertyState >&& rProperties );

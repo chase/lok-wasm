@@ -30,11 +30,10 @@
 
 namespace rptui
 {
-    OUString HelpIdUrl::getHelpURL( std::string_view sHelpId )
+    OUString HelpIdUrl::getHelpURL( std::u16string_view sHelpId )
     {
-        OUString aTmp( OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8) );
-        DBG_ASSERT( INetURLObject( aTmp ).GetProtocol() == INetProtocol::NotValid, "Wrong HelpId!" );
-        return INET_HID_SCHEME + aTmp;
+        DBG_ASSERT( INetURLObject(sHelpId).GetProtocol() == INetProtocol::NotValid, "Wrong HelpId!" );
+        return INET_HID_SCHEME + sHelpId;
     }
 
     using namespace com::sun::star::uno;
@@ -87,39 +86,39 @@ namespace rptui
 
     sal_Bool SAL_CALL DefaultComponentInspectorModel::getHasHelpSection()
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         return m_bHasHelpSection;
     }
 
 
     ::sal_Int32 SAL_CALL DefaultComponentInspectorModel::getMinHelpTextLines()
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         return m_nMinHelpTextLines;
     }
 
     sal_Bool SAL_CALL DefaultComponentInspectorModel::getIsReadOnly()
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         return m_bIsReadOnly;
     }
 
     void SAL_CALL DefaultComponentInspectorModel::setIsReadOnly( sal_Bool _isreadonly )
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         m_bIsReadOnly = _isreadonly;
     }
 
 
     ::sal_Int32 SAL_CALL DefaultComponentInspectorModel::getMaxHelpTextLines()
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         return m_nMaxHelpTextLines;
     }
 
     void SAL_CALL DefaultComponentInspectorModel::initialize( const Sequence< Any >& _arguments )
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         if ( m_bConstructed )
             throw ucb::AlreadyInitializedException();
 
@@ -155,13 +154,13 @@ namespace rptui
 
     Sequence< PropertyCategoryDescriptor > SAL_CALL DefaultComponentInspectorModel::describeCategories(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
         const struct
         {
             const char* programmaticName;
             TranslateId uiNameResId;
-            OString    helpId;
+            OUString    helpId;
         } aCategories[] = {
             { "General",    RID_STR_PROPPAGE_DEFAULT,   HID_RPT_PROPDLG_TAB_GENERAL },
             { "Data",       RID_STR_PROPPAGE_DATA,      HID_RPT_PROPDLG_TAB_DATA },
@@ -183,7 +182,7 @@ namespace rptui
 
     ::sal_Int32 SAL_CALL DefaultComponentInspectorModel::getPropertyOrderIndex( const OUString& _rPropertyName )
     {
-        ::osl::MutexGuard aGuard(m_aMutex);
+        std::unique_lock aGuard(m_aMutex);
         const sal_Int32 nPropertyId( OPropertyInfoService::getPropertyId( _rPropertyName ) );
         if ( nPropertyId != -1 )
             return nPropertyId;

@@ -24,6 +24,7 @@
 #include <com/sun/star/lang/NoSupportException.hpp>
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
+#include <cppuhelper/supportsservice.hxx>
 #include <vcl/outdev.hxx>
 
 #include "outdevholder.hxx"
@@ -96,6 +97,18 @@ namespace vclcanvas
         return "com.sun.star.rendering.Canvas.VCL";
     }
 
+    OUString Canvas::getImplementationName() {
+        return "com.sun.star.comp.rendering.Canvas.VCL";
+    }
+
+    sal_Bool Canvas::supportsService(OUString const & ServiceName) {
+        return cppu::supportsService(this, ServiceName);
+    }
+
+    css::uno::Sequence<OUString> Canvas::getSupportedServiceNames() {
+        return {getServiceName()};
+    }
+
     bool Canvas::repaint( const GraphicObjectSharedPtr& rGrf,
                           const rendering::ViewState&   viewState,
                           const rendering::RenderState& renderState,
@@ -114,9 +127,8 @@ com_sun_star_comp_rendering_Canvas_VCL_get_implementation(
     css::uno::XComponentContext* context, css::uno::Sequence<css::uno::Any> const& args)
 {
     rtl::Reference<vclcanvas::Canvas> p = new vclcanvas::Canvas(args, context);
-    cppu::acquire(p.get());
     p->initialize();
-    return static_cast<cppu::OWeakObject*>(p.get());
+    return cppu::acquire(p.get());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

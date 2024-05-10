@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -38,8 +39,7 @@ std::string convert(std::u16string_view s16) {
     OString s8(OUStringToOString(s16, osl_getThreadTextEncoding()));
     static_assert(sizeof (sal_Int32) <= sizeof (std::string::size_type), "got to be at least equal");
         // ensure following cast is legitimate
-    return std::string(
-        s8.getStr(), static_cast< std::string::size_type >(s8.getLength()));
+    return std::string(s8);
 }
 
 class Prot : public CppUnit::Protector
@@ -75,7 +75,7 @@ bool Prot::protect(
 
 extern "C" SAL_DLLPUBLIC_EXPORT CppUnit::Protector *
 unoexceptionprotector() {
-    return new Prot;
+    return std::getenv("CPPUNIT_PROPAGATE_EXCEPTIONS") == nullptr ? new Prot : nullptr;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

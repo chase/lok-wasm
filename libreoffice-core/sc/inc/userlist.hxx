@@ -23,37 +23,32 @@
 
 #include <rtl/ustring.hxx>
 
-#include <memory>
 #include <vector>
 
 /**
  * Stores individual user-defined sort list.
  */
-class SC_DLLPUBLIC ScUserListData
+class SC_DLLPUBLIC ScUserListData final
 {
-public:
+private:
     struct SAL_DLLPRIVATE SubStr
     {
         OUString maReal;
         OUString maUpper;
-        SubStr(OUString aReal, OUString aUpper);
+        SubStr(OUString&& aReal);
     };
 
-private:
-    typedef std::vector<SubStr> SubStringsType;
-    SubStringsType maSubStrings;
+    std::vector<SubStr> maSubStrings;
     OUString aStr;
 
     SAL_DLLPRIVATE void InitTokens();
 
 public:
     ScUserListData(OUString aStr);
-    ScUserListData(const ScUserListData& rData);
-    ~ScUserListData();
 
     const OUString& GetString() const { return aStr; }
     void SetString(const OUString& rStr);
-    size_t GetSubCount() const;
+    size_t GetSubCount() const { return maSubStrings.size(); }
     bool GetSubIndex(const OUString& rSubStr, sal_uInt16& rIndex, bool& bMatchCase) const;
     OUString GetSubStr(sal_uInt16 nIndex) const;
     sal_Int32 Compare(const OUString& rSubStr1, const OUString& rSubStr2) const;
@@ -65,32 +60,32 @@ public:
  */
 class SC_DLLPUBLIC ScUserList
 {
-    typedef std::vector<std::unique_ptr<ScUserListData>> DataType;
+    typedef std::vector<ScUserListData> DataType;
     DataType maData;
 
 public:
-    typedef DataType::iterator iterator;
-    typedef DataType::const_iterator const_iterator;
+    explicit ScUserList(bool initDefault = true);
+    ScUserList(const ScUserList& r) = default;
 
-    ScUserList();
-    ScUserList(const ScUserList& r);
+    void AddDefaults();
+    void EraseData(size_t nIndex) { maData.erase(maData.cbegin() + nIndex); }
 
     const ScUserListData* GetData(const OUString& rSubStr) const;
     /// If the list in rStr is already inserted
     bool HasEntry(std::u16string_view rStr) const;
 
-    const ScUserListData& operator[](size_t nIndex) const;
-    ScUserListData& operator[](size_t nIndex);
-    ScUserList& operator=(const ScUserList& r);
+    const ScUserListData& operator[](size_t nIndex) const { return maData[nIndex]; }
+    ScUserListData& operator[](size_t nIndex) { return maData[nIndex]; }
+    ScUserList& operator=(const ScUserList& r) = default;
     bool operator==(const ScUserList& r) const;
-    bool operator!=(const ScUserList& r) const;
+    bool operator!=(const ScUserList& r) const { return !operator==(r); }
 
-    iterator begin();
-    const_iterator begin() const;
-    void clear();
-    size_t size() const;
-    void push_back(ScUserListData* p);
-    void erase(const iterator& itr);
+    void clear() { maData.clear(); }
+    size_t size() const { return maData.size(); }
+    template <class... Args> void emplace_back(Args&&... args)
+    {
+        maData.emplace_back(std::forward<Args>(args)...);
+    }
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

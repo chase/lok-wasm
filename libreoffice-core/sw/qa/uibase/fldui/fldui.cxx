@@ -79,7 +79,7 @@ CPPUNIT_TEST_FIXTURE(Test, testBiblioPageNumberUpdate)
     OUStringBuffer aFieldBuffer;
     for (const auto& rField : aCoreFields)
     {
-        aFieldBuffer.append(rField).append(TOX_STYLE_DELIMITER);
+        aFieldBuffer.append(rField + OUStringChar(TOX_STYLE_DELIMITER));
     }
     SwFieldMgr aMgr(pWrtShell);
     aMgr.UpdateCurField(0, aFieldBuffer.makeStringAndClear(), OUString());
@@ -119,6 +119,50 @@ CPPUNIT_TEST_FIXTURE(Test, testInsertRefmark)
     // i.e. no refmark was created, only the hard to read Type=12 created a refmark.
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aAttrs.size());
     CPPUNIT_ASSERT_EQUAL(OUString("aaabbbccc"), pTextNode->GetText());
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testTdf68364InsertConditionalFieldWithTwoDots)
+{
+    // Create an empty document
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    // Insert a conditional field containing exactly two dots for its condition
+    SwFieldMgr aFieldMgr(pWrtShell);
+    SwInsertField_Data aFieldData(SwFieldTypesEnum::ConditionalText, 0, "true", "19.12.2023", 0);
+    CPPUNIT_ASSERT(aFieldMgr.InsertField(aFieldData));
+    pWrtShell->SttEndDoc(true);
+
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 19.12.2023
+    // - Actual  :
+    CPPUNIT_ASSERT_EQUAL(OUString("19.12.2023"),
+                         pWrtShell->GetCurField()->ExpandField(true, nullptr));
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testInsertRefmarkSelection)
+{
+    // Given a document with a single selected word:
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    pWrtShell->Insert2("myword");
+    pWrtShell->SelAll();
+
+    // When inserting a refmark:
+    SwFieldMgr aMgr(pWrtShell);
+    SwInsertField_Data aData(SwFieldTypesEnum::SetRef, /*nSubType=*/0, "myname", "myword",
+                             /*nFormatId=*/0);
+    aMgr.InsertField(aData);
+
+    // Then make sure the document still just contains that word only once:
+    SwTextNode* pTextNode = pWrtShell->GetCursor()->GetPointNode().GetTextNode();
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: myword
+    // - Actual  : mywordmyword
+    // i.e. the content of the selection was duplicated.
+    CPPUNIT_ASSERT_EQUAL(OUString("myword"), pTextNode->GetText());
 }
 }
 

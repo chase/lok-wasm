@@ -24,22 +24,23 @@
 #include <svl/SfxBroadcaster.hxx>
 #include <svx/svxdllapi.h>
 #include <tools/urlobj.hxx>
-#include <svx/gallerybinaryengineentry.hxx>
-#include <svx/gallerybinaryengine.hxx>
 
 #include <cstdio>
 #include <memory>
 #include <vector>
 
-class GalleryBinaryEngineEntry;
+class Gallery;
+class GalleryFileStorage;
+class GalleryFileStorageEntry;
+class GalleryObjectCollection;
 class GalleryStorageLocations;
 class GalleryTheme;
 
-class GalleryThemeEntry
+class SVXCORE_DLLPUBLIC GalleryThemeEntry
 {
 private:
 
-    std::unique_ptr<GalleryBinaryEngineEntry>     mpGalleryStorageEngineEntry;
+    std::unique_ptr<GalleryFileStorageEntry> mpGalleryStorageEngineEntry;
     OUString                aName;
     sal_uInt32              nId;
     bool                    bReadOnly;
@@ -52,14 +53,13 @@ public:
                                                const OUString& rName,
                                                bool bReadOnly, bool bNewFile,
                                                sal_uInt32 nId, bool bThemeNameFromResource );
-
-    const std::unique_ptr<GalleryBinaryEngineEntry>& getGalleryStorageEngineEntry() const { return mpGalleryStorageEngineEntry; }
-
-    GalleryStorageLocations& getGalleryStorageLocations() const { return *mpGalleryStorageEngineEntry->getGalleryStorageLocations(); }
+    ~GalleryThemeEntry();
+    
+    GalleryStorageLocations& getGalleryStorageLocations() const;
 
     GalleryTheme* createGalleryTheme(Gallery* pGallery);
 
-    std::unique_ptr<GalleryBinaryEngine> createGalleryStorageEngine(GalleryObjectCollection& mrGalleryObjectCollection);
+    std::unique_ptr<GalleryFileStorage> createGalleryStorageEngine(GalleryObjectCollection& mrGalleryObjectCollection);
 
     const OUString&         GetThemeName() const { return aName; }
 

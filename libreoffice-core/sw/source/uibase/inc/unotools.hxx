@@ -29,6 +29,7 @@
 #include <com/sun/star/frame/XController.hpp>
 #include <com/sun/star/text/XTextCursor.hpp>
 #include <swdllapi.h>
+#include <rtl/ref.hxx>
 
 #define EX_SHOW_ONLINE_LAYOUT   0x01
 // hard zoom value
@@ -39,13 +40,14 @@
 #define EX_LOCALIZE_TOC_STRINGS 0x08
 
 class SwView;
+class SwXTextCursor;
 
 class SW_DLLPUBLIC SwOneExampleFrame final : public weld::CustomWidgetController
 {
     ScopedVclPtr<VirtualDevice> m_xVirDev;
     css::uno::Reference< css::frame::XModel >         m_xModel;
     css::uno::Reference< css::frame::XController >    m_xController;
-    css::uno::Reference< css::text::XTextCursor >     m_xCursor;
+    rtl::Reference< SwXTextCursor >                   m_xCursor;
 
     Idle            m_aLoadedIdle;
     Link<SwOneExampleFrame&,void> m_aInitializedLink;
@@ -59,7 +61,7 @@ class SW_DLLPUBLIC SwOneExampleFrame final : public weld::CustomWidgetController
     bool            m_bIsInitialized;
 
     DECL_DLLPRIVATE_LINK( TimeoutHdl, Timer*, void );
-    void PopupHdl(std::string_view rId);
+    void PopupHdl(std::u16string_view rId);
 
     SAL_DLLPRIVATE void  CreateControl();
     SAL_DLLPRIVATE void  DisposeControl();
@@ -74,7 +76,7 @@ public:
     virtual ~SwOneExampleFrame() override;
 
     css::uno::Reference< css::frame::XModel > &       GetModel()      {return m_xModel;}
-    css::uno::Reference< css::text::XTextCursor > &   GetTextCursor() {return m_xCursor;}
+    rtl::Reference< SwXTextCursor > &                 GetTextCursor() {return m_xCursor;}
 
     void ClearDocument();
 

@@ -56,8 +56,7 @@
         Execute-Id      SID_ATTR_CHAR_COLOR
 
         for character background color (writer)
-        Execute-Id      SID_ATTR_CHAR_COLOR_BACKGROUND
-                    and SID_ATTR_CHAR_COLOR_BACKGROUND_EXT
+        Execute-Id      SID_ATTR_CHAR_BACK_COLOR
 
         for paragraph background color (writer)
         and cell background color (calc)
@@ -209,7 +208,6 @@ class SVXCORE_DLLPUBLIC SvxColorToolBoxControl final : public cppu::ImplInherita
     bool m_bSplitButton;
     sal_uInt16 m_nSlotId;
     ColorSelectFunction m_aColorSelectFunction;
-    DECL_DLLPRIVATE_LINK(SelectedHdl, const NamedColor&, void);
 
     weld::Window* GetParentFrame() const;
 
@@ -246,6 +244,7 @@ public:
     void EnsurePaletteManager();
 };
 
+/** Popup controller for currency combo widget **/
 class UNLESS_MERGELIBS(SVXCORE_DLLPUBLIC) SvxCurrencyToolBoxControl final : public svt::PopupWindowController
 {
 private:
@@ -254,6 +253,14 @@ private:
     sal_uInt32   m_nFormatKey;
 
 public:
+    /**
+    * Static method used by SvxNumberFormatShell::GetCurrencySymbols<p>
+    *
+    * @param rList output: labels in the combo box
+    * @param bFlag input: true means that we add the default currency in the combox
+    * @param rCurrencyList output: list of the currency positions in SvxCurrencyToolBoxControl::CurrencySymbols vector
+    * @see SvxNumberFormatShell::GetCurrencySymbols
+    **/
     static void GetCurrencySymbols( std::vector<OUString>& rList, bool bFlag,
                                     std::vector<sal_uInt16>& rCurrencyList,
                                     std::vector<sfx::CurrencyID> const& rCurrencyIDs);
@@ -261,17 +268,17 @@ public:
     explicit SvxCurrencyToolBoxControl( const css::uno::Reference<css::uno::XComponentContext>& rContext );
     virtual ~SvxCurrencyToolBoxControl() override;
 
-    // XToolbarController
+    /** XToolbarController **/
     virtual void SAL_CALL execute( sal_Int16 nSelectModifier ) override;
 
     virtual VclPtr<vcl::Window> createVclPopupWindow( vcl::Window* pParent ) override;
     virtual std::unique_ptr<WeldToolbarPopup> weldPopupWindow() override;
 
-    // XServiceInfo
+    /** XServiceInfo **/
     virtual OUString SAL_CALL getImplementationName() override;
     virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
 
-    // XInitialization
+    /** XInitialization **/
     virtual void SAL_CALL initialize( const css::uno::Sequence< css::uno::Any >& rArguments ) override;
 };
 

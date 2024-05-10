@@ -30,7 +30,6 @@
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
 #include <com/sun/star/beans/XTolerantMultiPropertySet.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 
 #include <cppuhelper/implbase.hxx>
 
@@ -46,9 +45,11 @@ namespace com::sun::star::text { class XFootnote; }
 class SwFrameFormat;
 class SwRangeRedline;
 class SwTextRuby;
+class SwXText;
+class SwXTextPortion;
 
 typedef std::deque<
-    css::uno::Reference< css::text::XTextRange > >
+    rtl::Reference<SwXTextPortion> >
     TextRangeList_t;
 
 enum SwTextPortionType
@@ -88,7 +89,6 @@ class SwXTextPortion : public cppu::WeakImplHelper
     css::text::XTextRange,
     css::beans::XPropertyState,
     css::container::XContentEnumerationAccess,
-    css::lang::XUnoTunnel,
     css::lang::XServiceInfo
 >,
     public SvtListener
@@ -200,10 +200,6 @@ public:
     virtual void SAL_CALL setPropertyToDefault( const OUString& PropertyName ) override;
     virtual css::uno::Any SAL_CALL getPropertyDefault( const OUString& aPropertyName ) override;
 
-    //XUnoTunnel
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
-
     //XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
@@ -253,7 +249,6 @@ class SwXTextPortionEnumeration final
     : public ::cppu::WeakImplHelper
         < css::container::XEnumeration
         , css::lang::XServiceInfo
-        , css::lang::XUnoTunnel
         >
 {
     TextRangeList_t m_Portions; // contains all portions, filled by ctor
@@ -264,17 +259,11 @@ class SwXTextPortionEnumeration final
 public:
     /// @param bOnlyTextFields tries to return less data, but may return more than just text fields
     SwXTextPortionEnumeration(SwPaM& rParaCursor,
-            css::uno::Reference< css::text::XText > const & xParent,
+            css::uno::Reference< SwXText > const & xParent,
             const sal_Int32 nStart, const sal_Int32 nEnd, bool bOnlyTextFields = false );
 
     SwXTextPortionEnumeration(SwPaM& rParaCursor,
         TextRangeList_t && rPortions );
-
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     //XEnumeration
     virtual sal_Bool SAL_CALL hasMoreElements() override;

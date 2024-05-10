@@ -48,12 +48,8 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
     private FloatBuffer mCoordBuffer;
     private RenderContext mLastPageContext;
     private int mMaxTextureSize;
-    private int mBackgroundColor;
 
     private CopyOnWriteArrayList<Layer> mExtraLayers = new CopyOnWriteArrayList<Layer>();
-
-    /* Used by robocop for testing purposes */
-    private IntBuffer mPixelBuffer;
 
     // Used by GLES 2.0
     private int mProgram;
@@ -146,6 +142,7 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
         mVertScrollLayer.destroy();
     }
 
+    @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         createDefaultProgram();
         activateDefaultProgram();
@@ -184,9 +181,6 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
         GLES20.glEnableVertexAttribArray(mTextureHandle);
 
         GLES20.glUniform1i(mSampleHandle, 0);
-
-        // TODO: Move these calls into a separate deactivate() call that is called after the
-        // underlay and overlay are rendered.
     }
 
     // Deactivates the shader program. This must be done to avoid crashes after returning to the
@@ -220,8 +214,9 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
     /**
      * Called whenever a new frame is about to be drawn.
      */
+    @Override
     public void onDrawFrame(GL10 gl) {
-        Frame frame = createFrame(mView.getLayerClient().getViewportMetrics());
+        Frame frame = new Frame(mView.getLayerClient().getViewportMetrics());
         synchronized (mView.getLayerClient()) {
             frame.beginDrawing();
             frame.drawBackground();
@@ -249,6 +244,7 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
                                  mCoordBuffer);
     }
 
+    @Override
     public void onSurfaceChanged(GL10 gl, final int width, final int height) {
         GLES20.glViewport(0, 0, width, height);
     }
@@ -262,10 +258,6 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
         GLES20.glShaderSource(shader, shaderCode);
         GLES20.glCompileShader(shader);
         return shader;
-    }
-
-    public Frame createFrame(ImmutableViewportMetrics metrics) {
-        return new Frame(metrics);
     }
 
     class FadeRunnable implements Runnable {
@@ -305,8 +297,6 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
     }
 
     public class Frame {
-        // The timestamp recording the start of this frame.
-        private long mFrameStartTime;
         // A fixed snapshot of the viewport metrics that this frame is using to render content.
         private ImmutableViewportMetrics mFrameMetrics;
         // A rendering context for page-positioned layers, and one for screen-positioned layers.
@@ -348,10 +338,7 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
             return pageRect;
         }
 
-        /** This function is invoked via JNI; be careful when modifying signature. */
         public void beginDrawing() {
-            mFrameStartTime = SystemClock.uptimeMillis();
-
             TextureReaper.get().reap();
             TextureGenerator.get().fill();
 
@@ -386,58 +373,18 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
                 mUpdated &= layer.update(mPageContext); // called on compositor thread
         }
 
-        /** Retrieves the bounds for the layer, rounded in such a way that it
-         * can be used as a mask for something that will render underneath it.
-         * This will round the bounds inwards, but stretch the mask towards any
-         * near page edge, where near is considered to be 'within 2 pixels'.
-         * Returns null if the given layer is null.
-         */
-        private Rect getMaskForLayer(Layer layer) {
-            if (layer == null) {
-                return null;
-            }
-
-            RectF bounds = RectUtils.contract(layer.getBounds(mPageContext), 1.0f, 1.0f);
-            Rect mask = RectUtils.roundIn(bounds);
-
-            // If the mask is within two pixels of any page edge, stretch it over
-            // that edge. This is to avoid drawing thin slivers when masking
-            // layers.
-            if (mask.top <= 2) {
-                mask.top = -1;
-            }
-            if (mask.left <= 2) {
-                mask.left = -1;
-            }
-
-            // Because we're drawing relative to the page-rect, we only need to
-            // take into account its width and height (and not its origin)
-            int pageRight = mPageRect.width();
-            int pageBottom = mPageRect.height();
-
-            if (mask.right >= pageRight - 2) {
-                mask.right = pageRight + 1;
-            }
-            if (mask.bottom >= pageBottom - 2) {
-                mask.bottom = pageBottom + 1;
-            }
-
-            return mask;
-        }
-
-        /** This function is invoked via JNI; be careful when modifying signature. */
         public void drawBackground() {
             GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
 
             /* Update background color. */
-            mBackgroundColor = Color.WHITE;
+            final int backgroundColor = Color.WHITE;
 
             /* Clear to the page background colour. The bits set here need to
              * match up with those used in gfx/layers/opengl/LayerManagerOGL.cpp.
              */
-            GLES20.glClearColor(((mBackgroundColor>>16)&0xFF) / 255.0f,
-                                ((mBackgroundColor>>8)&0xFF) / 255.0f,
-                                (mBackgroundColor&0xFF) / 255.0f,
+            GLES20.glClearColor(((backgroundColor >> 16) & 0xFF) / 255.0f,
+                                ((backgroundColor >> 8) & 0xFF) / 255.0f,
+                                (backgroundColor & 0xFF) / 255.0f,
                                 0.0f);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT |
                            GLES20.GL_DEPTH_BUFFER_BIT);
@@ -474,7 +421,6 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
             rootLayer.draw(mPageContext);
         }
 
-        /** This function is invoked via JNI; be careful when modifying signature. */
         public void drawForeground() {
             /* Draw any extra layers that were added (likely plugins) */
             if (mExtraLayers.size() > 0) {
@@ -498,23 +444,10 @@ public class LayerRenderer implements GLSurfaceView.Renderer {
                 mHorizScrollLayer.draw(mPageContext);
         }
 
-        /** This function is invoked via JNI; be careful when modifying signature. */
         public void endDrawing() {
             // If a layer update requires further work, schedule another redraw
             if (!mUpdated)
                 mView.requestRender();
-
-            /* Used by robocop for testing purposes */
-            IntBuffer pixelBuffer = mPixelBuffer;
-            if (mUpdated && pixelBuffer != null) {
-                synchronized (pixelBuffer) {
-                    pixelBuffer.position(0);
-                    GLES20.glReadPixels(0, 0, (int)mScreenContext.viewport.width(),
-                                        (int)mScreenContext.viewport.height(), GLES20.GL_RGBA,
-                                        GLES20.GL_UNSIGNED_BYTE, pixelBuffer);
-                    pixelBuffer.notify();
-                }
-            }
         }
     }
 }

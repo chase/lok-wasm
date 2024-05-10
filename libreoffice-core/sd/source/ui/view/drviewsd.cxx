@@ -72,8 +72,7 @@ void DrawViewShell::ExecNavigatorWin( SfxRequest& rReq )
                     mpDrawView->SdrEndTextEdit();
 
                 const SfxItemSet* pArgs = rReq.GetArgs();
-                PageJump eJump = static_cast<PageJump>(static_cast<const SfxUInt16Item&>( pArgs->
-                                  Get(SID_NAVIGATOR_PAGE)).GetValue());
+                PageJump eJump = static_cast<PageJump>( pArgs->Get(SID_NAVIGATOR_PAGE).GetValue() );
 
                 switch (eJump)
                 {
@@ -123,8 +122,7 @@ void DrawViewShell::ExecNavigatorWin( SfxRequest& rReq )
             {
                 OUString aBookmarkStr("#");
                 const SfxItemSet* pArgs = rReq.GetArgs();
-                OUString aTarget = static_cast<const SfxStringItem&>( pArgs->
-                                 Get(SID_NAVIGATOR_OBJECT)).GetValue();
+                OUString aTarget = pArgs->Get(SID_NAVIGATOR_OBJECT).GetValue();
                 aBookmarkStr += aTarget;
                 SfxStringItem aStrItem(SID_FILE_NAME, aBookmarkStr);
                 SfxStringItem aReferer(SID_REFERER, GetDocSh()->GetMedium()->GetName());

@@ -52,6 +52,7 @@
 #include <vcl/filter/PDFiumLibrary.hxx>
 #include <comphelper/scopeguard.hxx>
 #include <basegfx/utils/gradienttools.hxx>
+#include <docmodel/uno/UnoGradientTools.hxx>
 
 #include <docufld.hxx> // for SwHiddenTextField::ParseIfFieldDefinition() method call
 #include <unoprnms.hxx>
@@ -69,11 +70,6 @@ class Test : public SwModelTestBase
 {
 public:
     Test() : SwModelTestBase("/sw/qa/extras/odfexport/data/", "writer8") {}
-
-    bool mustValidate(const char* /*filename*/) const override
-    {
-        return true;
-    }
 };
 
 CPPUNIT_TEST_FIXTURE(Test, testMathObjectFlatExport)
@@ -94,7 +90,7 @@ CPPUNIT_TEST_FIXTURE(Test, testMathObjectFlatExport)
 
     uno::Reference<util::XModifiable> xModifiable(mxComponent, uno::UNO_QUERY);
     CPPUNIT_ASSERT(!xModifiable->isModified());
-    // see preTest(), set the OLE cache to 1 for this test
+    // see above, set the OLE cache to 1 for this test
     // and the problem was that the formulas that were in the cache
     // (the second one) were lost
     OUString formula1(getFormula(getRun(getParagraph(1), 1)));
@@ -232,14 +228,14 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf133487)
     CPPUNIT_ASSERT_EQUAL(1, getPages());
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // shape in background has lowest index
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[2]/draw:custom-shape", "z-index", "0");
-    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[2]/draw:custom-shape[@draw:z-index = '0']/attribute::draw:style-name]/style:graphic-properties", "run-through", "background");
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[2]/draw:custom-shape"_ostr, "z-index"_ostr, "0");
+    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[2]/draw:custom-shape[@draw:z-index = '0']/attribute::draw:style-name]/style:graphic-properties"_ostr, "run-through"_ostr, "background");
     // shape in foreground, previously index 1
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[1]/draw:custom-shape", "z-index", "2");
-    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[1]/draw:custom-shape[@draw:z-index = '2']/attribute::draw:style-name]/style:graphic-properties", "run-through", "foreground");
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[1]/draw:custom-shape"_ostr, "z-index"_ostr, "2");
+    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[1]/draw:custom-shape[@draw:z-index = '2']/attribute::draw:style-name]/style:graphic-properties"_ostr, "run-through"_ostr, "foreground");
     // shape in foreground, previously index 0
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[3]/draw:custom-shape", "z-index", "1");
-    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[3]/draw:custom-shape[@draw:z-index = '1']/attribute::draw:style-name]/style:graphic-properties", "run-through", "foreground");
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[3]/draw:custom-shape"_ostr, "z-index"_ostr, "1");
+    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[3]/draw:custom-shape[@draw:z-index = '1']/attribute::draw:style-name]/style:graphic-properties"_ostr, "run-through"_ostr, "foreground");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf141467)
@@ -249,12 +245,12 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf141467)
     CPPUNIT_ASSERT_EQUAL(1, getPages());
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // shape in foreground has lowest index
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[2]/draw:custom-shape", "z-index", "0");
-    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[2]/draw:custom-shape[@draw:z-index = '0']/attribute::draw:style-name]/style:graphic-properties", "run-through", "foreground");
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[2]/draw:custom-shape"_ostr, "z-index"_ostr, "0");
+    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[2]/draw:custom-shape[@draw:z-index = '0']/attribute::draw:style-name]/style:graphic-properties"_ostr, "run-through"_ostr, "foreground");
     // form control, previously index 0
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[2]/draw:control", "z-index", "1");
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p[2]/draw:control"_ostr, "z-index"_ostr, "1");
     // no run-through on form's style
-    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[2]/draw:control[@draw:z-index = '1']/attribute::draw:style-name]/style:graphic-properties/attribute::run-through", 0);
+    assertXPath(pXmlDoc, "/office:document-content/office:automatic-styles/style:style[@style:name = /office:document-content/office:body/office:text/text:p[2]/draw:control[@draw:z-index = '1']/attribute::draw:style-name]/style:graphic-properties/attribute::run-through"_ostr, 0);
 }
 
 DECLARE_ODFEXPORT_TEST(testTdf139126, "tdf139126.odt")
@@ -280,7 +276,6 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf125877)
     CPPUNIT_ASSERT_EQUAL(1, getPages());
     uno::Reference<text::XTextTablesSupplier> xSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<container::XIndexAccess> xTables(xSupplier->getTextTables(), uno::UNO_QUERY);
-    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
 
     // This was 0 (lost table during ODT export in footnotes)
     // Note: fix also tdf#95806: painting table layout is correct
@@ -298,8 +293,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf150149)
     CPPUNIT_ASSERT_EQUAL(1, getPages());
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // This was 0 (lost table header in multi-column section)
-    assertXPath(pXmlDoc, "//table:table-header-rows", 1);
-    assertXPath(pXmlDoc, "//table:table-header-rows/table:table-row/table:table-cell", 3);
+    assertXPath(pXmlDoc, "//table:table-header-rows"_ostr, 1);
+    assertXPath(pXmlDoc, "//table:table-header-rows/table:table-row/table:table-cell"_ostr, 3);
 }
 
 DECLARE_ODFEXPORT_TEST(testTdf103567, "tdf103567.odt")
@@ -347,7 +342,7 @@ CPPUNIT_TEST_FIXTURE(Test, testUserFieldDecl)
     // Without the accompanying fix in place, this test would have failed with 'Expected: 2;
     // Actual: 1', i.e. the in-table field had no declaration (in the header), while the
     // outside-table one had the declaration.
-    assertXPath(pXmlDoc, "//style:header/text:user-field-decls/text:user-field-decl", 2);
+    assertXPath(pXmlDoc, "//style:header/text:user-field-decls/text:user-field-decl"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testUserFieldDeclFly)
@@ -359,7 +354,7 @@ CPPUNIT_TEST_FIXTURE(Test, testUserFieldDeclFly)
     // Without the accompanying fix in place, this test would have failed with 'Expected: 2;
     // Actual: 1', i.e. the in-textframe field had no declaration (in the header), while the
     // outside-textframe one had the declaration.
-    assertXPath(pXmlDoc, "//style:header/text:user-field-decls/text:user-field-decl", 2);
+    assertXPath(pXmlDoc, "//style:header/text:user-field-decls/text:user-field-decl"_ostr, 2);
 }
 
 DECLARE_ODFEXPORT_TEST(testFramebackgrounds, "framebackgrounds.odt")
@@ -482,12 +477,12 @@ DECLARE_ODFEXPORT_TEST(testFramebackgrounds, "framebackgrounds.odt")
     {
         xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
         // check that there are 3 background-image elements
-        assertXPath(pXmlDoc, "//style:style[@style:parent-style-name='Frame' and @style:family='graphic']/style:graphic-properties[@draw:fill='bitmap']/style:background-image[@style:repeat='stretch']", 3);
+        assertXPath(pXmlDoc, "//style:style[@style:parent-style-name='Frame' and @style:family='graphic']/style:graphic-properties[@draw:fill='bitmap']/style:background-image[@style:repeat='stretch']"_ostr, 3);
         // tdf#90640: check that one of them is 55% opaque
-        assertXPath(pXmlDoc, "//style:style[@style:parent-style-name='Frame' and @style:family='graphic']/style:graphic-properties[@draw:fill='bitmap' and @fo:background-color='transparent' and @draw:opacity='55%']/style:background-image[@style:repeat='stretch' and @draw:opacity='55%']", 1);
+        assertXPath(pXmlDoc, "//style:style[@style:parent-style-name='Frame' and @style:family='graphic']/style:graphic-properties[@draw:fill='bitmap' and @fo:background-color='transparent' and @draw:opacity='55%']/style:background-image[@style:repeat='stretch' and @draw:opacity='55%']"_ostr, 1);
         // tdf#90640: check that one of them is 43% opaque
         // (emulated - hopefully not with rounding errors)
-        assertXPath(pXmlDoc, "//style:style[@style:parent-style-name='Frame' and @style:family='graphic']/style:graphic-properties[@draw:fill='bitmap' and @fo:background-color='transparent' and @draw:opacity-name='Transparency_20_1']/style:background-image[@style:repeat='stretch' and @draw:opacity='43%']", 1);
+        assertXPath(pXmlDoc, "//style:style[@style:parent-style-name='Frame' and @style:family='graphic']/style:graphic-properties[@draw:fill='bitmap' and @fo:background-color='transparent' and @draw:opacity-name='Transparency_20_1']/style:background-image[@style:repeat='stretch' and @draw:opacity='43%']"_ostr, 1);
     }
 }
 
@@ -534,6 +529,12 @@ CPPUNIT_TEST_FIXTURE(Test, testOOoxmlEmbedded)
     uno::Reference<document::XStorageBasedDocument> xSBDoc4(xObj4, uno::UNO_QUERY);
     uno::Reference<embed::XStorage> xStorage4(xSBDoc4->getDocumentStorage());
     CPPUNIT_ASSERT_EQUAL(sal_Int32(SOFFICE_FILEFORMAT_8), comphelper::OStorageHelper::GetXStorageFormat(xStorage4));
+}
+
+DECLARE_ODFEXPORT_TEST(testTdf152710, "tdf152710.odt")
+{
+    // Without this fix in place, this test would have crash at import time
+    CPPUNIT_ASSERT_EQUAL(2, getPages());
 }
 
 DECLARE_ODFEXPORT_TEST(testredlineTextFrame, "redlineTextFrame.odt")
@@ -681,8 +682,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf92379)
     {
         xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
         // check that fo:background-color attribute is exported properly
-        assertXPath(pXmlDoc, "//style:style[@style:family='graphic' and @style:name='encarts']/style:graphic-properties[@fo:background-color='#ffcc99']", 1);
-        assertXPath(pXmlDoc, "//style:style[@style:family='graphic' and @style:name='Untitled1']/style:graphic-properties[@fo:background-color='transparent']", 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='graphic' and @style:name='encarts']/style:graphic-properties[@fo:background-color='#ffcc99']"_ostr, 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='graphic' and @style:name='Untitled1']/style:graphic-properties[@fo:background-color='transparent']"_ostr, 1);
     }
 
     // paragraph style fo:background-color was wrongly inherited despite being
@@ -730,10 +731,10 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf92379)
     {
         xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
         // check that fo:background-color attribute is exported properly
-        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='Titre Avis expert']/style:paragraph-properties[@fo:background-color='#661900']", 1);
-        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='Avis expert questions']/style:paragraph-properties[@fo:background-color='transparent']", 1);
-        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='avis expert questions non cadres']/style:paragraph-properties[@fo:background-color='#801900']", 1);
-        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='Avis expert rXponses']/style:paragraph-properties[@fo:background-color='transparent']", 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='Titre Avis expert']/style:paragraph-properties[@fo:background-color='#661900']"_ostr, 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='Avis expert questions']/style:paragraph-properties[@fo:background-color='transparent']"_ostr, 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='avis expert questions non cadres']/style:paragraph-properties[@fo:background-color='#801900']"_ostr, 1);
+        assertXPath(pXmlDoc, "//style:style[@style:family='paragraph' and @style:display-name='Avis expert rXponses']/style:paragraph-properties[@fo:background-color='transparent']"_ostr, 1);
     }
 }
 
@@ -770,13 +771,13 @@ DECLARE_ODFEXPORT_TEST(testTextframeGradient, "textframe-gradient.odt")
     awt::Gradient2 aGradient = getProperty<awt::Gradient2>(xFrame, "FillGradient");
 
     // MCGR: Use the completely imported gradient to check for correctness
-    basegfx::BColorStops aColorStops(aGradient.ColorStops);
+    basegfx::BColorStops aColorStops = model::gradient::getColorStopsFromUno(aGradient.ColorStops);
 
     CPPUNIT_ASSERT_EQUAL(size_t(2), aColorStops.size());
     CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[0].getStopOffset(), 0.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[0].getStopColor(), basegfx::BColor(0.75294117647058822, 0.31372549019607843, 0.30196078431372547));
+    CPPUNIT_ASSERT_EQUAL(Color(0xc0504d), Color(aColorStops[0].getStopColor()));
     CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[1].getStopOffset(), 1.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[1].getStopColor(), basegfx::BColor(0.85098039215686272, 0.58431372549019611, 0.58039215686274515));
+    CPPUNIT_ASSERT_EQUAL(Color(0xd99594), Color(aColorStops[1].getStopColor()));
     CPPUNIT_ASSERT_EQUAL(awt::GradientStyle_AXIAL, aGradient.Style);
 
     xFrame.set(xIndexAccess->getByIndex(1), uno::UNO_QUERY);
@@ -784,13 +785,13 @@ DECLARE_ODFEXPORT_TEST(testTextframeGradient, "textframe-gradient.odt")
     aGradient = getProperty<awt::Gradient2>(xFrame, "FillGradient");
 
     // MCGR: Use the completely imported gradient to check for correctness
-    aColorStops = basegfx::BColorStops(aGradient.ColorStops);
+    aColorStops = model::gradient::getColorStopsFromUno(aGradient.ColorStops);
 
     CPPUNIT_ASSERT_EQUAL(size_t(2), aColorStops.size());
     CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[0].getStopOffset(), 0.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[0].getStopColor(), basegfx::BColor(0.0, 0.0, 0.0));
+    CPPUNIT_ASSERT_EQUAL(Color(0x000000), Color(aColorStops[0].getStopColor()));
     CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[1].getStopOffset(), 1.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[1].getStopColor(), basegfx::BColor(0.40000000000000002, 0.40000000000000002, 0.40000000000000002));
+    CPPUNIT_ASSERT_EQUAL(Color(0x666666), Color(aColorStops[1].getStopColor()));
     CPPUNIT_ASSERT_EQUAL(awt::GradientStyle_AXIAL, aGradient.Style);
 }
 
@@ -1090,9 +1091,6 @@ DECLARE_ODFEXPORT_TEST(testCharacterBorder, "charborder.odt")
             uno::Reference < container::XEnumeration > xAutoStylesEnum( xAutoStyleFamily->createEnumeration() );
             CPPUNIT_ASSERT_EQUAL(true, static_cast<bool>(xAutoStylesEnum->hasMoreElements()));
 
-            // First paragraph autostyle
-            uno::Reference < beans::XPropertySet > xPSet( xAutoStylesEnum->nextElement(), uno::UNO_QUERY );
-
             // Top border
             CPPUNIT_ASSERT_BORDER_EQUAL(aFirstParCharTopBorder, getProperty<table::BorderLine2>(xSet,"CharTopBorder"));
             CPPUNIT_ASSERT_EQUAL(aFirstParCharTopPadding, getProperty<sal_Int32>(xSet,"CharTopBorderDistance"));
@@ -1178,7 +1176,7 @@ DECLARE_ODFEXPORT_TEST(testCharacterBorder, "charborder.odt")
 CPPUNIT_TEST_FIXTURE(Test, testProtectionKey)
 {
     loadAndReload("protection-key.fodt");
-    OUString const password("1012345678901234567890123456789012345678901234567890");
+    OUString constexpr password(u"1012345678901234567890123456789012345678901234567890"_ustr);
 
     // check 1 invalid OOo legacy password and 3 valid ODF 1.2 passwords
     uno::Reference<text::XTextSectionsSupplier> xTextSectionsSupplier(mxComponent, uno::UNO_QUERY);
@@ -1190,10 +1188,10 @@ CPPUNIT_TEST_FIXTURE(Test, testProtectionKey)
     uno::Sequence<sal_Int8> const key1(getProperty<uno::Sequence<sal_Int8>>(xSect1, "ProtectionKey"));
     CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key1, password));
     uno::Reference<beans::XPropertySet> xSect2(xSections->getByIndex(2), uno::UNO_QUERY);
-    uno::Sequence<sal_Int8> const key2(getProperty<uno::Sequence<sal_Int8>>(xSect1, "ProtectionKey"));
+    uno::Sequence<sal_Int8> const key2(getProperty<uno::Sequence<sal_Int8>>(xSect2, "ProtectionKey"));
     CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key2, password));
     uno::Reference<beans::XPropertySet> xSect3(xSections->getByIndex(3), uno::UNO_QUERY);
-    uno::Sequence<sal_Int8> const key3(getProperty<uno::Sequence<sal_Int8>>(xSect1, "ProtectionKey"));
+    uno::Sequence<sal_Int8> const key3(getProperty<uno::Sequence<sal_Int8>>(xSect3, "ProtectionKey"));
     CPPUNIT_ASSERT(SvPasswordHelper::CompareHashPassword(key3, password));
 
     // we can't assume that the user entered the password; check that we
@@ -1201,10 +1199,10 @@ CPPUNIT_TEST_FIXTURE(Test, testProtectionKey)
     if (isExported())
     {
         xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
-        assertXPath(pXmlDoc, "//text:section[@text:name='Section0' and @text:protected='true' and @text:protection-key='vbnhxyBKtPHCA1wB21zG1Oha8ZA=']");
-        assertXPath(pXmlDoc, "//text:section[@text:name='Section1' and @text:protected='true' and @text:protection-key='nLHas0RIwepGDaH4c2hpyIUvIS8=']");
-        assertXPath(pXmlDoc, "//text:section[@text:name='Section2' and @text:protected='true' and @text:protection-key-digest-algorithm='http://www.w3.org/2000/09/xmldsig#sha256' and @text:protection-key='1tnJohagR2T0yF/v69hLPuumSTsj32CumW97nkKGuSQ=']");
-        assertXPath(pXmlDoc, "//text:section[@text:name='Section3' and @text:protected='true' and @text:protection-key-digest-algorithm='http://www.w3.org/2000/09/xmldsig#sha256' and @text:protection-key='1tnJohagR2T0yF/v69hLPuumSTsj32CumW97nkKGuSQ=']");
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section0' and @text:protected='true' and @text:protection-key='vbnhxyBKtPHCA1wB21zG1Oha8ZA=']"_ostr);
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section1' and @text:protected='true' and @text:protection-key='nLHas0RIwepGDaH4c2hpyIUvIS8=']"_ostr);
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section2' and @text:protected='true' and @text:protection-key-digest-algorithm='http://www.w3.org/2000/09/xmldsig#sha256' and @text:protection-key='1tnJohagR2T0yF/v69hLPuumSTsj32CumW97nkKGuSQ=']"_ostr);
+        assertXPath(pXmlDoc, "//text:section[@text:name='Section3' and @text:protected='true' and @text:protection-key-digest-algorithm='http://www.w3.org/2000/09/xmldsig#sha256' and @text:protection-key='1tnJohagR2T0yF/v69hLPuumSTsj32CumW97nkKGuSQ=']"_ostr);
     }
 }
 
@@ -1248,7 +1246,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf103091)
     // check that all conditional paragraph style conditions are imported
     uno::Reference<container::XNameAccess> xParaStyles(getStyles("ParagraphStyles"));
     uno::Reference<beans::XPropertySet> xStyle1(xParaStyles->getByName(
-            "Text Body"), uno::UNO_QUERY);
+            "Text body"), uno::UNO_QUERY);
     auto conditions(getProperty<uno::Sequence<beans::NamedValue>>(xStyle1, "ParaStyleConditions"));
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(28), conditions.getLength());
@@ -1330,7 +1328,7 @@ DECLARE_ODFEXPORT_TEST(testRelhPage, "relh-page.odt")
     CPPUNIT_ASSERT_EQUAL(text::RelOrientation::FRAME, getProperty<sal_Int16>(xTextFrame, "RelativeWidthRelation"));
 
     // This was 2601, 20% height was relative from margin, not page.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(3168), parseDump("/root/page/body/txt/anchored/fly/infos/bounds", "height").toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3168), parseDump("/root/page/body/txt/anchored/fly/infos/bounds"_ostr, "height"_ostr).toInt32());
 }
 
 DECLARE_ODFEXPORT_TEST(testRelhPageTdf80282, "relh-page-tdf80282.odt")
@@ -1338,8 +1336,8 @@ DECLARE_ODFEXPORT_TEST(testRelhPageTdf80282, "relh-page-tdf80282.odt")
     CPPUNIT_ASSERT_EQUAL(1, getShapes());
     CPPUNIT_ASSERT_EQUAL(1, getPages());
     uno::Reference<drawing::XShape> xTextFrame = getShape(1);
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("Height", sal_Int32(8391), parseDump("//anchored/fly/infos/bounds", "height").toInt32());
-    CPPUNIT_ASSERT_EQUAL_MESSAGE("Width",  sal_Int32(5953), parseDump("//anchored/fly/infos/bounds", "width").toInt32());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Height", sal_Int32(8391), parseDump("//anchored/fly/infos/bounds"_ostr, "height"_ostr).toInt32());
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Width",  sal_Int32(5953), parseDump("//anchored/fly/infos/bounds"_ostr, "width"_ostr).toInt32());
 }
 
 DECLARE_ODFEXPORT_TEST(testRelwPage, "relw-page.odt")
@@ -1353,7 +1351,7 @@ DECLARE_ODFEXPORT_TEST(testRelwPage, "relw-page.odt")
     CPPUNIT_ASSERT_EQUAL(text::RelOrientation::FRAME, getProperty<sal_Int16>(xTextFrame, "RelativeHeightRelation"));
 
     // This was 3762, 40% width was relative from margin, not page.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4896), parseDump("/root/page/body/txt/anchored/fly/infos/bounds", "width").toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4896), parseDump("/root/page/body/txt/anchored/fly/infos/bounds"_ostr, "width"_ostr).toInt32());
 }
 
 DECLARE_ODFEXPORT_TEST(testTextFrameVertAdjust, "textframe-vertadjust.odt")
@@ -1417,7 +1415,7 @@ DECLARE_ODFEXPORT_TEST(testTextboxRoundedCorners, "textbox-rounded-corners.odt")
     {
         xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
         // This failed, as draw:custom-shape had a table:table child.
-        assertXPath(pXmlDoc, "//draw:custom-shape/loext:table", "name", "Table1");
+        assertXPath(pXmlDoc, "//draw:custom-shape/loext:table"_ostr, "name"_ostr, "Table1");
     }
 }
 
@@ -1753,11 +1751,11 @@ DECLARE_ODFEXPORT_TEST(testTdf136645, "tdf136645.odt")
     // Without the fix in place, this would have failed with
     //- Expected: 2640
     //- Actual  : 3000
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(2640), parseDump("/root/page/body/section/column[1]/body/infos/bounds", "width").toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2640), parseDump("/root/page/body/section/column[1]/body/infos/bounds"_ostr, "width"_ostr).toInt32());
 
     //- Expected: 6000
     //- Actual  : 6360
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(6000), parseDump("/root/page/body/section/column[2]/body/infos/bounds", "width").toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6000), parseDump("/root/page/body/section/column[2]/body/infos/bounds"_ostr, "width"_ostr).toInt32());
 }
 
 DECLARE_ODFEXPORT_TEST(testBtlrCell, "btlr-cell.odt")
@@ -1861,7 +1859,7 @@ DECLARE_ODFEXPORT_TEST(testTdf135338_firstLeftPageFooter, "tdf135338_firstLeftPa
     CPPUNIT_ASSERT_EQUAL(6, getPages());
     // The first page is a left page only style, but it should still show the first page footer
     // instead of the left footer text "EVEN/LEFT (Left page only)"
-    CPPUNIT_ASSERT_EQUAL(OUString("First (Left page only)"),  parseDump("/root/page[2]/footer/txt/text()"));
+    CPPUNIT_ASSERT_EQUAL(OUString("First (Left page only)"),  parseDump("/root/page[2]/footer/txt/text()"_ostr));
 }
 
 DECLARE_ODFEXPORT_TEST(testGerrit13858, "gerrit13858.odt")
@@ -1925,53 +1923,53 @@ CPPUNIT_TEST_FIXTURE(Test, testPageStyleBackgroundFullSizeOOo)
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "solid");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-color", "#99ccff");
+        "]/style:drawing-page-properties"_ostr, "fill-color"_ostr, "#99ccff");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
     // Endnote
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "repeat");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "repeat");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Footnote
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "stretch");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "stretch");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testPageStyleBackgroundFullSizeLO64)
@@ -1983,104 +1981,104 @@ CPPUNIT_TEST_FIXTURE(Test, testPageStyleBackgroundFullSizeLO64)
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "solid");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-color", "#99ccff");
+        "]/style:drawing-page-properties"_ostr, "fill-color"_ostr, "#99ccff");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
     // Endnote
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "repeat");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "repeat");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Footnote
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "stretch");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "stretch");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Landscape
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "no-repeat");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "no-repeat");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Index
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "gradient");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "gradient");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "gradient-step-count", "0");
+        "]/style:drawing-page-properties"_ostr, "gradient-step-count"_ostr, "0");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
     // First Page
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "hatch");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "hatch");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-hatch-solid", "false");
+        "]/style:drawing-page-properties"_ostr, "fill-hatch-solid"_ostr, "false");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testPageStyleBackgroundFullSizeLO70)
@@ -2092,104 +2090,104 @@ CPPUNIT_TEST_FIXTURE(Test, testPageStyleBackgroundFullSizeLO70)
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "solid");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-color", "#99ccff");
+        "]/style:drawing-page-properties"_ostr, "fill-color"_ostr, "#99ccff");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Standard']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
     // Endnote
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "repeat");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "repeat");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Endnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Footnote
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "stretch");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "stretch");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Footnote']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Landscape
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "border");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "border");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "bitmap");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "repeat", "no-repeat");
+        "]/style:drawing-page-properties"_ostr, "repeat"_ostr, "no-repeat");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Landscape']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-image-ref-point", "top-left");
+        "]/style:drawing-page-properties"_ostr, "fill-image-ref-point"_ostr, "top-left");
     // Index
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "gradient");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "gradient");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "gradient-step-count", "0");
+        "]/style:drawing-page-properties"_ostr, "gradient-step-count"_ostr, "0");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='Index']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
     // First Page
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "background-size", "full");
+        "]/style:drawing-page-properties"_ostr, "background-size"_ostr, "full");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill", "hatch");
+        "]/style:drawing-page-properties"_ostr, "fill"_ostr, "hatch");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "fill-hatch-solid", "false");
+        "]/style:drawing-page-properties"_ostr, "fill-hatch-solid"_ostr, "false");
     assertXPath(pXmlDoc,
         "/office:document-styles/office:automatic-styles/style:style[@style:family='drawing-page' and @style:name = "
         "/office:document-styles/office:master-styles/style:master-page[@style:name='First_20_Page']/attribute::draw:style-name"
-        "]/style:drawing-page-properties", "opacity", "100%");
+        "]/style:drawing-page-properties"_ostr, "opacity"_ostr, "100%");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testFillBitmapUnused)
@@ -2202,56 +2200,56 @@ CPPUNIT_TEST_FIXTURE(Test, testFillBitmapUnused)
 
     // paragraph style
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:styles/style:style[@style:name='Text_20_body']/loext:graphic-properties", "fill", "solid");
+        "/office:document-styles/office:styles/style:style[@style:name='Text_20_body']/loext:graphic-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:styles/style:style[@style:name='Text_20_body']/loext:graphic-properties", "fill-color", "#c0c0c0");
+        "/office:document-styles/office:styles/style:style[@style:name='Text_20_body']/loext:graphic-properties"_ostr, "fill-color"_ostr, "#c0c0c0");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:styles/style:style[@style:name='Text_20_body']/loext:graphic-properties[@draw:fill-image-name]", 0);
+        "/office:document-styles/office:styles/style:style[@style:name='Text_20_body']/loext:graphic-properties[@draw:fill-image-name]"_ostr, 0);
 
     // page style page-layout
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:page-layout-properties", "fill", "bitmap");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:page-layout-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:page-layout-properties", "fill-image-name", "nav_5f_up");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:page-layout-properties"_ostr, "fill-image-name"_ostr, "nav_5f_up");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:header-style/style:header-footer-properties", "fill", "bitmap");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:header-style/style:header-footer-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:header-style/style:header-footer-properties", "fill-image-name", "nav_5f_up");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:header-style/style:header-footer-properties"_ostr, "fill-image-name"_ostr, "nav_5f_up");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:footer-style/style:header-footer-properties", "fill", "bitmap");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:footer-style/style:header-footer-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:footer-style/style:header-footer-properties", "fill-image-name", "nav_5f_up");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm1']/style:footer-style/style:header-footer-properties"_ostr, "fill-image-name"_ostr, "nav_5f_up");
 
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:page-layout-properties", "fill", "solid");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:page-layout-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:page-layout-properties[@draw:fill-image-name]", 0);
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:page-layout-properties[@draw:fill-image-name]"_ostr, 0);
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:header-style/style:header-footer-properties", "fill", "solid");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:header-style/style:header-footer-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:header-style/style:header-footer-properties[@draw:fill-image-name]", 0);
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:header-style/style:header-footer-properties[@draw:fill-image-name]"_ostr, 0);
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:footer-style/style:header-footer-properties", "fill", "solid");
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:footer-style/style:header-footer-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:footer-style/style:header-footer-properties[@draw:fill-image-name]", 0);
+        "/office:document-styles/office:automatic-styles/style:page-layout[@style:name='Mpm2']/style:footer-style/style:header-footer-properties[@draw:fill-image-name]"_ostr, 0);
 
     // page style drawing-page
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp1']/style:drawing-page-properties", "fill", "bitmap");
+        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp1']/style:drawing-page-properties"_ostr, "fill"_ostr, "bitmap");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp1']/style:drawing-page-properties", "fill-image-name", "nav_5f_up");
+        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp1']/style:drawing-page-properties"_ostr, "fill-image-name"_ostr, "nav_5f_up");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp2']/style:drawing-page-properties", "fill", "solid");
+        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp2']/style:drawing-page-properties"_ostr, "fill"_ostr, "solid");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp2']/style:drawing-page-properties", "fill-color", "#c0c0c0");
+        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp2']/style:drawing-page-properties"_ostr, "fill-color"_ostr, "#c0c0c0");
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp2']/style:drawing-page-properties[@draw:fill-image-name]", 0);
+        "/office:document-styles/office:automatic-styles/style:style[@style:name='Mdp2']/style:drawing-page-properties[@draw:fill-image-name]"_ostr, 0);
 
     // the named items
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:styles/draw:fill-image", 1);
+        "/office:document-styles/office:styles/draw:fill-image"_ostr, 1);
     assertXPath(pXmlDoc,
-        "/office:document-styles/office:styles/draw:fill-image", "name", "nav_5f_up");
+        "/office:document-styles/office:styles/draw:fill-image"_ostr, "name"_ostr, "nav_5f_up");
 }
 
 DECLARE_ODFEXPORT_TEST(testCellUserDefineAttr, "userdefattr-tablecell.odt")
@@ -2557,55 +2555,55 @@ CPPUNIT_TEST_FIXTURE(Test, testTableStyles3)
 
     // <style:paragraph-properties>
     // For this element the only exported attributes are: "border-left", "border-bottom"
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "background-color");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "background-color"_ostr);
     // border-left place
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "border-right");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "border-top");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "border-right"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "border-top"_ostr);
     // border-bottom place
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "padding");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "padding-left");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "padding-right");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "padding-top");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "padding-bottom");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties", "writing-mode");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "padding"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "padding-left"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "padding-right"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "padding-top"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "padding-bottom"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:table-cell-properties"_ostr, "writing-mode"_ostr);
 
     // <style:paragraph-properties> should be absent, because it has only "text-align" attribute, which shouldn't be exported.
     // Assume that style:paragraph-properties and style:text-properties exists.
-    assertXPathChildren(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']", 2);
+    assertXPathChildren(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']"_ostr, 2);
 
     // <style:text-properties>
     // For this element the only exported attributes are: "use-window-font-color place", "font-size-asian", "font-name-asian", "font-family-asian", "font-name-complex", "font-family-complex"
     // use-window-font-color place
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "text-shadow");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "text-outline");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "text-line-through-style");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "text-line-through-type");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "text-underline-style");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "text-underline-color");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-size");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-weight");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-style");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-family");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-family-generic");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-pitch");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "text-shadow"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "text-outline"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "text-line-through-style"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "text-line-through-type"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "text-underline-style"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "text-underline-color"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-size"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-weight"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-style"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-family"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-family-generic"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-pitch"_ostr);
     // font-size-asian place
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-weight-asian");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-style-asian");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-weight-asian"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-style-asian"_ostr);
     // font-name-asian place
     // font-family-asian place
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-style-name-asian");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-family-generic-asian");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-pitch-asian");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-size-complex");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-weight-complex");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-style-complex");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-style-name-asian"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-family-generic-asian"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-pitch-asian"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-size-complex"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-weight-complex"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-style-complex"_ostr);
     // font-name-complex place
     // font-family-complex place
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-style-name-complex");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-family-generic-complex");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties", "font-pitch-complex");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-style-name-complex"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-family-generic-complex"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style3.2']/style:text-properties"_ostr, "font-pitch-complex"_ostr);
 
 }
 
@@ -2630,22 +2628,22 @@ CPPUNIT_TEST_FIXTURE(Test, testTableStyles5)
     // Test if cell styles doesn't have a style:parent-style-name attribute.
     xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
 
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.1']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.2']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.3']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.4']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.5']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.6']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.7']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.8']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.9']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.10']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.11']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.12']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.13']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.14']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.15']", "parent-style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.16']", "parent-style-name");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.1']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.2']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.3']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.4']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.5']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.6']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.7']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.8']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.9']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.10']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.11']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.12']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.13']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.14']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.15']"_ostr, "parent-style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:display-name='Test style.16']"_ostr, "parent-style-name"_ostr);
 
 }
 
@@ -2655,10 +2653,10 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf145226)
     CPPUNIT_ASSERT_EQUAL(1, getPages());
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
 
-    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[1]", "style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[2]", "style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[3]", "style-name");
-    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[4]", "style-name");
+    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[1]"_ostr, "style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[2]"_ostr, "style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[3]"_ostr, "style-name"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "/office:document-content/office:body/office:text/table:table/table:table-row[4]"_ostr, "style-name"_ostr);
 }
 
 DECLARE_ODFEXPORT_TEST(testTdf101710, "tdf101710.odt")
@@ -2702,7 +2700,7 @@ CPPUNIT_TEST_FIXTURE(Test, testImageMimetype)
     // Test that the loext:mimetype attribute is written for exported images, tdf#109202
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // Original image (svg)
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p/draw:frame/draw:image[@draw:mime-type='image/svg+xml']");
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:p/draw:frame/draw:image[@draw:mime-type='image/svg+xml']"_ostr);
 }
 
 

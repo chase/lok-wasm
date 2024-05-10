@@ -89,7 +89,7 @@ bool ScVbaWorkbook::setFilterPropsFromFormat( sal_Int32 nFormat, uno::Sequence< 
         switch( nFormat )
         {
             case excel::XlFileFormat::xlCSV:
-                pProp->Value <<= OUString(SC_TEXT_CSV_FILTER_NAME);
+                pProp->Value <<= SC_TEXT_CSV_FILTER_NAME;
                 break;
             case excel::XlFileFormat::xlDBF4:
                 pProp->Value <<= OUString("DBF");
@@ -354,6 +354,18 @@ ScVbaWorkbook::SaveAs( const uno::Any& FileName, const uno::Any& FileFormat, con
 
     uno::Reference< frame::XStorable > xStor( getModel(), uno::UNO_QUERY_THROW );
     xStor->storeAsURL( sURL, storeProps );
+}
+
+void SAL_CALL
+ScVbaWorkbook::ExportAsFixedFormat(const css::uno::Any& Type, const css::uno::Any& FileName, const css::uno::Any& Quality,
+    const css::uno::Any& IncludeDocProperties, const css::uno::Any& /*IgnorePrintAreas*/, const css::uno::Any& From,
+    const css::uno::Any& To, const css::uno::Any& OpenAfterPublish, const css::uno::Any& /*FixedFormatExtClassPtr*/)
+{
+    uno::Reference< frame::XModel > xModel(getModel(), uno::UNO_SET_THROW);
+    uno::Reference< excel::XApplication > xApplication(Application(), uno::UNO_QUERY_THROW);
+
+    excel::ExportAsFixedFormatHelper(xModel, xApplication, Type, FileName, Quality,
+        IncludeDocProperties, From, To, OpenAfterPublish);
 }
 
 css::uno::Any SAL_CALL

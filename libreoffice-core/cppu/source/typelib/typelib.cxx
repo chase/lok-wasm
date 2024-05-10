@@ -55,14 +55,7 @@ namespace {
 struct AlignSize_Impl
 {
     sal_Int16 nInt16;
-#ifdef AIX
-    //double: doubleword aligned if -qalign=natural/-malign=natural
-    //which isn't the default ABI. Otherwise word aligned, While a long long int
-    //is always doubleword aligned, so use that instead.
-    sal_Int64 dDouble;
-#else
     double dDouble;
-#endif
 };
 
 }
@@ -300,8 +293,7 @@ extern "C" void SAL_CALL typelib_typedescription_revokeCallback(
         // todo mt safe: guard is no solution, can not acquire while calling callback!
 //          OslGuard aGuard( rInit.getMutex() );
         CallbackEntry aEntry( pContext, pCallback );
-        rInit.maCallbacks.erase(std::remove(rInit.maCallbacks.begin(), rInit.maCallbacks.end(), aEntry),
-                                rInit.maCallbacks.end());
+        std::erase(rInit.maCallbacks, aEntry);
     }
 }
 
@@ -1724,13 +1716,7 @@ extern "C" sal_Int32 typelib_typedescription_getAlignedUnoSize(
                 nSize = rMaxIntegralTypeSize = sal_Int32(sizeof( float ));
                 break;
             case typelib_TypeClass_DOUBLE:
-#ifdef AIX
-                //See previous AIX ifdef comment for an explanation
-                nSize = (sal_Int32)(sizeof(double));
-                rMaxIntegralTypeSize = (sal_Int32)(sizeof(void*));
-#else
                 nSize = rMaxIntegralTypeSize = sal_Int32(sizeof( double ));
-#endif
                 break;
             case typelib_TypeClass_BYTE:
                 nSize = rMaxIntegralTypeSize = sal_Int32(sizeof( sal_Int8 ));

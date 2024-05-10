@@ -59,7 +59,7 @@ bool IsEqual (const TabBarButton& rButton1, const TabBarButton& rButton2)
 
 ViewTabBar::ViewTabBar (
     const Reference<XResourceId>& rxViewTabBarId,
-    const Reference<frame::XController>& rxController)
+    const rtl::Reference<::sd::DrawController>& rxController)
     : mpTabControl(VclPtr<TabBarControl>::Create(GetAnchorWindow(rxViewTabBarId,rxController), this)),
       mxController(rxController),
       mxViewTabBarId(rxViewTabBarId),
@@ -71,21 +71,13 @@ ViewTabBar::ViewTabBar (
 
     // Tunnel through the controller and use the ViewShellBase to obtain the
     // view frame.
-    try
-    {
-        Reference<lang::XUnoTunnel> xTunnel (mxController, UNO_QUERY_THROW);
-        if (auto pController = comphelper::getFromUnoTunnel<DrawController>(xTunnel))
-            mpViewShellBase = pController->GetViewShellBase();
-    }
-    catch (const RuntimeException&)
-    {
-    }
+    if (mxController)
+        mpViewShellBase = mxController->GetViewShellBase();
 
     // Register as listener at XConfigurationController.
-    Reference<XControllerManager> xControllerManager (mxController, UNO_QUERY);
-    if (xControllerManager.is())
+    if (mxController.is())
     {
-        mxConfigurationController = xControllerManager->getConfigurationController();
+        mxConfigurationController = mxController->getConfigurationController();
         if (mxConfigurationController.is())
         {
             mxConfigurationController->addConfigurationChangeListener(
@@ -145,30 +137,23 @@ void ViewTabBar::disposing(std::unique_lock<std::mutex>&)
 
 vcl::Window* ViewTabBar::GetAnchorWindow(
     const Reference<XResourceId>& rxViewTabBarId,
-    const Reference<frame::XController>& rxController)
+    const rtl::Reference<::sd::DrawController>& rxController)
 {
     vcl::Window* pWindow = nullptr;
     ViewShellBase* pBase = nullptr;
 
     // Tunnel through the controller and use the ViewShellBase to obtain the
     // view frame.
-    try
-    {
-        Reference<lang::XUnoTunnel> xTunnel (rxController, UNO_QUERY_THROW);
-        if (auto pController = comphelper::getFromUnoTunnel<DrawController>(xTunnel))
-            pBase = pController->GetViewShellBase();
-    }
-    catch (const RuntimeException&)
-    {
-    }
+    if (rxController)
+        pBase = rxController->GetViewShellBase();
 
     // The ViewTabBar supports at the moment only the center pane.
     if (rxViewTabBarId.is()
         && rxViewTabBarId->isBoundToURL(
             FrameworkHelper::msCenterPaneURL, AnchorBindingMode_DIRECT))
     {
-        if (pBase != nullptr && pBase->GetViewFrame() != nullptr)
-            pWindow = &pBase->GetViewFrame()->GetWindow();
+        if (pBase != nullptr)
+            pWindow = &pBase->GetViewFrame().GetWindow();
     }
 
     // The rest is (at the moment) just for the emergency case.
@@ -177,9 +162,8 @@ vcl::Window* ViewTabBar::GetAnchorWindow(
         Reference<XPane> xPane;
         try
         {
-            Reference<XControllerManager> xControllerManager (rxController, UNO_QUERY_THROW);
             Reference<XConfigurationController> xCC (
-                xControllerManager->getConfigurationController());
+                rxController->getConfigurationController());
             if (xCC.is())
                 xPane.set(xCC->getResource(rxViewTabBarId->getAnchor()), UNO_QUERY);
         }
@@ -190,8 +174,7 @@ vcl::Window* ViewTabBar::GetAnchorWindow(
         // Tunnel through the XWindow to the VCL side.
         try
         {
-            Reference<lang::XUnoTunnel> xTunnel (xPane, UNO_QUERY_THROW);
-            if (auto pPane = comphelper::getFromUnoTunnel<framework::Pane>(xTunnel))
+            if (auto pPane = dynamic_cast<framework::Pane*>(xPane.get()))
                 pWindow = pPane->GetWindow()->GetParent();
         }
         catch (const RuntimeException&)
@@ -273,26 +256,12 @@ sal_Bool SAL_CALL ViewTabBar::isAnchorOnly()
     return false;
 }
 
-//----- XUnoTunnel ------------------------------------------------------------
-
-const Sequence<sal_Int8>& ViewTabBar::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theViewTabBarUnoTunnelId;
-    return theViewTabBarUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL ViewTabBar::getSomething (const Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 bool ViewTabBar::ActivatePage(size_t nIndex)
 {
     try
     {
-        Reference<XControllerManager> xControllerManager (mxController,UNO_QUERY_THROW);
         Reference<XConfigurationController> xConfigurationController (
-            xControllerManager->getConfigurationController());
+            mxController->getConfigurationController());
         if ( ! xConfigurationController.is())
             throw RuntimeException();
         Reference<XView> xView;
@@ -346,7 +315,7 @@ int ViewTabBar::GetHeight() const
             // set each page width-request to the size it takes to fit the notebook allocation
             for (int nIndex = 1, nPageCount = rNotebook.get_n_pages(); nIndex <= nPageCount; ++nIndex)
             {
-                OString sIdent(OString::number(nIndex));
+                OUString sIdent(OUString::number(nIndex));
                 weld::Container* pContainer = rNotebook.get_page(sIdent);
                 pContainer->set_size_request(nPageWidth, -1);
             }
@@ -481,7 +450,7 @@ void ViewTabBar::UpdateTabBarButtons()
     int nIndex = 1;
     for (const auto& rTab : maTabBarButtons)
     {
-        OString sIdent(OString::number(nIndex));
+        OUString sIdent(OUString::number(nIndex));
         // Create a new tab when there are not enough.
         if (nPageCount < nIndex)
             rNotebook.append_page(sIdent, rTab.ButtonLabel);
@@ -503,7 +472,7 @@ void ViewTabBar::UpdateTabBarButtons()
 
     // Delete tabs that are no longer used.
     for (; nIndex<=nPageCount; ++nIndex)
-        rNotebook.remove_page(OString::number(nIndex));
+        rNotebook.remove_page(OUString::number(nIndex));
 
     int nWidthReq = rNotebook.get_preferred_size().Width();
     // The excess width over the page request that the notebook uses we will
@@ -551,7 +520,7 @@ IMPL_LINK(TabBarControl, NotebookSizeAllocHdl, const Size&, rSize, void)
     mnAllocatedWidth = rSize.Width();
 }
 
-IMPL_LINK(TabBarControl, ActivatePageHdl, const OString&, rPage, void)
+IMPL_LINK(TabBarControl, ActivatePageHdl, const OUString&, rPage, void)
 {
     if (!mpViewTabBar->ActivatePage(mxTabControl->get_page_index(rPage)))
     {

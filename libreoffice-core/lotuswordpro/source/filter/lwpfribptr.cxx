@@ -261,7 +261,7 @@ void LwpFribPtr::XFConvert()
         }
             break;
         case FRIB_TAG_SOFTHYPHEN:
-            pFrib->ConvertChars(m_pXFPara.get(), u"\x00ad");
+            pFrib->ConvertChars(m_pXFPara.get(), u"\x00ad"_ustr);
             break;
         case FRIB_TAG_FRAME:
         {
@@ -270,7 +270,7 @@ void LwpFribPtr::XFConvert()
             if (pLayout.is() && pLayout->GetTag() == VO_DROPCAPLAYOUT)
             {
                 LwpFoundry* pFoundry = m_pPara->GetFoundry();
-                LwpDropcapMgr* pMgr = pFoundry ? pFoundry->GetDropcapMgr() : nullptr;
+                LwpDropcapMgr* pMgr = pFoundry ? &pFoundry->GetDropcapMgr() : nullptr;
                 if (pMgr)
                     pMgr->SetXFPara(m_pXFPara.get());
             }

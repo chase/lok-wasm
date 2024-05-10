@@ -54,9 +54,9 @@ CustomShapeProperties::CustomShapeProperties()
 {
 }
 
-uno::Sequence< sal_Int8 > const & CustomShapeProperties::getShapePresetTypeName() const
+OUString CustomShapeProperties::getShapePresetTypeName() const
 {
-    return StaticTokenMap().getUtf8TokenName( mnShapePresetType );
+    return StaticTokenMap().getUnicodeTokenName(mnShapePresetType);
 }
 
 sal_Int32 CustomShapeProperties::SetCustomShapeGuideValue( std::vector< CustomShapeGuide >& rGuideList, const CustomShapeGuide& rGuide )
@@ -134,8 +134,8 @@ void CustomShapeProperties::pushToPropSet(
 
         if ( !maAdjustmentGuideList.empty() )
         {
-            static const OUStringLiteral sCustomShapeGeometry(u"CustomShapeGeometry");
-            static const OUStringLiteral sAdjustmentValues(u"AdjustmentValues");
+            static constexpr OUString sCustomShapeGeometry(u"CustomShapeGeometry"_ustr);
+            static constexpr OUStringLiteral sAdjustmentValues(u"AdjustmentValues");
             uno::Any aGeoPropSet = xPropSet->getPropertyValue( sCustomShapeGeometry );
             uno::Sequence< beans::PropertyValue > aGeoPropSeq;
             if ( aGeoPropSet >>= aGeoPropSeq )

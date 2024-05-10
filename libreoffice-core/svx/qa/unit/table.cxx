@@ -64,7 +64,7 @@ Test::renderPageToPrimitives(const uno::Reference<drawing::XDrawPage>& xDrawPage
 CPPUNIT_TEST_FIXTURE(Test, testTableShadowBlur)
 {
     // Given a document containing a table with a blurry shadow:
-    loadFromURL(u"table-shadow-blur.pptx");
+    loadFromFile(u"table-shadow-blur.pptx");
 
     // When rendering the table shadow to primitives:
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -73,17 +73,33 @@ CPPUNIT_TEST_FIXTURE(Test, testTableShadowBlur)
     drawinglayer::primitive2d::Primitive2DContainer xPrimitiveSequence
         = renderPageToPrimitives(xDrawPage);
 
-    // Then make sure that the cell fill part of the shadow is excluded from blurring:
+    // Then make sure that the cell fill part of the shadow has the expected transparency:
     drawinglayer::Primitive2dXmlDump aDumper;
     xmlDocUniquePtr pDocument = aDumper.dumpAndParse(xPrimitiveSequence);
     // Without the accompanying fix in place, this test would have failed with:
-    // - number of nodes is incorrect
-    // - Expected: 1
-    // - Actual  : 0
-    // i.e. the shadow itself was not transparent and that resulted in a non-transparent rendering
-    // as well, while the rendering transparency should be based on the transparency of the shadow
-    // itself and the transparency of the cell fill.
-    assertXPath(pDocument, "//objectinfo/unifiedtransparence[1]", "transparence", "80");
+    //- Expected: 0
+    //- Actual  : 2
+    //- In <>, XPath contents of child does not match
+    // i.e. the shadow's transparency was miscalculated.
+    assertXPathContent(pDocument, "count(//objectinfo/unifiedtransparence)"_ostr, "0");
+
+    assertXPath(pDocument, "//objectinfo/shadow[1]"_ostr, "color"_ostr, "#ff0000");
+    assertXPath(pDocument, "//objectinfo/shadow[1]"_ostr, "blur"_ostr, "141");
+    assertXPath(pDocument, "//objectinfo/shadow[2]"_ostr, "color"_ostr, "#ff0000");
+    assertXPath(pDocument, "//objectinfo/shadow[2]"_ostr, "blur"_ostr, "141");
+    assertXPath(pDocument, "//objectinfo/shadow[3]"_ostr, "color"_ostr, "#ff0000");
+    assertXPath(pDocument, "//objectinfo/shadow[3]"_ostr, "blur"_ostr, "141");
+    assertXPath(pDocument, "//objectinfo/shadow[4]"_ostr, "color"_ostr, "#ff0000");
+    assertXPath(pDocument, "//objectinfo/shadow[4]"_ostr, "blur"_ostr, "141");
+    assertXPath(pDocument, "//objectinfo/shadow[5]"_ostr, "color"_ostr, "#ff0000");
+    assertXPath(pDocument, "//objectinfo/shadow[5]"_ostr, "blur"_ostr, "141");
+
+    assertXPath(pDocument, "//objectinfo/group/sdrCell[1]/unifiedtransparence"_ostr, 0);
+    assertXPath(pDocument, "//objectinfo/group/sdrCell[2]/unifiedtransparence"_ostr, 0);
+    assertXPath(pDocument, "//objectinfo/group/sdrCell[3]/unifiedtransparence"_ostr,
+                "transparence"_ostr, "80");
+    assertXPath(pDocument, "//objectinfo/group/sdrCell[4]/unifiedtransparence"_ostr,
+                "transparence"_ostr, "80");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testSvxTableControllerSetAttrToSelectedShape)

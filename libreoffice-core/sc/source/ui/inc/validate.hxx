@@ -150,7 +150,7 @@ class ScValidationDlg
     typedef ScRefHdlrControllerImpl<SfxTabDialogController, false> ScValidationDlgBase;
 
     ScTabViewShell * m_pTabVwSh;
-    OString m_sValuePageId;
+    OUString m_sValuePageId;
     bool    m_bOwnRefHdlr:1;
     bool    m_bRefInputting:1;
 
@@ -177,6 +177,8 @@ public:
     void            SetModal(bool bModal) { m_xDialog->set_modal(bModal); }
 
     virtual void EndDialog(int nResponse) override;
+
+    virtual bool CloseOnHide() const override { return false; }
 
     virtual void            SetReference( const ScRange& rRef, ScDocument& rDoc ) override
     {

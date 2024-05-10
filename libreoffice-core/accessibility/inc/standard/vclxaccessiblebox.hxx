@@ -24,23 +24,20 @@
 #include <com/sun/star/accessibility/XAccessibleKeyBinding.hpp>
 #include <com/sun/star/accessibility/XAccessibleValue.hpp>
 #include <toolkit/awt/vclxaccessiblecomponent.hxx>
-#include <cppuhelper/implbase3.hxx>
+#include <cppuhelper/implbase.hxx>
 
-
-typedef ::cppu::ImplHelper3<
-    css::accessibility::XAccessible,
-    css::accessibility::XAccessibleValue,
-    css::accessibility::XAccessibleAction
-    > VCLXAccessibleBox_BASE;
-
+class VCLXAccessibleList;
 
 /** Base class for list- and combo boxes.  This class manages the box'
     children.  The classed derived from this one have only to implement the
     IsValid method and return the correct implementation name.
 */
 class VCLXAccessibleBox
-    : public VCLXAccessibleComponent,
-      public VCLXAccessibleBox_BASE
+    : public cppu::ImplInheritanceHelper<
+          VCLXAccessibleComponent,
+          css::accessibility::XAccessible,
+          css::accessibility::XAccessibleValue,
+          css::accessibility::XAccessibleAction>
 {
 public:
     enum BoxType {COMBOBOX, LISTBOX};
@@ -50,12 +47,6 @@ public:
         indicating whether the box is a drop down box.
     */
     VCLXAccessibleBox (VCLXWindow* pVCLXindow, BoxType aType, bool bIsDropDownBox);
-
-    // XTypeProvider
-    DECLARE_XTYPEPROVIDER()
-
-    // XInterface
-    DECLARE_XINTERFACE()
 
 
     // XAccessible
@@ -112,7 +103,7 @@ public:
     virtual css::uno::Any SAL_CALL getMinimumIncrement(  ) override;
 
 protected:
-    virtual ~VCLXAccessibleBox() override = default;
+    virtual ~VCLXAccessibleBox() override;
 
     /** Returns true when the object is valid.
     */
@@ -139,8 +130,7 @@ private:
         m_xText;
 
     /// The child that contains the items of this box.
-    css::uno::Reference< css::accessibility::XAccessible>
-        m_xList;
+    rtl::Reference<VCLXAccessibleList> m_xList;
 
     /** This flag specifies whether an object has a text field as child
         regardless of whether that child being currently instantiated or

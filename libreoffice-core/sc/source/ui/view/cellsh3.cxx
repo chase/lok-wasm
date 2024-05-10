@@ -88,19 +88,19 @@ void lcl_lokGetWholeFunctionList()
     if (!(pFuncManager && aFuncNameOrderedSet.size()))
         return;
 
-    OStringBuffer aPayload;
-    aPayload.append("{ \"wholeList\": true, ");
-    aPayload.append("\"categories\": [ ");
+    OStringBuffer aPayload(
+        "{ \"wholeList\": true, "
+        "\"categories\": [ ");
 
     formula::FormulaHelper aHelper(pFuncManager);
     sal_uInt32 nCategoryCount = pFuncManager->getCount();
     for (sal_uInt32 i = 0; i < nCategoryCount; ++i)
     {
         OUString sCategoryName = ScFunctionMgr::GetCategoryName(i);
-        aPayload.append("{");
-        aPayload.append("\"name\": \"");
-        aPayload.append(escapeJSON(sCategoryName));
-        aPayload.append("\"}, ");
+        aPayload.append("{"
+            "\"name\": \""
+            + escapeJSON(sCategoryName)
+            + "\"}, ");
     }
     sal_Int32 nLen = aPayload.getLength();
     aPayload[nLen - 2] = ' ';
@@ -123,19 +123,19 @@ void lcl_lokGetWholeFunctionList()
             {
                 if (ppFDesc->getCategory())
                 {
-                    aPayload.append("{");
-                    aPayload.append("\"index\": ");
-                    aPayload.append(static_cast<sal_Int64>(nCurIndex));
-                    aPayload.append(", ");
-                    aPayload.append("\"category\": ");
-                    aPayload.append(static_cast<sal_Int64>(ppFDesc->getCategory()->getNumber()));
-                    aPayload.append(", ");
-                    aPayload.append("\"signature\": \"");
-                    aPayload.append(escapeJSON(ppFDesc->getSignature()));
-                    aPayload.append("\", ");
-                    aPayload.append("\"description\": \"");
-                    aPayload.append(escapeJSON(ppFDesc->getDescription()));
-                    aPayload.append("\"}, ");
+                    aPayload.append("{"
+                        "\"index\": "
+                        + OString::number(static_cast<sal_Int64>(nCurIndex))
+                        + ", "
+                        "\"category\": "
+                        + OString::number(static_cast<sal_Int64>(ppFDesc->getCategory()->getNumber()))
+                        + ", "
+                        "\"signature\": \""
+                        + escapeJSON(ppFDesc->getSignature())
+                        + "\", "
+                        "\"description\": \""
+                        + escapeJSON(ppFDesc->getDescription())
+                        + "\"}, ");
                 }
             }
         }
@@ -147,7 +147,7 @@ void lcl_lokGetWholeFunctionList()
     aPayload.append(" }");
 
     OString s = aPayload.makeStringAndClear();
-    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CALC_FUNCTION_LIST, s.getStr());
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CALC_FUNCTION_LIST, s);
 }
 
 } // end namespace
@@ -155,7 +155,7 @@ void lcl_lokGetWholeFunctionList()
 void ScCellShell::Execute( SfxRequest& rReq )
 {
     ScTabViewShell* pTabViewShell   = GetViewData().GetViewShell();
-    SfxBindings&        rBindings   = pTabViewShell->GetViewFrame()->GetBindings();
+    SfxBindings&        rBindings   = pTabViewShell->GetViewFrame().GetBindings();
     ScModule*           pScMod      = SC_MOD();
     const SfxItemSet*   pReqArgs    = rReq.GetArgs();
     sal_uInt16              nSlot       = rReq.GetSlot();
@@ -172,7 +172,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
             case SID_OPENDLG_FUNCTION:
                     //  inplace leads to trouble with EditShell ...
                     //! cannot always be switched ????
-                    if (!pTabViewShell->GetViewFrame()->GetFrame().IsInPlace())
+                    if (!pTabViewShell->GetViewFrame().GetFrame().IsInPlace())
                         pTabViewShell->SetDontSwitch(true);         // do not switch off EditShell
                     [[fallthrough]];
 
@@ -278,8 +278,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                         rBindings.Invalidate(SID_DOC_MODIFIED);
                     }
 
-                    OUString aStr( static_cast<const SfxStringItem&>(pReqArgs->
-                                    Get( SID_ENTER_STRING )).GetValue() );
+                    OUString aStr( pReqArgs->Get( SID_ENTER_STRING ).GetValue() );
                     const SfxPoolItem* pDontCommitItem;
                     bool bCommit = true;
                     if (pReqArgs->HasItem(FN_PARAM_1, &pDontCommitItem))
@@ -431,8 +430,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
                 else
                 {
                     sal_uInt16 nId = SID_OPENDLG_FUNCTION;
-                    SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-                    SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+                    SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+                    SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
                     bool bVis = comphelper::LibreOfficeKit::isActive() || pWnd == nullptr;
                     pScMod->SetRefDialog( nId, bVis );
                 }
@@ -443,8 +442,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
         case SID_OPENDLG_CONSOLIDATE:
             {
                 sal_uInt16          nId  = ScConsolidateDlgWrapper::GetChildWindowId();
-                SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-                SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+                SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+                SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
                 pScMod->SetRefDialog( nId, pWnd == nullptr );
             }
@@ -459,8 +458,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     {
                         sal_Int16 nFormat = static_cast<const SfxInt16Item*>(pFormat)->GetValue();
                         sal_uInt16 nId = sc::ConditionalFormatEasyDialogWrapper::GetChildWindowId();
-                        SfxViewFrame* rViewFrame = pTabViewShell->GetViewFrame();
-                        SfxChildWindow* pWindow = rViewFrame->GetChildWindow( nId );
+                        SfxViewFrame& rViewFrame = pTabViewShell->GetViewFrame();
+                        SfxChildWindow* pWindow = rViewFrame.GetChildWindow( nId );
                         GetViewData().GetDocument().SetEasyConditionalFormatDialogData(std::make_unique<ScConditionMode>(static_cast<ScConditionMode>(nFormat)));
 
                         pScMod->SetRefDialog( nId, pWindow == nullptr );
@@ -487,7 +486,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
                         if ( pReqArgs->GetItemState( nWhich, true, &pAttr ) == SfxItemState::SET )
                             aNewSet.Put( *pAttr );
 
-                    pTabViewShell->ApplyAttributes( &aNewSet, &aEmptySet );
+                    pTabViewShell->ApplyAttributes( aNewSet, aEmptySet );
 
                     rReq.Done();
                 }
@@ -517,8 +516,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
         case SID_OPENDLG_SOLVE:
             {
                 sal_uInt16          nId  = ScSolverDlgWrapper::GetChildWindowId();
-                SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-                SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+                SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+                SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
                 pScMod->SetRefDialog( nId, pWnd == nullptr );
             }
@@ -527,8 +526,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
         case SID_OPENDLG_OPTSOLVER:
             {
                 sal_uInt16 nId = ScOptSolverDlgWrapper::GetChildWindowId();
-                SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-                SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+                SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+                SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
                 pScMod->SetRefDialog( nId, pWnd == nullptr );
             }
@@ -537,8 +536,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
         case SID_OPENDLG_TABOP:
             {
                 sal_uInt16          nId  = ScTabOpDlgWrapper::GetChildWindowId();
-                SfxViewFrame* pViewFrm = pTabViewShell->GetViewFrame();
-                SfxChildWindow* pWnd = pViewFrm->GetChildWindow( nId );
+                SfxViewFrame& rViewFrm = pTabViewShell->GetViewFrame();
+                SfxChildWindow* pWnd = rViewFrm.GetChildWindow( nId );
 
                 pScMod->SetRefDialog( nId, pWnd == nullptr );
             }
@@ -709,8 +708,8 @@ void ScCellShell::Execute( SfxRequest& rReq )
                                                               rData.GetTabNo() );
                     ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
                     VclPtr<AbstractScMetricInputDlg> pDlg(pFact->CreateScMetricInputDlg(
-                        pTabViewShell->GetFrameWeld(), "RowHeightDialog",
-                        nCurHeight, ScGlobal::nStdRowHeight,
+                        pTabViewShell->GetFrameWeld(), "RowHeightDialog", nCurHeight,
+                        rData.GetDocument().GetSheetOptimalMinRowHeight(rData.GetTabNo()),
                         eMetric, 2, MAX_ROW_HEIGHT));
 
                     pDlg->StartExecuteAsync([pDlg, pTabViewShell](sal_Int32 nResult){
@@ -734,7 +733,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
             {
                 if ( pReqArgs )
                 {
-                    const SfxUInt16Item&  rUInt16Item = static_cast<const SfxUInt16Item&>(pReqArgs->Get( FID_ROW_OPT_HEIGHT ));
+                    const SfxUInt16Item&  rUInt16Item = pReqArgs->Get( FID_ROW_OPT_HEIGHT );
 
                     // #101390#; the value of the macro is in HMM so use convertMm100ToTwip to convert
                     pTabViewShell->SetMarkedWidthOrHeight( false, SC_SIZE_OPTIMAL,
@@ -839,7 +838,7 @@ void ScCellShell::Execute( SfxRequest& rReq )
             {
                 if ( pReqArgs )
                 {
-                    const SfxUInt16Item&  rUInt16Item = static_cast<const SfxUInt16Item&>(pReqArgs->Get( FID_COL_OPT_WIDTH ));
+                    const SfxUInt16Item&  rUInt16Item = pReqArgs->Get( FID_COL_OPT_WIDTH );
 
                     // #101390#; the value of the macro is in HMM so use convertMm100ToTwip to convert
                     pTabViewShell->SetMarkedWidthOrHeight( true, SC_SIZE_OPTIMAL,

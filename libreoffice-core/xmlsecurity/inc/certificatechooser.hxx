@@ -22,6 +22,8 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <vcl/weld.hxx>
 #include <unotools/resmgr.hxx>
+#include <unotools/useroptions.hxx>
+#include <unordered_map>
 
 namespace com::sun::star {
     namespace security { class XCertificate; }
@@ -64,14 +66,21 @@ private:
     std::unique_ptr<weld::Button>   m_xOKBtn;
     std::unique_ptr<weld::Label>    m_xFTDescription;
     std::unique_ptr<weld::Entry>    m_xDescriptionED;
+    std::unique_ptr<weld::Entry>    m_xSearchBox;
+    std::unique_ptr<weld::Button>   m_xReloadBtn;
 
+    std::unordered_map<css::uno::Reference< css::xml::crypto::XXMLSecurityContext>,
+        css::uno::Sequence< css::uno::Reference< css::security::XCertificate > > > xMemCerts;
+
+    DECL_LINK(ReloadButtonHdl, weld::Button&, void);
     DECL_LINK(ViewButtonHdl, weld::Button&, void);
     DECL_LINK(CertificateHighlightHdl, weld::TreeView&, void);
     DECL_LINK(CertificateSelectHdl, weld::TreeView&, bool);
+    DECL_LINK(SearchModifyHdl, weld::Entry&, void);
 
     void ImplShowCertificateDetails();
-    void ImplInitialize();
-
+    void ImplInitialize(bool mbSearch = false);
+    void ImplReloadCertificates();
     static void HandleOneUsageBit(OUString& string, int& bits, int bit, TranslateId name);
 
 public:
@@ -79,6 +88,20 @@ public:
                        std::vector< css::uno::Reference< css::xml::crypto::XXMLSecurityContext > > && rxSecurityContexts,
                        UserAction eAction);
     virtual ~CertificateChooser() override;
+
+    static std::unique_ptr<CertificateChooser> getInstance(weld::Window* _pParent,
+                        std::vector< css::uno::Reference< css::xml::crypto::XXMLSecurityContext > > && rxSecurityContexts,
+                        UserAction eAction) {
+        // Don't reuse CertificateChooser instances
+        // Reusing the same instance will, in the following case, lead to a
+        // crash. It appears that the CertificateChooser is getting disposed
+        // somewhere as mpDialogImpl in its base class ends up being null:
+        // 1. Create an empty Writer document and add a digital signature
+        //    in the Digital Signatures dialog
+        // 2. File > Save As the document, check the "Encrypt with GPG key"
+        //    checkbox, press Encrypt, and crash in Dialog::ImplStartExecute()
+        return std::make_unique<CertificateChooser>(_pParent, std::move(rxSecurityContexts), eAction);
+    }
 
     short run() override;
 

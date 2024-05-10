@@ -218,11 +218,11 @@ bool PageSelector::IsPageSelected(int nPageIndex)
         return false;
 }
 
-bool PageSelector::IsPageVisible(int nPageIndex)
+bool PageSelector::IsPageExcluded(int nPageIndex)
 {
-    SharedPageDescriptor pDescriptor (mrModel.GetPageDescriptor(nPageIndex));
+    SharedPageDescriptor pDescriptor(mrModel.GetPageDescriptor(nPageIndex));
     if (pDescriptor)
-        return pDescriptor->HasState(PageDescriptor::ST_Visible);
+        return pDescriptor->HasState(PageDescriptor::ST_Excluded);
     else
         return false;
 }

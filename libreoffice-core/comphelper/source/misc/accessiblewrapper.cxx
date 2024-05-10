@@ -79,7 +79,7 @@ namespace comphelper
                 xComp->removeEventListener( this );
         }
         // clear the map
-        AccessibleMap().swap(m_aChildrenMap);
+        m_aChildrenMap.clear();
     }
 
 
@@ -147,7 +147,7 @@ namespace comphelper
         }
 
         // clear our children
-        AccessibleMap().swap(m_aChildrenMap);
+        m_aChildrenMap.clear();
     }
 
 
@@ -585,7 +585,7 @@ namespace comphelper
     }
 
 
-    void SAL_CALL OAccessibleContextWrapper::disposing()
+    void OAccessibleContextWrapper::implDisposing(const css::lang::EventObject* pEvent)
     {
         AccessibleEventNotifier::TClientId nClientId( 0 );
 
@@ -603,11 +603,28 @@ namespace comphelper
         // --- </mutex lock> -----------------------------------------
 
         // let the base class do
-        OAccessibleContextWrapperHelper::dispose();
+        if (pEvent)
+            OAccessibleContextWrapperHelper::disposing(*pEvent);
+        else
+            OAccessibleContextWrapperHelper::dispose();
 
         // notify the disposal
         if ( nClientId )
             AccessibleEventNotifier::revokeClientNotifyDisposing( nClientId, *this );
+    }
+
+    void SAL_CALL OAccessibleContextWrapper::disposing()
+    {
+        implDisposing(nullptr);
+    }
+
+    void SAL_CALL OAccessibleContextWrapper::disposing(const css::lang::EventObject& rEvent)
+    {
+        assert(rEvent.Source == Reference<XInterface>(m_xInnerContext, UNO_QUERY)
+               && "OAccessibleContextWrapper::disposing called with event source that's not the "
+                  "wrapped a11y context");
+
+        implDisposing(&rEvent);
     }
 }   // namespace accessibility
 

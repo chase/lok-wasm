@@ -26,13 +26,13 @@
 #include "colcontainer.hxx"
 #include "sortparam.hxx"
 #include "types.hxx"
-#include "cellvalue.hxx"
 #include <formula/types.hxx>
 #include "calcmacros.hxx"
 #include <formula/errorcodes.hxx>
 #include "document.hxx"
 #include "drwlayer.hxx"
 #include "SparklineList.hxx"
+#include "SolverSettings.hxx"
 #include "markdata.hxx"
 
 #include <algorithm>
@@ -58,6 +58,7 @@ namespace com::sun::star {
 namespace formula { struct VectorRefArray; }
 namespace sc {
 
+struct BroadcasterState;
 class StartListeningContext;
 class EndListeningContext;
 class CopyFromClipContext;
@@ -179,11 +180,8 @@ private:
     SCROW           nRepeatStartY;
     SCROW           nRepeatEndY;
 
-    // last used col and row
-    bool            mbCellAreaDirty;
-    bool            mbCellAreaEmpty;
-    SCCOL           mnEndCol;
-    SCROW           mnEndRow;
+    // Standard row height for this sheet - benefits XLSX because default height defined per sheet
+    sal_uInt16 mnOptimalMinRowHeight; // in Twips
 
     std::unique_ptr<ScTableProtection> pTabProtection;
 
@@ -256,6 +254,9 @@ private:
     bool            mbForceBreaks:1;
     /** this is touched from formula group threading context */
     std::atomic<bool> bStreamValid;
+
+    // Solver settings in current tab
+    std::shared_ptr<sc::SolverSettings> m_pSolverSettings;
 
     // Default attributes for the unallocated columns.
     ScColumnData    aDefaultColData;
@@ -442,6 +443,12 @@ public:
     void SetFormula(
         SCCOL nCol, SCROW nRow, const OUString& rFormula, formula::FormulaGrammar::Grammar eGram );
 
+    SC_DLLPUBLIC std::shared_ptr<sc::SolverSettings> GetSolverSettings();
+
+    // tdf#156815 Sets the solver settings object to nullptr to force reloading Solver settings the
+    // next time the dialog is opened. This is required when sheets are renamed
+    void ResetSolverSettings() { m_pSolverSettings.reset(); }
+
     /**
      * Takes ownership of pCell
      *
@@ -612,8 +619,7 @@ public:
     void        InvalidateTableArea();
     void        InvalidatePageBreaks();
 
-    void        InvalidateCellArea() { mbCellAreaDirty = true; }
-    bool        GetCellArea( SCCOL& rEndCol, SCROW& rEndRow );            // FALSE = empty
+    bool        GetCellArea( SCCOL& rEndCol, SCROW& rEndRow ) const;            // FALSE = empty
     bool        GetTableArea( SCCOL& rEndCol, SCROW& rEndRow, bool bCalcHiddens = false) const;
     bool        GetPrintArea( SCCOL& rEndCol, SCROW& rEndRow, bool bNotes, bool bCalcHiddens = false) const;
     bool        GetPrintAreaHor( SCROW nStartRow, SCROW nEndRow,
@@ -808,7 +814,7 @@ public:
     bool        ApplyFlags( SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCROW nEndRow, ScMF nFlags );
     bool        RemoveFlags( SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCROW nEndRow, ScMF nFlags );
 
-    void        ApplySelectionCache( SfxItemPoolCache* pCache, const ScMarkData& rMark, ScEditDataArray* pDataArray = nullptr, bool* const pIsChanged = nullptr );
+    void        ApplySelectionCache( ScItemPoolCache* pCache, const ScMarkData& rMark, ScEditDataArray* pDataArray = nullptr, bool* const pIsChanged = nullptr );
     void        DeleteSelection( InsertDeleteFlags nDelFlag, const ScMarkData& rMark, bool bBroadcast = true );
 
     void        ClearSelectionItems( const sal_uInt16* pWhich, const ScMarkData& rMark );
@@ -828,6 +834,10 @@ public:
     void            ClearPrintRanges();
     /** Adds a new print ranges. */
     void            AddPrintRange( const ScRange& rNew );
+
+    // Removes all named ranges used for print ranges
+    void            ClearPrintNamedRanges();
+
     /** Marks the specified sheet to be printed completely. Deletes old print ranges! */
     void            SetPrintEntireSheet();
 
@@ -870,6 +880,14 @@ public:
 
                         // nPPT to test for modification
     void        SetManualHeight( SCROW nStartRow, SCROW nEndRow, bool bManual );
+
+    sal_uInt16 GetOptimalMinRowHeight() const
+    {
+        if (!mnOptimalMinRowHeight)
+            return ScGlobal::nStdRowHeight;
+        return mnOptimalMinRowHeight;
+    };
+    void SetOptimalMinRowHeight(sal_uInt16 nSet) { mnOptimalMinRowHeight = nSet; }
 
     sal_uInt16      GetColWidth( SCCOL nCol, bool bHiddenAsZero = true ) const;
     tools::Long     GetColWidth( SCCOL nStartCol, SCCOL nEndCol ) const;
@@ -970,11 +988,9 @@ public:
     SCROW       FirstVisibleRow(SCROW nStartRow, SCROW nEndRow) const;
     SCROW       LastVisibleRow(SCROW nStartRow, SCROW nEndRow) const;
     SCROW       CountVisibleRows(SCROW nStartRow, SCROW nEndRow) const;
-    SCROW       CountHiddenRows(SCROW nStartRow, SCROW nEndRow) const;
     tools::Long GetTotalRowHeight(SCROW nStartRow, SCROW nEndRow, bool bHiddenAsZero = true) const;
 
     SCCOL       CountVisibleCols(SCCOL nStartCol, SCCOL nEndCol) const;
-    SCCOL       CountHiddenCols(SCCOL nStartCol, SCCOL nEndCol) const;
 
     SCCOLROW    LastHiddenColRow(SCCOLROW nPos, bool bCol) const;
 
@@ -988,6 +1004,9 @@ public:
     SCROW       FirstNonFilteredRow(SCROW nStartRow, SCROW nEndRow) const;
     SCROW       LastNonFilteredRow(SCROW nStartRow, SCROW nEndRow) const;
     SCROW       CountNonFilteredRows(SCROW nStartRow, SCROW nEndRow) const;
+
+    Color GetCellBackgroundColor(ScAddress aPos) const;
+    Color GetCellTextColor(ScAddress aPos) const;
 
     bool IsManualRowHeight(SCROW nRow) const;
 
@@ -1060,7 +1079,8 @@ public:
     formula::FormulaTokenRef ResolveStaticReference( SCCOL nCol, SCROW nRow );
     formula::FormulaTokenRef ResolveStaticReference( SCCOL nCol1, SCROW nRow1, SCCOL nCol2, SCROW nRow2 );
     formula::VectorRefArray FetchVectorRefArray( SCCOL nCol, SCROW nRow1, SCROW nRow2 );
-    bool HandleRefArrayForParallelism( SCCOL nCol, SCROW nRow1, SCROW nRow2, const ScFormulaCellGroupRef& mxGroup );
+    bool HandleRefArrayForParallelism( SCCOL nCol, SCROW nRow1, SCROW nRow2,
+                                       const ScFormulaCellGroupRef& mxGroup, ScAddress* pDirtiedAddress );
 #ifdef DBG_UTIL
     void AssertNoInterpretNeeded( SCCOL nCol, SCROW nRow1, SCROW nRow2 );
 #endif
@@ -1163,6 +1183,8 @@ public:
     const ScColumnData& ColumnData( SCCOL nCol ) const { return nCol < aCol.size() ? aCol[ nCol ] : aDefaultColData; }
 
     void CheckIntegrity() const;
+
+    void CollectBroadcasterState(sc::BroadcasterState& rState) const;
 
 private:
 

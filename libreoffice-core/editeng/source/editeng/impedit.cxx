@@ -423,7 +423,7 @@ void ImpEditView::lokSelectionCallback(const std::optional<tools::PolyPolygon> &
             if (mpLOKSpecialPositioning)
                 aPayload += ":: " + sRefPoint;
 
-            mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_START, aPayload.getStr());
+            mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_START, aPayload);
 
             tools::Rectangle& rEnd = aRectangles.back();
             tools::Rectangle aEnd(rEnd.Right() - 1, rEnd.Top(), rEnd.Right(), rEnd.Bottom());
@@ -432,19 +432,19 @@ void ImpEditView::lokSelectionCallback(const std::optional<tools::PolyPolygon> &
             if (mpLOKSpecialPositioning)
                 aPayload += ":: " + sRefPoint;
 
-            mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_END, aPayload.getStr());
+            mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION_END, aPayload);
         }
 
         if (mpOtherShell)
         {
             // Another shell wants to know about our existing selection.
             if (mpViewShell != mpOtherShell)
-                mpViewShell->NotifyOtherView(mpOtherShell, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", sRectangle);
+                mpViewShell->NotifyOtherView(mpOtherShell, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection"_ostr, sRectangle);
         }
         else
         {
-            mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRectangle.getStr());
-            mpViewShell->NotifyOtherViews(LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", sRectangle);
+            mpViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRectangle);
+            mpViewShell->NotifyOtherViews(LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection"_ostr, sRectangle);
         }
 
         pOutWin->GetOutDev()->Pop();
@@ -1455,7 +1455,7 @@ void ImpEditView::ShowCursor( bool bGotoCursor, bool bForceVisCursor )
                             LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR, aMessageParams);
                 else
                     pThisShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR,
-                            aMessageParams.get<std::string>("rectangle").c_str());
+                            OString(aMessageParams.get<std::string>("rectangle")));
             }
         }
 
@@ -2049,6 +2049,29 @@ bool ImpEditView::IsInSelection( const EditPaM& rPaM )
     return false;
 }
 
+bool ImpEditView::IsSelectionFullPara() const
+{
+    if (!IsSelectionInSinglePara())
+        return false;
+
+    sal_Int32 nSelectionStartPos = GetEditSelection().Min().GetIndex();
+    sal_Int32 nSelectionEndPos = GetEditSelection().Max().GetIndex();
+
+    if (nSelectionStartPos > nSelectionEndPos)
+        std::swap(nSelectionStartPos, nSelectionEndPos);
+
+    if (nSelectionStartPos != 0)
+        return false;
+
+    const ContentNode* pNode = GetEditSelection().Min().GetNode();
+    return pNode->Len() == nSelectionEndPos;
+}
+
+bool ImpEditView::IsSelectionInSinglePara() const
+{
+    return GetEditSelection().Min().GetNode() == GetEditSelection().Max().GetNode();
+}
+
 void ImpEditView::CreateAnchor()
 {
     pEditEngine->SetInSelectionMode(true);
@@ -2133,7 +2156,11 @@ bool ImpEditView::SetCursorAtPoint( const Point& rPointPixel )
     if (!pEditEngine->GetSelectionEngine().HasAnchor())
     {
         if ( aNewEditSelection.Min() != aPaM )
-            pEditEngine->CursorMoved(aNewEditSelection.Min().GetNode());
+        {
+            const ContentNode* pNode(aNewEditSelection.Min().GetNode());
+            if (nullptr != pNode)
+                pNode->checkAndDeleteEmptyAttribs();
+        }
         aNewEditSelection.Min() = aPaM;
     }
     else

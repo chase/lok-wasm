@@ -100,8 +100,8 @@ void SwUndoFlyBase::InsFly(::sw::UndoRedoContext & rContext, bool bShowSelFrame)
     SwDoc *const pDoc = & rContext.GetDoc();
 
     // add again into array
-    SwFrameFormats& rFlyFormats = *pDoc->GetSpzFrameFormats();
-    rFlyFormats.push_back( m_pFrameFormat );
+    sw::SpzFrameFormats& rFlyFormats = *pDoc->GetSpzFrameFormats();
+    rFlyFormats.push_back( static_cast<sw::SpzFrameFormat*>(m_pFrameFormat));
 
     // OD 26.06.2003 #108784# - insert 'master' drawing object into drawing page
     if ( RES_DRAWFRMFMT == m_pFrameFormat->Which() )
@@ -272,8 +272,8 @@ void SwUndoFlyBase::DelFly( SwDoc* pDoc )
     m_pFrameFormat->ResetFormatAttr( RES_ANCHOR );        // delete anchor
 
     // delete from array
-    SwFrameFormats& rFlyFormats = *pDoc->GetSpzFrameFormats();
-    rFlyFormats.erase( m_pFrameFormat );
+    sw::SpzFrameFormats& rFlyFormats = *pDoc->GetSpzFrameFormats();
+    rFlyFormats.erase(static_cast<sw::SpzFrameFormat*>(m_pFrameFormat));
 }
 
 SwUndoInsLayFormat::SwUndoInsLayFormat( SwFrameFormat* pFormat, SwNodeOffset nNodeIdx, sal_Int32 nCntIdx )
@@ -572,7 +572,7 @@ void SwUndoSetFlyFormat::UndoImpl(::sw::UndoRedoContext & rContext)
     for (const SfxPoolItem* pItem = aIter.GetCurItem(); pItem; pItem = aIter.NextItem())
     {
         if( IsInvalidItem( pItem ))
-            m_pFrameFormat->ResetFormatAttr( m_oItemSet->GetWhichByPos(
+            m_pFrameFormat->ResetFormatAttr( m_oItemSet->GetWhichByOffset(
                                     aIter.GetCurPos() ));
         else
             m_pFrameFormat->SetFormatAttr( *pItem );
@@ -648,7 +648,7 @@ void SwUndoSetFlyFormat::RedoImpl(::sw::UndoRedoContext & rContext)
 
 void SwUndoSetFlyFormat::PutAttr( sal_uInt16 nWhich, const SfxPoolItem* pItem )
 {
-    if( pItem && pItem != GetDfltAttr( nWhich ) )
+    if( pItem && !SfxPoolItem::areSame(pItem, GetDfltAttr( nWhich ) ) )
     {
         // Special treatment for this anchor
         if( RES_ANCHOR == nWhich )

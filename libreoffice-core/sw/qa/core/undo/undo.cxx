@@ -10,8 +10,6 @@
 #include <swmodeltestbase.hxx>
 
 #include <unotools/mediadescriptor.hxx>
-#include <sfx2/viewfrm.hxx>
-#include <sfx2/dispatch.hxx>
 
 #include <unotxdoc.hxx>
 #include <docsh.hxx>
@@ -19,8 +17,6 @@
 #include <swdtflvr.hxx>
 #include <frameformats.hxx>
 #include <fmtcntnt.hxx>
-#include <view.hxx>
-#include <cmdid.h>
 
 /// Covers sw/source/core/undo/ fixes.
 class SwCoreUndoTest : public SwModelTestBase
@@ -70,7 +66,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreUndoTest, testTextboxCutUndo)
     selectShape(1);
     rtl::Reference<SwTransferable> pTransfer = new SwTransferable(*pWrtShell);
     pTransfer->Cut();
-    SwFrameFormats& rSpzFrameFormats = *pDoc->GetSpzFrameFormats();
+    auto& rSpzFrameFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(0), rSpzFrameFormats.size());
 
     pWrtShell->Undo();
@@ -148,6 +144,36 @@ CPPUNIT_TEST_FIXTURE(SwCoreUndoTest, testImagePropsCreateUndoAndModifyDoc)
 
     CPPUNIT_ASSERT(!pTextDoc->isModified());
     CPPUNIT_ASSERT(!pWrtShell->GetLastUndoInfo(nullptr, nullptr, nullptr));
+}
+
+CPPUNIT_TEST_FIXTURE(SwCoreUndoTest, testAnchorTypeChangePosition)
+{
+    // Given a document with a textbox (draw + fly format pair) + an inner image:
+    createSwDoc("anchor-type-change-position.docx");
+    selectShape(1);
+    SwDoc* pDoc = getSwDoc();
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), rFormats.size());
+    Point aOldPos;
+    {
+        const SwFormatHoriOrient& rHoriOrient = rFormats[0]->GetHoriOrient();
+        const SwFormatVertOrient& rVertOrient = rFormats[0]->GetVertOrient();
+        aOldPos = Point(rHoriOrient.GetPos(), rVertOrient.GetPos());
+    }
+
+    // When changing the anchor type + undo:
+    dispatchCommand(mxComponent, ".uno:SetAnchorToChar", {});
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    // Then make sure the old position is also restored:
+    const SwFormatHoriOrient& rHoriOrient = rFormats[0]->GetHoriOrient();
+    const SwFormatVertOrient& rVertOrient = rFormats[0]->GetVertOrient();
+    Point aNewPos(rHoriOrient.GetPos(), rVertOrient.GetPos());
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 789,213
+    // - Actual  : 1578,3425
+    // i.e. there was a big, unexpected increase in the vertical position after undo.
+    CPPUNIT_ASSERT_EQUAL(aOldPos, aNewPos);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -225,8 +225,7 @@ OUString VbaSiteModel::getSubStorageName() const
 {
     if( mnId >= 0 )
     {
-        OUStringBuffer aBuffer;
-        aBuffer.append( 'i' );
+        OUStringBuffer aBuffer( "i" );
         if( mnId < 10 )
             aBuffer.append( '0' );
         aBuffer.append( mnId );
@@ -804,7 +803,7 @@ void VbaUserForm::importForm( const Reference< XNameContainer >& rxDialogLib,
 
     // scan for the line 'Begin {GUID} <FormName>'
     TextInputStream aFrameTextStrm( mxContext, aInStrm, eTextEnc );
-    static const OUStringLiteral aBegin = u"Begin";
+    static constexpr OUStringLiteral aBegin = u"Begin";
     OUString aLine;
     bool bBeginFound = false;
     while( !bBeginFound && !aFrameTextStrm.isEof() )

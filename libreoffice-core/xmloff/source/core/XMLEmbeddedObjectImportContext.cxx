@@ -32,7 +32,6 @@
 #include <xmloff/xmlimp.hxx>
 #include <xmloff/xmlnamespace.hxx>
 #include <xmloff/xmltoken.hxx>
-#include <xmloff/attrlist.hxx>
 #include <xmloff/XMLFilterServiceNames.h>
 #include <XMLEmbeddedObjectImportContext.hxx>
 
@@ -171,7 +170,7 @@ XMLEmbeddedObjectImportContext::XMLEmbeddedObjectImportContext(
             }
         }
 
-        OUString sClass;
+        std::u16string_view sClass;
         static std::u16string_view const prefixes[] = {
             u"application/vnd.oasis.openoffice.",
             u"application/x-vnd.oasis.openoffice.",
@@ -179,13 +178,13 @@ XMLEmbeddedObjectImportContext::XMLEmbeddedObjectImportContext(
             u"application/x-vnd.oasis.opendocument."};
         for (auto const & p: prefixes)
         {
-            if (sMime.startsWith(p, &sClass))
+            if (o3tl::starts_with(sMime, p, &sClass))
             {
                 break;
             }
         }
 
-        if( !sClass.isEmpty() )
+        if( !sClass.empty() )
         {
             static const std::tuple<XMLTokenEnum, OUString, SvGUID> aServiceMap[] = {
                 { XML_TEXT, XML_IMPORT_FILTER_WRITER, { SO3_SW_CLASSID } },

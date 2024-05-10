@@ -36,6 +36,7 @@
 #include <o3tl/any.hxx>
 #include <svl/itempool.hxx>
 #include <editeng/memberids.h>
+#include <docmodel/uno/UnoGradientTools.hxx>
 #include <docmodel/uno/UnoComplexColor.hxx>
 #include <docmodel/color/ComplexColorJSON.hxx>
 #include <tools/mapunit.hxx>
@@ -98,26 +99,26 @@ typedef std::map<OUString, OUString> StringMap;
 
 NameOrIndex::NameOrIndex(TypedWhichId<NameOrIndex> _nWhich, sal_Int32 nIndex) :
     SfxStringItem(_nWhich, OUString()),
-    nPalIndex(nIndex)
+    m_nPalIndex(nIndex)
 {
 }
 
 NameOrIndex::NameOrIndex(TypedWhichId<NameOrIndex> _nWhich, const OUString& rName) :
     SfxStringItem(_nWhich, rName),
-    nPalIndex(-1)
+    m_nPalIndex(-1)
 {
 }
 
 NameOrIndex::NameOrIndex(const NameOrIndex& rNameOrIndex) :
     SfxStringItem(rNameOrIndex),
-    nPalIndex(rNameOrIndex.nPalIndex)
+    m_nPalIndex(rNameOrIndex.m_nPalIndex)
 {
 }
 
 bool NameOrIndex::operator==(const SfxPoolItem& rItem) const
 {
     return ( SfxStringItem::operator==(rItem) &&
-            static_cast<const NameOrIndex&>(rItem).nPalIndex == nPalIndex );
+            static_cast<const NameOrIndex&>(rItem).m_nPalIndex == m_nPalIndex );
 }
 
 NameOrIndex* NameOrIndex::Clone(SfxItemPool* /*pPool*/) const
@@ -256,7 +257,7 @@ void NameOrIndex::dumpAsXml(xmlTextWriterPtr pWriter) const
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("isIndex"), BAD_CAST(OString::boolean(IsIndex()).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("name"), BAD_CAST(GetName().toUtf8().getStr()));
-    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("index"), BAD_CAST(OString::number(nPalIndex).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("index"), BAD_CAST(OString::number(m_nPalIndex).getStr()));
     (void)xmlTextWriterEndElement(pWriter);
 }
 
@@ -1812,7 +1813,7 @@ bool XLineStartCenterItem::QueryValue( css::uno::Any& rVal, sal_uInt8 /*nMemberI
 bool XLineStartCenterItem::PutValue( const css::uno::Any& rVal, sal_uInt8 /*nMemberId*/)
 {
     auto b = o3tl::tryAccess<bool>(rVal);
-    if( !b )
+    if( !b.has_value() )
         return false;
 
     SetValue( *b );
@@ -1851,7 +1852,7 @@ bool XLineEndCenterItem::QueryValue( css::uno::Any& rVal, sal_uInt8 /*nMemberId*
 bool XLineEndCenterItem::PutValue( const css::uno::Any& rVal, sal_uInt8 /*nMemberId*/)
 {
     auto b = o3tl::tryAccess<bool>(rVal);
-    if( !b )
+    if( !b.has_value() )
         return false;
 
     SetValue( *b );
@@ -2252,7 +2253,7 @@ bool XFillGradientItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId ) c
         case 0:
         {
             // fill values
-            const css::awt::Gradient2 aGradient2(GetGradientValue().getAsGradient2());
+            const css::awt::Gradient2 aGradient2 = model::gradient::createUnoGradient2(GetGradientValue());
 
             // create sequence
             uno::Sequence< beans::PropertyValue > aPropSeq{
@@ -2266,7 +2267,7 @@ bool XFillGradientItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId ) c
         case MID_FILLGRADIENT:
         {
             // fill values
-            const css::awt::Gradient2 aGradient2(GetGradientValue().getAsGradient2());
+            const css::awt::Gradient2 aGradient2 = model::gradient::createUnoGradient2(GetGradientValue());
 
             // create sequence
             rVal <<= aGradient2;
@@ -2282,8 +2283,7 @@ bool XFillGradientItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId ) c
         case MID_GRADIENT_COLORSTOPSEQUENCE:
         {
             // fill values
-            const css::awt::ColorStopSequence aColorStopSequence(
-                GetGradientValue().GetColorStops().getAsColorStopSequence());
+            const css::awt::ColorStopSequence aColorStopSequence = model::gradient::createColorStopSequence(GetGradientValue().GetColorStops());
 
             // create sequence
             rVal <<= aColorStopSequence;
@@ -2334,8 +2334,7 @@ bool XFillGradientItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId
 
                 if (aGradientAny.hasValue() && (aGradientAny.has<css::awt::Gradient>() || aGradientAny.has<css::awt::Gradient2>()))
                 {
-                    const basegfx::BGradient aBGradient(aGradientAny);
-                    SetGradientValue(aBGradient);
+                    SetGradientValue(model::gradient::getFromAny(aGradientAny));
                 }
 
                 return true;
@@ -2357,8 +2356,7 @@ bool XFillGradientItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId
         {
             if (rVal.hasValue() && (rVal.has<css::awt::Gradient>() || rVal.has<css::awt::Gradient2>()))
             {
-                const basegfx::BGradient aBGradient(rVal);
-                SetGradientValue(aBGradient);
+                SetGradientValue(model::gradient::getFromAny(rVal));
             }
 
             break;
@@ -2369,7 +2367,8 @@ bool XFillGradientItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId
             // check if we have a awt::ColorStopSequence
             if (rVal.hasValue() && rVal.has<css::awt::ColorStopSequence>())
             {
-                const basegfx::BColorStops aColorStops(rVal);
+
+                const basegfx::BColorStops aColorStops = model::gradient::getColorStopsFromAny(rVal);
 
                 if (!aColorStops.empty())
                 {
@@ -2526,11 +2525,20 @@ XFillFloatTransparenceItem* XFillFloatTransparenceItem::Clone( SfxItemPool* /*pP
 
 bool XFillFloatTransparenceItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMemberId ) const
 {
+    if (MID_GRADIENT_STARTINTENSITY == nMemberId
+        || MID_GRADIENT_ENDINTENSITY == nMemberId
+        || MID_GRADIENT_STEPCOUNT == nMemberId)
+    {
+        // tdf#155913 handle attributes not supported by transparency gradient as error
+        return false;
+    }
+
     if (!IsEnabled() && nMemberId == MID_NAME)
     {
         // make sure that we return empty string in case of query for
         // "FillTransparenceGradientName" if the item is disabled
         rVal <<= OUString();
+        return true;
     }
 
     return XFillGradientItem::QueryValue( rVal, nMemberId );
@@ -2538,6 +2546,14 @@ bool XFillFloatTransparenceItem::QueryValue( css::uno::Any& rVal, sal_uInt8 nMem
 
 bool XFillFloatTransparenceItem::PutValue( const css::uno::Any& rVal, sal_uInt8 nMemberId )
 {
+    if (MID_GRADIENT_STARTINTENSITY == nMemberId
+        || MID_GRADIENT_ENDINTENSITY == nMemberId
+        || MID_GRADIENT_STEPCOUNT == nMemberId)
+    {
+        // tdf#155913 handle attributes not supported by transparency gradient as error
+        return false;
+    }
+
     return XFillGradientItem::PutValue( rVal, nMemberId );
 }
 

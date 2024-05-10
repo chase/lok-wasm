@@ -301,6 +301,15 @@ export async function preload() {
   loadWorkerOnce().postMessage(message);
 }
 
+export async function setIsMacOSForConfig() {
+  const message: ToWorker = {
+    f: 'setIsMacOSForConfig',
+    i: UNUSED_ID,
+    a: [],
+  };
+  loadWorkerOnce().postMessage(message);
+}
+
 declare global {
   interface ImportMeta {
     readonly hot?: {

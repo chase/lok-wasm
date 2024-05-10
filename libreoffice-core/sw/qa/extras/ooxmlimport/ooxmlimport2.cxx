@@ -253,7 +253,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf114212)
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1428
     // - Actual  : 387
-    OUString aTop = parseDump("//anchored/fly[1]/infos/bounds", "top");
+    OUString aTop = parseDump("//anchored/fly[1]/infos/bounds"_ostr, "top"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("1428"), aTop);
 }
 
@@ -333,11 +333,13 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf118693)
     awt::Point aPosGroup = xGroupShape->getPosition();
     awt::Size aSizeGroup = xGroupShape->getSize();
 
+    // ToDo: width and height are inaccurate for unknown reason.
+    // Allow some tolerance
     CPPUNIT_ASSERT_EQUAL(sal_Int32(10162), aPosGroup.X);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(118), aPosGroup.Y);
-    // As of LO7.2 width by 1 too small, height by 2 too small. Reason unclear.
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(6368), aSizeGroup.Width);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4981), aSizeGroup.Height);
+    // width 2292840 EMU = 6369, height 1793875 EMU = 4982.98
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(sal_Int32(6369), aSizeGroup.Width, 2);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(sal_Int32(4983), aSizeGroup.Height, 2);
 
     // Without the fix in place, this test would have failed at many places
     // as the first shape in the group would have had an incorrect position,
@@ -349,8 +351,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf118693)
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(12861), aPosShape1.X);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(146), aPosShape1.Y);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(3669), aSizeShape1.Width);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4912), aSizeShape1.Height);
+    // width 2292840/2293461*1321179 EMU = 3668.94, height 1767845 EMU = 4910.68
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(sal_Int32(3671), aSizeShape1.Width, 2);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(sal_Int32(4914), aSizeShape1.Height, 2);
 
     uno::Reference<drawing::XShape> xShape2(xGroup->getByIndex(1), uno::UNO_QUERY_THROW);
     awt::Point aPosShape2 = xShape2->getPosition();
@@ -358,8 +361,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf118693)
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(10162), aPosShape2.X);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(118), aPosShape2.Y);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4595), aSizeShape2.Width);
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4981), aSizeShape2.Height);
+    // width 2292840/2293461*1654824 EMU = 4595.48, height 1793875 EMU = 4982.98
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(sal_Int32(4597), aSizeShape2.Width, 2);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(sal_Int32(4983), aSizeShape2.Height, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testGroupShapeFontName)
@@ -377,7 +381,7 @@ CPPUNIT_TEST_FIXTURE(Test, testGroupShapeFontName)
         OUString("Calibri"),
         getProperty<OUString>(getRun(getParagraphOfText(1, xText), 1), "CharFontNameComplex"));
     CPPUNIT_ASSERT_EQUAL(
-        OUString(""),
+        OUString("Calibri"),
         getProperty<OUString>(getRun(getParagraphOfText(1, xText), 1), "CharFontNameAsian"));
 }
 
@@ -398,8 +402,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf124600)
 
     // Make sure that "Shape 1 text" (anchored in the header) has the same left margin as the body
     // text.
-    OUString aShapeTextLeft = parseDump("/root/page/header/txt/anchored/fly/infos/bounds", "left");
-    OUString aBodyTextLeft = parseDump("/root/page/body/txt/infos/bounds", "left");
+    OUString aShapeTextLeft
+        = parseDump("/root/page/header/txt/anchored/fly/infos/bounds"_ostr, "left"_ostr);
+    OUString aBodyTextLeft = parseDump("/root/page/body/txt/infos/bounds"_ostr, "left"_ostr);
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1701
     // - Actual  : 1815
@@ -413,8 +418,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf120548)
     createSwDoc("tdf120548.docx");
     // Without the accompanying fix in place, this test would have failed with 'Expected: 00ff0000;
     // Actual: ffffffff', i.e. the numbering portion was black, not red.
-    CPPUNIT_ASSERT_EQUAL(OUString("00ff0000"),
-                         parseDump("//SwFieldPortion[@type='PortionType::Number']", "font-color"));
+    CPPUNIT_ASSERT_EQUAL(
+        OUString("00ff0000"),
+        parseDump("//SwFieldPortion[@type='PortionType::Number']/SwFont"_ostr, "color"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, test120551)
@@ -631,7 +637,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf104167)
 CPPUNIT_TEST_FIXTURE(Test, testTdf113946)
 {
     createSwDoc("tdf113946.docx");
-    OUString aTop = parseDump("/root/page/body/txt/anchored/SwAnchoredDrawObject/bounds", "top");
+    OUString aTop
+        = parseDump("/root/page/body/txt/anchored/SwAnchoredDrawObject/bounds"_ostr, "top"_ostr);
     // tdf#106792 Checked loading of tdf113946.docx. Before the change, the expected
     // value of this test was "1696". Opening the file shows a single short line anchored
     // at the doc start. Only diff is that in 'old' version it is slightly rotated, in 'new'
@@ -681,13 +688,13 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf119200)
     createSwDoc("tdf119200.docx");
     auto xPara = getParagraph(1);
     // Check that we import MathType functional symbols as symbols, not functions with missing args
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2208 } {}"), getFormula(getRun(xPara, 1)));
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2209 } {}"), getFormula(getRun(xPara, 2)));
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2282 } {}"), getFormula(getRun(xPara, 3)));
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2283 } {}"), getFormula(getRun(xPara, 4)));
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2284 } {}"), getFormula(getRun(xPara, 5)));
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2286 } {}"), getFormula(getRun(xPara, 6)));
-    CPPUNIT_ASSERT_EQUAL(OUString(u" size 12{ func \u2287 } {}"), getFormula(getRun(xPara, 7)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2208 } {}"_ustr, getFormula(getRun(xPara, 1)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2209 } {}"_ustr, getFormula(getRun(xPara, 2)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2282 } {}"_ustr, getFormula(getRun(xPara, 3)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2283 } {}"_ustr, getFormula(getRun(xPara, 4)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2284 } {}"_ustr, getFormula(getRun(xPara, 5)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2286 } {}"_ustr, getFormula(getRun(xPara, 6)));
+    CPPUNIT_ASSERT_EQUAL(u" size 12{ func \u2287 } {}"_ustr, getFormula(getRun(xPara, 7)));
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf115094)
@@ -884,7 +891,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf129912)
 
     // the expected footnote labels
     // TODO: the 5th label is actually wrong (missing the "PR" after the symbol part), but the "b" is there?!
-    static constexpr OUStringLiteral pLabel5 = u"\uF0D1\uF031\uF032b";
+    static constexpr OUString pLabel5 = u"\uF0D1\uF031\uF032b"_ustr;
     const OUString sFootnoteLabels[]
         = { OUString(u'\xF0A7'), "1", "2", OUString(u'\xF020'), pLabel5 };
     CPPUNIT_ASSERT_EQUAL(sal_Int32(SAL_N_ELEMENTS(sFootnoteLabels)), nCount);
@@ -1030,11 +1037,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf154319)
 {
     createSwDoc("tdf154319-ToC_with_s_and_d.docx");
 
-    css::uno::Reference<css::text::XDocumentIndexesSupplier> xSupplier(mxComponent,
-                                                                       css::uno::UNO_QUERY_THROW);
+    auto xSupplier(mxComponent.queryThrow<css::text::XDocumentIndexesSupplier>());
     auto xIndexes = xSupplier->getDocumentIndexes();
-    css::uno::Reference<css::beans::XPropertySet> xTOCIndex(xIndexes->getByIndex(0),
-                                                            css::uno::UNO_QUERY_THROW);
+    auto xTOCIndex(xIndexes->getByIndex(0).queryThrow<css::beans::XPropertySet>());
     css::uno::Reference<css::container::XIndexReplace> xLevelFormats;
     CPPUNIT_ASSERT(xTOCIndex->getPropertyValue("LevelFormat") >>= xLevelFormats);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(11), xLevelFormats->getCount());
@@ -1050,7 +1055,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf154319)
     };
 
     // tdf#154360: check tab stops between the number and the entry text
-    // The last (10th) level does not correspont to any MS level (only 9 levels there)
+    // The last (10th) level does not correspond to any MS level (only 9 levels there)
     constexpr sal_Int32 levelTabStops[]
         = { 776, 1552, 2328, 3104, 3881, 4657, 5433, 6209, 6985, -1 };
 
@@ -1094,11 +1099,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf154695)
 {
     createSwDoc("tdf154695-ToC_no_numbers.docx");
 
-    css::uno::Reference<css::text::XDocumentIndexesSupplier> xSupplier(mxComponent,
-                                                                       css::uno::UNO_QUERY_THROW);
+    auto xSupplier(mxComponent.queryThrow<css::text::XDocumentIndexesSupplier>());
     auto xIndexes = xSupplier->getDocumentIndexes();
-    css::uno::Reference<css::beans::XPropertySet> xTOCIndex(xIndexes->getByIndex(0),
-                                                            css::uno::UNO_QUERY_THROW);
+    auto xTOCIndex(xIndexes->getByIndex(0).queryThrow<css::beans::XPropertySet>());
     css::uno::Reference<css::container::XIndexReplace> xLevelFormats;
     CPPUNIT_ASSERT(xTOCIndex->getPropertyValue("LevelFormat") >>= xLevelFormats);
     CPPUNIT_ASSERT_EQUAL(sal_Int32(11), xLevelFormats->getCount());
@@ -1156,7 +1159,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf156078)
     Graphic exported;
     GraphicFilter::LoadGraphic(maTempFile.GetURL(), {}, exported);
     Bitmap bmp = exported.GetBitmapEx().GetBitmap();
-    Bitmap::ScopedReadAccess pAccess(bmp);
+    BitmapScopedReadAccess pAccess(bmp);
 
     // "1" must export to the top right corner; check its pixels
     bool numberPixelsFound = false;
@@ -1185,6 +1188,83 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf141969)
     CPPUNIT_ASSERT_EQUAL(8.0f, getProperty<float>(xRun, "CharHeight"));
 }
 
+CPPUNIT_TEST_FIXTURE(Test, testTdf154370)
+{
+    // Import a file with pargraph and character styles containing toggle properties applied to the end of
+    // the paragraphs. Should result in hard attributes resetting the properties
+    createSwDoc("tdf154370.docx");
+    {
+        auto xPara(getParagraph(2));
+        auto xRun = getRun(xPara, 2);
+
+        OUString rangeText = xRun->getString();
+        CPPUNIT_ASSERT_EQUAL(OUString("CharStyle BoldItalicCapsEmbossedStrike"), rangeText);
+
+        const uno::Reference<beans::XPropertyState> xRangePropState(xRun, uno::UNO_QUERY_THROW);
+        beans::PropertyState ePropertyState = xRangePropState->getPropertyState("CharWeight");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharWeightComplex");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharWeightAsian");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharPosture");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharPostureAsian");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharCaseMap");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharRelief");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharStrikeout");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+    }
+    {
+        auto xPara(getParagraph(3));
+        auto xRun = getRun(xPara, 2);
+
+        OUString rangeText = xRun->getString();
+        CPPUNIT_ASSERT_EQUAL(OUString("CharStyle SmallcapsImprint"), rangeText);
+
+        const uno::Reference<beans::XPropertyState> xRangePropState(xRun, uno::UNO_QUERY_THROW);
+        beans::PropertyState ePropertyState = xRangePropState->getPropertyState("CharCaseMap");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharRelief");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+    }
+    {
+        auto xPara(getParagraph(5));
+        auto xRun = getRun(xPara, 2);
+
+        OUString rangeText = xRun->getString();
+        CPPUNIT_ASSERT_EQUAL(OUString("CharStyle Hidden"), rangeText);
+
+        const uno::Reference<beans::XPropertyState> xRangePropState(xRun, uno::UNO_QUERY_THROW);
+        beans::PropertyState ePropertyState = xRangePropState->getPropertyState("CharHidden");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+    }
+    {
+        auto xPara(getParagraph(7));
+        auto xRun = getRun(xPara, 2);
+
+        OUString rangeText = xRun->getString();
+        CPPUNIT_ASSERT_EQUAL(OUString("OutlineShadow"), rangeText);
+
+        const uno::Reference<beans::XPropertyState> xRangePropState(xRun, uno::UNO_QUERY_THROW);
+        beans::PropertyState ePropertyState = xRangePropState->getPropertyState("CharContoured");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+
+        ePropertyState = xRangePropState->getPropertyState("CharShadowed");
+        CPPUNIT_ASSERT_EQUAL(beans::PropertyState_DIRECT_VALUE, ePropertyState);
+    }
+}
 // tests should only be added to ooxmlIMPORT *if* they fail round-tripping in ooxmlEXPORT
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -30,14 +30,14 @@ using namespace ::ooo::vba::excel::XlAxisCrosses;
 using namespace ::ooo::vba::excel::XlAxisType;
 using namespace ::ooo::vba::excel::XlScaleType;
 
-constexpr OUStringLiteral ORIGIN(u"Origin");
-constexpr OUStringLiteral AUTOORIGIN(u"AutoOrigin");
-constexpr OUStringLiteral VBA_MIN(u"Max");
+constexpr OUString ORIGIN(u"Origin"_ustr);
+constexpr OUString AUTOORIGIN(u"AutoOrigin"_ustr);
+constexpr OUString VBA_MIN(u"Max"_ustr);
 constexpr OUStringLiteral VBA_MAX(u"Min");
 ScVbaChart*
 ScVbaAxis::getChartPtr()
 {
-    ScVbaChart* pChart = static_cast< ScVbaChart* >( moChartParent.get() );
+    ScVbaChart* pChart = moChartParent.get();
     if ( !pChart )
         throw uno::RuntimeException("Can't access parent chart impl" );
     return pChart;
@@ -53,10 +53,17 @@ ScVbaAxis::isValueAxis()
     return true;
 }
 
-ScVbaAxis::ScVbaAxis( const uno::Reference< XHelperInterface >& xParent,const uno::Reference< uno::XComponentContext > & xContext, uno::Reference< beans::XPropertySet >  _xPropertySet, sal_Int32 _nType, sal_Int32 _nGroup  ) : ScVbaAxis_BASE( xParent, xContext ), mxPropertySet(std::move( _xPropertySet )), mnType( _nType ), mnGroup( _nGroup ), bCrossesAreCustomized( false )
+ScVbaAxis::ScVbaAxis( const rtl::Reference< ScVbaChart >& xParent,
+                      const uno::Reference< uno::XComponentContext > & xContext,
+                      uno::Reference< beans::XPropertySet >  _xPropertySet,
+                      sal_Int32 _nType, sal_Int32 _nGroup )
+  : ScVbaAxis_BASE( xParent, xContext ),
+    moChartParent(xParent),
+    mxPropertySet(std::move( _xPropertySet )),
+    mnType( _nType ), mnGroup( _nGroup ),
+    maShapeHelper( uno::Reference< drawing::XShape >( mxPropertySet, uno::UNO_QUERY ) ),
+    bCrossesAreCustomized( false )
 {
-    oShapeHelper.reset( new ShapeHelper( uno::Reference< drawing::XShape >( mxPropertySet, uno::UNO_QUERY ) ) );
-    moChartParent.set( xParent, uno::UNO_QUERY_THROW  );
     setType(_nType);
     setCrosses(xlAxisCrossesAutomatic);
 }
@@ -606,36 +613,36 @@ ScVbaAxis::getScaleType(  )
 double SAL_CALL
 ScVbaAxis::getHeight(  )
 {
-    return oShapeHelper->getHeight();
+    return maShapeHelper.getHeight();
 }
 
 void SAL_CALL ScVbaAxis::setHeight( double height )
 {
-    oShapeHelper->setHeight( height );
+    maShapeHelper.setHeight( height );
 }
 double SAL_CALL ScVbaAxis::getWidth(  )
 {
-    return oShapeHelper->getWidth( );
+    return maShapeHelper.getWidth( );
 }
 void SAL_CALL ScVbaAxis::setWidth( double width )
 {
-    oShapeHelper->setWidth( width );
+    maShapeHelper.setWidth( width );
 }
 double SAL_CALL ScVbaAxis::getTop(  )
 {
-    return oShapeHelper->getTop( );
+    return maShapeHelper.getTop( );
 }
 void SAL_CALL ScVbaAxis::setTop( double top )
 {
-    oShapeHelper->setTop( top );
+    maShapeHelper.setTop( top );
 }
 double SAL_CALL ScVbaAxis::getLeft(  )
 {
-    return oShapeHelper->getLeft( );
+    return maShapeHelper.getLeft( );
 }
 void SAL_CALL ScVbaAxis::setLeft( double left )
 {
-    oShapeHelper->setLeft( left );
+    maShapeHelper.setLeft( left );
 }
 
 OUString

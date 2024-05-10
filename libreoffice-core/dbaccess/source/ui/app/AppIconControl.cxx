@@ -69,11 +69,11 @@ OApplicationIconControl::OApplicationIconControl(std::unique_ptr<weld::ScrolledW
 
 void OApplicationIconControl::Fill()
 {
-    static const struct CategoryDescriptor
+    static constexpr struct CategoryDescriptor
     {
         TranslateId pLabelResId;
         ElementType eType;
-        rtl::OUStringConstExpr aImageResId;
+        OUString aImageResId;
     } aCategories[] = { { RID_STR_TABLES_CONTAINER, E_TABLE, BMP_TABLEFOLDER_TREE_L },
                         { RID_STR_QUERIES_CONTAINER, E_QUERY, BMP_QUERYFOLDER_TREE_L },
                         { RID_STR_FORMS_CONTAINER, E_FORM, BMP_FORMFOLDER_TREE_L },

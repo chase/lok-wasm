@@ -43,72 +43,34 @@ using ::com::sun::star::uno::Any;
 namespace
 {
 
-struct StaticMinMaxLineWrapperDefaults_Initializer
+Sequence< Property >& StaticMinMaxLineWrapperPropertyArray()
 {
-    ::chart::tPropertyValueMap* operator()()
-    {
-        static ::chart::tPropertyValueMap aStaticDefaults;
-        ::chart::LinePropertiesHelper::AddDefaultsToMap( aStaticDefaults );
-        return &aStaticDefaults;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
+
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 };
 
-struct StaticMinMaxLineWrapperDefaults : public rtl::StaticAggregate< ::chart::tPropertyValueMap, StaticMinMaxLineWrapperDefaults_Initializer >
+::cppu::OPropertyArrayHelper& StaticMinMaxLineWrapperInfoHelper()
 {
+    static ::cppu::OPropertyArrayHelper aPropHelper( StaticMinMaxLineWrapperPropertyArray() );
+    return aPropHelper;
 };
 
-struct StaticMinMaxLineWrapperPropertyArray_Initializer
+uno::Reference< beans::XPropertySetInfo >& StaticMinMaxLineWrapperInfo()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
-
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticMinMaxLineWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticMinMaxLineWrapperPropertyArray_Initializer >
-{
-};
-
-struct StaticMinMaxLineWrapperInfoHelper_Initializer
-{
-    ::cppu::OPropertyArrayHelper* operator()()
-    {
-        static ::cppu::OPropertyArrayHelper aPropHelper( *StaticMinMaxLineWrapperPropertyArray::get() );
-        return &aPropHelper;
-    }
-};
-
-struct StaticMinMaxLineWrapperInfoHelper : public rtl::StaticAggregate< ::cppu::OPropertyArrayHelper, StaticMinMaxLineWrapperInfoHelper_Initializer >
-{
-};
-
-struct StaticMinMaxLineWrapperInfo_Initializer
-{
-    uno::Reference< beans::XPropertySetInfo >* operator()()
-    {
-        static uno::Reference< beans::XPropertySetInfo > xPropertySetInfo(
-            ::cppu::OPropertySetHelper::createPropertySetInfo(*StaticMinMaxLineWrapperInfoHelper::get() ) );
-        return &xPropertySetInfo;
-    }
-};
-
-struct StaticMinMaxLineWrapperInfo : public rtl::StaticAggregate< uno::Reference< beans::XPropertySetInfo >, StaticMinMaxLineWrapperInfo_Initializer >
-{
+    static uno::Reference< beans::XPropertySetInfo > xPropertySetInfo(
+        ::cppu::OPropertySetHelper::createPropertySetInfo( StaticMinMaxLineWrapperInfoHelper() ) );
+    return xPropertySetInfo;
 };
 
 } // anonymous namespace
@@ -118,7 +80,6 @@ namespace chart::wrapper
 
 MinMaxLineWrapper::MinMaxLineWrapper(std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
         : m_spChart2ModelContact(std::move( spChart2ModelContact ))
-        , m_aEventListenerContainer( m_aMutex )
         , m_aWrappedLineJointProperty( "LineJoint", uno::Any( drawing::LineJoint_NONE ))
 {
 }
@@ -130,33 +91,35 @@ MinMaxLineWrapper::~MinMaxLineWrapper()
 // ____ XComponent ____
 void SAL_CALL MinMaxLineWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 }
 
 void SAL_CALL MinMaxLineWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL MinMaxLineWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 //XPropertySet
 uno::Reference< beans::XPropertySetInfo > SAL_CALL MinMaxLineWrapper::getPropertySetInfo()
 {
-    return *StaticMinMaxLineWrapperInfo::get();
+    return StaticMinMaxLineWrapperInfo();
 }
 
 void SAL_CALL MinMaxLineWrapper::setPropertyValue( const OUString& rPropertyName, const uno::Any& rValue )
 {
     rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
-    const std::vector< rtl::Reference< ChartType > > & aTypes(
-            ::chart::DiagramHelper::getChartTypesFromDiagram( xDiagram ) );
+    const std::vector< rtl::Reference< ChartType > > & aTypes = xDiagram->getChartTypes();
     for( rtl::Reference< ChartType > const & xType : aTypes )
     {
         if( xType->getChartType() == CHART2_SERVICE_NAME_CHARTTYPE_CANDLESTICK )
@@ -187,8 +150,7 @@ uno::Any SAL_CALL MinMaxLineWrapper::getPropertyValue( const OUString& rProperty
     rtl::Reference< DataSeries > xPropSet;
 
     rtl::Reference< ::chart::Diagram > xDiagram( m_spChart2ModelContact->getDiagram() );
-    const std::vector< rtl::Reference< ChartType > > aTypes(
-            ::chart::DiagramHelper::getChartTypesFromDiagram( xDiagram ) );
+    const std::vector< rtl::Reference< ChartType > > aTypes = xDiagram->getChartTypes();
     for( rtl::Reference< ChartType > const & xType : aTypes )
     {
         if( xType->getChartType() == CHART2_SERVICE_NAME_CHARTTYPE_CANDLESTICK )
@@ -321,9 +283,14 @@ void SAL_CALL MinMaxLineWrapper::setPropertyToDefault( const OUString& rProperty
 
 uno::Any SAL_CALL MinMaxLineWrapper::getPropertyDefault( const OUString& rPropertyName )
 {
-    const tPropertyValueMap& rStaticDefaults = *StaticMinMaxLineWrapperDefaults::get();
-    tPropertyValueMap::const_iterator aFound( rStaticDefaults.find( StaticMinMaxLineWrapperInfoHelper::get()->getHandleByName( rPropertyName ) ) );
-    if( aFound == rStaticDefaults.end() )
+    static const ::chart::tPropertyValueMap aStaticDefaults = []
+        {
+            ::chart::tPropertyValueMap aTmp;
+            ::chart::LinePropertiesHelper::AddDefaultsToMap( aTmp );
+            return aTmp;
+        }();
+    tPropertyValueMap::const_iterator aFound( aStaticDefaults.find( StaticMinMaxLineWrapperInfoHelper().getHandleByName( rPropertyName ) ) );
+    if( aFound == aStaticDefaults.end() )
         return uno::Any();
     return (*aFound).second;
 }
@@ -332,7 +299,7 @@ uno::Any SAL_CALL MinMaxLineWrapper::getPropertyDefault( const OUString& rProper
 //getPropertyStates() already declared in XPropertyState
 void SAL_CALL MinMaxLineWrapper::setAllPropertiesToDefault(  )
 {
-    const Sequence< beans::Property >& rPropSeq = *StaticMinMaxLineWrapperPropertyArray::get();
+    const Sequence< beans::Property >& rPropSeq = StaticMinMaxLineWrapperPropertyArray();
     for(beans::Property const & prop : rPropSeq)
     {
         setPropertyToDefault( prop.Name );

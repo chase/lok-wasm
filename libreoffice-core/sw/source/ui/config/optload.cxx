@@ -51,10 +51,440 @@
 
 #include <doc.hxx>
 #include <svl/cjkoptions.hxx>
+#include <svl/eitem.hxx>
 
 using namespace ::com::sun::star;
 
-#include <svl/eitem.hxx>
+static bool lcl_isPropertyReadOnly(const SwCapObjType eType, const CapConfigProp ePropType, const SvGlobalName& rOleId)
+{
+    bool bReadOnly = false;
+
+    switch (ePropType)
+    {
+        case PROP_CAP_OBJECT_ENABLE:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Enable::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Enable::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Enable::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Enable::isReadOnly();
+                    } else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Enable::isReadOnly();
+                    } else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Enable::isReadOnly();
+                    } else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Enable::isReadOnly();
+                    } else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Enable::isReadOnly();
+                    } else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Enable::isReadOnly();
+                    } else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_CATEGORY:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::Category::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::Category::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::Category::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::Category::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::Category::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::Category::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::Category::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::Category::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::Category::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_NUMBERING:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::Numbering::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::Numbering::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::Numbering::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::Numbering::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::Numbering::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::Numbering::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::Numbering::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::Numbering::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::Numbering::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_NUMBERINGSEPARATOR:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::NumberingSeparator::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::NumberingSeparator::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::NumberingSeparator::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::NumberingSeparator::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::NumberingSeparator::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::NumberingSeparator::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::NumberingSeparator::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::NumberingSeparator::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::NumberingSeparator::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_CAPTIONTEXT:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::CaptionText::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::CaptionText::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::CaptionText::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::CaptionText::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::CaptionText::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::CaptionText::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::CaptionText::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::CaptionText::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::CaptionText::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_DELIMITER:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::Delimiter::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::Delimiter::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::Delimiter::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::Delimiter::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::Delimiter::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::Delimiter::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::Delimiter::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::Delimiter::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::Delimiter::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_LEVEL:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::Level::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::Level::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::Level::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::Level::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::Level::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::Level::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::Level::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::Level::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::Level::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_POSITION:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::Position::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::Position::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::Position::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::Position::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::Position::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::Position::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::Position::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::Position::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::Position::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_CHARACTERSTYLE:
+        {
+            switch (eType)
+            {
+                case TABLE_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Settings::CharacterStyle::isReadOnly();
+                    break;
+                case FRAME_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Settings::CharacterStyle::isReadOnly();
+                    break;
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::CharacterStyle::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::CharacterStyle::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::CharacterStyle::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::CharacterStyle::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::CharacterStyle::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::CharacterStyle::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::CharacterStyle::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        case PROP_CAP_OBJECT_APPLYATTRIBUTES:
+        {
+            switch (eType)
+            {
+                case GRAPHIC_CAP:
+                    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Settings::ApplyAttributes::isReadOnly();
+                    break;
+                case OLE_CAP:
+                {
+                    if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Settings::ApplyAttributes::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Settings::ApplyAttributes::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Settings::ApplyAttributes::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Settings::ApplyAttributes::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Settings::ApplyAttributes::isReadOnly();
+                    }
+                    else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+                        bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Settings::ApplyAttributes::isReadOnly();
+                    }
+                    else {
+                        // Should not reach it.
+                    }
+                }
+                break;
+                default:
+                    break;
+            }
+        }
+        break;
+        default:
+            break;
+    }
+
+    return bReadOnly;
+}
 
 sal_uInt32 SwFieldUnitTable::Count()
 {
@@ -83,16 +513,27 @@ SwLoadOptPage::SwLoadOptPage(weld::Container* pPage, weld::DialogController* pCo
     , m_xAlwaysRB(m_xBuilder->weld_radio_button("always"))
     , m_xRequestRB(m_xBuilder->weld_radio_button("onrequest"))
     , m_xNeverRB(m_xBuilder->weld_radio_button("never"))
+    , m_xGridupdatelink(m_xBuilder->weld_widget("gridupdatelink"))
+    , m_xUpdateLinkImg(m_xBuilder->weld_widget("lockupdatelink"))
     , m_xAutoUpdateFields(m_xBuilder->weld_check_button("updatefields"))
+    , m_xAutoUpdateFieldsImg(m_xBuilder->weld_widget("lockupdatefields"))
     , m_xAutoUpdateCharts(m_xBuilder->weld_check_button("updatecharts"))
+    , m_xAutoUpdateChartsImg(m_xBuilder->weld_widget("lockupdatecharts"))
     , m_xMetricLB(m_xBuilder->weld_combo_box("metric"))
+    , m_xMetricImg(m_xBuilder->weld_widget("lockmetric"))
     , m_xTabFT(m_xBuilder->weld_label("tablabel"))
     , m_xTabMF(m_xBuilder->weld_metric_spin_button("tab", FieldUnit::CM))
+    , m_xTabImg(m_xBuilder->weld_widget("locktab"))
     , m_xUseSquaredPageMode(m_xBuilder->weld_check_button("squaremode"))
+    , m_xUseSquaredPageModeImg(m_xBuilder->weld_widget("locksquaremode"))
     , m_xUseCharUnit(m_xBuilder->weld_check_button("usecharunit"))
+    , m_xUseCharUnitImg(m_xBuilder->weld_widget("lockusecharunit"))
     , m_xWordCountED(m_xBuilder->weld_entry("wordcount"))
+    , m_xWordCountImg(m_xBuilder->weld_widget("lockwordcount"))
     , m_xShowStandardizedPageCount(m_xBuilder->weld_check_button("standardizedpageshow"))
+    , m_xShowStandardizedPageCountImg(m_xBuilder->weld_widget("lockstandardizedpageshow"))
     , m_xStandardizedPageSizeNF(m_xBuilder->weld_spin_button("standardpagesize"))
+    , m_xStandardizedPageSizeImg(m_xBuilder->weld_widget("lockstandardpagesize"))
 {
     for (sal_uInt32 i = 0; i < SwFieldUnitTable::Count(); ++i)
     {
@@ -145,6 +586,38 @@ std::unique_ptr<SfxTabPage> SwLoadOptPage::Create( weld::Container* pPage, weld:
 IMPL_LINK_NOARG(SwLoadOptPage, StandardizedPageCountCheckHdl, weld::Toggleable&, void)
 {
     m_xStandardizedPageSizeNF->set_sensitive(m_xShowStandardizedPageCount->get_active());
+}
+
+OUString SwLoadOptPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label2",   "label1", "label3", "label5",
+                          "tablabel", "label4", "label7", "labelstandardpages" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[]
+        = { "updatefields", "updatecharts", "usecharunit", "squaremode", "standardizedpageshow" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "always", "onrequest", "never" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwLoadOptPage::FillItemSet( SfxItemSet* rSet )
@@ -330,16 +803,51 @@ void SwLoadOptPage::Reset( const SfxItemSet* rSet)
     }
     m_xUseCharUnit->save_state();
 
+    bool bReadOnly = officecfg::Office::Writer::Content::Update::Link::isReadOnly();
+    m_xGridupdatelink->set_sensitive(!bReadOnly);
+    m_xUpdateLinkImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Content::Update::Field::isReadOnly();
+    m_xAutoUpdateFields->set_sensitive(!bReadOnly);
+    m_xAutoUpdateFieldsImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Content::Update::Chart::isReadOnly();
+    m_xAutoUpdateCharts->set_sensitive(!bReadOnly);
+    m_xAutoUpdateChartsImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Layout::Other::MeasureUnit::isReadOnly();
+    m_xMetricLB->set_sensitive(!bReadOnly);
+    m_xMetricImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Layout::Other::TabStop::isReadOnly();
+    m_xTabMF->set_sensitive(!bReadOnly);
+    m_xTabImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Layout::Other::ApplyCharUnit::isReadOnly();
+    m_xUseCharUnit->set_sensitive(!bReadOnly);
+    m_xUseCharUnitImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Layout::Other::IsSquaredPageMode::isReadOnly();
+    m_xUseSquaredPageMode->set_sensitive(!bReadOnly);
+    m_xUseSquaredPageModeImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::WordCount::AdditionalSeparators::isReadOnly();
     m_xWordCountED->set_text(officecfg::Office::Writer::WordCount::AdditionalSeparators::get());
-    m_xWordCountED->set_sensitive(!officecfg::Office::Writer::WordCount::AdditionalSeparators::isReadOnly());
+    m_xWordCountED->set_sensitive(!bReadOnly);
+    m_xWordCountImg->set_visible(bReadOnly);
     m_xWordCountED->save_value();
+
+    bReadOnly = officecfg::Office::Writer::WordCount::ShowStandardizedPageCount::isReadOnly();
     m_xShowStandardizedPageCount->set_active(officecfg::Office::Writer::WordCount::ShowStandardizedPageCount::get());
-    m_xShowStandardizedPageCount->set_sensitive(!officecfg::Office::Writer::WordCount::ShowStandardizedPageCount::isReadOnly());
+    m_xShowStandardizedPageCount->set_sensitive(!bReadOnly);
+    m_xShowStandardizedPageCountImg->set_visible(bReadOnly);
     m_xShowStandardizedPageCount->save_state();
+
+    bReadOnly = officecfg::Office::Writer::WordCount::StandardizedPageSize::isReadOnly();
     m_xStandardizedPageSizeNF->set_value(officecfg::Office::Writer::WordCount::StandardizedPageSize::get());
-    m_xStandardizedPageSizeNF->set_sensitive(!officecfg::Office::Writer::WordCount::StandardizedPageSize::isReadOnly());
+    m_xStandardizedPageSizeNF->set_sensitive(!bReadOnly && m_xShowStandardizedPageCount->get_active());
+    m_xStandardizedPageSizeImg->set_visible(bReadOnly);
     m_xStandardizedPageSizeNF->save_value();
-    m_xStandardizedPageSizeNF->set_sensitive(m_xShowStandardizedPageCount->get_active());
 }
 
 IMPL_LINK_NOARG(SwLoadOptPage, MetricHdl, weld::ComboBox&, void)
@@ -438,21 +946,31 @@ SwCaptionOptPage::SwCaptionOptPage(weld::Container* pPage, weld::DialogControlle
     , m_aTextFilter(m_sNone)
     , m_xCheckLB(m_xBuilder->weld_tree_view("objects"))
     , m_xLbCaptionOrder(m_xBuilder->weld_combo_box("captionorder"))
+    , m_xLbCaptionOrderImg(m_xBuilder->weld_widget("lockcaptionorder"))
     , m_xSettingsGroup(m_xBuilder->weld_widget("settings"))
     , m_xCategoryBox(m_xBuilder->weld_combo_box("category"))
+    , m_xCategoryBoxImg(m_xBuilder->weld_widget("lockcategory"))
     , m_xFormatText(m_xBuilder->weld_label("numberingft"))
     , m_xFormatBox(m_xBuilder->weld_combo_box("numbering"))
+    , m_xFormatBoxImg(m_xBuilder->weld_widget("locknumbering"))
     , m_xNumberingSeparatorFT(m_xBuilder->weld_label("numseparatorft"))
     , m_xNumberingSeparatorED(m_xBuilder->weld_entry("numseparator"))
+    , m_xNumberingSeparatorImg(m_xBuilder->weld_widget("locknumseparator"))
     , m_xTextText(m_xBuilder->weld_label("separatorft"))
     , m_xTextEdit(m_xBuilder->weld_entry("separator"))
+    , m_xTextEditImg(m_xBuilder->weld_widget("lockseparator"))
     , m_xPosBox(m_xBuilder->weld_combo_box("position"))
+    , m_xPosBoxImg(m_xBuilder->weld_widget("lockposition"))
     , m_xNumCapt(m_xBuilder->weld_widget("numcaption"))
     , m_xLbLevel(m_xBuilder->weld_combo_box("level"))
+    , m_xLbLevelImg(m_xBuilder->weld_widget("locklevel"))
     , m_xEdDelim(m_xBuilder->weld_entry("chapseparator"))
+    , m_xEdDelimImg(m_xBuilder->weld_widget("lockchapseparator"))
     , m_xCategory(m_xBuilder->weld_widget("categoryformat"))
     , m_xCharStyleLB(m_xBuilder->weld_combo_box("charstyle"))
+    , m_xCharStyleImg(m_xBuilder->weld_widget("lockcharstyle"))
     , m_xApplyBorderCB(m_xBuilder->weld_check_button("applyborder"))
+    , m_xApplyBorderImg(m_xBuilder->weld_widget("lockapplyborder"))
     , m_xPreview(new weld::CustomWeld(*m_xBuilder, "preview", m_aPreview))
 {
     m_xCategoryBox->connect_entry_insert_text(LINK(this, SwCaptionOptPage, TextFilterHdl));
@@ -541,6 +1059,25 @@ std::unique_ptr<SfxTabPage> SwCaptionOptPage::Create(weld::Container* pPage, wel
     return std::make_unique<SwCaptionOptPage>(pPage, pController, *rAttrSet);
 }
 
+OUString SwCaptionOptPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1",         "label13",     "label2",  "label7",  "numberingft",
+                          "numseparatorft", "separatorft", "label18", "label11", "label4",
+                          "label6",         "label10",     "label3" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    if (const auto& pString = m_xBuilder->weld_check_button("applyborder"))
+        sAllStrings += pString->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool SwCaptionOptPage::FillItemSet( SfxItemSet* )
 {
     bool bRet = false;
@@ -577,17 +1114,24 @@ void SwCaptionOptPage::Reset( const SfxItemSet* rSet)
 
     // Writer objects
     int nPos = 0;
+    bool bReadOnly = false;
     m_xCheckLB->append();
     m_xCheckLB->set_toggle(nPos, TRISTATE_FALSE);
     m_xCheckLB->set_text(nPos, m_sSWTable, 0);
+    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Table::Enable::isReadOnly();
+    m_xCheckLB->set_sensitive(nPos, !bReadOnly);
     SetOptions(nPos++, TABLE_CAP);
     m_xCheckLB->append();
     m_xCheckLB->set_toggle(nPos, TRISTATE_FALSE);
     m_xCheckLB->set_text(nPos, m_sSWFrame, 0);
+    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Frame::Enable::isReadOnly();
+    m_xCheckLB->set_sensitive(nPos, !bReadOnly);
     SetOptions(nPos++, FRAME_CAP);
     m_xCheckLB->append();
     m_xCheckLB->set_toggle(nPos, TRISTATE_FALSE);
     m_xCheckLB->set_text(nPos, m_sSWGraphic, 0);
+    bReadOnly = officecfg::Office::Writer::Insert::Caption::WriterObject::Graphic::Enable::isReadOnly();
+    m_xCheckLB->set_sensitive(nPos, !bReadOnly);
     SetOptions(nPos++, GRAPHIC_CAP);
 
     // get Productname and -version
@@ -613,10 +1157,29 @@ void SwCaptionOptPage::Reset( const SfxItemSet* rSet)
         m_xCheckLB->append();
         m_xCheckLB->set_toggle(nPos, TRISTATE_FALSE);
         m_xCheckLB->set_text(nPos, sClass, 0);
+        if (rOleId == SvGlobalName(SO3_SC_CLASSID)) {
+            bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Calc::Enable::isReadOnly();
+        } else if (rOleId == SvGlobalName(SO3_SDRAW_CLASSID)) {
+            bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Draw::Enable::isReadOnly();
+        } else if (rOleId == SvGlobalName(SO3_SM_CLASSID)) {
+            bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Formula::Enable::isReadOnly();
+        } else if (rOleId == SvGlobalName(SO3_SCH_CLASSID)) {
+            bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Chart::Enable::isReadOnly();
+        } else if (rOleId == SvGlobalName(SO3_SIMPRESS_CLASSID)) {
+            bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::Impress::Enable::isReadOnly();
+        } else if (rOleId == SvGlobalName(SO3_OUT_CLASSID)) {
+            bReadOnly = officecfg::Office::Writer::Insert::Caption::OfficeObject::OLEMisc::Enable::isReadOnly();
+        }
+        else {
+            //
+        }
+        m_xCheckLB->set_sensitive(nPos, !bReadOnly);
         SetOptions( nPos++, OLE_CAP, &rOleId );
     }
     m_xLbCaptionOrder->set_active(
         SW_MOD()->GetModuleConfig()->IsCaptionOrderNumberingFirst() ? 1 : 0);
+    m_xLbCaptionOrder->set_sensitive(!officecfg::Office::Writer::Insert::Caption::CaptionOrderNumberingFirst::isReadOnly());
+    m_xLbCaptionOrderImg->set_visible(officecfg::Office::Writer::Insert::Caption::CaptionOrderNumberingFirst::isReadOnly());
     m_xCheckLB->select(0);
     ShowEntryHdl(*m_xCheckLB);
 }
@@ -713,6 +1276,38 @@ void SwCaptionOptPage::UpdateEntry(int nSelEntry)
             m_xCategoryBox->set_active(nPos);
         }
 
+        bool bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_CATEGORY, pOpt->GetOleId());
+        m_xCategoryBox->set_sensitive(bChecked && !bReadOnly);
+        m_xCategoryBoxImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_NUMBERING, pOpt->GetOleId());
+        m_xFormatBox->set_sensitive(bChecked && !bReadOnly);
+        m_xFormatBoxImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_NUMBERINGSEPARATOR, pOpt->GetOleId());
+        m_xNumberingSeparatorED->set_sensitive(bNumSep && !bReadOnly);
+        m_xNumberingSeparatorImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_CAPTIONTEXT, pOpt->GetOleId());
+        m_xTextEdit->set_sensitive(bChecked && !bReadOnly);
+        m_xTextEditImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_DELIMITER, pOpt->GetOleId());
+        m_xPosBox->set_sensitive(bChecked && !bReadOnly);
+        m_xPosBoxImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_LEVEL, pOpt->GetOleId());
+        m_xLbLevel->set_sensitive(bChecked && !bReadOnly);
+        m_xLbLevelImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_POSITION, pOpt->GetOleId());
+        m_xEdDelim->set_sensitive(bChecked && !bReadOnly);
+        m_xEdDelimImg->set_visible(bReadOnly);
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_CHARACTERSTYLE, pOpt->GetOleId());
+        m_xCharStyleLB->set_sensitive(bChecked && !bReadOnly);
+        m_xCharStyleImg->set_visible(bReadOnly);
+
         for (sal_Int32 i = 0; i < m_xFormatBox->get_count(); i++)
         {
             if (pOpt->GetNumType() == m_xFormatBox->get_id(i).toUInt32())
@@ -747,8 +1342,11 @@ void SwCaptionOptPage::UpdateEntry(int nSelEntry)
             m_xCharStyleLB->set_active_text(pOpt->GetCharacterStyle());
         else
             m_xCharStyleLB->set_active(0);
-        m_xApplyBorderCB->set_sensitive(m_xCategoryBox->get_sensitive() &&
+
+        bReadOnly = lcl_isPropertyReadOnly(pOpt->GetObjType(), PROP_CAP_OBJECT_APPLYATTRIBUTES, pOpt->GetOleId());
+        m_xApplyBorderCB->set_sensitive(m_xCategoryBox->get_sensitive() && !bReadOnly &&
                 pOpt->GetObjType() != TABLE_CAP && pOpt->GetObjType() != FRAME_CAP );
+        m_xApplyBorderImg->set_visible(bReadOnly);
         m_xApplyBorderCB->set_active(pOpt->CopyAttributes());
     }
 

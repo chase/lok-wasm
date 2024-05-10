@@ -19,11 +19,7 @@
 #include <rtl/ustring.hxx>
 #include <sal/log.hxx>
 
-#include <orcus/orcus_csv.hpp>
-#include <orcus/orcus_gnumeric.hpp>
-#include <orcus/orcus_xlsx.hpp>
-#include <orcus/orcus_xls_xml.hpp>
-#include <orcus/orcus_ods.hpp>
+#include <orcus/format_detection.hpp>
 #include <orcus/orcus_import_ods.hpp>
 #include <orcus/stream.hpp>
 #include <com/sun/star/task/XStatusIndicator.hpp>
@@ -35,13 +31,10 @@ namespace
 uno::Reference<task::XStatusIndicator> getStatusIndicator(const SfxMedium& rMedium)
 {
     uno::Reference<task::XStatusIndicator> xStatusIndicator;
-    SfxItemSet* pSet = rMedium.GetItemSet();
-    if (pSet)
-    {
-        const SfxUnoAnyItem* pItem = pSet->GetItem<SfxUnoAnyItem>(SID_PROGRESS_STATUSBAR_CONTROL);
-        if (pItem)
-            xStatusIndicator.set(pItem->GetValue(), uno::UNO_QUERY);
-    }
+    const SfxUnoAnyItem* pItem
+        = rMedium.GetItemSet().GetItem<SfxUnoAnyItem>(SID_PROGRESS_STATUSBAR_CONTROL);
+    if (pItem)
+        xStatusIndicator.set(pItem->GetValue(), uno::UNO_QUERY);
     return xStatusIndicator;
 }
 
@@ -73,49 +66,35 @@ bool loadFileContent(SfxMedium& rMedium, orcus::iface::import_filter& filter)
 }
 }
 
-bool ScOrcusFiltersImpl::importCSV(ScDocument& rDoc, SfxMedium& rMedium) const
+ScOrcusFilters::ImportResult ScOrcusFiltersImpl::importByName(ScDocument& rDoc, SfxMedium& rMedium,
+                                                              const OUString& rFilterName) const
 {
-    ScOrcusFactory aFactory(rDoc);
-    aFactory.setStatusIndicator(getStatusIndicator(rMedium));
+    const std::unordered_map<OUString, orcus::format_t> aMap = {
+        { "Apache Parquet Spreadsheet", orcus::format_t::parquet },
+        { "Gnumeric Spreadsheet", orcus::format_t::gnumeric },
+        { "MS Excel 2003 XML Orcus", orcus::format_t::xls_xml },
+        { "csv", orcus::format_t::csv },
+        { "gnumeric", orcus::format_t::gnumeric },
+        { "ods", orcus::format_t::ods },
+        { "parquet", orcus::format_t::parquet },
+        { "xls-xml", orcus::format_t::xls_xml },
+        { "xlsx", orcus::format_t::xlsx },
+    };
 
-    orcus::orcus_csv filter(&aFactory);
-    return loadFileContent(rMedium, filter);
-}
+    if (auto it = aMap.find(rFilterName); it != aMap.end())
+    {
+        ScOrcusFactory aFactory(rDoc);
+        aFactory.setStatusIndicator(getStatusIndicator(rMedium));
 
-bool ScOrcusFiltersImpl::importGnumeric(ScDocument& rDoc, SfxMedium& rMedium) const
-{
-    ScOrcusFactory aFactory(rDoc);
-    aFactory.setStatusIndicator(getStatusIndicator(rMedium));
+        auto filter = orcus::create_filter(it->second, &aFactory);
+        if (!filter)
+            return ImportResult::Failure;
 
-    orcus::orcus_gnumeric filter(&aFactory);
-    return loadFileContent(rMedium, filter);
-}
+        bool res = loadFileContent(rMedium, *filter);
+        return res ? ImportResult::Success : ImportResult::Failure;
+    }
 
-bool ScOrcusFiltersImpl::importExcel2003XML(ScDocument& rDoc, SfxMedium& rMedium) const
-{
-    ScOrcusFactory aFactory(rDoc);
-    aFactory.setStatusIndicator(getStatusIndicator(rMedium));
-
-    orcus::orcus_xls_xml filter(&aFactory);
-    return loadFileContent(rMedium, filter);
-}
-
-bool ScOrcusFiltersImpl::importXLSX(ScDocument& rDoc, SfxMedium& rMedium) const
-{
-    ScOrcusFactory aFactory(rDoc);
-    aFactory.setStatusIndicator(getStatusIndicator(rMedium));
-
-    orcus::orcus_xlsx filter(&aFactory);
-    return loadFileContent(rMedium, filter);
-}
-
-bool ScOrcusFiltersImpl::importODS(ScDocument& rDoc, SfxMedium& rMedium) const
-{
-    ScOrcusFactory aFactory(rDoc);
-    aFactory.setStatusIndicator(getStatusIndicator(rMedium));
-
-    orcus::orcus_ods filter(&aFactory);
-    return loadFileContent(rMedium, filter);
+    return ImportResult::NotSupported;
 }
 
 bool ScOrcusFiltersImpl::importODS_Styles(ScDocument& rDoc, OUString& aPath) const

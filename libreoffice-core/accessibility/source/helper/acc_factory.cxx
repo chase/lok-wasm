@@ -103,6 +103,8 @@ public:
     virtual css::uno::Reference< css::accessibility::XAccessibleContext >
         createAccessibleContext( VCLXEdit* _pXWindow ) override;
     virtual css::uno::Reference< css::accessibility::XAccessibleContext >
+        createAccessibleContext( VCLXMultiLineEdit* _pXWindow ) override;
+    virtual css::uno::Reference< css::accessibility::XAccessibleContext >
         createAccessibleContext( VCLXComboBox* _pXWindow ) override;
     virtual css::uno::Reference< css::accessibility::XAccessibleContext >
         createAccessibleContext( VCLXToolBox* _pXWindow ) override;
@@ -122,13 +124,13 @@ public:
             SvHeaderTabListBox& rBox
         ) const override;
 
-    virtual vcl::IAccessibleBrowseBox*
+    virtual rtl::Reference<vcl::IAccessibleBrowseBox>
         createAccessibleBrowseBox(
             const css::uno::Reference< css::accessibility::XAccessible >& _rxParent,
             vcl::IAccessibleTableProvider& _rBrowseBox
         ) const override;
 
-    virtual IAccessibleTableControl*
+    virtual rtl::Reference<IAccessibleTableControl>
         createAccessibleTableControl(
             const css::uno::Reference< css::accessibility::XAccessible >& _rxParent,
             IAccessibleTable& _rTable
@@ -280,6 +282,11 @@ Reference< XAccessibleContext > AccessibleFactory::createAccessibleContext( VCLX
     return new VCLXAccessibleEdit( _pXWindow );
 }
 
+Reference< XAccessibleContext > AccessibleFactory::createAccessibleContext( VCLXMultiLineEdit* _pXWindow )
+{
+    return new VCLXAccessibleEdit( _pXWindow );
+}
+
 Reference< XAccessibleContext > AccessibleFactory::createAccessibleContext( VCLXComboBox* _pXWindow )
 {
     bool bIsDropDownBox = false;
@@ -374,13 +381,13 @@ vcl::IAccessibleTabListBox* AccessibleFactory::createAccessibleTabListBox(
     return new AccessibleTabListBox( rxParent, rBox );
 }
 
-vcl::IAccessibleBrowseBox* AccessibleFactory::createAccessibleBrowseBox(
+rtl::Reference<vcl::IAccessibleBrowseBox> AccessibleFactory::createAccessibleBrowseBox(
     const Reference< XAccessible >& _rxParent, vcl::IAccessibleTableProvider& _rBrowseBox ) const
 {
     return new AccessibleBrowseBoxAccess( _rxParent, _rBrowseBox );
 }
 
-IAccessibleTableControl* AccessibleFactory::createAccessibleTableControl(
+rtl::Reference<IAccessibleTableControl> AccessibleFactory::createAccessibleTableControl(
     const Reference< XAccessible >& _rxParent, IAccessibleTable& _rTable ) const
 {
     return new AccessibleGridControlAccess( _rxParent, _rTable );

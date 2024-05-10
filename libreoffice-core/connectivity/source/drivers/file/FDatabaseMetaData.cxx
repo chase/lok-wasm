@@ -167,7 +167,7 @@ Reference< XResultSet > SAL_CALL ODatabaseMetaData::getTables(
     // check if any type is given
     // when no types are given then we have to return all tables e.g. TABLE
 
-    static constexpr OUStringLiteral aTable = u"TABLE";
+    static constexpr OUString aTable = u"TABLE"_ustr;
 
     bool bTableFound = true;
     sal_Int32 nLength = types.getLength();
@@ -299,7 +299,7 @@ Reference< XResultSet > SAL_CALL ODatabaseMetaData::getTables(
         }
         if(bNewRow)
         {
-            aRow.push_back(new ORowSetValueDecorator(OUString(aTable)));
+            aRow.push_back(new ORowSetValueDecorator(aTable));
             aRow.push_back(ODatabaseMetaDataResultSet::getEmptyValue());
 
             aRows.push_back(aRow);
@@ -401,7 +401,7 @@ Reference< XResultSet > SAL_CALL ODatabaseMetaData::getTablePrivileges(
                     xNames->getByName(*pBegin), css::uno::UNO_QUERY);
                 if(xTable.is())
                 {
-                    auto pTable = comphelper::getFromUnoTunnel<OFileTable>(xTable);
+                    auto pTable = dynamic_cast<OFileTable*>(xTable.get());
                     if(pTable && !pTable->isReadOnly())
                     {
                         aRow[6] = ODatabaseMetaDataResultSet::getInsertValue();
@@ -618,14 +618,9 @@ sal_Bool SAL_CALL ODatabaseMetaData::supportsOuterJoins(  )
 
 Reference< XResultSet > SAL_CALL ODatabaseMetaData::getTableTypes(  )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
-
     rtl::Reference<ODatabaseMetaDataResultSet> pResult = new ODatabaseMetaDataResultSet( ODatabaseMetaDataResultSet::eTableTypes );
-    static ODatabaseMetaDataResultSet::ORows aRows;
-    if(aRows.empty())
-    {
-        aRows.push_back( { ODatabaseMetaDataResultSet::getEmptyValue(), new ORowSetValueDecorator(OUString("TABLE")) } );
-    }
+    ODatabaseMetaDataResultSet::ORows aRows;
+    aRows.push_back( { ODatabaseMetaDataResultSet::getEmptyValue(), new ORowSetValueDecorator(OUString("TABLE")) } );
     pResult->setRows(std::move(aRows));
     return pResult;
 }

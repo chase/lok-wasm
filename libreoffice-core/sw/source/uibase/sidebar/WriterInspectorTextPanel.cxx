@@ -359,18 +359,13 @@ static svx::sidebar::TreeNode BorderToTreeNode(const OUString& rName, const css:
     aCurNode.sNodeName = PropertyNametoRID(rName);
     aCurNode.NodeType = svx::sidebar::TreeNode::ComplexProperty;
 
-    aCurNode.children.push_back(SimplePropToTreeNode("BorderColor", css::uno::Any(aBorder.Color)));
-    aCurNode.children.push_back(
-        SimplePropToTreeNode("BorderLineWidth", css::uno::Any(aBorder.LineWidth)));
-    aCurNode.children.push_back(
-        SimplePropToTreeNode("BorderLineStyle", css::uno::Any(aBorder.LineStyle)));
-    aCurNode.children.push_back(
-        SimplePropToTreeNode("BorderLineDistance", css::uno::Any(aBorder.LineDistance)));
-    aCurNode.children.push_back(
-        SimplePropToTreeNode("BorderInnerLineWidth", css::uno::Any(aBorder.InnerLineWidth)));
-    aCurNode.children.push_back(
-        SimplePropToTreeNode("BorderOuterLineWidth", css::uno::Any(aBorder.OuterLineWidth)));
-
+    aCurNode.children
+        = { SimplePropToTreeNode("BorderColor", css::uno::Any(aBorder.Color)),
+            SimplePropToTreeNode("BorderLineWidth", css::uno::Any(aBorder.LineWidth)),
+            SimplePropToTreeNode("BorderLineStyle", css::uno::Any(aBorder.LineStyle)),
+            SimplePropToTreeNode("BorderLineDistance", css::uno::Any(aBorder.LineDistance)),
+            SimplePropToTreeNode("BorderInnerLineWidth", css::uno::Any(aBorder.InnerLineWidth)),
+            SimplePropToTreeNode("BorderOuterLineWidth", css::uno::Any(aBorder.OuterLineWidth)) };
     return aCurNode;
 }
 
@@ -565,9 +560,10 @@ static void UpdateTree(SwDocShell& rDocSh, SwEditShell& rEditSh,
     aFieldsNode.NodeType = svx::sidebar::TreeNode::Category;
     aTextSectionsNode.NodeType = svx::sidebar::TreeNode::Category;
 
-    uno::Reference<text::XTextRange> xRange(
+    rtl::Reference<SwXTextRange> xRange(
         SwXTextRange::CreateXTextRange(*pDoc, *pCursor->GetPoint(), nullptr));
-    uno::Reference<beans::XPropertySet> xPropertiesSet(xRange, uno::UNO_QUERY_THROW);
+    if (!xRange)
+        throw uno::RuntimeException();
     std::unordered_map<OUString, bool> aIsDefined;
 
     const std::vector<OUString> aHiddenProperties{ UNO_NAME_RSID,
@@ -580,6 +576,7 @@ static void UpdateTree(SwDocShell& rDocSh, SwEditShell& rEditSh,
                                                    UNO_NAME_PARA_CONTINUEING_PREVIOUS_SUB_TREE,
                                                    UNO_NAME_CHAR_STYLE_NAME,
                                                    UNO_NAME_NUMBERING_LEVEL,
+                                                   UNO_NAME_SORTED_TEXT_ID,
                                                    UNO_NAME_PARRSID,
                                                    UNO_NAME_CHAR_COLOR_THEME,
                                                    UNO_NAME_CHAR_COLOR_TINT_OR_SHADE };
@@ -587,7 +584,8 @@ static void UpdateTree(SwDocShell& rDocSh, SwEditShell& rEditSh,
     const std::vector<OUString> aHiddenCharacterProperties{ UNO_NAME_CHAR_COLOR_THEME,
                                                             UNO_NAME_CHAR_COLOR_TINT_OR_SHADE };
 
-    InsertValues(xRange, aIsDefined, aCharDFNode, false, aHiddenProperties, aFieldsNode);
+    InsertValues(static_cast<cppu::OWeakObject*>(xRange.get()), aIsDefined, aCharDFNode, false,
+                 aHiddenProperties, aFieldsNode);
 
     uno::Reference<style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(rDocSh.GetBaseModel(),
                                                                          uno::UNO_QUERY);
@@ -597,12 +595,13 @@ static void UpdateTree(SwDocShell& rDocSh, SwEditShell& rEditSh,
 
     uno::Reference<container::XNameAccess> xStyleFamily(
         xStyleFamilies->getByName("CharacterStyles"), uno::UNO_QUERY_THROW);
-    xPropertiesSet->getPropertyValue("CharStyleName") >>= sCurrentCharStyle;
-    xPropertiesSet->getPropertyValue("ParaStyleName") >>= sCurrentParaStyle;
+    xRange->getPropertyValue("CharStyleName") >>= sCurrentCharStyle;
+    xRange->getPropertyValue("ParaStyleName") >>= sCurrentParaStyle;
 
     if (!sCurrentCharStyle.isEmpty())
     {
-        xPropertiesSet.set(xStyleFamily->getByName(sCurrentCharStyle), css::uno::UNO_QUERY_THROW);
+        uno::Reference<beans::XPropertySet> xPropertiesSet(
+            xStyleFamily->getByName(sCurrentCharStyle), css::uno::UNO_QUERY_THROW);
         xPropertiesSet->getPropertyValue("DisplayName") >>= sDisplayName;
         svx::sidebar::TreeNode aCurrentChild;
         aCurrentChild.sNodeName = sDisplayName;
@@ -615,8 +614,7 @@ static void UpdateTree(SwDocShell& rDocSh, SwEditShell& rEditSh,
     }
 
     // Collect paragraph direct formatting
-    uno::Reference<container::XEnumerationAccess> xParaEnumAccess(xRange, uno::UNO_QUERY_THROW);
-    uno::Reference<container::XEnumeration> xParaEnum = xParaEnumAccess->createEnumeration();
+    uno::Reference<container::XEnumeration> xParaEnum = xRange->createEnumeration();
     uno::Reference<text::XTextRange> xThisParagraphRange(xParaEnum->nextElement(), uno::UNO_QUERY);
     if (xThisParagraphRange.is())
     {
@@ -632,7 +630,8 @@ static void UpdateTree(SwDocShell& rDocSh, SwEditShell& rEditSh,
     {
         uno::Reference<style::XStyle> xPropertiesStyle(xStyleFamily->getByName(sCurrentParaStyle),
                                                        uno::UNO_QUERY_THROW);
-        xPropertiesSet.set(xPropertiesStyle, css::uno::UNO_QUERY_THROW);
+        uno::Reference<beans::XPropertySet> xPropertiesSet(xPropertiesStyle,
+                                                           css::uno::UNO_QUERY_THROW);
         xPropertiesSet->getPropertyValue("DisplayName") >>= sDisplayName;
         OUString aParentParaStyle = xPropertiesStyle->getParentStyle();
         svx::sidebar::TreeNode aCurrentChild;
@@ -759,12 +758,18 @@ IMPL_LINK(WriterInspectorTextPanel, AttrChangedNotify, LinkParamNone*, pLink, vo
     if (m_oldLink.IsSet())
         m_oldLink.Call(pLink);
 
+    if (m_pShell->IsViewLocked())
+    {
+        return; // tdf#142806 avoid slowdown when storing files
+    }
+
     SwDocShell* pDocSh = m_pShell->GetDoc()->GetDocShell();
     std::vector<svx::sidebar::TreeNode> aStore;
 
-    SwEditShell* pEditSh = pDocSh ? pDocSh->GetDoc()->GetEditShell() : nullptr;
-    if (pEditSh && pEditSh->GetCursor()->GetPointNode().GetTextNode())
-        UpdateTree(*pDocSh, *pEditSh, aStore, m_nParIdx);
+    if (m_pShell->GetCursor()->GetPointNode().GetTextNode())
+    {
+        UpdateTree(*pDocSh, *m_pShell, aStore, m_nParIdx);
+    }
 
     updateEntries(aStore, m_nParIdx);
 }

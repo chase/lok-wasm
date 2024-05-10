@@ -23,6 +23,7 @@
 #include <sdbcoretools.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <osl/diagnose.h>
+#include <comphelper/compbase.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/namedvaluecollection.hxx>
 #include <comphelper/classids.hxx>
@@ -147,22 +148,20 @@ namespace dbaccess
     }
 
     // OEmbedObjectHolder
-    typedef ::cppu::WeakComponentImplHelper<   embed::XStateChangeListener > TEmbedObjectHolder;
+    typedef ::comphelper::WeakComponentImplHelper<   embed::XStateChangeListener > TEmbedObjectHolder;
 
     namespace {
 
-    class OEmbedObjectHolder :   public ::cppu::BaseMutex
-                                ,public TEmbedObjectHolder
+    class OEmbedObjectHolder : public TEmbedObjectHolder
     {
         Reference< XEmbeddedObject >    m_xBroadCaster;
         ODocumentDefinition*            m_pDefinition;
         bool                            m_bInStateChange;
     protected:
-        virtual void SAL_CALL disposing() override;
+        virtual void disposing(std::unique_lock<std::mutex>& rGuard) override;
     public:
         OEmbedObjectHolder(const Reference< XEmbeddedObject >& _xBroadCaster,ODocumentDefinition* _pDefinition)
-            : TEmbedObjectHolder(m_aMutex)
-            ,m_xBroadCaster(_xBroadCaster)
+            : m_xBroadCaster(_xBroadCaster)
             ,m_pDefinition(_pDefinition)
             ,m_bInStateChange(false)
         {
@@ -181,7 +180,7 @@ namespace dbaccess
 
     }
 
-    void SAL_CALL OEmbedObjectHolder::disposing()
+    void OEmbedObjectHolder::disposing(std::unique_lock<std::mutex>& /*rGuard*/)
     {
         if ( m_xBroadCaster.is() )
             m_xBroadCaster->removeStateChangeListener(this);
@@ -1388,7 +1387,7 @@ namespace
 {
     void    lcl_putLoadArgs( ::comphelper::NamedValueCollection& _io_rArgs, const optional_bool& _bSuppressMacros, const optional_bool& _bReadOnly )
     {
-        if ( !!_bSuppressMacros )
+        if ( _bSuppressMacros.has_value() )
         {
             if ( *_bSuppressMacros )
             {
@@ -1405,7 +1404,7 @@ namespace
             }
         }
 
-        if ( !!_bReadOnly )
+        if ( _bReadOnly.has_value() )
             _io_rArgs.put( "ReadOnly", *_bReadOnly );
     }
 }
@@ -1567,9 +1566,7 @@ void ODocumentDefinition::loadEmbeddedObject( const Reference< XConnection >& i_
                     Reference< XEnumeration > xEnumDrivers = xEnumAccess->createContentEnumeration(sReportEngineServiceName);
                     if ( !xEnumDrivers.is() || !xEnumDrivers->hasMoreElements() )
                     {
-                        css::io::WrongFormatException aWFE;
-                        aWFE.Message = DBA_RES( RID_STR_MISSING_EXTENSION );
-                        throw aWFE;
+                        throw css::io::WrongFormatException(DBA_RES(RID_STR_MISSING_EXTENSION));
                     }
                 }
                 if ( !aClassID.hasElements() )

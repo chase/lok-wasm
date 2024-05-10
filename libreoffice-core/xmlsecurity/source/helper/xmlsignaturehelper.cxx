@@ -22,12 +22,11 @@
 #include <documentsignaturehelper.hxx>
 #include <xsecctl.hxx>
 #include <biginteger.hxx>
+#include <certificate.hxx>
 
 #include <UriBindingHelper.hxx>
 
 #include <tools/datetime.hxx>
-
-#include <xmloff/attrlist.hxx>
 
 #include <com/sun/star/io/XOutputStream.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
@@ -41,6 +40,7 @@
 #include <com/sun/star/embed/StorageFormats.hpp>
 #include <com/sun/star/embed/XTransactedObject.hpp>
 
+#include <comphelper/attributelist.hxx>
 #include <comphelper/ofopxmlhelper.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/diagnose_ex.hxx>
@@ -51,8 +51,8 @@
 
 constexpr OUStringLiteral NS_DOCUMENTSIGNATURES = u"http://openoffice.org/2004/documentsignatures";
 constexpr OUStringLiteral NS_DOCUMENTSIGNATURES_ODF_1_2 = u"urn:oasis:names:tc:opendocument:xmlns:digitalsignature:1.0";
-constexpr OUStringLiteral OOXML_SIGNATURE_ORIGIN = u"http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin";
-constexpr OUStringLiteral OOXML_SIGNATURE_SIGNATURE = u"http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/signature";
+constexpr OUString OOXML_SIGNATURE_ORIGIN = u"http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/origin"_ustr;
+constexpr OUString OOXML_SIGNATURE_SIGNATURE = u"http://schemas.openxmlformats.org/package/2006/relationships/digital-signature/signature"_ustr;
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::graphic;
@@ -188,7 +188,7 @@ uno::Reference<xml::sax::XWriter> XMLSignatureHelper::CreateDocumentHandlerWithH
     /*
      * write the xml context for signatures
      */
-    rtl::Reference<SvXMLAttributeList> pAttributeList = new SvXMLAttributeList();
+    rtl::Reference<comphelper::AttributeList> pAttributeList = new comphelper::AttributeList();
     OUString sNamespace;
     if (mbODFPre1_2)
         sNamespace = NS_DOCUMENTSIGNATURES;
@@ -522,10 +522,10 @@ void XMLSignatureHelper::ExportSignatureContentTypes(const css::uno::Reference<c
     // Remove existing signature overrides.
     uno::Sequence<beans::StringPair>& rOverrides = pContentTypeInfo[1];
     auto aOverrides = comphelper::sequenceToContainer< std::vector<beans::StringPair> >(rOverrides);
-    aOverrides.erase(std::remove_if(aOverrides.begin(), aOverrides.end(), [](const beans::StringPair& rPair)
+    std::erase_if(aOverrides, [](const beans::StringPair& rPair)
     {
         return rPair.First.startsWith("/_xmlsignatures/sig");
-    }), aOverrides.end());
+    });
 
     // Add our signature overrides.
     for (int i = 1; i <= nSignatureCount; ++i)
@@ -703,7 +703,72 @@ XMLSignatureHelper::CheckAndUpdateSignatureInformation(
     }
     if (CheckX509Data(xSecEnv, temp, certs, tempResult))
     {
-        datas.emplace_back(tempResult);
+        if (rInfo.maEncapsulatedX509Certificates.empty()) // optional, XAdES
+        {
+            datas.emplace_back(tempResult);
+        }
+        else
+        {
+            // check for consistency between X509Data and EncapsulatedX509Certificate
+            // (LO produces just the signing certificate in X509Data and
+            // the entire chain in EncapsulatedX509Certificate so in this case
+            // using EncapsulatedX509Certificate yields additional intermediate
+            // certificates that may help in verifying)
+            std::vector<SignatureInformation::X509CertInfo> encapsulatedCertInfos;
+            for (OUString const& it : rInfo.maEncapsulatedX509Certificates)
+            {
+                encapsulatedCertInfos.emplace_back();
+                encapsulatedCertInfos.back().X509Certificate = it;
+            }
+            std::vector<uno::Reference<security::XCertificate>> encapsulatedCerts;
+            SignatureInformation::X509Data encapsulatedResult;
+            if (CheckX509Data(xSecEnv, encapsulatedCertInfos, encapsulatedCerts, encapsulatedResult))
+            {
+                auto const pXCertificate(dynamic_cast<xmlsecurity::Certificate*>(certs.back().get()));
+                auto const pECertificate(dynamic_cast<xmlsecurity::Certificate*>(encapsulatedCerts.back().get()));
+                assert(pXCertificate && pECertificate); // was just created by CheckX509Data
+                if (pXCertificate->getSHA256Thumbprint() == pECertificate->getSHA256Thumbprint())
+                {
+                    // both are chains - take the longer one
+                    if (encapsulatedCerts.size() < certs.size())
+                    {
+                        datas.emplace_back(tempResult);
+                    }
+                    else
+                    {
+#if 0
+                        // extra info needed in testSigningMultipleTimes_ODT
+                        // ... but with it, it fails with BROKEN signature?
+                        // fails even on the first signature, because somehow
+                        // the xd:SigningCertificate element was signed
+                        // containing only one certificate, but in the final
+                        // file it contains all 3 certificates due to this here.
+                        for (size_t i = 0; i < encapsulatedResult.size(); ++i)
+                        {
+                            encapsulatedResult[i].X509IssuerName = encapsulatedCerts[i]->getIssuerName();
+                            encapsulatedResult[i].X509SerialNumber = xmlsecurity::bigIntegerToNumericString(encapsulatedCerts[i]->getSerialNumber());
+                            encapsulatedResult[i].X509Subject = encapsulatedCerts[i]->getSubjectName();
+                            auto const pCertificate(dynamic_cast<xmlsecurity::Certificate*>(encapsulatedCerts[i].get()));
+                            assert(pCertificate); // this was just created by CheckX509Data
+                            OUStringBuffer aBuffer;
+                            comphelper::Base64::encode(aBuffer, pCertificate->getSHA256Thumbprint());
+                            encapsulatedResult[i].CertDigest = aBuffer.makeStringAndClear();
+                        }
+                        datas.emplace_back(encapsulatedResult);
+#else
+                        // keep the X509Data stuff in datas but return the
+                        // longer EncapsulatedX509Certificate chain
+                        datas.emplace_back(tempResult);
+#endif
+                        certs = encapsulatedCerts; // overwrite this seems easier
+                    }
+                }
+                else
+                {
+                    SAL_WARN("xmlsecurity.comp", "X509Data and EncapsulatedX509Certificate contain different certificates");
+                }
+            }
+        }
     }
 
     // rInfo is a copy, update the original

@@ -104,13 +104,13 @@ namespace svgio::svgreader
         const SvgStyleAttributes* SvgSvgNode::getSvgStyleAttributes() const
         {
             // #i125258# svg node can have CssStyles, too, so check for it here
-            return checkForCssStyle("svg", maSvgStyleAttributes);
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgSvgNode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgSvgNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);

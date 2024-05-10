@@ -136,7 +136,7 @@ namespace rptxml
         /** this method is called for every item that has the
         MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
         virtual void handleSpecialItem(
-                SvXMLAttributeList& /*rAttrList*/,
+                comphelper::AttributeList& /*rAttrList*/,
                 const XMLPropertyState& /*rProperty*/,
                 const SvXMLUnitConverter& /*rUnitConverter*/,
                 const SvXMLNamespaceMap& /*rNamespaceMap*/,
@@ -661,8 +661,7 @@ void ORptExport::exportReportComponentAutoStyles(const Reference<XSection>& _xPr
             rtl::Reference< XMLShapeExport > xShapeExport = GetShapeExport();
             xShapeExport->seekShapes(_xProp);
             SolarMutexGuard aGuard;
-            css::uno::Sequence<OUString> aAutoStylePropNames = GetAutoStylePool()->GetPropertyNames();
-            xShapeExport->collectShapeAutoStyles(xShape, aAutoStylePropNames);
+            xShapeExport->collectShapeAutoStyles(xShape);
         }
         else
         {
@@ -756,6 +755,7 @@ void ORptExport::exportContainer(const Reference< XSection>& _xSection)
     TGrid::const_iterator aRowEnd = aFind->second.end();
 
     TGridStyleMap::const_iterator aRowFind = m_aRowStyleNames.find(_xSection);
+    assert(aRowFind != m_aRowStyleNames.end());
     auto aHeightIter = aRowFind->second.cbegin();
     OSL_ENSURE(aRowFind->second.size() == aFind->second.size(),"Different count for rows");
 
@@ -995,7 +995,7 @@ bool ORptExport::exportFormula(enum ::xmloff::token::XMLTokenEnum eName,const OU
     return bRet;
 }
 
-void ORptExport::exportStyleName(XPropertySet* _xProp,SvXMLAttributeList& _rAtt,const OUString& _sName)
+void ORptExport::exportStyleName(XPropertySet* _xProp,comphelper::AttributeList& _rAtt,const OUString& _sName)
 {
     Reference<XPropertySet> xFind(_xProp);
     TPropertyStyleMap::const_iterator aFind = m_aAutoStyleNames.find(xFind);

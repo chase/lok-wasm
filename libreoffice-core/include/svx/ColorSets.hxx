@@ -11,12 +11,8 @@
 #ifndef INCLUDED_SVX_COLORSETS_HXX
 #define INCLUDED_SVX_COLORSETS_HXX
 
-#include <rtl/ustring.hxx>
-#include <sal/types.h>
-#include <sal/log.hxx>
 #include <svx/svxdllapi.h>
 #include <docmodel/theme/ColorSet.hxx>
-#include <optional>
 
 namespace svx
 {

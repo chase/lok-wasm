@@ -26,15 +26,12 @@
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
 
-#include <tools/gen.hxx>
-#include <tools/solar.h>
-#include <unx/gendata.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/outdev.hxx>
 
 #include <fontattributes.hxx>
-#include <font/LogicalFontInstance.hxx>
-#include <impfontmetricdata.hxx>
+#include <font/FontMetricData.hxx>
+#include <glyphid.hxx>
 
 #include <unordered_map>
 
@@ -121,9 +118,8 @@ public:
     FT_Face                 GetFtFace() const;
     const FontConfigFontOptions* GetFontOptions() const;
 
-    void                    GetFontMetric(ImplFontMetricDataRef const &) const;
+    void                    GetFontMetric(FontMetricDataRef const &) const;
 
-    bool                    GetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const;
     bool                    GetGlyphOutline(sal_GlyphId, basegfx::B2DPolyPolygon&, bool) const;
     bool                    GetAntialiasAdvice() const;
 
@@ -144,7 +140,6 @@ private:
     int                     mnWidth;
     int                     mnPrioAntiAlias;
     std::shared_ptr<FreetypeFontInfo> mxFontInfo;
-    FT_Int                  mnLoadFlags;
     double                  mfStretch;
     FT_FaceRec_*            maFaceFT;
     FT_SizeRec_*            maSizeFT;

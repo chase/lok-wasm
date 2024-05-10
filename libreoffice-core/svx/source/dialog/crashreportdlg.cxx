@@ -32,17 +32,17 @@ CrashReportDialog::CrashReportDialog(weld::Window* pParent)
     , mxBtnCancel(m_xBuilder->weld_button("btn_cancel"))
     , mxBtnClose(m_xBuilder->weld_button("btn_close"))
     , mxEditPreUpload(m_xBuilder->weld_label("ed_pre"))
-    , mxEditPostUpload(m_xBuilder->weld_label("ft_post"))
-    , mxBugReportMailto(m_xBuilder->weld_link_button("bugreport_mailto"))
+    , mxEditPostUpload(m_xBuilder->weld_label("ed_post"))
+    , mxLinkButton(m_xBuilder->weld_link_button("linkbutton"))
+    , mxFtBugReport(m_xBuilder->weld_label("ed_bugreport"))
     , mxCBSafeMode(m_xBuilder->weld_check_button("check_safemode"))
     , mxPrivacyPolicyButton(m_xBuilder->weld_link_button("btnPrivacyPolicy"))
 {
-    maSuccessMsg = mxEditPostUpload->get_label();
+    maLinkTemplate = mxLinkButton->get_uri();
 
     auto nWidth = mxEditPreUpload->get_preferred_size().Width();
     nWidth = std::max(nWidth, mxCBSafeMode->get_size_request().Width());
     mxEditPreUpload->set_size_request(nWidth, -1);
-    mxEditPostUpload->set_size_request(nWidth, -1);
     mxCBSafeMode->set_size_request(nWidth, -1);
 
     mxBtnSend->connect_clicked(LINK(this, CrashReportDialog, BtnHdl));
@@ -80,24 +80,26 @@ IMPL_LINK(CrashReportDialog, BtnHdl, weld::Button&, rBtn, void)
         std::string response;
         bool bSuccess = CrashReporter::readSendConfig(response);
 
-        OUString aCrashID = OUString::createFromAscii(response.c_str());
+        OUString aCrashID = OUString::createFromAscii(response);
 
         if (bSuccess)
         {
-            OUString aProcessedMessage
-                = maSuccessMsg.replaceAll("%CRASHID", aCrashID.replaceAll("Crash-ID=", ""));
+            OUString aProcessedLink
+                = maLinkTemplate.replaceAll("%CRASHID", aCrashID.replaceAll("Crash-ID=", ""));
 
             // vclbuilder seems to replace _ with ~ even in text
-            mxEditPostUpload->set_label(aProcessedMessage.replaceAll("~", "_"));
+            mxLinkButton->set_label(aProcessedLink.replaceAll("~", "_"));
+            mxLinkButton->set_uri(aProcessedLink);
         }
         else
         {
             mxEditPostUpload->set_label(aCrashID);
         }
 
+        mxLinkButton->set_visible(bSuccess);
+
         mxBtnClose->show();
-        mxBugReportMailto->set_uri(mxBugReportMailto->get_uri().replaceAll("%CRASHID", aCrashID.replaceAll("Crash-ID=","")));
-        mxBugReportMailto->show();
+        mxFtBugReport->show();
         mxEditPostUpload->show();
         mxBtnSend->set_sensitive(false);
         mxBtnCancel->set_sensitive(false);

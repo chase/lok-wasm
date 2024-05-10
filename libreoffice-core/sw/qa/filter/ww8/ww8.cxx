@@ -24,6 +24,7 @@
 #include <IDocumentLayoutAccess.hxx>
 #include <rootfrm.hxx>
 #include <pagefrm.hxx>
+#include <ftnfrm.hxx>
 #include <IDocumentSettingAccess.hxx>
 #include <sortedobjs.hxx>
 #include <fmtwrapinfluenceonobjpos.hxx>
@@ -100,7 +101,7 @@ CPPUNIT_TEST_FIXTURE(Test, testPlainTextContentControlExport)
     // - Actual  : 0
     // - XPath '//w:sdt/w:sdtPr/w:text' number of nodes is incorrect
     // i.e. the plain text content control was turned into a rich text one on export.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:text", 1);
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:text"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDocxComboBoxContentControlExport)
@@ -121,7 +122,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDocxComboBoxContentControlExport)
     // - Actual  : 0
     // - XPath '//w:sdt/w:sdtPr/w:comboBox' number of nodes is incorrect
     // i.e. the combo box content control was turned into a drop-down one on export.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:comboBox", 1);
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:comboBox"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDocxHyperlinkShape)
@@ -129,7 +130,6 @@ CPPUNIT_TEST_FIXTURE(Test, testDocxHyperlinkShape)
     // Given a document with a hyperlink at char positions 0 -> 6 and a shape with text anchored at
     // char position 6:
     createSwDoc();
-    uno::Reference<lang::XMultiServiceFactory> xMSF(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xTextDocument->getText();
     uno::Reference<text::XTextCursor> xCursor = xText->createTextCursor();
@@ -172,19 +172,19 @@ CPPUNIT_TEST_FIXTURE(Test, testDocxContentControlDropdownEmptyDisplayText)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//w:sdt/w:sdtPr/w:dropDownList/w:listItem' unexpected 'displayText' attribute
     // i.e. we wrote an empty attribute instead of omitting it.
-    assertXPathNoAttribute(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem", "displayText");
+    assertXPathNoAttribute(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem"_ostr,
+                           "displayText"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDocxSymbolFontExport)
 {
     // Create document with symbol character and font Wingdings
     mxComponent = loadFromDesktop("private:factory/swriter");
-    uno::Reference<lang::XMultiServiceFactory> xMSF(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xTextDocument->getText();
     uno::Reference<text::XTextCursor> xCursor = xText->createTextCursor();
 
-    xText->insertString(xCursor, u"", true);
+    xText->insertString(xCursor, u""_ustr, true);
 
     uno::Reference<text::XTextRange> xRange = xCursor;
     uno::Reference<beans::XPropertySet> xTextProps(xRange, uno::UNO_QUERY);
@@ -199,9 +199,9 @@ CPPUNIT_TEST_FIXTURE(Test, testDocxSymbolFontExport)
     // Then make sure the expected markup is used:
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
 
-    assertXPath(pXmlDoc, "//w:p/w:r/w:sym", 1);
-    assertXPath(pXmlDoc, "//w:p/w:r/w:sym[1]", "font", "Wingdings");
-    assertXPath(pXmlDoc, "//w:p/w:r/w:sym[1]", "char", "f0e0");
+    assertXPath(pXmlDoc, "//w:p/w:r/w:sym"_ostr, 1);
+    assertXPath(pXmlDoc, "//w:p/w:r/w:sym[1]"_ostr, "font"_ostr, "Wingdings");
+    assertXPath(pXmlDoc, "//w:p/w:r/w:sym[1]"_ostr, "char"_ostr, "f0e0");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDocxFloatingTableExport)
@@ -221,8 +221,8 @@ CPPUNIT_TEST_FIXTURE(Test, testDocxFloatingTableExport)
     pWrtShell->StartAllAction();
     aMgr.InsertFlyFrame(RndStdIds::FLY_AT_PARA, aMgr.GetPos(), aMgr.GetSize());
     // Mark it as a floating table:
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[0];
+    auto& rFlys = *pDoc->GetSpzFrameFormats();
+    auto pFly = rFlys[0];
     SwAttrSet aSet(pFly->GetAttrSet());
     aSet.Put(SwFormatFlySplit(true));
     pDoc->SetAttr(aSet, *pFly);
@@ -236,7 +236,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDocxFloatingTableExport)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//w:tbl/w:tblPr/w:tblpPr' number of nodes is incorrect
     // i.e. no floating table was exported.
-    assertXPath(pXmlDoc, "//w:tbl/w:tblPr/w:tblpPr", 1);
+    assertXPath(pXmlDoc, "//w:tbl/w:tblPr/w:tblpPr"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDocFloatingTableImport)
@@ -283,7 +283,33 @@ CPPUNIT_TEST_FIXTURE(Test, testWrapThroughLayoutInCell)
     // - Actual  : 0
     // - attribute 'layoutInCell' of '//wp:anchor' incorrect value.
     // i.e. layoutInCell was disabled, leading to bad layout in Word.
-    assertXPath(pXmlDoc, "//wp:anchor", "layoutInCell", "1");
+    assertXPath(pXmlDoc, "//wp:anchor"_ostr, "layoutInCell"_ostr, "1");
+}
+
+CPPUNIT_TEST_FIXTURE(Test, test3Endnotes)
+{
+    // Given a DOC file with 3 endnotes:
+    createSwDoc("3endnotes.doc");
+
+    // When laying out that document:
+    calcLayout();
+
+    // Then make sure that all 3 endnotes are on the last page, like in Word:
+    SwDoc* pDoc = getSwDoc();
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    SwPageFrame* pPage = pLayout->GetLastPage();
+    SwFootnoteContFrame* pFootnoteCont = pPage->FindFootnoteCont();
+    int nEndnotes = 0;
+    for (SwFrame* pLower = pFootnoteCont->GetLower(); pLower; pLower = pLower->GetNext())
+    {
+        ++nEndnotes;
+    }
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 3
+    // - Actual  : 1
+    // i.e. only 1 endnote was on the last page, the other 2 was not moved to the end of the
+    // document, which is incorrect.
+    CPPUNIT_ASSERT_EQUAL(3, nEndnotes);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDoNotBreakWrappedTables)
@@ -304,7 +330,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDoNotBreakWrappedTables)
     // - Actual  : 0
     // - XPath '/w:settings/w:compat/w:doNotBreakWrappedTables' number of nodes is incorrect
     // i.e. <w:doNotBreakWrappedTables> was not written.
-    assertXPath(pXmlDoc, "/w:settings/w:compat/w:doNotBreakWrappedTables", 1);
+    assertXPath(pXmlDoc, "/w:settings/w:compat/w:doNotBreakWrappedTables"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testAllowTextAfterFloatingTableBreak)
@@ -325,9 +351,10 @@ CPPUNIT_TEST_FIXTURE(Test, testAllowTextAfterFloatingTableBreak)
     // - Actual  : 0
     // - XPath '/w:settings/w:compat/w:compatSetting[@w:name='allowTextAfterFloatingTableBreak']' number of nodes is incorrect
     // i.e. the compat flag was lost on export.
-    assertXPath(pXmlDoc,
-                "/w:settings/w:compat/w:compatSetting[@w:name='allowTextAfterFloatingTableBreak']",
-                "val", "1");
+    assertXPath(
+        pXmlDoc,
+        "/w:settings/w:compat/w:compatSetting[@w:name='allowTextAfterFloatingTableBreak']"_ostr,
+        "val"_ostr, "1");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDOCfDontBreakWrappedTables)
@@ -358,30 +385,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDOCFloatingTableHiddenAnchor)
     // - Expected: 2
     // - Actual  : 1
     // i.e. the floating table was lost.
-    assertXPath(pLayout, "//tab", 2);
-}
-
-CPPUNIT_TEST_FIXTURE(Test, testFloattableThenFloattable)
-{
-    // Given a document that contains a floating table, immediately followed by an other floating
-    // table:
-    // When importing the document & laying it out:
-    createSwDoc("floattable-then-floattable.doc");
-    calcLayout();
-
-    // Then make sure that the two floating table has different anchors:
-    SwDoc* pDoc = getSwDoc();
-    auto& rFlys = *pDoc->GetSpzFrameFormats();
-    auto pFly1 = rFlys[0];
-    SwNodeOffset nFly1Anchor = pFly1->GetAttrSet().GetAnchor().GetAnchorContentNode()->GetIndex();
-    auto pFly2 = rFlys[1];
-    SwNodeOffset nFly2Anchor = pFly2->GetAttrSet().GetAnchor().GetAnchorContentNode()->GetIndex();
-    // Without the accompanying fix in place, this test would have failed with:
-    // - Expected: 42
-    // - Actual  : 41
-    // i.e. the two anchor positions were the same instead of first anchor followed by the second
-    // anchor.
-    CPPUNIT_ASSERT_EQUAL(nFly1Anchor + 1, nFly2Anchor);
+    assertXPath(pLayout, "//tab"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDOCVerticalFlyOffset)
@@ -410,6 +414,29 @@ CPPUNIT_TEST_FIXTURE(Test, testDOCVerticalFlyOffset)
     CPPUNIT_ASSERT(pTable2);
     // Page 2 starts with an inline table:
     CPPUNIT_ASSERT(pTable2->IsTabFrame());
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testFloattableThenFloattable)
+{
+    // Given a document that contains a floating table, immediately followed by an other floating
+    // table:
+    // When importing the document & laying it out:
+    createSwDoc("floattable-then-floattable.doc");
+    calcLayout();
+
+    // Then make sure that the two floating table has different anchors:
+    SwDoc* pDoc = getSwDoc();
+    auto& rFlys = *pDoc->GetSpzFrameFormats();
+    auto pFly1 = rFlys[0];
+    SwNodeOffset nFly1Anchor = pFly1->GetAttrSet().GetAnchor().GetAnchorContentNode()->GetIndex();
+    auto pFly2 = rFlys[1];
+    SwNodeOffset nFly2Anchor = pFly2->GetAttrSet().GetAnchor().GetAnchorContentNode()->GetIndex();
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 42
+    // - Actual  : 41
+    // i.e. the two anchor positions were the same instead of first anchor followed by the second
+    // anchor.
+    CPPUNIT_ASSERT_EQUAL(nFly1Anchor + 1, nFly2Anchor);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testFloattableOverlapNeverDOCXExport)
@@ -453,7 +480,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableOverlapNeverDOCXExport)
     // - Actual  : 0
     // - XPath '//w:tblPr/w:tblOverlap' number of nodes is incorrect
     // i.e. <w:tblOverlap> was not written.
-    assertXPath(pXmlDoc, "//w:tblPr/w:tblOverlap", "val", "never");
+    assertXPath(pXmlDoc, "//w:tblPr/w:tblOverlap"_ostr, "val"_ostr, "never");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testFloattableOverlapNeverDOCImport)
@@ -464,8 +491,8 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableOverlapNeverDOCImport)
 
     // Then make sure the second table is marked as "can't overlap":
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = rFlys[1];
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = rFlys[1];
     // Without the accompanying fix in place, this test would have failed, the fly had the default
     // "can overlap".
     CPPUNIT_ASSERT(!pFly->GetAttrSet().GetWrapInfluenceOnObjPos().GetAllowOverlap());
@@ -479,7 +506,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableFootnote)
 
     // Then make sure we both have a fly frame and a footnote:
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats& rFlys = *pDoc->GetSpzFrameFormats();
+    sw::FrameFormats<sw::SpzFrameFormat*>& rFlys = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rFlys.size());
     SwFootnoteIdxs& rFootnotes = pDoc->GetFootnoteIdxs();
     // Without the accompanying fix in place, this test would have failed with:
@@ -522,6 +549,15 @@ CPPUNIT_TEST_FIXTURE(Test, testSplitFlyInInlineTableDOC)
         CPPUNIT_ASSERT(pTab->GetPrecede());
         CPPUNIT_ASSERT(!pTab->GetFollow());
     }
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testNullPointerDereference)
+{
+    // Given a document with multiple pages:
+    // When loading that document:
+    // Without the accompanying fix in place, this test would have crashed due to null pointer access
+    createSwDoc("null-pointer-dereference.doc");
+    CPPUNIT_ASSERT_EQUAL(6, getPages());
 }
 }
 

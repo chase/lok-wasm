@@ -45,6 +45,9 @@
 #include <editeng/lrspitem.hxx>
 #include <editeng/formatbreakitem.hxx>
 #include <editeng/keepitem.hxx>
+#include <editeng/scriptspaceitem.hxx>
+#include <editeng/hngpnctitem.hxx>
+#include <editeng/forbiddenruleitem.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <i18nlangtag/mslangid.hxx>
 #include <svx/dlgutil.hxx>
@@ -57,12 +60,17 @@
 const WhichRangesContainer SvxStdParagraphTabPage::pStdRanges(
     svl::Items<
     SID_ATTR_PARA_LINESPACE, SID_ATTR_PARA_LINESPACE, // 10033
+    SID_ATTR_PARA_LEFTSPACE, SID_ATTR_PARA_FIRSTLINESPACE,
     SID_ATTR_LRSPACE, SID_ATTR_ULSPACE,              // 10048 - 10049
     SID_ATTR_PARA_REGISTER, SID_ATTR_PARA_REGISTER  // 10413
     >);
 
 const WhichRangesContainer SvxParaAlignTabPage::pAlignRanges(
-    svl::Items<SID_ATTR_PARA_ADJUST, SID_ATTR_PARA_ADJUST>);  // 10027
+    svl::Items<
+    SID_ATTR_PARA_ADJUST, SID_ATTR_PARA_ADJUST, // 10027
+    // tdf#154543 - reset snap to grid to parent
+    SID_ATTR_PARA_SNAPTOGRID, SID_ATTR_PARA_SNAPTOGRID // 10945
+    >);
 
 const WhichRangesContainer SvxParaAlignTabPage::pSdrAlignRanges(
     svl::Items<
@@ -169,34 +177,34 @@ void SvxStdParagraphTabPage::ELRLoseFocus()
     FieldUnit eUnit =
         MapToFieldUnit( pPool->GetMetric( GetWhich( SID_ATTR_LRSPACE ) ) );
 
-    sal_Int64 nL = m_xLeftIndent->denormalize(m_xLeftIndent->get_value(eUnit));
-    sal_Int64 nR = m_xRightIndent->denormalize(m_xRightIndent->get_value(eUnit));
-    OUString aTmp = m_xFLineIndent->get_text();
+    sal_Int64 nL = m_aLeftIndent.denormalize(m_aLeftIndent.get_value(eUnit));
+    sal_Int64 nR = m_aRightIndent.denormalize(m_aRightIndent.get_value(eUnit));
+    OUString aTmp = m_aFLineIndent.get_text();
 
-    if (m_xLeftIndent->get_min(FieldUnit::NONE) < 0)
-        m_xFLineIndent->set_min(-99999, FieldUnit::MM);
+    if (m_aLeftIndent.get_min(FieldUnit::NONE) < 0)
+        m_aFLineIndent.set_min(-99999, FieldUnit::MM);
     else
-        m_xFLineIndent->set_min(m_xFLineIndent->normalize(-nL), eUnit);
+        m_aFLineIndent.set_min(m_aFLineIndent.normalize(-nL), eUnit);
 
     // Check only for concrete width (Shell)
     sal_Int64 nTmp = nWidth - nL - nR - MM50;
-    m_xFLineIndent->set_max(m_xFLineIndent->normalize(nTmp), eUnit);
+    m_aFLineIndent.set_max(m_aFLineIndent.normalize(nTmp), eUnit);
 
     if (aTmp.isEmpty())
-        m_xFLineIndent->set_text(OUString());
+        m_aFLineIndent.set_text(OUString());
     // maximum left right
-    aTmp = m_xLeftIndent->get_text();
+    aTmp = m_aLeftIndent.get_text();
     nTmp = nWidth - nR - MM50;
-    m_xLeftIndent->set_max(m_xLeftIndent->normalize(nTmp), eUnit);
+    m_aLeftIndent.set_max(m_aLeftIndent.normalize(nTmp), eUnit);
 
     if ( aTmp.isEmpty() )
-        m_xLeftIndent->set_text(OUString());
-    aTmp = m_xRightIndent->get_text();
+        m_aLeftIndent.set_text(OUString());
+    aTmp = m_aRightIndent.get_text();
     nTmp = nWidth - nL - MM50;
-    m_xRightIndent->set_max(m_xRightIndent->normalize(nTmp), eUnit);
+    m_aRightIndent.set_max(m_aRightIndent.normalize(nTmp), eUnit);
 
     if ( aTmp.isEmpty() )
-        m_xRightIndent->set_text(OUString());
+        m_aRightIndent.set_text(OUString());
 
     UpdateExample_Impl();
 }
@@ -269,7 +277,7 @@ bool SvxStdParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
         }
     }
 
-    if ( m_xTopDist->get_value_changed_from_saved() || m_xBottomDist->get_value_changed_from_saved()
+    if ( m_aTopDist.get_value_changed_from_saved() || m_aBottomDist.get_value_changed_from_saved()
          || m_xContextualCB->get_state_changed_from_saved())
     {
         nWhich = GetWhich( SID_ATTR_ULSPACE );
@@ -284,23 +292,23 @@ bool SvxStdParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
             const SvxULSpaceItem& rOldItem =
                 static_cast<const SvxULSpaceItem&>(GetItemSet().GetParent()->Get( nWhich ));
 
-            if ( m_xTopDist->IsRelative() )
+            if ( m_aTopDist.IsRelative() )
                 aMargin.SetUpper( rOldItem.GetUpper(),
-                                  static_cast<sal_uInt16>(m_xTopDist->get_value(FieldUnit::NONE)) );
+                                  static_cast<sal_uInt16>(m_aTopDist.get_value(FieldUnit::NONE)) );
             else
-                aMargin.SetUpper( static_cast<sal_uInt16>(m_xTopDist->GetCoreValue(eUnit)) );
+                aMargin.SetUpper( static_cast<sal_uInt16>(m_aTopDist.GetCoreValue(eUnit)) );
 
-            if ( m_xBottomDist->IsRelative() )
+            if ( m_aBottomDist.IsRelative() )
                 aMargin.SetLower( rOldItem.GetLower(),
-                                  static_cast<sal_uInt16>(m_xBottomDist->get_value(FieldUnit::NONE)) );
+                                  static_cast<sal_uInt16>(m_aBottomDist.get_value(FieldUnit::NONE)) );
             else
-                aMargin.SetLower( static_cast<sal_uInt16>(m_xBottomDist->GetCoreValue(eUnit)) );
+                aMargin.SetLower( static_cast<sal_uInt16>(m_aBottomDist.GetCoreValue(eUnit)) );
 
         }
         else
         {
-            aMargin.SetUpper(static_cast<sal_uInt16>(m_xTopDist->GetCoreValue(eUnit)));
-            aMargin.SetLower(static_cast<sal_uInt16>(m_xBottomDist->GetCoreValue(eUnit)));
+            aMargin.SetUpper(static_cast<sal_uInt16>(m_aTopDist.GetCoreValue(eUnit)));
+            aMargin.SetLower(static_cast<sal_uInt16>(m_aBottomDist.GetCoreValue(eUnit)));
         }
         aMargin.SetContextValue(m_xContextualCB->get_active());
 
@@ -313,10 +321,126 @@ bool SvxStdParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
     }
     bool bNullTab = false;
 
-    if ( m_xLeftIndent->get_value_changed_from_saved() ||
-         m_xFLineIndent->get_value_changed_from_saved() ||
-         m_xRightIndent->get_value_changed_from_saved() ||
-         m_xAutoCB->get_state_changed_from_saved() )
+    if (m_bSplitLRSpace && m_aLeftIndent.get_value_changed_from_saved())
+    {
+        nWhich = GetWhich(SID_ATTR_PARA_LEFTSPACE);
+        MapUnit const eUnit = pPool->GetMetric(nWhich);
+        SvxTextLeftMarginItem item(nWhich);
+        pOld = GetOldItem(*rOutSet, SID_ATTR_PARA_LEFTSPACE);
+
+        if (bRelativeMode)
+        {
+            assert(GetItemSet().GetParent());
+
+            const SvxTextLeftMarginItem & rOldItem(
+                static_cast<const SvxTextLeftMarginItem&>(GetItemSet().GetParent()->Get(nWhich)));
+
+            if (m_aLeftIndent.IsRelative())
+            {
+                item.SetTextLeft(rOldItem.GetTextLeft(),
+                    static_cast<sal_uInt16>(m_aLeftIndent.get_value(FieldUnit::NONE)));
+            }
+            else
+            {
+                item.SetTextLeft(m_aLeftIndent.GetCoreValue(eUnit));
+            }
+        }
+        else
+        {
+            item.SetTextLeft(m_aLeftIndent.GetCoreValue(eUnit));
+        }
+        if (!pOld || *static_cast<const SvxTextLeftMarginItem*>(pOld) != item
+            || SfxItemState::DONTCARE == GetItemSet().GetItemState(nWhich))
+        {
+            rOutSet->Put(item);
+            bModified = true;
+        }
+    }
+
+    if (m_bSplitLRSpace && m_aRightIndent.get_value_changed_from_saved())
+    {
+        nWhich = GetWhich(SID_ATTR_PARA_RIGHTSPACE);
+        MapUnit const eUnit = pPool->GetMetric(nWhich);
+        SvxRightMarginItem item(nWhich);
+        pOld = GetOldItem(*rOutSet, SID_ATTR_PARA_RIGHTSPACE);
+
+        if (bRelativeMode)
+        {
+            assert(GetItemSet().GetParent());
+
+            const SvxRightMarginItem & rOldItem(
+                static_cast<const SvxRightMarginItem&>(GetItemSet().GetParent()->Get(nWhich)));
+
+            if (m_aRightIndent.IsRelative())
+            {
+                item.SetRight(rOldItem.GetRight(),
+                    static_cast<sal_uInt16>(m_aRightIndent.get_value(FieldUnit::NONE)));
+            }
+            else
+            {
+                item.SetRight(m_aRightIndent.GetCoreValue(eUnit));
+            }
+        }
+        else
+        {
+            item.SetRight(m_aRightIndent.GetCoreValue(eUnit));
+        }
+        if (!pOld || *static_cast<const SvxRightMarginItem*>(pOld) != item
+            || SfxItemState::DONTCARE == GetItemSet().GetItemState(nWhich))
+        {
+            rOutSet->Put(item);
+            bModified = true;
+        }
+    }
+
+    if (m_bSplitLRSpace && (m_aFLineIndent.get_value_changed_from_saved()
+                            || m_xAutoCB->get_state_changed_from_saved()))
+    {
+        nWhich = GetWhich(SID_ATTR_PARA_FIRSTLINESPACE);
+        MapUnit const eUnit = pPool->GetMetric(nWhich);
+        SvxFirstLineIndentItem item(nWhich);
+        pOld = GetOldItem(*rOutSet, SID_ATTR_PARA_FIRSTLINESPACE);
+
+        if (bRelativeMode)
+        {
+            assert(GetItemSet().GetParent());
+
+            const SvxFirstLineIndentItem & rOldItem(
+                static_cast<const SvxFirstLineIndentItem&>(GetItemSet().GetParent()->Get(nWhich)));
+
+            if (m_aFLineIndent.IsRelative())
+            {
+                item.SetTextFirstLineOffset(rOldItem.GetTextFirstLineOffset(),
+                    static_cast<sal_uInt16>(m_aFLineIndent.get_value(FieldUnit::NONE)));
+            }
+            else
+            {
+                item.SetTextFirstLineOffset(static_cast<sal_uInt16>(m_aFLineIndent.GetCoreValue(eUnit)));
+            }
+        }
+        else
+        {
+            item.SetTextFirstLineOffset(static_cast<sal_uInt16>(m_aFLineIndent.GetCoreValue(eUnit)));
+        }
+        item.SetAutoFirst(m_xAutoCB->get_active());
+        if (item.GetTextFirstLineOffset() < 0)
+        {
+            bNullTab = true;
+        }
+
+        if (!pOld || *static_cast<const SvxFirstLineIndentItem*>(pOld) != item
+            || SfxItemState::DONTCARE == GetItemSet().GetItemState(nWhich))
+        {
+            rOutSet->Put(item);
+            bModified = true;
+        }
+    }
+
+    if (!m_bSplitLRSpace &&
+        (m_aLeftIndent.get_value_changed_from_saved() ||
+         m_aFLineIndent.get_value_changed_from_saved() ||
+         m_aRightIndent.get_value_changed_from_saved() ||
+         m_xAutoCB->get_state_changed_from_saved()))
     {
         nWhich = GetWhich( SID_ATTR_LRSPACE );
         MapUnit eUnit = pPool->GetMetric( nWhich );
@@ -330,29 +454,29 @@ bool SvxStdParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
             const SvxLRSpaceItem& rOldItem =
                 static_cast<const SvxLRSpaceItem&>(GetItemSet().GetParent()->Get( nWhich ));
 
-            if (m_xLeftIndent->IsRelative())
+            if (m_aLeftIndent.IsRelative())
                 aMargin.SetTextLeft( rOldItem.GetTextLeft(),
-                                    static_cast<sal_uInt16>(m_xLeftIndent->get_value(FieldUnit::NONE)) );
+                                    static_cast<sal_uInt16>(m_aLeftIndent.get_value(FieldUnit::NONE)) );
             else
-                aMargin.SetTextLeft(m_xLeftIndent->GetCoreValue(eUnit));
+                aMargin.SetTextLeft(m_aLeftIndent.GetCoreValue(eUnit));
 
-            if ( m_xRightIndent->IsRelative() )
+            if ( m_aRightIndent.IsRelative() )
                 aMargin.SetRight( rOldItem.GetRight(),
-                                  static_cast<sal_uInt16>(m_xRightIndent->get_value(FieldUnit::NONE)) );
+                                  static_cast<sal_uInt16>(m_aRightIndent.get_value(FieldUnit::NONE)) );
             else
-                aMargin.SetRight(m_xRightIndent->GetCoreValue(eUnit));
+                aMargin.SetRight(m_aRightIndent.GetCoreValue(eUnit));
 
-            if ( m_xFLineIndent->IsRelative() )
+            if ( m_aFLineIndent.IsRelative() )
                 aMargin.SetTextFirstLineOffset( rOldItem.GetTextFirstLineOffset(),
-                                             static_cast<sal_uInt16>(m_xFLineIndent->get_value(FieldUnit::NONE)) );
+                                             static_cast<sal_uInt16>(m_aFLineIndent.get_value(FieldUnit::NONE)) );
             else
-                aMargin.SetTextFirstLineOffset(static_cast<sal_uInt16>(m_xFLineIndent->GetCoreValue(eUnit)));
+                aMargin.SetTextFirstLineOffset(static_cast<sal_uInt16>(m_aFLineIndent.GetCoreValue(eUnit)));
         }
         else
         {
-            aMargin.SetTextLeft(m_xLeftIndent->GetCoreValue(eUnit));
-            aMargin.SetRight(m_xRightIndent->GetCoreValue(eUnit));
-            aMargin.SetTextFirstLineOffset(static_cast<sal_uInt16>(m_xFLineIndent->GetCoreValue(eUnit)));
+            aMargin.SetTextLeft(m_aLeftIndent.GetCoreValue(eUnit));
+            aMargin.SetRight(m_aRightIndent.GetCoreValue(eUnit));
+            aMargin.SetTextFirstLineOffset(static_cast<sal_uInt16>(m_aFLineIndent.GetCoreValue(eUnit)));
         }
         aMargin.SetAutoFirst(m_xAutoCB->get_active());
         if ( aMargin.GetTextFirstLineOffset() < 0 )
@@ -433,26 +557,131 @@ void SvxStdParagraphTabPage::Reset( const SfxItemSet* rSet )
     if (UseCharUnitInUI(*rSet))
         eFUnit = FieldUnit::CHAR;
 
-    m_xLeftIndent->SetFieldUnit(eFUnit);
-    m_xRightIndent->SetFieldUnit(eFUnit);
-    m_xFLineIndent->SetFieldUnit(eFUnit);
+    m_aLeftIndent.SetFieldUnit(eFUnit);
+    m_aRightIndent.SetFieldUnit(eFUnit);
+    m_aFLineIndent.SetFieldUnit(eFUnit);
     if ( eFUnit == FieldUnit::CHAR )
     {
-        m_xTopDist->SetFieldUnit(FieldUnit::LINE);
-        m_xBottomDist->SetFieldUnit(FieldUnit::LINE);
+        m_aTopDist.SetFieldUnit(FieldUnit::LINE);
+        m_aBottomDist.SetFieldUnit(FieldUnit::LINE);
         SetFieldUnit(*m_xLineDistAtMetricBox, FieldUnit::POINT);
     }
     else
     {
-        m_xTopDist->SetFieldUnit(eFUnit);
-        m_xBottomDist->SetFieldUnit(eFUnit);
+        m_aTopDist.SetFieldUnit(eFUnit);
+        m_aBottomDist.SetFieldUnit(eFUnit);
         SetFieldUnit(*m_xLineDistAtMetricBox, eFUnit);
+    }
+
+    sal_uInt16 const nWhichFL(GetWhich(SID_ATTR_PARA_FIRSTLINESPACE));
+    m_bSplitLRSpace = (nWhichFL != SID_ATTR_PARA_FIRSTLINESPACE);
+    SfxItemState const eItemStateFL(rSet->GetItemState(nWhichFL));
+    sal_uInt16 const nWhichLM(GetWhich(SID_ATTR_PARA_LEFTSPACE));
+    SfxItemState const eItemStateLM(rSet->GetItemState(nWhichLM));
+    sal_uInt16 const nWhichRM(GetWhich(SID_ATTR_PARA_RIGHTSPACE));
+    SfxItemState const eItemStateRM(rSet->GetItemState(nWhichRM));
+
+    if (m_bSplitLRSpace && SfxItemState::DEFAULT <= eItemStateLM)
+    {
+        const SvxTextLeftMarginItem & rOldLeftMargin(
+            static_cast<const SvxTextLeftMarginItem &>(rSet->Get(nWhichLM)));
+
+        MapUnit const eUnit = pPool->GetMetric(nWhichLM);
+
+        if (bRelativeMode)
+        {
+            if (rOldLeftMargin.GetPropLeft() != 100)
+            {
+                m_aLeftIndent.SetRelative( true );
+                m_aLeftIndent.set_value(rOldLeftMargin.GetPropLeft(), FieldUnit::NONE);
+            }
+            else
+            {
+                m_aLeftIndent.SetRelative(false);
+                m_aLeftIndent.SetFieldUnit(eFUnit);
+                m_aLeftIndent.SetMetricValue(rOldLeftMargin.GetTextLeft(), eUnit);
+            }
+        }
+        else
+        {
+            m_aLeftIndent.SetMetricValue(rOldLeftMargin.GetTextLeft(), eUnit);
+        }
+    }
+    else if (m_bSplitLRSpace)
+    {
+        m_aLeftIndent.set_text(OUString());
+    }
+
+    if (m_bSplitLRSpace && SfxItemState::DEFAULT <= eItemStateRM)
+    {
+        const SvxRightMarginItem & rOldRightMargin(
+            static_cast<const SvxRightMarginItem &>(rSet->Get(nWhichRM)));
+
+        MapUnit const eUnit = pPool->GetMetric(nWhichRM);
+
+        if (bRelativeMode)
+        {
+            if (rOldRightMargin.GetPropRight() != 100)
+            {
+                m_aRightIndent.SetRelative( true );
+                m_aRightIndent.set_value(rOldRightMargin.GetPropRight(), FieldUnit::NONE);
+            }
+            else
+            {
+                m_aRightIndent.SetRelative(false);
+                m_aRightIndent.SetFieldUnit(eFUnit);
+                m_aRightIndent.SetMetricValue(rOldRightMargin.GetRight(), eUnit);
+            }
+        }
+        else
+        {
+            m_aRightIndent.SetMetricValue(rOldRightMargin.GetRight(), eUnit);
+        }
+    }
+    else if (m_bSplitLRSpace)
+    {
+        m_aRightIndent.set_text(OUString());
+    }
+
+    if (m_bSplitLRSpace && SfxItemState::DEFAULT <= eItemStateFL)
+    {
+        const SvxFirstLineIndentItem & rOldFirstLine(
+            static_cast<const SvxFirstLineIndentItem &>(rSet->Get(nWhichFL)));
+
+        MapUnit const eUnit = pPool->GetMetric(nWhichFL);
+
+        if (bRelativeMode)
+        {
+            if (rOldFirstLine.GetPropTextFirstLineOffset() != 100)
+            {
+                m_aFLineIndent.SetRelative(true);
+                m_aFLineIndent.set_value(rOldFirstLine.GetPropTextFirstLineOffset(), FieldUnit::NONE);
+            }
+            else
+            {
+                m_aFLineIndent.SetRelative(false);
+                m_aFLineIndent.set_min(-9999, FieldUnit::NONE);
+                m_aFLineIndent.SetFieldUnit(eFUnit);
+                m_aFLineIndent.SetMetricValue(rOldFirstLine.GetTextFirstLineOffset(), eUnit);
+            }
+            m_xAutoCB->set_active(rOldFirstLine.IsAutoFirst());
+        }
+        else
+        {
+            m_aFLineIndent.SetMetricValue(rOldFirstLine.GetTextFirstLineOffset(), eUnit);
+            m_xAutoCB->set_active(rOldFirstLine.IsAutoFirst());
+        }
+        AutoHdl_Impl(*m_xAutoCB);
+    }
+    else if (m_bSplitLRSpace)
+    {
+        m_aFLineIndent.set_text(OUString());
     }
 
     sal_uInt16 _nWhich = GetWhich( SID_ATTR_LRSPACE );
     SfxItemState eItemState = rSet->GetItemState( _nWhich );
 
-    if ( eItemState >= SfxItemState::DEFAULT )
+    if (!m_bSplitLRSpace && SfxItemState::DEFAULT <= eItemState)
     {
         MapUnit eUnit = pPool->GetMetric( _nWhich );
 
@@ -463,39 +692,39 @@ void SvxStdParagraphTabPage::Reset( const SfxItemSet* rSet )
 
             if ( rOldItem.GetPropLeft() != 100 )
             {
-                m_xLeftIndent->SetRelative( true );
-                m_xLeftIndent->set_value(rOldItem.GetPropLeft(), FieldUnit::NONE);
+                m_aLeftIndent.SetRelative( true );
+                m_aLeftIndent.set_value(rOldItem.GetPropLeft(), FieldUnit::NONE);
             }
             else
             {
-                m_xLeftIndent->SetRelative(false);
-                m_xLeftIndent->SetFieldUnit(eFUnit);
-                m_xLeftIndent->SetMetricValue(rOldItem.GetTextLeft(), eUnit);
+                m_aLeftIndent.SetRelative(false);
+                m_aLeftIndent.SetFieldUnit(eFUnit);
+                m_aLeftIndent.SetMetricValue(rOldItem.GetTextLeft(), eUnit);
             }
 
             if ( rOldItem.GetPropRight() != 100 )
             {
-                m_xRightIndent->SetRelative( true );
-                m_xRightIndent->set_value(rOldItem.GetPropRight(), FieldUnit::NONE);
+                m_aRightIndent.SetRelative( true );
+                m_aRightIndent.set_value(rOldItem.GetPropRight(), FieldUnit::NONE);
             }
             else
             {
-                m_xRightIndent->SetRelative(false);
-                m_xRightIndent->SetFieldUnit(eFUnit);
-                m_xRightIndent->SetMetricValue(rOldItem.GetRight(), eUnit);
+                m_aRightIndent.SetRelative(false);
+                m_aRightIndent.SetFieldUnit(eFUnit);
+                m_aRightIndent.SetMetricValue(rOldItem.GetRight(), eUnit);
             }
 
             if ( rOldItem.GetPropTextFirstLineOffset() != 100 )
             {
-                m_xFLineIndent->SetRelative(true);
-                m_xFLineIndent->set_value(rOldItem.GetPropTextFirstLineOffset(), FieldUnit::NONE);
+                m_aFLineIndent.SetRelative(true);
+                m_aFLineIndent.set_value(rOldItem.GetPropTextFirstLineOffset(), FieldUnit::NONE);
             }
             else
             {
-                m_xFLineIndent->SetRelative(false);
-                m_xFLineIndent->set_min(-9999, FieldUnit::NONE);
-                m_xFLineIndent->SetFieldUnit(eFUnit);
-                m_xFLineIndent->SetMetricValue(rOldItem.GetTextFirstLineOffset(), eUnit);
+                m_aFLineIndent.SetRelative(false);
+                m_aFLineIndent.set_min(-9999, FieldUnit::NONE);
+                m_aFLineIndent.SetFieldUnit(eFUnit);
+                m_aFLineIndent.SetMetricValue(rOldItem.GetTextFirstLineOffset(), eUnit);
             }
             m_xAutoCB->set_active(rOldItem.IsAutoFirst());
         }
@@ -504,18 +733,18 @@ void SvxStdParagraphTabPage::Reset( const SfxItemSet* rSet )
             const SvxLRSpaceItem& rSpace =
                 static_cast<const SvxLRSpaceItem&>(rSet->Get( _nWhich ));
 
-            m_xLeftIndent->SetMetricValue(rSpace.GetTextLeft(), eUnit);
-            m_xRightIndent->SetMetricValue(rSpace.GetRight(), eUnit);
-            m_xFLineIndent->SetMetricValue(rSpace.GetTextFirstLineOffset(), eUnit);
+            m_aLeftIndent.SetMetricValue(rSpace.GetTextLeft(), eUnit);
+            m_aRightIndent.SetMetricValue(rSpace.GetRight(), eUnit);
+            m_aFLineIndent.SetMetricValue(rSpace.GetTextFirstLineOffset(), eUnit);
             m_xAutoCB->set_active(rSpace.IsAutoFirst());
         }
         AutoHdl_Impl(*m_xAutoCB);
     }
-    else
+    else if (!m_bSplitLRSpace)
     {
-        m_xLeftIndent->set_text(OUString());
-        m_xRightIndent->set_text(OUString());
-        m_xFLineIndent->set_text(OUString());
+        m_aLeftIndent.set_text(OUString());
+        m_aRightIndent.set_text(OUString());
+        m_aFLineIndent.set_text(OUString());
     }
 
     _nWhich = GetWhich( SID_ATTR_ULSPACE );
@@ -532,45 +761,45 @@ void SvxStdParagraphTabPage::Reset( const SfxItemSet* rSet )
 
             if ( rOldItem.GetPropUpper() != 100 )
             {
-                m_xTopDist->SetRelative( true );
-                m_xTopDist->set_value(rOldItem.GetPropUpper(), FieldUnit::NONE);
+                m_aTopDist.SetRelative( true );
+                m_aTopDist.set_value(rOldItem.GetPropUpper(), FieldUnit::NONE);
             }
             else
             {
-                m_xTopDist->SetRelative(false);
+                m_aTopDist.SetRelative(false);
                 if (eFUnit == FieldUnit::CHAR)
-                    m_xTopDist->SetFieldUnit(FieldUnit::LINE);
+                    m_aTopDist.SetFieldUnit(FieldUnit::LINE);
                 else
-                    m_xTopDist->SetFieldUnit(eFUnit);
-                m_xTopDist->SetMetricValue(rOldItem.GetUpper(), eUnit);
+                    m_aTopDist.SetFieldUnit(eFUnit);
+                m_aTopDist.SetMetricValue(rOldItem.GetUpper(), eUnit);
             }
 
             if ( rOldItem.GetPropLower() != 100 )
             {
-                m_xBottomDist->SetRelative( true );
-                m_xBottomDist->set_value(rOldItem.GetPropLower(), FieldUnit::NONE);
+                m_aBottomDist.SetRelative( true );
+                m_aBottomDist.set_value(rOldItem.GetPropLower(), FieldUnit::NONE);
             }
             else
             {
-                m_xBottomDist->SetRelative(false);
+                m_aBottomDist.SetRelative(false);
                 if (eFUnit == FieldUnit::CHAR)
-                    m_xBottomDist->SetFieldUnit(FieldUnit::LINE);
+                    m_aBottomDist.SetFieldUnit(FieldUnit::LINE);
                 else
-                    m_xBottomDist->SetFieldUnit(eFUnit);
-                m_xBottomDist->SetMetricValue(rOldItem.GetLower(), eUnit);
+                    m_aBottomDist.SetFieldUnit(eFUnit);
+                m_aBottomDist.SetMetricValue(rOldItem.GetLower(), eUnit);
             }
         }
         else
         {
-            m_xTopDist->SetMetricValue(rOldItem.GetUpper(), eUnit);
-            m_xBottomDist->SetMetricValue(rOldItem.GetLower(), eUnit);
+            m_aTopDist.SetMetricValue(rOldItem.GetUpper(), eUnit);
+            m_aBottomDist.SetMetricValue(rOldItem.GetLower(), eUnit);
         }
         m_xContextualCB->set_active(rOldItem.GetContext());
     }
     else
     {
-        m_xTopDist->set_text(OUString());
-        m_xBottomDist->set_text(OUString());
+        m_aTopDist.set_text(OUString());
+        m_aBottomDist.set_text(OUString());
     }
 
     _nWhich = GetWhich( SID_ATTR_PARA_LINESPACE );
@@ -603,15 +832,15 @@ void SvxStdParagraphTabPage::Reset( const SfxItemSet* rSet )
 
 void SvxStdParagraphTabPage::ChangesApplied()
 {
-    m_xLeftIndent->save_value();
-    m_xRightIndent->save_value();
-    m_xFLineIndent->save_value();
+    m_aLeftIndent.save_value();
+    m_aRightIndent.save_value();
+    m_aFLineIndent.save_value();
     m_xLineDist->save_value();
     m_xLineDistAtPercentBox->save_value();
     m_xLineDistAtMetricBox->save_value();
     m_xRegisterCB->save_state();
-    m_xTopDist->save_value();
-    m_xBottomDist->save_value();
+    m_aTopDist.save_value();
+    m_aBottomDist.save_value();
     m_xContextualCB->save_state();
     m_xAutoCB->save_state();
 }
@@ -620,11 +849,11 @@ void SvxStdParagraphTabPage::EnableRelativeMode()
 {
     DBG_ASSERT( GetItemSet().GetParent(), "RelativeMode, but no parent-set!" );
 
-    m_xLeftIndent->EnableRelativeMode( 0, 999 );
-    m_xFLineIndent->EnableRelativeMode( 0, 999 );
-    m_xRightIndent->EnableRelativeMode( 0, 999 );
-    m_xTopDist->EnableRelativeMode( 0, 999 );
-    m_xBottomDist->EnableRelativeMode( 0, 999 );
+    m_aLeftIndent.EnableRelativeMode( 0, 999 );
+    m_aFLineIndent.EnableRelativeMode( 0, 999 );
+    m_aRightIndent.EnableRelativeMode( 0, 999 );
+    m_aTopDist.EnableRelativeMode( 0, 999 );
+    m_aBottomDist.EnableRelativeMode( 0, 999 );
     bRelativeMode = true;
 }
 
@@ -679,13 +908,13 @@ SvxStdParagraphTabPage::SvxStdParagraphTabPage(weld::Container* pPage, weld::Dia
     , nWidth(11905 /*567 * 50*/)
     , nMinFixDist(0)
     , bRelativeMode(false)
-    , m_xLeftIndent(new SvxRelativeField(m_xBuilder->weld_metric_spin_button("spinED_LEFTINDENT", FieldUnit::CM)))
-    , m_xRightIndent(new SvxRelativeField(m_xBuilder->weld_metric_spin_button("spinED_RIGHTINDENT", FieldUnit::CM)))
+    , m_aLeftIndent(m_xBuilder->weld_metric_spin_button("spinED_LEFTINDENT", FieldUnit::CM))
+    , m_aRightIndent(m_xBuilder->weld_metric_spin_button("spinED_RIGHTINDENT", FieldUnit::CM))
     , m_xFLineLabel(m_xBuilder->weld_label("labelFT_FLINEINDENT"))
-    , m_xFLineIndent(new SvxRelativeField(m_xBuilder->weld_metric_spin_button("spinED_FLINEINDENT", FieldUnit::CM)))
+    , m_aFLineIndent(m_xBuilder->weld_metric_spin_button("spinED_FLINEINDENT", FieldUnit::CM))
     , m_xAutoCB(m_xBuilder->weld_check_button("checkCB_AUTO"))
-    , m_xTopDist(new SvxRelativeField(m_xBuilder->weld_metric_spin_button("spinED_TOPDIST", FieldUnit::CM)))
-    , m_xBottomDist(new SvxRelativeField(m_xBuilder->weld_metric_spin_button("spinED_BOTTOMDIST", FieldUnit::CM)))
+    , m_aTopDist(m_xBuilder->weld_metric_spin_button("spinED_TOPDIST", FieldUnit::CM))
+    , m_aBottomDist(m_xBuilder->weld_metric_spin_button("spinED_BOTTOMDIST", FieldUnit::CM))
     , m_xContextualCB(m_xBuilder->weld_check_button("checkCB_CONTEXTUALSPACING"))
     , m_xLineDist(m_xBuilder->weld_combo_box("comboLB_LINEDIST"))
     , m_xLineDistAtPercentBox(m_xBuilder->weld_metric_spin_button("spinED_LINEDISTPERCENT", FieldUnit::PERCENT))
@@ -706,7 +935,7 @@ SvxStdParagraphTabPage::SvxStdParagraphTabPage(weld::Container* pPage, weld::Dia
     m_xLineDistAtPlaceHolderBox->set_text(OUString());
 
     Init_Impl();
-    m_xFLineIndent->set_min(-9999, FieldUnit::NONE);    // is set to 0 on default
+    m_aFLineIndent.set_min(-9999, FieldUnit::NONE);    // is set to 0 on default
 }
 
 SvxStdParagraphTabPage::~SvxStdParagraphTabPage()
@@ -715,10 +944,10 @@ SvxStdParagraphTabPage::~SvxStdParagraphTabPage()
 
 void SvxStdParagraphTabPage::EnableNegativeMode()
 {
-    m_xLeftIndent->set_min(-9999, FieldUnit::NONE);
-    m_xRightIndent->set_min(-9999, FieldUnit::NONE);
-    m_xRightIndent->EnableNegativeMode();
-    m_xLeftIndent->EnableNegativeMode();
+    m_aLeftIndent.set_min(-9999, FieldUnit::NONE);
+    m_aRightIndent.set_min(-9999, FieldUnit::NONE);
+    m_aRightIndent.EnableNegativeMode();
+    m_aLeftIndent.EnableNegativeMode();
 }
 
 void SvxStdParagraphTabPage::SetLineSpacing_Impl
@@ -875,31 +1104,31 @@ void SvxStdParagraphTabPage::Init_Impl()
     m_xLineDist->connect_changed(LINK(this, SvxStdParagraphTabPage, LineDistHdl_Impl));
 
     Link<weld::MetricSpinButton&,void> aLink2 = LINK(this, SvxStdParagraphTabPage, ELRLoseFocusHdl);
-    m_xFLineIndent->connect_value_changed(aLink2);
-    m_xLeftIndent->connect_value_changed(aLink2);
-    m_xRightIndent->connect_value_changed(aLink2);
+    m_aFLineIndent.connect_value_changed(aLink2);
+    m_aLeftIndent.connect_value_changed(aLink2);
+    m_aRightIndent.connect_value_changed(aLink2);
 
     Link<weld::MetricSpinButton&,void> aLink = LINK(this, SvxStdParagraphTabPage, ModifyHdl_Impl);
-    m_xTopDist->connect_value_changed(aLink);
-    m_xBottomDist->connect_value_changed(aLink);
+    m_aTopDist.connect_value_changed(aLink);
+    m_aBottomDist.connect_value_changed(aLink);
 
     m_xAutoCB->connect_toggled(LINK(this, SvxStdParagraphTabPage, AutoHdl_Impl));
     SfxItemPool* pPool = GetItemSet().GetPool();
     DBG_ASSERT( pPool, "Where is the pool?" );
     FieldUnit eUnit = MapToFieldUnit( pPool->GetMetric( GetWhich( SID_ATTR_LRSPACE ) ) );
 
-    m_xTopDist->set_max( m_xTopDist->normalize( MAX_DURCH ), eUnit );
-    m_xBottomDist->set_max( m_xBottomDist->normalize( MAX_DURCH ), eUnit );
+    m_aTopDist.set_max( m_aTopDist.normalize( MAX_DURCH ), eUnit );
+    m_aBottomDist.set_max( m_aBottomDist.normalize( MAX_DURCH ), eUnit );
     m_xLineDistAtMetricBox->set_max( m_xLineDistAtMetricBox->normalize( MAX_DURCH ), eUnit );
 }
 
 void SvxStdParagraphTabPage::UpdateExample_Impl()
 {
-    m_aExampleWin.SetFirstLineOffset( static_cast<short>(m_xFLineIndent->denormalize( m_xFLineIndent->get_value( FieldUnit::TWIP ) )) );
-    m_aExampleWin.SetLeftMargin( static_cast<tools::Long>(m_xLeftIndent->denormalize( m_xLeftIndent->get_value( FieldUnit::TWIP ) ) ) );
-    m_aExampleWin.SetRightMargin( static_cast<tools::Long>(m_xRightIndent->denormalize( m_xRightIndent->get_value( FieldUnit::TWIP ) ) ) );
-    m_aExampleWin.SetUpper( static_cast<sal_uInt16>(m_xTopDist->denormalize( m_xTopDist->get_value( FieldUnit::TWIP ) )) );
-    m_aExampleWin.SetLower( static_cast<sal_uInt16>(m_xBottomDist->denormalize( m_xBottomDist->get_value( FieldUnit::TWIP ) )) );
+    m_aExampleWin.SetFirstLineOffset( static_cast<short>(m_aFLineIndent.denormalize( m_aFLineIndent.get_value( FieldUnit::TWIP ) )) );
+    m_aExampleWin.SetLeftMargin( static_cast<tools::Long>(m_aLeftIndent.denormalize( m_aLeftIndent.get_value( FieldUnit::TWIP ) ) ) );
+    m_aExampleWin.SetRightMargin( static_cast<tools::Long>(m_aRightIndent.denormalize( m_aRightIndent.get_value( FieldUnit::TWIP ) ) ) );
+    m_aExampleWin.SetUpper( static_cast<sal_uInt16>(m_aTopDist.denormalize( m_aTopDist.get_value( FieldUnit::TWIP ) )) );
+    m_aExampleWin.SetLower( static_cast<sal_uInt16>(m_aBottomDist.denormalize( m_aBottomDist.get_value( FieldUnit::TWIP ) )) );
 
     int nPos = m_xLineDist->get_active();
 
@@ -933,7 +1162,7 @@ IMPL_LINK(SvxStdParagraphTabPage, AutoHdl_Impl, weld::Toggleable&, rBox, void)
 {
     bool bEnable = !rBox.get_active();
     m_xFLineLabel->set_sensitive(bEnable);
-    m_xFLineIndent->set_sensitive(bEnable);
+    m_aFLineIndent.set_sensitive(bEnable);
 }
 
 void SvxStdParagraphTabPage::EnableAutoFirstLine()
@@ -1398,7 +1627,7 @@ bool SvxExtParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
          m_xExtHyphenAfterBox->get_value_changed_from_saved() ||
          m_xMaxHyphenEdit->get_value_changed_from_saved() ||
          m_xMinWordLength->get_value_changed_from_saved() ||
-         m_xHyphenZone->get_value_changed_from_saved() )
+         m_aHyphenZone.get_value_changed_from_saved() )
     {
         SvxHyphenZoneItem aHyphen(
             static_cast<const SvxHyphenZoneItem&>(GetItemSet().Get( _nWhich )) );
@@ -1417,7 +1646,7 @@ bool SvxExtParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
         SfxItemPool* pPool = GetItemSet().GetPool();
         DBG_ASSERT( pPool, "Where is the pool?" );
         MapUnit eUnit = pPool->GetMetric( _nWhich );
-        aHyphen.GetTextHyphenZone() = static_cast<sal_uInt16>(m_xHyphenZone->GetCoreValue(eUnit));
+        aHyphen.GetTextHyphenZone() = static_cast<sal_uInt16>(m_aHyphenZone.GetCoreValue(eUnit));
 
         if ( !pOld ||
             *static_cast<const SvxHyphenZoneItem*>(pOld) != aHyphen ||
@@ -1541,9 +1770,9 @@ bool SvxExtParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
 
     // paragraph split
     _nWhich = GetWhich( SID_ATTR_PARA_SPLIT );
-    eState = m_xKeepTogetherBox->get_state();
+    eState = m_xAllowSplitBox->get_state();
 
-    if (m_xKeepTogetherBox->get_state_changed_from_saved())
+    if (m_xAllowSplitBox->get_state_changed_from_saved())
     {
         pOld = GetOldItem( *rOutSet, SID_ATTR_PARA_SPLIT );
 
@@ -1567,14 +1796,14 @@ bool SvxExtParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
     }
 
     // widows and orphans
-    _nWhich = GetWhich( SID_ATTR_PARA_WIDOWS );
+    TypedWhichId<SvxWidowsItem> nWidowsWhich = GetWhich( SID_ATTR_PARA_WIDOWS );
     eState = m_xWidowBox->get_state();
 
     if ( m_xWidowBox->get_state_changed_from_saved() ||
          m_xWidowRowNo->get_value_changed_from_saved() )
     {
         SvxWidowsItem rItem( eState == TRISTATE_TRUE ?
-                             static_cast<sal_uInt8>(m_xWidowRowNo->get_value()) : 0, _nWhich );
+                             static_cast<sal_uInt8>(m_xWidowRowNo->get_value()) : 0, nWidowsWhich );
         pOld = GetOldItem( *rOutSet, SID_ATTR_PARA_WIDOWS );
 
         if ( m_xWidowBox->get_state_changed_from_saved() || !pOld || !( *static_cast<const SvxWidowsItem*>(pOld) == rItem ) )
@@ -1584,14 +1813,14 @@ bool SvxExtParagraphTabPage::FillItemSet( SfxItemSet* rOutSet )
         }
     }
 
-    _nWhich = GetWhich( SID_ATTR_PARA_ORPHANS );
+    TypedWhichId<SvxOrphansItem> nOrphansWhich = GetWhich( SID_ATTR_PARA_ORPHANS );
     eState = m_xOrphanBox->get_state();
 
     if ( m_xOrphanBox->get_state_changed_from_saved() ||
          m_xOrphanRowNo->get_value_changed_from_saved() )
     {
         SvxOrphansItem rItem( eState == TRISTATE_TRUE ?
-                             static_cast<sal_uInt8>(m_xOrphanRowNo->get_value()) : 0, _nWhich );
+                             static_cast<sal_uInt8>(m_xOrphanRowNo->get_value()) : 0, nOrphansWhich );
         pOld = GetOldItem( *rOutSet, SID_ATTR_PARA_ORPHANS );
 
         if ( m_xOrphanBox->get_state_changed_from_saved() ||
@@ -1635,8 +1864,8 @@ void SvxExtParagraphTabPage::Reset( const SfxItemSet* rSet )
         m_xExtHyphenAfterBox->set_value(rHyphen.GetMinTrail());
         m_xMaxHyphenEdit->set_value(rHyphen.GetMaxHyphens());
         m_xMinWordLength->set_value(rHyphen.GetMinWordLength());
-        m_xHyphenZone->SetFieldUnit(eFUnit);
-        m_xHyphenZone->SetMetricValue(rHyphen.GetTextHyphenZone(), MapUnit::MapTwip);
+        m_aHyphenZone.SetFieldUnit(eFUnit);
+        m_aHyphenZone.SetMetricValue(rHyphen.GetTextHyphenZone(), MapUnit::MapTwip);
     }
     else
     {
@@ -1656,7 +1885,7 @@ void SvxExtParagraphTabPage::Reset( const SfxItemSet* rSet )
     m_xMinWordLabel->set_sensitive(bEnable);
     m_xMinWordLength->set_sensitive(bEnable);
     m_xHyphenZoneLabel->set_sensitive(bEnable);
-    m_xHyphenZone->set_sensitive(bEnable);
+    m_aHyphenZone.set_sensitive(bEnable);
 
     switch (rSet->GetItemState(SID_ATTR_PARA_PAGENUM))
     {
@@ -1841,13 +2070,13 @@ void SvxExtParagraphTabPage::Reset( const SfxItemSet* rSet )
     {
         const SvxFormatSplitItem& rSplit =
             static_cast<const SvxFormatSplitItem&>(rSet->Get( _nWhich ));
-        aKeepTogetherState.bTriStateEnabled = false;
+        aAllowSplitState.bTriStateEnabled = false;
 
         if ( !rSplit.GetValue() )
-            m_xKeepTogetherBox->set_state(TRISTATE_TRUE);
+            m_xAllowSplitBox->set_state(TRISTATE_FALSE);
         else
         {
-            m_xKeepTogetherBox->set_state(TRISTATE_FALSE);
+            m_xAllowSplitBox->set_state(TRISTATE_TRUE);
             // default widows and orphans to enabled
             m_xWidowBox->set_sensitive(true);
             m_xOrphanBox->set_sensitive(true);
@@ -1898,12 +2127,12 @@ void SvxExtParagraphTabPage::Reset( const SfxItemSet* rSet )
         aOrphanState.eState = m_xOrphanBox->get_state();
     }
     else if ( SfxItemState::DONTCARE == eItemState )
-        m_xKeepTogetherBox->set_state(TRISTATE_INDET);
+        m_xAllowSplitBox->set_state(TRISTATE_INDET);
     else
-        m_xKeepTogetherBox->set_sensitive(false);
+        m_xAllowSplitBox->set_sensitive(false);
 
     // so that everything is enabled correctly
-    KeepTogetherHdl();
+    AllowSplitHdl();
     WidowHdl();
     OrphanHdl();
     ChangesApplied();
@@ -1913,15 +2142,11 @@ void SvxExtParagraphTabPage::ChangesApplied()
     m_xHyphenBox->save_state();
     m_xHyphenNoCapsBox->save_state();
     m_xHyphenNoLastWordBox->save_state();
-    m_xExtHyphenBeforeBox->set_value(m_xExtHyphenBeforeBox->get_value());
-    m_xExtHyphenAfterBox->set_value(m_xExtHyphenAfterBox->get_value());
-    m_xMaxHyphenEdit->set_value(m_xMaxHyphenEdit->get_value());
-    m_xMinWordLength->set_value(m_xMinWordLength->get_value());
-    SfxItemPool* pPool = GetItemSet().GetPool();
-    DBG_ASSERT( pPool, "Where is the pool?" );
-    FieldUnit eUnit =
-           MapToFieldUnit( pPool->GetMetric( GetWhich( SID_ATTR_PARA_HYPHENZONE ) ) );
-    m_xHyphenZone->set_value(m_xHyphenZone->get_value(eUnit), eUnit);
+    m_xExtHyphenBeforeBox->save_value();
+    m_xExtHyphenAfterBox->save_value();
+    m_xMaxHyphenEdit->save_value();
+    m_xMinWordLength->save_value();
+    m_aHyphenZone.save_value();
     m_xPageBreakBox->save_state();
     m_xBreakPositionLB->save_value();
     m_xBreakTypeLB->save_value();
@@ -1929,7 +2154,7 @@ void SvxExtParagraphTabPage::ChangesApplied()
     m_xApplyCollBox->save_value();
     m_xPageNumBox->save_state();
     m_xPagenumEdit->save_value();
-    m_xKeepTogetherBox->save_state();
+    m_xAllowSplitBox->save_state();
     m_xKeepParaBox->save_state();
     m_xWidowBox->save_state();
     m_xOrphanBox->save_state();
@@ -1975,7 +2200,7 @@ SvxExtParagraphTabPage::SvxExtParagraphTabPage(weld::Container* pPage, weld::Dia
     , m_xMinWordLabel(m_xBuilder->weld_label("labelMinLen"))
     , m_xMinWordLength(m_xBuilder->weld_spin_button("spinMinLen"))
     , m_xHyphenZoneLabel(m_xBuilder->weld_label("labelHyphenZone"))
-    , m_xHyphenZone(new SvxRelativeField(m_xBuilder->weld_metric_spin_button("spinHyphenZone", FieldUnit::CM)))
+    , m_aHyphenZone(m_xBuilder->weld_metric_spin_button("spinHyphenZone", FieldUnit::CM))
     //Page break
     , m_xPageBreakBox(m_xBuilder->weld_check_button("checkInsert"))
     , m_xBreakTypeFT(m_xBuilder->weld_label("labelType"))
@@ -1987,7 +2212,7 @@ SvxExtParagraphTabPage::SvxExtParagraphTabPage(weld::Container* pPage, weld::Dia
     , m_xPageNumBox(m_xBuilder->weld_check_button("labelPageNum"))
     , m_xPagenumEdit(m_xBuilder->weld_spin_button("spinPageNumber"))
     // Options
-    , m_xKeepTogetherBox(m_xBuilder->weld_check_button("checkSplitPara"))
+    , m_xAllowSplitBox(m_xBuilder->weld_check_button("checkSplitPara"))
     , m_xKeepParaBox(m_xBuilder->weld_check_button("checkKeepPara"))
     , m_xOrphanBox(m_xBuilder->weld_check_button("checkOrphan"))
     , m_xOrphanRowNo(m_xBuilder->weld_spin_button("spinOrphan"))
@@ -2001,7 +2226,7 @@ SvxExtParagraphTabPage::SvxExtParagraphTabPage(weld::Container* pPage, weld::Dia
 
     m_xHyphenBox->connect_toggled(LINK(this, SvxExtParagraphTabPage, HyphenClickHdl_Impl));
     m_xPageBreakBox->connect_toggled(LINK(this, SvxExtParagraphTabPage, PageBreakHdl_Impl));
-    m_xKeepTogetherBox->connect_toggled(LINK(this, SvxExtParagraphTabPage, KeepTogetherHdl_Impl));
+    m_xAllowSplitBox->connect_toggled(LINK(this, SvxExtParagraphTabPage, AllowSplitHdl_Impl));
     m_xWidowBox->connect_toggled(LINK(this, SvxExtParagraphTabPage, WidowHdl_Impl));
     m_xOrphanBox->connect_toggled(LINK(this, SvxExtParagraphTabPage, OrphanHdl_Impl));
     m_xApplyCollBtn->connect_toggled(LINK(this, SvxExtParagraphTabPage, ApplyCollClickHdl_Impl));
@@ -2046,7 +2271,7 @@ SvxExtParagraphTabPage::SvxExtParagraphTabPage(weld::Container* pPage, weld::Dia
     m_xMinWordLabel->set_sensitive(false);
     m_xMinWordLength->set_sensitive(false);
     m_xHyphenZoneLabel->set_sensitive(false);
-    m_xHyphenZone->set_sensitive(false);
+    m_aHyphenZone.set_sensitive(false);
     m_xPageNumBox->set_sensitive(false);
     m_xPagenumEdit->set_sensitive(false);
     // no column break in HTML
@@ -2103,17 +2328,17 @@ IMPL_LINK(SvxExtParagraphTabPage, PageBreakHdl_Impl, weld::Toggleable&, rToggle,
     PageBreakHdl();
 }
 
-void SvxExtParagraphTabPage::KeepTogetherHdl()
+void SvxExtParagraphTabPage::AllowSplitHdl()
 {
-    bool bEnable = m_xKeepTogetherBox->get_state() == TRISTATE_FALSE;
+    bool bEnable = m_xAllowSplitBox->get_state() == TRISTATE_TRUE;
     m_xWidowBox->set_sensitive(bEnable);
     m_xOrphanBox->set_sensitive(bEnable);
 }
 
-IMPL_LINK(SvxExtParagraphTabPage, KeepTogetherHdl_Impl, weld::Toggleable&, rToggle, void)
+IMPL_LINK(SvxExtParagraphTabPage, AllowSplitHdl_Impl, weld::Toggleable&, rToggle, void)
 {
-    aKeepTogetherState.ButtonToggled(rToggle);
-    KeepTogetherHdl();
+    aAllowSplitState.ButtonToggled(rToggle);
+    AllowSplitHdl();
 }
 
 void SvxExtParagraphTabPage::WidowHdl()
@@ -2123,11 +2348,11 @@ void SvxExtParagraphTabPage::WidowHdl()
         case TRISTATE_TRUE:
             m_xWidowRowNo->set_sensitive(true);
             m_xWidowRowLabel->set_sensitive(true);
-            m_xKeepTogetherBox->set_sensitive(false);
+            m_xAllowSplitBox->set_sensitive(true);
             break;
         case TRISTATE_FALSE:
             if (m_xOrphanBox->get_state() == TRISTATE_FALSE)
-                m_xKeepTogetherBox->set_sensitive(true);
+                m_xAllowSplitBox->set_sensitive(false);
             [[fallthrough]];
         case TRISTATE_INDET:
             m_xWidowRowNo->set_sensitive(false);
@@ -2155,12 +2380,12 @@ void SvxExtParagraphTabPage::OrphanHdl()
         case TRISTATE_TRUE:
             m_xOrphanRowNo->set_sensitive(true);
             m_xOrphanRowLabel->set_sensitive(true);
-            m_xKeepTogetherBox->set_sensitive(false);
+            m_xAllowSplitBox->set_sensitive(true);
             break;
 
         case TRISTATE_FALSE:
             if (m_xWidowBox->get_state() == TRISTATE_FALSE)
-                m_xKeepTogetherBox->set_sensitive(true);
+                m_xAllowSplitBox->set_sensitive(true);
             [[fallthrough]];
         case TRISTATE_INDET:
             m_xOrphanRowNo->set_sensitive(false);
@@ -2183,7 +2408,7 @@ void SvxExtParagraphTabPage::HyphenClickHdl()
     m_xMinWordLabel->set_sensitive(bEnable);
     m_xMinWordLength->set_sensitive(bEnable);
     m_xHyphenZoneLabel->set_sensitive(bEnable);
-    m_xHyphenZone->set_sensitive(bEnable);
+    m_aHyphenZone.set_sensitive(bEnable);
     m_xHyphenBox->set_state(bEnable ? TRISTATE_TRUE : TRISTATE_FALSE);
 }
 

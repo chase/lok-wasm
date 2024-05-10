@@ -25,8 +25,11 @@
 #include <visitors.hxx>
 #include <tools/UnitConversion.hxx>
 #include <vcl/metric.hxx>
+#include <o3tl/safeint.hxx>
 #include <osl/diagnose.h>
 #include <basegfx/numeric/ftools.hxx>
+#include <unicode/uchar.h>
+#include <unicode/uscript.h>
 
 namespace {
 
@@ -415,33 +418,6 @@ void SmStructureNode::SetSubNodesBinMo(std::unique_ptr<SmNode> pFirst, std::uniq
     ClaimPaternity();
 }
 
-void SmStructureNode::SetSubNodesBinMo(SmNode* pFirst, SmNode* pSecond, SmNode* pThird)
-{
-    if(GetType()==SmNodeType::BinDiagonal)
-    {
-        size_t nSize = pSecond ? 3 : (pThird ? 2 : (pFirst ? 1 : 0));
-        maSubNodes.resize( nSize );
-        if (pFirst)
-            maSubNodes[0] = pFirst;
-        if (pSecond)
-            maSubNodes[2] = pSecond;
-        if (pThird)
-            maSubNodes[1] = pThird;
-    }
-    else
-    {
-        size_t nSize = pThird ? 3 : (pSecond ? 2 : (pFirst ? 1 : 0));
-        maSubNodes.resize( nSize );
-        if (pFirst)
-            maSubNodes[0] = pFirst;
-        if (pSecond)
-            maSubNodes[1] = pSecond;
-        if (pThird)
-            maSubNodes[2] = pThird;
-    }
-    ClaimPaternity();
-}
-
 void SmStructureNode::SetSubNodes(SmNodeArray&& rNodeArray)
 {
     maSubNodes = std::move(rNodeArray);
@@ -795,6 +771,12 @@ void SmRootNode::Arrange(OutputDevice &rDev, const SmFormat &rFormat)
 
     pRootSym->Arrange(rDev, rFormat);
 
+    // Set the top and bottom of the root symbol to the top and bottom of its glyph bounding rect,
+    // to get accurate position of the root symbol.
+    SmRect rRootSymRect = pRootSym->AsGlyphRect();
+    pRootSym->SetTop(rRootSymRect.GetTop());
+    pRootSym->SetBottom(rRootSymRect.GetBottom());
+
     Point  aPos = pRootSym->AlignTo(*pBody, RectPos::Left, RectHorAlign::Center, RectVerAlign::Baseline);
     //! override calculated vertical position
     aPos.setY( pRootSym->GetTop() + pBody->GetBottom() - pRootSym->GetBottom() );
@@ -835,8 +817,14 @@ void SmBinHorNode::Arrange(OutputDevice &rDev, const SmFormat &rFormat)
 
     const SmRect &rOpRect = pOper->GetRect();
 
-    tools::Long nDist = (rOpRect.GetWidth() *
-                 rFormat.GetDistance(DIS_HORIZONTAL)) / 100;
+    tools::Long nMul;
+    if (o3tl::checked_multiply<tools::Long>(rOpRect.GetWidth(), rFormat.GetDistance(DIS_HORIZONTAL), nMul))
+    {
+        SAL_WARN("starmath", "integer overflow");
+        return;
+    }
+
+    tools::Long nDist = nMul / 100;
 
     SmRect::operator = (*pLeft);
 
@@ -1880,8 +1868,24 @@ void SmTextNode::Prepare(const SmFormat &rFormat, const SmDocShell &rDocShell, i
     // special handling for ':' where it is a token on its own and is likely
     // to be used for mathematical notations. (E.g. a:b = 2:3)
     // In that case it should not be displayed in italic.
-    if (GetToken().aText.getLength() == 1 && GetToken().aText[0] == ':')
+    if (maText.getLength() == 1 && GetToken().aText[0] == ':')
         Attributes() &= ~FontAttribute::Italic;
+
+    // Arabic text should not be italic, so we check for any character in Arabic script and
+    // remove italic attribute.
+    if (!maText.isEmpty())
+    {
+        sal_Int32 nIndex = 0;
+        while (nIndex < maText.getLength())
+        {
+            sal_uInt32 cChar = maText.iterateCodePoints(&nIndex);
+            if (u_getIntPropertyValue(cChar, UCHAR_SCRIPT) == USCRIPT_ARABIC)
+            {
+                Attributes() &= ~FontAttribute::Italic;
+                break;
+            }
+        }
+    }
 };
 
 
@@ -2162,33 +2166,14 @@ void SmMathSymbolNode::Arrange(OutputDevice &rDev, const SmFormat &rFormat)
 
 /**************************************************************************/
 
-static bool lcl_IsFromGreekSymbolSet( std::u16string_view aTokenText )
-{
-    bool bRes = false;
-
-    // valid symbol name needs to have a '%' at pos 0 and at least an additional char
-    if (aTokenText.size() > 2 && aTokenText[0] == u'%')
-    {
-        OUString aName( aTokenText.substr(1) );
-        SmSym *pSymbol = SM_MOD()->GetSymbolManager().GetSymbolByName( aName );
-        if (pSymbol && SmLocalizedSymbolData::GetExportSymbolSetName(pSymbol->GetSymbolSetName()) == "Greek")
-            bRes = true;
-    }
-
-    return bRes;
-}
-
-
 SmSpecialNode::SmSpecialNode(SmNodeType eNodeType, const SmToken &rNodeToken, sal_uInt16 _nFontDesc)
     : SmTextNode(eNodeType, rNodeToken, _nFontDesc)
-    , mbIsFromGreekSymbolSet(lcl_IsFromGreekSymbolSet( rNodeToken.aText ))
 {
 }
 
 
 SmSpecialNode::SmSpecialNode(const SmToken &rNodeToken)
-    : SmTextNode(SmNodeType::Special, rNodeToken, FNT_MATH)  // default Font isn't always correct!
-    , mbIsFromGreekSymbolSet(lcl_IsFromGreekSymbolSet( rNodeToken.aText ))
+    : SmTextNode(SmNodeType::Special, rNodeToken, FNT_VARIABLE)  // default Font isn't always correct!
 {
 }
 
@@ -2200,13 +2185,24 @@ void SmSpecialNode::Prepare(const SmFormat &rFormat, const SmDocShell &rDocShell
     const SmSym   *pSym;
     SmModule  *pp = SM_MOD();
 
-    OUString aName(GetToken().aText.copy(1));
-    if (nullptr != (pSym = pp->GetSymbolManager().GetSymbolByName( aName )))
+    bool bIsGreekSymbol = false;
+    bool bIsSpecialSymbol = false;
+    bool bIsArabic = false;
+
+    if (nullptr != (pSym = pp->GetSymbolManager().GetSymbolByName(GetToken().aText.subView(1))))
     {
         sal_UCS4 cChar = pSym->GetCharacter();
         OUString aTmp( &cChar, 1 );
         SetText( aTmp );
-        GetFont() = pSym->GetFace();
+        GetFont() = pSym->GetFace(&rFormat);
+
+        OUString aSymbolSetName = SmLocalizedSymbolData::GetExportSymbolSetName(pSym->GetSymbolSetName());
+        if (aSymbolSetName == "Greek")
+            bIsGreekSymbol = true;
+        else if (aSymbolSetName == "Special")
+            bIsSpecialSymbol = true;
+        else if (aSymbolSetName == "Arabic")
+            bIsArabic = true;
     }
     else
     {
@@ -2228,23 +2224,31 @@ void SmSpecialNode::Prepare(const SmFormat &rFormat, const SmDocShell &rDocShell
 
     Flags() |= FontChangeMask::Face;
 
-    if (!mbIsFromGreekSymbolSet)
+    sal_uInt32 cChar = 0;
+    if (!GetText().isEmpty())
+    {
+        sal_Int32 nIndex = 0;
+        cChar = GetText().iterateCodePoints(&nIndex);
+        if (!bIsArabic)
+            bIsArabic = u_getIntPropertyValue(cChar, UCHAR_SCRIPT) == USCRIPT_ARABIC;
+    }
+
+    if (!bIsGreekSymbol && !bIsSpecialSymbol && !bIsArabic)
         return;
 
-    OSL_ENSURE( GetText().getLength() == 1, "a symbol should only consist of 1 char!" );
+    // Arabic and special symbols should not be italic,
+    // Greek is italic only in some cases.
     bool bItalic = false;
-    sal_Int16 nStyle = rFormat.GetGreekCharStyle();
-    OSL_ENSURE( nStyle >= 0 && nStyle <= 2, "unexpected value for GreekCharStyle" );
-    if (nStyle == 1)
-        bItalic = true;
-    else if (nStyle == 2)
+    if (bIsGreekSymbol)
     {
-        const OUString& rTmp(GetText());
-        if (!rTmp.isEmpty())
+        sal_Int16 nStyle = rFormat.GetGreekCharStyle();
+        OSL_ENSURE( nStyle >= 0 && nStyle <= 2, "unexpected value for GreekCharStyle" );
+        if (nStyle == 1)
+            bItalic = true;
+        else if (nStyle == 2)
         {
             static const sal_Unicode cUppercaseAlpha = 0x0391;
             static const sal_Unicode cUppercaseOmega = 0x03A9;
-            sal_Unicode cChar = rTmp[0];
             // uppercase letters should be straight and lowercase letters italic
             bItalic = cUppercaseAlpha > cChar || cChar > cUppercaseOmega;
         }

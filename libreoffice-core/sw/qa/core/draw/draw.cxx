@@ -64,7 +64,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreDrawTest, testTextboxUndoOrdNum)
     createSwDoc("textbox-undo-ordnum.docx");
     SwDoc* pDoc = getSwDoc();
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
     // Test the state before del + undo.
     for (const auto& pFormat : rFormats)
     {
@@ -112,7 +112,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreDrawTest, testTdf107727FrameBorder)
     createSwDoc("tdf107727_FrameBorder.odt");
 
     // Export to RTF and reload
-    reload("Rich Text Format", nullptr);
+    saveAndReload("Rich Text Format");
 
     // Get frame without border and inspect it.
     uno::Reference<text::XTextFramesSupplier> xTextFramesSupplier(mxComponent, uno::UNO_QUERY);

@@ -25,6 +25,7 @@
 #include <rtl/ustrbuf.hxx>
 #include <osl/diagnose.h>
 #include <tools/date.hxx>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/uno/Type.hxx>
 #include <com/sun/star/util/Date.hpp>
 #include <com/sun/star/util/DateTime.hpp>
@@ -133,7 +134,7 @@ namespace
 
         // all okay?
         if ( !bWellformed )
-            return css::util::Date( 1, 1, 1900 );
+            throw com::sun::star::lang::IllegalArgumentException();
 
         return aDate;
     }
@@ -162,7 +163,7 @@ namespace
             ostr.fill('0');
             ostr.width(9);
             ostr << rTime.NanoSeconds;
-            sInfo.append(OUString::createFromAscii(ostr.str().c_str()));
+            sInfo.appendAscii(ostr.str().c_str());
         }
 
         return sInfo.makeStringAndClear();
@@ -203,7 +204,7 @@ namespace
 
         // all okay?
         if ( !bWellformed )
-            return css::util::Time();
+            throw com::sun::star::lang::IllegalArgumentException();
 
         return aTime;
     }

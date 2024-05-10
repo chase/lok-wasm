@@ -42,10 +42,6 @@
 
 #include <mutex>
 
-using namespace com::sun::star::lang;
-using namespace com::sun::star::uri;
-using namespace com::sun::star::uno;
-
 namespace desktop
 {
 
@@ -325,10 +321,6 @@ void CommandLineArgs::ParseCommandLine_Impl( Supplier& supplier )
             else if ( oArg == "headless" )
             {
                 setHeadless();
-            }
-            else if ( oArg == "eventtesting" )
-            {
-                m_eventtesting = true;
             }
             else if ( oArg == "safe-mode" )
             {
@@ -707,7 +699,6 @@ void CommandLineArgs::InitParamValues()
     m_invisible = true;
     m_headless = true;
 #endif
-    m_eventtesting = false;
     m_quickstart = false;
     m_noquickstart = false;
     m_terminateafterinit = false;

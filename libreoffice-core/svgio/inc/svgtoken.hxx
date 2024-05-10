@@ -41,6 +41,7 @@ namespace svgio::svgreader
             Xmlns,
             Version,
             Id,
+            In,
             Rx,
             Ry,
             Points,
@@ -69,6 +70,7 @@ namespace svgio::svgreader
             StartOffset,
             Method,
             Spacing,
+            StdDeviation,
             TextAlign,
             PathLength,
             Type,
@@ -78,6 +80,15 @@ namespace svgio::svgreader
             Color,
             ClipPathNode,
             ClipPathProperty,
+            FeColorMatrix,
+            FeDropShadow,
+            FeFlood,
+            FeImage,
+            FeGaussianBlur,
+            FeOffset,
+            Filter,
+            FloodColor,
+            FloodOpacity,
             Mask,
             ClipPathUnits,
             MaskUnits,
@@ -98,9 +109,11 @@ namespace svgio::svgreader
             PatternContentUnits,
             PatternTransform,
             Opacity,
+            SystemLanguage,
             Visibility,
             Title,
             Desc,
+            Overflow,
 
             // AspectRatio and params
             PreserveAspectRatio,
@@ -117,12 +130,14 @@ namespace svgio::svgreader
             XMaxYMax,
             Meet,
             Slice,
+            Values,
 
             // structural elements
             Defs,
             G,
             Svg,
             Symbol,
+            Switch,
             Use,
             A,
 
@@ -176,14 +191,11 @@ namespace svgio::svgreader
             // text tokens
             Text,
             BaselineShift,
-
-            FlowRoot
+            DominantBaseline
         };
 
-        SVGToken StrToSVGToken(const OUString& rStr, bool bCaseIndependent);
-
-        OUString getStrTitle();
-        OUString getStrDesc();
+        SVGToken StrToSVGToken(std::u16string_view rStr, bool bIgnoreCase);
+        OUString SVGTokenToStr(const SVGToken& rToken);
 
 } // end of namespace svgio::svgreader
 

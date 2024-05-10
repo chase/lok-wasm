@@ -26,6 +26,7 @@
 #include <svx/xflgrit.hxx>
 #include <svx/xflhtit.hxx>
 #include <svx/xbtmpit.hxx>
+#include <svx/xgrscit.hxx>
 #include <cuitabarea.hxx>
 #include <sfx2/tabdlg.hxx>
 
@@ -194,6 +195,7 @@ void SvxAreaTabPage::ActivatePage( const SfxItemSet& rSet )
         case drawing::FillStyle_GRADIENT:
         {
             m_rXFSet.Put( rSet.Get( GetWhich( XATTR_FILLGRADIENT ) ) );
+            m_rXFSet.Put(rSet.Get(GetWhich(XATTR_GRADIENTSTEPCOUNT)));
             SelectFillType(*m_xBtnGradient);
             break;
         }
@@ -274,6 +276,21 @@ template< typename TTabPage >
 bool SvxAreaTabPage::FillItemSet_Impl( SfxItemSet* rAttrs)
 {
     return static_cast<TTabPage&>( *m_xFillTabPage ).FillItemSet( rAttrs );
+}
+
+OUString SvxAreaTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString toggleButton[] = { "btnnone",    "btncolor", "btngradient",     "btnbitmap",
+                                "btnpattern", "btnhatch", "btnusebackground" };
+
+    for (const auto& toggle : toggleButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_toggle_button(toggle))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SvxAreaTabPage::FillItemSet( SfxItemSet* rAttrs )

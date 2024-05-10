@@ -87,33 +87,32 @@ void SwHTMLParser::InsertDrawObject( SdrObject* pNewDrawObj,
         Reader::ResetFrameFormatAttrs( aFrameSet );
 
     sal_uInt16 nLeftSpace = 0, nRightSpace = 0, nUpperSpace = 0, nLowerSpace = 0;
-    if( (rPixSpace.Width() || rPixSpace.Height()) && Application::GetDefaultDevice() )
+    if( rPixSpace.Width() || rPixSpace.Height() )
     {
-        Size aTwipSpc( rPixSpace.Width(), rPixSpace.Height() );
-        aTwipSpc =
-            Application::GetDefaultDevice()->PixelToLogic( aTwipSpc,
-                                                MapMode(MapUnit::MapTwip) );
-        nLeftSpace = nRightSpace = o3tl::narrowing<sal_uInt16>(aTwipSpc.Width());
-        nUpperSpace = nLowerSpace = o3tl::narrowing<sal_uInt16>(aTwipSpc.Height());
+        nLeftSpace = nRightSpace = o3tl::convert(rPixSpace.Width(), o3tl::Length::px, o3tl::Length::twip);
+        nUpperSpace = nLowerSpace = o3tl::convert(rPixSpace.Height(), o3tl::Length::px, o3tl::Length::twip);
     }
 
     // set left/right border
-    if( const SvxLRSpaceItem* pLRItem = rCSS1ItemSet.GetItemIfSet( RES_LR_SPACE ) )
+    // note: parser never creates SvxLeftMarginItem! must be converted
+    if (const SvxTextLeftMarginItem *const pLeft = rCSS1ItemSet.GetItemIfSet(RES_MARGIN_TEXTLEFT))
     {
-        // maybe flatten the first line indentation
-        SvxLRSpaceItem aLRItem( *pLRItem );
-        aLRItem.SetTextFirstLineOffset( 0 );
         if( rCSS1PropInfo.m_bLeftMargin )
         {
-            nLeftSpace = static_cast< sal_uInt16 >(aLRItem.GetLeft());
+            // should be SvxLeftMarginItem... "cast" it
+            nLeftSpace = static_cast<sal_uInt16>(pLeft->GetTextLeft());
             rCSS1PropInfo.m_bLeftMargin = false;
         }
+        rCSS1ItemSet.ClearItem(RES_MARGIN_TEXTLEFT);
+    }
+    if (const SvxRightMarginItem *const pRight = rCSS1ItemSet.GetItemIfSet(RES_MARGIN_RIGHT))
+    {
         if( rCSS1PropInfo.m_bRightMargin )
         {
-            nRightSpace = static_cast< sal_uInt16 >(aLRItem.GetRight());
+            nRightSpace = static_cast< sal_uInt16 >(pRight->GetRight());
             rCSS1PropInfo.m_bRightMargin = false;
         }
-        rCSS1ItemSet.ClearItem( RES_LR_SPACE );
+        rCSS1ItemSet.ClearItem(RES_MARGIN_RIGHT);
     }
     if( nLeftSpace || nRightSpace )
     {
@@ -346,10 +345,10 @@ void SwHTMLParser::NewMarquee( HTMLTable *pCurTable )
     // #i52858# - method name changed
     SwDrawModel* pModel = m_xDoc->getIDocumentDrawModelAccess().GetOrCreateDrawModel();
     SdrPage* pPg = pModel->GetPage( 0 );
-    m_pMarquee = SdrObjFactory::MakeNewObject(
+    m_pMarquee = static_cast<SdrTextObj*>(SdrObjFactory::MakeNewObject(
         *pModel,
         SdrInventor::Default,
-        SdrObjKind::Text);
+        SdrObjKind::Text).get());
 
     if( !m_pMarquee )
         return;
@@ -451,10 +450,9 @@ void SwHTMLParser::NewMarquee( HTMLTable *pCurTable )
 
     // now set the size
     Size aTwipSz( bPercentWidth ? 0 : nWidth, nHeight );
-    if( (aTwipSz.Width() || aTwipSz.Height()) && Application::GetDefaultDevice() )
+    if( aTwipSz.Width() || aTwipSz.Height() )
     {
-        aTwipSz = Application::GetDefaultDevice()
-                    ->PixelToLogic( aTwipSz, MapMode( MapUnit::MapTwip ) );
+        aTwipSz = o3tl::convert(aTwipSz, o3tl::Length::px, o3tl::Length::twip);
     }
 
     if( SVX_CSS1_LTYPE_TWIP== aPropInfo.m_eWidthType )
@@ -535,13 +533,13 @@ void SwHTMLParser::EndMarquee()
     }
 
     // insert the collected text
-    static_cast<SdrTextObj*>(m_pMarquee.get())->SetText( m_aContents );
+    m_pMarquee->SetText( m_aContents );
     m_pMarquee->SetMergedItemSetAndBroadcast( m_pMarquee->GetMergedItemSet() );
 
-    if (m_bFixMarqueeWidth && !m_bFuzzing)
+    if (m_bFixMarqueeWidth && !bFuzzing)
     {
         // adjust the size to the text
-        static_cast<SdrTextObj*>(m_pMarquee.get())->FitFrameToTextSize();
+        m_pMarquee->FitFrameToTextSize();
     }
 
     m_aContents.clear();

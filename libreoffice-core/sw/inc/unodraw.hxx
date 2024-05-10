@@ -21,7 +21,7 @@
 
 #include <svl/itemprop.hxx>
 #include <svl/listener.hxx>
-#include <svx/fmdpage.hxx>
+#include <svx/unopage.hxx>
 #include "frmfmt.hxx"
 #include <com/sun/star/text/XTextContent.hpp>
 #include <com/sun/star/drawing/PolyPolygonBezierCoords.hpp>
@@ -30,19 +30,19 @@
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/drawing/XShapes.hpp>
-#include <cppuhelper/implbase6.hxx>
-#include <cppuhelper/implbase2.hxx>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/drawing/HomogenMatrix3.hpp>
+#include <com/sun/star/uno/XAggregation.hpp>
+#include <cppuhelper/implbase.hxx>
 
 class SdrMarkList;
 class SdrView;
 class SwDoc;
 class SwXShape;
 
-typedef cppu::AggImplInheritanceHelper2
+typedef cppu::ImplInheritanceHelper
 <
-    SvxFmDrawPage,
+    SvxDrawPage,
     css::container::XEnumerationAccess,
     css::beans::XPropertySet>
         SwFmDrawPage_Base;
@@ -81,9 +81,6 @@ public:
     //XEnumerationAccess
     virtual css::uno::Reference< css::container::XEnumeration > SAL_CALL createEnumeration() override;
 
-    virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
-    virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes(  ) override;
-
     //XIndexAccess
     virtual sal_Int32 SAL_CALL getCount() override;
     virtual css::uno::Any SAL_CALL getByIndex(sal_Int32 nIndex) override;
@@ -120,7 +117,7 @@ public:
 
 class SwShapeDescriptor_Impl;
 typedef
-cppu::WeakAggImplHelper6
+cppu::WeakImplHelper
 <
     css::beans::XPropertySet,
     css::beans::XPropertyState,
@@ -130,7 +127,7 @@ cppu::WeakAggImplHelper6
     css::drawing::XShape
 >
 SwXShapeBaseClass;
-class SwXShape : public SwXShapeBaseClass, public SvtListener
+class SwXShape : public SwXShapeBaseClass
 {
     friend class SwXGroupShape;
     friend class SwFmDrawPage;
@@ -142,14 +139,12 @@ class SwXShape : public SwXShapeBaseClass, public SvtListener
     css::uno::Reference< css::drawing::XShape > mxShape;
 
     const SfxItemPropertySet*           m_pPropSet;
-    o3tl::span<const SfxItemPropertyMapEntry>      m_pPropertyMapEntries;
+    std::span<const SfxItemPropertyMapEntry>      m_pPropertyMapEntries;
     css::uno::Reference< css::beans::XPropertySetInfo > mxPropertySetInfo;
 
     std::unique_ptr<SwShapeDescriptor_Impl>  m_pImpl;
 
     bool                        m_bDescriptor;
-
-    SvxShape*               GetSvxShape();
 
     /** method to determine top group object */
     SdrObject* GetTopGroupObj( SvxShape* _pSvxShape = nullptr );
@@ -203,7 +198,6 @@ protected:
 public:
     SwXShape(css::uno::Reference<css::uno::XInterface> & xShape, SwDoc const*const pDoc);
 
-    virtual void Notify(const SfxHint&) override;
     static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
     virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
     virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes(  ) override;
@@ -249,7 +243,7 @@ public:
 
     SwShapeDescriptor_Impl*     GetDescImpl() {return m_pImpl.get();}
     SwFrameFormat* GetFrameFormat() const;
-    const css::uno::Reference< css::uno::XAggregation >& GetAggregationInterface() const {return m_xShapeAgg;}
+    SvxShape*               GetSvxShape();
 
     // helper
     static void AddExistingShapeToFormat( SdrObject const & _rObj );

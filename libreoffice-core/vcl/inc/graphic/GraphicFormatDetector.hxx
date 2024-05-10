@@ -22,10 +22,8 @@
 
 #include <tools/stream.hxx>
 #include <vector>
-#include <vcl/mapmod.hxx>
-#include <tools/gen.hxx>
-#include <optional>
 #include <vcl/graphic/GraphicMetadata.hxx>
+
 namespace vcl
 {
 static inline OUString getImportFormatShortName(GraphicFileFormat nFormat)
@@ -51,6 +49,9 @@ static inline OUString getImportFormatShortName(GraphicFileFormat nFormat)
             break;
         case GraphicFileFormat::PNG:
             pKeyName = "PNG";
+            break;
+        case GraphicFileFormat::APNG:
+            pKeyName = "APNG";
             break;
         case GraphicFileFormat::XBM:
             pKeyName = "XBM";
@@ -163,6 +164,7 @@ public:
     bool checkTIF();
     bool checkGIF();
     bool checkPNG();
+    bool checkAPNG();
     bool checkJPG();
     bool checkSVM();
     bool checkPCD();

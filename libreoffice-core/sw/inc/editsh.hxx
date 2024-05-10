@@ -81,6 +81,7 @@ class SwLineNumberInfo;
 class SwAuthEntry;
 class SwRewriter;
 class SwView;
+class SwWrtShell;
 struct SwConversionArgs;
 struct SvxSwAutoFormatFlags;
 struct SwInsertTableOptions;
@@ -151,7 +152,7 @@ class SW_DLLPUBLIC SwEditShell : public SwCursorShell
      that will be used by GetGraphic() and GetGraphicSize(). */
     SAL_DLLPRIVATE SwGrfNode *GetGrfNode_() const ;
 
-    SAL_DLLPRIVATE void DeleteSel(SwPaM& rPam, bool isArtificialSelection, bool* pUndo = nullptr);
+    SAL_DLLPRIVATE void DeleteSel(SwPaM& rPam, bool isArtificialSelection, bool goLeft = false, bool* pUndo = nullptr);
 
     SAL_DLLPRIVATE void SetSectionAttr_( SwSectionFormat& rSectFormat, const SfxItemSet& rSet );
 
@@ -171,9 +172,13 @@ public:
            --> "xx\t<Tab>..zzz..&" */
     bool Replace( const OUString& rNewStr, bool bRegExpRplc );
 
+    /** Replace a selected range in a TextNode by given string.
+     Possible comments will be kept (moved to the end of the selection). */
+    bool ReplaceKeepComments( const OUString& rNewStr);
+
     /** Delete content of all ranges.
      If whole nodes are selected, these nodes get deleted. */
-    bool Delete(bool isArtificialSelection = false);
+    bool Delete(bool isArtificialSelection = false, bool goLeft = false);
 
     /// Remove a complete paragraph.
     bool DelFullPara();
@@ -185,7 +190,7 @@ public:
     void CountWords( SwDocStat& rStat ) const;
 
     /// Replace fields by text - mailmerge support.
-    bool ConvertFieldsToText();
+    SAL_DLLPRIVATE bool ConvertFieldsToText();
 
     /// Set all numbering start points to a fixed value - mailmerge support.
     void SetNumberingRestart();
@@ -623,6 +628,26 @@ public:
     /// Apply ViewOptions with Start-/EndAction.
     virtual void ApplyViewOptions( const SwViewOption &rOpt ) override;
 
+    /// Selected area has readonly content
+    virtual void InfoReadOnlyDialog(bool /*bAsync*/) const
+    {
+        // override in SwWrtShell
+    }
+
+    /// Selected area has hidden content
+    virtual bool WarnHiddenSectionDialog() const
+    {
+        // override in SwWrtShell
+        return true;
+    }
+
+    /// Switch to Design mode for Forms
+    virtual bool WarnSwitchToDesignModeDialog() const
+    {
+        // override in SwWrtShell
+        return false;
+    }
+
     /** Query text within selection. */
     void GetSelectedText( OUString &rBuf,
                         ParaBreakType nHndlParaBreak = ParaBreakType::ToBlank );
@@ -822,7 +847,7 @@ public:
     std::vector<OUString> GetChunkForAutoText();
 
     /// Set our styles according to the respective rules.
-    void AutoFormat( const SvxSwAutoFormatFlags* pAFlags );
+    void AutoFormat( const SvxSwAutoFormatFlags* pAFlags, bool bCurrentParagraphOnly );
 
     static SvxSwAutoFormatFlags* GetAutoFormatFlags();
     static void SetAutoFormatFlags(SvxSwAutoFormatFlags const *);
@@ -842,7 +867,7 @@ public:
     bool IsOutlineMovable( SwOutlineNodes::size_type nIdx ) const;
     bool IsOutlineCopyable( SwOutlineNodes::size_type nIdx ) const;
 
-    sal_uInt16 GetLineCount();
+    sal_Int32 GetLineCount();
 
     /// Query and set footnote-text/number. Set... to current SSelection!
     bool GetCurFootnote( SwFormatFootnote* pToFillFootnote = nullptr );

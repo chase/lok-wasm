@@ -10,6 +10,7 @@
 #include <pdf/pdfcompat.hxx>
 
 #include <o3tl/string_view.hxx>
+#include <tools/solar.h>
 #include <vcl/filter/PDFiumLibrary.hxx>
 #include <sal/log.hxx>
 
@@ -97,7 +98,7 @@ BinaryDataContainer createBinaryDataContainer(SvStream& rStream)
     if (!getCompatibleStream(rStream, aMemoryStream))
         return {};
 
-    const sal_uInt32 nStreamLength = aMemoryStream.TellEnd();
+    const sal_uInt64 nStreamLength = aMemoryStream.TellEnd();
 
     aMemoryStream.Seek(STREAM_SEEK_TO_BEGIN);
     BinaryDataContainer aPdfData(aMemoryStream, nStreamLength);

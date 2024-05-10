@@ -203,11 +203,6 @@ Download::getProxyForURL(std::u16string_view rURL, OString& rHost, sal_Int32& rP
             rHost = getStringValue(xNameAccess, "ooInetHTTPSProxyName");
             rPort = getInt32Value(xNameAccess, "ooInetHTTPSProxyPort");
         }
-        else if( o3tl::starts_with(rURL, u"ftp:") )
-        {
-            rHost = getStringValue(xNameAccess, "ooInetFTPProxyName");
-            rPort = getInt32Value(xNameAccess, "ooInetFTPProxyPort");
-        }
     }
 }
 
@@ -238,9 +233,9 @@ static bool curl_run(std::u16string_view rURL, OutData& out, const OString& aPro
         (void)curl_easy_setopt(pCURL, CURLOPT_FOLLOWLOCATION, 1);
         // only allow redirect to https://
 #if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR >= 85)
-    curl_easy_setopt(pCURL, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+        (void)curl_easy_setopt(pCURL, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 #else
-    curl_easy_setopt(pCURL, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+        (void)curl_easy_setopt(pCURL, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
 #endif
 
         // write function
@@ -298,7 +293,7 @@ static bool curl_run(std::u16string_view rURL, OutData& out, const OString& aPro
         // Only report errors when not stopped
         else
         {
-            OString aMessage("Unknown error");
+            OString aMessage("Unknown error"_ostr);
 
             const char * error_message = curl_easy_strerror(cc);
             if( nullptr != error_message )

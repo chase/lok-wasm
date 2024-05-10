@@ -128,7 +128,6 @@ class DocxExport : public MSWordExportBase
 
     /// Storage for sdt data which need to be written to other XMLs
     std::vector<SdtData> m_SdtData;
-
 public:
 
     DocxExportFilter& GetFilter() { return m_rFilter; };

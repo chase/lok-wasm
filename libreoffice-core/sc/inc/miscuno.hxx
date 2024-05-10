@@ -83,16 +83,6 @@ css::uno::Sequence< OUString >                                                  
                             const uno::Reference<beans::XVetoableChangeListener>&)  \
     { OSL_FAIL("not implemented"); }
 
-#define SC_QUERYINTERFACE(x)    \
-    if (rType == cppu::UnoType<x>::get())  \
-    { return uno::Any(uno::Reference<x>(this)); }
-
-// SC_QUERY_MULTIPLE( XElementAccess, XIndexAccess ):
-//  use if interface is used several times in one class
-
-#define SC_QUERY_MULTIPLE(x,y)  \
-    if (rType == cppu::UnoType<x>::get())  \
-    { uno::Any aR; aR <<= uno::Reference<x>(static_cast<y*>(this)); return aR; }
 
 class ScIndexEnumeration final : public cppu::WeakImplHelper<
                                 css::container::XEnumeration,
@@ -195,14 +185,6 @@ public:
         SetOptionalPropertyValue(rPropSet, rPropName, any);
     }
 
-    template<typename ValueType>
-    static css::uno::Sequence<ValueType> VectorToSequence( const std::vector<ValueType>& rVector )
-    {
-        if (rVector.empty())
-            return css::uno::Sequence<ValueType>();
-
-        return css::uno::Sequence<ValueType>(&rVector[0], static_cast<sal_Int32>(rVector.size()));
-    }
 private:
     static sal_Int32        GetEnumPropertyImpl( const css::uno::Reference< css::beans::XPropertySet>& xProp,
                                             const OUString& rName, sal_Int32 nDefault );

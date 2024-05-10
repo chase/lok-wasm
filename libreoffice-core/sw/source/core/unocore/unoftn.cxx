@@ -163,19 +163,6 @@ SwXFootnote::CreateXFootnote(SwDoc & rDoc, SwFormatFootnote *const pFootnoteForm
     return xNote;
 }
 
-const uno::Sequence< sal_Int8 > & SwXFootnote::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXFootnoteUnoTunnelId;
-    return theSwXFootnoteUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXFootnote::getSomething(const uno::Sequence< sal_Int8 >& rId)
-{
-    const sal_Int64 nRet( comphelper::getSomethingImpl<SwXFootnote>(rId, this) );
-    return nRet ? nRet : SwXText::getSomething(rId);
-}
-
 OUString SAL_CALL
 SwXFootnote::getImplementationName()
 {
@@ -291,12 +278,8 @@ SwXFootnote::attach(const uno::Reference< text::XTextRange > & xTextRange)
     {
         throw uno::RuntimeException();
     }
-    const uno::Reference<lang::XUnoTunnel> xRangeTunnel(
-            xTextRange, uno::UNO_QUERY);
-    SwXTextRange *const pRange =
-        comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-    OTextCursorHelper *const pCursor =
-        comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+    SwXTextRange *const pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+    OTextCursorHelper *const pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
     SwDoc *const pNewDoc =
         pRange ? &pRange->GetDoc() : (pCursor ? pCursor->GetDoc() : nullptr);
     if (!pNewDoc)
@@ -403,17 +386,9 @@ const SwStartNode *SwXFootnote::GetStartNode() const
     return nullptr;
 }
 
-uno::Reference< text::XTextCursor >
-SwXFootnote::CreateCursor()
+rtl::Reference< SwXTextCursor >
+SwXFootnote::createXTextCursor()
 {
-    return createTextCursor();
-}
-
-uno::Reference< text::XTextCursor > SAL_CALL
-SwXFootnote::createTextCursor()
-{
-    SolarMutexGuard aGuard;
-
     SwFormatFootnote const& rFormat( m_pImpl->GetFootnoteFormatOrThrow() );
 
     SwTextFootnote const*const pTextFootnote = rFormat.GetTextFootnote();
@@ -422,15 +397,13 @@ SwXFootnote::createTextCursor()
         new SwXTextCursor(*GetDoc(), this, CursorType::Footnote, aPos);
     auto& rUnoCursor(pXCursor->GetCursor());
     rUnoCursor.Move(fnMoveForward, GoInNode);
-    return static_cast<text::XWordCursor*>(pXCursor.get());
+    return pXCursor;
 }
 
-uno::Reference< text::XTextCursor > SAL_CALL
-SwXFootnote::createTextCursorByRange(
+rtl::Reference< SwXTextCursor >
+SwXFootnote::createXTextCursorByRange(
     const uno::Reference< text::XTextRange > & xTextPosition)
 {
-    SolarMutexGuard aGuard;
-
     SwFormatFootnote const& rFormat( m_pImpl->GetFootnoteFormatOrThrow() );
 
     SwUnoInternalPaM aPam(*GetDoc());
@@ -448,10 +421,9 @@ SwXFootnote::createTextCursorByRange(
         throw uno::RuntimeException();
     }
 
-    const uno::Reference< text::XTextCursor > xRet =
-        static_cast<text::XWordCursor*>(
+    const rtl::Reference< SwXTextCursor > xRet =
                 new SwXTextCursor(*GetDoc(), this, CursorType::Footnote,
-                    *aPam.GetPoint(), aPam.GetMark()));
+                    *aPam.GetPoint(), aPam.GetMark());
     return xRet;
 }
 
@@ -525,9 +497,7 @@ SwXFootnote::getPropertyValue(const OUString& rPropertyName)
         }
         else
         {
-            beans::UnknownPropertyException aExcept;
-            aExcept.Message = rPropertyName;
-            throw aExcept;
+            throw beans::UnknownPropertyException(rPropertyName);
         }
     }
     return aRet;

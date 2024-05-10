@@ -66,7 +66,7 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
         }
         bool bNewResult = GetShell().SelectionHasNumber();
         if (bNewResult!=bMode) {
-            SfxBindings& rBindings = GetView().GetViewFrame()->GetBindings();
+            SfxBindings& rBindings = GetView().GetViewFrame().GetBindings();
             SfxBoolItem aItem(FN_NUM_NUMBERING_ON,!bNewResult);
             rBindings.SetState(aItem);
             SfxBoolItem aNewItem(FN_NUM_NUMBERING_ON,bNewResult);
@@ -95,7 +95,7 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
         }
         bool bNewResult = GetShell().SelectionHasBullet();
         if (bNewResult!=bMode) {
-            SfxBindings& rBindings = GetView().GetViewFrame()->GetBindings();
+            SfxBindings& rBindings = GetView().GetViewFrame().GetBindings();
             SfxBoolItem aItem(FN_NUM_BULLET_ON,!bNewResult);
             rBindings.SetState(aItem);
             SfxBoolItem aNewItem(FN_NUM_BULLET_ON,bNewResult);
@@ -111,7 +111,6 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
         SfxRequest aReq(GetView().GetViewFrame(), FN_NUM_BULLET_ON);
         aReq.AppendItem(SfxBoolItem(FN_PARAM_1, false));
         aReq.Done();
-        GetShell().NumOrBulletOff();
         GetShell().DelNumRules();
         GetShell().EndAllAction();
     }
@@ -192,15 +191,15 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
 
         SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
         weld::Window *pParent = rReq.GetFrameWeld();
-        VclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateSvxNumBulletTabDialog(pParent, &aSet, GetShell()));
+        VclPtr<AbstractNumBulletDialog> pDlg(pFact->CreateSvxNumBulletTabDialog(pParent, aSet, GetShell()));
         const SfxStringItem* pPageItem = rReq.GetArg<SfxStringItem>(FN_PARAM_1);
         if ( pPageItem )
-            pDlg->SetCurPageId( OUStringToOString( pPageItem->GetValue(), RTL_TEXTENCODING_UTF8 ) );
+            pDlg->SetCurPageId( pPageItem->GetValue() );
 
         auto pRequest = std::make_shared<SfxRequest>(rReq);
         rReq.Ignore(); // the 'old' request is not relevant any more
 
-        pDlg->StartExecuteAsync([aSet, pDlg, pNumRuleAtCurrentSelection, pRequest, this](sal_Int32 nResult){
+        pDlg->StartExecuteAsync([pDlg, pNumRuleAtCurrentSelection, pRequest, this](sal_Int32 nResult){
             if (RET_OK == nResult)
             {
                 const SvxNumBulletItem* pBulletItem = pDlg->GetOutputItemSet()->GetItemIfSet(SID_ATTR_NUMBERING_RULE, false);
@@ -224,7 +223,7 @@ void SwTextShell::ExecEnterNum(SfxRequest &rReq)
                 // If the Dialog was leaved with OK but nothing was chosen then the
                 // numbering must be at least activated, if it is not already.
                 else if (pNumRuleAtCurrentSelection == nullptr
-                         && (pBulletItem = aSet.GetItemIfSet(SID_ATTR_NUMBERING_RULE, false)))
+                         && (pBulletItem = pDlg->GetInputItemSet()->GetItemIfSet(SID_ATTR_NUMBERING_RULE, false)))
                 {
                     pRequest->AppendItem(*pBulletItem);
                     pRequest->Done();
@@ -313,7 +312,7 @@ void SwTextShell::ExecSetNumber(SfxRequest const &rReq)
             else if (nSlot == FN_SVX_SET_OUTLINE)
             {
                 // no outline provided: launch dialog to request a specific outline
-                SfxBindings& rBindings = GetView().GetViewFrame()->GetBindings();
+                SfxBindings& rBindings = GetView().GetViewFrame().GetBindings();
                 const SfxStringItem aPage(FN_PARAM_1, "outlinenum");
                 const SfxPoolItem* aItems[] = { &aPage, nullptr };
                 rBindings.Execute(SID_OUTLINE_BULLET, aItems);

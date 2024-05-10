@@ -63,7 +63,7 @@
 #include <com/sun/star/awt/XWindow2.hpp>
 #include <com/sun/star/awt/XControl.hpp>
 
-#include <svtools/optionsdrawinglayer.hxx>
+#include <officecfg/Office/Common.hxx>
 #include <vcl/gradient.hxx>
 
 using namespace com::sun::star;
@@ -75,6 +75,10 @@ VclPixelProcessor2D::VclPixelProcessor2D(const geometry::ViewInformation2D& rVie
                                          const basegfx::BColorModifierStack& rInitStack)
     : VclProcessor2D(rViewInformation, rOutDev, rInitStack)
     , m_nOrigAntiAliasing(rOutDev.GetAntialiasing())
+    , m_bRenderSimpleTextDirect(
+          officecfg::Office::Common::Drawinglayer::RenderSimpleTextDirect::get())
+    , m_bRenderDecoratedTextDirect(
+          officecfg::Office::Common::Drawinglayer::RenderDecoratedTextDirect::get())
 {
     // prepare maCurrentTransformation matrix with viewTransformation to target directly to pixels
     maCurrentTransformation = rViewInformation.getObjectToViewTransformation();
@@ -403,7 +407,7 @@ void VclPixelProcessor2D::processTextSimplePortionPrimitive2D(
     const DrawModeFlags nOriginalDrawMode(mpOutputDevice->GetDrawMode());
     adaptTextToFillDrawMode();
 
-    if (SvtOptionsDrawinglayer::IsRenderSimpleTextDirect())
+    if (SAL_LIKELY(m_bRenderSimpleTextDirect))
     {
         RenderTextSimpleOrDecoratedPortionPrimitive2D(rCandidate);
     }
@@ -423,7 +427,7 @@ void VclPixelProcessor2D::processTextDecoratedPortionPrimitive2D(
     const DrawModeFlags nOriginalDrawMode(mpOutputDevice->GetDrawMode());
     adaptTextToFillDrawMode();
 
-    if (SvtOptionsDrawinglayer::IsRenderDecoratedTextDirect())
+    if (SAL_LIKELY(m_bRenderDecoratedTextDirect))
     {
         RenderTextSimpleOrDecoratedPortionPrimitive2D(rCandidate);
     }
@@ -981,16 +985,16 @@ void VclPixelProcessor2D::processFillGradientPrimitive2D(
         if (bTryDirectRender)
         {
             // MCGR: Avoid one level of primitive creation, use FillGradientPrimitive2D
-            // tooling to directly create needed geoemtry & color for getting better
+            // tooling to directly create needed geometry & color for getting better
             // performance (partially compensate for potentially more expensive multi
             // color gradients).
             // To handle a primitive that needs paint, either use decompose, or - when you
             // do not want that for any reason, e.g. extra primitives created - implement
-            // a direct handling in your primitive rendererer. This is always possible
+            // a direct handling in your primitive renderer. This is always possible
             // since primitives by definition are self-contained what means they have all
             // needed data locally available to do so.
             // The question is the complexity to invest - the implemented decompose
-            // is always a good hint what is neeed to do this. In this case I decided
+            // is always a good hint of what is needed to do this. In this case I decided
             // to add some tooling methods to the primitive itself to support this. These
             // are used in decompose and can be used - as here now - for direct handling,
             // too. This is always a possibility in primitive handling - you can, but do not

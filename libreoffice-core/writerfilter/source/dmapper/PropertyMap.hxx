@@ -61,7 +61,6 @@ namespace com::sun::star {
 namespace writerfilter::dmapper {
 
 class  DomainMapper_Impl;
-struct FloatingTableInfo;
 struct AnchoredObjectInfo;
 
 enum BorderPosition
@@ -211,7 +210,7 @@ enum class PageType
     RIGHT
 };
 
-/** Which page part we are refering to.
+/** Which page part we are referring to.
  * This is mainly introduced to avoid having cryptic bools as input parameter.*/
 enum class PagePartType
 {
@@ -295,6 +294,9 @@ private:
     sal_uInt32                                      m_nLnc;
     sal_Int32                                       m_ndxaLnn;
     sal_Int32                                       m_nLnnMin;
+
+    sal_Int32                                       m_nPaperSourceFirst;
+    sal_Int32                                       m_nPaperSourceOther;
 
     bool                                            m_bDynamicHeightTop;
     bool                                            m_bDynamicHeightBottom;
@@ -410,12 +412,14 @@ public:
     void SetdxaLnn( sal_Int32 nValue ) { m_ndxaLnn = nValue; }
     void SetLnnMin( sal_Int32 nValue ) { m_nLnnMin = nValue; }
 
+    void SetPaperSource(sal_Int32 first, sal_Int32 other) { m_nPaperSourceFirst = first; m_nPaperSourceOther = other;}
+
     void addRelativeWidthShape( css::uno::Reference<css::drawing::XShape> xShape ) { m_xRelativeWidthShapes.push_back( xShape ); }
 
     // determine which style gets the borders
     void ApplyBorderToPageStyles( DomainMapper_Impl &rDM_Impl,
                                   BorderApply eBorderApply, BorderOffsetFrom eOffsetFrom );
-
+    void ApplyPaperSource(DomainMapper_Impl& rDM_Impl);
     void CloseSectionGroup( DomainMapper_Impl& rDM_Impl );
     // Handling of margins, header and footer for any kind of sections breaks.
     void HandleMarginsHeaderFooter(DomainMapper_Impl& rDM_Impl);
@@ -429,6 +433,9 @@ public:
     bool m_bLeftFooter = false;
     bool m_bRightHeader = false;
     bool m_bRightFooter = false;
+    bool m_bHadFirstHeader = false;
+    bool m_bHadLeftHeader = false;
+    bool m_bHadRightHeader = false;
 
     static void removeXTextContent(css::uno::Reference<css::text::XText> const& rxText);
 };
@@ -472,9 +479,6 @@ public:
     ParagraphProperties(ParagraphProperties &&) = default;
     ParagraphProperties & operator =(ParagraphProperties const &) = default;
     ParagraphProperties & operator =(ParagraphProperties &&) = default;
-
-    // Does not compare the starting/ending range, m_sParaStyleName and m_nDropCapLength
-    bool operator==( const ParagraphProperties& ) const;
 
     sal_Int32 GetListId() const          { return m_nListId; }
     void      SetListId( sal_Int32 nId ) { m_nListId = nId; }

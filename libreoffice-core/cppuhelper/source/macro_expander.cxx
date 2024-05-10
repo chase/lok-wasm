@@ -24,7 +24,7 @@
 #include <uno/mapping.hxx>
 
 #include <cppuhelper/factory.hxx>
-#include <cppuhelper/compbase.hxx>
+#include <compbase2.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -34,8 +34,8 @@
 #include "macro_expander.hxx"
 #include "paths.hxx"
 
-constexpr OUStringLiteral SERVICE_NAME_A = u"com.sun.star.lang.MacroExpander";
-constexpr OUStringLiteral SERVICE_NAME_B = u"com.sun.star.lang.BootstrapMacroExpander";
+constexpr OUString SERVICE_NAME_A = u"com.sun.star.lang.MacroExpander"_ustr;
+constexpr OUString SERVICE_NAME_B = u"com.sun.star.lang.BootstrapMacroExpander"_ustr;
 constexpr OUStringLiteral IMPL_NAME = u"com.sun.star.lang.comp.cppuhelper.BootstrapMacroExpander";
 
 using namespace ::osl;
@@ -83,22 +83,13 @@ Sequence< OUString > const & s_get_service_names()
     return IMPL_NAMES;
 }
 
-typedef cppu::WeakComponentImplHelper<
+typedef cppuhelper::WeakComponentImplHelper2<
     util::XMacroExpander, lang::XServiceInfo > t_uno_impl;
 
-struct mutex_holder
+class Bootstrap_MacroExpander : public t_uno_impl
 {
-    Mutex m_mutex;
-};
-
-class Bootstrap_MacroExpander : public mutex_holder, public t_uno_impl
-{
-protected:
-    virtual void SAL_CALL disposing() override;
-
 public:
     Bootstrap_MacroExpander()
-        : t_uno_impl( m_mutex )
         {}
 
     // XMacroExpander impl
@@ -109,9 +100,6 @@ public:
     virtual Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
 };
 
-
-void Bootstrap_MacroExpander::disposing()
-{}
 
 // XServiceInfo impl
 

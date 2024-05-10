@@ -25,14 +25,15 @@
 #include <sfx2/sfxbasemodel.hxx>
 #include <comphelper/propertysethelper.hxx>
 #include <vcl/print.hxx>
-#include <oox/mathml/export.hxx>
-#include <oox/mathml/import.hxx>
+#include <oox/mathml/imexport.hxx>
 
-inline constexpr OUStringLiteral PRTUIOPT_TITLE_ROW = u"TitleRow";
-inline constexpr OUStringLiteral PRTUIOPT_FORMULA_TEXT = u"FormulaText";
-inline constexpr OUStringLiteral PRTUIOPT_BORDER = u"Border";
-inline constexpr OUStringLiteral PRTUIOPT_PRINT_FORMAT = u"PrintFormat";
-inline constexpr OUStringLiteral PRTUIOPT_PRINT_SCALE = u"PrintScale";
+#include "format.hxx"
+
+inline constexpr OUString PRTUIOPT_TITLE_ROW = u"TitleRow"_ustr;
+inline constexpr OUString PRTUIOPT_FORMULA_TEXT = u"FormulaText"_ustr;
+inline constexpr OUString PRTUIOPT_BORDER = u"Border"_ustr;
+inline constexpr OUString PRTUIOPT_PRINT_FORMAT = u"PrintFormat"_ustr;
+inline constexpr OUString PRTUIOPT_PRINT_SCALE = u"PrintScale"_ustr;
 
 class SmPrintUIOptions : public vcl::PrinterOptionsHelper
 {
@@ -45,10 +46,11 @@ class SmModel final : public SfxBaseModel,
                 public comphelper::PropertySetHelper,
                 public css::lang::XServiceInfo,
                 public css::view::XRenderable,
-                public oox::FormulaExportBase,
-                public oox::FormulaImportBase
+                public oox::FormulaImExportBase
 {
     std::unique_ptr<SmPrintUIOptions> m_pPrintUIOptions;
+
+    SmFace maFonts[FNT_END + 1];
 
     virtual void _setPropertyValues( const comphelper::PropertyMapEntry** ppEntries, const css::uno::Any* pValues ) override;
     virtual void _getPropertyValues( const comphelper::PropertyMapEntry** ppEntries, css::uno::Any* pValue ) override;
@@ -81,12 +83,11 @@ public:
 
     virtual void SAL_CALL setParent( const css::uno::Reference< css::uno::XInterface >& xParent ) override;
 
-    // oox::FormulaExportBase
+    // oox::FormulaImExportBase
     virtual void writeFormulaOoxml(::sax_fastparser::FSHelperPtr pSerializer,
             oox::core::OoxmlVersion version,
             oox::drawingml::DocumentType documentType, sal_Int8 nAlign) override;
     virtual void writeFormulaRtf(OStringBuffer& rBuffer, rtl_TextEncoding nEncoding) override;
-    // oox::FormulaImportBase
     virtual void readFormulaOoxml( oox::formulaimport::XmlStream& stream ) override;
     virtual Size getFormulaSize() const override;
 };

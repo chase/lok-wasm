@@ -386,7 +386,7 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                     OUString      aErrMsg ( ScResId( STR_INVALIDTABNAME ) );
                     OUString aName;
                     OUString      aDlgTitle;
-                    OString sHelpId;
+                    OUString sHelpId;
 
                     switch ( nSlot )
                     {
@@ -770,27 +770,49 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                         if (pDPs)
                         {
                             const ScMarkData::MarkedTabsType& rSelectedTabs = rViewData.GetMarkData().GetSelectedTabs();
-                            for (const SCTAB nSelTab : rSelectedTabs)
+                            const size_t nCount = pDPs->GetCount();
+                            for (size_t i = 0; i < nCount; ++i)
                             {
-                                const size_t nCount = pDPs->GetCount();
-                                for (size_t i = 0; i < nCount; ++i)
+                                const ScDPObject& rDPObj = (*pDPs)[i];
+                                const ScSheetSourceDesc* pSheetSourceDesc = rDPObj.GetSheetDesc();
+                                if (pSheetSourceDesc)
                                 {
-                                    const ScDPObject& rDPObj = (*pDPs)[i];
-                                    const ScSheetSourceDesc* pSheetSourceDesc = rDPObj.GetSheetDesc();
-                                    if (pSheetSourceDesc && pSheetSourceDesc->GetSourceRange().aStart.Tab() == nSelTab)
-                                        bTabWithPivotTable = true;
+                                    SCTAB nTabOut = rDPObj.GetOutRange().aStart.Tab();
+                                    SCTAB nTabSource = pSheetSourceDesc->GetSourceRange().aStart.Tab();
+                                    bool bTabOutSel = false;
+                                    for (const SCTAB nSelTab : rSelectedTabs)
+                                    {
+                                        if (nSelTab == nTabSource)
+                                            bTabWithPivotTable = true;
+                                        if (nSelTab == nTabOut)
+                                            bTabOutSel = true;
+                                        if (bTabWithPivotTable && bTabOutSel)
+                                            break;
+                                    }
+                                    // if both pivot table and data are selected
+                                    // no need to warn for source data losing
+                                    if (bTabWithPivotTable && bTabOutSel)
+                                        bTabWithPivotTable = false;
+                                    if (bTabWithPivotTable)
+                                        break;
                                 }
-                                if (bTabWithPivotTable)
-                                    break;
                             }
                         }
                     }
 
+                    SCTAB nTabSelCnt = rViewData.GetMarkData().GetSelectCount();
+                    OUString aTabSelCnt = Application::GetSettings().GetUILocaleDataWrapper().getNum( nTabSelCnt, 0 );
+                    OUString aQueryDeleteTab = ScResId( STR_QUERY_DELTAB, nTabSelCnt )
+                                                        .replaceAll( "%d", aTabSelCnt );
                     if (bTabWithPivotTable)
                     {
+                        OUString aStr = ScResId( STR_QUERY_PIVOTTABLE_DELTAB, nTabSelCnt )
+                                                        .replaceAll( "%d", aTabSelCnt )
+                                                        + " " + aQueryDeleteTab;
+
                         std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
                                                                        VclMessageType::Question, VclButtonsType::YesNo,
-                                                                       ScResId(STR_QUERY_PIVOTTABLE_DELTAB)));
+                                                                       aStr));
                         xQueryBox->set_default_response(RET_NO);
 
                         // Hard warning as there is potential of data loss on deletion
@@ -798,13 +820,30 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                     }
                     else
                     {
-                        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
-                                                                       VclMessageType::Question, VclButtonsType::YesNo,
-                                                                       ScResId(STR_QUERY_DELTAB)));
-                        xQueryBox->set_default_response(RET_YES);
+                        bool bHasData = false;
+                        ScMarkData& rMark = rViewData.GetMarkData();
+                        for ( SCTAB i = 0; i < nTabCount && !bHasData; i++ )
+                        {
+                            if ( rMark.GetTableSelect(i) && !rDoc.IsTabProtected(i) )
+                            {
+                                SCCOL nStartCol;
+                                SCROW nStartRow;
+                                bHasData = rDoc.GetDataStart( i, nStartCol, nStartRow );
+                            }
+                        }
+                        // Do not ask for confirmation if all selected tabs are empty
+                        if (bHasData)
+                        {
+                            std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(GetFrameWeld(),
+                                                                           VclMessageType::Question, VclButtonsType::YesNo,
+                                                                           aQueryDeleteTab));
+                            xQueryBox->set_default_response(RET_YES);
 
-                        // no parameter given, ask for confirmation
-                        bDoIt = (RET_YES == xQueryBox->run());
+                            // no parameter given, ask for confirmation
+                            bDoIt = (RET_YES == xQueryBox->run());
+                        }
+                        else
+                            bDoIt = true;
                     }
                 }
 
@@ -878,7 +917,7 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
             {
                 bool bShowGrid = rViewData.GetShowGrid();
                 rViewData.SetShowGrid(!bShowGrid);
-                SfxBindings& rBindings = GetViewFrame()->GetBindings();
+                SfxBindings& rBindings = GetViewFrame().GetBindings();
                 rBindings.Invalidate( FID_TAB_TOGGLE_GRID );
                 ScDocShellModificator aModificator(*rViewData.GetDocShell());
                 aModificator.SetDocumentModified();
@@ -997,7 +1036,7 @@ void ScTabViewShell::ExecuteTable( SfxRequest& rReq )
                 {
                     ScDocShell* pDocSh = rViewData.GetDocShell();
                     uno::Reference<container::XNameReplace> xEvents( new ScSheetEventsObj( pDocSh, nCurrentTab ) );
-                    uno::Reference<frame::XFrame> xFrame = GetViewFrame()->GetFrame().GetFrameInterface();
+                    uno::Reference<frame::XFrame> xFrame = GetViewFrame().GetFrame().GetFrameInterface();
                     SvxAbstractDialogFactory* pDlgFactory = SvxAbstractDialogFactory::Create();
                     ScopedVclPtr<VclAbstractDialog> pDialog( pDlgFactory->CreateSvxMacroAssignDlg(
                         GetFrameWeld(), xFrame, false, xEvents, 0 ) );
@@ -1131,7 +1170,7 @@ void ScTabViewShell::GetStateTable( SfxItemSet& rSet )
 
             case FID_TAB_RTL:
                 {
-                    if ( !SvtCTLOptions().IsCTLFontEnabled() )
+                    if ( !SvtCTLOptions::IsCTLFontEnabled() )
                         rSet.DisableItem( nWhich );
                     else
                         rSet.Put( SfxBoolItem( nWhich, rDoc.IsLayoutRTL( nTab ) ) );

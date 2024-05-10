@@ -153,7 +153,7 @@ void SwFlyFreeFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
         if ( !IsNoMoveOnCheckClip() &&
              !( PositionLocked() &&
                 GetAnchorFrame()->IsInFly() &&
-                GetFrameFormat().GetFollowTextFlow().GetValue() ) )
+                GetFrameFormat()->GetFollowTextFlow().GetValue() ) )
         {
             setFrameAreaPositionValid(false);
         }
@@ -220,7 +220,7 @@ void SwFlyFreeFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
             else
                 // #i26791# - use new method <MakeObjPos()>
                 MakeObjPos();
-            if( aOldPos == aRectFnSet.GetPos(getFrameArea()) )
+            if (!IsForceNotifyNewBackground() && aOldPos == aRectFnSet.GetPos(getFrameArea()))
             {
                 if( !isFrameAreaPositionValid() && GetAnchorFrame()->IsInSct() &&
                     !GetAnchorFrame()->FindSctFrame()->isFrameAreaDefinitionValid() )
@@ -737,6 +737,12 @@ void SwFlyLayFrame::RegisterAtPage(SwPageFrame & rPageFrame)
 
 void SwFlyLayFrame::SwClientNotify(const SwModify& rMod, const SfxHint& rHint)
 {
+    if (rHint.GetId() == SfxHintId::SwAutoFormatUsedHint)
+    {
+        // There's a FlyFrame, so use it
+        static_cast<const sw::AutoFormatUsedHint&>(rHint).SetUsed();
+        return;
+    }
     if (rHint.GetId() != SfxHintId::SwLegacyModify)
         return;
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
@@ -900,11 +906,7 @@ void SwPageFrame::AppendFlyToPage( SwFlyFrame *pNew )
             // #i87493#
             if ( pTmpObj->GetPageFrame() != this )
             {
-                if ( pTmpObj->GetPageFrame() != nullptr )
-                {
-                    pTmpObj->GetPageFrame()->RemoveDrawObjFromPage( *pTmpObj );
-                }
-                AppendDrawObjToPage( *pTmpObj );
+                pTmpObj->RegisterAtPage(*this);
             }
         }
     }
@@ -1068,23 +1070,7 @@ void SwPageFrame::MoveFly( SwFlyFrame *pToMove, SwPageFrame *pDest )
     SwSortedObjs &rObjs = *pToMove->GetDrawObjs();
     for (SwAnchoredObject* pObj : rObjs)
     {
-        if ( auto pFly = pObj->DynCastFlyFrame() )
-        {
-            if ( pFly->IsFlyFreeFrame() )
-            {
-                // #i28701# - use new method <GetPageFrame()>
-                SwPageFrame* pPageFrame = pFly->GetPageFrame();
-                if ( pPageFrame )
-                    pPageFrame->MoveFly( pFly, pDest );
-                else
-                    pDest->AppendFlyToPage( pFly );
-            }
-        }
-        else if ( dynamic_cast<const SwAnchoredDrawObject*>( pObj) !=  nullptr )
-        {
-            RemoveDrawObjFromPage( *pObj );
-            pDest->AppendDrawObjToPage( *pObj );
-        }
+        pObj->RegisterAtPage(*pDest);
     }
 }
 
@@ -1114,7 +1100,7 @@ void SwPageFrame::AppendDrawObjToPage( SwAnchoredObject& _rNewObj )
             pFlyFrame->GetVirtDrawObj()->SetOrdNum( nNewNum );
     }
 
-    if ( RndStdIds::FLY_AS_CHAR == _rNewObj.GetFrameFormat().GetAnchor().GetAnchorId() )
+    if ( RndStdIds::FLY_AS_CHAR == _rNewObj.GetFrameFormat()->GetAnchor().GetAnchorId() )
     {
         return;
     }
@@ -1154,8 +1140,9 @@ void SwPageFrame::RemoveDrawObjFromPage( SwAnchoredObject& _rToRemoveObj )
         }
         if ( GetUpper() )
         {
-            if (RndStdIds::FLY_AS_CHAR !=
-                    _rToRemoveObj.GetFrameFormat().GetAnchor().GetAnchorId())
+            const SwFrameFormat* pObjFormat = _rToRemoveObj.GetFrameFormat();
+            if (pObjFormat
+                && RndStdIds::FLY_AS_CHAR != pObjFormat->GetAnchor().GetAnchorId())
             {
                 static_cast<SwRootFrame*>(GetUpper())->SetSuperfluous();
                 InvalidatePage();
@@ -1468,63 +1455,67 @@ bool CalcClipRect( const SdrObject *pSdrObj, SwRect &rRect, bool bMove )
     }
     else
     {
-        const SwDrawContact *pC = static_cast<const SwDrawContact*>(GetUserCall(pSdrObj));
-        const SwFrameFormat  *pFormat = pC->GetFormat();
-        const SwFormatAnchor &rAnch = pFormat->GetAnchor();
-        if ( RndStdIds::FLY_AS_CHAR == rAnch.GetAnchorId() )
+        if (const SwDrawContact* pC = static_cast<const SwDrawContact*>(GetUserCall(pSdrObj)))
         {
-            const SwFrame* pAnchorFrame = pC->GetAnchorFrame( pSdrObj );
-            if( !pAnchorFrame )
+            const SwFrameFormat* pFormat = pC->GetFormat();
+            const SwFormatAnchor& rAnch = pFormat->GetAnchor();
+            if (RndStdIds::FLY_AS_CHAR == rAnch.GetAnchorId())
             {
-                OSL_FAIL( "<::CalcClipRect(..)> - missing anchor frame." );
-                const_cast<SwDrawContact*>(pC)->ConnectToLayout();
-                pAnchorFrame = pC->GetAnchorFrame();
-            }
-            const SwFrame* pUp = pAnchorFrame->GetUpper();
-            rRect = pUp->getFramePrintArea();
-            rRect += pUp->getFrameArea().Pos();
-            SwRectFnSet aRectFnSet(pAnchorFrame);
-            tools::Long nHeight = (9*aRectFnSet.GetHeight(rRect))/10;
-            tools::Long nTop;
-            const SvxULSpaceItem &rUL = pFormat->GetULSpace();
-            SwRect aSnapRect( pSdrObj->GetSnapRect() );
-            tools::Long nTmpH = 0;
-            if( bMove )
-            {
-                nTop = aRectFnSet.YInc( aRectFnSet.IsVert() ? pSdrObj->GetAnchorPos().X() :
-                                       pSdrObj->GetAnchorPos().Y(), -nHeight );
-                tools::Long nWidth = aRectFnSet.GetWidth(aSnapRect);
-                aRectFnSet.SetLeftAndWidth( rRect, aRectFnSet.IsVert() ?
-                            pSdrObj->GetAnchorPos().Y() :
-                            pSdrObj->GetAnchorPos().X(), nWidth );
+                const SwFrame* pAnchorFrame = pC->GetAnchorFrame(pSdrObj);
+                if (!pAnchorFrame)
+                {
+                    OSL_FAIL("<::CalcClipRect(..)> - missing anchor frame.");
+                    const_cast<SwDrawContact*>(pC)->ConnectToLayout();
+                    pAnchorFrame = pC->GetAnchorFrame();
+                }
+                const SwFrame* pUp = pAnchorFrame->GetUpper();
+                rRect = pUp->getFramePrintArea();
+                rRect += pUp->getFrameArea().Pos();
+                SwRectFnSet aRectFnSet(pAnchorFrame);
+                tools::Long nHeight = (9 * aRectFnSet.GetHeight(rRect)) / 10;
+                tools::Long nTop;
+                const SvxULSpaceItem& rUL = pFormat->GetULSpace();
+                SwRect aSnapRect(pSdrObj->GetSnapRect());
+                tools::Long nTmpH = 0;
+                if (bMove)
+                {
+                    nTop = aRectFnSet.YInc(aRectFnSet.IsVert() ? pSdrObj->GetAnchorPos().X()
+                                                               : pSdrObj->GetAnchorPos().Y(),
+                                           -nHeight);
+                    tools::Long nWidth = aRectFnSet.GetWidth(aSnapRect);
+                    aRectFnSet.SetLeftAndWidth(rRect,
+                                               aRectFnSet.IsVert() ? pSdrObj->GetAnchorPos().Y()
+                                                                   : pSdrObj->GetAnchorPos().X(),
+                                               nWidth);
+                }
+                else
+                {
+                    // #i26791# - value of <nTmpH> is needed to
+                    // calculate value of <nTop>.
+                    nTmpH = aRectFnSet.IsVert() ? pSdrObj->GetCurrentBoundRect().GetWidth()
+                                                : pSdrObj->GetCurrentBoundRect().GetHeight();
+                    nTop = aRectFnSet.YInc(aRectFnSet.GetTop(aSnapRect),
+                                           rUL.GetLower() + nTmpH - nHeight);
+                }
+                nHeight = 2 * nHeight - nTmpH - rUL.GetLower() - rUL.GetUpper();
+                aRectFnSet.SetTopAndHeight(rRect, nTop, nHeight);
             }
             else
             {
-                // #i26791# - value of <nTmpH> is needed to
-                // calculate value of <nTop>.
-                nTmpH = aRectFnSet.IsVert() ? pSdrObj->GetCurrentBoundRect().GetWidth() :
-                                       pSdrObj->GetCurrentBoundRect().GetHeight();
-                nTop = aRectFnSet.YInc( aRectFnSet.GetTop(aSnapRect),
-                                          rUL.GetLower() + nTmpH - nHeight );
-            }
-            nHeight = 2*nHeight - nTmpH - rUL.GetLower() - rUL.GetUpper();
-            aRectFnSet.SetTopAndHeight( rRect, nTop, nHeight );
-        }
-        else
-        {
-            // restrict clip rectangle for drawing
-            // objects in header/footer to the page frame.
-            // #i26791#
-            const SwFrame* pAnchorFrame = pC->GetAnchorFrame( pSdrObj );
-            if ( pAnchorFrame && pAnchorFrame->FindFooterOrHeader() )
-            {
-                // clip frame is the page frame the header/footer is on.
-                const SwFrame* pClipFrame = pAnchorFrame->FindPageFrame();
-                rRect = pClipFrame->getFrameArea();
-            }
-            else
-            {
-                bRet = false;
+                // restrict clip rectangle for drawing
+                // objects in header/footer to the page frame.
+                // #i26791#
+                const SwFrame* pAnchorFrame = pC->GetAnchorFrame(pSdrObj);
+                if (pAnchorFrame && pAnchorFrame->FindFooterOrHeader())
+                {
+                    // clip frame is the page frame the header/footer is on.
+                    const SwFrame* pClipFrame = pAnchorFrame->FindPageFrame();
+                    rRect = pClipFrame->getFrameArea();
+                }
+                else
+                {
+                    bRet = false;
+                }
             }
         }
     }

@@ -49,10 +49,6 @@ class ScContentTree
     o3tl::enumarray<ScContentId, std::unique_ptr<weld::TreeIter>> m_aRootNodes;
     ScContentId             nRootType;          // set as Root
     OUString                aManualDoc;         // Switched in Navigator (Title)
-    bool                    bHiddenDoc;         // Hidden active?
-    OUString                aHiddenName;        // URL to load
-    OUString                aHiddenTitle;       // for display
-    ScDocument*             pHiddenDocument;    // temporary
     bool                    bIsInNavigatorDlg;
     bool                    m_bFreeze;
     ImplSVEvent*            m_nAsyncMouseReleaseId;
@@ -148,11 +144,8 @@ public:
     bool    ActiveDocChanged();
     void    ResetManualDoc();
     void    SetManualDoc(const OUString& rName);
-    void    LoadFile(const OUString& rUrl);
     void    SelectDoc(const OUString& rName);
     void    SelectEntryByName(const ScContentId nRoot, std::u16string_view rName);
-
-    const OUString& GetHiddenTitle() const    { return aHiddenTitle; }
 
     /** Applies the navigator settings to the listbox. */
     void ApplyNavigatorSettings();

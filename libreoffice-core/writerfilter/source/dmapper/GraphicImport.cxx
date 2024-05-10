@@ -57,7 +57,6 @@
 #include <comphelper/string.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/sequence.hxx>
-
 #include <oox/drawingml/drawingmltypes.hxx>
 
 #include "DomainMapper.hxx"
@@ -271,6 +270,7 @@ public:
     std::optional<sal_Int32> m_oEffectExtentTop;
     std::optional<sal_Int32> m_oEffectExtentRight;
     std::optional<sal_Int32> m_oEffectExtentBottom;
+    std::optional<text::GraphicCrop> m_oCrop;
 
     GraphicImport_Impl(GraphicImportType & rImportType, DomainMapper& rDMapper,
             std::pair<OUString, OUString>& rPositionOffsets,
@@ -796,6 +796,9 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
         case NS_ooxml::LN_CT_WrapSquare_wrapText: //90928;
             handleWrapTextValue(rValue.getInt());
             break;
+        case NS_ooxml::LN_CT_BlipFillProperties_srcRect:
+            m_pImpl->m_oCrop.emplace(rValue.getAny().get<text::GraphicCrop>());
+            break;
         case NS_ooxml::LN_shape:
             {
                 uno::Reference< drawing::XShape> xShape;
@@ -858,7 +861,13 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
                             text::GraphicCrop aGraphicCrop( 0, 0, 0, 0 );
                             uno::Reference< beans::XPropertySet > xSourceGraphProps( xShape, uno::UNO_QUERY );
                             uno::Any aAny = xSourceGraphProps->getPropertyValue("GraphicCrop");
-                            if(aAny >>= aGraphicCrop) {
+                            if (m_pImpl->m_oCrop)
+                            {   // RTF: RTFValue from resolvePict()
+                                xGraphProps->setPropertyValue("GraphicCrop",
+                                        uno::Any(*m_pImpl->m_oCrop));
+                            }
+                            else if (aAny >>= aGraphicCrop)
+                            {   // DOCX: imported in oox BlipFillContext
                                 xGraphProps->setPropertyValue("GraphicCrop",
                                     uno::Any( aGraphicCrop ) );
                             }
@@ -934,8 +943,10 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
                         // got size and position. Values from m_Impl has to be used.
                         bool bIsLockedCanvas(false);
                         aInteropGrabBag.getValue("LockedCanvas") >>= bIsLockedCanvas;
+                        bool bIsWordprocessingCanvas(false);
+                        aInteropGrabBag.getValue("WordprocessingCanvas") >>= bIsWordprocessingCanvas;
                         const bool bIsGroupOrLine = (xServiceInfo->supportsService("com.sun.star.drawing.GroupShape")
-                            && !bIsDiagram && !bIsLockedCanvas)
+                            && !bIsDiagram && !bIsLockedCanvas && !bIsWordprocessingCanvas)
                             || xServiceInfo->supportsService("com.sun.star.drawing.LineShape");
                         SdrObject* pShape = SdrObject::getSdrObjectFromXShape(m_xShape);
                         if ((bIsGroupOrLine && !lcl_bHasGroupSlantedChild(pShape) && nOOXAngle == 0)
@@ -956,7 +967,13 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
                             if (pShape)
                                 nRotation = pShape->GetRotateAngle();
                         }
-                        m_xShape->setSize(aSize);
+
+                        // tdf#157960: SdrEdgeObj::NbcResize would reset the adjustment values of
+                        // connectors to default zero. Thus we do not resize in case of a group that
+                        // represents a Word drawing canvas.
+                        if (!bIsWordprocessingCanvas)
+                            m_xShape->setSize(aSize);
+
                         if (bKeepRotation)
                         {
                             xShapeProps->setPropertyValue("RotateAngle", uno::Any(nRotation.get()));
@@ -1079,7 +1096,7 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
                                   || m_pImpl->m_nWrap == text::WrapTextMode_LEFT
                                   || m_pImpl->m_nWrap == text::WrapTextMode_RIGHT
                                   || m_pImpl->m_nWrap == text::WrapTextMode_NONE)
-                                  && !(m_pImpl->mpWrapPolygon) && !bIsDiagram)
+                                  && !(m_pImpl->mpWrapPolygon) && !bIsDiagram && !bIsWordprocessingCanvas)
                         {
                             // For wrap "Square" an area is defined around which the text wraps. MSO
                             // describes the area by a base rectangle and effectExtent. LO uses the
@@ -1113,7 +1130,7 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
                             m_pImpl->m_nBottomMargin += aMSOBaseLeftTop.Y + aMSOBaseSize.Height
                                                       - (aLOBoundRect.Y + aLOBoundRect.Height);
                         }
-                        else if (m_pImpl->mpWrapPolygon && !bIsDiagram)
+                        else if (m_pImpl->mpWrapPolygon && !bIsDiagram && !bIsWordprocessingCanvas)
                         {
                             // Word uses a wrap polygon, LibreOffice has no explicit wrap polygon
                             // but creates the wrap contour based on the shape geometry, without
@@ -1203,7 +1220,7 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
                             if (m_pImpl->m_nRightMargin < 0)
                                 m_pImpl->m_nRightMargin = 0;
                         }
-                        else if (!bIsDiagram) // text::WrapTextMode_THROUGH
+                        else if (!bIsDiagram && !bIsWordprocessingCanvas) // text::WrapTextMode_THROUGH
                         {
                             // Word writes and evaluates the effectExtent in case of position
                             // type 'Alignment' (UI). We move these values to margin to approximate
@@ -1246,9 +1263,32 @@ void GraphicImport::lcl_attribute(Id nName, Value& rValue)
 
                         if (m_pImpl->m_nWrap == text::WrapTextMode_THROUGH && m_pImpl->m_nHoriRelation == text::RelOrientation::FRAME)
                         {
+                            if (m_pImpl->m_bLayoutInCell && m_pImpl->m_rDomainMapper.IsInTable()
+                                && (m_pImpl->m_nVertRelation == text::RelOrientation::PAGE_FRAME
+                                    || m_pImpl->m_nVertRelation == text::RelOrientation::PAGE_PRINT_AREA))
+                            {
+                                // Impossible to be page-oriented when layout in cell.
+                                // Since we are turning LayoutInCell off (to simplify layout),
+                                // we need to set the orientation to the paragraph,
+                                // as MSO effectively does when it forces layoutInCell.
+                                // Probably also needs to happen with TEXT_LINE,
+                                // but MSO is really weird with vertical relation to "line"
+                                m_pImpl->m_nVertRelation = text::RelOrientation::FRAME;
+                            }
+
                             // text::RelOrientation::FRAME is OOXML's "column", which behaves as if
                             // layout-in-cell would be always off.
                             m_pImpl->m_bLayoutInCell = false;
+                        }
+
+                        if (m_pImpl->m_nHoriRelation == text::RelOrientation::FRAME
+                            && m_pImpl->m_nHoriOrient > text::HoriOrientation::NONE
+                            && m_pImpl->m_nHoriOrient != text::HoriOrientation::CENTER
+                            && m_pImpl->m_nHoriOrient < text::HoriOrientation::FULL)
+                        {
+                            // before compat15, relative left/right/inside/outside honored margins.
+                            if (m_pImpl->m_rDomainMapper.GetSettingsTable()->GetWordCompatibilityMode() < 15)
+                                m_pImpl->m_nHoriRelation = text::RelOrientation::PRINT_AREA;
                         }
 
                         // Anchored: Word only supports at-char in that case.
@@ -1540,6 +1580,7 @@ void GraphicImport::lcl_sprm(Sprm& rSprm)
         case NS_ooxml::LN_sizeRelH_sizeRelH:
         case NS_ooxml::LN_sizeRelV_sizeRelV:
         case NS_ooxml::LN_hlinkClick_hlinkClick:
+        case NS_ooxml::LN_wpc_wpc:
         {
             writerfilter::Reference<Properties>::Pointer_t pProperties = rSprm.getProps();
             if( pProperties )
@@ -1799,6 +1840,16 @@ uno::Reference<text::XTextContent> GraphicImport::createGraphicObject(uno::Refer
             sal_Int32 nWidth = - m_pImpl->m_nLeftPosition;
             if (m_pImpl->m_rGraphicImportType == IMPORT_AS_DETECTED_ANCHOR)
             {
+                if (m_pImpl->m_nHoriRelation == text::RelOrientation::FRAME
+                    && m_pImpl->m_nHoriOrient > text::HoriOrientation::NONE
+                    && m_pImpl->m_nHoriOrient != text::HoriOrientation::CENTER
+                    && m_pImpl->m_nHoriOrient < text::HoriOrientation::FULL)
+                {
+                    // before compat15, relative left/right/inside/outside honored margins.
+                    if (m_pImpl->m_rDomainMapper.GetSettingsTable()->GetWordCompatibilityMode() < 15)
+                        m_pImpl->m_nHoriRelation = text::RelOrientation::PRINT_AREA;
+                }
+
                 //adjust margins
                 if( (m_pImpl->m_nHoriOrient == text::HoriOrientation::LEFT &&
                     (m_pImpl->m_nHoriRelation == text::RelOrientation::PAGE_PRINT_AREA ||
@@ -1842,6 +1893,13 @@ uno::Reference<text::XTextContent> GraphicImport::createGraphicObject(uno::Refer
                     m_pImpl->m_nLeftPosition = 0;
                 }
 
+                if (m_pImpl->m_nVertRelation == text::RelOrientation::TEXT_LINE)
+                {
+                    // Word's "line" is "below the bottom of the line", our TEXT_LINE is
+                    // "towards top, from the bottom of the line", so invert the vertical position.
+                    m_pImpl->m_nTopPosition *= -1;
+                }
+
                 m_pImpl->applyPosition(xGraphicObjectProperties);
                 m_pImpl->applyRelativePosition(xGraphicObjectProperties);
                 if( !m_pImpl->m_bOpaque )
@@ -1853,6 +1911,9 @@ uno::Reference<text::XTextContent> GraphicImport::createGraphicObject(uno::Refer
                 if( m_pImpl->m_rDomainMapper.IsInTable())
                     xGraphicObjectProperties->setPropertyValue(getPropertyName( PROP_FOLLOW_TEXT_FLOW ),
                         uno::Any(m_pImpl->m_bLayoutInCell));
+
+                xGraphicObjectProperties->setPropertyValue(getPropertyName(PROP_ALLOW_OVERLAP),
+                                                           uno::Any(m_pImpl->m_bAllowOverlap));
 
                 xGraphicObjectProperties->setPropertyValue(getPropertyName( PROP_SURROUND_CONTOUR ),
                     uno::Any(m_pImpl->m_bContour));
@@ -1999,7 +2060,7 @@ void GraphicImport::lcl_text(const sal_uInt8 * /*_data*/, size_t /*len*/)
 }
 
 
-void GraphicImport::lcl_utext(const sal_uInt8 * /*_data*/, size_t /*len*/)
+void GraphicImport::lcl_utext(const sal_Unicode * /*_data*/, size_t /*len*/)
 {
 }
 

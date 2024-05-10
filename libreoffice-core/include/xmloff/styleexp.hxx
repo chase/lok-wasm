@@ -52,12 +52,12 @@ enum class XmlStyleFamily;
 
 class XMLOFF_DLLPUBLIC XMLStyleExport : public salhelper::SimpleReferenceObject
 {
-    SvXMLExport& rExport;
-    SvXMLAutoStylePoolP *pAutoStylePool;
+    SvXMLExport& m_rExport;
+    SvXMLAutoStylePoolP *m_pAutoStylePool;
 
 protected:
-    SvXMLExport& GetExport() { return rExport; }
-    const SvXMLExport& GetExport() const  { return rExport; }
+    SvXMLExport& GetExport() { return m_rExport; }
+    const SvXMLExport& GetExport() const  { return m_rExport; }
 
     bool exportStyle(
         const css::uno::Reference< css::style::XStyle > & rStyle,
@@ -96,12 +96,6 @@ public:
 
     void exportStyleFamily(
         const OUString& rFamily, const OUString& rXMLFamily,
-        const rtl::Reference < SvXMLExportPropertyMapper >& rPropMapper,
-        bool bUsed, XmlStyleFamily nFamily,
-        const OUString* pPrefix = nullptr);
-
-    void exportStyleFamily(
-        const char *pFamily, const OUString& rXMLFamily,
         const rtl::Reference < SvXMLExportPropertyMapper >& rPropMapper,
         bool bUsed, XmlStyleFamily nFamily,
         const OUString* pPrefix = nullptr);

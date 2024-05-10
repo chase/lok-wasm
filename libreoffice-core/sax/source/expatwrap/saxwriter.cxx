@@ -41,7 +41,8 @@
 #include <rtl/character.hxx>
 #include <sal/log.hxx>
 
-using namespace ::std;
+#include <memory>
+
 using namespace ::osl;
 using namespace ::cppu;
 using namespace ::com::sun::star::uno;
@@ -49,8 +50,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::xml::sax;
 using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::io;
-
-#include <memory>
 
 #define LINEFEED 10
 #define SEQUENCESIZE 1024
@@ -1036,8 +1035,8 @@ public: // XActiveDataSource
         }
         catch (const SAXException& e)
         {
-            throw css::lang::WrappedTargetRuntimeException(
-                e.Message, static_cast<OWeakObject*>(this), e.WrappedException);
+            throw css::lang::WrappedTargetRuntimeException(e.Message, getXWeak(),
+                                                           e.WrappedException);
         }
     }
     virtual Reference<XOutputStream> SAL_CALL getOutputStream() override { return m_out; }
@@ -1159,15 +1158,11 @@ void SAXWriter::startElement(const OUString& aName, const Reference<XAttributeLi
 {
     if (!m_bDocStarted)
     {
-        SAXException except;
-        except.Message = "startElement called before startDocument";
-        throw except;
+        throw SAXException("startElement called before startDocument", {}, {});
     }
     if (m_bIsCDATA)
     {
-        SAXException except;
-        except.Message = "startElement call not allowed with CDATA sections";
-        throw except;
+        throw SAXException("startElement call not allowed with CDATA sections", {}, {});
     }
 
     sal_Int32 nLength(0);
@@ -1211,15 +1206,12 @@ void SAXWriter::startElement(const OUString& aName, const Reference<XAttributeLi
 
     if (eRet == SAX_WARNING)
     {
-        SAXInvalidCharacterException except;
-        except.Message = "Invalid character during XML-Export in an attribute value";
-        throw except;
+        throw SAXInvalidCharacterException(
+            "Invalid character during XML-Export in an attribute value", {}, {});
     }
     else if (eRet == SAX_ERROR)
     {
-        SAXException except;
-        except.Message = "Invalid character during XML-Export";
-        throw except;
+        throw SAXException("Invalid character during XML-Export", {}, {});
     }
 }
 
@@ -1263,9 +1255,7 @@ void SAXWriter::endElement(const OUString& aName)
 
     if (!bRet)
     {
-        SAXException except;
-        except.Message = "Invalid character during XML-Export";
-        throw except;
+        throw SAXException("Invalid character during XML-Export", {}, {});
     }
 }
 
@@ -1273,9 +1263,7 @@ void SAXWriter::characters(const OUString& aChars)
 {
     if (!m_bDocStarted)
     {
-        SAXException except;
-        except.Message = "characters method called before startDocument";
-        throw except;
+        throw SAXException("characters method called before startDocument", {}, {});
     }
 
     bool bThrowException(false);
@@ -1315,9 +1303,7 @@ void SAXWriter::characters(const OUString& aChars)
     }
     if (bThrowException)
     {
-        SAXInvalidCharacterException except;
-        except.Message = "Invalid character during XML-Export";
-        throw except;
+        throw SAXInvalidCharacterException("Invalid character during XML-Export", {}, {});
     }
 }
 
@@ -1358,9 +1344,7 @@ void SAXWriter::processingInstruction(const OUString& aTarget, const OUString& a
 
     if (!m_pSaxWriterHelper->processingInstruction(aTarget, aData))
     {
-        SAXException except;
-        except.Message = "Invalid character during XML-Export";
-        throw except;
+        throw SAXException("Invalid character during XML-Export", {}, {});
     }
 }
 
@@ -1392,9 +1376,7 @@ void SAXWriter::endCDATA()
 {
     if (!m_bDocStarted || !m_bIsCDATA)
     {
-        SAXException except;
-        except.Message = "endCDATA was called without startCDATA";
-        throw except;
+        throw SAXException("endCDATA was called without startCDATA", {}, {});
     }
 
     sal_Int32 nPrefix = getIndentPrefixLength(3);
@@ -1428,9 +1410,7 @@ void SAXWriter::comment(const OUString& sComment)
 
     if (!m_pSaxWriterHelper->comment(sComment))
     {
-        SAXException except;
-        except.Message = "Invalid character during XML-Export";
-        throw except;
+        throw SAXException("Invalid character during XML-Export", {}, {});
     }
 }
 
@@ -1468,9 +1448,7 @@ void SAXWriter::unknown(const OUString& sString)
 
     if (!m_pSaxWriterHelper->writeString(sString, false, false))
     {
-        SAXException except;
-        except.Message = "Invalid character during XML-Export";
-        throw except;
+        throw SAXException("Invalid character during XML-Export", {}, {});
     }
 }
 

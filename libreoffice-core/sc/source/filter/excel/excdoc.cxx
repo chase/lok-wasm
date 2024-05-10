@@ -21,6 +21,7 @@
 #include <rtl/ustring.hxx>
 
 #include <document.hxx>
+#include <docsh.hxx>
 #include <scextopt.hxx>
 #include <docoptio.hxx>
 #include <tabprotection.hxx>
@@ -155,7 +156,7 @@ void ExcTable::FillAsHeaderBinary( ExcBoundsheetList& rBoundsheetList )
     sal_uInt16  nExcTabCount    = rTabInfo.GetXclTabCount();
     sal_uInt16  nCodenames      = static_cast< sal_uInt16 >( GetExtDocOptions().GetCodeNameCount() );
 
-    SfxObjectShell* pShell = GetDocShell();
+    ScDocShell* pShell = GetDocShell();
     sal_uInt16 nWriteProtHash = pShell ? pShell->GetModifyPasswordHash() : 0;
     bool bRecommendReadOnly = pShell && pShell->IsLoadReadonly();
 
@@ -696,12 +697,12 @@ void ExcTable::WriteXml( XclExpXmlStream& rStrm )
     rStrm.PushStream( pWorksheet );
 
     pWorksheet->startElement( XML_worksheet,
-        XML_xmlns, rStrm.getNamespaceURL(OOX_NS(xls)).toUtf8(),
-        FSNS(XML_xmlns, XML_r), rStrm.getNamespaceURL(OOX_NS(officeRel)).toUtf8(),
-        FSNS(XML_xmlns, XML_xdr), "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing", // rStrm.getNamespaceURL(OOX_NS(xm)).toUtf8() -> "http://schemas.microsoft.com/office/excel/2006/main",
-        FSNS(XML_xmlns, XML_x14), rStrm.getNamespaceURL(OOX_NS(xls14Lst)).toUtf8(),
-        FSNS(XML_xmlns, XML_xr2), rStrm.getNamespaceURL(OOX_NS(xr2)).toUtf8(),
-        FSNS(XML_xmlns, XML_mc), rStrm.getNamespaceURL(OOX_NS(mce)).toUtf8());
+        XML_xmlns, rStrm.getNamespaceURL(OOX_NS(xls)),
+        FSNS(XML_xmlns, XML_r), rStrm.getNamespaceURL(OOX_NS(officeRel)),
+        FSNS(XML_xmlns, XML_xdr), "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing", // rStrm.getNamespaceURL(OOX_NS(xm)) -> "http://schemas.microsoft.com/office/excel/2006/main",
+        FSNS(XML_xmlns, XML_x14), rStrm.getNamespaceURL(OOX_NS(xls14Lst)),
+        FSNS(XML_xmlns, XML_xr2), rStrm.getNamespaceURL(OOX_NS(xr2)),
+        FSNS(XML_xmlns, XML_mc), rStrm.getNamespaceURL(OOX_NS(mce)));
 
     SetCurrScTab( mnScTab );
     if (mxCellTable)
@@ -808,10 +809,10 @@ void ExcDocument::Write( SvStream& rSvStrm )
 
 void ExcDocument::WriteXml( XclExpXmlStream& rStrm )
 {
-    SfxObjectShell* pDocShell = GetDocShell();
+    ScDocShell* pDocShell = GetDocShell();
 
     using namespace ::com::sun::star;
-    uno::Reference<document::XDocumentPropertiesSupplier> xDPS( pDocShell->GetModel(), uno::UNO_QUERY_THROW );
+    uno::Reference<document::XDocumentPropertiesSupplier> xDPS( static_cast<cppu::OWeakObject*>(pDocShell->GetModel()), uno::UNO_QUERY_THROW );
     uno::Reference<document::XDocumentProperties> xDocProps = xDPS->getDocumentProperties();
 
     OUString sUserName = GetUserName();
@@ -839,8 +840,8 @@ void ExcDocument::WriteXml( XclExpXmlStream& rStrm )
 
     sax_fastparser::FSHelperPtr& rWorkbook = rStrm.GetCurrentStream();
     rWorkbook->startElement( XML_workbook,
-            XML_xmlns, rStrm.getNamespaceURL(OOX_NS(xls)).toUtf8(),
-            FSNS(XML_xmlns, XML_r), rStrm.getNamespaceURL(OOX_NS(officeRel)).toUtf8() );
+            XML_xmlns, rStrm.getNamespaceURL(OOX_NS(xls)),
+            FSNS(XML_xmlns, XML_r), rStrm.getNamespaceURL(OOX_NS(officeRel)) );
     rWorkbook->singleElement( XML_fileVersion,
             XML_appName, "Calc"
             // OOXTODO: XML_codeName
@@ -852,14 +853,14 @@ void ExcDocument::WriteXml( XclExpXmlStream& rStrm )
     if (bHasPasswordHash)
         rWorkbook->singleElement(XML_fileSharing,
                 XML_userName, sUserName,
-                XML_reservationPassword, OString::number(nWriteProtHash, 16).getStr());
+                XML_reservationPassword, OString::number(nWriteProtHash, 16));
     else if (bHasPasswordInfo)
         rWorkbook->singleElement(XML_fileSharing,
                 XML_userName, sUserName,
-                XML_algorithmName, sAlgorithm.toUtf8().getStr(),
-                XML_hashValue, sHash.toUtf8().getStr(),
-                XML_saltValue, sSalt.toUtf8().getStr(),
-                XML_spinCount, OString::number(nCount).getStr());
+                XML_algorithmName, sAlgorithm,
+                XML_hashValue, sHash,
+                XML_saltValue, sSalt,
+                XML_spinCount, OString::number(nCount));
 
     if( !maTableList.IsEmpty() )
     {

@@ -90,19 +90,23 @@ SwASCWriter::~SwASCWriter() {}
 
 ErrCode SwASCWriter::WriteStream()
 {
+    static constexpr OUString STR_CR = u"\015"_ustr;
+    static constexpr OUStringLiteral STR_LF = u"\012";
+    static constexpr OUStringLiteral STR_CRLF = u"\015\012";
+    static constexpr OUStringLiteral STR_BLANK = u" ";
     bool bIncludeBOM = GetAsciiOptions().GetIncludeBOM();
     bool bIncludeHidden = GetAsciiOptions().GetIncludeHidden();
 
     if( m_bASCII_ParaAsCR )           // If predefined
-        m_sLineEnd = "\015";
+        m_sLineEnd = STR_CR;
     else if( m_bASCII_ParaAsBlank )
-        m_sLineEnd = " ";
+        m_sLineEnd = STR_BLANK;
     else
         switch( GetAsciiOptions().GetParaFlags() )
         {
-        case LINEEND_CR:    m_sLineEnd = "\015"; break;
-        case LINEEND_LF:    m_sLineEnd = "\012"; break;
-        case LINEEND_CRLF:  m_sLineEnd = "\015\012"; break;
+        case LINEEND_CR:    m_sLineEnd = STR_CR; break;
+        case LINEEND_LF:    m_sLineEnd = STR_LF; break;
+        case LINEEND_CRLF:  m_sLineEnd = STR_CRLF; break;
         }
 
     SwNodeOffset nMaxNode = m_pDoc->GetNodes().Count();
@@ -170,17 +174,13 @@ ErrCode SwASCWriter::WriteStream()
                             case RTL_TEXTENCODING_UCS2:
 #ifdef OSL_LITENDIAN
                                 Strm().SetEndian(SvStreamEndian::LITTLE);
-                                if( bIncludeBOM )
-                                {
-                                    Strm().WriteUChar( 0xFF ).WriteUChar( 0xFE );
-                                }
 #else
                                 Strm().SetEndian(SvStreamEndian::BIG);
+#endif
                                 if( bIncludeBOM )
                                 {
-                                    Strm().WriteUChar( 0xFE ).WriteUChar( 0xFF );
+                                    Strm().StartWritingUnicodeText();
                                 }
-#endif
                                 break;
 
                         }
@@ -211,17 +211,13 @@ ErrCode SwASCWriter::WriteStream()
 
 void SwASCWriter::SetupFilterOptions(SfxMedium& rMedium)
 {
-    const SfxItemSet* pSet = rMedium.GetItemSet();
-    if( nullptr != pSet )
+    if( const SfxStringItem* pItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
     {
-        if( const SfxStringItem* pItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
-        {
-            SwAsciiOptions aOpt;
-            OUString sItemOpt;
-            sItemOpt = pItem->GetValue();
-            aOpt.ReadUserData(sItemOpt);
-            SetAsciiOptions(aOpt);
-        }
+        SwAsciiOptions aOpt;
+        OUString sItemOpt;
+        sItemOpt = pItem->GetValue();
+        aOpt.ReadUserData(sItemOpt);
+        SetAsciiOptions(aOpt);
     }
 }
 

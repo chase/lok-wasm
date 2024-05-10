@@ -31,6 +31,7 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <sal/log.hxx>
 #include <rtl/ref.hxx>
+#include <rtl/uri.hxx>
 
 #include <comphelper/interaction.hxx>
 
@@ -64,7 +65,6 @@
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/task/XInteractionHandler.hpp>
 #include <com/sun/star/ucb/InteractiveAugmentedIOException.hpp>
-#include <com/sun/star/xml/xslt/XSLT2Transformer.hpp>
 #include <com/sun/star/xml/xslt/XSLTTransformer.hpp>
 #include <utility>
 
@@ -207,20 +207,16 @@ namespace XSLT
     OUString
     XSLTFilter::expandUrl(const OUString& sUrl)
     {
-        OUString sExpandedUrl;
-        try
-            {
-                css::uno::Reference<XMacroExpander>
-                        xMacroExpander = theMacroExpander::get(m_xContext);
-                sExpandedUrl = xMacroExpander->expandMacros(sUrl);
-                sal_Int32 nPos = sExpandedUrl.indexOf( "vnd.sun.star.expand:" );
-                if (nPos != -1)
-                    sExpandedUrl = sExpandedUrl.copy(nPos + 20);
-            }
-        catch (const Exception&)
-            {
-            }
-        return sExpandedUrl;
+        OUString sPreparedURL(sUrl);
+        if (sPreparedURL.startsWithIgnoreAsciiCase("vnd.sun.star.expand:", &sPreparedURL))
+        {
+            sPreparedURL = rtl::Uri::decode(sPreparedURL, rtl_UriDecodeWithCharset,
+                                            RTL_TEXTENCODING_UTF8);
+            css::uno::Reference<XMacroExpander>
+                xMacroExpander = theMacroExpander::get(m_xContext);
+            sPreparedURL = xMacroExpander->expandMacros(sPreparedURL);
+        }
+        return sPreparedURL;
     }
 
     css::uno::Reference<xslt::XXSLTTransformer>
@@ -237,7 +233,10 @@ namespace XSLT
         {
             try
             {
-                xTransformer = xslt::XSLT2Transformer::create(m_xContext, rArgs);
+                xTransformer.set(
+                    m_xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
+                        "com.sun.star.xml.xslt.XSLT2Transformer", rArgs, m_xContext),
+                    css::uno::UNO_QUERY_THROW);
             }
             catch (const Exception&)
             {
@@ -247,10 +246,7 @@ namespace XSLT
                 throw;
             }
         }
-
-        // instantiation of XSLT 2.0 transformer service failed, or the
-        // filter does not need it
-        if (!xTransformer.is())
+        else
         {
             xTransformer = xslt::XSLTTransformer::create(m_xContext, rArgs);
         }
@@ -378,7 +374,7 @@ namespace XSLT
                                         Sequence<Any> excArgs(0);
                                         css::ucb::InteractiveAugmentedIOException exc(
                                                 "Timeout!",
-                                                static_cast< OWeakObject * >( this ),
+                                                getXWeak(),
                                                 InteractionClassification_ERROR,
                                                 css::ucb::IOErrorCode_GENERAL,
                                                  excArgs);
@@ -505,7 +501,7 @@ namespace XSLT
                                         Sequence<Any> excArgs(0);
                                         css::ucb::InteractiveAugmentedIOException exc(
                                                 "Timeout!",
-                                                static_cast< OWeakObject * >( this ),
+                                                getXWeak(),
                                                 InteractionClassification_ERROR,
                                                 css::ucb::IOErrorCode_GENERAL,
                                                  excArgs);

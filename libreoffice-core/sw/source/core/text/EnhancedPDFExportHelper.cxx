@@ -17,11 +17,12 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <EnhancedPDFExportHelper.hxx>
+
 #include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
-#include <EnhancedPDFExportHelper.hxx>
 #include <hintids.hxx>
 
 #include <sot/exchange.hxx>
@@ -66,17 +67,19 @@
 #include <rowfrm.hxx>
 #include <cellfrm.hxx>
 #include <sectfrm.hxx>
+#include <ftnfrm.hxx>
 #include <flyfrm.hxx>
 #include <notxtfrm.hxx>
 #include "porfld.hxx"
+#include "pormulti.hxx"
 #include <SwStyleNameMapper.hxx>
 #include "itrpaint.hxx"
 #include <i18nlangtag/languagetag.hxx>
 #include <IMark.hxx>
 #include <printdata.hxx>
+#include <vprint.hxx>
 #include <SwNodeNum.hxx>
 #include <calbck.hxx>
-#include <stack>
 #include <frmtool.hxx>
 #include <strings.hrc>
 #include <frameformats.hxx>
@@ -87,17 +90,12 @@
 #include <tools/globname.hxx>
 #include <svx/svdobj.hxx>
 
+#include <stack>
+#include <map>
+#include <set>
+#include <optional>
+
 using namespace ::com::sun::star;
-
-// Some static data structures
-
-TableColumnsMap SwEnhancedPDFExportHelper::s_aTableColumnsMap;
-LinkIdMap SwEnhancedPDFExportHelper::s_aLinkIdMap;
-NumListIdMap SwEnhancedPDFExportHelper::s_aNumListIdMap;
-NumListBodyIdMap SwEnhancedPDFExportHelper::s_aNumListBodyIdMap;
-FrameTagIdMap SwEnhancedPDFExportHelper::s_aFrameTagIdMap;
-
-LanguageType SwEnhancedPDFExportHelper::s_eLanguageDefault = LANGUAGE_SYSTEM;
 
 #if OSL_DEBUG_LEVEL > 1
 
@@ -128,6 +126,45 @@ void lcl_DBGCheckStack()
 
 #endif
 
+typedef std::set< tools::Long, lt_TableColumn > TableColumnsMapEntry;
+typedef std::pair< SwRect, sal_Int32 > IdMapEntry;
+typedef std::vector< IdMapEntry > LinkIdMap;
+typedef std::map< const SwTable*, TableColumnsMapEntry > TableColumnsMap;
+typedef std::map< const SwNumberTreeNode*, sal_Int32 > NumListIdMap;
+typedef std::map< const SwNumberTreeNode*, sal_Int32 > NumListBodyIdMap;
+typedef std::set<const void*> FrameTagSet;
+
+struct SwEnhancedPDFState
+{
+    TableColumnsMap m_TableColumnsMap;
+    LinkIdMap m_LinkIdMap;
+    NumListIdMap m_NumListIdMap;
+    NumListBodyIdMap m_NumListBodyIdMap;
+    FrameTagSet m_FrameTagSet;
+
+    LanguageType m_eLanguageDefault;
+
+    struct Span
+    {
+        FontLineStyle eUnderline;
+        FontLineStyle eOverline;
+        FontStrikeout eStrikeout;
+        FontEmphasisMark eFontEmphasis;
+        short nEscapement;
+        SwFontScript nScript;
+        LanguageType nLang;
+        OUString StyleName;
+    };
+
+    ::std::optional<Span> m_oCurrentSpan;
+    ::std::optional<SwTextAttr const*> m_oCurrentLink;
+
+    SwEnhancedPDFState(LanguageType const eLanguageDefault)
+        : m_eLanguageDefault(eLanguageDefault)
+    {
+    }
+};
+
 namespace
 {
 // ODF Style Names:
@@ -140,7 +177,7 @@ const char aSourceText[]        = "Source Text";
 
 // PDF Tag Names:
 constexpr OUStringLiteral aDocumentString = u"Document";
-constexpr OUStringLiteral aDivString = u"Div";
+constexpr OUString aDivString = u"Div"_ustr;
 constexpr OUStringLiteral aSectString = u"Sect";
 constexpr OUStringLiteral aHString = u"H";
 constexpr OUStringLiteral aH1String = u"H1";
@@ -155,9 +192,10 @@ constexpr OUStringLiteral aH9String = u"H9";
 constexpr OUStringLiteral aH10String = u"H10";
 constexpr OUStringLiteral aListString = u"L";
 constexpr OUStringLiteral aListItemString = u"LI";
-constexpr OUStringLiteral aListBodyString = u"LBody";
+constexpr OUStringLiteral aListLabelString = u"Lbl";
+constexpr OUString aListBodyString = u"LBody"_ustr;
 constexpr OUStringLiteral aBlockQuoteString = u"BlockQuote";
-constexpr OUStringLiteral aCaptionString = u"Caption";
+constexpr OUString aCaptionString = u"Caption"_ustr;
 constexpr OUStringLiteral aIndexString = u"Index";
 constexpr OUStringLiteral aTOCString = u"TOC";
 constexpr OUStringLiteral aTOCIString = u"TOCI";
@@ -167,11 +205,11 @@ constexpr OUStringLiteral aTDString = u"TD";
 constexpr OUStringLiteral aTHString = u"TH";
 constexpr OUStringLiteral aBibEntryString = u"BibEntry";
 constexpr OUStringLiteral aQuoteString = u"Quote";
-constexpr OUStringLiteral aSpanString = u"Span";
+constexpr OUString aSpanString = u"Span"_ustr;
 constexpr OUStringLiteral aCodeString = u"Code";
 constexpr OUStringLiteral aFigureString = u"Figure";
 constexpr OUStringLiteral aFormulaString = u"Formula";
-constexpr OUStringLiteral aLinkString = u"Link";
+constexpr OUString aLinkString = u"Link"_ustr;
 constexpr OUStringLiteral aNoteString = u"Note";
 
 // returns true if first paragraph in cell frame has 'table heading' style
@@ -231,25 +269,29 @@ bool lcl_IsInNonStructEnv( const SwFrame& rFrame )
 }
 
 // Generate key from frame for reopening tags:
-void* lcl_GetKeyFromFrame( const SwFrame& rFrame )
+void const* lcl_GetKeyFromFrame( const SwFrame& rFrame )
 {
-    void* pKey = nullptr;
+    void const* pKey = nullptr;
 
     if ( rFrame.IsPageFrame() )
-        pKey = const_cast<void*>(static_cast<void const *>(&(static_cast<const SwPageFrame&>(rFrame).GetFormat()->getIDocumentSettingAccess())));
+        pKey = static_cast<void const *>(&(static_cast<const SwPageFrame&>(rFrame).GetFormat()->getIDocumentSettingAccess()));
     else if ( rFrame.IsTextFrame() )
-        pKey = const_cast<void*>(static_cast<void const *>(static_cast<const SwTextFrame&>(rFrame).GetTextNodeFirst()));
+        pKey = static_cast<void const *>(static_cast<const SwTextFrame&>(rFrame).GetTextNodeFirst());
     else if ( rFrame.IsSctFrame() )
-        pKey = const_cast<void*>(static_cast<void const *>(static_cast<const SwSectionFrame&>(rFrame).GetSection()));
+        pKey = static_cast<void const *>(static_cast<const SwSectionFrame&>(rFrame).GetSection());
     else if ( rFrame.IsTabFrame() )
-        pKey = const_cast<void*>(static_cast<void const *>(static_cast<const SwTabFrame&>(rFrame).GetTable()));
+        pKey = static_cast<void const *>(static_cast<const SwTabFrame&>(rFrame).GetTable());
     else if ( rFrame.IsRowFrame() )
-        pKey = const_cast<void*>(static_cast<void const *>(static_cast<const SwRowFrame&>(rFrame).GetTabLine()));
+        pKey = static_cast<void const *>(static_cast<const SwRowFrame&>(rFrame).GetTabLine());
     else if ( rFrame.IsCellFrame() )
     {
         const SwTabFrame* pTabFrame = rFrame.FindTabFrame();
         const SwTable* pTable = pTabFrame->GetTable();
-        pKey = const_cast<void*>(static_cast<void const *>(& static_cast<const SwCellFrame&>(rFrame).GetTabBox()->FindStartOfRowSpan( *pTable )));
+        pKey = static_cast<void const *>(& static_cast<const SwCellFrame&>(rFrame).GetTabBox()->FindStartOfRowSpan(*pTable));
+    }
+    else if (rFrame.IsFootnoteFrame())
+    {
+        pKey = static_cast<void const*>(static_cast<SwFootnoteFrame const&>(rFrame).GetAttr());
     }
 
     return pKey;
@@ -295,13 +337,47 @@ bool lcl_TryMoveToNonHiddenField(SwEditShell& rShell, const SwTextNode& rNd, con
     // 3. Check for hidden text attribute
     if(rNd.IsHidden())
         return false;
-    if(!rShell.GotoFormatField(rField) || rShell.SelectHiddenRange())
+    if(!rShell.GotoFormatField(rField) || rShell.IsInHiddenRange(/*bSelect=*/false))
     {
         rShell.SwCursorShell::ClearMark();
         return false;
     }
     return true;
 };
+
+// tdf#157816: try to check if the rectangle contains actual text
+::std::vector<SwRect> GetCursorRectsContainingText(SwCursorShell const& rShell)
+{
+    ::std::vector<SwRect> ret;
+    SwRects rects;
+    rShell.GetLayout()->CalcFrameRects(*rShell.GetCursor_(), rects, SwRootFrame::RectsMode::NoAnchoredFlys);
+    for (SwRect const& rRect : rects)
+    {
+        Point center(rRect.Center());
+        SwSpecialPos special;
+        SwCursorMoveState cms(CursorMoveState::NONE);
+        cms.m_pSpecialPos = &special;
+        cms.m_bFieldInfo = true;
+        SwPosition pos(rShell.GetDoc()->GetNodes());
+        auto const [pStart, pEnd] = rShell.GetCursor_()->StartEnd();
+        if (rShell.GetLayout()->GetModelPositionForViewPoint(&pos, center, &cms)
+            && *pStart <= pos && pos <= *pEnd)
+        {
+            SwRect charRect;
+            std::pair<Point, bool> const tmp(center, false);
+            SwContentFrame const*const pFrame(
+                pos.nNode.GetNode().GetTextNode()->getLayoutFrame(rShell.GetLayout(), &pos, &tmp));
+            if (pFrame->GetCharRect(charRect, pos, &cms, false)
+                && rRect.Overlaps(charRect))
+            {
+                ret.push_back(rRect);
+            }
+        }
+        // reset stupid static var that may have gotten set now
+        SwTextCursor::SetRightMargin(false); // WTF is this crap
+    }
+    return ret;
+}
 
 } // end namespace
 
@@ -359,32 +435,16 @@ SwTaggedPDFHelper::~SwTaggedPDFHelper()
 #endif
 }
 
-static auto GetReopenTagFromFrame(SwFrame const& rFrame) -> sal_Int32
-{
-    void const*const pKey = lcl_GetKeyFromFrame(rFrame);
-
-    if (pKey)
-    {
-        FrameTagIdMap const& rFrameTagIdMap(SwEnhancedPDFExportHelper::GetFrameTagIdMap());
-        auto const it(rFrameTagIdMap.find(pKey));
-        if (it != rFrameTagIdMap.end())
-        {
-            return (*it).second;
-        }
-    }
-    return -1;
-}
-
-sal_Int32 SwDrawContact::GetPDFAnchorStructureElementId(SdrObject const& rObj, OutputDevice const&)
+void const* SwDrawContact::GetPDFAnchorStructureElementKey(SdrObject const& rObj)
 {
     SwFrame const*const pAnchorFrame(GetAnchoredObj(&rObj)->GetAnchorFrame());
-    return pAnchorFrame ? GetReopenTagFromFrame(*pAnchorFrame) : -1;
+    return pAnchorFrame ? lcl_GetKeyFromFrame(*pAnchorFrame) : nullptr;
 }
 
 bool SwTaggedPDFHelper::CheckReopenTag()
 {
     bool bRet = false;
-    sal_Int32 nReopenTag = -1;
+    void const* pReopenKey(nullptr);
     bool bContinue = false; // in some cases we just have to reopen a tag without early returning
 
     if ( mpFrameInfo )
@@ -401,12 +461,13 @@ bool SwTaggedPDFHelper::CheckReopenTag()
         // - rFrame is a cell frame in a follow flow row (reopen TableData tag)
         if ( ( rFrame.IsPageFrame() && static_cast<const SwPageFrame&>(rFrame).GetPrev() ) ||
              ( rFrame.IsFlowFrame() && SwFlowFrame::CastFlowFrame(&rFrame)->IsFollow() ) ||
+             (rFrame.IsFootnoteFrame() && static_cast<SwFootnoteFrame const&>(rFrame).GetMaster()) ||
              ( rFrame.IsRowFrame() && rFrame.IsInFollowFlowRow() ) ||
              ( rFrame.IsCellFrame() && const_cast<SwFrame&>(rFrame).GetPrevCellLeaf() ) )
         {
             pKeyFrame = &rFrame;
         }
-        else if ( rFrame.IsFlyFrame() )
+        else if (rFrame.IsFlyFrame() && !mpFrameInfo->m_isLink)
         {
             const SwFormatAnchor& rAnchor =
                 static_cast<const SwFlyFrame*>(&rFrame)->GetFormat()->GetAnchor();
@@ -421,21 +482,29 @@ bool SwTaggedPDFHelper::CheckReopenTag()
 
         if ( pKeyFrame )
         {
-            nReopenTag = GetReopenTagFromFrame(*pKeyFrame);
+            void const*const pKey = lcl_GetKeyFromFrame(*pKeyFrame);
+            FrameTagSet& rFrameTagSet(mpPDFExtOutDevData->GetSwPDFState()->m_FrameTagSet);
+            if (rFrameTagSet.find(pKey) != rFrameTagSet.end()
+                || rFrame.IsFlyFrame()) // for hell layer flys
+            {
+                pReopenKey = pKey;
+            }
         }
     }
 
-    if ( -1 != nReopenTag )
+    if (pReopenKey)
     {
+        // note: it would be possible to get rid of the SetCurrentStructureElement()
+        // - which is quite ugly - for most cases by recreating the parents until the
+        // current ancestor, but there are special cases cell frame rowspan > 1 follow
+        // and footnote frame follow where the parent of the follow is different from
+        // the parent of the first one, and so in PDFExtOutDevData the wrong parent
+        // would be restored and used for next elements.
         m_nRestoreCurrentTag = mpPDFExtOutDevData->GetCurrentStructureElement();
-        const bool bSuccess = mpPDFExtOutDevData->SetCurrentStructureElement( nReopenTag );
-        OSL_ENSURE( bSuccess, "Failed to reopen tag" );
+        sal_Int32 const id = mpPDFExtOutDevData->EnsureStructureElement(pReopenKey);
+        mpPDFExtOutDevData->SetCurrentStructureElement(id);
 
-#if OSL_DEBUG_LEVEL > 1
-        aStructStack.push_back( 99 );
-#endif
-
-        bRet = bSuccess;
+        bRet = true;
     }
 
     return bRet && !bContinue;
@@ -445,8 +514,7 @@ void SwTaggedPDFHelper::CheckRestoreTag() const
 {
     if ( m_nRestoreCurrentTag != -1 )
     {
-        const bool bSuccess = mpPDFExtOutDevData->SetCurrentStructureElement( m_nRestoreCurrentTag );
-        OSL_ENSURE( bSuccess, "Failed to restore reopened tag" );
+        mpPDFExtOutDevData->SetCurrentStructureElement( m_nRestoreCurrentTag );
 
 #if OSL_DEBUG_LEVEL > 1
         aStructStack.pop_back();
@@ -454,15 +522,61 @@ void SwTaggedPDFHelper::CheckRestoreTag() const
     }
 }
 
-void SwTaggedPDFHelper::BeginTag( vcl::PDFWriter::StructElement eType, const OUString& rString )
+void SwTaggedPDFHelper::OpenTagImpl(void const*const pKey)
+{
+    sal_Int32 const id = mpPDFExtOutDevData->EnsureStructureElement(pKey);
+    mpPDFExtOutDevData->BeginStructureElement(id);
+    ++m_nEndStructureElement;
+
+#if OSL_DEBUG_LEVEL > 1
+    aStructStack.push_back( 99 );
+#endif
+}
+
+sal_Int32 SwTaggedPDFHelper::BeginTagImpl(void const*const pKey,
+    vcl::PDFWriter::StructElement const eType, const OUString& rString)
 {
     // write new tag
-    const sal_Int32 nId = mpPDFExtOutDevData->BeginStructureElement( eType, rString );
+    const sal_Int32 nId = mpPDFExtOutDevData->EnsureStructureElement(pKey);
+    mpPDFExtOutDevData->InitStructureElement(nId, eType, rString);
+    mpPDFExtOutDevData->BeginStructureElement(nId);
     ++m_nEndStructureElement;
 
 #if OSL_DEBUG_LEVEL > 1
     aStructStack.push_back( o3tl::narrowing<sal_uInt16>(eType) );
 #endif
+
+    return nId;
+}
+
+void SwTaggedPDFHelper::BeginTag( vcl::PDFWriter::StructElement eType, const OUString& rString )
+{
+    void const* pKey(nullptr);
+
+    if (mpFrameInfo)
+    {
+        const SwFrame& rFrame = mpFrameInfo->mrFrame;
+
+        if ( ( rFrame.IsPageFrame() && !static_cast<const SwPageFrame&>(rFrame).GetPrev() ) ||
+             ( rFrame.IsFlowFrame() && !SwFlowFrame::CastFlowFrame(&rFrame)->IsFollow() && SwFlowFrame::CastFlowFrame(&rFrame)->HasFollow() ) ||
+             rFrame.IsSctFrame() || // all of them, so that opening parent sections works
+             ( rFrame.IsTextFrame() && rFrame.GetDrawObjs() ) ||
+             (rFrame.IsFootnoteFrame() && static_cast<SwFootnoteFrame const&>(rFrame).GetFollow()) ||
+             ( rFrame.IsRowFrame() && rFrame.IsInSplitTableRow() ) ||
+             ( rFrame.IsCellFrame() && const_cast<SwFrame&>(rFrame).GetNextCellLeaf() ) )
+        {
+            pKey = lcl_GetKeyFromFrame(rFrame);
+
+            if (pKey)
+            {
+                FrameTagSet& rFrameTagSet(mpPDFExtOutDevData->GetSwPDFState()->m_FrameTagSet);
+                assert(rFrameTagSet.find(pKey) == rFrameTagSet.end());
+                rFrameTagSet.emplace(pKey);
+            }
+        }
+    }
+
+    sal_Int32 const nId = BeginTagImpl(pKey, eType, rString);
 
     // Store the id of the current structure element if
     // - it is a list structure element
@@ -474,38 +588,19 @@ void SwTaggedPDFHelper::BeginTag( vcl::PDFWriter::StructElement eType, const OUS
 
     if ( mpNumInfo )
     {
-        const SwTextFrame& rTextFrame = static_cast<const SwTextFrame&>(mpNumInfo->mrFrame);
+        const SwTextFrame& rTextFrame = mpNumInfo->mrFrame;
         SwTextNode const*const pTextNd = rTextFrame.GetTextNodeForParaProps();
         const SwNodeNum* pNodeNum = pTextNd->GetNum(rTextFrame.getRootFrame());
 
         if ( vcl::PDFWriter::List == eType )
         {
-            NumListIdMap& rNumListIdMap = SwEnhancedPDFExportHelper::GetNumListIdMap();
+            NumListIdMap& rNumListIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListIdMap);
             rNumListIdMap[ pNodeNum ] = nId;
         }
         else if ( vcl::PDFWriter::LIBody == eType )
         {
-            NumListBodyIdMap& rNumListBodyIdMap = SwEnhancedPDFExportHelper::GetNumListBodyIdMap();
+            NumListBodyIdMap& rNumListBodyIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListBodyIdMap);
             rNumListBodyIdMap[ pNodeNum ] = nId;
-        }
-    }
-    else if ( mpFrameInfo )
-    {
-        const SwFrame& rFrame = mpFrameInfo->mrFrame;
-
-        if ( ( rFrame.IsPageFrame() && !static_cast<const SwPageFrame&>(rFrame).GetPrev() ) ||
-             ( rFrame.IsFlowFrame() && !SwFlowFrame::CastFlowFrame(&rFrame)->IsFollow() && SwFlowFrame::CastFlowFrame(&rFrame)->HasFollow() ) ||
-             ( rFrame.IsTextFrame() && rFrame.GetDrawObjs() ) ||
-             ( rFrame.IsRowFrame() && rFrame.IsInSplitTableRow() ) ||
-             ( rFrame.IsCellFrame() && const_cast<SwFrame&>(rFrame).GetNextCellLeaf() ) )
-        {
-            const void* pKey = lcl_GetKeyFromFrame( rFrame );
-
-            if ( pKey )
-            {
-                FrameTagIdMap& rFrameTagIdMap = SwEnhancedPDFExportHelper::GetFrameTagIdMap();
-                rFrameTagIdMap[ pKey ] = nId;
-            }
         }
     }
 
@@ -519,6 +614,23 @@ void SwTaggedPDFHelper::EndTag()
 #if OSL_DEBUG_LEVEL > 1
     aStructStack.pop_back();
 #endif
+}
+
+namespace {
+
+    // link the link annotation to the link structured element
+    void LinkLinkLink(vcl::PDFExtOutDevData & rPDFExtOutDevData, SwRect const& rRect)
+    {
+        const LinkIdMap& rLinkIdMap(rPDFExtOutDevData.GetSwPDFState()->m_LinkIdMap);
+        const Point aCenter = rRect.Center();
+        auto aIter = std::find_if(rLinkIdMap.begin(), rLinkIdMap.end(),
+            [&aCenter](const IdMapEntry& rEntry) { return rEntry.first.Contains(aCenter); });
+        if (aIter != rLinkIdMap.end())
+        {
+            sal_Int32 nLinkId = (*aIter).second;
+            rPDFExtOutDevData.SetStructureAttributeNumerical(vcl::PDFWriter::LinkAnnotation, nLinkId);
+        }
+    }
 }
 
 // Sets the attributes according to the structure type.
@@ -557,6 +669,10 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
                 bWritingMode = true;
                 break;
 
+            case vcl::PDFWriter::Note:
+                bPlacement = true;
+                break;
+
             case vcl::PDFWriter::Table :
                 bPlacement =
                 bWritingMode =
@@ -585,6 +701,12 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
                 bRowSpan = true;
                 break;
 
+            case vcl::PDFWriter::Caption:
+                if (pFrame->IsSctFrame())
+                {
+                    break;
+                }
+                [[fallthrough]];
             case vcl::PDFWriter::H1 :
             case vcl::PDFWriter::H2 :
             case vcl::PDFWriter::H3 :
@@ -593,7 +715,6 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
             case vcl::PDFWriter::H6 :
             case vcl::PDFWriter::Paragraph :
             case vcl::PDFWriter::Heading :
-            case vcl::PDFWriter::Caption :
             case vcl::PDFWriter::BlockQuote :
 
                 bPlacement =
@@ -694,9 +815,9 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
         if ( bTextIndent )
         {
             OSL_ENSURE( pFrame->IsTextFrame(), "Frame type <-> tag attribute mismatch" );
-            const SvxLRSpaceItem &rSpace =
-                static_cast<const SwTextFrame*>(pFrame)->GetTextNodeForParaProps()->GetSwAttrSet().GetLRSpace();
-            nVal =  rSpace.GetTextFirstLineOffset();
+            const SvxFirstLineIndentItem& rFirstLine(
+                static_cast<const SwTextFrame*>(pFrame)->GetTextNodeForParaProps()->GetSwAttrSet().GetFirstLineIndent());
+            nVal = rFirstLine.GetTextFirstLineOffset();
             if ( 0 != nVal )
                 mpPDFExtOutDevData->SetStructureAttributeNumerical( vcl::PDFWriter::TextIndent, nVal );
         }
@@ -779,7 +900,7 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
 
                 SwRectFnSet fnRectX(pTabFrame);
 
-                const TableColumnsMapEntry& rCols = SwEnhancedPDFExportHelper::GetTableColumnsMap()[ pTable ];
+                const TableColumnsMapEntry& rCols(mpPDFExtOutDevData->GetSwPDFState()->m_TableColumnsMap[pTable]);
 
                 const tools::Long nLeft  = fnRectX.GetLeft(pThisCell->getFrameArea());
                 const tools::Long nRight = fnRectX.GetRight(pThisCell->getFrameArea());
@@ -794,6 +915,12 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
                         mpPDFExtOutDevData->SetStructureAttributeNumerical( vcl::PDFWriter::ColSpan, nVal );
                 }
             }
+        }
+
+        if (mpFrameInfo->m_isLink)
+        {
+            SwRect const aRect(mpFrameInfo->mrFrame.getFrameArea());
+            LinkLinkLink(*mpPDFExtOutDevData, aRect);
         }
     }
 
@@ -834,6 +961,58 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
                 bBaselineShift =
                 bLinkAttribute =
                 bLanguage = true;
+                break;
+
+            case vcl::PDFWriter::BibEntry :
+                bTextDecorationType =
+                bBaselineShift =
+                bLinkAttribute =
+                bLanguage = true;
+                break;
+
+            case vcl::PDFWriter::RT:
+                {
+                    SwRubyPortion const*const pRuby(static_cast<SwRubyPortion const*>(pPor));
+                    vcl::PDFWriter::StructAttributeValue nAlign = {};
+                    switch (pRuby->GetAdjustment())
+                    {
+                        case text::RubyAdjust_LEFT:
+                            nAlign = vcl::PDFWriter::RStart;
+                            break;
+                        case text::RubyAdjust_CENTER:
+                            nAlign = vcl::PDFWriter::RCenter;
+                            break;
+                        case text::RubyAdjust_RIGHT:
+                            nAlign = vcl::PDFWriter::REnd;
+                            break;
+                        case text::RubyAdjust_BLOCK:
+                            nAlign = vcl::PDFWriter::RJustify;
+                            break;
+                        case text::RubyAdjust_INDENT_BLOCK:
+                            nAlign = vcl::PDFWriter::RDistribute;
+                            break;
+                        default:
+                            assert(false);
+                            break;
+                    }
+                    ::std::optional<vcl::PDFWriter::StructAttributeValue> oPos;
+                    switch (pRuby->GetRubyPosition())
+                    {
+                        case RubyPosition::ABOVE:
+                            oPos = vcl::PDFWriter::RBefore;
+                            break;
+                        case RubyPosition::BELOW:
+                            oPos = vcl::PDFWriter::RAfter;
+                            break;
+                        case RubyPosition::RIGHT:
+                            break; // no such thing???
+                    }
+                    mpPDFExtOutDevData->SetStructureAttribute(vcl::PDFWriter::RubyAlign, nAlign);
+                    if (oPos)
+                    {
+                        mpPDFExtOutDevData->SetStructureAttribute(vcl::PDFWriter::RubyPosition, *oPos);
+                    }
+                }
                 break;
 
             default:
@@ -880,7 +1059,7 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
         {
 
             const LanguageType nCurrentLanguage = rInf.GetFont()->GetLanguage();
-            const LanguageType nDefaultLang = SwEnhancedPDFExportHelper::GetDefaultLanguage();
+            const LanguageType nDefaultLang(mpPDFExtOutDevData->GetSwPDFState()->m_eLanguageDefault);
 
             if ( nDefaultLang != nCurrentLanguage )
                 mpPDFExtOutDevData->SetStructureAttributeNumerical( vcl::PDFWriter::Language, static_cast<sal_uInt16>(nCurrentLanguage) );
@@ -888,22 +1067,14 @@ void SwTaggedPDFHelper::SetAttributes( vcl::PDFWriter::StructElement eType )
 
         if ( bLinkAttribute )
         {
-            const LinkIdMap& rLinkIdMap = SwEnhancedPDFExportHelper::GetLinkIdMap();
             SwRect aPorRect;
             rInf.CalcRect( *pPor, &aPorRect );
-            const Point aPorCenter = aPorRect.Center();
-            auto aIter = std::find_if(rLinkIdMap.begin(), rLinkIdMap.end(),
-                [&aPorCenter](const IdMapEntry& rEntry) { return rEntry.first.Contains(aPorCenter); });
-            if (aIter != rLinkIdMap.end())
-            {
-                sal_Int32 nLinkId = (*aIter).second;
-                mpPDFExtOutDevData->SetStructureAttributeNumerical( vcl::PDFWriter::LinkAnnotation, nLinkId );
-            }
+            LinkLinkLink(*mpPDFExtOutDevData, aPorRect);
         }
     }
     else if (mpNumInfo && eType == vcl::PDFWriter::List)
     {
-        SwTextFrame const& rFrame(static_cast<SwTextFrame const&>(mpNumInfo->mrFrame));
+        SwTextFrame const& rFrame(mpNumInfo->mrFrame);
         SwTextNode const& rNode(*rFrame.GetTextNodeForParaProps());
         SwNumRule const*const pNumRule = rNode.GetNumRule();
         assert(pNumRule); // was required for List
@@ -959,9 +1130,18 @@ void SwTaggedPDFHelper::BeginNumberedListStructureElements()
     const SwTextFrame& rTextFrame = static_cast<const SwTextFrame&>(rFrame);
 
     // Lowers of NonStructureElements should not be considered:
-
-    if ( lcl_IsInNonStructEnv( rTextFrame ) || rTextFrame.IsFollow() )
+    if (lcl_IsInNonStructEnv(rTextFrame))
         return;
+
+    // do it for the first one in the follow chain that has content
+    for (SwFlowFrame const* pPrecede = rTextFrame.GetPrecede(); pPrecede; pPrecede = pPrecede->GetPrecede())
+    {
+        SwTextFrame const*const pText(static_cast<SwTextFrame const*>(pPrecede));
+        if (!pText->HasPara() || pText->GetPara()->HasContentPortions())
+        {
+            return;
+        }
+    }
 
     const SwTextNode *const pTextNd = rTextFrame.GetTextNodeForParaProps();
     const SwNumRule* pNumRule = pTextNd->GetNumRule();
@@ -994,7 +1174,7 @@ void SwTaggedPDFHelper::BeginNumberedListStructureElements()
         if ( bNewSubListStart || bNoLabel )
         {
             // Fine, we try to reopen the appropriate list body
-            NumListBodyIdMap& rNumListBodyIdMap = SwEnhancedPDFExportHelper::GetNumListBodyIdMap();
+            NumListBodyIdMap& rNumListBodyIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListBodyIdMap);
 
             if ( bNewSubListStart )
             {
@@ -1034,7 +1214,7 @@ void SwTaggedPDFHelper::BeginNumberedListStructureElements()
         {
             // any other than the first node in a list level has to reopen the current
             // list. The current list is associated in a map with the first child of the list:
-            NumListIdMap& rNumListIdMap = SwEnhancedPDFExportHelper::GetNumListIdMap();
+            NumListIdMap& rNumListIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListIdMap);
 
             // Search backwards and check if any of the previous nodes has a list associated with it:
             const SwNumberTreeNode* pPrevious = pNodeNum->GetPred(true);
@@ -1065,9 +1245,9 @@ void SwTaggedPDFHelper::BeginNumberedListStructureElements()
     else
     {
         // clear list maps in case a list has been interrupted
-        NumListIdMap& rNumListIdMap = SwEnhancedPDFExportHelper::GetNumListIdMap();
+        NumListIdMap& rNumListIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListIdMap);
         rNumListIdMap.clear();
-        NumListBodyIdMap& rNumListBodyIdMap = SwEnhancedPDFExportHelper::GetNumListBodyIdMap();
+        NumListBodyIdMap& rNumListBodyIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListBodyIdMap);
         rNumListBodyIdMap.clear();
     }
 
@@ -1081,7 +1261,12 @@ void SwTaggedPDFHelper::BeginNumberedListStructureElements()
     if ( bNewItemTag )
     {
         BeginTag( vcl::PDFWriter::ListItem, aListItemString );
-        BeginTag( vcl::PDFWriter::LIBody, aListBodyString );
+        assert(rTextFrame.GetPara());
+        // check whether to open LBody now or delay until after Lbl
+        if (!rTextFrame.GetPara()->HasNumberingPortion(SwParaPortion::OnlyNumbering))
+        {
+            BeginTag(vcl::PDFWriter::LIBody, aListBodyString);
+        }
     }
 }
 
@@ -1149,7 +1334,35 @@ void SwTaggedPDFHelper::BeginBlockStructureElements()
             {
                 const SwSection* pSection =
                         static_cast<const SwSectionFrame*>(pFrame)->GetSection();
-                if ( SectionType::ToxContent == pSection->GetType() )
+
+                // open all parent sections, so that the SEs of sections
+                // are nested in the same way as their SwSectionNodes
+                std::vector<SwSection const*> parents;
+                for (SwSection const* pParent = pSection->GetParent();
+                     pParent != nullptr; pParent = pParent->GetParent())
+                {
+                    parents.push_back(pParent);
+                }
+                for (auto it = parents.rbegin(); it != parents.rend(); ++it)
+                {
+                    // key is the SwSection - see lcl_GetKeyFromFrame()
+                    OpenTagImpl(*it);
+                }
+
+                FrameTagSet& rFrameTagSet(mpPDFExtOutDevData->GetSwPDFState()->m_FrameTagSet);
+                if (rFrameTagSet.find(pSection) != rFrameTagSet.end())
+                {
+                    // special case: section may have *multiple* master frames,
+                    // when it is interrupted by nested section - reopen!
+                    OpenTagImpl(pSection);
+                    break;
+                }
+                else if (SectionType::ToxHeader == pSection->GetType())
+                {
+                    nPDFType = vcl::PDFWriter::Caption;
+                    aPDFType = aCaptionString;
+                }
+                else if (SectionType::ToxContent == pSection->GetType())
                 {
                     const SwTOXBase* pTOXBase = pSection->GetTOXBase();
                     if ( pTOXBase )
@@ -1180,8 +1393,18 @@ void SwTaggedPDFHelper::BeginBlockStructureElements()
 
         case SwFrameType::Txt :
             {
-                const SwTextNode* pTextNd =
-                    static_cast<const SwTextFrame*>(pFrame)->GetTextNodeForParaProps();
+                SwTextFrame const& rTextFrame(*static_cast<const SwTextFrame*>(pFrame));
+                const SwTextNode *const pTextNd(rTextFrame.GetTextNodeForParaProps());
+
+                // lazy open LBody after Lbl
+                if (!pTextNd->IsOutline()
+                    && rTextFrame.GetPara()->HasNumberingPortion(SwParaPortion::OnlyNumbering))
+                {
+                    sal_Int32 const nId = BeginTagImpl(nullptr, vcl::PDFWriter::LIBody, aListBodyString);
+                    SwNodeNum const*const pNodeNum(pTextNd->GetNum(rTextFrame.getRootFrame()));
+                    NumListBodyIdMap& rNumListBodyIdMap(mpPDFExtOutDevData->GetSwPDFState()->m_NumListBodyIdMap);
+                    rNumListBodyIdMap[ pNodeNum ] = nId;
+                }
 
                 const SwFormat* pTextFormat = pTextNd->GetFormatColl();
                 const SwFormat* pParentTextFormat = pTextFormat ? pTextFormat->DerivedFrom() : nullptr;
@@ -1296,7 +1519,7 @@ void SwTaggedPDFHelper::BeginBlockStructureElements()
                         if ( pTOXBase && TOX_INDEX != pTOXBase->GetType() )
                         {
                             // Special case: Open additional TOCI tag:
-                            BeginTag( vcl::PDFWriter::TOCI, aTOCIString );
+                            BeginTagImpl(nullptr, vcl::PDFWriter::TOCI, aTOCIString);
                         }
                     }
                 }
@@ -1315,7 +1538,7 @@ void SwTaggedPDFHelper::BeginBlockStructureElements()
                 const SwTabFrame* pTabFrame = static_cast<const SwTabFrame*>(pFrame);
                 const SwTable* pTable = pTabFrame->GetTable();
 
-                TableColumnsMap& rTableColumnsMap = SwEnhancedPDFExportHelper::GetTableColumnsMap();
+                TableColumnsMap& rTableColumnsMap(mpPDFExtOutDevData->GetSwPDFState()->m_TableColumnsMap);
                 const TableColumnsMap::const_iterator aIter = rTableColumnsMap.find( pTable );
 
                 if ( aIter == rTableColumnsMap.end() )
@@ -1397,10 +1620,16 @@ void SwTaggedPDFHelper::BeginBlockStructureElements()
 
             // FlyFrame: Figure, Formula, Control
             // fly in content or fly at page
+            if (mpFrameInfo->m_isLink)
+            {   // tdf#154939 additional inner link element for flys
+                nPDFType = vcl::PDFWriter::Link;
+                aPDFType = aLinkString;
+            }
+            else
             {
                 const SwFlyFrame* pFly = static_cast<const SwFlyFrame*>(pFrame);
                 if (pFly->GetAnchorFrame()->FindFooterOrHeader() != nullptr
-                    || pFly->GetFrameFormat().GetAttrSet().Get(RES_DECORATIVE).GetValue())
+                    || pFly->GetFrameFormat()->GetAttrSet().Get(RES_DECORATIVE).GetValue())
                 {
                     nPDFType = vcl::PDFWriter::NonStructElement;
                 }
@@ -1449,6 +1678,20 @@ void SwTaggedPDFHelper::BeginBlockStructureElements()
 
 void SwTaggedPDFHelper::EndStructureElements()
 {
+    if (mpFrameInfo != nullptr)
+    {
+        if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan)
+        {   // close span at end of paragraph
+            mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan.reset();
+            ++m_nEndStructureElement;
+        }
+        if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink)
+        {   // close link at end of paragraph
+            mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink.reset();
+            ++m_nEndStructureElement;
+        }
+    }
+
     while ( m_nEndStructureElement > 0 )
     {
         EndTag();
@@ -1456,6 +1699,103 @@ void SwTaggedPDFHelper::EndStructureElements()
     }
 
     CheckRestoreTag();
+}
+
+void SwTaggedPDFHelper::EndCurrentLink(OutputDevice const& rOut)
+{
+    vcl::PDFExtOutDevData *const pPDFExtOutDevData(
+        dynamic_cast<vcl::PDFExtOutDevData *>(rOut.GetExtOutDevData()));
+    if (pPDFExtOutDevData && pPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink)
+    {
+        pPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink.reset();
+        pPDFExtOutDevData->EndStructureElement();
+#if OSL_DEBUG_LEVEL > 1
+    aStructStack.pop_back();
+#endif
+    }
+}
+
+void SwTaggedPDFHelper::EndCurrentAll()
+{
+    if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan)
+    {
+        mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan.reset();
+    }
+    if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink)
+    {
+        mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink.reset();
+    }
+}
+
+void SwTaggedPDFHelper::EndCurrentSpan()
+{
+    mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan.reset();
+    EndTag(); // close span
+}
+
+void SwTaggedPDFHelper::CreateCurrentSpan(
+        SwTextPaintInfo const& rInf, OUString const& rStyleName)
+{
+    assert(!mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan);
+    mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan.emplace(
+        SwEnhancedPDFState::Span{
+            rInf.GetFont()->GetUnderline(),
+            rInf.GetFont()->GetOverline(),
+            rInf.GetFont()->GetStrikeout(),
+            rInf.GetFont()->GetEmphasisMark(),
+            rInf.GetFont()->GetEscapement(),
+            rInf.GetFont()->GetActual(),
+            rInf.GetFont()->GetLanguage(),
+            rStyleName});
+    // leave it open to let next portion decide to merge or close
+    --m_nEndStructureElement;
+}
+
+bool SwTaggedPDFHelper::CheckContinueSpan(
+        SwTextPaintInfo const& rInf, std::u16string_view const rStyleName,
+        SwTextAttr const*const pInetFormatAttr)
+{
+    // for now, don't create span inside of link - this should be very rare
+    // situation and it looks complicated to implement.
+    assert(!mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan
+        || !mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink);
+    if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink)
+    {
+        if (pInetFormatAttr && pInetFormatAttr == *mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink)
+        {
+            return true;
+        }
+        else
+        {
+            mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink.reset();
+            EndTag();
+            return false;
+        }
+    }
+    if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan && pInetFormatAttr)
+    {
+        EndCurrentSpan();
+        return false;
+    }
+
+    if (!mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan)
+        return false;
+
+    SwEnhancedPDFState::Span const& rCurrent(*mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentSpan);
+
+    bool const ret(rCurrent.eUnderline == rInf.GetFont()->GetUnderline()
+                && rCurrent.eOverline == rInf.GetFont()->GetOverline()
+                && rCurrent.eStrikeout == rInf.GetFont()->GetStrikeout()
+                && rCurrent.eFontEmphasis == rInf.GetFont()->GetEmphasisMark()
+                && rCurrent.nEscapement == rInf.GetFont()->GetEscapement()
+                && rCurrent.nScript == rInf.GetFont()->GetActual()
+                && rCurrent.nLang == rInf.GetFont()->GetLanguage()
+                && rCurrent.StyleName == rStyleName);
+    if (!ret)
+    {
+        EndCurrentSpan();
+    }
+    return ret;
 }
 
 void SwTaggedPDFHelper::BeginInlineStructureElements()
@@ -1468,6 +1808,26 @@ void SwTaggedPDFHelper::BeginInlineStructureElements()
 
     if ( lcl_IsInNonStructEnv( *pFrame ) )
         return;
+
+    std::pair<SwTextNode const*, sal_Int32> const pos(
+            pFrame->MapViewToModel(rInf.GetIdx()));
+    SwTextAttr const*const pInetFormatAttr =
+        pos.first->GetTextAttrAt(pos.second, RES_TXTATR_INETFMT);
+
+    OUString sStyleName;
+    if (!pInetFormatAttr)
+    {
+        std::vector<SwTextAttr *> const charAttrs(
+            pos.first->GetTextAttrsAt(pos.second, RES_TXTATR_CHARFMT));
+        // TODO: handle more than 1 char style?
+        const SwCharFormat* pCharFormat = (charAttrs.size())
+            ? (*charAttrs.begin())->GetCharFormat().GetCharFormat() : nullptr;
+        if (pCharFormat)
+            SwStyleNameMapper::FillProgName( pCharFormat->GetName(), sStyleName, SwGetPoolIdFromName::TxtColl );
+    }
+
+    // note: ILSE may be nested, so only end the span if needed to start new one
+    bool const isContinueSpan(CheckContinueSpan(rInf, sStyleName, pInetFormatAttr));
 
     sal_uInt16 nPDFType = USHRT_MAX;
     OUString aPDFType;
@@ -1483,49 +1843,58 @@ void SwTaggedPDFHelper::BeginInlineStructureElements()
             aPDFType = aSpanString;
             break;
 
+        case PortionType::Fly:
+            // if a link is split by a fly overlap, then there will be multiple
+            // annotations for the link, and hence there must be multiple SEs,
+            // so every annotation has its own SE.
+            if (mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink)
+            {
+                mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink.reset();
+                EndTag();
+            }
+            break;
+
         case PortionType::Lay :
         case PortionType::Text :
         case PortionType::Para :
             {
-                std::pair<SwTextNode const*, sal_Int32> const pos(
-                        pFrame->MapViewToModel(rInf.GetIdx()));
-                SwTextAttr const*const pInetFormatAttr =
-                    pos.first->GetTextAttrAt(pos.second, RES_TXTATR_INETFMT);
-
-                OUString sStyleName;
-                if ( !pInetFormatAttr )
-                {
-                    std::vector<SwTextAttr *> const charAttrs(
-                        pos.first->GetTextAttrsAt(pos.second, RES_TXTATR_CHARFMT));
-                    // TODO: handle more than 1 char style?
-                    const SwCharFormat* pCharFormat = (charAttrs.size())
-                        ? (*charAttrs.begin())->GetCharFormat().GetCharFormat() : nullptr;
-                    if ( pCharFormat )
-                        SwStyleNameMapper::FillProgName( pCharFormat->GetName(), sStyleName, SwGetPoolIdFromName::TxtColl );
-                }
-
                 // Check for Link:
                 if( pInetFormatAttr )
                 {
-                    nPDFType = vcl::PDFWriter::Link;
-                    aPDFType = aLinkString;
+                    if (!isContinueSpan)
+                    {
+                        nPDFType = vcl::PDFWriter::Link;
+                        aPDFType = aLinkString;
+                        assert(!mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink);
+                        mpPDFExtOutDevData->GetSwPDFState()->m_oCurrentLink.emplace(pInetFormatAttr);
+                        // leave it open to let next portion decide to merge or close
+                        --m_nEndStructureElement;
+                    }
                 }
                 // Check for Quote/Code character style:
                 else if (sStyleName == aQuotation)
                 {
-                    nPDFType = vcl::PDFWriter::Quote;
-                    aPDFType = aQuoteString;
+                    if (!isContinueSpan)
+                    {
+                        nPDFType = vcl::PDFWriter::Quote;
+                        aPDFType = aQuoteString;
+                        CreateCurrentSpan(rInf, sStyleName);
+                    }
                 }
                 else if (sStyleName == aSourceText)
                 {
-                    nPDFType = vcl::PDFWriter::Code;
-                    aPDFType = aCodeString;
+                    if (!isContinueSpan)
+                    {
+                        nPDFType = vcl::PDFWriter::Code;
+                        aPDFType = aCodeString;
+                        CreateCurrentSpan(rInf, sStyleName);
+                    }
                 }
-                else
+                else if (!isContinueSpan)
                 {
                     const LanguageType nCurrentLanguage = rInf.GetFont()->GetLanguage();
                     const SwFontScript nFont = rInf.GetFont()->GetActual();
-                    const LanguageType nDefaultLang = SwEnhancedPDFExportHelper::GetDefaultLanguage();
+                    const LanguageType nDefaultLang(mpPDFExtOutDevData->GetSwPDFState()->m_eLanguageDefault);
 
                     if ( LINESTYLE_NONE    != rInf.GetFont()->GetUnderline() ||
                          LINESTYLE_NONE    != rInf.GetFont()->GetOverline()  ||
@@ -1541,12 +1910,12 @@ void SwTaggedPDFHelper::BeginInlineStructureElements()
                             aPDFType = sStyleName;
                         else
                             aPDFType = aSpanString;
+                        CreateCurrentSpan(rInf, sStyleName);
                     }
                 }
             }
             break;
 
-        case PortionType::FootnoteNum: // tdf#152218 link both directions
         case PortionType::Footnote :
             nPDFType = vcl::PDFWriter::Link;
             aPDFType = aLinkString;
@@ -1573,6 +1942,72 @@ void SwTaggedPDFHelper::BeginInlineStructureElements()
                         aPDFType = aBibEntryString;
                     }
                 }
+            }
+            break;
+
+        case PortionType::Multi:
+            {
+                SwMultiPortion const*const pMulti(static_cast<SwMultiPortion const*>(pPor));
+                if (pMulti->IsRuby())
+                {
+                    EndCurrentAll();
+                    switch (mpPorInfo->m_Mode)
+                    {
+                        case 0:
+                            nPDFType = vcl::PDFWriter::Ruby;
+                            aPDFType = "Ruby";
+                        break;
+                        case 1:
+                            nPDFType = vcl::PDFWriter::RT;
+                            aPDFType = "RT";
+                        break;
+                        case 2:
+                            nPDFType = vcl::PDFWriter::RB;
+                            aPDFType = "RB";
+                        break;
+                    }
+                }
+                else if (pMulti->IsDouble())
+                {
+                    EndCurrentAll();
+                    switch (mpPorInfo->m_Mode)
+                    {
+                        case 0:
+                            nPDFType = vcl::PDFWriter::Warichu;
+                            aPDFType = "Warichu";
+                        break;
+                        case 1:
+                            nPDFType = vcl::PDFWriter::WP;
+                            aPDFType = "WP";
+                        break;
+                        case 2:
+                            nPDFType = vcl::PDFWriter::WT;
+                            aPDFType = "WT";
+                        break;
+                    }
+                }
+            }
+            break;
+
+
+        // for FootnoteNum, is called twice: outer generates Lbl, inner Link
+        case PortionType::FootnoteNum:
+            assert(!isContinueSpan); // is at start
+            if (mpPorInfo->m_Mode == 0)
+            {   // tdf#152218 link both directions
+                nPDFType = vcl::PDFWriter::Link;
+                aPDFType = aLinkString;
+                break;
+            }
+            [[fallthrough]];
+        case PortionType::Number:
+        case PortionType::Bullet:
+        case PortionType::GrfNum:
+            assert(!isContinueSpan); // is at start
+            if (mpPorInfo->m_Mode == 1)
+            {   // only works for multiple lines via wrapper from PaintSwFrame
+                nPDFType = vcl::PDFWriter::LILabel;
+                aPDFType = aListLabelString;
             }
             break;
 
@@ -1629,27 +2064,22 @@ SwEnhancedPDFExportHelper::SwEnhancedPDFExportHelper( SwEditShell& rSh,
         }
     }
 
-    s_aTableColumnsMap.clear();
-    s_aLinkIdMap.clear();
-    s_aNumListIdMap.clear();
-    s_aNumListBodyIdMap.clear();
-    s_aFrameTagIdMap.clear();
-
 #if OSL_DEBUG_LEVEL > 1
     aStructStack.clear();
 #endif
 
     const sal_Int16 nScript = SvtLanguageOptions::GetI18NScriptTypeOfLanguage( GetAppLanguage() );
-    sal_uInt16 nLangRes = RES_CHRATR_LANGUAGE;
+    TypedWhichId<SvxLanguageItem> nLangRes = RES_CHRATR_LANGUAGE;
 
     if ( i18n::ScriptType::ASIAN == nScript )
         nLangRes = RES_CHRATR_CJK_LANGUAGE;
     else if ( i18n::ScriptType::COMPLEX == nScript )
         nLangRes = RES_CHRATR_CTL_LANGUAGE;
 
-    s_eLanguageDefault = static_cast<const SvxLanguageItem*>(&mrSh.GetDoc()->GetDefault( nLangRes ))->GetLanguage();
+    const SvxLanguageItem& rLangItem = mrSh.GetDoc()->GetDefault( nLangRes );
+    auto const eLanguageDefault = rLangItem.GetLanguage();
 
-    EnhancedPDFExport();
+    EnhancedPDFExport(eLanguageDefault);
 }
 
 SwEnhancedPDFExportHelper::~SwEnhancedPDFExportHelper()
@@ -1659,9 +2089,10 @@ SwEnhancedPDFExportHelper::~SwEnhancedPDFExportHelper()
 tools::Rectangle SwEnhancedPDFExportHelper::SwRectToPDFRect(const SwPageFrame* pCurrPage,
     const tools::Rectangle& rRectangle) const
 {
-    SwPostItMode nPostItMode = mrPrintData.GetPrintPostIts();
-    if (nPostItMode != SwPostItMode::InMargins)
+    if (!::sw::IsShrinkPageForPostIts(mrSh, mrPrintData)) // tdf#148729
+    {
         return rRectangle;
+    }
     //the page has been scaled by 75% and vertically centered, so adjust these
     //rectangles equivalently
     tools::Rectangle aRect(rRectangle);
@@ -1679,7 +2110,7 @@ tools::Rectangle SwEnhancedPDFExportHelper::SwRectToPDFRect(const SwPageFrame* p
     return aRect;
 }
 
-void SwEnhancedPDFExportHelper::EnhancedPDFExport()
+void SwEnhancedPDFExportHelper::EnhancedPDFExport(LanguageType const eLanguageDefault)
 {
     vcl::PDFExtOutDevData* pPDFExtOutDevData =
         dynamic_cast< vcl::PDFExtOutDevData*>( mrOut.GetExtOutDevData() );
@@ -1689,7 +2120,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
     // set the document locale
 
-    css::lang::Locale aDocLocale( LanguageTag( SwEnhancedPDFExportHelper::GetDefaultLanguage() ).getLocale() );
+    lang::Locale const aDocLocale( LanguageTag(eLanguageDefault).getLocale() );
     pPDFExtOutDevData->SetDocumentLocale( aDocLocale );
 
     // Prepare the output device:
@@ -1709,6 +2140,8 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
     if ( !mbEditEngineOnly )
     {
+        assert(pPDFExtOutDevData->GetSwPDFState() == nullptr);
+        pPDFExtOutDevData->SetSwPDFState(new SwEnhancedPDFState(eLanguageDefault));
 
         // POSTITS
 
@@ -1771,7 +2204,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
             // 3. Check for hidden text attribute
             if ( !pTNd->IsHidden() &&
                   mrSh.GotoINetAttr( p->rINetAttr ) &&
-                 !mrSh.SelectHiddenRange() )
+                 !mrSh.IsInHiddenRange(/*bSelect=*/false) )
             {
                 // Select the hyperlink:
                 mrSh.SwCursorShell::Right( 1, SwCursorSkipMode::Chars );
@@ -1783,16 +2216,15 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                         p->rINetAttr.GetINetFormat().GetValue(),
                         INetURLObject::DecodeMechanism::Unambiguous ) );
 
-                    // We have to distinguish between intern and real URLs
-                    const bool bIntern = '#' == aURL[0];
+                    // We have to distinguish between internal and real URLs
+                    const bool bInternal = '#' == aURL[0];
 
                     // GetCursor_() is a SwShellCursor, which is derived from
                     // SwSelPaintRects, therefore the rectangles of the current
                     // selection can be easily obtained:
                     // Note: We make a copy of the rectangles, because they may
                     // be deleted again in JumpToSwMark.
-                    SwRects aTmp;
-                    aTmp.insert( aTmp.begin(), mrSh.SwCursorShell::GetCursor_()->begin(), mrSh.SwCursorShell::GetCursor_()->end() );
+                    SwRects const aTmp(GetCursorRectsContainingText(mrSh));
                     OSL_ENSURE( !aTmp.empty(), "Enhanced pdf export - rectangles are missing" );
                     OUString const altText(mrSh.GetSelText());
 
@@ -1801,7 +2233,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
                     // Create the destination for internal links:
                     sal_Int32 nDestId = -1;
-                    if ( bIntern )
+                    if ( bInternal )
                     {
                         aURL = aURL.copy( 1 );
                         mrSh.SwCursorShell::ClearMark();
@@ -1827,7 +2259,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                         }
                     }
 
-                    if ( !bIntern || -1 != nDestId )
+                    if ( !bInternal || -1 != nDestId )
                     {
                         // #i44368# Links in Header/Footer
                         const bool bHeaderFooter = pDoc->IsInHeaderFooter( *pTNd );
@@ -1851,17 +2283,17 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
                                 // Store link info for tagged pdf output:
                                 const IdMapEntry aLinkEntry( rLinkRect, nLinkId );
-                                s_aLinkIdMap.push_back( aLinkEntry );
+                                pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aLinkEntry);
 
                                 // Connect Link and Destination:
-                                if ( bIntern )
+                                if ( bInternal )
                                     pPDFExtOutDevData->SetLinkDest( nLinkId, nDestId );
                                 else
                                     pPDFExtOutDevData->SetLinkURL( nLinkId, aURL );
 
                                 // #i44368# Links in Header/Footer
                                 if ( bHeaderFooter )
-                                    MakeHeaderFooterLinks(*pPDFExtOutDevData, *pTNd, rLinkRect, nDestId, aURL, bIntern, altText);
+                                    MakeHeaderFooterLinks(*pPDFExtOutDevData, *pTNd, rLinkRect, nDestId, aURL, bInternal, altText);
                             }
                         }
                     }
@@ -1872,11 +2304,8 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
         // HYPERLINKS (Graphics, Frames, OLEs )
 
-        SwFrameFormats* pTable = pDoc->GetSpzFrameFormats();
-        const size_t nSpzFrameFormatsCount = pTable->size();
-        for( size_t n = 0; n < nSpzFrameFormatsCount; ++n )
+        for(sw::SpzFrameFormat* pFrameFormat: *pDoc->GetSpzFrameFormats())
         {
-            SwFrameFormat* pFrameFormat = (*pTable)[n];
             const SwFormatURL* pItem;
             if ( RES_DRAWFRMFMT != pFrameFormat->Which() &&
                 GetFrameOfModify(mrSh.GetLayout(), *pFrameFormat, SwFrameType::Fly) &&
@@ -1888,11 +2317,11 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                 OUString aURL( pItem->GetURL() );
                 if (aURL.isEmpty())
                     continue;
-                const bool bIntern = '#' == aURL[0];
+                const bool bInternal = '#' == aURL[0];
 
                 // Create the destination for internal links:
                 sal_Int32 nDestId = -1;
-                if ( bIntern )
+                if ( bInternal )
                 {
                     aURL = aURL.copy( 1 );
                     mrSh.SwCursorShell::ClearMark();
@@ -1917,7 +2346,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                     }
                 }
 
-                if ( !bIntern || -1 != nDestId )
+                if ( !bInternal || -1 != nDestId )
                 {
                     Point aNullPt;
                     const SwRect aLinkRect = pFrameFormat->FindLayoutRect( false, &aNullPt );
@@ -1932,8 +2361,12 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                         const sal_Int32 nLinkId =
                             pPDFExtOutDevData->CreateLink(aRect, formatName, aLinkPageNum);
 
+                        // Store link info for tagged pdf output:
+                        const IdMapEntry aLinkEntry(aLinkRect, nLinkId);
+                        pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aLinkEntry);
+
                         // Connect Link and Destination:
-                        if ( bIntern )
+                        if ( bInternal )
                             pPDFExtOutDevData->SetLinkDest( nLinkId, nDestId );
                         else
                             pPDFExtOutDevData->SetLinkURL( nLinkId, aURL );
@@ -1947,7 +2380,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                             {
                                 const SwTextNode* pTNd = pAnchorNode->GetTextNode();
                                 if ( pTNd )
-                                    MakeHeaderFooterLinks(*pPDFExtOutDevData, *pTNd, aLinkRect, nDestId, aURL, bIntern, formatName);
+                                    MakeHeaderFooterLinks(*pPDFExtOutDevData, *pTNd, aLinkRect, nDestId, aURL, bInternal, formatName);
                             }
                         }
                     }
@@ -1981,11 +2414,12 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                         xShapePropSet->getPropertyValue("MediaURL") >>= aMediaURL;
                         if (!aMediaURL.isEmpty())
                         {
+                            OUString const mimeType(xShapePropSet->getPropertyValue("MediaMimeType").get<OUString>());
                             const SwPageFrame* pCurrPage = mrSh.GetLayout()->GetPageAtPos(aSnapRect.Center());
                             tools::Rectangle aPDFRect(SwRectToPDFRect(pCurrPage, aSnapRect.SVRect()));
                             for (sal_Int32 nScreenPageNum : aScreenPageNums)
                             {
-                                sal_Int32 nScreenId = pPDFExtOutDevData->CreateScreen(aPDFRect, altText, nScreenPageNum, pObject);
+                                sal_Int32 nScreenId = pPDFExtOutDevData->CreateScreen(aPDFRect, altText, mimeType, nScreenPageNum, pObject);
                                 if (aMediaURL.startsWith("vnd.sun.star.Package:"))
                                 {
                                     // Embedded media.
@@ -2021,8 +2455,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                 mrSh.SwCursorShell::Right( 1, SwCursorSkipMode::Chars );
 
                 // Link Rectangles
-                SwRects aTmp;
-                aTmp.insert( aTmp.begin(), mrSh.SwCursorShell::GetCursor_()->begin(), mrSh.SwCursorShell::GetCursor_()->end() );
+                SwRects const aTmp(GetCursorRectsContainingText(mrSh));
                 OSL_ENSURE( !aTmp.empty(), "Enhanced pdf export - rectangles are missing" );
 
                 mrSh.SwCursorShell::ClearMark();
@@ -2067,7 +2500,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
                             // Store link info for tagged pdf output:
                             const IdMapEntry aLinkEntry( rLinkRect, nLinkId );
-                            s_aLinkIdMap.push_back( aLinkEntry );
+                            pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aLinkEntry);
 
                             // Connect Link and Destination:
                             pPDFExtOutDevData->SetLinkDest( nLinkId, nDestId );
@@ -2099,7 +2532,7 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
 
             // 1. Check if the whole paragraph is hidden
             // 2. Check for hidden text attribute
-            if (rTNd.GetTextNode()->IsHidden() || mrSh.SelectHiddenRange()
+            if (rTNd.GetTextNode()->IsHidden() || mrSh.IsInHiddenRange(/*bSelect=*/false)
                 || (mrSh.GetLayout()->IsHideRedlines()
                     && sw::IsFootnoteDeleted(pDoc->getIDocumentRedlineAccess(), *pTextFootnote)))
             {
@@ -2174,11 +2607,11 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                     const sal_Int32 nBackDestId = pPDFExtOutDevData->CreateDest(aRect, aLinkPageNum);
                     // Store link info for tagged pdf output:
                     const IdMapEntry aLinkEntry( aLinkRect, nLinkId );
-                    s_aLinkIdMap.push_back( aLinkEntry );
+                    pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aLinkEntry);
 
                     // Store backlink info for tagged pdf output:
                     const IdMapEntry aBackLinkEntry( aFootnoteSymbolRect, nBackLinkId );
-                    s_aLinkIdMap.push_back( aBackLinkEntry );
+                    pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aBackLinkEntry);
                     // Connect Links and Destinations:
                     pPDFExtOutDevData->SetLinkDest( nLinkId, nDestId );
                     pPDFExtOutDevData->SetLinkDest( nBackLinkId, nBackDestId );
@@ -2302,8 +2735,8 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
         for ( const auto& rBookmark : rBookmarks )
         {
             OUString aBookmarkName( rBookmark.aBookmark );
-            const bool bIntern = '#' == aBookmarkName[0];
-            if ( bIntern )
+            const bool bInternal = '#' == aBookmarkName[0];
+            if ( bInternal )
             {
                 aBookmarkName = aBookmarkName.copy( 1 );
                 JumpToSwMark( &mrSh, aBookmarkName );
@@ -2338,6 +2771,9 @@ void SwEnhancedPDFExportHelper::EnhancedPDFExport()
                 pPDFExtOutDevData->SetLinkURL( rBookmark.nLinkId, aBookmarkName );
         }
         rBookmarks.clear();
+        assert(pPDFExtOutDevData->GetSwPDFState());
+        delete pPDFExtOutDevData->GetSwPDFState();
+        pPDFExtOutDevData->SetSwPDFState(nullptr);
     }
 
     // Restore view, cursor, and outdev:
@@ -2354,6 +2790,53 @@ void SwEnhancedPDFExportHelper::ExportAuthorityEntryLinks()
         return;
     }
 
+    // Create PDF destinations for bibliography table entries
+    std::vector<std::tuple<const SwTOXBase*, const OUString*, sal_Int32>> vDestinations;
+    //  string is the row node text, sal_Int32 is number of the destination
+    // Note: This way of iterating doesn't seem to take into account TOXes
+    //          that are in a frame, probably in some other cases too
+    {
+        mrSh.GotoPage(1);
+        while (mrSh.GotoNextTOXBase())
+        {
+            const SwTOXBase* pIteratedTOX = nullptr;
+            while ((pIteratedTOX = mrSh.GetCurTOX()) != nullptr
+                   && pIteratedTOX->GetType() == TOX_AUTHORITIES)
+            {
+                if (const SwNode& rCurrentNode = mrSh.GetCursor()->GetPoint()->GetNode();
+                    rCurrentNode.GetNodeType() == SwNodeType::Text)
+                {
+                    if (mrSh.GetCursor()->GetPoint()->GetNode().FindSectionNode()->GetSection().GetType()
+                        == SectionType::ToxContent) // this checks it's not a heading
+                    {
+                        // Destination Rectangle
+                        const SwRect& rDestRect = mrSh.GetCharRect();
+
+                        const SwPageFrame* pCurrPage =
+                            static_cast<const SwPageFrame*>( mrSh.GetLayout()->Lower() );
+
+                        // Destination PageNum
+                        const sal_Int32 nDestPageNum = CalcOutputPageNum( rDestRect );
+
+                        // Destination Export
+                        if ( -1 != nDestPageNum )
+                        {
+                            tools::Rectangle aRect(SwRectToPDFRect(pCurrPage, rDestRect.SVRect()));
+                            const sal_Int32 nDestId = pPDFExtOutDevData->CreateDest(aRect, nDestPageNum);
+                            const OUString* vNodeText = &static_cast<const SwTextNode*>(&rCurrentNode)->GetText();
+                            vDestinations.emplace_back(pIteratedTOX, vNodeText, nDestId);
+                        }
+                    }
+                }
+                if (!mrSh.MovePara(GoNextPara, fnParaStart))
+                { // Cursor is stuck in the TOX due to document ending immediately afterwards
+                    break;
+                }
+            }
+        }
+    }
+
+    // Generate links to matching entries in the bibliography tables
     std::vector<SwFormatField*> aFields;
     SwFieldType* pType = mrSh.GetFieldType(SwFieldIds::TableOfAuthorities, OUString());
     if (!pType)
@@ -2372,38 +2855,96 @@ void SwEnhancedPDFExportHelper::ExportAuthorityEntryLinks()
 
         const auto& rAuthorityField
             = *static_cast<const SwAuthorityField*>(pFormatField->GetField());
-        if (!rAuthorityField.HasURL())
+
+        if (auto targetType = rAuthorityField.GetTargetType();
+            targetType == SwAuthorityField::TargetType::UseDisplayURL
+            || targetType == SwAuthorityField::TargetType::UseTargetURL)
         {
-            continue;
-        }
-
-        const OUString& rURL = rAuthorityField.GetAuthEntry()->GetAuthorField(AUTH_FIELD_URL);
-        const SwTextNode& rTextNode = pFormatField->GetTextField()->GetTextNode();
-        if (!lcl_TryMoveToNonHiddenField(mrSh, rTextNode, *pFormatField))
-        {
-            continue;
-        }
-
-        OUString const content(rAuthorityField.ExpandField(true, mrSh.GetLayout()));
-
-        // Select the field.
-        mrSh.SwCursorShell::SetMark();
-        mrSh.SwCursorShell::Right(1, SwCursorSkipMode::Chars);
-
-        // Create the links.
-        for (const auto& rLinkRect : *mrSh.SwCursorShell::GetCursor_())
-        {
-            for (const auto& rLinkPageNum : CalcOutputPageNums(rLinkRect))
+            // Since the target type specifies to use an URL, link to it
+            const OUString& rURL = rAuthorityField.GetAbsoluteURL();
+            if (rURL.getLength() == 0)
             {
-                tools::Rectangle aRect(SwRectToPDFRect(pPageFrame, rLinkRect.SVRect()));
-                sal_Int32 nLinkId = pPDFExtOutDevData->CreateLink(aRect, content, rLinkPageNum);
-                IdMapEntry aLinkEntry(rLinkRect, nLinkId);
-                s_aLinkIdMap.push_back(aLinkEntry);
-                pPDFExtOutDevData->SetLinkURL(nLinkId, rURL);
+                continue;
             }
-        }
 
-        mrSh.SwCursorShell::ClearMark();
+            const SwTextNode& rTextNode = pFormatField->GetTextField()->GetTextNode();
+            if (!lcl_TryMoveToNonHiddenField(mrSh, rTextNode, *pFormatField))
+            {
+                continue;
+            }
+
+            OUString const content(rAuthorityField.ExpandField(true, mrSh.GetLayout()));
+
+            // Select the field.
+            mrSh.SwCursorShell::SetMark();
+            mrSh.SwCursorShell::Right(1, SwCursorSkipMode::Chars);
+
+            // Create the links.
+            SwRects const rects(GetCursorRectsContainingText(mrSh));
+            for (const auto& rLinkRect : rects)
+            {
+                for (const auto& rLinkPageNum : CalcOutputPageNums(rLinkRect))
+                {
+                    tools::Rectangle aRect(SwRectToPDFRect(pPageFrame, rLinkRect.SVRect()));
+                    sal_Int32 nLinkId = pPDFExtOutDevData->CreateLink(aRect, content, rLinkPageNum);
+                    IdMapEntry aLinkEntry(rLinkRect, nLinkId);
+                    pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aLinkEntry);
+                    pPDFExtOutDevData->SetLinkURL(nLinkId, rURL);
+                }
+            }
+            mrSh.SwCursorShell::ClearMark();
+        }
+        else if (targetType == SwAuthorityField::TargetType::BibliographyTableRow)
+        {
+            // As the target type specifies, try linking to a bibliography table row
+            sal_Int32 nDestId = -1;
+
+            std::unordered_map<const SwTOXBase*, OUString> vFormattedFieldStrings;
+            for (const auto& rDestinationTuple : vDestinations)
+            {
+                if (vFormattedFieldStrings.find(std::get<0>(rDestinationTuple))
+                    == vFormattedFieldStrings.end())
+                    vFormattedFieldStrings.emplace(std::get<0>(rDestinationTuple),
+                                                  rAuthorityField.GetAuthority(mrSh.GetLayout(),
+                                                                               &std::get<0>(rDestinationTuple)->GetTOXForm()));
+
+                if (vFormattedFieldStrings.at(std::get<0>(rDestinationTuple)) == *std::get<1>(rDestinationTuple))
+                {
+                    nDestId = std::get<2>(rDestinationTuple);
+                    break;
+                }
+            }
+
+            if (nDestId == -1)
+                continue;
+
+            const SwTextNode& rTextNode = pFormatField->GetTextField()->GetTextNode();
+            if (!lcl_TryMoveToNonHiddenField(mrSh, rTextNode, *pFormatField))
+            {
+                continue;
+            }
+
+            OUString const content(rAuthorityField.ExpandField(true, mrSh.GetLayout()));
+
+            // Select the field.
+            mrSh.SwCursorShell::SetMark();
+            mrSh.SwCursorShell::Right(1, SwCursorSkipMode::Chars);
+
+            // Create the links.
+            SwRects const rects(GetCursorRectsContainingText(mrSh));
+            for (const auto& rLinkRect : rects)
+            {
+                for (const auto& rLinkPageNum : CalcOutputPageNums(rLinkRect))
+                {
+                    tools::Rectangle aRect(SwRectToPDFRect(pPageFrame, rLinkRect.SVRect()));
+                    sal_Int32 nLinkId = pPDFExtOutDevData->CreateLink(aRect, content, rLinkPageNum);
+                    IdMapEntry aLinkEntry(rLinkRect, nLinkId);
+                    pPDFExtOutDevData->GetSwPDFState()->m_LinkIdMap.push_back(aLinkEntry);
+                    pPDFExtOutDevData->SetLinkDest(nLinkId, nDestId);
+                }
+            }
+            mrSh.SwCursorShell::ClearMark();
+        }
     }
 }
 
@@ -2480,7 +3021,7 @@ void SwEnhancedPDFExportHelper::MakeHeaderFooterLinks( vcl::PDFExtOutDevData& rP
                                                        const SwRect& rLinkRect,
                                                        sal_Int32 nDestId,
                                                        const OUString& rURL,
-                                                       bool bIntern,
+                                                       bool bInternal,
                                                        OUString const& rContent) const
 {
     // We assume, that the primary link has just been exported. Therefore
@@ -2511,7 +3052,7 @@ void SwEnhancedPDFExportHelper::MakeHeaderFooterLinks( vcl::PDFExtOutDevData& rP
                     rPDFExtOutDevData.CreateLink(aRect, rContent, aHFLinkPageNum);
 
                 // Connect Link and Destination:
-                if ( bIntern )
+                if ( bInternal )
                     rPDFExtOutDevData.SetLinkDest( nHFLinkId, nDestId );
                 else
                     rPDFExtOutDevData.SetLinkURL( nHFLinkId, rURL );

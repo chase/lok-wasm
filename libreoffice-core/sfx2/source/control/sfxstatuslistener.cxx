@@ -23,6 +23,7 @@
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/visitem.hxx>
+#include <svl/voiditem.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <vcl/svapp.hxx>
@@ -142,8 +143,7 @@ void SAL_CALL SfxStatusListener::statusChanged( const FeatureStateEvent& rEvent)
     SfxViewFrame* pViewFrame = nullptr;
     if ( m_xDispatch.is() )
     {
-        Reference< XUnoTunnel > xTunnel( m_xDispatch, UNO_QUERY );
-        if (auto pDisp = comphelper::getFromUnoTunnel<SfxOfficeDispatch>(xTunnel))
+        if (auto pDisp = dynamic_cast<SfxOfficeDispatch*>(m_xDispatch.get()))
             pViewFrame = pDisp->GetDispatcher_Impl()->GetFrame();
     }
 

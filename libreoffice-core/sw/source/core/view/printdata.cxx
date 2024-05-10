@@ -30,6 +30,7 @@
 #include <svl/cjkoptions.hxx>
 #include <svl/ctloptions.hxx>
 #include <toolkit/awt/vclxdevice.hxx>
+#include <unotools/configmgr.hxx>
 #include <unotools/moduleoptions.hxx>
 #include <vcl/outdev.hxx>
 #include <osl/diagnose.h>
@@ -163,14 +164,14 @@ SwPrintUIOptions::SwPrintUIOptions(
 {
     // printing HTML sources does not have any valid UI options.
     // It's just the source code that gets printed...
-    if (bSwSrcView)
+    if (bSwSrcView || utl::ConfigManager::IsFuzzing())
     {
         m_aUIProperties.clear();
         return;
     }
 
     // check if either CJK or CTL is enabled
-    bool bRTL = SvtCJKOptions::IsCJKFontEnabled() || SvtCTLOptions().IsCTLFontEnabled();
+    bool bRTL = SvtCJKOptions::IsCJKFontEnabled() || SvtCTLOptions::IsCTLFontEnabled();
 
     // create sequence of print UI options
     // (5 options are not available for Writer-Web)
@@ -272,7 +273,7 @@ SwPrintUIOptions::SwPrintUIOptions(
                                                           aPrintRangeOpt );
 
     // create a choice for the content to create
-    static const OUStringLiteral aPrintRangeName( u"PrintContent" );
+    static constexpr OUString aPrintRangeName( u"PrintContent"_ustr );
     uno::Sequence< OUString > aChoices{ SwResId( STR_PRINTOPTUI_PRINTALLPAGES ),
                                         SwResId( STR_PRINTOPTUI_PRINTPAGES ),
                                         SwResId( STR_PRINTOPTUI_PRINTSELECTION ) };
@@ -330,7 +331,7 @@ SwPrintUIOptions::SwPrintUIOptions(
 
     // create a bool option for brochure
     bDefaultVal = rDefaultPrintData.IsPrintProspect();
-    static const OUStringLiteral aBrochurePropertyName( u"PrintProspect" );
+    static constexpr OUString aBrochurePropertyName( u"PrintProspect"_ustr );
     m_aUIProperties[ nIdx++ ].Value = setBoolControlOpt("brochure", SwResId( STR_PRINTOPTUI_BROCHURE),
                                                         ".HelpID:vcl:PrintDialog:PrintProspect:CheckBox",
                                                         aBrochurePropertyName,
@@ -432,7 +433,7 @@ bool SwPrintUIOptions::processPropertiesAndCheckFormat( const uno::Sequence< bea
     VclPtr< OutputDevice > pOut;
     if (xRenderDevice.is())
     {
-        VCLXDevice*     pDevice = comphelper::getFromUnoTunnel<VCLXDevice>( xRenderDevice );
+        VCLXDevice* pDevice = dynamic_cast<VCLXDevice*>( xRenderDevice.get() );
         if (pDevice)
             pOut = pDevice->GetOutputDevice();
     }

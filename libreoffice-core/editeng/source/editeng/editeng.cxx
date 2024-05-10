@@ -112,12 +112,12 @@ bool EditEngine::IsInUndo() const
     return pImpEditEngine->IsInUndo();
 }
 
-SfxUndoManager& EditEngine::GetUndoManager()
+EditUndoManager& EditEngine::GetUndoManager()
 {
     return pImpEditEngine->GetUndoManager();
 }
 
-SfxUndoManager* EditEngine::SetUndoManager(SfxUndoManager* pNew)
+EditUndoManager* EditEngine::SetUndoManager(EditUndoManager* pNew)
 {
     return pImpEditEngine->SetUndoManager(pNew);
 }
@@ -217,7 +217,7 @@ void EditEngine::Draw( OutputDevice& rOutDev, const Point& rStartPos, Degree10 n
     if ( IsEffectivelyVertical() )
     {
         aStartPos.AdjustX(GetPaperSize().Width() );
-        aStartPos = Rotate( aStartPos, nOrientation, rStartPos );
+        rStartPos.RotateAround(aStartPos, nOrientation);
     }
     pImpEditEngine->Paint(rOutDev, aBigRect, aStartPos, false, nOrientation);
     if( rOutDev.GetConnectMetaFile() )
@@ -588,7 +588,7 @@ sal_Int32 EditEngine::GetTextLen() const
 
 sal_Int32 EditEngine::GetParagraphCount() const
 {
-    return pImpEditEngine->aEditDoc.Count();
+    return pImpEditEngine->maEditDoc.Count();
 }
 
 sal_Int32 EditEngine::GetLineCount( sal_Int32 nParagraph ) const
@@ -676,11 +676,6 @@ ESelection EditEngine::GetWord( const ESelection& rSelection, sal_uInt16 nWordTy
     EditSelection aSel( pE->pImpEditEngine->CreateSel( rSelection ) );
     aSel = pE->pImpEditEngine->SelectWord( aSel, nWordType );
     return pE->pImpEditEngine->CreateESel( aSel );
-}
-
-void EditEngine::CursorMoved(const ContentNode* pPrevNode)
-{
-    pImpEditEngine->CursorMoved(pPrevNode);
 }
 
 void EditEngine::CheckIdleFormatter()
@@ -994,7 +989,7 @@ const EditSelectionEngine& EditEngine::GetSelectionEngine() const
 
 void EditEngine::SetInSelectionMode(bool b)
 {
-    pImpEditEngine->bInSelection = b;
+    pImpEditEngine->mbInSelection = b;
 }
 
 bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, vcl::Window const * pFrameWin )
@@ -1122,7 +1117,7 @@ bool EditEngine::PostKeyEvent( const KeyEvent& rKeyEvent, EditView* pEditView, v
             {
                 if ( !rKeyEvent.GetKeyCode().IsMod2() || ( nCode == KEY_LEFT ) || ( nCode == KEY_RIGHT ) )
                 {
-                    if ( pImpEditEngine->DoVisualCursorTraveling() && ( ( nCode == KEY_LEFT ) || ( nCode == KEY_RIGHT ) /* || ( nCode == KEY_HOME ) || ( nCode == KEY_END ) */ ) )
+                    if ( ImpEditEngine::DoVisualCursorTraveling() && ( ( nCode == KEY_LEFT ) || ( nCode == KEY_RIGHT ) /* || ( nCode == KEY_HOME ) || ( nCode == KEY_END ) */ ) )
                         bSetCursorFlags = false;    // Will be manipulated within visual cursor move
 
                     aCurSel = pImpEditEngine->MoveCursor( rKeyEvent, pEditView );
@@ -1665,12 +1660,6 @@ void EditEngine::SetModifyHdl( const Link<LinkParamNone*,void>& rLink )
     pImpEditEngine->SetModifyHdl( rLink );
 }
 
-Link<LinkParamNone*,void> const & EditEngine::GetModifyHdl() const
-{
-    return pImpEditEngine->GetModifyHdl();
-}
-
-
 void EditEngine::ClearModifyFlag()
 {
     pImpEditEngine->SetModifyFlag( false );
@@ -1869,28 +1858,28 @@ void EditEngine::SetFlatMode( bool bFlat)
 
 bool EditEngine::IsFlatMode() const
 {
-    return !( pImpEditEngine->aStatus.UseCharAttribs() );
+    return !( pImpEditEngine->GetStatus().UseCharAttribs() );
 }
 
 void EditEngine::SetSingleLine(bool bValue)
 {
-    if (bValue == pImpEditEngine->aStatus.IsSingleLine())
+    if (bValue == pImpEditEngine->GetStatus().IsSingleLine())
         return;
 
     if (bValue)
-        pImpEditEngine->aStatus.TurnOnFlags(EEControlBits::SINGLELINE);
+        pImpEditEngine->GetStatus().TurnOnFlags(EEControlBits::SINGLELINE);
     else
-        pImpEditEngine->aStatus.TurnOffFlags(EEControlBits::SINGLELINE);
+        pImpEditEngine->GetStatus().TurnOffFlags(EEControlBits::SINGLELINE);
 }
 
 void EditEngine::SetControlWord( EEControlBits nWord )
 {
 
-    if ( nWord == pImpEditEngine->aStatus.GetControlWord() )
+    if ( nWord == pImpEditEngine->GetStatus().GetControlWord() )
         return;
 
-    EEControlBits nPrev = pImpEditEngine->aStatus.GetControlWord();
-    pImpEditEngine->aStatus.GetControlWord() = nWord;
+    EEControlBits nPrev = pImpEditEngine->GetStatus().GetControlWord();
+    pImpEditEngine->GetStatus().GetControlWord() = nWord;
 
     EEControlBits nChanges = nPrev ^ nWord;
     if ( pImpEditEngine->IsFormatted() )
@@ -1958,7 +1947,7 @@ void EditEngine::SetControlWord( EEControlBits nWord )
 
 EEControlBits EditEngine::GetControlWord() const
 {
-    return pImpEditEngine->aStatus.GetControlWord();
+    return pImpEditEngine->GetStatus().GetControlWord();
 }
 
 tools::Long EditEngine::GetFirstLineStartX( sal_Int32 nParagraph )
@@ -2276,35 +2265,19 @@ bool EditEngine::HasText( const SvxSearchItem& rSearchItem )
     return pImpEditEngine->HasText( rSearchItem );
 }
 
-void EditEngine::setGlobalScale(double fFontScaleX, double fFontScaleY, double fSpacingScaleX, double fSpacingScaleY)
+ScalingParameters EditEngine::getScalingParameters() const
 {
-    pImpEditEngine->setScale(fFontScaleX, fFontScaleY, fSpacingScaleX, fSpacingScaleY);
+    return pImpEditEngine->getScalingParameters();
 }
 
-void EditEngine::getGlobalSpacingScale(double& rX, double& rY) const
+void EditEngine::resetScalingParameters()
 {
-    pImpEditEngine->getSpacingScale(rX, rY);
+    pImpEditEngine->resetScalingParameters();
 }
 
-basegfx::B2DTuple EditEngine::getGlobalSpacingScale() const
+void EditEngine::setScalingParameters(ScalingParameters const& rScalingParameters)
 {
-    double x = 0.0;
-    double y = 0.0;
-    pImpEditEngine->getSpacingScale(x, y);
-    return {x, y};
-}
-
-void EditEngine::getGlobalFontScale(double& rX, double& rY) const
-{
-    pImpEditEngine->getFontScale(rX, rY);
-}
-
-basegfx::B2DTuple EditEngine::getGlobalFontScale() const
-{
-    double x = 0.0;
-    double y = 0.0;
-    pImpEditEngine->getFontScale(x, y);
-    return {x, y};
+    pImpEditEngine->setScalingParameters(rScalingParameters);
 }
 
 void EditEngine::setRoundFontSizeToPt(bool bRound) const
@@ -2443,7 +2416,7 @@ EPosition EditEngine::FindDocPosition( const Point& rDocPos ) const
     EditPaM aPaM = const_cast<EditEngine*>(this)->pImpEditEngine->GetPaM( rDocPos, false );
     if ( aPaM.GetNode() )
     {
-        aPos.nPara = pImpEditEngine->aEditDoc.GetPos( aPaM.GetNode() );
+        aPos.nPara = pImpEditEngine->maEditDoc.GetPos( aPaM.GetNode() );
         aPos.nIndex = aPaM.GetIndex();
     }
     return aPos;
@@ -2501,7 +2474,7 @@ css::uno::Reference< css::datatransfer::XTransferable >
 // ======================    Virtual Methods    ========================
 
 void EditEngine::DrawingText( const Point&, const OUString&, sal_Int32, sal_Int32,
-                              o3tl::span<const sal_Int32>, o3tl::span<const sal_Bool>,
+                              std::span<const sal_Int32>, std::span<const sal_Bool>,
                               const SvxFont&, sal_Int32 /*nPara*/, sal_uInt8 /*nRightToLeft*/,
                               const EEngineData::WrongSpellVector*, const SvxFieldData*, bool, bool,
                               const css::lang::Locale*, const Color&, const Color&)
@@ -2621,7 +2594,7 @@ tools::Rectangle EditEngine::GetBulletArea( sal_Int32 )
     return tools::Rectangle( Point(), Point() );
 }
 
-OUString EditEngine::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, std::optional<Color>&, std::optional<Color>& )
+OUString EditEngine::CalcFieldValue( const SvxFieldItem&, sal_Int32, sal_Int32, std::optional<Color>&, std::optional<Color>&, std::optional<FontLineStyle>& )
 {
     return OUString(' ');
 }
@@ -2661,9 +2634,14 @@ SfxItemPool& EditEngine::GetGlobalItemPool()
     if ( !pGlobalPool )
     {
         pGlobalPool = CreatePool();
+#if defined(FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION)
+        // TerminateListener option not available, force it to leak
+        pGlobalPool->acquire();
+#else
         uno::Reference< frame::XDesktop2 > xDesktop = frame::Desktop::create(comphelper::getProcessComponentContext());
         uno::Reference< frame::XTerminateListener > xListener( new TerminateListener );
         xDesktop->addTerminateListener( xListener );
+#endif
     }
     return *pGlobalPool;
 }

@@ -331,7 +331,7 @@ bool SwDoc::SplitDoc( sal_uInt16 eDocType, const OUString& rPath, bool bOutline,
                     xDocSh->DoSaveCompleted( pTmpMed );
 
                     // do not insert a FileLinkSection in case of error
-                    if( xDocSh->GetError() )
+                    if( xDocSh->GetErrorIgnoreWarning() )
                         sFileName.clear();
                 }
                 xDocSh->DoClose();
@@ -368,9 +368,10 @@ bool SwDoc::SplitDoc( sal_uInt16 eDocType, const OUString& rPath, bool bOutline,
                             CorrAbs( aSIdx, aEIdx, *aTmp.GetPoint(), true);
 
                             // If FlyFrames are still around, delete these too
-                            for( SwFrameFormats::size_type n = 0; n < GetSpzFrameFormats()->size(); ++n )
+                            auto& rSpzs = *GetSpzFrameFormats();
+                            for(sw::FrameFormats<sw::SpzFrameFormat*>::size_type n = 0; n < GetSpzFrameFormats()->size(); ++n)
                             {
-                                SwFrameFormat* pFly = (*GetSpzFrameFormats())[n];
+                                auto pFly = rSpzs[n];
                                 const SwFormatAnchor* pAnchor = &pFly->GetAnchor();
                                 SwNode const*const pAnchorNode =
                                     pAnchor->GetAnchorNode();
@@ -505,7 +506,8 @@ bool SwDoc::SplitDoc( sal_uInt16 eDocType, const OUString& rPath, bool bOutline,
     aReq.AppendItem( SfxBoolItem( SID_SAVETO, true ) );
     if(pFilter)
         aReq.AppendItem( SfxStringItem( SID_FILTER_NAME, pFilter->GetName() ) );
-    const SfxBoolItem *pRet = static_cast<const SfxBoolItem*>(mpDocShell->ExecuteSlot( aReq ));
+    const SfxPoolItemHolder& rResult(mpDocShell->ExecuteSlot(aReq));
+    const SfxBoolItem *pRet(static_cast<const SfxBoolItem*>(rResult.getItem()));
 
     return pRet && pRet->GetValue();
 }

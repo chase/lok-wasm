@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SW_INC_UNOTEXT_HXX
 #define INCLUDED_SW_INC_UNOTEXT_HXX
 
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/text/XTextCopy.hpp>
 #include <com/sun/star/text/XTextRangeCompare.hpp>
@@ -41,10 +40,10 @@ namespace com::sun::star {
 class SwDoc;
 class SwStartNode;
 class SwPaM;
+class SwXTextCursor;
 
 class SAL_DLLPUBLIC_RTTI SwXText
     : public css::lang::XTypeProvider
-    , public css::lang::XUnoTunnel
     , public css::beans::XPropertySet
     , public css::text::XTextAppendAndConvert
     , public css::text::XTextCopy
@@ -84,9 +83,9 @@ public:
     const SwDoc*    GetDoc() const;
           SwDoc*    GetDoc();
 
-    /// @throws css::uno::RuntimeException
-    virtual css::uno::Reference< css::text::XTextCursor >
-        CreateCursor();
+    // declare these here to resolve ambiguity when we declared rtl::Reference<subtype-of-SwXText>
+    virtual void SAL_CALL acquire() override = 0;
+    virtual void SAL_CALL release() override = 0;
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(
@@ -95,12 +94,6 @@ public:
     // XTypeProvider
     virtual css::uno::Sequence< css::uno::Type >
         SAL_CALL getTypes() override;
-
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& rIdentifier) override;
 
     // XPropertySet
     virtual css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL
@@ -139,6 +132,12 @@ public:
     virtual void SAL_CALL insertControlCharacter(
             const css::uno::Reference< css::text::XTextRange > & xRange,
             sal_Int16 nControlCharacter, sal_Bool bAbsorb) override;
+    virtual css::uno::Reference< css::text::XTextCursor > SAL_CALL createTextCursorByRange(
+            const ::css::uno::Reference< ::css::text::XTextRange >& aTextPosition ) override final;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursorByRange(
+            const ::css::uno::Reference< ::css::text::XTextRange >& aTextPosition ) = 0;
+    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL createTextCursor() override final;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursor() = 0;
 
     // XText
     virtual void SAL_CALL insertTextContent(

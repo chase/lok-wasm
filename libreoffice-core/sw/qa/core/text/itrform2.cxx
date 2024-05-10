@@ -88,6 +88,24 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableLegacyWrapEmptyParagraph)
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), rPageObjs2.size());
 }
 
+CPPUNIT_TEST_FIXTURE(Test, testApplyTextAttrToEmptyLineAtEndOfParagraph)
+{
+    createSwDoc("A011-charheight.rtf");
+
+    calcLayout();
+
+    SwDoc* pDoc = getSwDoc();
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    auto pPage = dynamic_cast<SwPageFrame*>(pLayout->Lower());
+
+    SwContentFrame* pLastPara = pPage->FindLastBodyContent();
+    // wrong was 449 (11.5pt)
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwTwips>(368), pLastPara->getFrameArea().Height());
+    SwContentFrame* pFirstPara = pPage->FindFirstBodyContent();
+    // wrong was 817 (11.5pt)
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwTwips>(736), pFirstPara->getFrameArea().Height());
+}
+
 CPPUNIT_TEST_FIXTURE(Test, testFlyMinimalWrap)
 {
     // Given a document with a first page that has a shape and a table in it (not floating table),
@@ -128,6 +146,10 @@ CPPUNIT_TEST_FIXTURE(Test, testContentControlHeaderPDFExport)
 
     // Then make sure all the expected text is there on page 2:
     std::unique_ptr<vcl::pdf::PDFiumDocument> pPdfDocument = parsePDFExport();
+    if (!pPdfDocument)
+    {
+        return;
+    }
     std::unique_ptr<vcl::pdf::PDFiumPage> pPage2 = pPdfDocument->openPage(1);
     int nTextCount = 0;
     for (int i = 0; i < pPage2->getObjectCount(); ++i)
@@ -147,7 +169,7 @@ CPPUNIT_TEST_FIXTURE(Test, testContentControlHeaderPDFExport)
 
 CPPUNIT_TEST_FIXTURE(Test, testSplitFlyAnchorLeftMargin)
 {
-    // Given a document with a floating table, anchor para is followed by an other para with a left
+    // Given a document with a floating table, anchor para is followed by another para with a left
     // margin:
     createSwDoc("floattable-anchor-left-margin.docx");
 

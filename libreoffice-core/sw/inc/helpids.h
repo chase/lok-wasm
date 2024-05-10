@@ -20,68 +20,71 @@
 #ifndef INCLUDED_SW_INC_HELPIDS_H
 #define INCLUDED_SW_INC_HELPIDS_H
 
-#include <rtl/string.hxx>
+#include <rtl/ustring.hxx>
 
-inline constexpr OStringLiteral HID_EDIT_WIN = "SW_HID_EDIT_WIN";
+inline constexpr OUString HID_EDIT_WIN = u"SW_HID_EDIT_WIN"_ustr;
 
-inline constexpr OStringLiteral HID_PAGEPREVIEW = "SW_HID_PAGEPREVIEW";
-inline constexpr OStringLiteral HID_SOURCE_EDITWIN = "SW_HID_SOURCE_EDITWIN";
+inline constexpr OUString HID_PAGEPREVIEW = u"SW_HID_PAGEPREVIEW"_ustr;
+inline constexpr OUString HID_SOURCE_EDITWIN = u"SW_HID_SOURCE_EDITWIN"_ustr;
 
 // Dialog Help-IDs
 
-inline constexpr OStringLiteral HID_NAVIGATOR_TREELIST = "SW_HID_NAVIGATOR_TREELIST";
-inline constexpr OStringLiteral HID_NAVIGATOR_TOOLBOX = "SW_HID_NAVIGATOR_TOOLBOX";
-inline constexpr OStringLiteral HID_NAVIGATOR_LISTBOX = "SW_HID_NAVIGATOR_LISTBOX";
-inline constexpr OStringLiteral HID_NAVIGATOR_GLOBAL_TOOLBOX = "SW_HID_NAVIGATOR_GLOBAL_TOOLBOX";
-inline constexpr OStringLiteral HID_NAVIGATOR_GLOB_TREELIST = "SW_HID_NAVIGATOR_GLOB_TREELIST";
+inline constexpr OUString HID_NAVIGATOR_TREELIST = u"SW_HID_NAVIGATOR_TREELIST"_ustr;
+inline constexpr OUString HID_NAVIGATOR_TOOLBOX = u"SW_HID_NAVIGATOR_TOOLBOX"_ustr;
+inline constexpr OUString HID_NAVIGATOR_LISTBOX = u"SW_HID_NAVIGATOR_LISTBOX"_ustr;
+inline constexpr OUString HID_NAVIGATOR_GLOBAL_TOOLBOX = u"SW_HID_NAVIGATOR_GLOBAL_TOOLBOX"_ustr;
+inline constexpr OUString HID_NAVIGATOR_GLOB_TREELIST = u"SW_HID_NAVIGATOR_GLOB_TREELIST"_ustr;
 
 // TabPage Help-IDs
 
-inline constexpr OStringLiteral HID_LINGU_AUTOCORR = "SW_HID_LINGU_AUTOCORR";
-inline constexpr OStringLiteral HID_LINGU_REPLACE = "SW_HID_LINGU_REPLACE";
-inline constexpr OStringLiteral HID_LINGU_IGNORE_SELECTION = "SW_HID_LINGU_IGNORE_SELECTION";    // grammar check context menu
+inline constexpr OUString HID_LINGU_AUTOCORR = u"SW_HID_LINGU_AUTOCORR"_ustr;
+inline constexpr OUString HID_LINGU_REPLACE = u"SW_HID_LINGU_REPLACE"_ustr;
+inline constexpr OUString HID_LINGU_IGNORE_SELECTION = u"SW_HID_LINGU_IGNORE_SELECTION"_ustr;    // grammar check context menu
 
 // More Help-IDs
-inline constexpr OStringLiteral HID_EDIT_FORMULA = "SW_HID_EDIT_FORMULA";
+inline constexpr OUString HID_EDIT_FORMULA = u"SW_HID_EDIT_FORMULA"_ustr;
 
-#define HID_AUTH_FIELD_IDENTIFIER                               "SW_HID_AUTH_FIELD_IDENTIFIER"
-#define HID_AUTH_FIELD_AUTHORITY_TYPE                           "SW_HID_AUTH_FIELD_AUTHORITY_TYPE"
-#define HID_AUTH_FIELD_ADDRESS                                  "SW_HID_AUTH_FIELD_ADDRESS"
-#define HID_AUTH_FIELD_ANNOTE                                   "SW_HID_AUTH_FIELD_ANNOTE"
-#define HID_AUTH_FIELD_AUTHOR                                   "SW_HID_AUTH_FIELD_AUTHOR"
-#define HID_AUTH_FIELD_BOOKTITLE                                "SW_HID_AUTH_FIELD_BOOKTITLE"
-#define HID_AUTH_FIELD_CHAPTER                                  "SW_HID_AUTH_FIELD_CHAPTER"
-#define HID_AUTH_FIELD_EDITION                                  "SW_HID_AUTH_FIELD_EDITION"
-#define HID_AUTH_FIELD_EDITOR                                   "SW_HID_AUTH_FIELD_EDITOR"
-#define HID_AUTH_FIELD_HOWPUBLISHED                             "SW_HID_AUTH_FIELD_HOWPUBLISHED"
-#define HID_AUTH_FIELD_INSTITUTION                              "SW_HID_AUTH_FIELD_INSTITUTION"
-#define HID_AUTH_FIELD_JOURNAL                                  "SW_HID_AUTH_FIELD_JOURNAL"
-#define HID_AUTH_FIELD_MONTH                                    "SW_HID_AUTH_FIELD_MONTH"
-#define HID_AUTH_FIELD_NOTE                                     "SW_HID_AUTH_FIELD_NOTE"
-#define HID_AUTH_FIELD_NUMBER                                   "SW_HID_AUTH_FIELD_NUMBER"
-#define HID_AUTH_FIELD_ORGANIZATIONS                            "SW_HID_AUTH_FIELD_ORGANIZATIONS"
-#define HID_AUTH_FIELD_PAGES                                    "SW_HID_AUTH_FIELD_PAGES"
-#define HID_AUTH_FIELD_PUBLISHER                                "SW_HID_AUTH_FIELD_PUBLISHER"
-#define HID_AUTH_FIELD_SCHOOL                                   "SW_HID_AUTH_FIELD_SCHOOL"
-#define HID_AUTH_FIELD_SERIES                                   "SW_HID_AUTH_FIELD_SERIES"
-#define HID_AUTH_FIELD_TITLE                                    "SW_HID_AUTH_FIELD_TITLE"
-#define HID_AUTH_FIELD_REPORT_TYPE                              "SW_HID_AUTH_FIELD_REPORT_TYPE"
-#define HID_AUTH_FIELD_VOLUME                                   "SW_HID_AUTH_FIELD_VOLUME"
-#define HID_AUTH_FIELD_YEAR                                     "SW_HID_AUTH_FIELD_YEAR"
-#define HID_AUTH_FIELD_URL                                      "SW_HID_AUTH_FIELD_URL"
-#define HID_AUTH_FIELD_CUSTOM1                                  "SW_HID_AUTH_FIELD_CUSTOM1"
-#define HID_AUTH_FIELD_CUSTOM2                                  "SW_HID_AUTH_FIELD_CUSTOM2"
-#define HID_AUTH_FIELD_CUSTOM3                                  "SW_HID_AUTH_FIELD_CUSTOM3"
-#define HID_AUTH_FIELD_CUSTOM4                                  "SW_HID_AUTH_FIELD_CUSTOM4"
-#define HID_AUTH_FIELD_CUSTOM5                                  "SW_HID_AUTH_FIELD_CUSTOM5"
-#define HID_AUTH_FIELD_ISBN                                     "SW_HID_AUTH_FIELD_ISBN"
-#define HID_AUTH_FIELD_LOCAL_URL                                "SW_HID_AUTH_FIELD_LOCAL_URL"
+inline constexpr OUString HID_AUTH_FIELD_IDENTIFIER = u"SW_HID_AUTH_FIELD_IDENTIFIER"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_AUTHORITY_TYPE = u"SW_HID_AUTH_FIELD_AUTHORITY_TYPE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_ADDRESS = u"SW_HID_AUTH_FIELD_ADDRESS"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_ANNOTE = u"SW_HID_AUTH_FIELD_ANNOTE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_AUTHOR = u"SW_HID_AUTH_FIELD_AUTHOR"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_BOOKTITLE = u"SW_HID_AUTH_FIELD_BOOKTITLE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_CHAPTER = u"SW_HID_AUTH_FIELD_CHAPTER"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_EDITION = u"SW_HID_AUTH_FIELD_EDITION"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_EDITOR = u"SW_HID_AUTH_FIELD_EDITOR"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_HOWPUBLISHED = u"SW_HID_AUTH_FIELD_HOWPUBLISHED"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_INSTITUTION = u"SW_HID_AUTH_FIELD_INSTITUTION"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_JOURNAL = u"SW_HID_AUTH_FIELD_JOURNAL"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_MONTH = u"SW_HID_AUTH_FIELD_MONTH"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_NOTE = u"SW_HID_AUTH_FIELD_NOTE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_NUMBER = u"SW_HID_AUTH_FIELD_NUMBER"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_ORGANIZATIONS = u"SW_HID_AUTH_FIELD_ORGANIZATIONS"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_PAGES = u"SW_HID_AUTH_FIELD_PAGES"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_PUBLISHER = u"SW_HID_AUTH_FIELD_PUBLISHER"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_SCHOOL = u"SW_HID_AUTH_FIELD_SCHOOL"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_SERIES = u"SW_HID_AUTH_FIELD_SERIES"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_TITLE = u"SW_HID_AUTH_FIELD_TITLE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_REPORT_TYPE = u"SW_HID_AUTH_FIELD_REPORT_TYPE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_VOLUME = u"SW_HID_AUTH_FIELD_VOLUME"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_YEAR = u"SW_HID_AUTH_FIELD_YEAR"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_URL = u"SW_HID_AUTH_FIELD_URL"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_CUSTOM1 = u"SW_HID_AUTH_FIELD_CUSTOM1"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_CUSTOM2 = u"SW_HID_AUTH_FIELD_CUSTOM2"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_CUSTOM3 = u"SW_HID_AUTH_FIELD_CUSTOM3"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_CUSTOM4 = u"SW_HID_AUTH_FIELD_CUSTOM4"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_CUSTOM5 = u"SW_HID_AUTH_FIELD_CUSTOM5"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_ISBN = u"SW_HID_AUTH_FIELD_ISBN"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_LOCAL_URL = u"SW_HID_AUTH_FIELD_LOCAL_URL"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_TARGET_TYPE = u"SW_HID_AUTH_FIELD_TARGET_TYPE"_ustr;
+inline constexpr OUString HID_AUTH_FIELD_TARGET_URL = u"SW_HID_AUTH_FIELD_TARGET_URL"_ustr;
 
-inline constexpr OStringLiteral HID_BUSINESS_FMT_PAGE = "SW_HID_BUSINESS_FMT_PAGE";
-inline constexpr OStringLiteral HID_BUSINESS_FMT_PAGE_CONT = "SW_HID_BUSINESS_FMT_PAGE_CONT";
-inline constexpr OStringLiteral HID_BUSINESS_FMT_PAGE_SHEET = "SW_HID_BUSINESS_FMT_PAGE_SHEET";
-inline constexpr OStringLiteral HID_BUSINESS_FMT_PAGE_BRAND = "SW_HID_BUSINESS_FMT_PAGE_BRAND";
-inline constexpr OStringLiteral HID_BUSINESS_FMT_PAGE_TYPE = "SW_HID_BUSINESS_FMT_PAGE_TYPE";
+
+inline constexpr OUString HID_BUSINESS_FMT_PAGE = u"SW_HID_BUSINESS_FMT_PAGE"_ustr;
+inline constexpr OUString HID_BUSINESS_FMT_PAGE_CONT = u"SW_HID_BUSINESS_FMT_PAGE_CONT"_ustr;
+inline constexpr OUString HID_BUSINESS_FMT_PAGE_SHEET = u"SW_HID_BUSINESS_FMT_PAGE_SHEET"_ustr;
+inline constexpr OUString HID_BUSINESS_FMT_PAGE_BRAND = u"SW_HID_BUSINESS_FMT_PAGE_BRAND"_ustr;
+inline constexpr OUString HID_BUSINESS_FMT_PAGE_TYPE = u"SW_HID_BUSINESS_FMT_PAGE_TYPE"_ustr;
 #define HID_SEND_MASTER_CTRL_PUSHBUTTON_OK                      "SW_HID_SEND_MASTER_CTRL_PUSHBUTTON_OK"
 #define HID_SEND_MASTER_CTRL_PUSHBUTTON_CANCEL                  "SW_HID_SEND_MASTER_CTRL_PUSHBUTTON_CANCEL"
 #define HID_SEND_MASTER_CTRL_LISTBOX_FILTER                     "SW_HID_SEND_MASTER_CTRL_LISTBOX_FILTER"
@@ -98,20 +101,26 @@ inline constexpr OStringLiteral HID_BUSINESS_FMT_PAGE_TYPE = "SW_HID_BUSINESS_FM
 #define HID_SEND_HTML_CTRL_CHECKBOX_AUTOEXTENSION               "SW_HID_SEND_HTML_CTRL_CHECKBOX_AUTOEXTENSION"
 #define HID_SEND_HTML_CTRL_LISTBOX_TEMPLATE                     "SW_HID_SEND_HTML_CTRL_LISTBOX_TEMPLATE"
 
-inline constexpr OStringLiteral HID_PVIEW_ZOOM_LB = "SW_HID_PVIEW_ZOOM_LB";
+inline constexpr OUString HID_PVIEW_ZOOM_LB = u"SW_HID_PVIEW_ZOOM_LB"_ustr;
 
-inline constexpr OStringLiteral HID_MM_NEXT_PAGE = "SW_HID_MM_NEXT_PAGE";
-inline constexpr OStringLiteral HID_MM_PREV_PAGE = "SW_HID_MM_PREV_PAGE";
-inline constexpr OStringLiteral HID_MM_ADDBLOCK_ELEMENTS = "SW_HID_MM_ADDBLOCK_ELEMENTS";
-inline constexpr OStringLiteral HID_MM_ADDBLOCK_INSERT = "SW_HID_MM_ADDBLOCK_INSERT";
-inline constexpr OStringLiteral HID_MM_ADDBLOCK_REMOVE = "SW_HID_MM_ADDBLOCK_REMOVE";
-inline constexpr OStringLiteral HID_MM_ADDBLOCK_DRAG = "SW_HID_MM_ADDBLOCK_DRAG";
-inline constexpr OStringLiteral HID_MM_ADDBLOCK_PREVIEW = "SW_HID_MM_ADDBLOCK_PREVIEW";
-inline constexpr OStringLiteral HID_MM_ADDBLOCK_MOVEBUTTONS = "SW_HID_MM_ADDBLOCK_MOVEBUTTONS";
+inline constexpr OUString HID_MM_NEXT_PAGE = u"SW_HID_MM_NEXT_PAGE"_ustr;
+inline constexpr OUString HID_MM_PREV_PAGE = u"SW_HID_MM_PREV_PAGE"_ustr;
+inline constexpr OUString HID_MM_ADDBLOCK_ELEMENTS = u"SW_HID_MM_ADDBLOCK_ELEMENTS"_ustr;
+inline constexpr OUString HID_MM_ADDBLOCK_INSERT = u"SW_HID_MM_ADDBLOCK_INSERT"_ustr;
+inline constexpr OUString HID_MM_ADDBLOCK_REMOVE = u"SW_HID_MM_ADDBLOCK_REMOVE"_ustr;
+inline constexpr OUString HID_MM_ADDBLOCK_DRAG = u"SW_HID_MM_ADDBLOCK_DRAG"_ustr;
+inline constexpr OUString HID_MM_ADDBLOCK_PREVIEW = u"SW_HID_MM_ADDBLOCK_PREVIEW"_ustr;
+inline constexpr OUString HID_MM_ADDBLOCK_MOVEBUTTONS = u"SW_HID_MM_ADDBLOCK_MOVEBUTTONS"_ustr;
 
-inline constexpr OStringLiteral HID_TBX_FORMULA_CALC = "SW_HID_TBX_FORMULA_CALC";
-inline constexpr OStringLiteral HID_TBX_FORMULA_CANCEL = "SW_HID_TBX_FORMULA_CANCEL";
-inline constexpr OStringLiteral HID_TBX_FORMULA_APPLY = "SW_HID_TBX_FORMULA_APPLY";
+inline constexpr OUString HID_TBX_FORMULA_CALC = u"SW_HID_TBX_FORMULA_CALC"_ustr;
+inline constexpr OUString HID_TBX_FORMULA_CANCEL = u"SW_HID_TBX_FORMULA_CANCEL"_ustr;
+inline constexpr OUString HID_TBX_FORMULA_APPLY = u"SW_HID_TBX_FORMULA_APPLY"_ustr;
+
+// Navigator context menu
+inline constexpr OUString HID_NAV_OUTLINE_TRACKING = u"SW_HID_NAV_OUTLINE_TRACKING"_ustr;
+inline constexpr OUString HID_NAV_OUTLINE_LEVEL = u"SW_HID_NAV_OUTLINE_LEVEL"_ustr;
+inline constexpr OUString HID_NAV_DRAG_MODE = u"SW_HID_NAV_DRAG_MODE"_ustr;
+inline constexpr OUString HID_NAV_DISPLAY = u"SW_HID_NAV_DISPLAY"_ustr;
 
 #endif
 

@@ -138,7 +138,7 @@ void lclProcessAttribs( OStringBuffer& rBuffer, const char* pcBeg, const char* p
     // if no error has occurred, build the resulting attribute list
     if( bOk )
         for (auto const& attrib : aAttributes)
-            rBuffer.append( ' ' ).append( attrib.second );
+            rBuffer.append( " " + attrib.second );
     // on error, just append the complete passed string
     else
         lclAppendToBuffer( rBuffer, pcBeg, pcEnd );
@@ -264,7 +264,7 @@ bool lclProcessCharacters( OStringBuffer& rBuffer, const OString& rChars )
 } // namespace
 
 constexpr OStringLiteral gaOpeningCData( "<![CDATA[" );
-constexpr OStringLiteral gaClosingCData( "]]>" );
+constexpr OString gaClosingCData( "]]>"_ostr );
 
 InputStream::InputStream( const Reference< XComponentContext >& rxContext, const Reference< XInputStream >& rxInStrm ) :
     // use single-byte ISO-8859-1 encoding which maps all byte characters to the first 256 Unicode characters

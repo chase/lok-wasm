@@ -447,7 +447,7 @@ void OKeySet::updateRow(const ORowSetRow& _rInsertRow ,const ORowSetRow& _rOrigi
     // list all columns that should be set
     constexpr OUStringLiteral aPara(u" = ?,");
     OUString aQuote  = getIdentifierQuoteString();
-    constexpr OUStringLiteral aAnd(u" AND ");
+    constexpr OUString aAnd(u" AND "_ustr);
     OUString sIsNull(" IS NULL");
     OUString sParam(" = ?");
 
@@ -583,6 +583,7 @@ void OKeySet::executeUpdate(const ORowSetRow& _rInsertRow ,const ORowSetRow& _rO
     {
         const sal_Int32 nBookmark = ::comphelper::getINT32((*_rInsertRow)[0].getAny());
         m_aKeyIter = m_aKeyMap.find(nBookmark);
+        assert(m_aKeyIter != m_aKeyMap.end());
         m_aKeyIter->second.second.first = 2;
         m_aKeyIter->second.second.second = xRow;
         copyRowValue(_rInsertRow,m_aKeyIter->second.first,nBookmark);
@@ -911,7 +912,9 @@ void OKeySet::deleteRow(const ORowSetRow& _rDeleteRow,const connectivity::OSQLTa
     if(m_bDeleted)
     {
         sal_Int32 nBookmark = ::comphelper::getINT32((*_rDeleteRow)[0].getAny());
-        if(m_aKeyIter == m_aKeyMap.find(nBookmark) && m_aKeyIter != m_aKeyMap.end())
+        const auto iter = m_aKeyMap.find(nBookmark);
+        assert(iter != m_aKeyMap.end());
+        if(m_aKeyIter == iter && m_aKeyIter != m_aKeyMap.end())
             ++m_aKeyIter;
         m_aKeyMap.erase(nBookmark);
         m_bDeleted = true;

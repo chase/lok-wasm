@@ -69,7 +69,7 @@ ThreeD_SceneGeometry_TabPage::ThreeD_SceneGeometry_TabPage(weld::Container* pPar
     , m_xMFPerspective(m_xBuilder->weld_metric_spin_button("MTR_FLD_PERSPECTIVE", FieldUnit::PERCENT))
 {
     double fXAngle, fYAngle, fZAngle;
-    ThreeDHelper::getRotationAngleFromDiagram( m_xDiagram, fXAngle, fYAngle, fZAngle );
+    m_xDiagram->getRotationAngle( fXAngle, fYAngle, fZAngle );
 
     fXAngle = basegfx::rad2deg(fXAngle);
     fYAngle = basegfx::rad2deg(fYAngle);
@@ -114,7 +114,7 @@ ThreeD_SceneGeometry_TabPage::ThreeD_SceneGeometry_TabPage(weld::Container* pPar
     m_xMFPerspective->set_sensitive( m_xCbxPerspective->get_active() );
 
     //RightAngledAxes
-    if (ChartTypeHelper::isSupportingRightAngledAxes(DiagramHelper::getChartTypeByIndex(m_xDiagram, 0)))
+    if (ChartTypeHelper::isSupportingRightAngledAxes(m_xDiagram->getChartTypeByIndex(0)))
     {
         bool bRightAngledAxes = false;
         m_xDiagram->getPropertyValue( "RightAngledAxes" ) >>= bRightAngledAxes;
@@ -159,7 +159,7 @@ void ThreeD_SceneGeometry_TabPage::applyAnglesToModel()
     fYAngle = basegfx::deg2rad(fYAngle);
     fZAngle = basegfx::deg2rad(fZAngle);
 
-    ThreeDHelper::setRotationAngleToDiagram( m_xDiagram, fXAngle, fYAngle, fZAngle );
+    m_xDiagram->setRotationAngle( fXAngle, fYAngle, fZAngle );
 
     m_bAngleChangePending = false;
     m_aAngleTimer.Stop();
@@ -249,7 +249,8 @@ IMPL_LINK_NOARG(ThreeD_SceneGeometry_TabPage, RightAngledAxesToggled, weld::Togg
         m_xMFZRotation->set_value(m_nZRotation, FieldUnit::DEGREE);
     }
 
-    ThreeDHelper::switchRightAngledAxes( m_xDiagram, m_xCbxRightAngledAxes->get_active() );
+    if (m_xDiagram)
+        m_xDiagram->switchRightAngledAxes( m_xCbxRightAngledAxes->get_active() );
 }
 
 } //namespace chart

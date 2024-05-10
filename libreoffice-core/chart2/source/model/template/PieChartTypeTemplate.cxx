@@ -26,6 +26,7 @@
 #include <DiagramHelper.hxx>
 #include <DataSeries.hxx>
 #include <DataSeriesHelper.hxx>
+#include <DataSeriesProperties.hxx>
 #include <Axis.hxx>
 #include <AxisHelper.hxx>
 #include <ThreeDHelper.hxx>
@@ -41,6 +42,7 @@
 #include <algorithm>
 
 using namespace ::com::sun::star;
+using namespace ::chart::DataSeriesProperties;
 
 using ::com::sun::star::beans::Property;
 using ::com::sun::star::uno::Sequence;
@@ -251,8 +253,8 @@ void PieChartTypeTemplate::createChartTypes(
     try
     {
         rtl::Reference< ChartType > xCT = new PieChartType();
-        xCT->setPropertyValue(
-            "UseRings", getFastPropertyValue( PROP_PIE_TEMPLATE_USE_RINGS ));
+        xCT->setFastPropertyValue(
+            PROP_PIECHARTTYPE_USE_RINGS, getFastPropertyValue( PROP_PIE_TEMPLATE_USE_RINGS )); // "UseRings"
         rCoordSys[0]->setChartTypes( std::vector{xCT} );
 
         if( !aSeriesSeq.empty() )
@@ -292,7 +294,7 @@ bool PieChartTypeTemplate::matchesTemplate2(
             sal_Int32 nOuterSeriesIndex = 0;
 
             std::vector< rtl::Reference< DataSeries > > aSeriesVec =
-                DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+                xDiagram->getDataSeries();
 
             //tdf#108067 The outer series is the last series in OOXML-heavy environments
             if( !officecfg::Office::Compatibility::View::ReverseXAxisOrientationDoughnutChart::get() )
@@ -305,9 +307,9 @@ bool PieChartTypeTemplate::matchesTemplate2(
                 rtl::Reference< DataSeries > xSeries( aSeriesVec[nOuterSeriesIndex] );
                 xSeries->getPropertyValue( "Offset") >>= fOffset;
 
-                //get AttributedDataPoints
+                // "AttributedDataPoints"
                 uno::Sequence< sal_Int32 > aAttributedDataPointIndexList;
-                if( xSeries->getPropertyValue( "AttributedDataPoints" ) >>= aAttributedDataPointIndexList )
+                if( xSeries->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS ) >>= aAttributedDataPointIndexList )
                 {
                     for(sal_Int32 nN=aAttributedDataPointIndexList.getLength();nN--;)
                     {
@@ -348,10 +350,9 @@ bool PieChartTypeTemplate::matchesTemplate2(
     //check UseRings
     if( bResult )
     {
-        rtl::Reference< ChartType > xCTProp =
-            DiagramHelper::getChartTypeByIndex( xDiagram, 0 );
+        rtl::Reference< ChartType > xCTProp = xDiagram->getChartTypeByIndex( 0 );
         bool bUseRings = false;
-        if( xCTProp->getPropertyValue( "UseRings") >>= bUseRings )
+        if( xCTProp->getFastPropertyValue( PROP_PIECHARTTYPE_USE_RINGS ) >>= bUseRings ) // "UseRings"
         {
             bResult = ( bTemplateUsesRings == bUseRings );
         }
@@ -367,8 +368,8 @@ rtl::Reference< ChartType > PieChartTypeTemplate::getChartTypeForIndex( sal_Int3
     try
     {
         xResult = new PieChartType();
-        xResult->setPropertyValue(
-            "UseRings", getFastPropertyValue( PROP_PIE_TEMPLATE_USE_RINGS ));
+        xResult->setFastPropertyValue(
+            PROP_PIECHARTTYPE_USE_RINGS, getFastPropertyValue( PROP_PIE_TEMPLATE_USE_RINGS )); // "UseRings"
     }
     catch( const uno::Exception & )
     {
@@ -387,8 +388,8 @@ rtl::Reference< ChartType > PieChartTypeTemplate::getChartTypeForNewSeries2(
     {
         xResult = new PieChartType();
         ChartTypeTemplate::copyPropertiesFromOldToNewCoordinateSystem( aFormerlyUsedChartTypes, xResult );
-        xResult->setPropertyValue(
-            "UseRings", getFastPropertyValue( PROP_PIE_TEMPLATE_USE_RINGS ));
+        xResult->setFastPropertyValue(
+            PROP_PIECHARTTYPE_USE_RINGS, getFastPropertyValue( PROP_PIE_TEMPLATE_USE_RINGS )); // "UseRings"
     }
     catch( const uno::Exception & )
     {
@@ -418,7 +419,7 @@ void PieChartTypeTemplate::applyStyle2(
 
         if( nSeriesIndex == nOuterSeriesIndex ) //@todo in future this will depend on Orientation of the radius axis scale
         {
-            static const OUStringLiteral aOffsetPropName( u"Offset" );
+            static constexpr OUString aOffsetPropName( u"Offset"_ustr );
             // get offset mode
             chart2::PieChartOffsetMode ePieOffsetMode;
             getFastPropertyValue( PROP_PIE_TEMPLATE_OFFSET_MODE ) >>= ePieOffsetMode;
@@ -429,7 +430,8 @@ void PieChartTypeTemplate::applyStyle2(
             double fOffsetToSet = fDefaultOffset;
 
             uno::Sequence< sal_Int32 > aAttributedDataPointIndexList;
-            xSeries->getPropertyValue( "AttributedDataPoints" ) >>= aAttributedDataPointIndexList;
+            // "AttributedDataPoints"
+            xSeries->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS ) >>= aAttributedDataPointIndexList;
 
             // determine whether to set the new offset
             bool bSetOffset = ( ePieOffsetMode == chart2::PieChartOffsetMode_ALL_EXPLODED );
@@ -483,7 +485,7 @@ void PieChartTypeTemplate::applyStyle2(
         DataSeriesHelper::setPropertyAlsoToAllAttributedDataPoints( xSeries, "BorderStyle", uno::Any( drawing::LineStyle_NONE ) );
 
         // vary colors by point
-        xSeries->setPropertyValue( "VaryColorsByPoint", uno::Any( true ));
+        xSeries->setFastPropertyValue( PROP_DATASERIES_VARY_COLORS_BY_POINT, uno::Any( true )); // "VaryColorsByPoint"
     }
     catch( const uno::Exception & )
     {
@@ -533,7 +535,7 @@ void PieChartTypeTemplate::resetStyles2( const rtl::Reference< ::chart::Diagram 
     // vary colors by point,
     // line style
     std::vector< rtl::Reference< DataSeries > > aSeriesVec =
-        DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        xDiagram->getDataSeries();
     uno::Any aLineStyleAny( drawing::LineStyle_NONE );
     for (auto const& series : aSeriesVec)
     {
@@ -545,7 +547,7 @@ void PieChartTypeTemplate::resetStyles2( const rtl::Reference< ::chart::Diagram 
     }
 
     //reset scene properties
-    ThreeDHelper::setDefaultRotation( xDiagram, false );
+    xDiagram->setDefaultRotation( false );
 }
 
 // ____ XChartTypeTemplate ____
@@ -555,7 +557,7 @@ void PieChartTypeTemplate::adaptDiagram( const rtl::Reference< ::chart::Diagram 
         return;
 
     //different default for scene geometry:
-    ThreeDHelper::setDefaultRotation( xDiagram, true );
+    xDiagram->setDefaultRotation( true );
 }
 
 IMPLEMENT_FORWARD_XINTERFACE2( PieChartTypeTemplate, ChartTypeTemplate, OPropertySet )

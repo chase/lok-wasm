@@ -122,8 +122,7 @@ void GraphCtrl::InitSdrModel()
     // Creating a Model
     pModel.reset(new SdrModel(nullptr, nullptr, true));
     pModel->GetItemPool().FreezeIdRanges();
-    pModel->SetScaleUnit( aMap100.GetMapUnit() );
-    pModel->SetScaleFraction( Fraction( 1, 1 ) );
+    pModel->SetScaleUnit(aMap100.GetMapUnit());
     pModel->SetDefaultFontHeight( 500 );
 
     pPage = new SdrPage( *pModel );
@@ -137,13 +136,14 @@ void GraphCtrl::InitSdrModel()
     pView.reset(new GraphCtrlView(*pModel, this));
     pView->SetWorkArea( tools::Rectangle( Point(), aGraphSize ) );
     pView->EnableExtendedMouseEventDispatcher( true );
-    pView->ShowSdrPage(pView->GetModel()->GetPage(0));
+    pView->ShowSdrPage(pView->GetModel().GetPage(0));
     pView->SetFrameDragSingles();
     pView->SetMarkedPointsSmooth( SdrPathSmoothKind::Symmetric );
     pView->SetEditMode();
 
     // #i72889# set needed flags
-    pView->SetPagePaintingAllowed(false);
+    pView->SetPageDecorationAllowed(false);
+    pView->SetMasterPageVisualizationAllowed(false);
     pView->SetBufferedOutputAllowed(true);
     pView->SetBufferedOverlayAllowed(true);
 

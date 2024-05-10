@@ -44,7 +44,7 @@ using namespace ::svxform;
     {
         SdrModel& rTargetModel(getSdrModelFromUnoModel());
         rtl::Reference<SdrObject> pObj = new FmFormObj(rTargetModel);
-        xRet = static_cast<cppu::OWeakObject*>(static_cast<SvxShape_UnoImplHelper*>(new SvxShapeControl(pObj.get())));
+        xRet = getXWeak(new SvxShapeControl(pObj.get()));
     }
 
     if (!xRet.is())
@@ -58,7 +58,7 @@ using namespace ::svxform;
 
 ::com::sun::star::uno::Sequence< OUString > SAL_CALL SvxFmMSFactory::getAvailableServiceNames()
 {
-    static const rtl::OUStringConstExpr aSvxComponentServiceNameList[] =
+    static constexpr OUString aSvxComponentServiceNameList[] =
     {
         FM_SUN_COMPONENT_TEXTFIELD,
         FM_SUN_COMPONENT_FORM,

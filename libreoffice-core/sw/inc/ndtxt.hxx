@@ -41,7 +41,8 @@
 class SfxHint;
 class SwNumRule;
 class SwNodeNum;
-class SvxLRSpaceItem;
+class SvxFirstLineIndentItem;
+class SvxTextLeftMarginItem;
 class SwXParagraph;
 
 namespace utl {
@@ -236,6 +237,7 @@ public:
 
 public:
     using SwContentNode::GetAttr;
+    void UpdateDocPos(const SwTwips nDocPos, const sal_uInt32 nIndex);
     /// for hanging TextFormatCollections somewhere else (Outline-Numbering!)
     void TriggerNodeUpdate(const sw::LegacyModifyHint&);
 
@@ -276,6 +278,8 @@ public:
     OUString InsertText( const OUString & rStr, const SwPosition & rIdx,
                      const SwInsertFlags nMode
                          = SwInsertFlags::DEFAULT );
+    /// Add a dummy character to the redline of the table changes
+    void InsertDummy() { m_Text = OUStringChar(CH_TXT_TRACKED_DUMMY_CHAR); }
 
     /** delete text content
         ATTENTION: must not be called with a range that overlaps the start of
@@ -515,9 +519,10 @@ public:
     /**
        Returns the additional indents of this text node and its numbering.
 
-       @param bTextLeft  ???
+       @param bTextLeft return text-left-margin instead of left-margin
+                        (include negative first-line-indent, see lrspitem.hxx)
 
-       @return additional indents
+       @return additional num indents - a delta to be added to node's items
      */
      tools::Long GetLeftMarginWithNum( bool bTextLeft = false ) const;
 
@@ -534,8 +539,6 @@ public:
     bool GetFirstLineOfsWithNum( short& rFirstOffset ) const;
 
     SwTwips GetAdditionalIndentForStartingNewList() const;
-
-    void ClearLRSpaceItemDueToListLevelIndents( std::shared_ptr<SvxLRSpaceItem>& o_rLRSpaceItem ) const;
 
     /** return left margin for tab stop position calculation
 
@@ -690,9 +693,10 @@ public:
           style hierarchy from the paragraph to the paragraph style with the
           list style no indent attributes are found.
 
-        @return boolean
+        @return bitmask
     */
-    bool AreListLevelIndentsApplicable() const;
+    ::sw::ListLevelIndents AreListLevelIndentsApplicable() const;
+    bool AreListLevelIndentsApplicableImpl(sal_uInt16 nWhich) const;
 
     /** Retrieves the list tab stop position, if the paragraph's list level defines
         one and this list tab stop has to merged into the tap stops of the paragraph
@@ -716,7 +720,7 @@ public:
     void fillSoftPageBreakList( SwSoftPageBreakList& rBreak ) const;
 
     LanguageType GetLang( const sal_Int32 nBegin, const sal_Int32 nLen = 0,
-                    sal_uInt16 nScript = 0 ) const;
+                    sal_uInt16 nScript = 0, bool bNoneIfNoHyphenation = false ) const;
 
     /// in ndcopy.cxx
     bool IsSymbolAt(sal_Int32 nBegin) const; // In itratr.cxx.

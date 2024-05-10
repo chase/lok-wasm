@@ -192,7 +192,7 @@ static void lcl_InsertGraphic( const Graphic& rGraphic,
     // Yes, due to the SdrObject had no SdrModel
     //  Path is no longer used as name for the graphics object
 
-    ScDrawLayer* pLayer = static_cast<ScDrawLayer*>(pView->GetModel());
+    ScDrawLayer* pLayer = static_cast<ScDrawLayer*>(&pView->GetModel());
     OUString aName = pLayer->GetNewGraphicName();                 // "Graphics"
     pObj->SetName(aName);
 
@@ -424,7 +424,7 @@ FuInsertMedia::FuInsertMedia( ScTabViewShell&   rViewSh,
         if( pWin )
             pWin->EnterWait();
 
-        css::uno::Reference<css::frame::XDispatchProvider> xDispatchProvider(rViewShell.GetViewFrame()->GetFrame().GetFrameInterface(), css::uno::UNO_QUERY);
+        css::uno::Reference<css::frame::XDispatchProvider> xDispatchProvider(rViewShell.GetViewFrame().GetFrame().GetFrameInterface(), css::uno::UNO_QUERY);
 
         rtl::Reference<avmedia::PlayerListener> xPlayerListener(new avmedia::PlayerListener(
             [xDispatchProvider, aURL, bLink](const css::uno::Reference<css::media::XPlayer>& rPlayer){

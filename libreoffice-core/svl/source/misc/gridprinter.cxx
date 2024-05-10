@@ -11,7 +11,6 @@
 #include <rtl/ustrbuf.hxx>
 
 #include <mdds/multi_type_vector/types.hpp>
-#include <mdds/multi_type_vector/custom_func1.hpp>
 #include <mdds/multi_type_vector/macro.hpp>
 #include <mdds/multi_type_matrix.hpp>
 
@@ -26,12 +25,10 @@ typedef mdds::mtv::default_element_block<element_type_string, OUString> string_b
 
 namespace {
 
-struct matrix_trait
+struct matrix_traits
 {
     typedef string_block string_element_block;
     typedef mdds::mtv::uint16_element_block integer_element_block;
-
-    typedef mdds::mtv::custom_block_func1<string_block> element_block_func;
 };
 
 }
@@ -48,7 +45,7 @@ MDDS_MTV_DEFINE_ELEMENT_CALLBACKS(OUString, svl::element_type_string, OUString()
 
 namespace svl {
 
-typedef mdds::multi_type_matrix<matrix_trait> MatrixImplType;
+typedef mdds::multi_type_matrix<matrix_traits> MatrixImplType;
 
 struct GridPrinter::Impl
 {
@@ -68,7 +65,14 @@ GridPrinter::~GridPrinter()
 
 void GridPrinter::set( size_t nRow, size_t nCol, const OUString& rStr )
 {
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12 && __cplusplus == 202002L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
     mpImpl->maMatrix.set(nRow, nCol, rStr);
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12 && __cplusplus == 202002L
+#pragma GCC diagnostic pop
+#endif
 }
 
 void GridPrinter::print( const char* pHeader ) const
@@ -94,8 +98,7 @@ void GridPrinter::print( const char* pHeader ) const
     }
 
     // Make the row separator string.
-    OUStringBuffer aBuf;
-    aBuf.append("+");
+    OUStringBuffer aBuf("+");
     for (size_t col = 0; col < ns.column; ++col)
     {
         aBuf.append("-");

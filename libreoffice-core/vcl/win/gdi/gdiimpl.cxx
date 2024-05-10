@@ -1032,7 +1032,7 @@ static bool containsOnlyHorizontalAndVerticalEdges(const basegfx::B2DPolyPolygon
     return true;
 }
 
-bool WinSalGraphicsImpl::setClipRegion( const vcl::Region& i_rClip )
+void WinSalGraphicsImpl::setClipRegion( const vcl::Region& i_rClip )
 {
     if ( mrParent.mhRegion )
     {
@@ -1275,9 +1275,6 @@ bool WinSalGraphicsImpl::setClipRegion( const vcl::Region& i_rClip )
         // #i123585# See above, this is a valid case, execute it
         SelectClipRgn( mrParent.getHDC(), nullptr );
     }
-
-    // #i123585# retval no longer dependent of mrParent.mhRegion, see TaskId comments above
-    return true;
 }
 
 void WinSalGraphicsImpl::SetLineColor()
@@ -2033,7 +2030,7 @@ sal_Int64 SystemDependentData_GraphicsPath::estimateUsageInBytes() const
     return nRetval;
 }
 
-bool WinSalGraphicsImpl::drawPolyPolygon(
+void WinSalGraphicsImpl::drawPolyPolygon(
     const basegfx::B2DHomMatrix& rObjectToDevice,
     const basegfx::B2DPolyPolygon& rPolyPolygon,
     double fTransparency)
@@ -2042,7 +2039,7 @@ bool WinSalGraphicsImpl::drawPolyPolygon(
 
     if(!mbBrush || 0 == nCount || fTransparency < 0.0 || fTransparency > 1.0)
     {
-        return true;
+        return;
     }
 
     Gdiplus::Graphics aGraphics(mrParent.getHDC());
@@ -2185,8 +2182,6 @@ bool WinSalGraphicsImpl::drawPolyPolygon(
     aGraphics.FillPath(
         &aSolidBrush,
         &(*pGraphicsPath));
-
-    return true;
 }
 
 bool WinSalGraphicsImpl::drawPolyLine(
@@ -2720,16 +2715,12 @@ bool WinSalGraphicsImpl::implDrawGradient(basegfx::B2DPolyPolygon const & /*rPol
 
 bool WinSalGraphicsImpl::supportsOperation(OutDevSupportType eType) const
 {
-    static bool bAllowForTest(true);
     bool bRet = false;
 
     switch (eType)
     {
         case OutDevSupportType::TransparentRect:
             bRet = mrParent.mbVirDev || mrParent.mbWindow;
-            break;
-        case OutDevSupportType::B2DDraw:
-            bRet = bAllowForTest;
             break;
         default:
             break;

@@ -46,25 +46,14 @@ class InternalDataProvider;
 class OOO_DLLPUBLIC_CHARTTOOLS ChartModelHelper
 {
 public:
-    static css::uno::Reference< css::chart2::data::XRangeHighlighter > createRangeHighlighter(
-            const rtl::Reference< ::chart::ChartModel >& xSelectionSupplier );
-
     static rtl::Reference< InternalDataProvider > createInternalDataProvider(
             const rtl::Reference<::chart::ChartModel>& xChartDoc, bool bConnectToModel );
-
-    static rtl::Reference< Diagram >
-        findDiagram( const rtl::Reference< ::chart::ChartModel >& xModel );
 
     static rtl::Reference< ::chart::BaseCoordinateSystem >
         getFirstCoordinateSystem( const rtl::Reference<::chart::ChartModel>& xModel );
 
     static std::vector< rtl::Reference< ::chart::DataSeries > >
             getDataSeries( const rtl::Reference< ::chart::ChartModel > & xModel );
-
-    static rtl::Reference< ChartType >
-        getChartTypeOfSeries(
-            const rtl::Reference<::chart::ChartModel>& xModel
-            , const css::uno::Reference< css::chart2::XDataSeries >& xGivenDataSeries );
 
     static rtl::Reference< ChartType >
         getChartTypeOfSeries(

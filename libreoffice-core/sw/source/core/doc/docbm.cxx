@@ -50,7 +50,7 @@
 #include <comphelper/lok.hxx>
 #include <strings.hrc>
 
-constexpr OUStringLiteral S_ANNOTATION_BOOKMARK = u"____";
+constexpr OUString S_ANNOTATION_BOOKMARK = u"____"_ustr;
 
 using namespace ::sw::mark;
 
@@ -224,6 +224,12 @@ namespace
         if (nFirstContent != 0 || nSecondContent != 0)
         {
             return nFirstContent < nSecondContent;
+        }
+        SwContentNode const*const pFirstNode(rFirstStart.nContent.GetContentNode());
+        SwContentNode const*const pSecondNode(rSecondStart.nContent.GetContentNode());
+        if ((pFirstNode != nullptr) != (pSecondNode != nullptr))
+        {   // consistency with SwPosition::operator<
+            return pSecondNode != nullptr;
         }
         auto *const pCRFirst (dynamic_cast<::sw::mark::CrossRefBookmark const*>(pFirst));
         auto *const pCRSecond(dynamic_cast<::sw::mark::CrossRefBookmark const*>(pSecond));
@@ -1091,7 +1097,8 @@ namespace sw::mark
             const SwNode& rEnd,
             std::vector<SaveBookmark>* pSaveBkmk,
             std::optional<sal_Int32> oStartContentIdx,
-            std::optional<sal_Int32> oEndContentIdx )
+            std::optional<sal_Int32> oEndContentIdx,
+            bool const isReplace)
     {
         std::vector<const_iterator_t> vMarksToDelete;
         bool bIsSortingNeeded = false;
@@ -1110,7 +1117,8 @@ namespace sw::mark
             ::sw::mark::MarkBase *const pMark = *ppMark;
             bool bIsPosInRange(false);
             bool bIsOtherPosInRange(false);
-            bool const bDeleteMark = isDeleteMark(pMark, false, rStt, rEnd, oStartContentIdx, oEndContentIdx, bIsPosInRange, bIsOtherPosInRange);
+            bool const bDeleteMark = isDeleteMark(pMark, isReplace, rStt, rEnd,
+                oStartContentIdx, oEndContentIdx, bIsPosInRange, bIsOtherPosInRange);
 
             if ( bIsPosInRange
                  && ( bIsOtherPosInRange
@@ -1402,6 +1410,16 @@ namespace sw::mark
         return IDocumentMarkAccess::iterator(ret);
     }
 
+    // find the first Mark that does not start before
+    IDocumentMarkAccess::const_iterator_t MarkManager::findFirstMarkNotStartsBefore(const SwPosition& rPos) const
+    {
+        return std::lower_bound(
+                m_vAllMarks.begin(),
+                m_vAllMarks.end(),
+                rPos,
+                CompareIMarkStartsBefore());
+    }
+
     IDocumentMarkAccess::const_iterator_t MarkManager::getAllMarksBegin() const
         { return m_vAllMarks.begin(); }
 
@@ -1455,7 +1473,7 @@ namespace sw::mark
             : dynamic_cast<IFieldmark*>(*pFieldmark);
     }
 
-    IFieldmark* MarkManager::getFieldmarkFor(const SwPosition& rPos) const
+    IFieldmark* MarkManager::getInnerFieldmarkFor(const SwPosition& rPos) const
     {
         auto itFieldmark = find_if(
             m_vFieldmarks.begin(),
@@ -1464,6 +1482,9 @@ namespace sw::mark
         if (itFieldmark == m_vFieldmarks.end())
             return nullptr;
         auto pFieldmark(*itFieldmark);
+
+        // See if any fieldmarks after the first hit are closer to rPos.
+        ++itFieldmark;
         for ( ; itFieldmark != m_vFieldmarks.end()
                 && (**itFieldmark).GetMarkStart() <= rPos; ++itFieldmark)
         {   // find the innermost fieldmark
@@ -1477,7 +1498,7 @@ namespace sw::mark
         return dynamic_cast<IFieldmark*>(pFieldmark);
     }
 
-    IMark* MarkManager::getBookmarkFor(const SwPosition& rPos) const
+    IMark* MarkManager::getOneInnermostBookmarkFor(const SwPosition& rPos) const
     {
         auto it = std::find_if(m_vBookmarks.begin(), m_vBookmarks.end(),
                                [&rPos](const sw::mark::MarkBase* pMark)
@@ -1487,6 +1508,10 @@ namespace sw::mark
             return nullptr;
         }
         sw::mark::IMark* pBookmark = *it;
+
+        // See if any bookmarks after the first hit are closer to rPos.
+        ++it;
+
         for (; it != m_vBookmarks.end() && (*it)->GetMarkStart() <= rPos; ++it)
         {
             // Find the innermost bookmark.
@@ -1568,13 +1593,13 @@ namespace sw::mark
 
         SwEditWin& rEditWin = pSwView->GetEditWin();
         SwPosition aPos(*rCursorShell.GetCursor()->GetPoint());
-        IFieldmark* pFieldBM = getFieldmarkFor(aPos);
+        IFieldmark* pFieldBM = getInnerFieldmarkFor(aPos);
         FieldmarkWithDropDownButton* pNewActiveFieldmark = nullptr;
         if ((!pFieldBM || (pFieldBM->GetFieldname() != ODF_FORMDROPDOWN && pFieldBM->GetFieldname() != ODF_FORMDATE))
             && aPos.GetContentIndex() > 0 )
         {
             aPos.AdjustContent(-1);
-            pFieldBM = getFieldmarkFor(aPos);
+            pFieldBM = getInnerFieldmarkFor(aPos);
         }
 
         if ( pFieldBM && (pFieldBM->GetFieldname() == ODF_FORMDROPDOWN ||
@@ -2000,7 +2025,8 @@ void DelBookmarks(
     const SwNode& rEnd,
     std::vector<SaveBookmark> * pSaveBkmk,
     std::optional<sal_Int32> oStartContentIdx,
-    std::optional<sal_Int32> oEndContentIdx)
+    std::optional<sal_Int32> oEndContentIdx,
+    bool const isReplace)
 {
     // illegal range ??
     if(rStt.GetIndex() > rEnd.GetIndex()
@@ -2010,7 +2036,8 @@ void DelBookmarks(
 
     rDoc.getIDocumentMarkAccess()->deleteMarks(rStt, rEnd, pSaveBkmk,
         oStartContentIdx,
-        oEndContentIdx);
+        oEndContentIdx,
+        isReplace);
 
     // Copy all Redlines which are in the move area into an array
     // which holds all position information as offset.
@@ -2083,7 +2110,7 @@ InsertText MakeInsertText(SwTextNode& rNode, const sal_Int32 nPos, const sal_Int
     SwCursor cursor(SwPosition(rNode, nPos), nullptr);
     bool isInsideFieldmarkCommand(false);
     bool isInsideFieldmarkResult(false);
-    while (auto const*const pMark = rNode.GetDoc().getIDocumentMarkAccess()->getFieldmarkFor(*cursor.GetPoint()))
+    while (auto const*const pMark = rNode.GetDoc().getIDocumentMarkAccess()->getInnerFieldmarkFor(*cursor.GetPoint()))
     {
         if (sw::mark::FindFieldSep(*pMark) < *cursor.GetPoint())
         {

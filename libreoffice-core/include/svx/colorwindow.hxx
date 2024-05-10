@@ -56,14 +56,14 @@ private:
     weld::MenuButton* m_pMenuButton;
     // or
     weld::Toolbar* m_pToolbar;
-    OString m_aIdent;
+    OUString m_aIdent;
     // or
     SvxColorToolBoxControl* m_pControl;
     VclPtr<ToolBox> m_xToolBox;
     ToolBoxItemId m_nId;
 public:
     MenuOrToolMenuButton(weld::MenuButton* pMenuButton);
-    MenuOrToolMenuButton(weld::Toolbar* pToolbar, OString sIdent);
+    MenuOrToolMenuButton(weld::Toolbar* pToolbar, OUString sIdent);
     MenuOrToolMenuButton(SvxColorToolBoxControl* pControl, ToolBox* pToolbar, ToolBoxItemId nId);
     ~MenuOrToolMenuButton();
 
@@ -99,7 +99,6 @@ private:
     std::unique_ptr<weld::CustomWeld> mxRecentColorSetWin;
     weld::Button* mpDefaultButton;
 
-    Link<const NamedColor&, void> maSelectedLink;
     DECL_DLLPRIVATE_LINK(SelectHdl, ValueSet*, void);
     DECL_DLLPRIVATE_LINK(SelectPaletteHdl, weld::ComboBox&, void);
     DECL_DLLPRIVATE_LINK(AutoColorClickHdl, weld::Button&, void);
@@ -127,8 +126,6 @@ public:
     NamedColor          GetSelectEntryColor() const;
 
     virtual void        statusChanged( const css::frame::FeatureStateEvent& rEvent ) override;
-
-    void SetSelectedHdl( const Link<const NamedColor&, void>& rLink ) { maSelectedLink = rLink; }
 
     virtual void GrabFocus() override;
 };

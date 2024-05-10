@@ -49,9 +49,6 @@ SvxPixelCtlAccessible::~SvxPixelCtlAccessible()
     ensureDisposed();
 }
 
-IMPLEMENT_FORWARD_XINTERFACE2( SvxPixelCtlAccessible, OAccessibleSelectionHelper, OAccessibleHelper_Base )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( SvxPixelCtlAccessible, OAccessibleSelectionHelper, OAccessibleHelper_Base )
-
 uno::Reference< XAccessibleContext > SvxPixelCtlAccessible::getAccessibleContext(  )
 {
     return this;
@@ -59,7 +56,6 @@ uno::Reference< XAccessibleContext > SvxPixelCtlAccessible::getAccessibleContext
 
 sal_Int64 SvxPixelCtlAccessible::getAccessibleChildCount(  )
 {
-    ::osl::MutexGuard   aGuard( m_aMutex );
     return SvxPixelCtl::GetSquares();
 }
 uno::Reference< XAccessible > SvxPixelCtlAccessible::getAccessibleChild( sal_Int64 i )
@@ -226,32 +222,25 @@ void SvxPixelCtlAccessible::NotifyChild(tools::Long nIndex,bool bSelect ,bool bC
 {
     DBG_ASSERT( !(!bSelect && !bCheck),"" );//non is false
 
-    SvxPixelCtlAccessibleChild *pChild= nullptr;
-
-    if (m_xCurChild.is())
+    rtl::Reference<SvxPixelCtlAccessibleChild> pChild = m_xCurChild;
+    if (pChild && pChild->getAccessibleIndexInParent() == nIndex )
     {
-        pChild= static_cast<SvxPixelCtlAccessibleChild*>(m_xCurChild.get());
-        DBG_ASSERT(pChild,"Child Must be Valid");
-        if (pChild->getAccessibleIndexInParent() == nIndex )
+        if (bSelect)
         {
-            if (bSelect)
-            {
-                pChild->SelectChild(true);
-            }
-            if (bCheck)
-            {
-                pChild->ChangePixelColorOrBG(mpPixelCtl->GetBitmapPixel(sal_uInt16(nIndex)) != 0);
-                pChild->CheckChild();
-            }
-            return ;
+            pChild->SelectChild(true);
         }
+        if (bCheck)
+        {
+            pChild->ChangePixelColorOrBG(mpPixelCtl->GetBitmapPixel(sal_uInt16(nIndex)) != 0);
+            pChild->CheckChild();
+        }
+        return;
     }
-    uno::Reference <XAccessible> xNewChild =CreateChild(nIndex, mpPixelCtl->IndexToPoint(nIndex));
-    SvxPixelCtlAccessibleChild *pNewChild= static_cast<SvxPixelCtlAccessibleChild*>(xNewChild.get());
-    DBG_ASSERT(pNewChild,"Child Must be Valid");
+    rtl::Reference<SvxPixelCtlAccessibleChild> xNewChild = CreateChild(nIndex, mpPixelCtl->IndexToPoint(nIndex));
+    DBG_ASSERT(xNewChild,"Child Must be Valid");
 
     Any aNewValue,aOldValue;
-    aNewValue<<= xNewChild;
+    aNewValue <<= uno::Reference<XAccessible>(xNewChild);
     NotifyAccessibleEvent(AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, aOldValue, aNewValue);
 
     if (bSelect)
@@ -260,20 +249,20 @@ void SvxPixelCtlAccessible::NotifyChild(tools::Long nIndex,bool bSelect ,bool bC
         {
             pChild->SelectChild(false);
         }
-        pNewChild->SelectChild(true);
+        xNewChild->SelectChild(true);
     }
     if (bCheck)
     {
-        pNewChild->CheckChild();
+        xNewChild->CheckChild();
     }
-    m_xCurChild= xNewChild;
+    m_xCurChild = xNewChild;
 }
 
-uno::Reference<XAccessible> SvxPixelCtlAccessible::CreateChild (tools::Long nIndex,Point mPoint)
+rtl::Reference<SvxPixelCtlAccessibleChild> SvxPixelCtlAccessible::CreateChild (tools::Long nIndex,Point mPoint)
 {
     bool bPixelColorOrBG = mpPixelCtl->GetBitmapPixel(sal_uInt16(nIndex)) != 0;
     Size size(mpPixelCtl->GetWidth() / SvxPixelCtl::GetLineCount(), mpPixelCtl->GetHeight() / SvxPixelCtl::GetLineCount());
-    uno::Reference<XAccessible> xChild = new SvxPixelCtlAccessibleChild(*mpPixelCtl,
+    rtl::Reference<SvxPixelCtlAccessibleChild> xChild = new SvxPixelCtlAccessibleChild(*mpPixelCtl,
                 bPixelColorOrBG,
                 tools::Rectangle(mPoint,size),
                 this,
@@ -327,9 +316,6 @@ SvxPixelCtlAccessibleChild::~SvxPixelCtlAccessibleChild()
 {
     ensureDisposed();
 }
-
-IMPLEMENT_FORWARD_XINTERFACE2( SvxPixelCtlAccessibleChild, OAccessibleComponentHelper, OAccessibleHelper_Base )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( SvxPixelCtlAccessibleChild, OAccessibleComponentHelper, OAccessibleHelper_Base )
 
 // XAccessible
 uno::Reference< XAccessibleContext> SAL_CALL SvxPixelCtlAccessibleChild::getAccessibleContext()

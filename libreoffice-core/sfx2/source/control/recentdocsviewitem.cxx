@@ -65,7 +65,7 @@ bool IsDocEncrypted(const OUString& rURL)
     }
     catch (const uno::Exception&)
     {
-        TOOLS_WARN_EXCEPTION("sfx", "caught exception trying to find out if doc <"
+        TOOLS_INFO_EXCEPTION("sfx", "caught exception trying to find out if doc <"
                                         << rURL << "> is encrypted:");
     }
 
@@ -123,14 +123,18 @@ BitmapEx getModuleOverlay(std::u16string_view rURL)
 RecentDocsViewItem::RecentDocsViewItem(sfx2::RecentDocsView &rView, const OUString &rURL,
     const OUString &rTitle, std::u16string_view const sThumbnailBase64,
         sal_uInt16 const nId, tools::Long const nThumbnailSize,
-        bool const isReadOnly)
+        bool const isReadOnly, bool const isPinned)
     : ThumbnailViewItem(rView, nId),
       mrParentView(rView),
       maURL(rURL),
       m_isReadOnly(isReadOnly),
       m_bRemoveIconHighlighted(false),
       m_aRemoveRecentBitmap(BMP_RECENTDOC_REMOVE),
-      m_aRemoveRecentBitmapHighlighted(BMP_RECENTDOC_REMOVE_HIGHLIGHTED)
+      m_aRemoveRecentBitmapHighlighted(BMP_RECENTDOC_REMOVE_HIGHLIGHTED),
+      m_bPinned(isPinned),
+      m_bPinnedIconHighlighted(false),
+      m_aPinnedDocumentBitmap(BMP_PIN_DOC),
+      m_aPinnedDocumentBitmapHiglighted(BMP_PIN_DOC_HIGHLIGHTED)
 {
     OUString aTitle(rTitle);
     INetURLObject aURLObj(rURL);
@@ -204,7 +208,7 @@ RecentDocsViewItem::RecentDocsViewItem(sfx2::RecentDocsView &rView, const OUStri
         aThumbnail.CopyPixel(
                 ::tools::Rectangle(Point((aThumbnailSize.Width() - aExtSize.Width()) / 2, (aThumbnailSize.Height() - aExtSize.Height()) / 2), aExtSize),
                 ::tools::Rectangle(Point(0, 0), aExtSize),
-                &aExt);
+                aExt);
     }
     else
     {
@@ -213,6 +217,7 @@ RecentDocsViewItem::RecentDocsViewItem(sfx2::RecentDocsView &rView, const OUStri
         aThumbnail = TemplateLocalView::scaleImg(aThumbnail, nThumbnailSize, nThumbnailSize);
 
         BitmapEx aModule = getModuleOverlay(rURL);
+        aModule.Scale(Size(48,48)); //tdf#155200: Thumbnails don't change their size so overlay must not too
         if (!aModule.IsEmpty())
         {
             const Size aSize(aThumbnail.GetSizePixel());
@@ -250,6 +255,21 @@ RecentDocsViewItem::RecentDocsViewItem(sfx2::RecentDocsView &rView, const OUStri
         m_bRemoveIconHighlighted = false;
     }
 
+    if (bVisible && getPinnedIconArea().Contains(rPoint))
+    {
+        if (!m_bPinnedIconHighlighted)
+            aRect.Union(getPinnedIconArea());
+
+        m_bPinnedIconHighlighted = true;
+    }
+    else
+    {
+        if (m_bPinnedIconHighlighted)
+            aRect.Union(getPinnedIconArea());
+
+        m_bPinnedIconHighlighted = false;
+    }
+
     return aRect;
 }
 
@@ -263,6 +283,11 @@ RecentDocsViewItem::RecentDocsViewItem(sfx2::RecentDocsView &rView, const OUStri
             aSize);
 }
 
+::tools::Rectangle RecentDocsViewItem::getPinnedIconArea() const
+{
+    return ::tools::Rectangle(maPinPos, m_aPinnedDocumentBitmap.GetSizePixel());
+}
+
 OUString RecentDocsViewItem::getHelpText() const
 {
     return m_sHelpText;
@@ -272,16 +297,33 @@ void RecentDocsViewItem::Paint(drawinglayer::processor2d::BaseProcessor2D *pProc
 {
     ThumbnailViewItem::Paint(pProcessor, pAttrs);
 
-    // paint the remove icon when highlighted
+    // paint the remove/pinned icon when hovered
     if (isHighlighted())
     {
-        drawinglayer::primitive2d::Primitive2DContainer aSeq(1);
+        drawinglayer::primitive2d::Primitive2DContainer aSeq(2);
 
         Point aIconPos(getRemoveIconArea().TopLeft());
 
         aSeq[0] = drawinglayer::primitive2d::Primitive2DReference(new DiscreteBitmapPrimitive2D(
                     m_bRemoveIconHighlighted ? m_aRemoveRecentBitmapHighlighted : m_aRemoveRecentBitmap,
                     B2DPoint(aIconPos.X(), aIconPos.Y())));
+
+        // tdf#38742 - draw pinned icon
+        const Point aPinnedIconPos(getPinnedIconArea().TopLeft());
+        aSeq[1] = drawinglayer::primitive2d::Primitive2DReference(new DiscreteBitmapPrimitive2D(
+            m_aPinnedDocumentBitmap, B2DPoint(aPinnedIconPos.X(), aPinnedIconPos.Y())));
+
+        pProcessor->process(aSeq);
+    }
+    // tdf#38742 - draw pinned icon if item is pinned
+    else if (m_bPinned)
+    {
+        drawinglayer::primitive2d::Primitive2DContainer aSeq(1);
+
+        const Point aPinnedIconPos(getPinnedIconArea().TopLeft());
+        aSeq[0] = drawinglayer::primitive2d::Primitive2DReference(new DiscreteBitmapPrimitive2D(
+            m_bPinnedIconHighlighted ? m_aPinnedDocumentBitmapHiglighted : m_aPinnedDocumentBitmap,
+            B2DPoint(aPinnedIconPos.X(), aPinnedIconPos.Y())));
 
         pProcessor->process(aSeq);
     }
@@ -294,6 +336,13 @@ void RecentDocsViewItem::MouseButtonUp(const MouseEvent& rMEvt)
         if (getRemoveIconArea().Contains(rMEvt.GetPosPixel()))
         {
             SvtHistoryOptions::DeleteItem(EHistoryType::PickList, maURL);
+            mrParent.Reload();
+            return;
+        }
+
+        if (getPinnedIconArea().Contains(rMEvt.GetPosPixel()))
+        {
+            SvtHistoryOptions::TogglePinItem(EHistoryType::PickList, maURL);
             mrParent.Reload();
             return;
         }

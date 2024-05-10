@@ -7,4 +7,16 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")" &> /dev/null && pwd)
 # Add emscripten toolchain
 source "$SCRIPT_DIR/../emsdk/emsdk_env.sh"
 cd "$SCRIPT_DIR/../libreoffice-core"
-./autogen.sh --with-distro=CPWASM-LOKit
+
+# LOK requires GCC 12, which often isn't the default, check for gcc-12 and g++12 if necessary
+BUILD_CC=
+BUILD_CXX=
+GCC_VERSION=$(gcc --version | head -n1 | grep -oP '\d+\.\d+\.\d+' | tail -n1 | grep -oP '\d+' | head -n1)
+if [[ $GCC_VERSION -lt 12 ]]; then
+  if which gcc-12 &>/dev/null && which g++-12 &>/dev/null; then
+    BUILD_CC='CC_FOR_BUILD=gcc-12'
+    BUILD_CXX='CXX_FOR_BUILD=g++-12'
+  fi
+fi
+
+./autogen.sh --with-distro=CPWASM-LOKit $BUILD_CC $BUILD_CXX

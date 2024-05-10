@@ -61,6 +61,7 @@
 #include <postit.hxx>
 #include <validat.hxx>
 #include <detfunc.hxx>
+#include <editutil.hxx>
 
 #include <SparklineRenderer.hxx>
 #include <colorscale.hxx>
@@ -169,7 +170,7 @@ ScOutputData::ScOutputData( OutputDevice* pNewDev, ScOutputType eNewType,
     bPagebreakMode( false ),
     bSolidBackground( false ),
     mbUseStyleColor( false ),
-    mbForceAutoColor( SC_MOD()->GetAccessOptions().GetIsAutomaticFontColor() ),
+    mbForceAutoColor( SvtAccessibilityOptions::GetIsAutomaticFontColor() ),
     mbSyntaxMode( false ),
     aGridColor( COL_BLACK ),
     mbShowNullValues( true ),
@@ -212,6 +213,7 @@ ScOutputData::ScOutputData( OutputDevice* pNewDev, ScOutputType eNewType,
 
     // always needed, so call at the end of the constructor
     SetCellRotations();
+    InitOutputEditEngine();
 }
 
 ScOutputData::~ScOutputData()
@@ -262,6 +264,8 @@ void ScOutputData::SetShowFormulas( bool bSet )
 void ScOutputData::SetShowSpellErrors( bool bSet )
 {
     bShowSpellErrors = bSet;
+    // reset EditEngine because it depends on bShowSpellErrors
+    mxOutputEditEngine.reset();
 }
 
 void ScOutputData::SetSnapPixel()
@@ -762,14 +766,14 @@ static bool lcl_EqualBack( const RowInfo& rFirst, const RowInfo& rOther,
             const ScPatternAttr* pPat1 = rFirst.cellInfo(nX).pPatternAttr;
             const ScPatternAttr* pPat2 = rOther.cellInfo(nX).pPatternAttr;
             if ( !pPat1 || !pPat2 ||
-                    &pPat1->GetItem(ATTR_PROTECTION) != &pPat2->GetItem(ATTR_PROTECTION) )
+                    !SfxPoolItem::areSame(pPat1->GetItem(ATTR_PROTECTION), pPat2->GetItem(ATTR_PROTECTION) ) )
                 return false;
         }
     }
     else
     {
         for ( nX=nX1; nX<=nX2; nX++ )
-            if ( rFirst.cellInfo(nX).pBackground != rOther.cellInfo(nX).pBackground )
+            if ( !SfxPoolItem::areSame(rFirst.cellInfo(nX).pBackground, rOther.cellInfo(nX).pBackground ) )
                 return false;
     }
 
@@ -966,7 +970,7 @@ void drawCells(vcl::RenderContext& rRenderContext, std::optional<Color> const & 
         rRect.SetLeft( nPosX - nSignedOneX );
     }
 
-    if ( pOldBackground && (pColor ||pBackground != pOldBackground || pOldDataBarInfo || pDataBarInfo || pIconSetInfo || pOldIconSetInfo) )
+    if ( pOldBackground && (pColor || !SfxPoolItem::areSame(pBackground, pOldBackground) || pOldDataBarInfo || pDataBarInfo || pIconSetInfo || pOldIconSetInfo) )
     {
         rRect.SetRight( nPosX-nSignedOneX );
         if (pOldBackground)             // ==0 if hidden
@@ -2382,8 +2386,6 @@ void ScOutputData::DrawNoteMarks(vcl::RenderContext& rRenderContext)
     if (comphelper::LibreOfficeKit::isActive())
         return;
 
-    bool bFirst = true;
-
     tools::Long nInitPosX = nScrX;
     if ( bLayoutRTL )
         nInitPosX += nMirrorW - 1;              // always in pixels
@@ -2414,20 +2416,21 @@ void ScOutputData::DrawNoteMarks(vcl::RenderContext& rRenderContext)
                 if (!mpDoc->ColHidden(nX, nTab) && mpDoc->GetNote(nX, pRowInfo[nArrY].nRowNo, nTab)
                     && (bIsMerged || (!pInfo->bHOverlapped && !pInfo->bVOverlapped)))
                 {
-                    if (bFirst)
-                    {
+
+                    const bool bIsDarkBackground = SC_MOD()->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor.IsDark();
+                    const Color aColor = pInfo->pBackground->GetColor();
+                    if ( aColor == COL_AUTO ? bIsDarkBackground : aColor.IsDark() )
                         rRenderContext.SetLineColor(COL_WHITE);
+                    else
+                        rRenderContext.SetLineColor(COL_BLACK);
 
-                        const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
-                        if ( mbUseStyleColor && rStyleSettings.GetHighContrastMode() )
-                            rRenderContext.SetFillColor( SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor );
-                        else
-                            rRenderContext.SetFillColor(COL_LIGHTRED);
+                    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+                    if ( mbUseStyleColor && rStyleSettings.GetHighContrastMode() )
+                        rRenderContext.SetFillColor( SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor );
+                    else
+                        rRenderContext.SetFillColor( SC_MOD()->GetColorConfig().GetColorValue(svtools::CALCCOMMENTS).nColor );
 
-                        bFirst = false;
-                    }
-
-                    tools::Long nMarkX = nPosX + ( pRowInfo[0].basicCellInfo(nX).nWidth - 4 ) * nLayoutSign;
+                    tools::Long nMarkX = nPosX + ( pRowInfo[0].basicCellInfo(nX).nWidth - 2 ) * nLayoutSign;
                     if ( bIsMerged || pInfo->bMerged )
                     {
                         //  if merged, add widths of all cells
@@ -2438,8 +2441,90 @@ void ScOutputData::DrawNoteMarks(vcl::RenderContext& rRenderContext)
                             ++nNextX;
                         }
                     }
+                    // DPI/ZOOM 100/100 => 10, 100/50 => 7, 100/150 => 13
+                    // DPI/ZOOM 150/100 => 13, 150/50 => 8.5, 150/150 => 17.5
+                    const double nSize( rRenderContext.GetDPIScaleFactor() * aZoomX * 6 + 4);
+                    Point aPoints[3];
+                    aPoints[0] = Point(nMarkX, nPosY);
+                    aPoints[0].setX( bLayoutRTL ? aPoints[0].X() + nSize : aPoints[0].X() - nSize );
+                    aPoints[1] = Point(nMarkX, nPosY);
+                    aPoints[2] = Point(nMarkX, nPosY + nSize);
+                    tools::Polygon aPoly(3, aPoints);
+
                     if ( bLayoutRTL ? ( nMarkX >= 0 ) : ( nMarkX < nScrX+nScrW ) )
-                        rRenderContext.DrawRect( tools::Rectangle( nMarkX-5*nLayoutSign,nPosY,nMarkX+1*nLayoutSign,nPosY+6 ) );
+                        rRenderContext.DrawPolygon(aPoly);
+                }
+
+                nPosX += pRowInfo[0].basicCellInfo(nX).nWidth * nLayoutSign;
+            }
+        }
+        nPosY += pThisRowInfo->nHeight;
+    }
+}
+
+void ScOutputData::DrawFormulaMarks(vcl::RenderContext& rRenderContext)
+{
+    bool bFirst = true;
+
+    tools::Long nInitPosX = nScrX;
+    if ( bLayoutRTL )
+        nInitPosX += nMirrorW - 1;              // always in pixels
+    tools::Long nLayoutSign = bLayoutRTL ? -1 : 1;
+
+    tools::Long nPosY = nScrY;
+    for (SCSIZE nArrY=1; nArrY+1<nArrCount; nArrY++)
+    {
+        RowInfo* pThisRowInfo = &pRowInfo[nArrY];
+        if ( pThisRowInfo->bChanged )
+        {
+            tools::Long nPosX = nInitPosX;
+            for (SCCOL nX=nX1; nX<=nX2; nX++)
+            {
+                ScCellInfo* pInfo = &pThisRowInfo->cellInfo(nX);
+                if (!mpDoc->ColHidden(nX, nTab) && !mpDoc->GetFormula(nX, pRowInfo[nArrY].nRowNo, nTab).isEmpty()
+                    && (!pInfo->bHOverlapped && !pInfo->bVOverlapped))
+                {
+                    if (bFirst)
+                    {
+                        rRenderContext.SetLineColor(COL_WHITE);
+
+                        const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+                        if ( mbUseStyleColor && rStyleSettings.GetHighContrastMode() )
+                            rRenderContext.SetFillColor( SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor );
+                        else
+                            rRenderContext.SetFillColor(COL_LIGHTBLUE);
+
+                        bFirst = false;
+                    }
+
+                    tools::Long nMarkX = nPosX;
+                    tools::Long nMarkY = nPosY + pThisRowInfo->nHeight - 2;
+                    if ( pInfo->bMerged )
+                    {
+                        for (SCSIZE nNextY=nArrY+1; nNextY+1<nArrCount; nNextY++)
+                        {
+                            bool bVOver;
+                            if (pRowInfo[nNextY + 1].nRowNo == (pRowInfo[nNextY].nRowNo + 1)) {
+                                bVOver = pRowInfo[nNextY].cellInfo(nX).bVOverlapped;
+                            } else {
+                                bVOver = mpDoc->GetAttr(nX,nNextY,nTab,ATTR_MERGE_FLAG)->IsVerOverlapped();
+                            }
+                            if (!bVOver) break;
+                            nMarkY += pRowInfo[nNextY].nHeight;
+                        }
+                    }
+                    // DPI/ZOOM 100/100 => 10, 100/50 => 7, 100/150 => 13
+                    // DPI/ZOOM 150/100 => 13, 150/50 => 8.5, 150/150 => 17.5
+                    const double nSize( rRenderContext.GetDPIScaleFactor() * aZoomX * 6 + 4);
+                    Point aPoints[3];
+                    aPoints[0] = Point(nMarkX, nMarkY);
+                    aPoints[0].setX( bLayoutRTL ? aPoints[0].X() - nSize : aPoints[0].X() + nSize );
+                    aPoints[1] = Point(nMarkX, nMarkY);
+                    aPoints[2] = Point(nMarkX, nMarkY - nSize);
+                    tools::Polygon aPoly(3, aPoints);
+
+                    if ( bLayoutRTL ? ( nMarkX >= 0 ) : ( nMarkX < nScrX+nScrW ) )
+                        rRenderContext.DrawPolygon(aPoly);
                 }
 
                 nPosX += pRowInfo[0].basicCellInfo(nX).nWidth * nLayoutSign;
@@ -2536,17 +2621,10 @@ void ScOutputData::DrawClipMarks()
     if (!bAnyClipped)
         return;
 
-    Color aArrowFillCol( COL_LIGHTRED );
+    Color aArrowFillCol( SC_MOD()->GetColorConfig().GetColorValue(svtools::CALCTEXTOVERFLOW).nColor );
+    const bool bIsDarkBackground = SC_MOD()->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor.IsDark();
 
     DrawModeFlags nOldDrawMode = mpDev->GetDrawMode();
-    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
-    if ( mbUseStyleColor && rStyleSettings.GetHighContrastMode() )
-    {
-        //  use DrawMode to change the arrow's outline color
-        mpDev->SetDrawMode( nOldDrawMode | DrawModeFlags::SettingsLine );
-        //  use text color also for the fill color
-        aArrowFillCol = SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor;
-    }
 
     tools::Long nInitPosX = nScrX;
     if ( bLayoutRTL )
@@ -2638,6 +2716,12 @@ void ScOutputData::DrawClipMarks()
 
                     tools::Long nMarkPixel = static_cast<tools::Long>( SC_CLIPMARK_SIZE * mnPPTX );
                     Size aMarkSize( nMarkPixel, (nMarkPixel-1)*2 );
+
+                    const Color aColor = pInfo->pBackground ? pInfo->pBackground->GetColor() : COL_AUTO;
+                    if ( aColor == COL_AUTO ? bIsDarkBackground : aColor.IsDark() )
+                        mpDev->SetDrawMode( nOldDrawMode | DrawModeFlags::WhiteLine );
+                    else
+                        mpDev->SetDrawMode( nOldDrawMode | DrawModeFlags::BlackLine );
 
                     if (bVertical)
                     {

@@ -693,8 +693,7 @@ namespace basegfx
             const B2DPoint& rPoint,
             double fHalfLineWidth,
             B2DLineJoin eJoin,
-            double fMiterMinimumAngle,
-            basegfx::triangulator::B2DTriangleVector* pTriangles)
+            double fMiterMinimumAngle)
         {
             SAL_WARN_IF(fHalfLineWidth <= 0.0,"basegfx","createAreaGeometryForJoin: LineWidth too small (!)");
             assert((eJoin != B2DLineJoin::NONE) && "createAreaGeometryForJoin: B2DLineJoin::NONE not allowed (!)");
@@ -721,19 +720,9 @@ namespace basegfx
             {
                 case B2DLineJoin::Miter :
                 {
-                    if(nullptr != pTriangles)
-                    {
-                        pTriangles->emplace_back(
-                            aEndPoint,
-                            rPoint,
-                            aStartPoint);
-                    }
-                    else
-                    {
-                        aEdgePolygon.append(aEndPoint);
-                        aEdgePolygon.append(rPoint);
-                        aEdgePolygon.append(aStartPoint);
-                    }
+                    aEdgePolygon.append(aEndPoint);
+                    aEdgePolygon.append(rPoint);
+                    aEdgePolygon.append(aStartPoint);
 
                     // Look for the cut point between start point along rTangentPrev and
                     // end point along rTangentEdge. -rTangentEdge should be used, but since
@@ -746,18 +735,7 @@ namespace basegfx
                     if(fCutPos != 0.0)
                     {
                         const B2DPoint aCutPoint(aStartPoint + (rTangentPrev * fCutPos));
-
-                        if(nullptr != pTriangles)
-                        {
-                            pTriangles->emplace_back(
-                                aStartPoint,
-                                aCutPoint,
-                                aEndPoint);
-                        }
-                        else
-                        {
-                            aEdgePolygon.append(aCutPoint);
-                        }
+                        aEdgePolygon.append(aCutPoint);
                     }
 
                     break;
@@ -783,27 +761,14 @@ namespace basegfx
 
                     if(aBow.count() > 1)
                     {
-                        if(nullptr != pTriangles)
-                        {
-                            for(sal_uInt32 a(0); a < aBow.count() - 1; a++)
-                            {
-                                pTriangles->emplace_back(
-                                    0 == a ? aStartPoint : aBow.getB2DPoint(a),
-                                    rPoint,
-                                    aBow.count() - 1 == a + 1 ? aEndPoint : aBow.getB2DPoint(a + 1));
-                            }
-                        }
-                        else
-                        {
-                            // #i101491#
-                            // use the original start/end positions; the ones from bow creation may be numerically
-                            // different due to their different creation. To guarantee good merging quality with edges
-                            // and edge roundings (and to reduce point count)
-                            aEdgePolygon = aBow;
-                            aEdgePolygon.setB2DPoint(0, aStartPoint);
-                            aEdgePolygon.setB2DPoint(aEdgePolygon.count() - 1, aEndPoint);
-                            aEdgePolygon.append(rPoint);
-                        }
+                        // #i101491#
+                        // use the original start/end positions; the ones from bow creation may be numerically
+                        // different due to their different creation. To guarantee good merging quality with edges
+                        // and edge roundings (and to reduce point count)
+                        aEdgePolygon = aBow;
+                        aEdgePolygon.setB2DPoint(0, aStartPoint);
+                        aEdgePolygon.setB2DPoint(aEdgePolygon.count() - 1, aEndPoint);
+                        aEdgePolygon.append(rPoint);
 
                         break;
                     }
@@ -814,19 +779,9 @@ namespace basegfx
                 }
                 default: // B2DLineJoin::Bevel
                 {
-                    if(nullptr != pTriangles)
-                    {
-                        pTriangles->emplace_back(
-                            aEndPoint,
-                            rPoint,
-                            aStartPoint);
-                    }
-                    else
-                    {
-                        aEdgePolygon.append(aEndPoint);
-                        aEdgePolygon.append(rPoint);
-                        aEdgePolygon.append(aStartPoint);
-                    }
+                    aEdgePolygon.append(aEndPoint);
+                    aEdgePolygon.append(rPoint);
+                    aEdgePolygon.append(aStartPoint);
 
                     break;
                 }
@@ -848,8 +803,7 @@ namespace basegfx
             css::drawing::LineCap eCap,
             double fMaxAllowedAngle,
             double fMaxPartOfEdge,
-            double fMiterMinimumAngle,
-            basegfx::triangulator::B2DTriangleVector* pTriangles)
+            double fMiterMinimumAngle)
         {
             if(fMaxAllowedAngle > M_PI_2)
             {
@@ -958,8 +912,7 @@ namespace basegfx
                                         aEdge.getStartPoint(),
                                         fHalfLineWidth,
                                         eJoin,
-                                        fMiterMinimumAngle,
-                                        pTriangles));
+                                        fMiterMinimumAngle));
                             }
                             else if(aOrientation == B2VectorOrientation::Negative)
                             {
@@ -975,8 +928,7 @@ namespace basegfx
                                         aEdge.getStartPoint(),
                                         fHalfLineWidth,
                                         eJoin,
-                                        fMiterMinimumAngle,
-                                        pTriangles));
+                                        fMiterMinimumAngle));
                             }
                         }
 
@@ -995,7 +947,7 @@ namespace basegfx
                                     bLast && eCap == css::drawing::LineCap_ROUND,
                                     bFirst && eCap == css::drawing::LineCap_SQUARE,
                                     bLast && eCap == css::drawing::LineCap_SQUARE,
-                                    pTriangles));
+                                    nullptr));
                         }
                         else
                         {
@@ -1007,7 +959,7 @@ namespace basegfx
                                     false,
                                     false,
                                     false,
-                                    pTriangles));
+                                    nullptr));
                         }
 
                         // prepare next step
@@ -1030,17 +982,7 @@ namespace basegfx
                             aCandidate.getB2DPoint(0),
                             fHalfLineWidth));
 
-                    if(nullptr != pTriangles)
-                    {
-                        const basegfx::triangulator::B2DTriangleVector aResult(
-                            basegfx::triangulator::triangulate(
-                                aCircle));
-                        pTriangles->insert(pTriangles->end(), aResult.begin(), aResult.end());
-                    }
-                    else
-                    {
-                        aRetval.append(aCircle);
-                    }
+                    aRetval.append(aCircle);
                 }
 
                 return aRetval;

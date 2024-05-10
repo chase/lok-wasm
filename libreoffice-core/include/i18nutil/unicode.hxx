@@ -22,6 +22,7 @@
 #include <com/sun/star/i18n/UnicodeScript.hpp>
 #include <sal/types.h>
 #include <rtl/ustrbuf.hxx>
+#include <unicode/uchar.h>
 #include <unicode/uscript.h>
 #include <i18nutil/i18nutildllapi.h>
 
@@ -37,17 +38,17 @@ struct ScriptTypeList
 class I18NUTIL_DLLPUBLIC unicode
 {
 public:
-    static sal_Int16 getUnicodeType(const sal_Unicode ch);
+    static sal_Int16 getUnicodeType(const sal_uInt32 ch);
     static sal_Int16 getUnicodeScriptType(const sal_Unicode ch, const ScriptTypeList* typeList,
                                           sal_Int16 unknownType = 0);
     static sal_Unicode getUnicodeScriptStart(css::i18n::UnicodeScript type);
     static sal_Unicode getUnicodeScriptEnd(css::i18n::UnicodeScript type);
     static sal_uInt8 getUnicodeDirection(const sal_Unicode ch);
     static sal_uInt32 GetMirroredChar(sal_uInt32);
-    static bool isControl(const sal_Unicode ch);
-    static bool isAlpha(const sal_Unicode ch);
-    static bool isSpace(const sal_Unicode ch);
-    static bool isWhiteSpace(const sal_Unicode ch);
+    static bool isControl(const sal_uInt32 ch);
+    static bool isAlpha(const sal_uInt32 ch);
+    static bool isSpace(const sal_uInt32 ch);
+    static bool isWhiteSpace(const sal_uInt32 ch);
 
     /** Check for Unicode variation sequence selectors
 
@@ -55,23 +56,9 @@ public:
 
         @return  True if code is a Unicode variation sequence selector.
      */
-    static bool isIVSSelector(sal_uInt32 nCode)
+    static bool isVariationSelector(sal_uInt32 nCode)
     {
-        return (nCode >= 0xFE00 && nCode <= 0xFE0F) // Variation Selectors block
-               || (nCode >= 0xE0100 && nCode <= 0xE01EF); // Variation Selectors Supplement block
-    }
-
-    /** Check for base characters of a CJK ideographic variation sequence (IVS)
-
-        @param nCode  A Unicode code point.
-
-        @return  True if code is a Unicode base character part of CJK IVS
-     */
-    static bool isCJKIVSCharacter(sal_uInt32 nCode)
-    {
-        return (nCode >= 0x4E00 && nCode <= 0x9FFF) // CJK Unified Ideographs
-               || (nCode >= 0x3400 && nCode <= 0x4DBF) // CJK Unified Ideographs Extension A
-               || (nCode >= 0x20000 && nCode <= 0x2A6DF); // CJK Unified Ideographs Extension B
+        return u_getIntPropertyValue(nCode, UCHAR_VARIATION_SELECTOR) != 0;
     }
 
     //Map an ISO 15924 script code to Latin/Asian/Complex/Weak

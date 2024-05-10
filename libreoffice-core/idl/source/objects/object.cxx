@@ -48,7 +48,7 @@ void SvMetaClass::ReadContextSvIdl( SvIdlDataBase & rBase,
     {
         SvMetaClass * pClass = rBase.ReadKnownClass( rInStm );
         if( !pClass )
-            throw SvParseException( rInStm, "unknown imported interface" );
+            throw SvParseException( rInStm, "unknown imported interface"_ostr );
         SvClassElement aEle;
         aEle.SetClass( pClass );
         aClassElementList.push_back( aEle );
@@ -106,9 +106,8 @@ bool SvMetaClass::TestAttribute( SvIdlDataBase & rBase, SvTokenStream & rInStm,
         SAL_WARN( "idl", "new slot : " << rAttr.GetSlotId().getString() );
     }
 
-    for( size_t n = 0; n < aAttrList.size(); n++ )
+    for( const auto &pS : aAttrList )
     {
-        SvMetaAttribute * pS = aAttrList[n];
         if( pS->GetName() == rAttr.GetName() )
         {
             // values have to match
@@ -139,9 +138,8 @@ sal_uInt16 SvMetaClass::WriteSlotParamArray( SvIdlDataBase & rBase,
                                         SvStream & rOutStm )
 {
     sal_uInt16 nCount = 0;
-    for ( size_t i = 0, n = rSlotList.size(); i < n; ++i )
+    for ( const auto& pAttr : rSlotList )
     {
-        SvMetaSlot *pAttr = rSlotList[ i ];
         nCount = nCount + pAttr->WriteSlotParamArray( rBase, rOutStm );
     }
 
@@ -165,26 +163,22 @@ sal_uInt16 SvMetaClass::WriteSlots( std::string_view rShellName,
     return nSCount;
 }
 
-void SvMetaClass::InsertSlots( SvSlotElementList& rList, std::vector<sal_uLong>& rSuperList,
+void SvMetaClass::InsertSlots( SvSlotElementList& rList, std::vector<sal_uInt32>& rSuperList,
                             SvMetaClassList &rClassList,
                             const OString& rPrefix, SvIdlDataBase& rBase)
 {
     // was this class already written?
-    for ( size_t i = 0, n = rClassList.size(); i < n ; ++i )
-        if ( rClassList[ i ] == this )
-            return;
+    if ( std::find( rClassList.begin(), rClassList.end(), this ) != rClassList.end() )
+        return;
 
     rClassList.push_back( this );
 
     // write all direct attributes
-    sal_uLong n;
-    for( n = 0; n < aAttrList.size(); n++ )
+    for( const auto& pAttr : aAttrList )
     {
-        SvMetaAttribute * pAttr = aAttrList[n];
+        sal_uInt32 nId = pAttr->GetSlotId().GetValue();
 
-        sal_uLong nId = pAttr->GetSlotId().GetValue();
-
-        std::vector<sal_uLong>::iterator iter = std::find(rSuperList.begin(),
+        std::vector<sal_uInt32>::iterator iter = std::find(rSuperList.begin(),
                                                       rSuperList.end(),nId);
 
         if( iter == rSuperList.end() )
@@ -205,9 +199,8 @@ void SvMetaClass::InsertSlots( SvSlotElementList& rList, std::vector<sal_uLong>&
 
     // Write all attributes of the imported classes, as long as they have
     // not already been imported by the superclass.
-    for( n = 0; n < aClassElementList.size(); n++ )
+    for( auto& rElement : aClassElementList )
     {
-        SvClassElement& rElement = aClassElementList[n];
         SvMetaClass * pCl = rElement.GetClass();
         OStringBuffer rPre(rPrefix.getLength() + 1 + rElement.GetPrefix().getLength());
         rPre.append(rPrefix);
@@ -227,26 +220,24 @@ void SvMetaClass::InsertSlots( SvSlotElementList& rList, std::vector<sal_uLong>&
     }
 }
 
-void SvMetaClass::FillClasses( SvMetaClassList & rList )
+void SvMetaClass::FillClasses( SvMetaClassList & rClassList )
 {
     // Am I not yet in?
-    for ( size_t i = 0, n = rList.size(); i < n; ++i )
-        if ( rList[ i ] == this )
-            return;
+    if ( std::find( rClassList.begin(), rClassList.end(), this ) != rClassList.end() )
+        return;
 
-    rList.push_back( this );
+    rClassList.push_back( this );
 
     // my imports
-    for( size_t n = 0; n < aClassElementList.size(); n++ )
+    for( auto& rElement : aClassElementList )
     {
-        SvClassElement& rElement = aClassElementList[n];
         SvMetaClass * pCl = rElement.GetClass();
-        pCl->FillClasses( rList );
+        pCl->FillClasses( rClassList );
     }
 
     // my superclass
     if( aSuperClass.is() )
-        aSuperClass->FillClasses( rList );
+        aSuperClass->FillClasses( rClassList );
 }
 
 
@@ -256,9 +247,8 @@ void SvMetaClass::WriteSlotStubs( std::string_view rShellName,
                                 SvStream & rOutStm )
 {
     // write all attributes
-    for ( size_t i = 0, n = rSlotList.size(); i < n; ++i )
+    for ( const auto& pAttr : rSlotList )
     {
-        SvMetaSlot *pAttr = rSlotList[ i ];
         pAttr->WriteSlotStubs( rShellName, rList, rOutStm );
     }
 }
@@ -267,22 +257,22 @@ void SvMetaClass::WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm )
 {
     WriteStars( rOutStm );
     // define class
-    rOutStm.WriteCharPtr( "#ifdef ShellClass_" ).WriteOString( GetName() ) << endl;
-    rOutStm.WriteCharPtr( "#undef ShellClass" ) << endl;
-    rOutStm.WriteCharPtr( "#undef ShellClass_" ).WriteOString( GetName() ) << endl;
-    rOutStm.WriteCharPtr( "#define ShellClass " ).WriteOString( GetName() ) << endl;
+    rOutStm.WriteOString( "#ifdef ShellClass_" ).WriteOString( GetName() ) << endl;
+    rOutStm.WriteOString( "#undef ShellClass" ) << endl;
+    rOutStm.WriteOString( "#undef ShellClass_" ).WriteOString( GetName() ) << endl;
+    rOutStm.WriteOString( "#define ShellClass " ).WriteOString( GetName() ) << endl;
 
     // no slotmaps get written for interfaces
     if( GetMetaTypeType() != MetaTypeType::Shell )
     {
-        rOutStm.WriteCharPtr( "#endif" ) << endl << endl;
+        rOutStm.WriteOString( "#endif" ) << endl << endl;
         return;
     }
     // write parameter array
-    rOutStm.WriteCharPtr("static SfxFormalArgument a").WriteOString(GetName()).WriteCharPtr("Args_Impl[] =") << endl;
+    rOutStm.WriteOString("static SfxFormalArgument a").WriteOString(GetName()).WriteOString("Args_Impl[] =") << endl;
     rOutStm.WriteChar('{') << endl;
 
-    std::vector<sal_uLong> aSuperList;
+    std::vector<sal_uInt32> aSuperList;
     SvMetaClassList classList;
     SvSlotElementList aSlotList;
     InsertSlots(aSlotList, aSuperList, classList, OString(), rBase);
@@ -302,10 +292,10 @@ void SvMetaClass::WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm )
     {
         // at least one dummy
         WriteTab( rOutStm, 1 );
-        rOutStm.WriteCharPtr("{ (const SfxType*) &aSfxVoidItem_Impl, 0, 0 }" ) << endl;
+        rOutStm.WriteOString("{ (const SfxType*) &aSfxVoidItem_Impl, 0, 0 }" ) << endl;
     }
     rOutStm << endl;
-    rOutStm.WriteCharPtr( "};" ) << endl << endl;
+    rOutStm.WriteOString( "};" ) << endl << endl;
 
     std::vector<OString> aStringList;
     WriteSlotStubs( GetName(), aSlotList, aStringList, rOutStm );
@@ -314,7 +304,7 @@ void SvMetaClass::WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm )
     rOutStm << endl;
 
     // write slotmap
-    rOutStm.WriteCharPtr("static SfxSlot a").WriteOString(GetName()).WriteCharPtr("Slots_Impl[] =") << endl;
+    rOutStm.WriteOString("static SfxSlot a").WriteOString(GetName()).WriteOString("Slots_Impl[] =") << endl;
     rOutStm.WriteChar( '{' ) << endl;
 
     // write all attributes
@@ -325,19 +315,18 @@ void SvMetaClass::WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm )
     {
         // at least one dummy
         WriteTab( rOutStm, 1 );
-        rOutStm.WriteCharPtr( "SFX_SLOT_ARG(" ).WriteOString( GetName() )
-               .WriteCharPtr( ", 0, SfxGroupId::NONE, " )
-               .WriteCharPtr( "SFX_STUB_PTR_EXEC_NONE," )
-               .WriteCharPtr( "SFX_STUB_PTR_STATE_NONE," )
-               .WriteCharPtr( "SfxSlotMode::NONE, SfxVoidItem, 0, 0, \"\", SfxSlotMode::NONE )" ) << endl;
+        rOutStm.WriteOString( "SFX_SLOT_ARG(" ).WriteOString( GetName() )
+               .WriteOString( ", 0, SfxGroupId::NONE, " )
+               .WriteOString( "SFX_STUB_PTR_EXEC_NONE," )
+               .WriteOString( "SFX_STUB_PTR_STATE_NONE," )
+               .WriteOString( "SfxSlotMode::NONE, SfxVoidItem, 0, 0, \"\", SfxSlotMode::NONE )" ) << endl;
     }
     rOutStm << endl;
-    rOutStm.WriteCharPtr( "};" ) << endl;
-    rOutStm.WriteCharPtr( "#endif" ) << endl << endl;
+    rOutStm.WriteOString( "};" ) << endl;
+    rOutStm.WriteOString( "#endif" ) << endl << endl;
 
-    for( size_t i = 0, n = aSlotList.size(); i < n; ++i )
+    for( auto& pAttr : aSlotList )
     {
-        SvMetaSlot* pAttr = aSlotList[ i ];
         pAttr->ResetSlotPointer();
     }
 

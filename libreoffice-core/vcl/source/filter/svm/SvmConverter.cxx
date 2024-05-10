@@ -370,7 +370,7 @@ void SVMConverter::ImplConvertFromSVM1( SvStream& rIStm, GDIMetaFile& rMtf )
     {
         sal_Int16 nType(0);
         rIStm.ReadInt16(nType);
-        sal_Int32 nActBegin = rIStm.Tell();
+        sal_uInt64 nActBegin = rIStm.Tell();
         sal_Int32 nActionSize(0);
         rIStm.ReadInt32(nActionSize);
 
@@ -512,7 +512,7 @@ void SVMConverter::ImplConvertFromSVM1( SvStream& rIStm, GDIMetaFile& rMtf )
                     rMtf.AddAction( new MetaRectAction( aRect ) );
 
                     if( bFatLine )
-                        rMtf.AddAction( new MetaPolyLineAction( aRect, aLineInfo ) );
+                        rMtf.AddAction( new MetaPolyLineAction( tools::Polygon(aRect), aLineInfo ) );
                 }
             }
             break;

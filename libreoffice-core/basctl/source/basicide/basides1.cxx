@@ -58,6 +58,7 @@
 #include <vcl/weld.hxx>
 #include <svx/zoomsliderctrl.hxx>
 #include <svx/zoomslideritem.hxx>
+#include <basegfx/utils/zoomtools.hxx>
 
 constexpr sal_Int32 TAB_HEIGHT_MARGIN = 10;
 
@@ -67,6 +68,17 @@ namespace basctl
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::frame;
+
+static void lcl_InvalidateZoomSlots(SfxBindings* pBindings)
+{
+    if (!pBindings)
+        return;
+
+    static sal_uInt16 const aInval[] = {
+        SID_ZOOM_OUT, SID_ZOOM_IN, SID_ATTR_ZOOMSLIDER, 0
+    };
+    pBindings->Invalidate(aInval);
+}
 
 void Shell::ExecuteSearch( SfxRequest& rReq )
 {
@@ -92,7 +104,7 @@ void Shell::ExecuteSearch( SfxRequest& rReq )
             break;
         case FID_SEARCH_ON:
             mbJustOpened = true;
-            GetViewFrame()->GetBindings().Invalidate(SID_SEARCH_ITEM);
+            GetViewFrame().GetBindings().Invalidate(SID_SEARCH_ITEM);
             break;
         case SID_BASICIDE_REPEAT_SEARCH:
         case FID_SEARCH_NOW:
@@ -175,8 +187,8 @@ void Shell::ExecuteSearch( SfxRequest& rReq )
                     {
                         if ( !pWin )
                         {
-                            SfxViewFrame* pViewFrame = GetViewFrame();
-                            SfxChildWindow* pChildWin = pViewFrame ? pViewFrame->GetChildWindow( SID_SEARCH_DLG ) : nullptr;
+                            SfxViewFrame& rViewFrame = GetViewFrame();
+                            SfxChildWindow* pChildWin = rViewFrame.GetChildWindow(SID_SEARCH_DLG);
                             auto xParent = pChildWin ? pChildWin->GetController() : nullptr;
 
                             std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(xParent ? xParent->getDialog() : nullptr,
@@ -260,7 +272,7 @@ void Shell::ExecuteCurrent( SfxRequest& rReq )
         case SID_UNDO:
         case SID_REDO:
             if ( GetUndoManager() && pCurWin->AllowUndo() )
-                GetViewFrame()->ExecuteSlot( rReq );
+                GetViewFrame().ExecuteSlot( rReq );
             break;
         default:
             pCurWin->ExecuteCommand( rReq );
@@ -399,9 +411,8 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
                 if ( pModule && !pModule->GetMethods()->Find( rInfo.GetMethod(), SbxClassType::Method ) )
                     CreateMacro( pModule, rInfo.GetMethod() );
             }
-            SfxViewFrame* pViewFrame = GetViewFrame();
-            if ( pViewFrame )
-                pViewFrame->ToTop();
+            SfxViewFrame& rViewFrame = GetViewFrame();
+            rViewFrame.ToTop();
             VclPtr<ModulWindow> pWin = FindBasWin( aDocument, aLibName, rInfo.GetModule(), true );
             DBG_ASSERT( pWin, "Edit/Create Macro: Window was not created/found!" );
             SetCurWindow( pWin, true );
@@ -418,6 +429,30 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
             if (SfxBindings* pBindings = GetBindingsPtr())
                 pBindings->Invalidate(SID_BASICIDE_OBJCAT);
             break;
+
+        case SID_BASICIDE_WATCH:
+        {
+            // Toggling the watch window can only be done from a ModulWindow
+            if (!dynamic_cast<ModulWindowLayout*>(pLayout.get()))
+                return;
+
+            pModulLayout->ShowWatchWindow(!pModulLayout->IsWatchWindowVisible());
+            if (SfxBindings* pBindings = GetBindingsPtr())
+                pBindings->Invalidate(SID_BASICIDE_WATCH);
+        }
+        break;
+
+        case SID_BASICIDE_STACK:
+        {
+            // Toggling the stack window can only be done from a ModulWindow
+            if (!dynamic_cast<ModulWindowLayout*>(pLayout.get()))
+                return;
+
+            pModulLayout->ShowStackWindow(!pModulLayout->IsStackWindowVisible());
+            if (SfxBindings* pBindings = GetBindingsPtr())
+                pBindings->Invalidate(SID_BASICIDE_STACK);
+        }
+        break;
 
         case SID_BASICIDE_NAMECHANGEDONTAB:
         {
@@ -772,6 +807,22 @@ void Shell::ExecuteGlobal( SfxRequest& rReq )
 
             if (pArgs && pArgs->GetItemState(SID_ATTR_ZOOMSLIDER, true, &pItem ) == SfxItemState::SET)
                 SetGlobalEditorZoomLevel(static_cast<const SvxZoomSliderItem*>(pItem)->GetValue());
+
+            lcl_InvalidateZoomSlots(GetBindingsPtr());
+        }
+        break;
+
+        case SID_ZOOM_IN:
+        case SID_ZOOM_OUT:
+        {
+            const sal_uInt16 nOldZoom = GetCurrentZoomSliderValue();
+            sal_uInt16 nNewZoom;
+            if (nSlot == SID_ZOOM_IN)
+                nNewZoom = std::min<sal_uInt16>(GetMaxZoom(), basegfx::zoomtools::zoomIn(nOldZoom));
+            else
+                nNewZoom = std::max<sal_uInt16>(GetMinZoom(), basegfx::zoomtools::zoomOut(nOldZoom));
+            SetGlobalEditorZoomLevel(nNewZoom);
+            lcl_InvalidateZoomSlots(GetBindingsPtr());
         }
         break;
 
@@ -848,12 +899,44 @@ void Shell::GetState(SfxItemSet &rSet)
                     rSet.DisableItem( nWh );
             }
             break;
+
             case SID_BASICIDE_OBJCAT:
+            {
                 if (pLayout)
                     rSet.Put(SfxBoolItem(nWh, aObjectCatalog->IsVisible()));
                 else
                     rSet.Put(SfxVisibilityItem(nWh, false));
-                break;
+            }
+            break;
+
+            case SID_BASICIDE_WATCH:
+            {
+                if (pLayout)
+                {
+                    rSet.Put(SfxBoolItem(nWh, pModulLayout->IsWatchWindowVisible()));
+                    // Disable command if the visible window is not a ModulWindow
+                    if (!dynamic_cast<ModulWindowLayout*>(pLayout.get()))
+                        rSet.DisableItem(nWh);
+                }
+                else
+                    rSet.Put(SfxVisibilityItem(nWh, false));
+            }
+            break;
+
+            case SID_BASICIDE_STACK:
+            {
+                if (pLayout)
+                {
+                    rSet.Put(SfxBoolItem(nWh, pModulLayout->IsStackWindowVisible()));
+                    // Disable command if the visible window is not a ModulWindow
+                    if (!dynamic_cast<ModulWindowLayout*>(pLayout.get()))
+                        rSet.DisableItem(nWh);
+                }
+                else
+                    rSet.Put(SfxVisibilityItem(nWh, false));
+            }
+            break;
+
             case SID_BASICIDE_SHOWSBX:
             case SID_BASICIDE_CREATEMACRO:
             case SID_BASICIDE_EDITMACRO:
@@ -1019,6 +1102,8 @@ void Shell::GetState(SfxItemSet &rSet)
                 if ( pCurWin )
                 {
                     OUString aTitle = pCurWin->CreateQualifiedName();
+                    if (pCurWin->IsReadOnly())
+                        aTitle += " (" + IDEResId(RID_STR_READONLY) + ")";
                     SfxStringItem aItem( SID_BASICIDE_STAT_TITLE, aTitle );
                     rSet.Put( aItem );
                 }
@@ -1045,7 +1130,7 @@ void Shell::GetState(SfxItemSet &rSet)
             case SID_REDO:
             {
                 if( GetUndoManager() )  // recursive GetState else
-                    GetViewFrame()->GetSlotState( nWh, nullptr, &rSet );
+                    GetViewFrame().GetSlotState( nWh, nullptr, &rSet );
             }
             break;
             case SID_BASICIDE_CURRENT_LANG:
@@ -1136,6 +1221,16 @@ void Shell::GetState(SfxItemSet &rSet)
             }
             break;
 
+            case SID_ZOOM_IN:
+            case SID_ZOOM_OUT:
+            {
+                const sal_uInt16 nCurrentZoom = GetCurrentZoomSliderValue();
+                if ((nWh == SID_ZOOM_IN && nCurrentZoom >= GetMaxZoom()) ||
+                    (nWh == SID_ZOOM_OUT && nCurrentZoom <= GetMinZoom()))
+                    rSet.DisableItem(nWh);
+            }
+            break;
+
             case SID_ATTR_ZOOMSLIDER:
             {
                 // The zoom slider is only visible in a module window
@@ -1187,17 +1282,17 @@ void Shell::SetCurWindow( BaseWindow* pNewWin, bool bUpdateTabBar, bool bRemembe
             pLayout = pModulLayout.get();
         else
             pLayout = pDialogLayout.get();
-        AdjustPosSizePixel(Point(0, 0), GetViewFrame()->GetWindow().GetOutputSizePixel());
+        AdjustPosSizePixel(Point(0, 0), GetViewFrame().GetWindow().GetOutputSizePixel());
         pLayout->Activating(*pCurWin);
-        GetViewFrame()->GetWindow().SetHelpId(pCurWin->GetHid());
+        GetViewFrame().GetWindow().SetHelpId(pCurWin->GetHid());
         if (bRememberAsCurrent)
             pCurWin->InsertLibInfo();
-        if (GetViewFrame()->GetWindow().IsVisible()) // SFX will do it later otherwise
+        if (GetViewFrame().GetWindow().IsVisible()) // SFX will do it later otherwise
             pCurWin->Show();
         pCurWin->Init();
         if (!GetExtraData()->ShellInCriticalSection())
         {
-            vcl::Window* pFrameWindow = &GetViewFrame()->GetWindow();
+            vcl::Window* pFrameWindow = &GetViewFrame().GetWindow();
             vcl::Window* pFocusWindow = Application::GetFocusWindow();
             while ( pFocusWindow && ( pFocusWindow != pFrameWindow ) )
                 pFocusWindow = pFocusWindow->GetParent();
@@ -1228,7 +1323,7 @@ void Shell::SetCurWindow( BaseWindow* pNewWin, bool bUpdateTabBar, bool bRemembe
     else if (pLayout)
     {
         SetWindow(pLayout);
-        GetViewFrame()->GetWindow().SetHelpId( HID_BASICIDE_MODULWINDOW );
+        GetViewFrame().GetWindow().SetHelpId( HID_BASICIDE_MODULWINDOW );
         SfxObjectShell::SetCurrentComponent(nullptr);
     }
     aObjectCatalog->SetCurrentEntry(pCurWin);
@@ -1247,18 +1342,18 @@ void Shell::SetCurWindow( BaseWindow* pNewWin, bool bUpdateTabBar, bool bRemembe
 
 void Shell::ManageToolbars()
 {
-    static constexpr OUStringLiteral aMacroBarResName = u"private:resource/toolbar/macrobar";
-    static constexpr OUStringLiteral aDialogBarResName = u"private:resource/toolbar/dialogbar";
-    static constexpr OUStringLiteral aInsertControlsBarResName
-        = u"private:resource/toolbar/insertcontrolsbar";
-    static constexpr OUStringLiteral aFormControlsBarResName
-        = u"private:resource/toolbar/formcontrolsbar";
+    static constexpr OUString aMacroBarResName = u"private:resource/toolbar/macrobar"_ustr;
+    static constexpr OUString aDialogBarResName = u"private:resource/toolbar/dialogbar"_ustr;
+    static constexpr OUString aInsertControlsBarResName
+        = u"private:resource/toolbar/insertcontrolsbar"_ustr;
+    static constexpr OUString aFormControlsBarResName
+        = u"private:resource/toolbar/formcontrolsbar"_ustr;
 
     if( !pCurWin )
         return;
 
     Reference< beans::XPropertySet > xFrameProps
-        ( GetViewFrame()->GetFrame().GetFrameInterface(), uno::UNO_QUERY );
+        ( GetViewFrame().GetFrame().GetFrameInterface(), uno::UNO_QUERY );
     if ( !xFrameProps.is() )
         return;
 
@@ -1339,7 +1434,7 @@ BasicDebugFlags Shell::CallBasicBreakHdl( StarBASIC const * pBasic )
             {
                 Shell* pShell = GetShell();
                 for ( sal_uInt16 n = 0; n < nWaitCount; n++ )
-                    pShell->GetViewFrame()->GetWindow().EnterWait();
+                    pShell->GetViewFrame().GetWindow().EnterWait();
             }
         }
     }
@@ -1383,11 +1478,11 @@ VclPtr<ModulWindow> Shell::ShowActiveModuleWindow( StarBASIC const * pBasic )
 void Shell::AdjustPosSizePixel( const Point &rPos, const Size &rSize )
 {
     // not if iconified because the whole text would be displaced then at restore
-    if ( GetViewFrame()->GetWindow().GetOutputSizePixel().Height() == 0 )
+    if ( GetViewFrame().GetWindow().GetOutputSizePixel().Height() == 0 )
         return;
 
     Size aTabBarSize;
-    aTabBarSize.setHeight( GetViewFrame()->GetWindow().GetFont().GetFontHeight() + TAB_HEIGHT_MARGIN );
+    aTabBarSize.setHeight( GetViewFrame().GetWindow().GetFont().GetFontHeight() + TAB_HEIGHT_MARGIN );
     aTabBarSize.setWidth( rSize.Width() );
 
     Size aSz( rSize );

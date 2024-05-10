@@ -50,14 +50,14 @@ typedef comphelper::WeakComponentImplHelper<
     css::lang::XServiceInfo,
     css::beans::XFastPropertySet > ShutdownIconServiceBase;
 
-inline constexpr OUStringLiteral WRITER_URL          = u"private:factory/swriter";
-inline constexpr OUStringLiteral CALC_URL            = u"private:factory/scalc";
-inline constexpr OUStringLiteral IMPRESS_URL         = u"private:factory/simpress";
-inline constexpr OUStringLiteral IMPRESS_WIZARD_URL  = u"private:factory/simpress?slot=6686";
-inline constexpr OUStringLiteral DRAW_URL            = u"private:factory/sdraw";
-inline constexpr OUStringLiteral MATH_URL            = u"private:factory/smath";
-inline constexpr OUStringLiteral BASE_URL            = u"private:factory/sdatabase?Interactive";
-inline constexpr OUStringLiteral STARTMODULE_URL     = u".uno:ShowStartModule";
+inline constexpr OUString WRITER_URL          = u"private:factory/swriter"_ustr;
+inline constexpr OUString CALC_URL            = u"private:factory/scalc"_ustr;
+inline constexpr OUString IMPRESS_URL         = u"private:factory/simpress"_ustr;
+inline constexpr OUString IMPRESS_WIZARD_URL  = u"private:factory/simpress?slot=6686"_ustr;
+inline constexpr OUString DRAW_URL            = u"private:factory/sdraw"_ustr;
+inline constexpr OUString MATH_URL            = u"private:factory/smath"_ustr;
+inline constexpr OUString BASE_URL            = u"private:factory/sdatabase?Interactive"_ustr;
+inline constexpr OUString STARTMODULE_URL     = u".uno:ShowStartModule"_ustr;
 
 class ShutdownIcon : public ShutdownIconServiceBase
 {
@@ -66,6 +66,7 @@ class ShutdownIcon : public ShutdownIconServiceBase
         bool                    m_bSystemDialogs;
         std::unique_ptr<sfx2::FileDialogHelper> m_pFileDlg;
         css::uno::Reference< css::uno::XComponentContext > m_xContext;
+        css::uno::Reference< css::frame::XDesktop2 > m_xDesktop;
 
         static rtl::Reference<ShutdownIcon> pShutdownIcon; // one instance
 
@@ -134,8 +135,6 @@ class ShutdownIcon : public ShutdownIconServiceBase
         virtual void SAL_CALL setFastPropertyValue(       ::sal_Int32                  nHandle,
                                                     const css::uno::Any& aValue ) override;
         virtual css::uno::Any SAL_CALL getFastPropertyValue( ::sal_Int32 nHandle ) override;
-
-        css::uno::Reference< css::frame::XDesktop2 > m_xDesktop;
 
 #ifdef _WIN32
         static void EnableAutostartW32( const OUString &aShortcutName );

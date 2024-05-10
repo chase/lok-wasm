@@ -68,7 +68,7 @@ class SwExtraPainter
     const SwLineNumberInfo &m_rLineInf;
     SwTwips m_nX;
     SwTwips m_nRedX;
-    sal_uLong m_nLineNr;
+    sal_Int32 m_nLineNr;
     sal_uInt16 m_nDivider;
     bool m_bGoLeft;
     bool IsClipChg() const { return m_aClip.IsChg(); }
@@ -86,7 +86,7 @@ public:
         assert( m_rLineInf.GetCountBy() != 0 );
         if( m_rLineInf.GetCountBy() == 0 )
             return false;
-        return !( m_nLineNr % m_rLineInf.GetCountBy() );
+        return !( m_nLineNr % static_cast<sal_Int32>(m_rLineInf.GetCountBy()) );
     }
     bool HasDivider() const {
         assert( m_rLineInf.GetDividerCountBy() != 0 );
@@ -177,7 +177,7 @@ SwExtraPainter::SwExtraPainter( const SwTextFrame *pFrame, SwViewShell *pVwSh,
 
     if( text::HoriOrientation::INSIDE == eHor || text::HoriOrientation::OUTSIDE == eHor )
     {
-        if (!oIsRightPage)
+        if (!oIsRightPage.has_value())
             oIsRightPage = pFrame->FindPageFrame()->OnRightPage();
         if (*oIsRightPage)
             eHor = eHor == text::HoriOrientation::INSIDE ? text::HoriOrientation::LEFT : text::HoriOrientation::RIGHT;
@@ -501,6 +501,8 @@ SwRect SwTextFrame::GetPaintSwRect()
 
 bool SwTextFrame::PaintEmpty( const SwRect &rRect, bool bCheck ) const
 {
+    PaintParagraphStylesHighlighting();
+
     SwViewShell *pSh = getRootFrame()->GetCurrShell();
     if( pSh && ( pSh->GetViewOptions()->IsParagraph() || bInitFont ) )
     {
@@ -570,11 +572,13 @@ bool SwTextFrame::PaintEmpty( const SwRect &rRect, bool bCheck ) const
                 pFnt->ChgPhysFnt( pSh, *pSh->GetOut() );
                 Point aPos = getFrameArea().Pos() + getFramePrintArea().Pos();
 
-                const SvxLRSpaceItem &rSpace =
-                    GetTextNodeForParaProps()->GetSwAttrSet().GetLRSpace();
+                const SvxFirstLineIndentItem& rFirstLine(
+                    GetTextNodeForParaProps()->GetSwAttrSet().GetFirstLineIndent());
 
-                if ( rSpace.GetTextFirstLineOffset() > 0 )
-                    aPos.AdjustX(rSpace.GetTextFirstLineOffset() );
+                if (0 < rFirstLine.GetTextFirstLineOffset())
+                {
+                    aPos.AdjustX(rFirstLine.GetTextFirstLineOffset());
+                }
 
                 std::unique_ptr<SwSaveClip, o3tl::default_delete<SwSaveClip>> xClip;
                 if( IsUndersized() )
@@ -645,12 +649,6 @@ void SwTextFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const&
     // #i16816# tagged pdf support
     SwViewShell *pSh = getRootFrame()->GetCurrShell();
 
-    Num_Info aNumInfo( *this );
-    SwTaggedPDFHelper aTaggedPDFHelperNumbering( &aNumInfo, nullptr, nullptr, rRenderContext );
-
-    Frame_Info aFrameInfo( *this );
-    SwTaggedPDFHelper aTaggedPDFHelperParagraph( nullptr, &aFrameInfo, nullptr, rRenderContext );
-
     if( IsEmpty() && PaintEmpty( rRect, true ) )
         return;
 
@@ -675,6 +673,31 @@ void SwTextFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const&
             OSL_ENSURE( false, "+SwTextFrame::PaintSwFrame: missing format information" );
             return;
         }
+    }
+
+    // tdf140219-2.odt text frame with only fly portions and a follow is not
+    // actually a paragraph - delay creating all structured elements to follow.
+    bool const isPDFTaggingEnabled(!HasFollow() || GetPara()->HasContentPortions());
+    ::std::optional<SwTaggedPDFHelper> oTaggedPDFHelperNumbering;
+    if (isPDFTaggingEnabled)
+    {
+        Num_Info aNumInfo(*this);
+        oTaggedPDFHelperNumbering.emplace(&aNumInfo, nullptr, nullptr, rRenderContext);
+    }
+
+    // Lbl unfortunately must be able to contain multiple numbering portions
+    // that may be on multiple lines of text (but apparently always in the
+    // master frame), so it gets complicated.
+    ::std::optional<SwTaggedPDFHelper> oTaggedLabel;
+    // Paragraph tag - if there is a list label, opening should be delayed.
+    ::std::optional<SwTaggedPDFHelper> oTaggedParagraph;
+
+    if (isPDFTaggingEnabled
+        && (GetTextNodeForParaProps()->IsOutline()
+            || !GetPara()->HasNumberingPortion(SwParaPortion::FootnoteToo)))
+    {   // no Lbl needed => open paragraph tag now
+        Frame_Info aFrameInfo(*this, false);
+        oTaggedParagraph.emplace(nullptr, &aFrameInfo, nullptr, rRenderContext);
     }
 
     // We don't want to be interrupted while painting.
@@ -761,7 +784,7 @@ void SwTextFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const&
         {
             do
             {
-                aLine.DrawTextLine( rRect, aClip, IsUndersized() );
+                aLine.DrawTextLine(rRect, aClip, IsUndersized(), oTaggedLabel, oTaggedParagraph, isPDFTaggingEnabled);
 
             } while( aLine.Next() && aLine.Y() <= nBottom );
         }
@@ -774,10 +797,14 @@ void SwTextFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const&
             rRepaint.Clear();
     }
 
+    PaintParagraphStylesHighlighting();
+
     const_cast<SwRect&>(rRect) = aOldRect;
 
     OSL_ENSURE( ! IsSwapped(), "A frame is swapped after Paint" );
 
+    assert(!oTaggedLabel); // must have been closed if opened
+    assert(!isPDFTaggingEnabled || oTaggedParagraph || rRect.GetIntersection(getFrameArea()) != getFrameArea()); // must have been created during complete paint (PDF export is always complete paint)
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

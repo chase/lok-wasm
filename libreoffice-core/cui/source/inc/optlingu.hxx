@@ -22,6 +22,7 @@
 #include <svx/langbox.hxx>
 #include <com/sun/star/uno/Reference.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
+#include <com/sun/star/configuration/ReadWriteAccess.hpp>
 
 namespace com::sun::star{
     namespace beans{
@@ -60,6 +61,8 @@ class SvxEditModulesDlg : public weld::GenericDialogController
     std::unique_ptr<weld::Button> m_xClosePB;
     std::unique_ptr<SvxLanguageBox> m_xLanguageLB;
 
+    css::uno::Reference< css::configuration::XReadWriteAccess> m_xReadWriteAccess;
+
     DECL_LINK( SelectHdl_Impl, weld::TreeView&, void );
     DECL_LINK( UpDownHdl_Impl, weld::Button&, void );
     DECL_LINK( ClickHdl_Impl, weld::Button&, void );
@@ -84,6 +87,8 @@ private:
     OUString            sWordsWithDigits;
     OUString            sSpellSpecial;
     OUString            sSpellAuto;
+    OUString            sSpellClosedCompound;
+    OUString            sSpellHyphenatedCompound;
     OUString            sGrammarAuto;
     OUString            sNumMinWordlen;
     OUString            sNumPreBreak;
@@ -139,6 +144,8 @@ public:
     SvxLinguTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rCoreSet);
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rSet );
     virtual ~SvxLinguTabPage() override;
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

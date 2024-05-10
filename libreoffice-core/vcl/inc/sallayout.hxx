@@ -22,13 +22,10 @@
 
 #include <sal/config.h>
 
+#include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
-#include <tools/gen.hxx>
-#include <tools/degree.hxx>
-#include <i18nlangtag/languagetag.hxx>
 
 #include <vcl/dllapi.h>
-#include <vcl/devicecoordinate.hxx>
 #include <vcl/vclenum.hxx> // for typedef sal_UCS4
 #include <vcl/vcllayout.hxx>
 
@@ -39,7 +36,6 @@
 
 #include <hb.h>
 
-#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -57,15 +53,15 @@ namespace vcl::text {
     class TextLayoutCache;
 }
 
-class MultiSalLayout final : public SalLayout
+class VCL_DLLPUBLIC MultiSalLayout final : public SalLayout
 {
 public:
     void            DrawText(SalGraphics&) const override;
-    sal_Int32       GetTextBreak(DeviceCoordinate nMaxWidth, DeviceCoordinate nCharExtra, int nFactor) const override;
-    DeviceCoordinate GetTextWidth() const final override;
-    DeviceCoordinate FillDXArray(std::vector<DeviceCoordinate>* pDXArray, const OUString& rStr) const override;
-    void            GetCaretPositions(int nArraySize, sal_Int32* pCaretXArray) const override;
-    bool            GetNextGlyph(const GlyphItem** pGlyph, DevicePoint& rPos, int& nStart,
+    sal_Int32       GetTextBreak(double nMaxWidth, double nCharExtra, int nFactor) const override;
+    double          GetTextWidth() const final override;
+    double          FillDXArray(std::vector<double>* pDXArray, const OUString& rStr) const override;
+    void            GetCaretPositions(std::vector<double>& rCaretPositions, const OUString& rStr) const override;
+    bool            GetNextGlyph(const GlyphItem** pGlyph, basegfx::B2DPoint& rPos, int& nStart,
                                  const LogicalFontInstance** ppGlyphFont = nullptr) const override;
     bool            GetOutline(basegfx::B2DPolyPolygonVector&) const override;
     bool            IsKashidaPosValid(int nCharPos, int nNextCharPos) const override;
@@ -85,6 +81,8 @@ public:
     void            ImplAdjustMultiLayout(vcl::text::ImplLayoutArgs& rArgs,
                                           vcl::text::ImplLayoutArgs& rMultiArgs,
                                           const double* pMultiDXArray);
+
+    SAL_DLLPRIVATE ImplLayoutRuns* GetFallbackRuns() { return maFallbackRuns; }
 
     virtual         ~MultiSalLayout() override;
 
@@ -117,16 +115,16 @@ public:
     bool            IsKashidaPosValid(int nCharPos, int nNextCharPos) const final override;
 
     // used by upper layers
-    DeviceCoordinate GetTextWidth() const final override;
-    DeviceCoordinate FillDXArray(std::vector<DeviceCoordinate>* pDXArray, const OUString& rStr) const final override;
-    sal_Int32 GetTextBreak(DeviceCoordinate nMaxWidth, DeviceCoordinate nCharExtra, int nFactor) const final override;
-    void            GetCaretPositions(int nArraySize, sal_Int32* pCaretXArray) const final override;
+    double          GetTextWidth() const final override;
+    double          FillDXArray(std::vector<double>* pDXArray, const OUString& rStr) const final override;
+    sal_Int32       GetTextBreak(double nMaxWidth, double nCharExtra, int nFactor) const final override;
+    void            GetCaretPositions(std::vector<double>& rCaretPositions, const OUString& rStr) const override;
 
     // used by display layers
     LogicalFontInstance& GetFont() const
         { return *m_GlyphItems.GetFont(); }
 
-    bool            GetNextGlyph(const GlyphItem** pGlyph, DevicePoint& rPos, int& nStart,
+    bool            GetNextGlyph(const GlyphItem** pGlyph, basegfx::B2DPoint& rPos, int& nStart,
                                  const LogicalFontInstance** ppGlyphFont = nullptr) const override;
 
     const SalLayoutGlyphsImpl& GlyphsImpl() const { return m_GlyphItems; }
@@ -141,10 +139,10 @@ private:
                     GenericSalLayout& operator=( const GenericSalLayout& ) = delete;
 
     void            ApplyDXArray(const double*, const sal_Bool*);
-    void            Justify(DeviceCoordinate nNewWidth);
+    void            Justify(double nNewWidth);
     void            ApplyAsianKerning(std::u16string_view rStr);
 
-    void            GetCharWidths(std::vector<DeviceCoordinate>& rCharWidths,
+    void            GetCharWidths(std::vector<double>& rCharWidths,
                                   const OUString& rStr) const;
 
     void            SetNeedFallback(vcl::text::ImplLayoutArgs&, sal_Int32, bool);

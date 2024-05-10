@@ -366,7 +366,7 @@ SwChapterNumRules*  SwModule::GetChapterNumRules()
 
 void SwModule::ShowDBObj(SwView const & rView, const SwDBData& rData)
 {
-    Reference<XFrame> xFrame = rView.GetViewFrame()->GetFrame().GetFrameInterface();
+    Reference<XFrame> xFrame = rView.GetViewFrame().GetFrame().GetFrameInterface();
 
     uno::Reference<XFrame> xBeamerFrame = xFrame->findFrame("_beamer", FrameSearchFlag::CHILDREN);
     if (!xBeamerFrame.is())
@@ -449,7 +449,6 @@ void SwModule::GetRedlineAuthorInfo(tools::JsonWriter& rJsonWriter)
         auto authorNode = rJsonWriter.startStruct();
         rJsonWriter.put("index", static_cast<sal_Int64>(nAuthor));
         rJsonWriter.put("name", m_pAuthorNames[nAuthor]);
-        rJsonWriter.put("color", sal_uInt32(lcl_GetAuthorColor(nAuthor)));
     }
 }
 
@@ -466,15 +465,12 @@ std::size_t SwModule::InsertRedlineAuthor(const OUString& rAuthor)
     return nPos;
 }
 
-static void lcl_FillAuthorAttr( std::size_t nAuthor, SfxItemSet &rSet,
+static void lcl_FillAuthorAttr( Color aCol, SfxItemSet &rSet,
                         const AuthorCharAttr &rAttr )
 {
-    Color aCol( rAttr.m_nColor );
 
-    if( rAttr.m_nColor == COL_TRANSPARENT )
-        aCol = lcl_GetAuthorColor(nAuthor);
-
-    bool bBackGr = rAttr.m_nColor == COL_NONE_COLOR;
+    // MACRO:
+    bool bBackGr = aCol == COL_NONE_COLOR || rAttr.m_nColor == COL_NONE_COLOR;
 
     switch (rAttr.m_nItemId)
     {
@@ -525,21 +521,23 @@ static void lcl_FillAuthorAttr( std::size_t nAuthor, SfxItemSet &rSet,
         rSet.Put( SvxColorItem( aCol, RES_CHRATR_COLOR ) );
 }
 
-void SwModule::GetInsertAuthorAttr(std::size_t nAuthor, SfxItemSet &rSet)
+// MACRO: {
+void SwModule::GetInsertAuthorAttr(SfxItemSet &rSet)
 {
-    lcl_FillAuthorAttr(nAuthor, rSet, m_pModuleConfig->GetInsertAuthorAttr());
+    lcl_FillAuthorAttr(COL_BLUE_CLASSIC, rSet, m_pModuleConfig->GetInsertAuthorAttr());
 }
 
-void SwModule::GetDeletedAuthorAttr(std::size_t nAuthor, SfxItemSet &rSet)
+void SwModule::GetDeletedAuthorAttr(SfxItemSet &rSet)
 {
-    lcl_FillAuthorAttr(nAuthor, rSet, m_pModuleConfig->GetDeletedAuthorAttr());
+    lcl_FillAuthorAttr(COL_RED_CLASSIC, rSet, m_pModuleConfig->GetDeletedAuthorAttr());
 }
 
 // For future extension:
-void SwModule::GetFormatAuthorAttr( std::size_t nAuthor, SfxItemSet &rSet )
+void SwModule::GetFormatAuthorAttr( SfxItemSet &rSet )
 {
-    lcl_FillAuthorAttr( nAuthor, rSet, m_pModuleConfig->GetFormatAuthorAttr() );
+    lcl_FillAuthorAttr( COL_NONE_COLOR, rSet, m_pModuleConfig->GetFormatAuthorAttr() );
 }
+//MACRO: }
 
 sal_uInt16 SwModule::GetRedlineMarkPos() const
 {

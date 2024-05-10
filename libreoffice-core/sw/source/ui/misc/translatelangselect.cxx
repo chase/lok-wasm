@@ -30,7 +30,6 @@
 #include <sal/log.hxx>
 #include <ndtxt.hxx>
 #include <shellio.hxx>
-#include <svtools/deeplcfg.hxx>
 #include <vcl/idle.hxx>
 #include <mdiexp.hxx>
 #include <strings.hrc>
@@ -38,6 +37,42 @@
 #include <sfx2/viewfrm.hxx>
 #include <com/sun/star/task/XStatusIndicatorFactory.hpp>
 #include <linguistic/translate.hxx>
+#include <officecfg/Office/Linguistic.hxx>
+
+static const std::vector<SwLanguageListItem>& getLanguageVec()
+{
+    static const std::vector<SwLanguageListItem> gLanguageVec{
+        SwLanguageListItem("BG"_ostr, "Bulgarian"_ostr),
+        SwLanguageListItem("CS"_ostr, "Czech"_ostr),
+        SwLanguageListItem("DA"_ostr, "Danish"_ostr),
+        SwLanguageListItem("DE"_ostr, "German"_ostr),
+        SwLanguageListItem("EL"_ostr, "Greek"_ostr),
+        SwLanguageListItem("EN-GB"_ostr, "English (British)"_ostr),
+        SwLanguageListItem("EN-US"_ostr, "English (American)"_ostr),
+        SwLanguageListItem("ES"_ostr, "Spanish"_ostr),
+        SwLanguageListItem("ET"_ostr, "Estonian"_ostr),
+        SwLanguageListItem("FI"_ostr, "Finnish"_ostr),
+        SwLanguageListItem("FR"_ostr, "French"_ostr),
+        SwLanguageListItem("HU"_ostr, "Hungarian"_ostr),
+        SwLanguageListItem("ID"_ostr, "Indonesian"_ostr),
+        SwLanguageListItem("IT"_ostr, "Italian"_ostr),
+        SwLanguageListItem("JA"_ostr, "Japanese"_ostr),
+        SwLanguageListItem("LT"_ostr, "Lithuanian"_ostr),
+        SwLanguageListItem("LV"_ostr, "Latvian"_ostr),
+        SwLanguageListItem("NL"_ostr, "Dutch"_ostr),
+        SwLanguageListItem("PL"_ostr, "Polish"_ostr),
+        SwLanguageListItem("PT-BR"_ostr, "Portuguese (Brazilian)"_ostr),
+        SwLanguageListItem("PT-PT"_ostr, "Portuguese (European)"_ostr),
+        SwLanguageListItem("RO"_ostr, "Romanian"_ostr),
+        SwLanguageListItem("RU"_ostr, "Russian"_ostr),
+        SwLanguageListItem("SK"_ostr, "Slovak"_ostr),
+        SwLanguageListItem("SL"_ostr, "Slovenian"_ostr),
+        SwLanguageListItem("SV"_ostr, "Swedish"_ostr),
+        SwLanguageListItem("TR"_ostr, "Turkish"_ostr),
+        SwLanguageListItem("ZH"_ostr, "Chinese (simplified)"_ostr)
+    };
+    return gLanguageVec;
+}
 
 int SwTranslateLangSelectDlg::selectedLangIdx = -1;
 SwTranslateLangSelectDlg::SwTranslateLangSelectDlg(weld::Window* pParent, SwWrtShell& rSh)
@@ -47,36 +82,6 @@ SwTranslateLangSelectDlg::SwTranslateLangSelectDlg(weld::Window* pParent, SwWrtS
     , m_xLanguageListBox(m_xBuilder->weld_combo_box("combobox1"))
     , m_xBtnCancel(m_xBuilder->weld_button("cancel"))
     , m_xBtnTranslate(m_xBuilder->weld_button("translate"))
-    , m_xLanguageVec({
-          SwLanguageListItem("BG", "Bulgarian"),
-          SwLanguageListItem("CS", "Czech"),
-          SwLanguageListItem("DA", "Danish"),
-          SwLanguageListItem("DE", "German"),
-          SwLanguageListItem("EL", "Greek"),
-          SwLanguageListItem("EN-GB", "English (British)"),
-          SwLanguageListItem("EN-US", "English (American)"),
-          SwLanguageListItem("ES", "Spanish"),
-          SwLanguageListItem("ET", "Estonian"),
-          SwLanguageListItem("FI", "Finnish"),
-          SwLanguageListItem("FR", "French"),
-          SwLanguageListItem("HU", "Hungarian"),
-          SwLanguageListItem("ID", "Indonesian"),
-          SwLanguageListItem("IT", "Italian"),
-          SwLanguageListItem("JA", "Japanese"),
-          SwLanguageListItem("LT", "Lithuanian"),
-          SwLanguageListItem("LV", "Latvian"),
-          SwLanguageListItem("NL", "Dutch"),
-          SwLanguageListItem("PL", "Polish"),
-          SwLanguageListItem("PT-BR", "Portuguese (Brazilian)"),
-          SwLanguageListItem("PT-PT", "Portuguese (European)"),
-          SwLanguageListItem("RO", "Romanian"),
-          SwLanguageListItem("RU", "Russian"),
-          SwLanguageListItem("SK", "Slovak"),
-          SwLanguageListItem("SL", "Slovenian"),
-          SwLanguageListItem("SV", "Swedish"),
-          SwLanguageListItem("TR", "Turkish"),
-          SwLanguageListItem("ZH", "Chinese (simplified)"),
-      })
     , m_bTranslationStarted(false)
     , m_bCancelTranslation(false)
 {
@@ -84,7 +89,7 @@ SwTranslateLangSelectDlg::SwTranslateLangSelectDlg(weld::Window* pParent, SwWrtS
     m_xBtnCancel->connect_clicked(LINK(this, SwTranslateLangSelectDlg, LangSelectCancelHdl));
     m_xBtnTranslate->connect_clicked(LINK(this, SwTranslateLangSelectDlg, LangSelectTranslateHdl));
 
-    for (const auto& item : m_xLanguageVec)
+    for (const auto& item : getLanguageVec())
     {
         m_xLanguageListBox->append_text(OStringToOUString(item.getName(), RTL_TEXTENCODING_UTF8));
     }
@@ -99,7 +104,7 @@ std::optional<SwLanguageListItem> SwTranslateLangSelectDlg::GetSelectedLanguage(
 {
     if (SwTranslateLangSelectDlg::selectedLangIdx != -1)
     {
-        return m_xLanguageVec.at(SwTranslateLangSelectDlg::selectedLangIdx);
+        return getLanguageVec().at(SwTranslateLangSelectDlg::selectedLangIdx);
     }
 
     return {};
@@ -130,8 +135,11 @@ IMPL_LINK_NOARG(SwTranslateLangSelectDlg, LangSelectTranslateHdl, weld::Button&,
         return;
     }
 
-    SvxDeeplOptions& rDeeplOptions = SvxDeeplOptions::Get();
-    if (rDeeplOptions.getAPIUrl().isEmpty() || rDeeplOptions.getAuthKey().isEmpty())
+    std::optional<OUString> oDeeplAPIUrl
+        = officecfg::Office::Linguistic::Translation::Deepl::ApiURL::get();
+    std::optional<OUString> oDeeplKey
+        = officecfg::Office::Linguistic::Translation::Deepl::AuthKey::get();
+    if (!oDeeplAPIUrl || oDeeplAPIUrl->isEmpty() || !oDeeplKey || oDeeplKey->isEmpty())
     {
         SAL_WARN("sw.ui", "SwTranslateLangSelectDlg: API options are not set");
         m_xDialog->response(RET_CANCEL);
@@ -139,13 +147,12 @@ IMPL_LINK_NOARG(SwTranslateLangSelectDlg, LangSelectTranslateHdl, weld::Button&,
     }
 
     const OString aAPIUrl
-        = OUStringToOString(rtl::Concat2View(rDeeplOptions.getAPIUrl() + "?tag_handling=html"),
+        = OUStringToOString(rtl::Concat2View(*oDeeplAPIUrl + "?tag_handling=html"),
                             RTL_TEXTENCODING_UTF8)
               .trim();
-    const OString aAuthKey
-        = OUStringToOString(rDeeplOptions.getAuthKey(), RTL_TEXTENCODING_UTF8).trim();
+    const OString aAuthKey = OUStringToOString(*oDeeplKey, RTL_TEXTENCODING_UTF8).trim();
     const auto aTargetLang
-        = m_xLanguageVec.at(SwTranslateLangSelectDlg::selectedLangIdx).getLanguage();
+        = getLanguageVec().at(SwTranslateLangSelectDlg::selectedLangIdx).getLanguage();
 
     m_bTranslationStarted = true;
 

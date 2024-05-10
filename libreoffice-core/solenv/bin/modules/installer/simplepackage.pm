@@ -42,13 +42,13 @@ sub check_simple_packager_project
 {
     my ( $allvariables ) = @_;
 
-    if (( $installer::globals::packageformat eq "installed" ) ||
-        ( $installer::globals::packageformat eq "archive" ))
+    if ( $installer::globals::packageformat eq "installed" )
     {
         $installer::globals::is_simple_packager_project = 1;
         $installer::globals::patch_user_dir = 1;
     }
-    elsif( $installer::globals::packageformat eq "dmg" )
+    elsif(( $installer::globals::packageformat eq "archive" ) ||
+          ( $installer::globals::packageformat eq "dmg" ) )
     {
         $installer::globals::is_simple_packager_project = 1;
     }
@@ -412,7 +412,10 @@ sub create_package
             installer::systemactions::rename_directory($oldappdir,$newappdir);
             my $subdir = "$newappdir/Contents/Resources";
             if ( ! -d $subdir ) { installer::systemactions::create_directory($subdir); }
-            if ( $ENV{'MACOSX_CODESIGNING_IDENTITY'} )
+            # For non-release builds where no identity is, set entitlements
+            # to allow Xcode's Instruments application to connect to the
+            # application
+            if ( $ENV{'MACOSX_CODESIGNING_IDENTITY'} || !$ENV{'ENABLE_RELEASE_BUILD'} )
             {
                 $newappdir =~ s/ /\\ /g;
                 $systemcall = "$ENV{'SRCDIR'}/solenv/bin/macosx-codesign-app-bundle $newappdir";
@@ -498,13 +501,14 @@ sub create_package
     if ( $makesystemcall )
     {
         print "... $systemcall ...\n";
-        my $returnvalue = system($systemcall);
+        my $systemcall_output = `$systemcall`;
+        my $returnvalue = $? >> 8;
         my $infoline = "Systemcall: $systemcall\n";
         push( @installer::globals::logfileinfo, $infoline);
 
         if ($returnvalue)
         {
-            $infoline = "ERROR: Could not execute \"$systemcall\": $returnvalue\n";
+            $infoline = "ERROR: Could not execute \"$systemcall\" - exitcode: $returnvalue - output:\n$systemcall_output\n";
             push( @installer::globals::logfileinfo, $infoline);
         }
         else

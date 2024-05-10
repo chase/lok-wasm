@@ -15,6 +15,7 @@
 #include <drawinglayer/processor2d/processor2dtools.hxx>
 #include <memory>
 #include <officecfg/Office/UI/Infobar.hxx>
+#include <officecfg/Office/Common.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/infobar.hxx>
@@ -114,12 +115,13 @@ void SfxInfoBarWindow::SetCloseButtonImage()
 
     drawinglayer::primitive2d::Primitive2DContainer aSeq(2);
 
-    //  background
+    // Draw background. The right and bottom need to be extended by 1 or
+    // there will be a white line on both edges when Skia is enabled.
     B2DPolygon aPolygon;
     aPolygon.append(B2DPoint(aRect.Left(), aRect.Top()));
-    aPolygon.append(B2DPoint(aRect.Right(), aRect.Top()));
-    aPolygon.append(B2DPoint(aRect.Right(), aRect.Bottom()));
-    aPolygon.append(B2DPoint(aRect.Left(), aRect.Bottom()));
+    aPolygon.append(B2DPoint(aRect.Right() + 1, aRect.Top()));
+    aPolygon.append(B2DPoint(aRect.Right() + 1, aRect.Bottom() + 1));
+    aPolygon.append(B2DPoint(aRect.Left(), aRect.Bottom() + 1));
     aPolygon.setClosed(true);
 
     aSeq[0] = new PolyPolygonColorPrimitive2D(B2DPolyPolygon(aPolygon), m_aBackgroundColor);
@@ -340,7 +342,7 @@ void SfxInfoBarWindow::Update(const OUString& sPrimaryMessage, const OUString& s
     Invalidate();
 }
 
-IMPL_LINK_NOARG(SfxInfoBarWindow, CloseHandler, const OString&, void)
+IMPL_LINK_NOARG(SfxInfoBarWindow, CloseHandler, const OUString&, void)
 {
     static_cast<SfxInfoBarContainerWindow*>(GetParent())->removeInfoBar(this);
 }
@@ -435,6 +437,15 @@ bool SfxInfoBarContainerWindow::isInfobarEnabled(std::u16string_view sId)
         return officecfg::Office::UI::Infobar::Enabled::WhatsNew::get();
     if (sId == u"hiddentrackchanges")
         return officecfg::Office::UI::Infobar::Enabled::HiddenTrackChanges::get();
+    if (sId == u"macro")
+        return officecfg::Office::UI::Infobar::Enabled::MacrosDisabled::get();
+    if (sId == u"securitywarn")
+    {
+        return officecfg::Office::Common::Security::Scripting::WarnSaveOrSendDoc::get()
+               || officecfg::Office::Common::Security::Scripting::WarnSignDoc::get()
+               || officecfg::Office::Common::Security::Scripting::WarnPrintDoc::get()
+               || officecfg::Office::Common::Security::Scripting::WarnCreatePDF::get();
+    }
 
     return true;
 }

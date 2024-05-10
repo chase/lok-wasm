@@ -428,7 +428,7 @@ void ChartModel::insertDefaultChart()
                 {
                     xDiagram->setPropertyValue( "RightAngledAxes", uno::Any( true ));
                     xDiagram->setPropertyValue( "D3DScenePerspective", uno::Any( drawing::ProjectionMode_PARALLEL ));
-                    ThreeDHelper::setScheme( xDiagram, ThreeDLookScheme::ThreeDLookScheme_Realistic );
+                    xDiagram->setScheme( ThreeDLookScheme::ThreeDLookScheme_Realistic );
                 }
 
                 //set some new 'defaults' for wall and floor
@@ -638,16 +638,11 @@ void ChartModel::impl_notifyModifiedListeners()
     //always notify the view first!
     ChartViewHelper::setViewToDirtyState( this );
 
-    ::comphelper::OInterfaceContainerHelper2* pIC = m_aLifeTimeManager.m_aListenerContainer
-        .getContainer( cppu::UnoType<util::XModifyListener>::get());
-    if( pIC )
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    if( m_aLifeTimeManager.m_aModifyListeners.getLength(aGuard) )
     {
         lang::EventObject aEvent( static_cast< lang::XComponent*>(this) );
-        ::comphelper::OInterfaceIteratorHelper2 aIt( *pIC );
-        while( aIt.hasMoreElements() )
-        {
-            static_cast< util::XModifyListener* >( aIt.next() )->modified( aEvent );
-        }
+        m_aLifeTimeManager.m_aModifyListeners.notifyEach(aGuard, &util::XModifyListener::modified, aEvent);
     }
 }
 
@@ -676,7 +671,8 @@ void SAL_CALL ChartModel::setModified( sal_Bool bModified )
 
     if( m_nControllerLockCount > 0 )
     {
-        m_bUpdateNotificationsPending = true;
+        if (bModified)
+            m_bUpdateNotificationsPending = true; // Maybe !bModified should reset it?
         return;//don't call listeners if controllers are locked
     }
     aGuard.clear();
@@ -692,8 +688,8 @@ void SAL_CALL ChartModel::addModifyListener(
     if( m_aLifeTimeManager.impl_isDisposedOrClosed() )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.addInterface(
-        cppu::UnoType<util::XModifyListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aModifyListeners.addInterface( aGuard, xListener );
 }
 
 void SAL_CALL ChartModel::removeModifyListener(
@@ -702,8 +698,8 @@ void SAL_CALL ChartModel::removeModifyListener(
     if( m_aLifeTimeManager.impl_isDisposedOrClosed(false) )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.removeInterface(
-        cppu::UnoType<util::XModifyListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aModifyListeners.removeInterface( aGuard, xListener );
 }
 
 // util::XModifyListener
@@ -723,7 +719,7 @@ void SAL_CALL ChartModel::modified( const lang::EventObject& rEvenObject)
             rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = getTypeManager();
             rtl::Reference<Diagram> xDiagram(getFirstChartDiagram());
 
-            DiagramHelper::tTemplateWithServiceName aTemplateAndService = DiagramHelper::getTemplateForDiagram(xDiagram, xChartTypeManager);
+            Diagram::tTemplateWithServiceName aTemplateAndService = xDiagram->getTemplate(xChartTypeManager);
             aTemplateAndService.xChartTypeTemplate->changeDiagramData(xDiagram, xDataSource, aArguments);
         }
         catch (const uno::Exception &)
@@ -772,16 +768,14 @@ Reference< embed::XStorage > SAL_CALL ChartModel::getDocumentStorage()
 
 void ChartModel::impl_notifyStorageChangeListeners()
 {
-    ::comphelper::OInterfaceContainerHelper2* pIC = m_aLifeTimeManager.m_aListenerContainer
-          .getContainer( cppu::UnoType<document::XStorageChangeListener>::get());
-    if( pIC )
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    if( m_aLifeTimeManager.m_aStorageChangeListeners.getLength(aGuard) )
     {
-        ::comphelper::OInterfaceIteratorHelper2 aIt( *pIC );
-        while( aIt.hasMoreElements() )
-        {
-            static_cast< document::XStorageChangeListener* >( aIt.next() )
-                ->notifyStorageChange( static_cast< ::cppu::OWeakObject* >( this ), m_xStorage );
-        }
+        m_aLifeTimeManager.m_aStorageChangeListeners.forEach(aGuard,
+            [this](const uno::Reference<document::XStorageChangeListener>& l)
+            {
+                l->notifyStorageChange( static_cast< ::cppu::OWeakObject* >( this ), m_xStorage );
+            });
     }
 }
 
@@ -790,8 +784,8 @@ void SAL_CALL ChartModel::addStorageChangeListener( const Reference< document::X
     if( m_aLifeTimeManager.impl_isDisposedOrClosed() )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.addInterface(
-        cppu::UnoType<document::XStorageChangeListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aStorageChangeListeners.addInterface( aGuard, xListener );
 }
 
 void SAL_CALL ChartModel::removeStorageChangeListener( const Reference< document::XStorageChangeListener >& xListener )
@@ -799,8 +793,8 @@ void SAL_CALL ChartModel::removeStorageChangeListener( const Reference< document
     if( m_aLifeTimeManager.impl_isDisposedOrClosed(false) )
         return; //behave passive if already disposed or closed
 
-    m_aLifeTimeManager.m_aListenerContainer.removeInterface(
-        cppu::UnoType<document::XStorageChangeListener>::get(), xListener );
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aStorageChangeListeners.removeInterface(aGuard, xListener );
 }
 
 } //  namespace chart

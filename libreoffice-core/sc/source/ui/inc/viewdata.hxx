@@ -49,7 +49,7 @@ inline ScHSplitPos WhichH( ScSplitPos ePos );
 inline ScVSplitPos WhichV( ScSplitPos ePos );
 
 /**  Screen behavior related to cursor movements */
-enum ScFollowMode { SC_FOLLOW_NONE, SC_FOLLOW_LINE, SC_FOLLOW_FIX, SC_FOLLOW_JUMP };
+enum ScFollowMode { SC_FOLLOW_NONE, SC_FOLLOW_LINE, SC_FOLLOW_FIX, SC_FOLLOW_JUMP, SC_FOLLOW_JUMP_END };
 
 /** Mouse mode to select areas */
 enum ScRefType { SC_REFTYPE_NONE, SC_REFTYPE_REF, SC_REFTYPE_FILL,
@@ -275,6 +275,7 @@ private:
 
     ::std::vector<std::unique_ptr<ScViewDataTable>> maTabData;
     ScMarkData          maMarkData;
+    ScMarkData          maHighlightData;
     ScViewDataTable*    pThisTab;                   // Data of the displayed sheet
     ScDocShell*         pDocShell;
     ScDocument&         mrDoc;
@@ -362,6 +363,7 @@ public:
     SfxDispatcher&  GetDispatcher();        // from ViewShell's ViewFrame
 
     ScMarkData&     GetMarkData();
+    ScMarkData&     GetHighlightData();
     const ScMarkData& GetMarkData() const;
 
     weld::Window*   GetDialogParent();          // forwarded from tabvwsh

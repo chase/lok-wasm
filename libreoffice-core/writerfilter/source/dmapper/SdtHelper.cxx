@@ -16,6 +16,7 @@
 #include <utility>
 #include <vcl/svapp.hxx>
 #include <vcl/outdev.hxx>
+#include <comphelper/diagnose_ex.hxx>
 #include <comphelper/string.hxx>
 #include <comphelper/sequence.hxx>
 #include <xmloff/odffields.hxx>
@@ -354,7 +355,7 @@ void SdtHelper::createPlainTextControl()
     try
     {
         bool bIsInTable = (m_rDM_Impl.hasTableManager() && m_rDM_Impl.getTableManager().isInTable())
-                              != (m_rDM_Impl.m_nTableDepth > 0)
+                              != (0 < m_rDM_Impl.m_StreamStateStack.top().nTableDepth)
                           && m_rDM_Impl.GetIsDummyParaAddedForTableInSection();
         if (bIsInTable)
             xCrsr->goRight(1, false);
@@ -362,7 +363,8 @@ void SdtHelper::createPlainTextControl()
     }
     catch (uno::Exception&)
     {
-        OSL_ENSURE(false, "Cannot get the right text range for text control");
+        TOOLS_WARN_EXCEPTION("writerfilter.dmapper",
+                             "Cannot get the right text range for date field");
         return;
     }
 
@@ -457,7 +459,7 @@ void SdtHelper::createDateContentControl()
         // tdf#138093: Date selector reset, if placed inside table
         // Modified to XOR relationship and adding dummy paragraph conditions
         bool bIsInTable = (m_rDM_Impl.hasTableManager() && m_rDM_Impl.getTableManager().isInTable())
-                              != (m_rDM_Impl.m_nTableDepth > 0)
+                              != (0 < m_rDM_Impl.m_StreamStateStack.top().nTableDepth)
                           && m_rDM_Impl.GetIsDummyParaAddedForTableInSection();
         if (bIsInTable)
             xCrsr->goRight(1, false);
@@ -465,7 +467,8 @@ void SdtHelper::createDateContentControl()
     }
     catch (uno::Exception&)
     {
-        OSL_ENSURE(false, "Cannot get the right text range for date field");
+        TOOLS_WARN_EXCEPTION("writerfilter.dmapper",
+                             "Cannot get the right text range for date field");
         return;
     }
 

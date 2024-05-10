@@ -17,10 +17,17 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_TEXTLAYOUT_HXX
-#define INCLUDED_VCL_INC_TEXTLAYOUT_HXX
+#pragma once
+
+#include <tools/long.hxx>
+#include <vcl/outdev.hxx>
 
 #include <memory>
+#include <vector>
+
+#include <com/sun/star/i18n/WordType.hpp>
+#include <com/sun/star/i18n/XBreakIterator.hpp>
+#include <com/sun/star/linguistic2/LinguServiceManager.hpp>
 
 class Control;
 
@@ -32,7 +39,7 @@ namespace vcl
         virtual tools::Long        GetTextWidth( const OUString& _rText, sal_Int32 _nStartIndex, sal_Int32 _nLength ) const = 0;
         virtual void        DrawText( const Point& _rStartPoint, const OUString& _rText, sal_Int32 _nStartIndex, sal_Int32 _nLength,
                                 std::vector< tools::Rectangle >* _pVector, OUString* _pDisplayText ) = 0;
-        virtual void        GetCaretPositions( const OUString& _rText, sal_Int32* _pCaretXArray, sal_Int32 _nStartIndex, sal_Int32 _nLength ) const = 0;
+        virtual tools::Long GetTextArray( const OUString& _rText, KernArray* _pDXArray, sal_Int32 _nStartIndex, sal_Int32 _nLength, bool bCaret = false ) const = 0;
         virtual sal_Int32   GetTextBreak( const OUString& _rText, tools::Long _nMaxTextWidth, sal_Int32 _nStartIndex, sal_Int32 _nLength ) const = 0;
         virtual bool        DecomposeTextRectAction() const = 0;
 
@@ -40,10 +47,35 @@ namespace vcl
         ~ITextLayout() COVERITY_NOEXCEPT_FALSE {}
     };
 
+    class TextLayoutCommon : public ITextLayout
+    {
+    public:
+        OUString GetEllipsisString(OUString const& rOrigStr, tools::Long nMaxWidth, DrawTextFlags nStyle);
+
+        sal_Int32 BreakLinesWithIterator(const tools::Long nWidth, OUString const& rStr,
+                        css::uno::Reference< css::linguistic2::XHyphenator > const& xHyph,
+                        css::uno::Reference<css::i18n::XBreakIterator> const& xBI,
+                        const bool bHyphenate,
+                        const sal_Int32 nPos, sal_Int32 nBreakPos);
+
+        sal_Int32 BreakLinesSimple(const tools::Long nWidth, OUString const& rStr,
+                                  const sal_Int32 nPos, sal_Int32 nBreakPos, tools::Long& nLineWidth);
+
+        tools::Long GetTextLines(tools::Rectangle const& rRect, const tools::Long nTextHeight,
+                                 ImplMultiTextLineInfo& rLineInfo,
+                                 tools::Long nWidth, OUString const& rStr,
+                                 DrawTextFlags nStyle);
+
+    private:
+        OUString GetCenterEllipsisString(OUString const& rOrigStr, sal_Int32 nIndex, tools::Long nMaxWidth);
+        OUString GetEndEllipsisString(OUString const& rOrigStr, sal_Int32 nIndex, tools::Long nMaxWidth, bool bClipText);
+        OUString GetNewsEllipsisString(OUString const& rOrigStr, tools::Long nMaxWidth, DrawTextFlags nStyle);
+    };
+
     /** is an implementation of the ITextLayout interface which simply delegates its calls to the respective
         methods of an OutputDevice instance, without any inbetween magic.
     */
-    class DefaultTextLayout final : public ITextLayout
+    class DefaultTextLayout final : public TextLayoutCommon
     {
     public:
         DefaultTextLayout( OutputDevice& _rTargetDevice )
@@ -64,10 +96,11 @@ namespace vcl
                                       std::vector< tools::Rectangle >* _pVector,
                                       OUString* _pDisplayText ) override;
 
-        virtual void        GetCaretPositions( const OUString& _rText,
-                                               sal_Int32* _pCaretXArray,
-                                               sal_Int32 _nStartIndex,
-                                               sal_Int32 _nLength ) const override;
+        virtual tools::Long GetTextArray( const OUString& _rText,
+                                          KernArray* _pDXArray,
+                                          sal_Int32 _nStartIndex,
+                                          sal_Int32 _nLength,
+                                          bool bCaret = false ) const override;
 
         virtual sal_Int32   GetTextBreak( const OUString& _rText,
                                           tools::Long _nMaxTextWidth,
@@ -106,7 +139,5 @@ namespace vcl
     };
 
 } // namespace vcl
-
-#endif // INCLUDED_VCL_INC_TEXTLAYOUT_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

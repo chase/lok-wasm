@@ -24,11 +24,11 @@
 #include <vcl/vclptr.hxx>
 #include <sfx2/objsh.hxx>
 #include <svl/lstner.hxx>
+#include <svl/urlbmk.hxx>
 
 // SdTransferable
 class SdDrawDocument;
 class SdrObject;
-class INetBookmark;
 class ImageMap;
 class VirtualDevice;
 
@@ -71,7 +71,6 @@ public:
 
     bool                            SetTableRTF( SdDrawDocument* );
 
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
     static SdTransferable*          getImplementation( const css::uno::Reference< css::uno::XInterface >& rxData ) noexcept;
 
     // SfxListener
@@ -102,9 +101,6 @@ public:
     */
     std::shared_ptr<UserData> GetUserData (const sal_Int32 nIndex) const;
 
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL      getSomething(const css::uno::Sequence< sal_Int8 >& rId) override;
-
 protected:
 
     virtual void                    AddSupportedFormats() override;
@@ -125,7 +121,7 @@ private:
     SdDrawDocument*                 mpSdDrawDocumentIntern;
     SdDrawDocument*                 mpSourceDoc;
     VclPtr<VirtualDevice>           mpVDev;
-    std::unique_ptr<INetBookmark>   mpBookmark;
+    std::optional<INetBookmark>     moBookmark;
     std::optional<Graphic>          moGraphic;
     std::unique_ptr<ImageMap>       mpImageMap;
     ::tools::Rectangle                       maVisArea;

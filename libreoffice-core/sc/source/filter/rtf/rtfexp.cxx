@@ -60,8 +60,8 @@ ScRTFExport::~ScRTFExport()
 
 void ScRTFExport::Write()
 {
-    rStrm.WriteChar( '{' ).WriteCharPtr( OOO_STRING_SVTOOLS_RTF_RTF );
-    rStrm.WriteCharPtr( OOO_STRING_SVTOOLS_RTF_ANSI ).WriteCharPtr( SAL_NEWLINE_STRING );
+    rStrm.WriteChar( '{' ).WriteOString( OOO_STRING_SVTOOLS_RTF_RTF );
+    rStrm.WriteOString( OOO_STRING_SVTOOLS_RTF_ANSI ).WriteOString( SAL_NEWLINE_STRING );
 
     m_aFontStrm.WriteChar( '{' ).WriteOString( OOO_STRING_SVTOOLS_RTF_FONTTBL );
 

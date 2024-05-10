@@ -23,7 +23,6 @@
 #include <com/sun/star/drawing/XShapes.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
 #include <com/sun/star/text/XTextDocument.hpp>
-#include <com/sun/star/text/XTextTable.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
 #include <com/sun/star/awt/FontSlant.hpp>
 #include <com/sun/star/awt/FontWeight.hpp>
@@ -39,7 +38,6 @@
 #include <wrtsh.hxx>
 #include <IDocumentLayoutAccess.hxx>
 #include <rootfrm.hxx>
-#include <xmloff/odffields.hxx>
 
 class Test : public SwModelTestBase
 {
@@ -49,7 +47,7 @@ public:
 
 DECLARE_OOXMLEXPORT_TEST(testTdf135164_cancelledNumbering, "tdf135164_cancelledNumbering.docx")
 {
-    uno::Reference<beans::XPropertySet> xPara(getParagraph(1, u"TBMM DÖNEMİ"), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xPara(getParagraph(1, u"TBMM DÖNEMİ"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString(""), getProperty<OUString>(xPara, "ListLabelString"));
 
     xPara.set(getParagraph(2, "Numbering explicitly cancelled"), uno::UNO_QUERY);
@@ -89,60 +87,6 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148380_createField, "tdf148380_createField.docx"
     xField.set(xFields->nextElement(), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("yesterday at noon"), xField->getPresentation(false));
 }
-
-DECLARE_OOXMLEXPORT_TEST(testTdf138093, "tdf138093.docx")
-{
-    if (isExported())
-    {
-        xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-        assertXPath(pXmlDoc, "//w:sdt", 3);
-        uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
-        uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
-                                                        uno::UNO_QUERY);
-        uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
-        uno::Reference<table::XCell> xCell = xTable->getCellByName("B1");
-        uno::Reference<container::XEnumerationAccess> xParagraphsAccess(xCell, uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xParagraphs
-            = xParagraphsAccess->createEnumeration();
-        uno::Reference<container::XEnumerationAccess> xParagraph(xParagraphs->nextElement(),
-                                                                 uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xPortions = xParagraph->createEnumeration();
-        uno::Reference<beans::XPropertySet> xTextPortion(xPortions->nextElement(), uno::UNO_QUERY);
-
-        OUString aPortionType;
-        xTextPortion->getPropertyValue("TextPortionType") >>= aPortionType;
-        CPPUNIT_ASSERT_EQUAL(OUString("ContentControl"), aPortionType);
-
-        uno::Reference<text::XTextContent> xContentControl;
-        xTextPortion->getPropertyValue("ContentControl") >>= xContentControl;
-        uno::Reference<beans::XPropertySet> xContentControlProps(xContentControl, uno::UNO_QUERY);
-        bool bDate{};
-        xContentControlProps->getPropertyValue("Date") >>= bDate;
-        CPPUNIT_ASSERT(bDate);
-        uno::Reference<container::XEnumerationAccess> xContentControlEnumAccess(xContentControl,
-                                                                                uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xContentControlEnum
-            = xContentControlEnumAccess->createEnumeration();
-        uno::Reference<text::XTextRange> xTextPortionRange(xContentControlEnum->nextElement(),
-                                                           uno::UNO_QUERY);
-        CPPUNIT_ASSERT_EQUAL(OUString("2017"), xTextPortionRange->getString());
-    }
-    else
-    {
-        SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
-        CPPUNIT_ASSERT(pTextDoc);
-        SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
-        IDocumentMarkAccess* pMarkAccess = pDoc->getIDocumentMarkAccess();
-        CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMarkAccess->getAllMarksCount());
-
-        ::sw::mark::IDateFieldmark* pFieldmark
-            = dynamic_cast<::sw::mark::IDateFieldmark*>(*pMarkAccess->getAllMarksBegin());
-        CPPUNIT_ASSERT(pFieldmark);
-        CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
-        CPPUNIT_ASSERT_EQUAL(OUString("2017"), pFieldmark->GetContent());
-    }
-}
-
 
 DECLARE_OOXMLEXPORT_TEST(testTdf148380_fldLocked, "tdf148380_fldLocked.docx")
 {
@@ -266,10 +210,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf135906)
     // just test round-tripping. The document was exported as corrupt and didn't re-load.
 }
 
-CPPUNIT_TEST_FIXTURE(Test, TestTdf146802)
+DECLARE_OOXMLEXPORT_TEST(testTdf146802, "tdf146802.docx")
 {
-    createSwDoc("tdf146802.docx");
-
     // First check if the load failed, as before the fix.
     CPPUNIT_ASSERT(mxComponent);
 
@@ -287,7 +229,7 @@ CPPUNIT_TEST_FIXTURE(Test, testParaStyleNumLevel)
     // - Expected: 1
     // - Actual  : 0
     // i.e. a custom list level in a para style was lost on import+export.
-    assertXPath(pXmlDoc, "/w:styles/w:style[@w:styleId='Mystyle']/w:pPr/w:numPr/w:ilvl", "val", "1");
+    assertXPath(pXmlDoc, "/w:styles/w:style[@w:styleId='Mystyle']/w:pPr/w:numPr/w:ilvl"_ostr, "val"_ostr, "1");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testClearingBreak)
@@ -300,7 +242,7 @@ CPPUNIT_TEST_FIXTURE(Test, testClearingBreak)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '/w:document/w:body/w:p/w:r/w:br' number of nodes is incorrect
     // i.e. first the clearing break was turned into a plain break, then it was completely lost.
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/w:br", "clear", "all");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p/w:r/w:br"_ostr, "clear"_ostr, "all");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testContentControlExport)
@@ -330,8 +272,8 @@ CPPUNIT_TEST_FIXTURE(Test, testContentControlExport)
     // - Actual  : 0
     // XPath '//w:sdt/w:sdtPr/w:showingPlcHdr' number of nodes is incorrect
     // i.e. the SDT elements were missing on export.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:showingPlcHdr", 1);
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtContent", 1);
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:showingPlcHdr"_ostr, 1);
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtContent"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testCheckboxContentControlExport)
@@ -342,7 +284,7 @@ CPPUNIT_TEST_FIXTURE(Test, testCheckboxContentControlExport)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xTextDocument->getText();
     uno::Reference<text::XTextCursor> xCursor = xText->createTextCursor();
-    xText->insertString(xCursor, OUString(u"☐"), /*bAbsorb=*/false);
+    xText->insertString(xCursor, u"☐"_ustr, /*bAbsorb=*/false);
     xCursor->gotoStart(/*bExpand=*/false);
     xCursor->gotoEnd(/*bExpand=*/true);
     uno::Reference<text::XTextContent> xContentControl(
@@ -350,8 +292,8 @@ CPPUNIT_TEST_FIXTURE(Test, testCheckboxContentControlExport)
     uno::Reference<beans::XPropertySet> xContentControlProps(xContentControl, uno::UNO_QUERY);
     xContentControlProps->setPropertyValue("Checkbox", uno::Any(true));
     xContentControlProps->setPropertyValue("Checked", uno::Any(true));
-    xContentControlProps->setPropertyValue("CheckedState", uno::Any(OUString(u"☒")));
-    xContentControlProps->setPropertyValue("UncheckedState", uno::Any(OUString(u"☐")));
+    xContentControlProps->setPropertyValue("CheckedState", uno::Any(u"☒"_ustr));
+    xContentControlProps->setPropertyValue("UncheckedState", uno::Any(u"☐"_ustr));
     xText->insertTextContent(xCursor, xContentControl, /*bAbsorb=*/true);
 
     // When exporting to DOCX:
@@ -364,9 +306,9 @@ CPPUNIT_TEST_FIXTURE(Test, testCheckboxContentControlExport)
     // - Actual  : 0
     // - XPath '//w:sdt/w:sdtPr/w14:checkbox/w14:checked' number of nodes is incorrect
     // i.e. <w14:checkbox> and its child elements were lost.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w14:checkbox/w14:checked", "val", "1");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w14:checkbox/w14:checkedState", "val", "2612");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w14:checkbox/w14:uncheckedState", "val", "2610");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w14:checkbox/w14:checked"_ostr, "val"_ostr, "1");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w14:checkbox/w14:checkedState"_ostr, "val"_ostr, "2612");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w14:checkbox/w14:uncheckedState"_ostr, "val"_ostr, "2610");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDropdownContentControlExport)
@@ -413,12 +355,12 @@ CPPUNIT_TEST_FIXTURE(Test, testDropdownContentControlExport)
     // - Actual  : 0
     // - XPath '//w:sdt/w:sdtPr/w:dropDownList/w:listItem[1]' number of nodes is incorrect
     // i.e. the list items were lost on export.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[1]", "displayText", "red");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[1]", "value", "R");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[2]", "displayText", "green");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[2]", "value", "G");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[3]", "displayText", "blue");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[3]", "value", "B");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[1]"_ostr, "displayText"_ostr, "red");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[1]"_ostr, "value"_ostr, "R");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[2]"_ostr, "displayText"_ostr, "green");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[2]"_ostr, "value"_ostr, "G");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[3]"_ostr, "displayText"_ostr, "blue");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dropDownList/w:listItem[3]"_ostr, "value"_ostr, "B");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testPictureContentControlExport)
@@ -452,7 +394,7 @@ CPPUNIT_TEST_FIXTURE(Test, testPictureContentControlExport)
     // - Expected: 1
     // - Actual  : 0
     // i.e. <w:picture> was lost on export.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:picture", 1);
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:picture"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testDateContentControlExport)
@@ -497,20 +439,20 @@ CPPUNIT_TEST_FIXTURE(Test, testDateContentControlExport)
     // - Actual  : 0
     // - XPath '//w:sdt/w:sdtPr/w:date/w:dateFormat' number of nodes is incorrect
     // i.e. the <w:date> was lost on export.
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:date/w:dateFormat", "val", "M/d/yyyy");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:date/w:lid", "val", "en-US");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:date", "fullDate", "2022-05-26T00:00:00Z");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:placeholder/w:docPart", "val", "DefaultPlaceholder_-1854013437");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dataBinding", "prefixMappings", "xmlns:ns0='http://schemas.microsoft.com/vsto/samples' ");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dataBinding", "xpath", "/ns0:employees[1]/ns0:employee[1]/ns0:hireDate[1]");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dataBinding", "storeItemID", "{241A8A02-7FFD-488D-8827-63FBE74E8BC9}");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w15:color", "val", "008000");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w15:appearance", "val", "hidden");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:alias", "val", "myalias");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:tag", "val", "mytag");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:id", "val", "123");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:tabIndex", "val", "-1");
-    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:lock", "val", "sdtLocked");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:date/w:dateFormat"_ostr, "val"_ostr, "M/d/yyyy");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:date/w:lid"_ostr, "val"_ostr, "en-US");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:date"_ostr, "fullDate"_ostr, "2022-05-26T00:00:00Z");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:placeholder/w:docPart"_ostr, "val"_ostr, "DefaultPlaceholder_-1854013437");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dataBinding"_ostr, "prefixMappings"_ostr, "xmlns:ns0='http://schemas.microsoft.com/vsto/samples' ");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dataBinding"_ostr, "xpath"_ostr, "/ns0:employees[1]/ns0:employee[1]/ns0:hireDate[1]");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:dataBinding"_ostr, "storeItemID"_ostr, "{241A8A02-7FFD-488D-8827-63FBE74E8BC9}");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w15:color"_ostr, "val"_ostr, "008000");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w15:appearance"_ostr, "val"_ostr, "hidden");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:alias"_ostr, "val"_ostr, "myalias");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:tag"_ostr, "val"_ostr, "mytag");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:id"_ostr, "val"_ostr, "123");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:tabIndex"_ostr, "val"_ostr, "-1");
+    assertXPath(pXmlDoc, "//w:sdt/w:sdtPr/w:lock"_ostr, "val"_ostr, "sdtLocked");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testNegativePageBorder)
@@ -536,13 +478,13 @@ CPPUNIT_TEST_FIXTURE(Test, testNegativePageBorder)
 
     // Then make sure that the page edge -> border space is correct:
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-    assertXPath(pXmlDoc, "//w:pgMar", "top", "284");
-    assertXPath(pXmlDoc, "//w:pgBorders/w:top", "sz", "36");
+    assertXPath(pXmlDoc, "//w:pgMar"_ostr, "top"_ostr, "284");
+    assertXPath(pXmlDoc, "//w:pgBorders/w:top"_ostr, "sz"_ostr, "36");
     // Without the fix in place, this test would have failed with:
     // - Expected: 28
     // - Actual  : 0
     // i.e. editeng::BorderDistancesToWord() mis-handled negative border distances.
-    assertXPath(pXmlDoc, "//w:pgBorders/w:top", "space", "28");
+    assertXPath(pXmlDoc, "//w:pgBorders/w:top"_ostr, "space"_ostr, "28");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf148494)
@@ -554,7 +496,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf148494)
     // Without the fix in place, this test would have failed with
     // - Expected:  MACROBUTTON AllCaps Hello World
     // - Actual  :  MACROBUTTONAllCaps Hello World
-    assertXPathContent(pXmlDoc, "/w:document/w:body/w:p/w:r[3]/w:instrText", " MACROBUTTON AllCaps Hello World ");
+    assertXPathContent(pXmlDoc, "/w:document/w:body/w:p/w:r[3]/w:instrText"_ostr, " MACROBUTTON AllCaps Hello World ");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf137466, "tdf137466.docx")
@@ -564,11 +506,11 @@ DECLARE_OOXMLEXPORT_TEST(testTdf137466, "tdf137466.docx")
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
 
     // Ensure that we have <w:placeholder><w:docPart v:val="xxxx"/></w:placeholder>
-    OUString sDocPart = getXPath(pXmlDoc, "/w:document/w:body/w:p/w:sdt/w:sdtPr/w:placeholder/w:docPart", "val");
+    OUString sDocPart = getXPath(pXmlDoc, "/w:document/w:body/w:p/w:sdt/w:sdtPr/w:placeholder/w:docPart"_ostr, "val"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("DefaultPlaceholder_-1854013440"), sDocPart);
 
     // Ensure that we have <w15:color v:val="xxxx"/>
-    OUString sColor = getXPath(pXmlDoc, "/w:document/w:body/w:p/w:sdt/w:sdtPr/w15:color", "val");
+    OUString sColor = getXPath(pXmlDoc, "/w:document/w:body/w:p/w:sdt/w:sdtPr/w15:color"_ostr, "val"_ostr);
     CPPUNIT_ASSERT_EQUAL(OUString("FF0000"), sColor);
 }
 
@@ -605,7 +547,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDontAddNewStyles)
     // - Expected: 0
     // - Actual  : 1
     // i.e. builtin styles were added to the export result, even if we opted out.
-    assertXPath(pXmlDoc, "/w:styles/w:style[@w:styleId='Caption']", 0);
+    assertXPath(pXmlDoc, "/w:styles/w:style[@w:styleId='Caption']"_ostr, 0);
 }
 
 DECLARE_OOXMLEXPORT_TEST(TestWPGZOrder, "testWPGZOrder.docx")
@@ -662,26 +604,26 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf148720)
 
     const OString sShapeXPaths[] =
     {
-        OString("/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObject[1]"),
-        OString("/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObject[1]"),
-        OString("/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObject[2]"),
-        OString("/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObject[2]")
+        "/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObject[1]"_ostr,
+        "/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObject[1]"_ostr,
+        "/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObjGroup/SdrObjList/SdrObject[2]"_ostr,
+        "/root/page/body/txt/anchored/SwAnchoredDrawObject/SdrObjGroup/SdrObjList/SdrObject[2]"_ostr
     };
 
     const OString sTextXPaths[] =
     {
-        OString("/root/page/body/txt/anchored/fly[1]/infos/bounds"),
-        OString("/root/page/body/txt/anchored/fly[2]/infos/bounds"),
-        OString("/root/page/body/txt/anchored/fly[3]/infos/bounds"),
-        OString("/root/page/body/txt/anchored/fly[4]/infos/bounds")
+        "/root/page/body/txt/anchored/fly[1]/infos/bounds"_ostr,
+        "/root/page/body/txt/anchored/fly[2]/infos/bounds"_ostr,
+        "/root/page/body/txt/anchored/fly[3]/infos/bounds"_ostr,
+        "/root/page/body/txt/anchored/fly[4]/infos/bounds"_ostr
     };
 
     const OString sAttribs[] =
     {
-        OString("left"),
-        OString("top"),
-        OString("width"),
-        OString("height")
+        "left"_ostr,
+        "top"_ostr,
+        "width"_ostr,
+        "height"_ostr
     };
 
     for (sal_Int32 i = 0; i < 4; ++i)
@@ -689,7 +631,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf148720)
         OUString aShapeVals[4];
         int aTextVals[4] = {0, 0, 0, 0};
 
-        const auto aOutRect = getXPath(pLayout, sShapeXPaths[i], "aOutRect");
+        const auto aOutRect = getXPath(pLayout, sShapeXPaths[i], "aOutRect"_ostr);
 
         sal_uInt16 nCommaPos[4] = {0, 0, 0, 0};
         nCommaPos[1] = aOutRect.indexOf(",");
@@ -736,7 +678,7 @@ DECLARE_OOXMLEXPORT_TEST(testTdf123642_BookmarkAtDocEnd, "tdf123642.docx")
        return; // initial import, no further checks
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
 
-    CPPUNIT_ASSERT_EQUAL(OUString("Bookmark1"), getXPath(pXmlDoc, "/w:document/w:body/w:p[2]/w:bookmarkStart[1]", "name"));
+    CPPUNIT_ASSERT_EQUAL(OUString("Bookmark1"), getXPath(pXmlDoc, "/w:document/w:body/w:p[2]/w:bookmarkStart[1]"_ostr, "name"_ostr));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf148361, "tdf148361.docx")
@@ -933,7 +875,7 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148111, "tdf148111.docx")
         return;
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
     // ShowingPlaceholder should be off for 0, false and "on". (This was 21 before the fix)
-    assertXPath(pXmlDoc,"//w:p/w:sdt/w:sdtPr/w:showingPlcHdr", 12);
+    assertXPath(pXmlDoc,"//w:p/w:sdt/w:sdtPr/w:showingPlcHdr"_ostr, 12);
 }
 
 DECLARE_OOXMLEXPORT_TEST(TestTdf73499, "tdf73499.docx")
@@ -971,14 +913,14 @@ DECLARE_OOXMLEXPORT_TEST(testTdf81507, "tdf81507.docx")
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
 
     // Ensure that we have <w:text w:multiLine="1"/>
-    CPPUNIT_ASSERT_EQUAL(OUString("1"), getXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:sdt/w:sdtPr/w:text", "multiLine"));
+    CPPUNIT_ASSERT_EQUAL(OUString("1"), getXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:sdt/w:sdtPr/w:text"_ostr, "multiLine"_ostr));
 
     // Ensure that we have <w:text w:multiLine="0"/>
-    CPPUNIT_ASSERT_EQUAL(OUString("0"), getXPath(pXmlDoc, "/w:document/w:body/w:p[2]/w:sdt/w:sdtPr/w:text", "multiLine"));
+    CPPUNIT_ASSERT_EQUAL(OUString("0"), getXPath(pXmlDoc, "/w:document/w:body/w:p[2]/w:sdt/w:sdtPr/w:text"_ostr, "multiLine"_ostr));
 
     // Ensure that we have <w:text/>
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p[3]/w:sdt/w:sdtPr/w:text");
-    assertXPath(pXmlDoc, "/w:document/w:body/w:p[4]/w:sdt/w:sdtPr/w:text");
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p[3]/w:sdt/w:sdtPr/w:text"_ostr);
+    assertXPath(pXmlDoc, "/w:document/w:body/w:p[4]/w:sdt/w:sdtPr/w:text"_ostr);
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf139948, "tdf139948.docx")
@@ -1048,16 +990,16 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf146955)
 CPPUNIT_TEST_FIXTURE(Test, testTdf144668)
 {
     loadAndReload("tdf144668.odt");
-    uno::Reference<beans::XPropertySet> xPara1(getParagraph(1, u"level1"), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xPara1(getParagraph(1, u"level1"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("[0001]"), getProperty<OUString>(xPara1, "ListLabelString"));
 
-    uno::Reference<beans::XPropertySet> xPara2(getParagraph(2, u"level2"), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xPara2(getParagraph(2, u"level2"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("[001]"), getProperty<OUString>(xPara2, "ListLabelString"));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf148455_1, "tdf148455_1.docx")
 {
-    uno::Reference<beans::XPropertySet> xPara2(getParagraph(3, u"1.1.1"), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xPara2(getParagraph(3, u"1.1.1"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("1.1.1."), getProperty<OUString>(xPara2, "ListLabelString"));
 }
 
@@ -1068,7 +1010,7 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148455_2, "tdf148455_2.docx")
     xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
 
     // Find list id for restarted list
-    sal_Int32 nListId = getXPath(pXmlDoc, "/w:document/w:body/w:p[3]/w:pPr/w:numPr/w:numId", "val").toInt32();
+    sal_Int32 nListId = getXPath(pXmlDoc, "/w:document/w:body/w:p[3]/w:pPr/w:numPr/w:numId"_ostr, "val"_ostr).toInt32();
 
     xmlDocUniquePtr pNumberingDoc = parseExport("word/numbering.xml");
 
@@ -1076,13 +1018,13 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148455_2, "tdf148455_2.docx")
     assertXPath(pNumberingDoc, "/w:numbering/w:num[@w:numId='" + OString::number(nListId) +"']/w:lvlOverride[@w:ilvl='0']");
     assertXPath(pNumberingDoc, "/w:numbering/w:num[@w:numId='" + OString::number(nListId) +"']/w:lvlOverride[@w:ilvl='1']");
     // And normal override for level 2
-    getXPath(pNumberingDoc, "/w:numbering/w:num[@w:numId='" + OString::number(nListId) +"']/w:lvlOverride[@w:ilvl='2']/w:startOverride", "val");
+    getXPath(pNumberingDoc, "/w:numbering/w:num[@w:numId='" + OString::number(nListId) +"']/w:lvlOverride[@w:ilvl='2']/w:startOverride", "val"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTdf147978enhancedPathABVW)
 {
     createSwDoc("tdf147978_enhancedPath_commandABVW.odt");
-    reload("Office Open XML Text", nullptr);
+    saveAndReload("Office Open XML Text");
     // Make sure the new implemented export for commands A,B,V and W use the correct arc between
     // the given two points, here the short one.
     for (sal_Int16 i = 1 ; i <= 4; ++i)
@@ -1121,6 +1063,11 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148132, "tdf148132.docx")
     }
 }
 
+DECLARE_OOXMLEXPORT_TEST(testTdf154481, "tdf154481.docx")
+{
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("Missing pages!", 7, getPages());
+}
+
 CPPUNIT_TEST_FIXTURE(Test, testTdf149200)
 {
     loadAndSave("tdf149200.docx");
@@ -1129,11 +1076,11 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf149200)
 
     // Ensure there is no unexpected invalid structure <w14:textFill>
     // There is just one run property
-    xmlXPathObjectPtr pXmlObj = getXPathNode(pXmlDoc, "count(/w:document/w:body/w:p[1]/w:r[1]/w:rPr/*)");
+    xmlXPathObjectPtr pXmlObj = getXPathNode(pXmlDoc, "count(/w:document/w:body/w:p[1]/w:r[1]/w:rPr/*)"_ostr);
     CPPUNIT_ASSERT(pXmlObj);
     CPPUNIT_ASSERT_EQUAL(double(1), pXmlObj->floatval);
     // And it is a color definition with themeColor
-    CPPUNIT_ASSERT_EQUAL(OUString("dark1"), getXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:r[1]/w:rPr/w:color", "themeColor"));
+    CPPUNIT_ASSERT_EQUAL(OUString("dark1"), getXPath(pXmlDoc, "/w:document/w:body/w:p[1]/w:r[1]/w:rPr/w:color"_ostr, "themeColor"_ostr));
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf149313, "tdf149313.docx")
@@ -1143,10 +1090,10 @@ DECLARE_OOXMLEXPORT_TEST(testTdf149313, "tdf149313.docx")
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
     // And ensure that pages are with correct sections (have correct dimensions)
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4989), getXPath(pXmlDoc, "/root/page[1]/infos/bounds", "height").toInt32());
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4989), getXPath(pXmlDoc, "/root/page[1]/infos/bounds", "width").toInt32());
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(4989), getXPath(pXmlDoc, "/root/page[2]/infos/bounds", "height").toInt32());
-    CPPUNIT_ASSERT_EQUAL(sal_Int32(8000), getXPath(pXmlDoc, "/root/page[2]/infos/bounds", "width").toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4989), getXPath(pXmlDoc, "/root/page[1]/infos/bounds"_ostr, "height"_ostr).toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4989), getXPath(pXmlDoc, "/root/page[1]/infos/bounds"_ostr, "width"_ostr).toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4989), getXPath(pXmlDoc, "/root/page[2]/infos/bounds"_ostr, "height"_ostr).toInt32());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(8000), getXPath(pXmlDoc, "/root/page[2]/infos/bounds"_ostr, "width"_ostr).toInt32());
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf148360, "tdf148360.docx")
@@ -1154,9 +1101,9 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148360, "tdf148360.docx")
     const auto& pLayout = parseLayoutDump();
 
     // Ensure first element is a tab
-    assertXPath(pLayout, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/child::*[1]", "type", "PortionType::TabLeft");
+    assertXPath(pLayout, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/child::*[1]"_ostr, "type"_ostr, "PortionType::TabLeft");
     // and only then goes content
-    assertXPath(pLayout, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/child::*[2]", "type", "PortionType::Text");
+    assertXPath(pLayout, "/root/page[1]/body/txt[1]/SwParaPortion/SwLineLayout/child::*[2]"_ostr, "type"_ostr, "PortionType::Text");
 }
 
 DECLARE_OOXMLEXPORT_TEST(testTdf135923, "tdf135923-min.docx")
@@ -1184,62 +1131,6 @@ DECLARE_OOXMLEXPORT_TEST(testTdf148273_sectionBulletFormatLeak, "tdf148273_secti
     CPPUNIT_ASSERT_EQUAL(false, aValue.hasValue());
 }
 
-DECLARE_OOXMLEXPORT_TEST(testTdf131722, "tdf131722.docx")
-{
-    if (isExported())
-    {
-        xmlDocUniquePtr pXmlDoc = parseExport("word/document.xml");
-        assertXPath(pXmlDoc, "//w:sdt", 4);
-        uno::Reference<text::XTextTablesSupplier> xTablesSupplier(mxComponent, uno::UNO_QUERY);
-        uno::Reference<container::XIndexAccess> xTables(xTablesSupplier->getTextTables(),
-                                                        uno::UNO_QUERY);
-        uno::Reference<text::XTextTable> xTable(xTables->getByIndex(0), uno::UNO_QUERY);
-        uno::Reference<table::XCell> xCell = xTable->getCellByName("A1");
-        uno::Reference<container::XEnumerationAccess> xParagraphsAccess(xCell, uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xParagraphs
-            = xParagraphsAccess->createEnumeration();
-        uno::Reference<container::XEnumerationAccess> xParagraph(xParagraphs->nextElement(),
-                                                                 uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xPortions = xParagraph->createEnumeration();
-        uno::Reference<beans::XPropertySet> xTextPortion(xPortions->nextElement(), uno::UNO_QUERY);
-
-        OUString aPortionType;
-        xTextPortion->getPropertyValue("TextPortionType") >>= aPortionType;
-        CPPUNIT_ASSERT_EQUAL(OUString("ContentControl"), aPortionType);
-
-        uno::Reference<text::XTextContent> xContentControl;
-        xTextPortion->getPropertyValue("ContentControl") >>= xContentControl;
-        uno::Reference<beans::XPropertySet> xContentControlProps(xContentControl, uno::UNO_QUERY);
-        bool bDate{};
-        xContentControlProps->getPropertyValue("Date") >>= bDate;
-        CPPUNIT_ASSERT(bDate);
-        uno::Reference<container::XEnumerationAccess> xContentControlEnumAccess(xContentControl,
-                                                                                uno::UNO_QUERY);
-        uno::Reference<container::XEnumeration> xContentControlEnum
-            = xContentControlEnumAccess->createEnumeration();
-        uno::Reference<text::XTextRange> xTextPortionRange(xContentControlEnum->nextElement(),
-                                                           uno::UNO_QUERY);
-        CPPUNIT_ASSERT_EQUAL(OUString("Enter a date here!"), xTextPortionRange->getString());
-    }
-    else
-    {
-        SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
-        CPPUNIT_ASSERT(pTextDoc);
-        SwDoc* pDoc = pTextDoc->GetDocShell()->GetDoc();
-        IDocumentMarkAccess* pMarkAccess = pDoc->getIDocumentMarkAccess();
-
-        for (auto aIter = pMarkAccess->getFieldmarksBegin();
-             aIter != pMarkAccess->getFieldmarksEnd(); ++aIter)
-        {
-            ::sw::mark::IDateFieldmark* pFieldmark
-                = dynamic_cast<::sw::mark::IDateFieldmark*>(*aIter);
-            CPPUNIT_ASSERT(pFieldmark);
-            CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
-            CPPUNIT_ASSERT_EQUAL(OUString("Enter a date here!"), pFieldmark->GetContent());
-        }
-    }
-}
-
 DECLARE_OOXMLEXPORT_TEST(testTdf149089, "tdf149089.docx")
 {
     uno::Reference<container::XNameAccess> xPageStyles = getStyles("PageStyles");
@@ -1258,7 +1149,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf139128)
     // - Expected: 2
     // - Actual  : 0
     // i.e. the line break was lost on export.
-    assertXPath(pXmlDoc, "//w:br", 2);
+    assertXPath(pXmlDoc, "//w:br"_ostr, 2);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

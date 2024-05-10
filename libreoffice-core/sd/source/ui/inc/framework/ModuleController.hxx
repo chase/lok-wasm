@@ -23,17 +23,18 @@
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <comphelper/compbase.hxx>
 #include <cppuhelper/weakref.hxx>
+#include <rtl/ref.hxx>
 
 #include <unordered_map>
 
 namespace com::sun::star::frame { class XController; }
 namespace com::sun::star::uno { class XComponentContext; }
+namespace sd { class DrawController; }
 
 namespace sd::framework {
 
 typedef comphelper::WeakComponentImplHelper <
-    css::drawing::framework::XModuleController,
-    css::lang::XInitialization
+    css::drawing::framework::XModuleController
     > ModuleControllerInterfaceBase;
 
 /** The ModuleController has two tasks:
@@ -48,9 +49,8 @@ typedef comphelper::WeakComponentImplHelper <
     resource and instantiates this service.  The service is expected to
     register on its creation a factory for the resource in question.
 
-    2. The ModuleController reads on its creation
-    org.openoffice.Office.Impress/MultiPaneGUI/Framework/StartupServices
-    configuration data and instantiates all listed services.  These services
+    2. The ModuleController instantiates PresentationFactoryProvider.
+    This service
     can then register as listeners at the ConfigurationController or do
     whatever they like.
 */
@@ -58,11 +58,8 @@ class ModuleController final
     : public ModuleControllerInterfaceBase
 {
 public:
-    static css::uno::Reference<
-        css::drawing::framework::XModuleController>
-        CreateInstance (
-            const css::uno::Reference<css::uno::XComponentContext>&
-            rxContext);
+    /// @throws std::exception
+    ModuleController(const rtl::Reference<::sd::DrawController>& rxController);
 
     virtual void disposing(std::unique_lock<std::mutex>&) override;
 
@@ -70,43 +67,23 @@ public:
 
     virtual void SAL_CALL requestResource(const OUString& rsResourceURL) override;
 
-    // XInitialization
-
-    virtual void SAL_CALL initialize(
-        const css::uno::Sequence<css::uno::Any>& aArguments) override;
-
 private:
-    css::uno::Reference<
-        css::frame::XController> mxController;
+    rtl::Reference<::sd::DrawController> mxController;
 
     std::unordered_map<OUString, OUString> maResourceToFactoryMap;
     std::unordered_map<OUString, css::uno::WeakReference<css::uno::XInterface>> maLoadedFactories;
 
-    /// @throws std::exception
-    ModuleController (
-        const css::uno::Reference<css::uno::XComponentContext>& rxContext);
     ModuleController (const ModuleController&) = delete;
     virtual ~ModuleController() noexcept override;
 
     /** Called for every entry in the ResourceFactories configuration entry.
     */
-    void ProcessFactory (const ::std::vector<css::uno::Any>& rValues);
+    void ProcessFactory (const OUString& ServiceName, ::std::vector<OUString> aURLs);
 
-    /** Instantiate all startup services that are found in the
-        /org.openoffice.Office.Impress/MultiPaneGUI/Framework/StartupServices
-        configuration entry.  This method is called once when a new
+    /** Instantiate startup services.  This method is called once when a new
         ModuleController object is created.
     */
     void InstantiateStartupServices();
-
-    /** Called for one entry in the StartupServices configuration list this
-        method instantiates the service described by the entry.  It does not
-        hold references to the new object so that the object will be
-        destroyed on function exit when it does not register itself
-        somewhere.  It typically will register as
-        XConfigurationChangeListener at the configuration controller.
-    */
-    void ProcessStartupService (const ::std::vector<css::uno::Any>& rValues);
 };
 
 } // end of namespace sd::framework

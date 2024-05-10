@@ -17,12 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_SALDISP_HXX
-#define INCLUDED_VCL_INC_UNX_SALDISP_HXX
+#pragma once
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <X11/extensions/render.h>
 #include <epoxy/glx.h>
 
 #include <rtl/string.hxx>
@@ -32,7 +30,6 @@
 #include <sal/types.h>
 #include <cassert>
 #include <list>
-#include <unordered_map>
 #include <vector>
 #include <tools/gen.hxx>
 #include <salwtype.hxx>
@@ -69,20 +66,8 @@ extern "C" srv_vendor_t sal_GetServerVendor( Display *p_display );
 
 // MSB/Bigendian view (Color == RGB, r=0xFF0000, g=0xFF00, b=0xFF)
 
-enum class SalRGB { RGB,  RBG,
-              GBR,  GRB,
-              BGR,  BRG,
-              otherSalRGB };
-
 class SalVisual : public XVisualInfo
 {
-    SalRGB          eRGBMode_;
-    int             nRedShift_;
-    int             nGreenShift_;
-    int             nBlueShift_;
-    int             nRedBits_;
-    int             nGreenBits_;
-    int             nBlueBits_;
 public:
                             SalVisual();
                             SalVisual( const XVisualInfo* pXVI );
@@ -91,9 +76,6 @@ public:
     Visual         *GetVisual() const { return visual; }
     int             GetClass() const { return c_class; }
     int             GetDepth() const { return depth; }
-
-            Pixel           GetTCPixel( Color nColor ) const;
-            Color           GetTCColor( Pixel nPixel ) const;
 };
 
 // A move-only flag, used by SalColormap to track ownership of its m_aVisual.visual:
@@ -119,13 +101,10 @@ class SalColormap
     std::vector<Color>      m_aPalette;         // Pseudocolor
     SalVisual               m_aVisual;
     OwnershipFlag           m_aVisualOwnership;
-    std::vector<sal_uInt16>     m_aLookupTable;     // Pseudocolor: 12bit reduction
     Pixel                   m_nWhitePixel;
     Pixel                   m_nBlackPixel;
     Pixel                   m_nUsed;            // Pseudocolor
 
-    void            GetPalette();
-    void            GetLookupTable();
 public:
     SalColormap( const SalDisplay*  pSalDisplay,
                  Colormap           hColormap,
@@ -142,10 +121,8 @@ public:
     const SalDisplay*   GetDisplay() const { return m_pDisplay; }
     inline  Display*            GetXDisplay() const;
     const SalVisual&    GetVisual() const { return m_aVisual; }
-    Visual*             GetXVisual() const { return m_aVisual.GetVisual(); }
     Pixel               GetWhitePixel() const { return m_nWhitePixel; }
     Pixel               GetBlackPixel() const { return m_nBlackPixel; }
-    Pixel               GetUsed() const { return m_nUsed; }
 
     bool            GetXPixels( XColor  &rColor,
                                     int      r,
@@ -155,8 +132,6 @@ public:
                                            int      r,
                                            int      g,
                                            int      b ) const;
-    Pixel           GetPixel( Color nColor ) const;
-    Color           GetColor( Pixel nPixel ) const;
 };
 
 class SalI18N_InputMethod;
@@ -227,15 +202,6 @@ public:
 class VCLPLUG_GEN_PUBLIC SalDisplay : public SalGenericDisplay
 {
 public:
-    struct RenderEntry
-    {
-        Pixmap      m_aPixmap;
-        Picture     m_aPicture;
-
-        RenderEntry() : m_aPixmap( 0 ), m_aPicture( 0 ) {}
-    };
-
-    typedef std::unordered_map<int,RenderEntry> RenderEntryMap;
 
     struct ScreenData
     {
@@ -243,7 +209,7 @@ public:
 
         ::Window            m_aRoot;
         ::Window            m_aRefWindow;
-        Size                m_aSize;
+        AbsoluteScreenPixelSize m_aSize;
         SalVisual           m_aVisual;
         SalColormap         m_aColormap;
         GC                  m_aMonoGC;
@@ -253,7 +219,6 @@ public:
         GC                  m_aOrGC;
         GC                  m_aStippleGC;
         Pixmap              m_hInvert50;
-        mutable RenderEntryMap m_aRenderData;
 
         ScreenData() :
         m_bInit( false ),
@@ -265,8 +230,7 @@ public:
         m_aAndGC( None ),
         m_aOrGC( None ),
         m_aStippleGC( None ),
-        m_hInvert50( None ),
-        m_aRenderData( 1 )
+        m_hInvert50( None )
         {}
     };
 
@@ -298,7 +262,7 @@ protected:
     std::unique_ptr<vcl_sal::WMAdaptor> m_pWMAdaptor;
 
     bool            m_bXinerama;
-    std::vector< tools::Rectangle > m_aXineramaScreens;
+    std::vector< AbsoluteScreenPixelRectangle > m_aXineramaScreens;
     std::vector< int > m_aXineramaScreenIndexMap;
     std::list<SalObject*> m_aSalObjects;
 
@@ -358,22 +322,15 @@ public:
     ::Window         GetDrawable( SalX11Screen nXScreen ) const { return getDataForScreen( nXScreen ).m_aRefWindow; }
     Display        *GetDisplay() const { return pDisp_; }
     const SalX11Screen& GetDefaultXScreen() const { return m_nXDefaultScreen; }
-    const Size&     GetScreenSize( SalX11Screen nXScreen ) const { return getDataForScreen( nXScreen ).m_aSize; }
+    const AbsoluteScreenPixelSize& GetScreenSize( SalX11Screen nXScreen ) const { return getDataForScreen( nXScreen ).m_aSize; }
     srv_vendor_t    GetServerVendor() const { return meServerVendor; }
     bool            IsDisplay() const { return !!pXLib_; }
-    GC              GetCopyGC( SalX11Screen nXScreen ) const { return getDataForScreen(nXScreen).m_aCopyGC; }
-    Pixmap          GetInvert50( SalX11Screen nXScreen ) const { return getDataForScreen(nXScreen).m_hInvert50; }
     const SalColormap&    GetColormap( SalX11Screen nXScreen ) const { return getDataForScreen(nXScreen).m_aColormap; }
     const SalVisual&      GetVisual( SalX11Screen nXScreen ) const { return getDataForScreen(nXScreen).m_aVisual; }
-    RenderEntryMap&       GetRenderEntries( SalX11Screen nXScreen ) const { return getDataForScreen(nXScreen).m_aRenderData; }
     const Pair     &GetResolution() const { return aResolution_; }
-    sal_uLong       GetMaxRequestSize() const { return nMaxRequestSize_; }
     Time            GetLastUserEventTime() const { return GetEventTimeImpl(); }
     // this is an equivalent of gdk_x11_get_server_time()
     Time            GetX11ServerTime() const { return GetEventTimeImpl( true ); }
-
-    bool            XIfEventWithTimeout( XEvent*, XPointer, X_if_predicate ) const;
-    SalXLib*        GetXLib() const { return pXLib_; }
 
     SalI18N_InputMethod*        GetInputMethod()  const { return pXLib_->GetInputMethod();  }
     SalI18N_KeyboardExtension*  GetKbdExtension() const { return mpKbdExtension; }
@@ -381,7 +338,7 @@ public:
     { mpKbdExtension = pKbdExtension; }
     ::vcl_sal::WMAdaptor* getWMAdaptor() const { return m_pWMAdaptor.get(); }
     bool            IsXinerama() const { return m_bXinerama; }
-    const std::vector< tools::Rectangle >& GetXineramaScreens() const { return m_aXineramaScreens; }
+    const std::vector< AbsoluteScreenPixelRectangle >& GetXineramaScreens() const { return m_aXineramaScreens; }
     ::Window        GetRootWindow( SalX11Screen nXScreen ) const
             { return getDataForScreen( nXScreen ).m_aRoot; }
     unsigned int GetXScreenCount() const { return m_aScreens.size(); }
@@ -420,7 +377,5 @@ namespace vcl_sal {
         return static_cast<SalDisplay *>(data->GetDisplay());
     }
 }
-
-#endif // INCLUDED_VCL_INC_UNX_SALDISP_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

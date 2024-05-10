@@ -247,7 +247,8 @@ const SwTOXMark& SwDoc::GotoTOXMark( const SwTOXMark& rCurTOXMark,
 
     for(SwTOXMark* pTOXMark : aMarks)
     {
-        if ( pTOXMark == &rCurTOXMark )
+        // Item PtrCompare needed here
+        if (areSfxPoolItemPtrsEqual( pTOXMark, &rCurTOXMark ))
             continue;
 
         pMark = pTOXMark->GetTextTOXMark();
@@ -1056,7 +1057,7 @@ void SwTOXBaseSection::Update(const SfxItemSet* pAttr,
         SwSectionFormat* pSectFormat = rDoc.MakeSectionFormat();
         rDoc.GetNodes().InsertTextSection(
                 *pHeadNd, *pSectFormat, headerData, nullptr, &aIdx.GetNode(), true, false);
-
+        pSectFormat->GetSection()->SetProtect(SwTOXBase::IsProtected());
         if (pUndo)
         {
             pUndo->TitleSectionInserted(*pSectFormat);
@@ -1373,6 +1374,8 @@ void SwTOXBaseSection::UpdateTemplate(const SwTextNode* pOwnChapterNode,
                 if (pTextNd->GetText().getLength() &&
                     pTextNd->getLayoutFrame(pLayout) &&
                     pTextNd->GetNodes().IsDocNodes() &&
+                    // tdf#40142 - consider level settings of the various text nodes
+                    o3tl::make_unsigned(pTextNd->GetAttrOutlineLevel()) <= GetLevel() &&
                     (!pLayout || !pLayout->HasMergedParas()
                         || static_cast<SwTextFrame*>(pTextNd->getLayoutFrame(pLayout))->GetTextNodeForParaProps() == pTextNd) &&
                     (!IsFromChapter() || IsHeadingContained(pOwnChapterNode, *pTextNd)))
@@ -1617,9 +1620,8 @@ void SwTOXBaseSection::UpdateTable(const SwTextNode* pOwnChapterNode,
 {
     SwDoc* pDoc = GetFormat()->GetDoc();
     SwNodes& rNds = pDoc->GetNodes();
-    const SwFrameFormats& rArr = *pDoc->GetTableFrameFormats();
 
-    for( auto pFrameFormat : rArr )
+    for(SwTableFormat* pFrameFormat: *pDoc->GetTableFrameFormats())
     {
         ::SetProgressState( 0, pDoc->GetDocShell() );
 

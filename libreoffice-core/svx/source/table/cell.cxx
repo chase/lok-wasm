@@ -36,6 +36,7 @@
 #include <libxml/xmlwriter.h>
 
 #include <sdr/properties/textproperties.hxx>
+#include <sdr/properties/cellproperties.hxx>
 #include <editeng/outlobj.hxx>
 #include <editeng/writingmodeitem.hxx>
 #include <svx/svdotable.hxx>
@@ -81,7 +82,7 @@ static const SvxItemPropertySet* ImplGetSvxCellPropertySet()
     {
         FILL_PROPERTIES
 //      { "HasLevels",                    OWN_ATTR_HASLEVELS,             cppu::UnoType<bool>::get(), css::beans::PropertyAttribute::READONLY,      0},
-        { u"Style",                        OWN_ATTR_STYLE,                 cppu::UnoType< css::style::XStyle >::get(),                                    css::beans::PropertyAttribute::MAYBEVOID, 0},
+        { u"Style"_ustr,                        OWN_ATTR_STYLE,                 cppu::UnoType< css::style::XStyle >::get(),                                    css::beans::PropertyAttribute::MAYBEVOID, 0},
         { UNO_NAME_TEXT_WRITINGMODE,      SDRATTR_TEXTDIRECTION,          cppu::UnoType<css::text::WritingMode>::get(),                         0,      0},
         { UNO_NAME_TEXT_HORZADJUST,       SDRATTR_TEXT_HORZADJUST,        cppu::UnoType<css::drawing::TextHorizontalAdjust>::get(),  0,      0},
         { UNO_NAME_TEXT_LEFTDIST,         SDRATTR_TEXT_LEFTDIST,          cppu::UnoType<sal_Int32>::get(),        0,      0, PropertyMoreFlags::METRIC_ITEM},
@@ -91,13 +92,13 @@ static const SvxItemPropertySet* ImplGetSvxCellPropertySet()
         { UNO_NAME_TEXT_VERTADJUST,       SDRATTR_TEXT_VERTADJUST,        cppu::UnoType<css::drawing::TextVerticalAdjust>::get(),    0,      0},
         { UNO_NAME_TEXT_WORDWRAP,         SDRATTR_TEXT_WORDWRAP,          cppu::UnoType<bool>::get(),        0,      0},
 
-        { u"TableBorder",                  OWN_ATTR_TABLEBORDER,           cppu::UnoType<TableBorder>::get(), 0, 0 },
-        { u"TopBorder",                    SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, TOP_BORDER },
-        { u"BottomBorder",                 SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, BOTTOM_BORDER },
-        { u"LeftBorder",                   SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, LEFT_BORDER },
-        { u"RightBorder",                  SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, RIGHT_BORDER },
-        { u"RotateAngle",                  SDRATTR_TABLE_TEXT_ROTATION,    cppu::UnoType<sal_Int32>::get(), 0, 0 },
-        { u"CellInteropGrabBag",           SDRATTR_TABLE_GRABBAG,          cppu::UnoType<css::uno::Sequence<css::beans::PropertyValue>>::get(), 0, 0},
+        { u"TableBorder"_ustr,                  OWN_ATTR_TABLEBORDER,           cppu::UnoType<TableBorder>::get(), 0, 0 },
+        { u"TopBorder"_ustr,                    SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, TOP_BORDER },
+        { u"BottomBorder"_ustr,                 SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, BOTTOM_BORDER },
+        { u"LeftBorder"_ustr,                   SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, LEFT_BORDER },
+        { u"RightBorder"_ustr,                  SDRATTR_TABLE_BORDER,           cppu::UnoType<BorderLine>::get(), 0, RIGHT_BORDER },
+        { u"RotateAngle"_ustr,                  SDRATTR_TABLE_TEXT_ROTATION,    cppu::UnoType<sal_Int32>::get(), 0, 0 },
+        { u"CellInteropGrabBag"_ustr,           SDRATTR_TABLE_CELL_GRABBAG,     cppu::UnoType<css::uno::Sequence<css::beans::PropertyValue>>::get(), 0, 0 },
 
         SVX_UNOEDIT_OUTLINER_PROPERTIES,
         SVX_UNOEDIT_CHAR_PROPERTIES,
@@ -108,22 +109,8 @@ static const SvxItemPropertySet* ImplGetSvxCellPropertySet()
     return &aSvxCellPropertySet;
 }
 
-namespace
+namespace sdr::properties
 {
-
-class CellTextProvider : public svx::ITextProvider
-{
-public:
-    explicit CellTextProvider(sdr::table::CellRef xCell);
-    virtual ~CellTextProvider();
-
-private:
-    virtual sal_Int32 getTextCount() const override;
-    virtual SdrText* getText(sal_Int32 nIndex) const override;
-
-private:
-    const sdr::table::CellRef m_xCell;
-};
 
 CellTextProvider::CellTextProvider(sdr::table::CellRef xCell)
     : m_xCell(std::move(xCell))
@@ -145,40 +132,6 @@ SdrText* CellTextProvider::getText(sal_Int32 nIndex) const
     assert(nIndex == 0);
     return m_xCell.get();
 }
-
-}
-
-namespace sdr::properties
-{
-        class CellProperties : public TextProperties
-        {
-        protected:
-            // create a new itemset
-            SfxItemSet CreateObjectSpecificItemSet(SfxItemPool& rPool) override;
-
-            const svx::ITextProvider& getTextProvider() const override;
-
-        public:
-            // basic constructor
-            CellProperties(SdrObject& rObj, sdr::table::Cell* pCell );
-
-            // constructor for copying, but using new object
-            CellProperties(const CellProperties& rProps, SdrObject& rObj, sdr::table::Cell* pCell);
-
-            // Clone() operator, normally just calls the local copy constructor
-            std::unique_ptr<BaseProperties> Clone(SdrObject& rObj) const override;
-
-            void ForceDefaultAttributes() override;
-
-            void ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich) override;
-
-            void ItemChange(const sal_uInt16 nWhich, const SfxPoolItem* pNewItem = nullptr) override;
-
-            sdr::table::CellRef mxCell;
-
-        private:
-            const CellTextProvider maTextProvider;
-        };
 
         // create a new itemset
         SfxItemSet CellProperties::CreateObjectSpecificItemSet(SfxItemPool& rPool)
@@ -216,6 +169,10 @@ namespace sdr::properties
         {
         }
 
+        CellProperties::~CellProperties()
+        {
+        }
+
         std::unique_ptr<BaseProperties> CellProperties::Clone(SdrObject& rObj) const
         {
             OSL_FAIL("CellProperties::Clone(), does not work yet!");
@@ -224,9 +181,10 @@ namespace sdr::properties
 
         void CellProperties::ForceDefaultAttributes()
         {
+            // deliberately do not run superclass ForceDefaultAttributes, we don't want any default attributes
         }
 
-        void CellProperties::ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
+        void CellProperties::ItemSetChanged(std::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
         {
             SdrTextObj& rObj = static_cast<SdrTextObj&>(GetSdrObject());
 
@@ -283,7 +241,7 @@ namespace sdr::properties
                             GetObjectItemSet();
 
                             SfxItemSet aNewSet(pOutliner->GetParaAttribs(0));
-                            mxItemSet->Put(aNewSet);
+                            moItemSet->Put(aNewSet);
                         }
 
                         std::optional<OutlinerParaObject> pTemp = pOutliner->CreateParaObject(0, nParaCount);
@@ -826,19 +784,11 @@ void Cell::AddUndo()
     }
 }
 
-
-sdr::properties::TextProperties* Cell::CloneProperties( sdr::properties::TextProperties const * pProperties, SdrObject& rNewObj, Cell& rNewCell )
+sdr::properties::CellProperties* Cell::CloneProperties( SdrObject& rNewObj, Cell& rNewCell )
 {
-    if( pProperties )
-        return new sdr::properties::CellProperties( *static_cast<sdr::properties::CellProperties const *>(pProperties), rNewObj, &rNewCell );
-    else
+    if (!mpProperties)
         return nullptr;
-}
-
-
-sdr::properties::TextProperties* Cell::CloneProperties( SdrObject& rNewObj, Cell& rNewCell )
-{
-    return CloneProperties(mpProperties.get(),rNewObj,rNewCell);
+    return new sdr::properties::CellProperties( *mpProperties, rNewObj, &rNewCell );
 }
 
 
@@ -1107,7 +1057,7 @@ void SAL_CALL Cell::setPropertyValue( const OUString& rPropertyName, const Any& 
             mpProperties->SetObjectItem(SvxTextRotateItem(Degree10(nRotVal/10), SDRATTR_TABLE_TEXT_ROTATION));
             return;
         }
-        case SDRATTR_TABLE_GRABBAG:
+        case SDRATTR_TABLE_CELL_GRABBAG:
         {
             if (mpGrabBagItem == nullptr)
                 mpGrabBagItem.reset(new SfxGrabBagItem);
@@ -1170,7 +1120,7 @@ void SAL_CALL Cell::setPropertyValue( const OUString& rPropertyName, const Any& 
         }
         }
     }
-    throw UnknownPropertyException( rPropertyName, static_cast<cppu::OWeakObject*>(this));
+    throw UnknownPropertyException( rPropertyName, getXWeak());
 }
 
 
@@ -1235,7 +1185,7 @@ Any SAL_CALL Cell::getPropertyValue( const OUString& PropertyName )
             const SvxTextRotateItem& rTextRotate = mpProperties->GetItem(SDRATTR_TABLE_TEXT_ROTATION);
             return Any(sal_Int32(to<Degree100>(rTextRotate.GetValue())));
         }
-        case SDRATTR_TABLE_GRABBAG:
+        case SDRATTR_TABLE_CELL_GRABBAG:
         {
             if (mpGrabBagItem != nullptr)
             {
@@ -1269,7 +1219,7 @@ Any SAL_CALL Cell::getPropertyValue( const OUString& PropertyName )
         }
         }
     }
-    throw UnknownPropertyException( PropertyName, static_cast<cppu::OWeakObject*>(this));
+    throw UnknownPropertyException( PropertyName, getXWeak());
 }
 
 
@@ -1306,7 +1256,7 @@ void SAL_CALL Cell::setPropertyValues( const Sequence< OUString >& aPropertyName
     const sal_Int32 nCount = aPropertyNames.getLength();
     if (nCount != aValues.getLength())
         throw css::lang::IllegalArgumentException("lengths do not match",
-                                                  static_cast<cppu::OWeakObject*>(this), -1);
+                                                  getXWeak(), -1);
 
     const OUString* pNames = aPropertyNames.getConstArray();
     const Any* pValues = aValues.getConstArray();
@@ -1600,7 +1550,7 @@ void SAL_CALL Cell::setPropertyToDefault( const OUString& PropertyName )
         GetObject().getSdrModelFromSdrObject().SetChanged();
         return;
     }
-    throw UnknownPropertyException( PropertyName, static_cast<cppu::OWeakObject*>(this));
+    throw UnknownPropertyException( PropertyName, getXWeak());
 }
 
 
@@ -1642,7 +1592,7 @@ Any SAL_CALL Cell::getPropertyDefault( const OUString& aPropertyName )
         }
         }
     }
-    throw UnknownPropertyException( aPropertyName, static_cast<cppu::OWeakObject*>(this));
+    throw UnknownPropertyException( aPropertyName, getXWeak());
 }
 
 

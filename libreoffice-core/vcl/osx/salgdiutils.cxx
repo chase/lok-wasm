@@ -40,6 +40,9 @@
 #include <vcl/skia/SkiaHelper.hxx>
 #endif
 
+static bool bTotalScreenBounds = false;
+static NSRect aTotalScreenBounds = NSZeroRect;
+
 // TODO: Scale will be set to 2.0f as default after implementation of full scaled display support . This will allow moving of
 // windows between non retina and retina displays without blurry text and graphics. Static variables have to be removed thereafter.
 
@@ -53,6 +56,39 @@ static float fWindowScale = 1.0f;
 
 namespace sal::aqua
 {
+NSRect getTotalScreenBounds()
+{
+    if (!bTotalScreenBounds)
+    {
+        aTotalScreenBounds = NSZeroRect;
+
+        NSArray *aScreens = [NSScreen screens];
+        if (aScreens != nullptr)
+        {
+            for (NSScreen *aScreen : aScreens)
+            {
+                // Calculate total screen bounds
+                NSRect aScreenFrame = [aScreen frame];
+                if (!NSIsEmptyRect(aScreenFrame))
+                {
+                    if (NSIsEmptyRect(aTotalScreenBounds))
+                        aTotalScreenBounds = aScreenFrame;
+                    else
+                        aTotalScreenBounds = NSUnionRect( aScreenFrame, aTotalScreenBounds );
+                }
+            }
+            bTotalScreenBounds = true;
+        }
+    }
+    return aTotalScreenBounds;
+}
+
+void resetTotalScreenBounds()
+{
+    bTotalScreenBounds = false;
+    getTotalScreenBounds();
+}
+
 float getWindowScaling()
 {
     // Related: tdf#147342 Any changes to this function must be copied to the
@@ -274,6 +310,22 @@ void AquaSalGraphics::UpdateWindow( NSRect& )
         CGContextHolder rCGContextHolder([pContext CGContext]);
 
         rCGContextHolder.saveState();
+
+        // Related: tdf#155092 translate Y coordinate for height differences
+        // When in live resize, the NSView's height may have changed before
+        // the CGLayer has been resized. This causes the CGLayer's content
+        // to be drawn just above or below the top left corner of the view
+        // so translate the Y coordinate by any difference between the
+        // NSView's height and the CGLayer's height.
+        NSView *pView = maShared.mpFrame->mpNSView;
+        if (pView)
+        {
+            // Use the NSView's bounds, not its frame, to properly handle
+            // any rotation and/or scaling that might have been already
+            // applied to the view
+            CGFloat fTranslateY = [pView bounds].size.height - maShared.maLayer.getSizePoints().height;
+            CGContextTranslateCTM(rCGContextHolder.get(), 0, fTranslateY);
+        }
 
         CGMutablePathRef rClip = maShared.mpFrame->getClipPath();
         if (rClip)

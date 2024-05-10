@@ -36,9 +36,12 @@ class SwDoc;
 class SwTextFootnote;
 class SwRootFrame;
 class SwXFootnote;
+class SwXTextRange;
 
 // ATT_FTN
 
+/// SfxPoolItem subclass for footnotes and endnotes, stored in the anchor text node. The start node
+/// for the footnote content is defined by m_pTextAttr.
 class SW_DLLPUBLIC SwFormatFootnote final
     : public SfxPoolItem
     , public sw::BroadcastingModify
@@ -91,11 +94,13 @@ public:
     OUString GetViewNumStr(const SwDoc& rDoc, SwRootFrame const* pLayout,
             bool bInclStrings = false) const;
 
-    css::uno::Reference<css::text::XTextRange> getAnchor(SwDoc& rDoc) const;
+    rtl::Reference<SwXTextRange> getAnchor(SwDoc& rDoc) const;
 
     unotools::WeakReference<SwXFootnote> const& GetXFootnote() const
         { return m_wXFootnote; }
     void SetXFootnote(rtl::Reference<SwXFootnote> const& xNote);
+
+    void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 };
 
 #endif

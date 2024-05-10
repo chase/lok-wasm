@@ -91,6 +91,7 @@ void Test::setUp()
     SmGlobals::ensure();
 
     xDocShRef = new SmDocShell(SfxModelFlags::EMBEDDED_OBJECT);
+    xDocShRef->DoInitNew();
 }
 
 void Test::tearDown()
@@ -527,7 +528,7 @@ void Test::testBinomInBinHor()
     aCursor.InsertElement(PlusElement);
     aCursor.InsertText("d");
 
-    sExpected += "{ { binom a b + c } + d }";
+    sExpected += "{ { binom a { b + c } } + d }";
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Binom Node in BinHor Node", sExpected, xDocShRef->GetText());
 }
 
@@ -622,7 +623,7 @@ void Test::testUnaryInMixedNumberAsNumerator()
     aCursor.InsertText("4");
 
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Unary in mixed number as Numerator",
-                                 OUString("{ 2 { - 1 over 2 } + 4 }"), xDocShRef->GetText());
+                                 OUString("{ 2 { { - 1 over 2 } + 4 } }"), xDocShRef->GetText());
 }
 
 void Test::testMiscEquivalent()
@@ -654,10 +655,10 @@ void Test::testMiscEquivalent()
 void Test::testParser()
 {
     OUString sOutput;
-    auto pNode = SmParser5().ParseExpression(u"{ \U0001D44E }"); // non-BMP Unicode
+    auto pNode = SmParser5().ParseExpression(u"{ \U0001D44E }"_ustr); // non-BMP Unicode
     pNode->Prepare(xDocShRef->GetFormat(), *xDocShRef, 0);
     SmNodeToTextVisitor(pNode.get(), sOutput);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"\U0001D44E"), sOutput);
+    CPPUNIT_ASSERT_EQUAL(u"\U0001D44E"_ustr, sOutput);
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(Test);

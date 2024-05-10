@@ -80,8 +80,6 @@
 #include <SwRewriter.hxx>
 #include <SwCapObjType.hxx>
 
-using namespace ::com::sun::star;
-
 #include <svx/svxdlg.hxx>
 #include <swabstdlg.hxx>
 #include <IDocumentDrawModelAccess.hxx>
@@ -92,6 +90,8 @@ using namespace ::com::sun::star;
 #include <com/sun/star/ui/dialogs/ExecutableDialogResults.hpp>
 #include <IDocumentUndoRedo.hxx>
 #include <formatcontentcontrol.hxx>
+
+using namespace ::com::sun::star;
 
 SFX_IMPL_INTERFACE(SwTextShell, SwBaseShell)
 
@@ -167,7 +167,8 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
                 && pACorr->IsAutoCorrFlag(
                     ACFlags::CapitalStartSentence | ACFlags::CapitalStartWord |
                     ACFlags::AddNonBrkSpace | ACFlags::ChgOrdinalNumber | ACFlags::TransliterateRTL |
-                    ACFlags::ChgToEnEmDash | ACFlags::SetINetAttr | ACFlags::Autocorrect ) )
+                    ACFlags::ChgToEnEmDash | ACFlags::SetINetAttr | ACFlags::Autocorrect |
+                    ACFlags::SetDOIAttr ) )
             {
                 rSh.AutoCorrect( *pACorr, cIns );
             }
@@ -316,7 +317,7 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
             OUString aName;
             xObj.Assign( aCnt.CreateEmbeddedObject( SvGlobalName( SO3_IFRAME_CLASSID ).GetByteSequence(), aName ),
                         embed::Aspects::MSOLE_CONTENT );
-            svt::EmbeddedObjectRef::TryRunningState( xObj.GetObject() );
+            (void)svt::EmbeddedObjectRef::TryRunningState( xObj.GetObject() );
             uno::Reference < beans::XPropertySet > xSet( xObj->getComponent(), uno::UNO_QUERY );
             if ( xSet.is() )
             {
@@ -559,16 +560,16 @@ void SwTextShell::ExecInsert(SfxRequest &rReq)
                     aAttrMgr.InsertFlyFrame();
 
                     uno::Reference< frame::XDispatchRecorder > xRecorder =
-                            GetView().GetViewFrame()->GetBindings().GetRecorder();
+                    GetView().GetViewFrame().GetBindings().GetRecorder();
                     if ( xRecorder.is() )
                     {
                         //FN_INSERT_FRAME
-                            sal_uInt16 nAnchor = static_cast<sal_uInt16>(aAttrMgr.GetAnchor());
-                            SfxRequest aReq(GetView().GetViewFrame(), FN_INSERT_FRAME);
-                            aReq.AppendItem(SfxUInt16Item(nSlot, nAnchor));
-                            aReq.AppendItem(SfxPointItem(FN_PARAM_1, rShell.GetObjAbsPos()));
-                            aReq.AppendItem(SvxSizeItem(FN_PARAM_2, rShell.GetObjSize()));
-                            aReq.Done();
+                        sal_uInt16 nAnchor = static_cast<sal_uInt16>(aAttrMgr.GetAnchor());
+                        SfxRequest aReq(GetView().GetViewFrame(), FN_INSERT_FRAME);
+                        aReq.AppendItem(SfxUInt16Item(nSlot, nAnchor));
+                        aReq.AppendItem(SfxPointItem(FN_PARAM_1, rShell.GetObjAbsPos()));
+                        aReq.AppendItem(SvxSizeItem(FN_PARAM_2, rShell.GetObjSize()));
+                        aReq.Done();
                     }
 
                     GetView().AutoCaption(FRAME_CAP);
@@ -621,14 +622,7 @@ void SwTextShell::StateInsert( SfxItemSet &rSet )
     SvtModuleOptions aMOpt;
     SfxObjectCreateMode eCreateMode =
                         GetView().GetDocShell()->GetCreateMode();
-
-    bool bCursorInHidden = false;
-    if( !rSh.HasMark() )
-    {
-        rSh.Push();
-        bCursorInHidden = rSh.SelectHiddenRange();
-        rSh.Pop();
-    }
+    const bool bCursorInHidden = rSh.IsInHiddenRange(/*bSelect=*/false);
 
     while ( nWhich )
     {
@@ -883,7 +877,23 @@ void SwTextShell::ExecTransliteration( SfxRequest const & rReq )
 void SwTextShell::ExecRotateTransliteration( SfxRequest const & rReq )
 {
     if( rReq.GetSlot() == SID_TRANSLITERATE_ROTATE_CASE )
-        GetShell().TransliterateText( m_aRotateCase.getNextMode() );
+    {
+        SwWrtShell& rSh = GetShell();
+        if (rSh.HasSelection())
+        {
+            rSh.TransliterateText(m_aRotateCase.getNextMode());
+        }
+        else
+        {
+            if (rSh.IsEndSentence())
+            {
+                rSh.BwdSentence(true);
+                rSh.TransliterateText(m_aRotateCase.getNextMode());
+            }
+            else if ((rSh.IsEndWrd() || rSh.IsStartWord() || rSh.IsInWord()) && rSh.SelWrd())
+                rSh.TransliterateText(m_aRotateCase.getNextMode());
+        }
+    }
 }
 
 SwTextShell::SwTextShell(SwView &_rView) :
@@ -1002,7 +1012,7 @@ void SwTextShell::InsertSymbol( SfxRequest& rReq )
             aAllSet.Put( SfxStringItem( SID_FONT_NAME, aFont->GetFamilyName() ) );
 
         SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-        auto xFrame = GetView().GetViewFrame()->GetFrame().GetFrameInterface();
+        auto xFrame = GetView().GetViewFrame().GetFrame().GetFrameInterface();
         ScopedVclPtr<SfxAbstractDialog> pDlg(pFact->CreateCharMapDialog(GetView().GetFrameWeld(), aAllSet, xFrame));
         pDlg->Execute();
         return;

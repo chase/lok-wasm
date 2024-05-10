@@ -321,11 +321,11 @@ tools::Rectangle AccessibleGridControlBase::getBoundingBox()
     return aRect;
 }
 
-tools::Rectangle AccessibleGridControlBase::getBoundingBoxOnScreen()
+AbsoluteScreenPixelRectangle AccessibleGridControlBase::getBoundingBoxOnScreen()
 {
     SolarMutexGuard aSolarGuard;
     ensureIsAlive();
-    tools::Rectangle aRect = implGetBoundingBoxOnScreen();
+    AbsoluteScreenPixelRectangle aRect = implGetBoundingBoxOnScreen();
     if ( aRect.Left() == 0 && aRect.Top() == 0 && aRect.Right() == 0 && aRect.Bottom() == 0 )
     {
         SAL_WARN( "accessibility", "rectangle doesn't exist" );
@@ -344,11 +344,7 @@ void AccessibleGridControlBase::commitEvent(
             return;
 
     // build an event object
-    AccessibleEventObject aEvent;
-    aEvent.Source = *this;
-    aEvent.EventId = _nEventId;
-    aEvent.OldValue = _rOldValue;
-    aEvent.NewValue = _rNewValue;
+    AccessibleEventObject aEvent(*this, _nEventId, _rNewValue, _rOldValue, -1);
 
     // let the notifier handle this event
 
@@ -361,21 +357,21 @@ sal_Int16 SAL_CALL AccessibleGridControlBase::getAccessibleRole()
     sal_Int16 nRole = AccessibleRole::UNKNOWN;
     switch ( m_eObjType )
     {
-        case TCTYPE_ROWHEADERCELL:
+        case AccessibleTableControlObjType::ROWHEADERCELL:
         nRole = AccessibleRole::ROW_HEADER;
         break;
-    case TCTYPE_COLUMNHEADERCELL:
+    case AccessibleTableControlObjType::COLUMNHEADERCELL:
         nRole = AccessibleRole::COLUMN_HEADER;
         break;
-    case TCTYPE_COLUMNHEADERBAR:
-    case TCTYPE_ROWHEADERBAR:
-    case TCTYPE_TABLE:
+    case AccessibleTableControlObjType::COLUMNHEADERBAR:
+    case AccessibleTableControlObjType::ROWHEADERBAR:
+    case AccessibleTableControlObjType::TABLE:
         nRole = AccessibleRole::TABLE;
         break;
-    case TCTYPE_TABLECELL:
+    case AccessibleTableControlObjType::TABLECELL:
         nRole = AccessibleRole::TABLE_CELL;
         break;
-    case TCTYPE_GRIDCONTROL:
+    case AccessibleTableControlObjType::GRIDCONTROL:
         nRole = AccessibleRole::PANEL;
         break;
     }

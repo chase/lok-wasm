@@ -95,7 +95,7 @@ SwUnoPropertyMapProvider::SwUnoPropertyMapProvider()
     }
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextCursorPropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextCursorPropertyMap()
 {
     static SfxItemPropertyMapEntry const aCharAndParaMap_Impl[] =
     {
@@ -105,7 +105,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextCurs
     return aCharAndParaMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAccessibilityTextAttrPropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAccessibilityTextAttrPropertyMap()
 {
     static SfxItemPropertyMapEntry const aAccessibilityTextAttrMap_Impl[] =
     {
@@ -115,7 +115,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAccessib
     return aAccessibilityTextAttrMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetParagraphPropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetParagraphPropertyMap()
 {
     static SfxItemPropertyMapEntry const aParagraphMap_Impl[] =
     {
@@ -135,7 +135,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetParagrap
     return aParagraphMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAutoParaStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAutoParaStylePropertyMap()
 {
     static SfxItemPropertyMapEntry const aAutoParaStyleMap [] =
     {
@@ -170,7 +170,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAutoPara
     return aAutoParaStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetCharStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetCharStylePropertyMap()
 {
     static SfxItemPropertyMapEntry const aCharStyleMap   [] =
     {
@@ -241,7 +241,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetCharStyle
     return aCharStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAutoCharStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAutoCharStylePropertyMap()
 {
     // same as PROPERTY_MAP_TEXTPORTION_EXTENSIONS
     static SfxItemPropertyMapEntry const aAutoCharStyleMap   [] =
@@ -307,12 +307,13 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetAutoChar
         { UNO_NAME_CHAR_BORDER_TOP_COMPLEX_COLOR, RES_CHRATR_BOX,    cppu::UnoType<css::util::XComplexColor>::get(),  PropertyAttribute::MAYBEVOID, MID_BORDER_TOP_COLOR },
         { UNO_NAME_CHAR_BORDER_BOTTOM_COMPLEX_COLOR, RES_CHRATR_BOX, cppu::UnoType<css::util::XComplexColor>::get(),  PropertyAttribute::MAYBEVOID, MID_BORDER_BOTTOM_COLOR },
         { UNO_NAME_CHAR_SHADOW_FORMAT, RES_CHRATR_SHADOW, cppu::UnoType<css::table::ShadowFormat>::get(), PROPERTY_NONE, CONVERT_TWIPS},
+        { UNO_NAME_CHAR_STYLE_NAME, RES_TXTATR_CHARFMT, cppu::UnoType<OUString>::get(), PropertyAttribute::MAYBEVOID, 0 },
     };
 
     return aAutoCharStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetParaStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetParaStylePropertyMap()
 {
     static SfxItemPropertyMapEntry const aParaStyleMap [] =
     {
@@ -328,7 +329,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetParaStyl
     return aParaStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetConditionalParaStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetConditionalParaStylePropertyMap()
 {
     static SfxItemPropertyMapEntry const aParaStyleMap [] =
     {
@@ -346,7 +347,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetConditio
     return aParaStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFrameStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFrameStylePropertyMap()
 {
     static SfxItemPropertyMapEntry const aFrameStyleMap   [] =
     {
@@ -433,7 +434,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFrameStyl
         { UNO_NAME_ALLOW_OVERLAP, RES_WRAP_INFLUENCE_ON_OBJPOS, cppu::UnoType<bool>::get(), PROPERTY_NONE, MID_ALLOW_OVERLAP},
         { UNO_NAME_WRITING_MODE, RES_FRAMEDIR, cppu::UnoType<sal_Int16>::get(), PROPERTY_NONE, 0 },
         { UNO_NAME_HIDDEN, FN_UNO_HIDDEN,     cppu::UnoType<bool>::get(), PROPERTY_NONE, 0},
-        { u"Decorative", RES_DECORATIVE, cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
+        { u"Decorative"_ustr, RES_DECORATIVE, cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
         { UNO_NAME_TEXT_VERT_ADJUST, RES_TEXT_VERT_ADJUST, cppu::UnoType<css::drawing::TextVerticalAdjust>::get(), PROPERTY_NONE ,0},
 
         // added FillProperties for SW, same as FILL_PROPERTIES in svx
@@ -446,7 +447,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFrameStyl
     return aFrameStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetPageStylePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetPageStylePropertyMap()
 {
     static SfxItemPropertyMapEntry const aPageStyleMap   [] =
     {
@@ -537,6 +538,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetPageStyle
         { UNO_NAME_NUMBERING_TYPE, SID_ATTR_PAGE,             cppu::UnoType<sal_Int16>::get(),           PROPERTY_NONE , MID_PAGE_NUMTYPE       },
         { UNO_NAME_PAGE_STYLE_LAYOUT, SID_ATTR_PAGE,          cppu::UnoType<css::style::PageStyleLayout>::get(),    PROPERTY_NONE ,MID_PAGE_LAYOUT     },
         { UNO_NAME_PRINTER_PAPER_TRAY, RES_PAPER_BIN,             cppu::UnoType<OUString>::get(),            PROPERTY_NONE , 0 },
+        { UNO_NAME_PRINTER_PAPER_TRAY_INDEX, RES_PAPER_BIN,       cppu::UnoType<sal_Int32>::get(),            PROPERTY_NONE , 0 },
 //                  { UNO_NAME_REGISTER_MODE_ACTIVE, SID_SWREGISTER_MODE,     cppu::UnoType<bool>::get(),             PROPERTY_NONE , 0 },
         { UNO_NAME_REGISTER_PARAGRAPH_STYLE, SID_SWREGISTER_COLLECTION,   cppu::UnoType<OUString>::get(),        PROPERTY_NONE , 0 },
         { UNO_NAME_SIZE, SID_ATTR_PAGE_SIZE,  cppu::UnoType<css::awt::Size>::get(),             PROPERTY_NONE,   MID_SIZE_SIZE|CONVERT_TWIPS},
@@ -586,8 +588,8 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetPageStyle
         // and uno types (see loop at end of this method and definition of SW_PROP_NMID)
         // This entry is for adding that properties to style import/export
         FILL_PROPERTIES_SW
-        { u"BackgroundFullSize", RES_BACKGROUND_FULL_SIZE,     cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
-        { u"RtlGutter", RES_RTL_GUTTER, cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
+        { u"BackgroundFullSize"_ustr, RES_BACKGROUND_FULL_SIZE,     cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
+        { u"RtlGutter"_ustr, RES_RTL_GUTTER, cppu::UnoType<bool>::get(), PROPERTY_NONE, 0 },
 
         // Added DrawingLayer FillStyle Properties for Header. These need an own unique name,
         // but reuse the same WhichIDs as the regular fill. The implementation will decide to which
@@ -651,7 +653,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetPageStyle
     return aPageStyleMap;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetTablePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetTablePropertyMap()
 {
     static SfxItemPropertyMapEntry const aTablePropertyMap_Impl[] =
     {
@@ -703,7 +705,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetTableProp
     return aTablePropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRangePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRangePropertyMap()
 {
     static SfxItemPropertyMapEntry const aRangePropertyMap_Impl[] =
     {
@@ -725,7 +727,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRangeProp
     return aRangePropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetSectionPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetSectionPropertyMap()
 {
     static SfxItemPropertyMapEntry const aSectionPropertyMap_Impl[] =
     {
@@ -778,7 +780,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetSectionPr
     return aSectionPropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFramePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFramePropertyMap()
 {
     static SfxItemPropertyMapEntry const aFramePropertyMap_Impl[] =
     {   //
@@ -814,7 +816,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFrameProp
     return aFramePropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetGraphicPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetGraphicPropertyMap()
 {
     static SfxItemPropertyMapEntry const aGraphicPropertyMap_Impl[] =
     {
@@ -859,7 +861,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetGraphicPr
     return aGraphicPropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetEmbeddedPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetEmbeddedPropertyMap()
 {
     static SfxItemPropertyMapEntry const aEmbeddedPropertyMap_Impl[] =
     {   //
@@ -892,7 +894,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetEmbeddedP
     return aEmbeddedPropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetIndexMarkPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetIndexMarkPropertyMap()
 {
     static SfxItemPropertyMapEntry const aIdxMarkMap_Impl[] =
     {
@@ -909,7 +911,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetIndexMark
     return aIdxMarkMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetContentMarkPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetContentMarkPropertyMap()
 {
     static SfxItemPropertyMapEntry const aContentMarkMap_Impl[] =
     {
@@ -921,7 +923,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetContentMa
     return aContentMarkMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetUserMarkPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetUserMarkPropertyMap()
 {
     static SfxItemPropertyMapEntry const aUserMarkMap_Impl[] =
     {
@@ -934,7 +936,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetUserMarkP
     return aUserMarkMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetTextTableCursorPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetTextTableCursorPropertyMap()
 {
     // The PropertySet corresponds to the Range without Chart properties
     static SfxItemPropertyMapEntry const aTableCursorPropertyMap_Impl [] =
@@ -960,7 +962,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetTextTable
     return aTableCursorPropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetBookmarkPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetBookmarkPropertyMap()
 {
     static SfxItemPropertyMapEntry const aBookmarkPropertyMap_Impl [] =
     {
@@ -973,7 +975,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetBookmarkP
     return aBookmarkPropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetParagraphExtensionsPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetParagraphExtensionsPropertyMap()
 {
     static SfxItemPropertyMapEntry const aParagraphExtensionsMap_Impl[] =
     {
@@ -983,7 +985,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetParagraph
     return aParagraphExtensionsMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextPortionExtensionPropertyMap()
+std::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextPortionExtensionPropertyMap()
 {
     static SfxItemPropertyMapEntry const aTextPortionExtensionMap_Impl[] =
     {
@@ -1002,7 +1004,7 @@ o3tl::span<const SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextPort
     return aTextPortionExtensionMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFootnotePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFootnotePropertyMap()
 {
     static SfxItemPropertyMapEntry const aFootnoteMap_Impl[] =
     {
@@ -1014,7 +1016,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetFootnoteP
     return aFootnoteMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetLineBreakPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetLineBreakPropertyMap()
 {
     static SfxItemPropertyMapEntry const aLineBreakMap_Impl[] =
     {
@@ -1025,7 +1027,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetLineBreak
     return aLineBreakMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetContentControlPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetContentControlPropertyMap()
 {
     static SfxItemPropertyMapEntry const aContentControlMap_Impl[] =
     {
@@ -1061,7 +1063,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetContentCo
     return aContentControlMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRedlinePropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRedlinePropertyMap()
 {
     static SfxItemPropertyMapEntry const aRedlineMap_Impl[] =
     {
@@ -1074,7 +1076,7 @@ o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRedlinePr
     return aRedlineMap_Impl;
 }
 
-o3tl::span<SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextDefaultPropertyMap()
+std::span<SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextDefaultPropertyMap()
 {
     static SfxItemPropertyMapEntry aTextDefaultMap_Impl[] =
     {
@@ -1094,7 +1096,7 @@ o3tl::span<SfxItemPropertyMapEntry>  SwUnoPropertyMapProvider::GetTextDefaultPro
     return aTextDefaultMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRedlinePortionPropertyMap()
+std::span<const SfxItemPropertyMapEntry> SwUnoPropertyMapProvider::GetRedlinePortionPropertyMap()
 {
     static SfxItemPropertyMapEntry const aRedlinePortionMap_Impl[] =
     {
@@ -1114,7 +1116,7 @@ const SfxItemPropertySet*  SwUnoPropertyMapProvider::GetPropertySet( sal_uInt16 
 {
     if( !m_aPropertySetArr[nPropertyId] )
     {
-        o3tl::span<const SfxItemPropertyMapEntry> pEntries = GetPropertyMapEntries(nPropertyId);
+        std::span<const SfxItemPropertyMapEntry> pEntries = GetPropertyMapEntries(nPropertyId);
         switch( nPropertyId )
         {
             case PROPERTY_MAP_TEXT_CURSOR:

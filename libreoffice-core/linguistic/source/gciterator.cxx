@@ -312,6 +312,14 @@ void GrammarCheckingIterator::TerminateThread()
     }
 }
 
+
+bool GrammarCheckingIterator::joinThreads()
+{
+    TerminateThread();
+    return true;
+}
+
+
 sal_Int32 GrammarCheckingIterator::NextDocId()
 {
     ::osl::Guard< ::osl::Mutex > aGuard( MyMutex() );
@@ -416,7 +424,7 @@ void GrammarCheckingIterator::ProcessResult(
                 // at pos 0 .. nErrors-1 -> all grammar errors
                 for (const linguistic2::SingleProofreadingError &rError : rRes.aErrors)
                 {
-                    OUString word = OUString(rRes.aText.subView(rError.nErrorStart, rError.nErrorLength));
+                    OUString word(rRes.aText.subView(rError.nErrorStart, rError.nErrorLength));
                     bool ignored = xIgnoreAll.is() && xIgnoreAll->getEntry(word).is();
 
                     if (!ignored)
@@ -493,12 +501,9 @@ void GrammarCheckingIterator::ProcessResult(
     if (bContinueWithNextPara)
     {
         // we need to continue with the next paragraph
-        uno::Reference< text::XFlatParagraph > xFlatParaNext;
         if (rxFlatParagraphIterator.is())
-            xFlatParaNext = rxFlatParagraphIterator->getNextPara();
-        {
-            AddEntry( rxFlatParagraphIterator, xFlatParaNext, rRes.aDocumentIdentifier, 0, bIsAutomaticChecking );
-        }
+            AddEntry(rxFlatParagraphIterator, rxFlatParagraphIterator->getNextPara(),
+                     rRes.aDocumentIdentifier, 0, bIsAutomaticChecking);
     }
 }
 
@@ -580,6 +585,11 @@ uno::Reference< linguistic2::XProofreader > GrammarCheckingIterator::GetGrammarC
             }
         }
     }
+    else // not found - quite normal
+    {
+        SAL_INFO("linguistic", "No grammar checker found for \""
+                                   << LanguageTag::convertToBcp47(rLocale, false) << "\"");
+    }
     // ---- THREAD SAFE END ----
 
     return xRes;
@@ -594,6 +604,8 @@ lcl_makeProperties(uno::Reference<text::XFlatParagraph> const& xFlatPara, sal_In
     return comphelper::InitPropertySequence({
         { "FieldPositions", xProps->getPropertyValue("FieldPositions") },
         { "FootnotePositions", xProps->getPropertyValue("FootnotePositions") },
+        { "SortedTextId", xProps->getPropertyValue("SortedTextId") },
+        { "DocumentElementsCount", xProps->getPropertyValue("DocumentElementsCount") },
         { "ProofInfo", a }
     });
 }
@@ -803,7 +815,7 @@ linguistic2::ProofreadingResult SAL_CALL GrammarCheckingIterator::checkSentenceA
 
             // ---- THREAD SAFE START ----
             {
-                ::osl::ClearableGuard< ::osl::Mutex > aGuard( MyMutex() );
+                ::osl::Guard< ::osl::Mutex > aGuard( MyMutex() );
                 aDocId = GetOrCreateDocId( xComponent );
                 nSuggestedEndOfSentencePos = GetSuggestedEndOfSentence( rText, nStartPos, aCurLocale );
                 DBG_ASSERT( nSuggestedEndOfSentencePos > nStartPos, "nSuggestedEndOfSentencePos calculation failed?" );
@@ -964,7 +976,7 @@ void SAL_CALL GrammarCheckingIterator::processLinguServiceEvent(
 
     try
     {
-         uno::Reference< uno::XInterface > xThis( static_cast< OWeakObject * >(this) );
+         uno::Reference< uno::XInterface > xThis( getXWeak() );
          linguistic2::LinguServiceEvent aEvent( xThis, linguistic2::LinguServiceEventFlags::PROOFREAD_AGAIN );
          m_aNotifyListeners.notifyEach(
                 &linguistic2::XLinguServiceEventListener::processLinguServiceEvent,
@@ -1140,7 +1152,7 @@ void GrammarCheckingIterator::GetConfiguredGCSvcs_Impl()
     {
         // ---- THREAD SAFE START ----
         ::osl::Guard< ::osl::Mutex > aGuard( MyMutex() );
-        m_aGCImplNamesByLang     = aTmpGCImplNamesByLang;
+        m_aGCImplNamesByLang.swap(aTmpGCImplNamesByLang);
         // ---- THREAD SAFE END ----
     }
 }

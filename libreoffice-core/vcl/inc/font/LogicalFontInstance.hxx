@@ -22,6 +22,7 @@
 #include <sal/config.h>
 
 #include <basegfx/polygon/b2dpolypolygon.hxx>
+#include <basegfx/range/b2drectangle.hxx>
 #include <o3tl/hash_combine.hxx>
 #include <rtl/ref.hxx>
 #include <salhelper/simplereferenceobject.hxx>
@@ -30,12 +31,11 @@
 #include <tools/degree.hxx>
 
 #include <font/FontSelectPattern.hxx>
-#include <impfontmetricdata.hxx>
+#include <font/FontMetricData.hxx>
 #include <glyphid.hxx>
 
 #include <optional>
 #include <unordered_map>
-#include <memory>
 
 #include <hb.h>
 
@@ -74,7 +74,7 @@ class VCL_PLUGIN_PUBLIC LogicalFontInstance : public salhelper::SimpleReferenceO
 public: // TODO: make data members private
     virtual ~LogicalFontInstance() override;
 
-    ImplFontMetricDataRef mxFontMetric; // Font attributes
+    FontMetricDataRef mxFontMetric; // Font attributes
     const ConvertChar* mpConversion; // used e.g. for StarBats->StarSymbol
 
     tools::Long mnLineHeight;
@@ -101,15 +101,15 @@ public: // TODO: make data members private
     vcl::font::PhysicalFontFace* GetFontFace() { return m_pFontFace.get(); }
     const ImplFontCache* GetFontCache() const { return mpFontCache; }
 
-    bool GetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const;
+    bool GetGlyphBoundRect(sal_GlyphId, basegfx::B2DRectangle&, bool) const;
     virtual bool GetGlyphOutline(sal_GlyphId, basegfx::B2DPolyPolygon&, bool) const = 0;
-    bool GetGlyphOutlineUntransformed(sal_GlyphId, basegfx::B2DPolyPolygon&) const;
+    basegfx::B2DPolyPolygon GetGlyphOutlineUntransformed(sal_GlyphId) const;
 
     sal_GlyphId GetGlyphIndex(uint32_t, uint32_t = 0) const;
 
     double GetGlyphWidth(sal_GlyphId, bool = false, bool = true) const;
 
-    int GetKashidaWidth() const;
+    double GetKashidaWidth() const;
 
     void GetScale(double* nXScale, double* nYScale) const;
 
@@ -119,8 +119,6 @@ public: // TODO: make data members private
 protected:
     explicit LogicalFontInstance(const vcl::font::PhysicalFontFace&,
                                  const vcl::font::FontSelectPattern&);
-
-    virtual bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const = 0;
 
     hb_font_t* InitHbFont();
     virtual void ImplInitHbFont(hb_font_t*) {}

@@ -46,7 +46,6 @@
 #include <rtl/random.h>
 #include <rtl/ustrbuf.hxx>
 #include <osl/security.hxx>
-#include <osl/thread.hxx>
 
 #include <cppuhelper/factory.hxx>
 
@@ -67,6 +66,9 @@
 
 // this one is header-only
 #include <comphelper/sequence.hxx>
+
+#include <mutex>
+#include <thread>
 #include <utility>
 
 namespace com::sun::star::registry { class XRegistryKey; }
@@ -210,7 +212,7 @@ Reference<XComponentContext> raise_uno_process(
             }
             catch (const css::connection::NoConnectException &) {
                 if (i < 40) {
-                    ::osl::Thread::wait( std::chrono::milliseconds(500) );
+                    std::this_thread::sleep_for( std::chrono::milliseconds(500) );
                 }
                 else throw;
             }
@@ -296,8 +298,8 @@ void JavaComponentLoader::disposing()
 
 const css::uno::Reference<XImplementationLoader> & JavaComponentLoader::getJavaLoader(OUString & rRemoteArg)
 {
-    static Mutex ourMutex;
-    MutexGuard aGuard(ourMutex);
+    static std::mutex ourMutex;
+    std::unique_lock aGuard(ourMutex);
 
     if (m_javaLoader.is())
         return m_javaLoader;
@@ -469,7 +471,7 @@ const css::uno::Reference<XImplementationLoader> & JavaComponentLoader::getJavaL
             css::uno::Any anyEx = cppu::getCaughtException();
             throw css::lang::WrappedTargetRuntimeException(
                 "jvmaccess::VirtualMachine::AttachGuard::CreationException",
-                static_cast< cppu::OWeakObject * >(this), anyEx );
+                getXWeak(), anyEx );
         }
 
         // set the service manager at the javaloader

@@ -20,6 +20,7 @@
 #define INCLUDED_SW_INC_COMCORE_HXX
 
 // defines for the Autoformat Redline Comments
+// see sw/inc/utlui.hrc
 #define STR_AUTOFMTREDL_DEL_EMPTY_PARA          0
 #define STR_AUTOFMTREDL_USE_REPLACE             1
 #define STR_AUTOFMTREDL_CPTL_STT_WORD           2
@@ -43,8 +44,11 @@
 #define STR_AUTOFMTREDL_DEL_MORELINES           20
 #define STR_AUTOFMTREDL_NON_BREAK_SPACE         21
 #define STR_AUTOFMTREDL_TRANSLITERATE_RTL       22
+#define STR_AUTOFMTREDL_DETECT_DOI              23
+#define STR_AUTOFMTREDL_ITALIC                  24
+#define STR_AUTOFMTREDL_STRIKETHROUGH           25
 // !!!!!!!!!!!!!!!!!!!!!!!!!!  always set the correct end !!!!!!!!!!!!
-#define STR_AUTOFMTREDL_END                     23
+#define STR_AUTOFMTREDL_END                     26
 
 #endif
 

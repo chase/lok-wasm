@@ -48,6 +48,7 @@
 #include <svtools/colorcfg.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <o3tl/string_view.hxx>
 
 using ::utl::AccessibleRelationSetHelper;
 using ::accessibility::AccessibleStaticTextBase;
@@ -246,7 +247,7 @@ static void lcl_FillFontAttributes( Sequence< PropertyValue >& rSeq, const vcl::
 }
 
 ScAccessibleCsvRuler::ScAccessibleCsvRuler(ScCsvRuler& rRuler)
-    : ScAccessibleCsvControl(rRuler)
+    : ImplInheritanceHelper(rRuler)
 {
     constructStringBuffer();
 }
@@ -420,7 +421,7 @@ OUString SAL_CALL ScAccessibleCsvRuler::getText()
 {
     SolarMutexGuard aGuard;
     ensureAlive();
-    return OUString( maBuffer.getStr(), implGetTextLength() );
+    return OUString(maBuffer.subView( 0, implGetTextLength() ));
 }
 
 OUString SAL_CALL ScAccessibleCsvRuler::getTextRange( sal_Int32 nStartIndex, sal_Int32 nEndIndex )
@@ -454,7 +455,10 @@ TextSegment SAL_CALL ScAccessibleCsvRuler::getTextAtIndex( sal_Int32 nIndex, sal
         case AccessibleTextType::CHARACTER:
         {
             aResult.SegmentStart = nIndex;
-            aResultText.append(maBuffer[nIndex]);
+            aResult.SegmentEnd = nIndex;
+            o3tl::iterateCodePoints(maBuffer, &aResult.SegmentEnd);
+            for (; nIndex < aResult.SegmentEnd; nIndex++)
+                aResultText.append(maBuffer[nIndex]);
         }
         break;
 
@@ -512,7 +516,10 @@ TextSegment SAL_CALL ScAccessibleCsvRuler::getTextBeforeIndex( sal_Int32 nIndex,
         // single character
         case AccessibleTextType::CHARACTER:
             if( nIndex > 0 )
-                aResult = getTextAtIndex( nIndex - 1, nTextType );
+            {
+                o3tl::iterateCodePoints(maBuffer, &nIndex, -1);
+                aResult = getTextAtIndex(nIndex, nTextType);
+            }
             // else empty
         break;
 
@@ -565,7 +572,10 @@ TextSegment SAL_CALL ScAccessibleCsvRuler::getTextBehindIndex( sal_Int32 nIndex,
         // single character
         case AccessibleTextType::CHARACTER:
             if( nIndex < nLastValid )
-                aResult = getTextAtIndex( nIndex + 1, nTextType );
+            {
+                o3tl::iterateCodePoints(maBuffer, &nIndex);
+                aResult = getTextAtIndex(nIndex, nTextType);
+            }
             // else empty
         break;
 
@@ -609,37 +619,6 @@ sal_Bool SAL_CALL ScAccessibleCsvRuler::copyText( sal_Int32 /* nStartIndex */, s
 sal_Bool SAL_CALL ScAccessibleCsvRuler::scrollSubstringTo( sal_Int32 /* nStartIndex */, sal_Int32/* nEndIndex */, AccessibleScrollType /* aScrollType */ )
 {
     return false;
-}
-
-// XInterface -----------------------------------------------------------------
-
-Any SAL_CALL ScAccessibleCsvRuler::queryInterface( const css::uno::Type& rType )
-{
-    Any aAny( ScAccessibleCsvRulerImpl::queryInterface( rType ) );
-    return aAny.hasValue() ? aAny : ScAccessibleCsvControl::queryInterface( rType );
-}
-
-void SAL_CALL ScAccessibleCsvRuler::acquire() noexcept
-{
-    ScAccessibleCsvControl::acquire();
-}
-
-void SAL_CALL ScAccessibleCsvRuler::release() noexcept
-{
-    ScAccessibleCsvControl::release();
-}
-
-// XTypeProvider --------------------------------------------------------------
-
-Sequence< css::uno::Type > SAL_CALL ScAccessibleCsvRuler::getTypes()
-{
-    return ::comphelper::concatSequences( ScAccessibleCsvControl::getTypes(),
-        Sequence { cppu::UnoType<XAccessibleText>::get() });
-}
-
-Sequence< sal_Int8 > SAL_CALL ScAccessibleCsvRuler::getImplementationId()
-{
-    return css::uno::Sequence<sal_Int8>();
 }
 
 // events ---------------------------------------------------------------------
@@ -758,7 +737,7 @@ static sal_uInt32 lcl_GetGridColumn( sal_Int32 nApiColumn )
 }
 
 ScAccessibleCsvGrid::ScAccessibleCsvGrid(ScCsvGrid& rGrid)
-    : ScAccessibleCsvControl(rGrid)
+    : ImplInheritanceHelper(rGrid)
 {
 }
 
@@ -1100,39 +1079,6 @@ void SAL_CALL ScAccessibleCsvGrid::deselectAccessibleChild( sal_Int64 nSelectedC
         implSelectColumn( nColumn, false );
 }
 
-// XInterface -----------------------------------------------------------------
-
-Any SAL_CALL ScAccessibleCsvGrid::queryInterface( const css::uno::Type& rType )
-{
-    Any aAny( ScAccessibleCsvGridImpl::queryInterface( rType ) );
-    return aAny.hasValue() ? aAny : ScAccessibleCsvControl::queryInterface( rType );
-}
-
-void SAL_CALL ScAccessibleCsvGrid::acquire() noexcept
-{
-    ScAccessibleCsvControl::acquire();
-}
-
-void SAL_CALL ScAccessibleCsvGrid::release() noexcept
-{
-    ScAccessibleCsvControl::release();
-}
-
-// XTypeProvider --------------------------------------------------------------
-
-Sequence< css::uno::Type > SAL_CALL ScAccessibleCsvGrid::getTypes()
-{
-    return ::comphelper::concatSequences( ScAccessibleCsvControl::getTypes(),
-        Sequence {
-            cppu::UnoType<XAccessibleTable>::get(),
-            cppu::UnoType<XAccessibleSelection>::get() });
-}
-
-Sequence< sal_Int8 > SAL_CALL ScAccessibleCsvGrid::getImplementationId()
-{
-    return css::uno::Sequence<sal_Int8>();
-}
-
 // events ---------------------------------------------------------------------
 
 void ScAccessibleCsvGrid::SendFocusEvent( bool bFocused )
@@ -1283,7 +1229,7 @@ ScAccessibleCsvCell::ScAccessibleCsvCell(
         ScCsvGrid& rGrid,
         OUString aCellText,
         sal_Int32 nRow, sal_Int32 nColumn ) :
-    ScAccessibleCsvControl( rGrid ),
+    ImplInheritanceHelper( rGrid ),
     AccessibleStaticTextBase( SvxEditSourcePtr() ),
     maCellText(std::move( aCellText )),
     mnLine( nRow ? (nRow + rGrid.GetFirstVisLine() - 1) : CSV_LINE_HEADER ),
@@ -1374,11 +1320,11 @@ sal_Int64 SAL_CALL ScAccessibleCsvCell::getAccessibleStateSet()
 
 // XInterface -----------------------------------------------------------------
 
-IMPLEMENT_FORWARD_XINTERFACE2( ScAccessibleCsvCell, ScAccessibleCsvControl, AccessibleStaticTextBase )
+IMPLEMENT_FORWARD_XINTERFACE2( ScAccessibleCsvCell, ImplInheritanceHelper, AccessibleStaticTextBase )
 
 // XTypeProvider --------------------------------------------------------------
 
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( ScAccessibleCsvCell, ScAccessibleCsvControl, AccessibleStaticTextBase )
+IMPLEMENT_FORWARD_XTYPEPROVIDER2( ScAccessibleCsvCell, ImplInheritanceHelper, AccessibleStaticTextBase )
 
 // helpers --------------------------------------------------------------------
 

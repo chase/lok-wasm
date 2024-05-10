@@ -565,7 +565,7 @@ OUString SwEditShell::Calculate()
 
                     OUString sVar = aStr.copy( nTmpStt, nPos - nTmpStt );
                     if( !::FindOperator( sVar ) &&
-                        (aCalc.GetVarTable().Find(sVar) ||
+                        (aCalc.GetVarTable().find(sVar) != aCalc.GetVarTable().end() ||
                          aCalc.VarLook( sVar )) )
                     {
                         if( !bValidFields )
@@ -796,7 +796,7 @@ void SwEditShell::SetNumberingRestart()
                     if( nullptr != pContentFrame )
                     {
                         // skip hidden frames - ignore protection!
-                        if( !static_cast<SwTextFrame*>(pContentFrame)->IsHiddenNow() )
+                        if( !pContentFrame->IsHiddenNow() )
                         {
                             // if the node is numbered and the starting value of the numbering equals the
                             // start value of the numbering rule then set this value as hard starting value
@@ -852,9 +852,9 @@ void SwEditShell::SetNumberingRestart()
     EndAllAction();
 }
 
-sal_uInt16 SwEditShell::GetLineCount()
+sal_Int32 SwEditShell::GetLineCount()
 {
-    sal_uInt16 nRet = 0;
+    sal_Int32 nRet = 0;
     CalcLayout();
     SwPaM* pPam = GetCursor();
     SwNodeIndex aStart( pPam->GetPoint()->GetNode() );

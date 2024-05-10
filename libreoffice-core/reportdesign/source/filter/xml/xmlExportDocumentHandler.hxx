@@ -21,7 +21,7 @@
 
 #include <sal/config.h>
 #include <com/sun/star/uno/XComponentContext.hpp>
-#include <cppuhelper/implbase3.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <com/sun/star/xml/sax/XDocumentHandler.hpp>
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -30,15 +30,16 @@
 #include <com/sun/star/chart2/data/XDatabaseDataProvider.hpp>
 #include <comphelper/uno3.hxx>
 #include <xmloff/xmltoken.hxx>
+#include <mutex>
 
 namespace rptxml
 {
 
 OUString lcl_createAttribute(const xmloff::token::XMLTokenEnum& _eNamespace,const xmloff::token::XMLTokenEnum& _eAttribute);
 
-typedef ::cppu::WeakAggImplHelper3< css::xml::sax::XDocumentHandler
-                                ,   css::lang::XInitialization
-                                ,   css::lang::XServiceInfo>   ExportDocumentHandler_BASE;
+typedef ::cppu::WeakImplHelper< css::xml::sax::XDocumentHandler
+                            ,   css::lang::XInitialization
+                            ,   css::lang::XServiceInfo>   ExportDocumentHandler_BASE;
 
 class ExportDocumentHandler : public ExportDocumentHandler_BASE
 {
@@ -74,7 +75,7 @@ private:
 
     virtual ~ExportDocumentHandler() override;
 
-    ::osl::Mutex                                              m_aMutex;
+    std::mutex                                                m_aMutex;
     css::uno::Reference< css::uno::XComponentContext >        m_xContext;
     css::uno::Reference< css::xml::sax::XDocumentHandler >    m_xDelegatee;
     css::uno::Reference< css::uno::XAggregation >             m_xProxy;

@@ -27,7 +27,7 @@ using namespace css;
 
 CPPUNIT_TEST_FIXTURE(test::AccessibleTestBase, TestCalcMenu)
 {
-    load(u"private:factory/scalc");
+    load(u"private:factory/scalc"_ustr);
 
     const Date beforeDate(Date::SYSTEM);
     const double beforeTime = tools::Time(tools::Time::SYSTEM).GetTimeInDays();
@@ -89,7 +89,7 @@ CPPUNIT_TEST_FIXTURE(test::AccessibleTestBase, TestCalcMenu)
 // for the case where 32-bit a11y child indices don't suffice (tdf#150683)
 CPPUNIT_TEST_FIXTURE(test::AccessibleTestBase, Test64BitChildIndices)
 {
-    load(u"private:factory/scalc");
+    load(u"private:factory/scalc"_ustr);
 
     const sal_Int32 nRow = 1048575;
     const sal_Int32 nCol = 16383;
@@ -106,6 +106,24 @@ CPPUNIT_TEST_FIXTURE(test::AccessibleTestBase, Test64BitChildIndices)
     // test that retrieving the row and column number via the child index again works
     CPPUNIT_ASSERT_EQUAL(nRow, xTable->getAccessibleRow(nChildIndex));
     CPPUNIT_ASSERT_EQUAL(nCol, xTable->getAccessibleColumn(nChildIndex));
+}
+
+CPPUNIT_TEST_FIXTURE(test::AccessibleTestBase, tdf157568)
+{
+    load(u"private:factory/scalc"_ustr);
+
+    uno::Reference<accessibility::XAccessibleTable> sheet(
+        getDocumentAccessibleContext()->getAccessibleChild(0)->getAccessibleContext(), // sheet 1
+        uno::UNO_QUERY_THROW);
+
+    uno::Reference<accessibility::XAccessible> xCell = sheet->getAccessibleCellAt(1, 1);
+    CPPUNIT_ASSERT(xCell);
+    uno::WeakReference<accessibility::XAccessible> xCellWeak(xCell);
+    xCell.clear();
+    // Verify that there are no reference cycles and that the ScAccessibleCell object dies after we
+    // are done with it.
+    uno::Reference<accessibility::XAccessible> xCell2(xCellWeak);
+    CPPUNIT_ASSERT(!xCell2.is());
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

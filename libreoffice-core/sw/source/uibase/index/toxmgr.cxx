@@ -47,7 +47,8 @@ void SwTOXMgr::DeleteTOXMark()
     if( m_pCurTOXMark )
     {
         pNext = const_cast<SwTOXMark*>(&m_pSh->GotoTOXMark( *m_pCurTOXMark, TOX_NXT ));
-        if( pNext == m_pCurTOXMark )
+        // tdf#158783 ptr compare OK for SwTOXMark (more below)
+        if (areSfxPoolItemPtrsEqual( pNext, m_pCurTOXMark ))
             pNext = nullptr;
 
         m_pSh->DeleteTOXMark( m_pCurTOXMark );
@@ -384,6 +385,12 @@ bool SwTOXMgr::UpdateOrInsertTOX(const SwTOXDescription& rDesc,
             }
             pNewTOX->SetFromObjectNames(rDesc.IsCreateFromObjectNames());
             pNewTOX->SetOLEOptions(rDesc.GetOLEOptions());
+            if (eCurTOXType == TOX_ILLUSTRATIONS
+                || eCurTOXType == TOX_TABLES
+                || eCurTOXType == TOX_OBJECTS)
+            {
+                pNewTOX->SetCreate(rDesc.GetContentOptions());
+            }
         }
         break;
     }

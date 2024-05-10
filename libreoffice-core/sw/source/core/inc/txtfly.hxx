@@ -153,10 +153,10 @@ class SwTextFly
      */
     SwRect GetFrame_( const SwRect &rPortion ) const;
 
-    SwAnchoredObjList* InitAnchoredObjList();
+    SwAnchoredObjList& InitAnchoredObjList();
 
 public:
-    SwAnchoredObjList* GetAnchoredObjList() const;
+    SwAnchoredObjList& GetAnchoredObjList() const;
 private:
 
     /**
@@ -307,12 +307,14 @@ public:
     void SetIgnoreContour( bool bNew );
 
     void SetIgnoreObjsInHeaderFooter( const bool bNew );
+
+    SwRect GetFrameArea() const;
 };
 
-inline SwAnchoredObjList* SwTextFly::GetAnchoredObjList() const
+inline SwAnchoredObjList& SwTextFly::GetAnchoredObjList() const
 {
     return mpAnchoredObjList
-           ? mpAnchoredObjList.get()
+           ? *mpAnchoredObjList
            : const_cast<SwTextFly*>(this)->InitAnchoredObjList();
 }
 

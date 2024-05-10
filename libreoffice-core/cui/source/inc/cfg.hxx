@@ -40,24 +40,24 @@
 #include "cfgutil.hxx"
 #include "CommandCategoryListBox.hxx"
 
-inline constexpr OUStringLiteral notebookbarTabScope = u"notebookbarTabScope";
+inline constexpr OUString notebookbarTabScope = u"notebookbarTabScope"_ustr;
 
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_COMMANDURL  = u"CommandURL";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_CONTAINER = u"ItemDescriptorContainer";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_LABEL = u"Label";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_TYPE = u"Type";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_STYLE = u"Style";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_ISVISIBLE = u"IsVisible";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_RESOURCEURL = u"ResourceURL";
-inline constexpr OUStringLiteral ITEM_DESCRIPTOR_UINAME = u"UIName";
+inline constexpr OUString ITEM_DESCRIPTOR_COMMANDURL  = u"CommandURL"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_CONTAINER = u"ItemDescriptorContainer"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_LABEL = u"Label"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_TYPE = u"Type"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_STYLE = u"Style"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_ISVISIBLE = u"IsVisible"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_RESOURCEURL = u"ResourceURL"_ustr;
+inline constexpr OUString ITEM_DESCRIPTOR_UINAME = u"UIName"_ustr;
 
-inline constexpr OUStringLiteral ITEM_MENUBAR_URL = u"private:resource/menubar/menubar";
-inline constexpr OUStringLiteral ITEM_TOOLBAR_URL = u"private:resource/toolbar/";
-inline constexpr OUStringLiteral ITEM_EVENT_URL = u"private:resource/event/";
+inline constexpr OUString ITEM_MENUBAR_URL = u"private:resource/menubar/menubar"_ustr;
+inline constexpr OUString ITEM_TOOLBAR_URL = u"private:resource/toolbar/"_ustr;
+inline constexpr OUString ITEM_EVENT_URL = u"private:resource/event/"_ustr;
 
-inline constexpr OUStringLiteral CUSTOM_TOOLBAR_STR = u"custom_toolbar_";
+inline constexpr OUString CUSTOM_TOOLBAR_STR = u"custom_toolbar_"_ustr;
 
-inline constexpr OUStringLiteral aMenuSeparatorStr = u" | ";
+inline constexpr OUString aMenuSeparatorStr = u" | "_ustr;
 
 class SvxConfigEntry;
 class SvxConfigPage;
@@ -69,12 +69,12 @@ class SvxConfigDialog : public SfxTabDialogController
 private:
     css::uno::Reference< css::frame::XFrame > m_xFrame;
 
-    virtual void ActivatePage(const OString& rPage) override;
+    virtual void ActivatePage(const OUString& rPage) override;
 
 public:
     SvxConfigDialog(weld::Window*, const SfxItemSet*);
 
-    virtual void PageCreated(const OString& rId, SfxTabPage &rPage) override;
+    virtual void PageCreated(const OUString& rId, SfxTabPage &rPage) override;
     void SetFrame(const css::uno::Reference< css::frame::XFrame >& xFrame);
 };
 
@@ -412,12 +412,14 @@ protected:
 
     std::unique_ptr<weld::ComboBox>            m_xSaveInListBox;
 
+    std::unique_ptr<weld::Widget>              m_xCustomizeBox;
     std::unique_ptr<weld::MenuButton>          m_xInsertBtn;
     std::unique_ptr<weld::MenuButton>          m_xModifyBtn;
     // Used to reset the selected toolbar/menu/context menu
     std::unique_ptr<weld::Button>              m_xResetBtn;
 
     // Middle buttons
+    std::unique_ptr<weld::Widget>              m_xCommandButtons;
     std::unique_ptr<weld::Button>              m_xAddCommandButton;
     std::unique_ptr<weld::Button>              m_xRemoveCommandButton;
 

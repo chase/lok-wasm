@@ -30,7 +30,6 @@
 #include <writer/WConnection.hxx>
 #include <connectivity/sdbcx/VColumn.hxx>
 #include <sal/log.hxx>
-#include <comphelper/servicehelper.hxx>
 
 namespace com::sun::star::text
 {
@@ -205,18 +204,6 @@ void SAL_CALL OWriterTable::disposing()
     if (m_pWriterConnection)
         m_pWriterConnection->releaseDoc();
     m_pWriterConnection = nullptr;
-}
-
-const uno::Sequence<sal_Int8>& OWriterTable::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit implId;
-    return implId.getSeq();
-}
-
-sal_Int64 OWriterTable::getSomething(const uno::Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<OWriterTable_BASE>{});
 }
 
 bool OWriterTable::fetchRow(OValueRefRow& _rRow, const OSQLColumns& _rCols, bool bRetrieveData)

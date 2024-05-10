@@ -70,18 +70,21 @@ public:
 
 private:
 
-    bool impl_getPreselectionForType(
+    static bool impl_getPreselectionForType(
+        std::unique_lock<std::mutex>& rGuard,
         const OUString& sPreSelType, const css::util::URL& aParsedURL, FlatDetection& rFlatTypes, bool bDocService);
 
-    void impl_getPreselectionForDocumentService(
+    static void impl_getPreselectionForDocumentService(
+        std::unique_lock<std::mutex>& rGuard,
         const OUString& sPreSelDocumentService, const css::util::URL& aParsedURL, FlatDetection& rFlatTypes);
 
-    OUString impl_getTypeFromFilter(const OUString& rFilterName);
+    static OUString impl_getTypeFromFilter(std::unique_lock<std::mutex>& rGuard, const OUString& rFilterName);
 
     /**
      * Get all format types that we handle.
      */
-    void impl_getAllFormatTypes(
+    static void impl_getAllFormatTypes(
+        std::unique_lock<std::mutex>& rGuard,
         const css::util::URL& aParsedURL, utl::MediaDescriptor const & rDescriptor,
         FlatDetection& rFlatTypes);
 
@@ -173,7 +176,7 @@ private:
         @return     [string]
                     a valid type name or an empty string if user canceled interaction.
      */
-    OUString impl_askUserForTypeAndFilterIfAllowed(utl::MediaDescriptor& rDescriptor);
+    static OUString impl_askUserForTypeAndFilterIfAllowed(utl::MediaDescriptor& rDescriptor);
 
 
     /** @short      check if an input stream is already part of the
@@ -230,8 +233,8 @@ private:
         @return     TRUE the specified type and its registrations was valid(!) and
                     could be set on the descriptor.
      */
-    bool impl_validateAndSetTypeOnDescriptor(      utl::MediaDescriptor& rDescriptor,
-                                                 const OUString&               sType      );
+    static bool impl_validateAndSetTypeOnDescriptor( utl::MediaDescriptor& rDescriptor,
+                                                     const OUString&               sType      );
 
 
     /** @short      validate the specified filter and its relationships
@@ -251,7 +254,8 @@ private:
         @return     TRUE the specified type and its registrations was valid(!) and
                     could be set on the descriptor.
      */
-    bool impl_validateAndSetFilterOnDescriptor(      utl::MediaDescriptor& rDescriptor,
+    static bool impl_validateAndSetFilterOnDescriptor(
+                                                utl::MediaDescriptor& rDescriptor,
                                                    const OUString&               sFilter    );
 
 

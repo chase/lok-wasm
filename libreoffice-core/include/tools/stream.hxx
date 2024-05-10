@@ -260,10 +260,9 @@ public:
     SvStream&       WriteUChar( unsigned char nChar );
     SvStream&       WriteFloat( float nFloat );
     SvStream&       WriteDouble( const double& rDouble );
-    SvStream&       WriteCharPtr( const char* pBuf );
 
-    SvStream&       WriteUInt32AsString( sal_uInt32 nUInt32 );
-    SvStream&       WriteInt32AsString( sal_Int32 nInt32 );
+    template <typename N>
+    SvStream&       WriteNumberAsString( N n ) { return WriteOString(OString::number(n)); }
 
     std::size_t     ReadBytes( void* pData, std::size_t nSize );
     std::size_t     WriteBytes( const void* pData, std::size_t nSize );
@@ -587,12 +586,11 @@ TOOLS_DLLPUBLIC bool isEmptyFileUrl(const OUString& rUrl);
 class TOOLS_DLLPUBLIC SvFileStream final : public SvStream
 {
 private:
-    std::unique_ptr<StreamData>
-                    pInstanceData;
-    OUString        aFilename;
+    void*           mxFileHandle = nullptr; // on windows, it is a HANDLE, otherwise, it is a oslFileHandle
 #if defined(_WIN32)
     sal_uInt16      nLockCounter;
 #endif
+    OUString        aFilename;
     bool            bIsOpen;
 
     SvFileStream (const SvFileStream&) = delete;

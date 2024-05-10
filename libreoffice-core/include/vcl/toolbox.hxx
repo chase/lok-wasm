@@ -199,7 +199,7 @@ private:
     SAL_DLLPRIVATE const OUString& ImplGetHelpText( ToolBoxItemId nItemId ) const;
     SAL_DLLPRIVATE Size            ImplGetOptimalFloatingSize();
     SAL_DLLPRIVATE bool            ImplHasExternalMenubutton() const;
-    SAL_DLLPRIVATE void            ImplDrawFloatwinBorder(vcl::RenderContext& rRenderContext, ImplToolItem const * pItem );
+    static SAL_DLLPRIVATE void     ImplDrawFloatwinBorder(vcl::RenderContext& rRenderContext, ImplToolItem const * pItem );
 
     DECL_DLLPRIVATE_LINK(    ImplUpdateHdl, Timer*, void );
     DECL_DLLPRIVATE_LINK(    ImplCustomMenuListener, VclMenuEvent&, void );
@@ -257,7 +257,7 @@ protected:
 
 public:
     ToolBox(vcl::Window* pParent, WinBits nStyle = 0);
-    ToolBox(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription,
+    ToolBox(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription,
         const css::uno::Reference<css::frame::XFrame> &rFrame = css::uno::Reference<css::frame::XFrame>());
     virtual             ~ToolBox() override;
     virtual void        dispose() override;
@@ -410,7 +410,7 @@ public:
     void                SetHelpText( ToolBoxItemId nItemId, const OUString& rText );
     const OUString&     GetHelpText( ToolBoxItemId nItemId ) const;
 
-    void                SetHelpId( ToolBoxItemId nItemId, const OString& rHelpId );
+    void                SetHelpId( ToolBoxItemId nItemId, const OUString& rHelpId );
 
     //  window size according to current alignment, floating state and number of lines
     Size                CalcWindowSizePixel();

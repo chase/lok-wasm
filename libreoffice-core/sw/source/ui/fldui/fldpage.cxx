@@ -42,7 +42,7 @@ using namespace ::com::sun::star;
 
 // note: pAttrSet may be null if the dialog is restored on startup
 SwFieldPage::SwFieldPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription,
-        const OString& rID, const SfxItemSet *pAttrSet)
+        const OUString& rID, const SfxItemSet *pAttrSet)
     : SfxTabPage(pPage, pController, rUIXMLDescription, rID, pAttrSet)
     , m_pCurField(nullptr)
     , m_pWrtShell(nullptr)
@@ -133,7 +133,7 @@ void SwFieldPage::InsertField(SwFieldTypesEnum nTypeId, sal_uInt16 nSubType, con
         m_aMgr.InsertField( aData );
 
         uno::Reference< frame::XDispatchRecorder > xRecorder =
-                pView->GetViewFrame()->GetBindings().GetRecorder();
+                pView->GetViewFrame().GetBindings().GetRecorder();
         if ( xRecorder.is() )
         {
             bool bRecordDB = SwFieldTypesEnum::Database == nTypeId ||
@@ -142,8 +142,8 @@ void SwFieldPage::InsertField(SwFieldTypesEnum nTypeId, sal_uInt16 nSubType, con
                             SwFieldTypesEnum::DatabaseNextSet == nTypeId ||
                             SwFieldTypesEnum::DatabaseName == nTypeId ;
 
-            SfxRequest aReq( pView->GetViewFrame(),
-                    bRecordDB ?  FN_INSERT_DBFIELD : FN_INSERT_FIELD );
+            SfxRequest aReq(pView->GetViewFrame(),
+                    bRecordDB ? FN_INSERT_DBFIELD : FN_INSERT_FIELD);
             if(bRecordDB)
             {
                 sal_Int32 nIdx{ 0 };
@@ -152,7 +152,7 @@ void SwFieldPage::InsertField(SwFieldTypesEnum nTypeId, sal_uInt16 nSubType, con
                 aReq.AppendItem(SfxStringItem
                         (FN_PARAM_1,rPar1.getToken(0, DB_DELIM, nIdx)));
                 aReq.AppendItem(SfxInt32Item
-                        (FN_PARAM_3, o3tl::toInt32(o3tl::getToken(rPar1, 0, DB_DELIM, nIdx))));
+                        (TypedWhichId<SfxInt32Item>(FN_PARAM_3), o3tl::toInt32(o3tl::getToken(rPar1, 0, DB_DELIM, nIdx))));
                 aReq.AppendItem(SfxStringItem
                         (FN_PARAM_2,rPar1.getToken(0, DB_DELIM, nIdx)));
             }

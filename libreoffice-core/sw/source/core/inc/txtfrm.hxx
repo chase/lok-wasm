@@ -27,6 +27,8 @@
 #include <set>
 #include <utility>
 
+#include <view.hxx>
+
 namespace com::sun::star::linguistic2 { class XHyphenatedWord; }
 
 namespace sw::mark { class IMark; }
@@ -179,8 +181,8 @@ class SW_DLLPUBLIC SwTextFrame final : public SwContentFrame
     static constexpr tools::Long nMinPrtLine = 0;    // This Line must not be underrun when printing
                                 // Hack for table cells stretching multiple pages
 
-    sal_uInt32  mnAllLines        :24; // Line count for the Paint (including nThisLines)
-    sal_uInt32  mnThisLines       :8; // Count of Lines of the Frame
+    sal_Int32  mnAllLines        :24; // Line count for the Paint (including nThisLines)
+    sal_Int32  mnThisLines       :8; // Count of Lines of the Frame
 
     // The x position for flys anchored at this paragraph.
     // These values are calculated in SwTextFrame::CalcBaseOfstForFly()
@@ -266,7 +268,8 @@ class SW_DLLPUBLIC SwTextFrame final : public SwContentFrame
 
     // In order to safe stack space, we split this method:
     // Format_ calls Format_ with parameters
-    void Format_( vcl::RenderContext* pRenderContext, SwParaPortion *pPara );
+    void FormatImpl( vcl::RenderContext* pRenderContext, SwParaPortion *pPara,
+            ::std::vector<SwAnchoredObject *> & rIntersectingObjs);
     void Format_( SwTextFormatter &rLine, SwTextFormatInfo &rInf,
                   const bool bAdjust = false );
     void FormatOnceMore( SwTextFormatter &rLine, SwTextFormatInfo &rInf );
@@ -329,6 +332,8 @@ class SW_DLLPUBLIC SwTextFrame final : public SwContentFrame
 
     void UpdateOutlineContentVisibilityButton(SwWrtShell* pWrtSh) const;
     void PaintOutlineContentVisibilityButton() const;
+
+    void PaintParagraphStylesHighlighting() const;
 
     virtual void SwClientNotify(SwModify const& rModify, SfxHint const& rHint) override;
 
@@ -416,7 +421,6 @@ public:
     SwRect GetPaintSwRect();
     virtual void PaintSwFrame( vcl::RenderContext& rRenderContext, SwRect const&,
                         SwPrintData const*const pPrintData = nullptr ) const override;
-    virtual bool GetInfo( SfxPoolItem & ) const override;
 
     /**
      * Layout oriented cursor travelling:
@@ -555,7 +559,7 @@ public:
 #endif
 
     /// Hidden
-    bool IsHiddenNow() const;       // bHidden && pOut == pPrt
+    virtual bool IsHiddenNow() const override; // bHidden && pOut == pPrt
     void HideHidden();              // Remove appendage if Hidden
     void HideFootnotes(TextFrameIndex nStart, TextFrameIndex nEnd);
 
@@ -584,7 +588,7 @@ public:
     TextFrameIndex GetDropLen(TextFrameIndex nWishLen) const;
 
     LanguageType GetLangOfChar(TextFrameIndex nIndex, sal_uInt16 nScript,
-            bool bNoChar = false) const;
+            bool bNoChar = false, bool bNoneIfNoHyphenation = false ) const;
 
     virtual void Format( vcl::RenderContext* pRenderContext, const SwBorderAttrs *pAttrs = nullptr ) override;
     virtual void CheckDirection( bool bVert ) override;
@@ -674,11 +678,11 @@ public:
     bool FillRegister( SwTwips& rRegStart, sal_uInt16& rRegDiff );
 
     /// Determines the line count
-    sal_uInt16 GetLineCount(TextFrameIndex nPos);
+    sal_Int32 GetLineCount(TextFrameIndex nPos);
 
     /// For displaying the line numbers
-    sal_uLong GetAllLines()  const { return mnAllLines; }
-    sal_uLong GetThisLines() const { return mnThisLines;}
+    sal_Int32 GetAllLines()  const { return mnAllLines; }
+    sal_Int32 GetThisLines() const { return mnThisLines;}
     void RecalcAllLines();
 
     /// Stops the animations within numberings
@@ -802,7 +806,10 @@ public:
     /// with a negative vertical offset. Such frames may need explicit splitting.
     bool IsEmptyWithSplitFly() const;
 
-    virtual void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
+    static SwView* GetView();
+
+    void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
+    void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
 };
 
 //use this to protect a SwTextFrame for a given scope from getting merged with

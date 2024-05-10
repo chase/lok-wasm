@@ -33,7 +33,6 @@
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
 #include <sax/fshelper.hxx>
-#include <vcl/checksum.hxx>
 #include <rtl/ref.hxx>
 
 namespace com::sun::star {
@@ -142,7 +141,7 @@ public:
             sal_Int16 eHOri = -1, sal_Int16 eVOri = -1, sal_Int16 eHRel = -1,
             sal_Int16 eVRel = -1,
             sax_fastparser::FastAttributeList* pWrapAttrList = nullptr,
-            const bool bOOxmlExport = false );
+            const bool bOOxmlExport = false, sal_uInt32 nId = 0);
     OString const & AddInlineSdrObject( const SdrObject& rObj, const bool bOOxmlExport );
     virtual void  AddSdrObjectVMLObject( const SdrObject& rObj) override;
     static bool IsWaterMarkShape(std::u16string_view rStr);
@@ -158,7 +157,7 @@ protected:
     ///
     /// This should be called from within StartShape() to ensure that the
     /// added attribute is preserved.
-    void                AddShapeAttribute( sal_Int32 nAttribute, const OString& sValue );
+    void AddShapeAttribute(sal_Int32 nAttribute, std::string_view sValue);
 
     using EscherEx::StartShape;
     using EscherEx::EndShape;

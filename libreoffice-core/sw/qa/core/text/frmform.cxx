@@ -63,6 +63,8 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableNegativeVertOffset)
     CPPUNIT_ASSERT_LESS(pPara2->getFrameArea().Top(), rFlyRect.Bottom());
 }
 
+// FIXME: because breaking the lines at the right place, test document became obsolete
+#if 0
 CPPUNIT_TEST_FIXTURE(Test, testFloattableAvoidManipOfst)
 {
     // Given a document with a 6-page floating table and some anchor text:
@@ -81,6 +83,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableAvoidManipOfst)
     // anchors of non-last split fly frames should contain no text.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), pAnchor->GetOffset().get());
 }
+#endif
 
 CPPUNIT_TEST_FIXTURE(Test, testFloattableAvoidLastManipOfst)
 {

@@ -66,6 +66,7 @@
 #include <ndtxt.hxx>
 #include <unotextcursor.hxx>
 #include <SwStyleNameMapper.hxx>
+#include <IDocumentSettingAccess.hxx>
 
 #include <algorithm>
 #include <vector>
@@ -91,7 +92,7 @@ class SwXMLTableCell_Impl
     OUString m_sFormula;  // cell formula; valid if length > 0
     double m_dValue;      // formula value
 
-    SvXMLImportContextRef   m_xSubTable;
+    rtl::Reference<SwXMLTableContext> m_xSubTable;
 
     const SwStartNode *m_pStartNode;
     sal_uInt32 m_nRowSpan;
@@ -192,7 +193,7 @@ inline void SwXMLTableCell_Impl::SetStartNode( const SwStartNode *pSttNd )
 
 inline SwXMLTableContext *SwXMLTableCell_Impl::GetSubTable() const
 {
-    return static_cast<SwXMLTableContext *>(m_xSubTable.get());
+    return m_xSubTable.get();
 }
 
 inline void SwXMLTableCell_Impl::Dispose()
@@ -301,7 +302,7 @@ class SwXMLTableCellContext_Impl : public SvXMLImportContext
     OUString m_sSaveParaDefault;
     OUString m_StringValue;
 
-    SvXMLImportContextRef   m_xMyTable;
+    rtl::Reference<SwXMLTableContext> m_xMyTable;
 
     double m_fValue;
     bool m_bHasValue;
@@ -316,7 +317,7 @@ class SwXMLTableCellContext_Impl : public SvXMLImportContext
     bool                    m_bHasTextContent : 1;
     bool                    m_bHasTableContent : 1;
 
-    SwXMLTableContext *GetTable() { return static_cast<SwXMLTableContext *>(m_xMyTable.get()); }
+    SwXMLTableContext *GetTable() { return m_xMyTable.get(); }
 
     bool HasContent() const { return m_bHasTextContent || m_bHasTableContent; }
     inline void InsertContent_();
@@ -596,9 +597,7 @@ void SwXMLTableCellContext_Impl::endFastElement(sal_Int32 )
                 xSrcTextCursor->gotoEnd( true );
 
                 // Until we have an API for copying we have to use the core.
-                Reference<XUnoTunnel> xSrcCursorTunnel( xSrcTextCursor, UNO_QUERY);
-                assert(xSrcCursorTunnel.is() && "missing XUnoTunnel for Cursor");
-                OTextCursorHelper *pSrcTextCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xSrcTextCursor);
+                OTextCursorHelper *pSrcTextCursor = dynamic_cast<OTextCursorHelper*>(xSrcTextCursor.get());
                 assert(pSrcTextCursor && "SwXTextCursor missing");
                 SwDoc *pDoc = pSrcTextCursor->GetDoc();
                 const SwPaM *pSrcPaM = pSrcTextCursor->GetPaM();
@@ -607,10 +606,7 @@ void SwXMLTableCellContext_Impl::endFastElement(sal_Int32 )
                 {
                     InsertContent_();
 
-                    Reference<XUnoTunnel> xDstCursorTunnel(
-                        GetImport().GetTextImport()->GetCursor(), UNO_QUERY);
-                    assert(xDstCursorTunnel.is() && "missing XUnoTunnel for Cursor");
-                    OTextCursorHelper *pDstTextCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(GetImport().GetTextImport()->GetCursor());
+                    OTextCursorHelper *pDstTextCursor = dynamic_cast<OTextCursorHelper*>(GetImport().GetTextImport()->GetCursor().get());
                     assert(pDstTextCursor && "SwXTextCursor missing");
                     SwPaM aSrcPaM(*pSrcPaM->GetMark(), *pSrcPaM->GetPoint());
                     SwPosition aDstPos( *pDstTextCursor->GetPaM()->GetPoint() );
@@ -640,9 +636,9 @@ namespace {
 
 class SwXMLTableColContext_Impl : public SvXMLImportContext
 {
-    SvXMLImportContextRef   m_xMyTable;
+    rtl::Reference<SwXMLTableContext> m_xMyTable;
 
-    SwXMLTableContext *GetTable() { return static_cast<SwXMLTableContext *>(m_xMyTable.get()); }
+    SwXMLTableContext *GetTable() { return m_xMyTable.get(); }
 
 public:
 
@@ -724,9 +720,9 @@ namespace {
 
 class SwXMLTableColsContext_Impl : public SvXMLImportContext
 {
-    SvXMLImportContextRef   m_xMyTable;
+    rtl::Reference<SwXMLTableContext>   m_xMyTable;
 
-    SwXMLTableContext *GetTable() { return static_cast<SwXMLTableContext *>(m_xMyTable.get()); }
+    SwXMLTableContext *GetTable() { return m_xMyTable.get(); }
 
 public:
 
@@ -768,11 +764,11 @@ namespace {
 
 class SwXMLTableRowContext_Impl : public SvXMLImportContext
 {
-    SvXMLImportContextRef   m_xMyTable;
+    rtl::Reference<SwXMLTableContext> m_xMyTable;
 
     sal_uInt32                  m_nRowRepeat;
 
-    SwXMLTableContext *GetTable() { return static_cast<SwXMLTableContext *>(m_xMyTable.get()); }
+    SwXMLTableContext *GetTable() { return m_xMyTable.get(); }
 
 public:
 
@@ -879,11 +875,11 @@ namespace {
 
 class SwXMLTableRowsContext_Impl : public SvXMLImportContext
 {
-    SvXMLImportContextRef   m_xMyTable;
+    rtl::Reference<SwXMLTableContext> m_xMyTable;
 
     bool m_bHeader;
 
-    SwXMLTableContext *GetTable() { return static_cast<SwXMLTableContext *>(m_xMyTable.get()); }
+    SwXMLTableContext *GetTable() { return m_xMyTable.get(); }
 
 public:
 
@@ -1213,7 +1209,7 @@ SwXMLTableContext::SwXMLTableContext( SwXMLImport& rImport,
     if( xTable.is() )
     {
         xTable->initialize( 1, 1 );
-        if (css::uno::Reference<css::beans::XPropertySet> xPropSet{ xTable, css::uno::UNO_QUERY })
+        if (auto xPropSet = xTable.query<css::beans::XPropertySet>())
             xPropSet->setPropertyValue(UNO_NAME_TABLE_NAME, css::uno::Any(sTableName));
 
         try
@@ -1233,7 +1229,7 @@ SwXMLTableContext::SwXMLTableContext( SwXMLImport& rImport,
         // xml:id for RDF metadata
         GetImport().SetXmlId(xTable, sXmlId);
 
-        pXTable = comphelper::getFromUnoTunnel<SwXTextTable>(xTable);
+        pXTable = dynamic_cast<SwXTextTable*>(xTable.get());
 
         Reference < XCellRange > xCellRange( xTable, UNO_QUERY );
         Reference < XCell > xCell = xCellRange->getCellByPosition( 0, 0 );
@@ -1507,6 +1503,14 @@ void SwXMLTableContext::InsertCell( const OUString& rStyleName,
 
 void SwXMLTableContext::InsertCoveredCell(const OUString& rStyleName)
 {
+    const IDocumentSettingAccess& rIDSA = GetSwImport().getDoc()->getIDocumentSettingAccess();
+    bool bWordTableCell = rIDSA.get(DocumentSettingId::TABLE_ROW_KEEP);
+    if (!bWordTableCell)
+    {
+        // Compatibility flag not active, ignore formatting of covered cells.
+        return;
+    }
+
     SwXMLTableCell_Impl* pCell = GetCell(m_nCurRow, m_nNonMergedCurCol);
     ++m_nNonMergedCurCol;
     if (!pCell)
@@ -1675,8 +1679,7 @@ SwTableBox *SwXMLTableContext::NewTableBox( const SwStartNode *pStNd,
     // The topmost table is the only table that maintains the two members
     // pBox1 and bFirstSection.
     if( m_xParentTable.is() )
-        return static_cast<SwXMLTableContext *>(m_xParentTable.get())->NewTableBox( pStNd,
-                                                                  pUpper );
+        return m_xParentTable->NewTableBox( pStNd, pUpper );
 
     SwTableBox *pBox;
 
@@ -2214,7 +2217,6 @@ SwTableLine *SwXMLTableContext::MakeTableLine( SwTableBox *pUpper,
 void SwXMLTableContext::MakeTable_( SwTableBox *pBox )
 {
     // fix column widths
-    std::vector<ColumnWidthInfo>::iterator colIter;
     sal_uInt32 nCols = GetColumnCount();
 
     // If there are empty rows (because of some row span of previous rows)
@@ -2312,7 +2314,7 @@ void SwXMLTableContext::MakeTable_( SwTableBox *pBox )
         {
             double n = static_cast<double>(m_nWidth) / static_cast<double>(nRelWidth);
             nRelWidth = 0;
-            for( colIter = m_aColumnWidths.begin(); colIter < m_aColumnWidths.end() - 1; ++colIter)
+            for( auto colIter = m_aColumnWidths.begin(); colIter != (m_aColumnWidths.end() - 1); ++colIter)
             {
                 sal_Int32 nW = static_cast<sal_Int32>( colIter->width * n);
                 colIter->width = o3tl::narrowing<sal_uInt16>(nW);
@@ -2413,7 +2415,7 @@ void SwXMLTableContext::MakeTable_( SwTableBox *pBox )
                 // column widths, every column get some extra width.
                 sal_Int32 nExtraAbs = m_nWidth - nAbsWidth;
                 sal_Int32 nAbsLastCol = m_aColumnWidths.back().width + nExtraAbs;
-                for( colIter = m_aColumnWidths.begin(); colIter < m_aColumnWidths.end()-1; ++colIter )
+                for( auto colIter = m_aColumnWidths.begin(); colIter != (m_aColumnWidths.end() - 1); ++colIter )
                 {
                     sal_Int32 nAbsCol = colIter->width;
                     sal_Int32 nExtraAbsCol = (nAbsCol * nExtraAbs) /
@@ -2431,7 +2433,7 @@ void SwXMLTableContext::MakeTable_( SwTableBox *pBox )
                 // Every column gets the minimum width plus some extra width.
                 sal_Int32 nExtraAbs = m_nWidth - (nCols * MINLAY);
                 sal_Int32 nAbsLastCol = MINLAY + nExtraAbs;
-                for( colIter = m_aColumnWidths.begin(); colIter < m_aColumnWidths.end()-1; ++colIter )
+                for( auto colIter = m_aColumnWidths.begin(); colIter != (m_aColumnWidths.end() - 1); ++colIter )
                 {
                     sal_Int32 nAbsCol = colIter->width;
                     sal_Int32 nExtraAbsCol = (nAbsCol * nExtraAbs) /
@@ -2639,7 +2641,7 @@ void SwXMLTableContext::MakeTable()
                                                         m_pTableNode );
 
         // 2) release the DDE source context,
-        m_xDDESource.set(nullptr);
+        m_xDDESource.clear();
 
         // 3) create new DDE table, and
         std::unique_ptr<SwDDETable> pDDETable( new SwDDETable( m_pTableNode->GetTable(),
@@ -2681,18 +2683,18 @@ const SwStartNode *SwXMLTableContext::InsertTableSection(
     // The topmost table is the only table that maintains the two members
     // pBox1 and bFirstSection.
     if( m_xParentTable.is() )
-        return static_cast<SwXMLTableContext *>(m_xParentTable.get())
-                    ->InsertTableSection(pPrevSttNd, pStringValueStyleName);
+        return m_xParentTable->InsertTableSection(pPrevSttNd, pStringValueStyleName);
 
     const SwStartNode *pStNd;
-    Reference<XUnoTunnel> xCursorTunnel( GetImport().GetTextImport()->GetCursor(),
-                                       UNO_QUERY);
-    OSL_ENSURE( xCursorTunnel.is(), "missing XUnoTunnel for Cursor" );
-    OTextCursorHelper *pTextCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xCursorTunnel);
-    OSL_ENSURE( pTextCursor, "SwXTextCursor missing" );
 
     if( m_bFirstSection )
     {
+        Reference<XInterface> xCursorTunnel( GetImport().GetTextImport()->GetCursor(),
+                                           UNO_QUERY);
+        OSL_ENSURE( xCursorTunnel.is(), "missing XUnoTunnel for Cursor" );
+        OTextCursorHelper *pTextCursor = dynamic_cast<OTextCursorHelper*>(xCursorTunnel.get());
+        assert(pTextCursor && "SwXTextCursor missing");
+
         // The Cursor already is in the first section
         pStNd = pTextCursor->GetPaM()->GetPointNode().FindTableBoxStartNode();
         m_bFirstSection = false;

@@ -21,7 +21,6 @@
 
 #include <sal/config.h>
 
-#include <o3tl/span.hxx>
 #include <tools/gen.hxx>
 #include <tools/ref.hxx>
 #include <tools/solar.h>
@@ -29,7 +28,6 @@
 #include <tools/poly.hxx>
 #include <vcl/bitmap.hxx>
 #include <vcl/cairo.hxx>
-#include <vcl/devicecoordinate.hxx>
 #include <vcl/dllapi.h>
 #include <vcl/font.hxx>
 #include <vcl/kernarray.hxx>
@@ -55,6 +53,7 @@
 #include <vcl/vclreferencebase.hxx>
 
 #include <basegfx/numeric/ftools.hxx>
+#include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/vector/b2enums.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 
@@ -67,6 +66,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -102,7 +102,7 @@ class SalLayoutGlyphs;
 namespace vcl
 {
     class ExtOutDevData;
-    class ITextLayout;
+    class TextLayoutCommon;
     struct FontCapabilities;
     class Window;
     class WindowOutputDevice;
@@ -122,7 +122,7 @@ namespace basegfx {
     class B2DHomMatrix;
     class B2DPolygon;
     class B2IVector;
-    typedef B2IVector B2ISize;
+    class B2ISize;
 }
 
 namespace com::sun::star::awt {
@@ -184,6 +184,7 @@ private:
     mutable VclPtr<OutputDevice>    mpNextGraphics;     ///< Next output device in list
     GDIMetaFile*                    mpMetaFile;
     mutable rtl::Reference<LogicalFontInstance> mpFontInstance;
+    rtl::Reference<LogicalFontInstance> mpForcedFallbackInstance;
     mutable std::unique_ptr<vcl::font::PhysicalFontFaceCollection>  mpFontFaceCollection;
     std::vector<vcl::State>        maOutDevStateStack;
     std::unique_ptr<ImplOutDevData> mpOutDevData;
@@ -869,11 +870,11 @@ public:
     void                        DrawText( const tools::Rectangle& rRect,
                                           const OUString& rStr, DrawTextFlags nStyle = DrawTextFlags::NONE,
                                           std::vector< tools::Rectangle >* pVector = nullptr, OUString* pDisplayText = nullptr,
-                                          vcl::ITextLayout* _pTextLayout = nullptr );
+                                          vcl::TextLayoutCommon* _pTextLayout = nullptr );
 
     static void                 ImplDrawText( OutputDevice& rTargetDevice, const tools::Rectangle& rRect,
                                               const OUString& rOrigStr, DrawTextFlags nStyle,
-                                              std::vector< tools::Rectangle >* pVector, OUString* pDisplayText, vcl::ITextLayout& _rLayout );
+                                              std::vector< tools::Rectangle >* pVector, OUString* pDisplayText, vcl::TextLayoutCommon& _rLayout );
 
     void                        ImplDrawText( SalLayout& );
 
@@ -890,7 +891,7 @@ public:
                                               FontLineStyle eOverline,
                                               bool bUnderlineAbove = false );
 
-    void                        ImplDrawTextLine( tools::Long nBaseX, tools::Long nX, tools::Long nY, DeviceCoordinate nWidth,
+    void                        ImplDrawTextLine( tools::Long nBaseX, tools::Long nX, tools::Long nY, double nWidth,
                                                   FontStrikeout eStrikeout, FontLineStyle eUnderline,
                                                   FontLineStyle eOverline, bool bUnderlineAbove );
 
@@ -904,7 +905,7 @@ public:
     tools::Rectangle                   GetTextRect( const tools::Rectangle& rRect,
                                              const OUString& rStr, DrawTextFlags nStyle = DrawTextFlags::WordBreak,
                                              TextRectInfo* pInfo = nullptr,
-                                             const vcl::ITextLayout* _pTextLayout = nullptr ) const;
+                                             const vcl::TextLayoutCommon* _pTextLayout = nullptr ) const;
 
     /** Return the exact bounding rectangle of rStr.
 
@@ -958,7 +959,7 @@ public:
     bool                        GetTextBoundRect( tools::Rectangle& rRect,
                                                   const OUString& rStr, sal_Int32 nBase = 0, sal_Int32 nIndex = 0, sal_Int32 nLen = -1,
                                                   sal_uLong nLayoutWidth = 0, KernArraySpan aDXArray = KernArraySpan(),
-                                                  o3tl::span<const sal_Bool> pKashidaArray = {},
+                                                  std::span<const sal_Bool> pKashidaArray = {},
                                                   const SalLayoutGlyphs* pGlyphs = nullptr ) const;
 
     tools::Rectangle            ImplGetTextBoundRect( const SalLayout& ) const;
@@ -970,13 +971,13 @@ public:
                                                  const OUString& rStr, sal_Int32 nBase = 0, sal_Int32 nIndex = 0,
                                                  sal_Int32 nLen = -1,
                                                  sal_uLong nLayoutWidth = 0, KernArraySpan aDXArray = KernArraySpan(),
-                                                 o3tl::span<const sal_Bool> pKashidaArray = {} ) const;
+                                                 std::span<const sal_Bool> pKashidaArray = {} ) const;
 
     bool                        GetTextOutlines( basegfx::B2DPolyPolygonVector &rVector,
                                                  const OUString& rStr, sal_Int32 nBase, sal_Int32 nIndex = 0,
                                                  sal_Int32 nLen = -1,
                                                  sal_uLong nLayoutWidth = 0, KernArraySpan aDXArray = KernArraySpan(),
-                                                 o3tl::span<const sal_Bool> pKashidaArray = {} ) const;
+                                                 std::span<const sal_Bool> pKashidaArray = {} ) const;
 
 
     OUString                    GetEllipsisString( const OUString& rStr, tools::Long nMaxWidth,
@@ -1037,7 +1038,7 @@ public:
 
     void                        DrawTextArray( const Point& rStartPt, const OUString& rStr,
                                                KernArraySpan aKernArray,
-                                               o3tl::span<const sal_Bool> pKashidaAry,
+                                               std::span<const sal_Bool> pKashidaAry,
                                                sal_Int32 nIndex,
                                                sal_Int32 nLen,
                                                SalLayoutFlags flags = SalLayoutFlags::NONE,
@@ -1047,10 +1048,10 @@ public:
                                               vcl::text::TextLayoutCache const* = nullptr,
                                               SalLayoutGlyphs const*const pLayoutCache = nullptr) const;
 
-    void                        GetCaretPositions( const OUString&, sal_Int32* pCaretXArray,
+    void                        GetCaretPositions( const OUString&, KernArray& rCaretXArray,
                                               sal_Int32 nIndex, sal_Int32 nLen,
                                               const SalLayoutGlyphs* pGlyphs = nullptr ) const;
-    void                        DrawStretchText( const Point& rStartPt, sal_uLong nWidth,
+    void                        DrawStretchText( const Point& rStartPt, sal_Int32 nWidth,
                                                  const OUString& rStr,
                                                  sal_Int32 nIndex = 0, sal_Int32 nLen = -1);
     sal_Int32                   GetTextBreak( const OUString& rStr, tools::Long nTextWidth,
@@ -1073,17 +1074,6 @@ public:
 protected:
     SAL_DLLPRIVATE void         ImplInitTextLineSize();
     SAL_DLLPRIVATE void         ImplInitAboveTextLineSize();
-    static
-    SAL_DLLPRIVATE tools::Long  ImplGetTextLines( const tools::Rectangle& rRect, tools::Long nTextHeight, ImplMultiTextLineInfo& rLineInfo, tools::Long nWidth, const OUString& rStr, DrawTextFlags nStyle, const vcl::ITextLayout& _rLayout );
-    static
-    SAL_DLLPRIVATE sal_Int32    ImplBreakLinesWithIterator(const tools::Long nWidth, const OUString& rStr, const vcl::ITextLayout& _rLayout,
-                                    const css::uno::Reference<css::linguistic2::XHyphenator>& xHyph,
-                                    const css::uno::Reference<css::i18n::XBreakIterator>& xBI,
-                                    const bool bHyphenate,
-                                    const sal_Int32 nPos, sal_Int32 nBreakPos);
-    static
-    SAL_DLLPRIVATE sal_Int32    ImplBreakLinesSimple( const tools::Long nWidth, const OUString& rStr,
-                                    const vcl::ITextLayout& _rLayout, const sal_Int32 nPos, sal_Int32 nBreakPos, tools::Long& nLineWidth );
     SAL_DLLPRIVATE float        approximate_char_width() const;
 
     virtual bool shouldDrawWavePixelAsRect(tools::Long nLineWidth) const;
@@ -1176,6 +1166,7 @@ public:
     SAL_DLLPRIVATE static void  ImplUpdateAllFontData( bool bNewFontLists );
 
     LogicalFontInstance const* GetFontInstance() const;
+    bool ForceFallbackFont(vcl::Font const& rFallbackFont);
 
 protected:
     SAL_DLLPRIVATE tools::Long GetEmphasisAscent() const { return mnEmphasisAscent; }
@@ -1200,10 +1191,6 @@ private:
 
     SAL_DLLPRIVATE static void  ImplUpdateFontDataForAllFrames( FontUpdateHandler_t pHdl, bool bNewFontLists );
 
-    static
-    SAL_DLLPRIVATE OUString     ImplGetEllipsisString( const OutputDevice& rTargetDevice, const OUString& rStr,
-                                                       tools::Long nMaxWidth, DrawTextFlags nStyle, const vcl::ITextLayout& _rLayout );
-
     SAL_DLLPRIVATE void         ImplDrawEmphasisMark( tools::Long nBaseX, tools::Long nX, tools::Long nY, const tools::PolyPolygon& rPolyPoly, bool bPolyLine, const tools::Rectangle& rRect1, const tools::Rectangle& rRect2 );
     SAL_DLLPRIVATE void         ImplDrawEmphasisMarks( SalLayout& );
     ///@}
@@ -1217,22 +1204,22 @@ public:
 
     // tells whether this output device is RTL in an LTR UI or LTR in a RTL UI
     SAL_DLLPRIVATE bool         ImplIsAntiparallel() const ;
-    SAL_DLLPRIVATE void         ReMirror( Point &rPoint ) const;
-    SAL_DLLPRIVATE void         ReMirror( tools::Rectangle &rRect ) const;
-    SAL_DLLPRIVATE void         ReMirror( vcl::Region &rRegion ) const;
+                   void         ReMirror( Point &rPoint ) const;
+                   void         ReMirror( tools::Rectangle &rRect ) const;
+                   void         ReMirror( vcl::Region &rRegion ) const;
     SAL_DLLPRIVATE bool         ImplIsRecordLayout() const;
     virtual bool                HasMirroredGraphics() const;
     std::unique_ptr<SalLayout>
                                 ImplLayout( const OUString&, sal_Int32 nIndex, sal_Int32 nLen,
                                             const Point& rLogicPos = Point(0,0), tools::Long nLogicWidth=0,
                                             KernArraySpan aKernArray = KernArraySpan(),
-                                            o3tl::span<const sal_Bool> pKashidaArray={},
+                                            std::span<const sal_Bool> pKashidaArray={},
                                             SalLayoutFlags flags = SalLayoutFlags::NONE,
                                             vcl::text::TextLayoutCache const* = nullptr,
                                             const SalLayoutGlyphs* pGlyphs = nullptr) const;
 
     SAL_DLLPRIVATE vcl::text::ImplLayoutArgs ImplPrepareLayoutArgs( OUString&, const sal_Int32 nIndex, const sal_Int32 nLen,
-                                                         DeviceCoordinate nPixelWidth,
+                                                         double nPixelWidth,
                                                          SalLayoutFlags flags = SalLayoutFlags::NONE,
                                                          vcl::text::TextLayoutCache const* = nullptr) const;
     SAL_DLLPRIVATE std::unique_ptr<SalLayout>
@@ -1685,7 +1672,7 @@ public:
      @returns Physical point on the device.
      */
     SAL_DLLPRIVATE Point        ImplLogicToDevicePixel( const Point& rLogicPt ) const;
-    SAL_DLLPRIVATE DevicePoint  ImplLogicToDeviceSubPixel(const Point& rLogicPt) const;
+    SAL_DLLPRIVATE basegfx::B2DPoint ImplLogicToDeviceSubPixel(const Point& rLogicPt) const;
 
     /** Convert a logical width to a width in units of device pixels.
 
@@ -1713,7 +1700,7 @@ public:
     SAL_DLLPRIVATE tools::Long         ImplLogicHeightToDevicePixel( tools::Long nHeight ) const;
     SAL_DLLPRIVATE double              ImplLogicHeightToDeviceSubPixel(tools::Long nHeight) const;
 
-    SAL_DLLPRIVATE Point               SubPixelToLogic(const DevicePoint& rDevicePt) const;
+    SAL_DLLPRIVATE Point               SubPixelToLogic(const basegfx::B2DPoint& rDevicePt) const;
 
     /** Convert device pixels to a width in logical units.
 
@@ -1806,8 +1793,6 @@ public:
     SAL_DLLPRIVATE basegfx::B2DHomMatrix ImplGetDeviceTransformation() const;
 
 private:
-    SAL_DLLPRIVATE DeviceCoordinate LogicWidthToDeviceCoordinate( tools::Long nWidth ) const;
-
     /** Convert a logical X coordinate to a device pixel's X coordinate.
 
      To get the device's X coordinate, it must calculate the mapping offset

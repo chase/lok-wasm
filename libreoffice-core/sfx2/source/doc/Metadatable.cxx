@@ -113,8 +113,8 @@ using ::sfx2::isValidXmlId;
 
 namespace sfx2 {
 
-constexpr OUStringLiteral s_content = u"content.xml";
-constexpr OUStringLiteral s_styles  = u"styles.xml";
+constexpr OUString s_content = u"content.xml"_ustr;
+constexpr OUString s_styles  = u"styles.xml"_ustr;
 
 static bool isContentFile(std::u16string_view i_rPath)
 {
@@ -488,7 +488,7 @@ rmIter(XmlIdMap_t & i_rXmlIdMap, XmlIdMap_t::iterator const& i_rIter,
     {
         XmlIdVector_t & rVector( isContentFile(i_rStream)
             ? i_rIter->second.first : i_rIter->second.second );
-        rVector.erase(std::remove(rVector.begin(), rVector.end(), &const_cast<Metadatable&>(i_rObject)));
+        std::erase(rVector, &const_cast<Metadatable&>(i_rObject));
         if (i_rIter->second.first.empty() && i_rIter->second.second.empty())
         {
             i_rXmlIdMap.erase(i_rIter);
@@ -724,7 +724,7 @@ XmlIdRegistryDocument::RegisterMetadatableAndCreateID(Metadatable & i_rObject)
 
     const bool isInContent( i_rObject.IsInContent() );
     const OUString stream(
-        isInContent ? OUString(s_content) : OUString(s_styles) );
+        isInContent ? s_content : s_styles );
     // check if we have a latent xmlid, and if yes, remove it
     OUString old_path;
     OUString old_idref;
@@ -1138,7 +1138,7 @@ XmlIdRegistryClipboard::RegisterMetadatableAndCreateID(Metadatable & i_rObject)
 
     bool isInContent( i_rObject.IsInContent() );
     OUString stream(
-        isInContent ? OUString(s_content) : OUString(s_styles) );
+        isInContent ? s_content : s_styles );
 
     OUString old_path;
     OUString old_idref;
@@ -1296,7 +1296,7 @@ void Metadatable::SetMetadataReference( const css::beans::StringPair & i_rRefere
         {
             // handle empty stream name as auto-detect.
             // necessary for importing flat file format.
-            streamName = IsInContent() ? OUString(s_content) : OUString(s_styles);
+            streamName = IsInContent() ? s_content : s_styles;
         }
         XmlIdRegistry & rReg( dynamic_cast<XmlIdRegistry&>( GetRegistry() ) );
         if (!rReg.TryRegisterMetadatable(*this, streamName, i_rReference.Second))

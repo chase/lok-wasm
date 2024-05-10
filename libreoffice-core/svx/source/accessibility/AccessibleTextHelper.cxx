@@ -1406,10 +1406,10 @@ namespace accessibility
 
             if (mxFrontEnd.is())
                 aEvent = AccessibleEventObject(mxFrontEnd->getAccessibleContext(), nEventId,
-                                               rNewValue, rOldValue);
+                                               rNewValue, rOldValue, -1);
             else
                 aEvent = AccessibleEventObject(uno::Reference<uno::XInterface>(), nEventId,
-                                               rNewValue, rOldValue);
+                                               rNewValue, rOldValue, -1);
 
             // no locking necessary, FireEvent internally copies listeners
             // if someone removes/adds in between Further locking,
@@ -1669,6 +1669,21 @@ namespace accessibility
 
         mpImpl->UpdateVisibleChildren();
         mpImpl->UpdateBoundRect();
+
+        mpImpl->UpdateSelection();
+
+#ifdef DBG_UTIL
+        mpImpl->CheckInvariants();
+#endif
+    }
+
+    void AccessibleTextHelper::UpdateSelection()
+    {
+#ifdef DBG_UTIL
+        // precondition: solar mutex locked
+        DBG_TESTSOLARMUTEX();
+        mpImpl->CheckInvariants();
+#endif
 
         mpImpl->UpdateSelection();
 

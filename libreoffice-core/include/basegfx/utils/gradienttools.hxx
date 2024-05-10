@@ -26,13 +26,9 @@
 #include <basegfx/color/bcolor.hxx>
 #include <utility>
 #include <basegfx/basegfxdllapi.h>
-#include <vector>
-#include <com/sun/star/awt/ColorStopSequence.hdl>
 #include <basegfx/utils/bgradient.hxx>
 #include <osl/endian.h>
 
-namespace com { namespace sun { namespace star { namespace uno { class Any; } } } }
-namespace com { namespace sun { namespace star { namespace awt { struct Gradient2; } } } }
 namespace basegfx { class B2DRange; }
 
 namespace
@@ -191,7 +187,7 @@ namespace basegfx
            on given SingleColor.
            This is used for export preparations in case these exports
            do neither support Start/EndIntensity nor Border settings,
-           both will be elliminated if possible (see below).
+           both will be eliminated if possible (see below).
            The BGradient rGradient and BColorStops& rColorStops
            are both return parameters and may be changed.
            This will do quite some preparations for the gradient

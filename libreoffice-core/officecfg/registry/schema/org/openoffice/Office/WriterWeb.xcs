@@ -71,14 +71,6 @@
           </info>
           <value>true</value>
         </prop>
-        <prop oor:name="PreventTips" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: Not accessible via user interface -->
-          <info>
-            <desc>Enables the writer to prevent the display of help tips programmatically.</desc>
-            <label>Prevent help tips</label>
-          </info>
-          <value>false</value>
-        </prop>
       </group>
       <group oor:name="NonprintingCharacter">
         <info>
@@ -162,22 +154,6 @@
             <label>Helplines</label>
           </info>
           <value>false</value>
-        </prop>
-        <prop oor:name="SimpleControlPoint" oor:type="xs:boolean">
-          <!-- UIHints: Tools - Option - HTML-Document - Layout - [Section] Lines -->
-          <info>
-            <desc>Specifies whether control points are displayed simple or enhanced.</desc>
-            <label>Simple control points</label>
-          </info>
-          <value>true</value>
-        </prop>
-        <prop oor:name="LargeControlPoint" oor:type="xs:boolean">
-          <!-- UIHints: Tools - Option - HTML-Document - Layout - [Section] Lines -->
-          <info>
-            <desc>Specifies whether control points are displayed as larger than the default size.</desc>
-            <label>Large control points</label>
-          </info>
-          <value>true</value>
         </prop>
       </group>
       <group oor:name="Window">

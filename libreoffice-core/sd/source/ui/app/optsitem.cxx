@@ -408,9 +408,6 @@ SdOptionsMisc::SdOptionsMisc( bool bImpress, bool bUseConfig ) :
     bPickThrough( true ),
     bDoubleClickTextEdit( true ),
     bClickChangeRotation( false ),
-    bEnableSdremote( false ),
-    bEnablePresenterScreen( true ),
-    bPresenterScreenFullScreen( true ),
     bSolidDragging( true ),
     bSummationOfParagraphs( false ),
     bTabBarVisible( true ),
@@ -426,7 +423,8 @@ SdOptionsMisc::SdOptionsMisc( bool bImpress, bool bUseConfig ) :
 
     // The default for 6.1-and-above documents is to use printer-independent
     // formatting.
-    mnPrinterIndependentLayout (1)
+    mnPrinterIndependentLayout (1),
+    mnDragThresholdPixels(6)
 {
     EnableModify( true );
 }
@@ -443,9 +441,6 @@ bool SdOptionsMisc::operator==( const SdOptionsMisc& rOpt ) const
             IsPickThrough() == rOpt.IsPickThrough() &&
             IsDoubleClickTextEdit() == rOpt.IsDoubleClickTextEdit() &&
             IsClickChangeRotation() == rOpt.IsClickChangeRotation() &&
-            IsEnableSdremote() == rOpt.IsEnableSdremote() &&
-            IsEnablePresenterScreen() == rOpt.IsEnablePresenterScreen() &&
-            IsPresenterScreenFullScreen() == rOpt.IsPresenterScreenFullScreen() &&
             IsSummationOfParagraphs() == rOpt.IsSummationOfParagraphs() &&
             IsTabBarVisible() == rOpt.IsTabBarVisible() &&
             IsSolidDragging() == rOpt.IsSolidDragging() &&
@@ -461,7 +456,8 @@ bool SdOptionsMisc::operator==( const SdOptionsMisc& rOpt ) const
             GetDisplay() == rOpt.GetDisplay() &&
             IsShowComments() == rOpt.IsShowComments() &&
             GetPresentationPenColor() == rOpt.GetPresentationPenColor() &&
-            GetPresentationPenWidth() == rOpt.GetPresentationPenWidth()
+            GetPresentationPenWidth() == rOpt.GetPresentationPenWidth() &&
+            GetDragThresholdPixels() == rOpt.GetDragThresholdPixels()
         );
 }
 
@@ -485,6 +481,7 @@ void SdOptionsMisc::GetPropNameArray( const char**& ppNames, sal_uLong& rCount )
         "Compatibility/PrinterIndependentLayout",
 
         "ShowComments",
+        "DragThresholdPixels",
 
         // just for impress
         "NewDoc/AutoPilot",
@@ -500,13 +497,10 @@ void SdOptionsMisc::GetPropNameArray( const char**& ppNames, sal_uLong& rCount )
 
         "PenColor",
         "PenWidth",
-        "Start/EnableSdremote",
-        "Start/EnablePresenterScreen",
-        "Start/PresenterScreenFullScreen",
         "TabBarVisible"
     };
 
-    rCount = ( IsImpress() ? SAL_N_ELEMENTS(aPropNames) : 14 );
+    rCount = ( IsImpress() ? SAL_N_ELEMENTS(aPropNames) : 16 );
     ppNames = aPropNames;
 }
 
@@ -527,49 +521,42 @@ bool SdOptionsMisc::ReadData( const Any* pValues )
 
     if( pValues[13].hasValue() )
         SetShowComments(  *o3tl::doAccess<bool>(pValues[ 13 ]) );
+    if (pValues[14].hasValue())
+        SetDragThreshold(*o3tl::doAccess<sal_Int32>(pValues[ 14 ]));
 
     // just for Impress
     if (IsImpress())
     {
-        if( pValues[14].hasValue() )
-            SetStartWithTemplate( *o3tl::doAccess<bool>(pValues[ 14 ]) );
         if( pValues[15].hasValue() )
-            SetSummationOfParagraphs( *o3tl::doAccess<bool>(pValues[ 15 ]) );
+            SetStartWithTemplate( *o3tl::doAccess<bool>(pValues[ 15 ]) );
         if( pValues[16].hasValue() )
-            SetShowUndoDeleteWarning( *o3tl::doAccess<bool>(pValues[ 16 ]) );
-
+            SetSummationOfParagraphs( *o3tl::doAccess<bool>(pValues[ 16 ]) );
         if( pValues[17].hasValue() )
-            SetSlideshowRespectZOrder(*o3tl::doAccess<bool>(pValues[ 17 ]));
+            SetShowUndoDeleteWarning( *o3tl::doAccess<bool>(pValues[ 17 ]) );
 
         if( pValues[18].hasValue() )
-            SetPreviewNewEffects(*o3tl::doAccess<bool>(pValues[ 18 ]));
+            SetSlideshowRespectZOrder(*o3tl::doAccess<bool>(pValues[ 18 ]));
 
         if( pValues[19].hasValue() )
-            SetPreviewChangedEffects(*o3tl::doAccess<bool>(pValues[ 19 ]));
+            SetPreviewNewEffects(*o3tl::doAccess<bool>(pValues[ 19 ]));
 
         if( pValues[20].hasValue() )
-            SetPreviewTransitions(*o3tl::doAccess<bool>(pValues[ 20 ]));
+            SetPreviewChangedEffects(*o3tl::doAccess<bool>(pValues[ 20 ]));
 
         if( pValues[21].hasValue() )
-            SetDisplay(*o3tl::doAccess<sal_Int32>(pValues[ 21 ]));
+            SetPreviewTransitions(*o3tl::doAccess<bool>(pValues[ 21 ]));
 
         if( pValues[22].hasValue() )
-            SetPresentationPenColor( getSafeValue< sal_Int32 >( pValues[ 22 ] ) );
+            SetDisplay(*o3tl::doAccess<sal_Int32>(pValues[ 22 ]));
 
         if( pValues[23].hasValue() )
-            SetPresentationPenWidth( getSafeValue< double >( pValues[ 23 ] ) );
+            SetPresentationPenColor( getSafeValue< sal_Int32 >( pValues[ 23 ] ) );
 
         if( pValues[24].hasValue() )
-            SetEnableSdremote( *o3tl::doAccess<bool>(pValues[ 24 ]) );
+            SetPresentationPenWidth( getSafeValue< double >( pValues[ 24 ] ) );
 
-        if( pValues[25].hasValue() )
-            SetEnablePresenterScreen( *o3tl::doAccess<bool>(pValues[ 25 ]) );
-
-        if (pValues[26].hasValue() )
-            SetPresenterScreenFullScreen( *o3tl::doAccess<bool>(pValues[ 26 ]) );
-
-        if( pValues[27].hasValue() ) {
-            SetTabBarVisible( *o3tl::doAccess<bool>(pValues[ 27 ]) );
+        if( pValues[25].hasValue() ) {
+            SetTabBarVisible( *o3tl::doAccess<bool>(pValues[ 25 ]) );
         }
     }
 
@@ -593,27 +580,25 @@ bool SdOptionsMisc::WriteData( Any* pValues ) const
     pValues[ 11 ] <<= GetDefaultObjectSizeHeight();
     pValues[ 12 ] <<= GetPrinterIndependentLayout();
     pValues[ 13 ] <<= IsShowComments();
+    pValues[ 14 ] <<= GetDragThresholdPixels();
 
     // just for Impress
     if (IsImpress())
     {
-        pValues[ 14 ] <<= IsStartWithTemplate();
-        pValues[ 15 ] <<= IsSummationOfParagraphs();
-        pValues[ 16 ] <<= IsShowUndoDeleteWarning();
-        pValues[ 17 ] <<= IsSlideshowRespectZOrder();
+        pValues[ 15 ] <<= IsStartWithTemplate();
+        pValues[ 16 ] <<= IsSummationOfParagraphs();
+        pValues[ 17 ] <<= IsShowUndoDeleteWarning();
+        pValues[ 18 ] <<= IsSlideshowRespectZOrder();
 
-        pValues[ 18 ] <<= IsPreviewNewEffects();
-        pValues[ 19 ] <<= IsPreviewChangedEffects();
-        pValues[ 20 ] <<= IsPreviewTransitions();
+        pValues[ 19 ] <<= IsPreviewNewEffects();
+        pValues[ 20 ] <<= IsPreviewChangedEffects();
+        pValues[ 21 ] <<= IsPreviewTransitions();
 
-        pValues[ 21 ] <<= GetDisplay();
+        pValues[ 22 ] <<= GetDisplay();
 
-        pValues[ 22 ] <<= GetPresentationPenColor();
-        pValues[ 23 ] <<= GetPresentationPenWidth();
-        pValues[ 24 ] <<= IsEnableSdremote();
-        pValues[ 25 ] <<= IsEnablePresenterScreen();
-        pValues[ 26 ] <<= IsPresenterScreenFullScreen();
-        pValues[ 27 ] <<= IsTabBarVisible();
+        pValues[ 23 ] <<= GetPresentationPenColor();
+        pValues[ 24 ] <<= GetPresentationPenWidth();
+        pValues[ 25 ] <<= IsTabBarVisible();
     }
 
     return true;
@@ -638,9 +623,6 @@ SdOptionsMiscItem::SdOptionsMiscItem( SdOptions const * pOpts, ::sd::FrameView c
     if( pOpts )
     {
         maOptionsMisc.SetStartWithTemplate( pOpts->IsStartWithTemplate() );
-        maOptionsMisc.SetEnableSdremote( pOpts->IsEnableSdremote() );
-        maOptionsMisc.SetEnablePresenterScreen( pOpts->IsEnablePresenterScreen() );
-        maOptionsMisc.SetPresenterScreenFullScreen( pOpts->IsPresenterScreenFullScreen() );
         maOptionsMisc.SetSummationOfParagraphs( pOpts->IsSummationOfParagraphs() );
         maOptionsMisc.SetTabBarVisible( pOpts->IsTabBarVisible() );
         maOptionsMisc.SetShowUndoDeleteWarning( pOpts->IsShowUndoDeleteWarning() );
@@ -670,10 +652,11 @@ SdOptionsMiscItem::SdOptionsMiscItem( SdOptions const * pOpts, ::sd::FrameView c
         maOptionsMisc.SetMasterPagePaintCaching( pView->IsMasterPagePaintCaching() );
 
         maOptionsMisc.SetDragWithCopy( pView->IsDragWithCopy() );
-        maOptionsMisc.SetPickThrough( pView->GetModel()->IsPickThroughTransparentTextFrames() );
+        maOptionsMisc.SetPickThrough(pView->GetModel().IsPickThroughTransparentTextFrames());
         maOptionsMisc.SetDoubleClickTextEdit( pView->IsDoubleClickTextEdit() );
         maOptionsMisc.SetClickChangeRotation( pView->IsClickChangeRotation() );
         maOptionsMisc.SetSolidDragging( pView->IsSolidDragging() );
+        maOptionsMisc.SetDragThreshold(pView->GetDragThresholdPixels());
     }
     else if( pOpts )
     {
@@ -687,6 +670,7 @@ SdOptionsMiscItem::SdOptionsMiscItem( SdOptions const * pOpts, ::sd::FrameView c
         maOptionsMisc.SetDoubleClickTextEdit( pOpts->IsDoubleClickTextEdit() );
         maOptionsMisc.SetClickChangeRotation( pOpts->IsClickChangeRotation() );
         maOptionsMisc.SetSolidDragging( pOpts->IsSolidDragging() );
+        maOptionsMisc.SetDragThreshold(pOpts->GetDragThresholdPixels());
     }
 }
 
@@ -716,9 +700,6 @@ void SdOptionsMiscItem::SetOptions( SdOptions* pOpts ) const
     pOpts->SetPickThrough( maOptionsMisc.IsPickThrough() );
     pOpts->SetDoubleClickTextEdit( maOptionsMisc.IsDoubleClickTextEdit() );
     pOpts->SetClickChangeRotation( maOptionsMisc.IsClickChangeRotation() );
-    pOpts->SetEnableSdremote( maOptionsMisc.IsEnableSdremote() );
-    pOpts->SetEnablePresenterScreen( maOptionsMisc.IsEnablePresenterScreen() );
-    pOpts->SetPresenterScreenFullScreen( maOptionsMisc.IsPresenterScreenFullScreen() );
     pOpts->SetSummationOfParagraphs( maOptionsMisc.IsSummationOfParagraphs() );
     pOpts->SetTabBarVisible( maOptionsMisc.IsTabBarVisible() );
 
@@ -737,6 +718,8 @@ void SdOptionsMiscItem::SetOptions( SdOptions* pOpts ) const
 
     pOpts->SetPresentationPenColor( maOptionsMisc.GetPresentationPenColor() );
     pOpts->SetPresentationPenWidth( maOptionsMisc.GetPresentationPenWidth() );
+
+    pOpts->SetDragThreshold( maOptionsMisc.GetDragThresholdPixels() );
 }
 
 /*************************************************************************
@@ -987,8 +970,6 @@ void SdOptionsGrid::SetDefaults()
     SetFieldDivisionY( nVal );
     SetFieldDrawX( nVal );
     SetFieldDrawY( nVal );
-    SetFieldSnapX( nVal );
-    SetFieldSnapY( nVal );
     SetUseGridSnap( false );
     SetSynchronize( true );
     SetGridVisible( false );
@@ -1005,8 +986,6 @@ void SdOptionsGrid::GetPropNameArray( const char**& ppNames, sal_uLong& rCount )
             "Resolution/YAxis/Metric",
             "Subdivision/XAxis",
             "Subdivision/YAxis",
-            "SnapGrid/XAxis/Metric",
-            "SnapGrid/YAxis/Metric",
             "Option/SnapToGrid",
             "Option/Synchronize",
             "Option/VisibleGrid",
@@ -1023,8 +1002,6 @@ void SdOptionsGrid::GetPropNameArray( const char**& ppNames, sal_uLong& rCount )
             "Resolution/YAxis/NonMetric",
             "Subdivision/XAxis",
             "Subdivision/YAxis",
-            "SnapGrid/XAxis/NonMetric",
-            "SnapGrid/YAxis/NonMetric",
             "Option/SnapToGrid",
             "Option/Synchronize",
             "Option/VisibleGrid",
@@ -1051,13 +1028,10 @@ bool SdOptionsGrid::ReadData( const Any* pValues )
         const sal_uInt32 nDivY = FRound( *o3tl::doAccess<double>(pValues[ 3 ]) );
         SetFieldDivisionY( SvxOptionsGrid::GetFieldDrawY() / ( nDivY + 1 ) );
     }
-
-    if( pValues[4].hasValue() ) SetFieldSnapX( *o3tl::doAccess<sal_Int32>(pValues[ 4 ]) );
-    if( pValues[5].hasValue() ) SetFieldSnapY( *o3tl::doAccess<sal_Int32>(pValues[ 5 ]) );
-    if( pValues[6].hasValue() ) SetUseGridSnap( *o3tl::doAccess<bool>(pValues[ 6 ]) );
-    if( pValues[7].hasValue() ) SetSynchronize( *o3tl::doAccess<bool>(pValues[ 7 ]) );
-    if( pValues[8].hasValue() ) SetGridVisible( *o3tl::doAccess<bool>(pValues[ 8 ]) );
-    if( pValues[9].hasValue() ) SetEqualGrid( *o3tl::doAccess<bool>(pValues[ 9 ]) );
+    if( pValues[4].hasValue() ) SetUseGridSnap( *o3tl::doAccess<bool>(pValues[ 4 ]) );
+    if( pValues[5].hasValue() ) SetSynchronize( *o3tl::doAccess<bool>(pValues[ 5 ]) );
+    if( pValues[6].hasValue() ) SetGridVisible( *o3tl::doAccess<bool>(pValues[ 6 ]) );
+    if( pValues[7].hasValue() ) SetEqualGrid( *o3tl::doAccess<bool>(pValues[ 7 ]) );
 
     return true;
 }
@@ -1068,12 +1042,10 @@ bool SdOptionsGrid::WriteData( Any* pValues ) const
     pValues[ 1 ] <<= static_cast<sal_Int32>(GetFieldDrawY());
     pValues[ 2 ] <<= ( GetFieldDivisionX() ? ( static_cast<double>(GetFieldDrawX()) / GetFieldDivisionX() - 1.0 ) : double(0) );
     pValues[ 3 ] <<= ( GetFieldDivisionY() ? ( static_cast<double>(GetFieldDrawY()) / GetFieldDivisionY() - 1.0 ) : double(0) );
-    pValues[ 4 ] <<= static_cast<sal_Int32>(GetFieldSnapX());
-    pValues[ 5 ] <<= static_cast<sal_Int32>(GetFieldSnapY());
-    pValues[ 6 ] <<= IsUseGridSnap();
-    pValues[ 7 ] <<= IsSynchronize();
-    pValues[ 8 ] <<= IsGridVisible();
-    pValues[ 9 ] <<= IsEqualGrid();
+    pValues[ 4 ] <<= IsUseGridSnap();
+    pValues[ 5 ] <<= IsSynchronize();
+    pValues[ 6 ] <<= IsGridVisible();
+    pValues[ 7 ] <<= IsEqualGrid();
 
     return true;
 }
@@ -1094,8 +1066,6 @@ SdOptionsGridItem::SdOptionsGridItem( SdOptions const * pOpts ) :
     SetFieldDrawY( pOpts->GetFieldDrawY() );
     SetFieldDivisionX( pOpts->GetFieldDivisionX() ? ( pOpts->GetFieldDrawX() / pOpts->GetFieldDivisionX() - 1 ) : 0 );
     SetFieldDivisionY( pOpts->GetFieldDivisionY() ? ( pOpts->GetFieldDrawY() / pOpts->GetFieldDivisionY() - 1 ) : 0 );
-    SetFieldSnapX( pOpts->GetFieldSnapX() );
-    SetFieldSnapY( pOpts->GetFieldSnapY() );
     SetUseGridSnap( pOpts->IsUseGridSnap() );
     SetGridVisible( pOpts->IsGridVisible() );
 }
@@ -1106,8 +1076,6 @@ void SdOptionsGridItem::SetOptions( SdOptions* pOpts ) const
     pOpts->SetFieldDivisionX( GetFieldDrawX() / ( GetFieldDivisionX() + 1 ) );
     pOpts->SetFieldDrawY( GetFieldDrawY() );
     pOpts->SetFieldDivisionY( GetFieldDrawY() / ( GetFieldDivisionY() + 1 ) );
-    pOpts->SetFieldSnapX( GetFieldSnapX() );
-    pOpts->SetFieldSnapY( GetFieldSnapY() );
     pOpts->SetUseGridSnap( GetUseGridSnap() );
     pOpts->SetSynchronize( GetSynchronize() );
     pOpts->SetGridVisible( GetGridVisible() );
@@ -1396,6 +1364,21 @@ void SdOptions::StoreConfig()
     SdOptionsZoom::Store();
     SdOptionsGrid::Store();
     SdOptionsPrint::Store();
+}
+
+sal_Int32 SdOptionsMisc::GetDragThresholdPixels() const
+{
+    Init();
+    return mnDragThresholdPixels;
+}
+
+void SdOptionsMisc::SetDragThreshold(sal_Int32 nDragThresholdPixels)
+{
+    if (mnDragThresholdPixels != nDragThresholdPixels)
+    {
+        OptionsChanged();
+        mnDragThresholdPixels = nDragThresholdPixels;
+    }
 }
 
 sal_Int32 SdOptionsMisc::GetDisplay() const

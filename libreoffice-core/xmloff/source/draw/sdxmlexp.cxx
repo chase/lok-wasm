@@ -376,7 +376,7 @@ ImpXMLAutoLayoutInfo::ImpXMLAutoLayoutInfo(sal_uInt16 nTyp, ImpXMLEXPPageMasterI
     maPresRect.SetSize(aLayoutSize);
 }
 
-constexpr OUStringLiteral gsPageLayoutNames( u"PageLayoutNames" );
+constexpr OUString gsPageLayoutNames( u"PageLayoutNames"_ustr );
 
 SdXMLExport::SdXMLExport(
     const css::uno::Reference< css::uno::XComponentContext >& xContext,
@@ -419,19 +419,19 @@ void SAL_CALL SdXMLExport::setSourceDocument( const Reference< lang::XComponent 
     // add family name
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::SD_GRAPHICS_ID,
-        OUString(XML_STYLE_FAMILY_SD_GRAPHICS_NAME),
+        XML_STYLE_FAMILY_SD_GRAPHICS_NAME,
           GetPropertySetMapper(),
-          OUString(XML_STYLE_FAMILY_SD_GRAPHICS_PREFIX));
+          XML_STYLE_FAMILY_SD_GRAPHICS_PREFIX);
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::SD_PRESENTATION_ID,
-        OUString(XML_STYLE_FAMILY_SD_PRESENTATION_NAME),
+        XML_STYLE_FAMILY_SD_PRESENTATION_NAME,
           GetPropertySetMapper(),
-          OUString(XML_STYLE_FAMILY_SD_PRESENTATION_PREFIX));
+          XML_STYLE_FAMILY_SD_PRESENTATION_PREFIX);
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::SD_DRAWINGPAGE_ID,
-        OUString(XML_STYLE_FAMILY_SD_DRAWINGPAGE_NAME),
+        XML_STYLE_FAMILY_SD_DRAWINGPAGE_NAME,
           GetPresPagePropsMapper(),
-          OUString(XML_STYLE_FAMILY_SD_DRAWINGPAGE_PREFIX));
+          XML_STYLE_FAMILY_SD_DRAWINGPAGE_PREFIX);
     // prepare access to styles
     Reference< style::XStyleFamiliesSupplier > xFamSup( GetModel(), UNO_QUERY );
     if(xFamSup.is())
@@ -748,7 +748,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderOutline, aLeft);
@@ -760,7 +760,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft( tools::Long(aRight.Left() + aRight.GetWidth() * 1.05) );
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderOutline, aLeft);
@@ -772,7 +772,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderOutline, aLeft);
@@ -784,7 +784,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderChart, aLeft);
@@ -802,7 +802,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderGraphic, aLeft);
@@ -814,7 +814,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderOutline, aLeft);
@@ -832,10 +832,10 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRightTop(aLeft);
-                    aRightTop.SetLeft(tools::Long(aRightTop.Left() + aRightTop.GetWidth() * 1.05));
+                    aRightTop.AdjustLeft(aRightTop.GetWidth() * 1.05);
                     aRightTop.setHeight(tools::Long(aRightTop.GetHeight() * 0.477));
                     tools::Rectangle aRightBottom(aRightTop);
-                    aRightBottom.SetTop(tools::Long(aRightBottom.Top() + aRightBottom.GetHeight() * 1.095));
+                    aRightBottom.AdjustTop(aRightBottom.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderOutline, aLeft);
@@ -848,7 +848,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderObject, aLeft);
@@ -860,7 +860,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aTop(pInfo->GetPresRectangle());
                     aTop.setHeight(tools::Long(aTop.GetHeight() * 0.477));
                     tools::Rectangle aBottom(aTop);
-                    aBottom.SetTop(tools::Long(aBottom.Top() + aBottom.GetHeight() * 1.095));
+                    aBottom.AdjustTop(aBottom.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderObject, aTop);
@@ -872,10 +872,10 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeftTop(pInfo->GetPresRectangle());
                     aLeftTop.setWidth(tools::Long(aLeftTop.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeftTop);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
                     aLeftTop.setHeight(tools::Long(aLeftTop.GetHeight() * 0.477));
                     tools::Rectangle aLeftBottom(aLeftTop);
-                    aLeftBottom.SetTop(tools::Long(aLeftBottom.Top() + aLeftBottom.GetHeight() * 1.095));
+                    aLeftBottom.AdjustTop(aLeftBottom.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderObject, aLeftTop);
@@ -888,10 +888,10 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aTopLeft(pInfo->GetPresRectangle());
                     aTopLeft.setHeight(tools::Long(aTopLeft.GetHeight() * 0.477));
                     tools::Rectangle aBottom(aTopLeft);
-                    aBottom.SetTop(tools::Long(aBottom.Top() + aBottom.GetHeight() * 1.095));
+                    aBottom.AdjustTop(aBottom.GetHeight() * 1.095);
                     aTopLeft.setWidth(tools::Long(aTopLeft.GetWidth() * 0.488));
                     tools::Rectangle aTopRight(aTopLeft);
-                    aTopRight.SetLeft(tools::Long(aTopRight.Left() + aTopRight.GetWidth() * 1.05));
+                    aTopRight.AdjustLeft(aTopRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderObject, aTopLeft);
@@ -904,7 +904,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aTop(pInfo->GetPresRectangle());
                     aTop.setHeight(tools::Long(aTop.GetHeight() * 0.477));
                     tools::Rectangle aBottom(aTop);
-                    aBottom.SetTop(tools::Long(aBottom.Top() + aBottom.GetHeight() * 1.095));
+                    aBottom.AdjustTop(aBottom.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderOutline, aTop);
@@ -917,11 +917,11 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     aTopLeft.setHeight(tools::Long(aTopLeft.GetHeight() * 0.477));
                     aTopLeft.setWidth(tools::Long(aTopLeft.GetWidth() * 0.488));
                     tools::Rectangle aBottomLeft(aTopLeft);
-                    aBottomLeft.SetTop(tools::Long(aBottomLeft.Top() + aBottomLeft.GetHeight() * 1.095));
+                    aBottomLeft.AdjustTop(aBottomLeft.GetHeight() * 1.095);
                     tools::Rectangle aTopRight(aTopLeft);
-                    aTopRight.SetLeft(tools::Long(aTopRight.Left() + aTopRight.GetWidth() * 1.05));
+                    aTopRight.AdjustLeft(aTopRight.GetWidth() * 1.05);
                     tools::Rectangle aBottomRight(aTopRight);
-                    aBottomRight.SetTop(tools::Long(aBottomRight.Top() + aBottomRight.GetHeight() * 1.095));
+                    aBottomRight.AdjustTop(aBottomRight.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderObject, aTopLeft);
@@ -1002,7 +1002,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aTop(pInfo->GetPresRectangle());
                     aTop.setHeight(tools::Long(aTop.GetHeight() * 0.488));
                     tools::Rectangle aBottom(aTop);
-                    aBottom.SetTop(tools::Long(aBottom.Top() + aBottom.GetHeight() * 1.05));
+                    aBottom.AdjustTop(aBottom.GetHeight() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderVerticalTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderVerticalOutline, aTop);
@@ -1026,7 +1026,7 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     tools::Rectangle aLeft(pInfo->GetPresRectangle());
                     aLeft.setWidth(tools::Long(aLeft.GetWidth() * 0.488));
                     tools::Rectangle aRight(aLeft);
-                    aRight.SetLeft(tools::Long(aRight.Left() + aRight.GetWidth() * 1.05));
+                    aRight.AdjustLeft(aRight.GetWidth() * 1.05);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderGraphic, aLeft);
@@ -1045,11 +1045,11 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     aTopLeft.setHeight(tools::Long(aTopLeft.GetHeight() * 0.477));
                     aTopLeft.setWidth(tools::Long(aTopLeft.GetWidth() * 0.488));
                     tools::Rectangle aBottomLeft(aTopLeft);
-                    aBottomLeft.SetTop(tools::Long(aBottomLeft.Top() + aBottomLeft.GetHeight() * 1.095));
+                    aBottomLeft.AdjustTop(aBottomLeft.GetHeight() * 1.095);
                     tools::Rectangle aTopRight(aTopLeft);
-                    aTopRight.SetLeft(tools::Long(aTopRight.Left() + aTopRight.GetWidth() * 1.05));
+                    aTopRight.AdjustLeft(aTopRight.GetWidth() * 1.05);
                     tools::Rectangle aBottomRight(aTopRight);
-                    aBottomRight.SetTop(tools::Long(aBottomRight.Top() + aBottomRight.GetHeight() * 1.095));
+                    aBottomRight.AdjustTop(aBottomRight.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderGraphic, aTopLeft);
@@ -1065,16 +1065,16 @@ void SdXMLExport::ImpWriteAutoLayoutInfos()
                     aTopLeft.setHeight(tools::Long(aTopLeft.GetHeight() * 0.477));
                     aTopLeft.setWidth(tools::Long(aTopLeft.GetWidth() * 0.322));
                     tools::Rectangle aTopCenter(aTopLeft);
-                    aTopCenter.SetLeft(tools::Long(aTopCenter.Left() + aTopCenter.GetWidth() * 1.05));
+                    aTopCenter.AdjustLeft(aTopCenter.GetWidth() * 1.05);
                     tools::Rectangle aTopRight(aTopLeft);
-                    aTopRight.SetLeft(tools::Long(aTopRight.Left() + aTopRight.GetWidth() * 2 * 1.05));
+                    aTopRight.AdjustLeft(aTopRight.GetWidth() * 2 * 1.05);
 
                     tools::Rectangle aBottomLeft(aTopLeft);
-                    aBottomLeft.SetTop(tools::Long(aBottomLeft.Top() + aBottomLeft.GetHeight() * 1.095));
+                    aBottomLeft.AdjustTop(aBottomLeft.GetHeight() * 1.095);
                     tools::Rectangle aBottomCenter(aTopCenter);
-                    aBottomCenter.SetTop(tools::Long(aBottomCenter.Top() + aBottomCenter.GetHeight() * 1.095));
+                    aBottomCenter.AdjustTop(aBottomCenter.GetHeight() * 1.095);
                     tools::Rectangle aBottomRight(aTopRight);
-                    aBottomRight.SetTop(tools::Long(aBottomRight.Top() + aBottomRight.GetHeight() * 1.095));
+                    aBottomRight.AdjustTop(aBottomRight.GetHeight() * 1.095);
 
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderTitle, pInfo->GetTitleRectangle());
                     ImpWriteAutoLayoutPlaceholder(XmlPlaceholderGraphic, aTopLeft);
@@ -1362,9 +1362,9 @@ static OUString findOrAppendImpl( std::vector< DateTimeDeclImpl >& rVector, cons
     return pPrefix + OUString::number( nIndex );
 }
 
-constexpr OUStringLiteral gpStrHeaderTextPrefix = u"hdr";
-constexpr OUStringLiteral gpStrFooterTextPrefix = u"ftr";
-constexpr OUStringLiteral gpStrDateTimeTextPrefix = u"dtd";
+constexpr OUString gpStrHeaderTextPrefix = u"hdr"_ustr;
+constexpr OUString gpStrFooterTextPrefix = u"ftr"_ustr;
+constexpr OUString gpStrDateTimeTextPrefix = u"dtd"_ustr;
 
 HeaderFooterPageSettingsImpl SdXMLExport::ImpPrepDrawPageHeaderFooterDecls( const Reference<XDrawPage>& xDrawPage )
 {
@@ -1377,7 +1377,7 @@ HeaderFooterPageSettingsImpl SdXMLExport::ImpPrepDrawPageHeaderFooterDecls( cons
 
         OUString aStrText;
 
-        static const OUStringLiteral aStrHeaderTextProp( u"HeaderText" );
+        static constexpr OUString aStrHeaderTextProp( u"HeaderText"_ustr );
         if( xInfo->hasPropertyByName( aStrHeaderTextProp ) )
         {
             xSet->getPropertyValue( aStrHeaderTextProp  ) >>= aStrText;
@@ -1385,7 +1385,7 @@ HeaderFooterPageSettingsImpl SdXMLExport::ImpPrepDrawPageHeaderFooterDecls( cons
                 aSettings.maStrHeaderDeclName = findOrAppendImpl( maHeaderDeclsVector, aStrText, gpStrHeaderTextPrefix );
         }
 
-        static const OUStringLiteral aStrFooterTextProp( u"FooterText" );
+        static constexpr OUString aStrFooterTextProp( u"FooterText"_ustr );
         if( xInfo->hasPropertyByName( aStrFooterTextProp ) )
         {
             xSet->getPropertyValue( aStrFooterTextProp ) >>= aStrText;
@@ -1393,7 +1393,7 @@ HeaderFooterPageSettingsImpl SdXMLExport::ImpPrepDrawPageHeaderFooterDecls( cons
                 aSettings.maStrFooterDeclName = findOrAppendImpl( maFooterDeclsVector, aStrText, gpStrFooterTextPrefix );
         }
 
-        static const OUStringLiteral aStrDateTimeTextProp( u"DateTimeText" );
+        static constexpr OUString aStrDateTimeTextProp( u"DateTimeText"_ustr );
         if( xInfo->hasPropertyByName( aStrDateTimeTextProp ) )
         {
             bool bFixed = false;
@@ -1429,8 +1429,7 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
         sal_Int32 nIndex = 1;
         for( const auto& rDecl : maHeaderDeclsVector )
         {
-            sBuffer.append( aPrefix );
-            sBuffer.append( nIndex );
+            sBuffer.append( aPrefix + OUString::number( nIndex ) );
             AddAttribute(XML_NAMESPACE_PRESENTATION, XML_NAME, sBuffer.makeStringAndClear());
 
             SvXMLElementExport aElem(*this, XML_NAMESPACE_PRESENTATION, XML_HEADER_DECL, true, true);
@@ -1446,8 +1445,7 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
         sal_Int32 nIndex = 1;
         for( const auto& rDecl : maFooterDeclsVector )
         {
-            sBuffer.append( aPrefix );
-            sBuffer.append( nIndex );
+            sBuffer.append( aPrefix + OUString::number( nIndex ) );
             AddAttribute(XML_NAMESPACE_PRESENTATION, XML_NAME, sBuffer.makeStringAndClear());
 
             SvXMLElementExport aElem(*this, XML_NAMESPACE_PRESENTATION, XML_FOOTER_DECL, false, false);
@@ -1464,8 +1462,7 @@ void SdXMLExport::ImpWriteHeaderFooterDecls()
     sal_Int32 nIndex = 1;
     for( const auto& rDecl : maDateTimeDeclsVector )
     {
-        sBuffer.append( aPrefix );
-        sBuffer.append( nIndex );
+        sBuffer.append( aPrefix + OUString::number( nIndex ) );
         AddAttribute( XML_NAMESPACE_PRESENTATION, XML_NAME, sBuffer.makeStringAndClear());
 
         AddAttribute( XML_NAMESPACE_PRESENTATION, XML_SOURCE, rDecl.mbFixed ? XML_FIXED : XML_CURRENT_DATE );
@@ -1511,7 +1508,7 @@ OUString SdXMLExport::ImpCreatePresPageStyleName( const Reference<XDrawPage>& xD
             // which itself is a property of the pages property set
             // we now merge these two propertysets if possible to simulate
             // a single propertyset with all draw page properties
-            static const OUStringLiteral aBackground(u"Background");
+            static constexpr OUString aBackground(u"Background"_ustr);
             Reference< beans::XPropertySet > xPropSet2;
             Reference< beans::XPropertySetInfo > xInfo( xPropSet1->getPropertySetInfo() );
             if( xInfo.is() && xInfo->hasPropertyByName( aBackground ) )
@@ -1601,7 +1598,7 @@ void SdXMLExport::ImpWritePresentationStyles()
                 OUString aPrefix( xNamed->getName() + "-" );
 
                 aStEx->exportStyleFamily(xNamed->getName(),
-                    OUString(XML_STYLE_FAMILY_SD_PRESENTATION_NAME),
+                    XML_STYLE_FAMILY_SD_PRESENTATION_NAME,
                     aMapperRef, false,
                     XmlStyleFamily::SD_PRESENTATION_ID, &aPrefix);
             }
@@ -2032,8 +2029,6 @@ void SdXMLExport::collectAutoStyles()
     if (mbAutoStylesCollected)
         return;
 
-    css::uno::Sequence<OUString> aAutoStylePropNames = GetAutoStylePool()->GetPropertyNames();
-
     Reference< beans::XPropertySet > xInfoSet( getExportInfo() );
     if( xInfoSet.is() )
     {
@@ -2073,7 +2068,7 @@ void SdXMLExport::collectAutoStyles()
             {
                 Reference< XDrawPage > xHandoutPage( xHandoutSupp->getHandoutMasterPage() );
                 if( xHandoutPage.is() && xHandoutPage->getCount())
-                    GetShapeExport()->collectShapesAutoStyles( xHandoutPage, aAutoStylePropNames );
+                    GetShapeExport()->collectShapesAutoStyles( xHandoutPage );
             }
         }
 
@@ -2101,7 +2096,7 @@ void SdXMLExport::collectAutoStyles()
                 GetShapeExport()->setPresentationStylePrefix( aMasterPageNamePrefix );
 
                 if(xMasterPage.is() && xMasterPage->getCount())
-                    GetShapeExport()->collectShapesAutoStyles( xMasterPage, aAutoStylePropNames );
+                    GetShapeExport()->collectShapesAutoStyles( xMasterPage );
 
                 if(IsImpress())
                 {
@@ -2115,7 +2110,7 @@ void SdXMLExport::collectAutoStyles()
                             GetFormExport()->examineForms( xNotesPage );
 
                             if(xNotesPage->getCount())
-                                GetShapeExport()->collectShapesAutoStyles( xNotesPage, aAutoStylePropNames );
+                                GetShapeExport()->collectShapesAutoStyles( xNotesPage );
                         }
                     }
                 }
@@ -2166,7 +2161,7 @@ void SdXMLExport::collectAutoStyles()
 
                 // prepare object infos
                 if(xDrawPage.is() && xDrawPage->getCount())
-                    GetShapeExport()->collectShapesAutoStyles( xDrawPage, aAutoStylePropNames );
+                    GetShapeExport()->collectShapesAutoStyles( xDrawPage );
 
                 // prepare presentation notes page object infos (ONLY if presentation)
                 if(IsImpress())
@@ -2181,7 +2176,7 @@ void SdXMLExport::collectAutoStyles()
                             GetFormExport()->examineForms( xNotesPage );
 
                             if(xNotesPage->getCount())
-                                GetShapeExport()->collectShapesAutoStyles( xNotesPage, aAutoStylePropNames );
+                                GetShapeExport()->collectShapesAutoStyles( xNotesPage );
                         }
                     }
                 }
@@ -2554,7 +2549,8 @@ void SdXMLExport::exportAnnotations( const Reference<XDrawPage>& xDrawPage )
         if( xAnnotationEnumeration.is() && xAnnotationEnumeration->hasMoreElements() )
         {
             bool bRemovePersonalInfo = SvtSecurityOptions::IsOptionSet(
-                SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo );
+                SvtSecurityOptions::EOption::DocWarnRemovePersonalInfo ) && !SvtSecurityOptions::IsOptionSet(
+                    SvtSecurityOptions::EOption::DocWarnKeepNoteAuthorDateInfo);
 
             OUStringBuffer sStringBuffer;
             do

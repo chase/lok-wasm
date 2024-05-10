@@ -105,6 +105,14 @@
           </info>
           <value>true</value>
         </prop>
+        <prop oor:name="FormulaMark" oor:type="xs:boolean" oor:nillable="false">
+          <!-- UIHints: Tools - Options -Spreadsheets - Contents - [Section] Display -->
+          <info>
+            <desc>Indicates whether formulas are marked.</desc>
+            <label>Formula indicator and hint</label>
+          </info>
+          <value>false</value>
+        </prop>
         <prop oor:name="ValueHighlighting" oor:type="xs:boolean" oor:nillable="false">
           <!-- UIHints: Tools - Options -Spreadsheets - Contents - [Section] Display -->
           <info>
@@ -113,19 +121,19 @@
           </info>
           <value>false</value>
         </prop>
+        <prop oor:name="ColumnRowHighlighting" oor:type="xs:boolean" oor:nillable="false">
+          <!-- UIHints: Tools - Options -Spreadsheets - Contents - [Section] Display -->
+          <info>
+            <desc>Indicates whether the column/row highlight has been enabled or not.</desc>
+            <label>Column/row highlighting</label>
+          </info>
+          <value>false</value>
+        </prop>
         <prop oor:name="Anchor" oor:type="xs:boolean" oor:nillable="false">
           <!-- UIHints: Tools - Options -Spreadsheets - Contents - [Section] Display -->
           <info>
             <desc>Indicates whether anchor icons are displayed next to selected graphics in the document.</desc>
             <label>Anchor</label>
-          </info>
-          <value>true</value>
-        </prop>
-        <prop oor:name="TextOverflow" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: Tools - Options -Spreadsheets - Contents - [Section] Display -->
-          <info>
-            <desc>Indicates whether text overflow is marked via a small triangle.</desc>
-            <label>Text overflow</label>
           </info>
           <value>true</value>
         </prop>
@@ -284,22 +292,6 @@
             <label>Helplines</label>
           </info>
           <value>false</value>
-        </prop>
-        <prop oor:name="SimpleControlPoint" oor:type="xs:boolean">
-          <!-- UIHints: Tools - Options -Spreadsheets - Layout - [Section] Lines -->
-          <info>
-            <desc>Specifies whether control points are displayed simple or enhanced.</desc>
-            <label>Simple control points</label>
-          </info>
-          <value>false</value>
-        </prop>
-        <prop oor:name="LargeControlPoint" oor:type="xs:boolean">
-          <!-- UIHints: Tools - Options -Spreadsheets - Layout - [Section] Lines -->
-          <info>
-            <desc>Specifies whether control points are displayed as larger than the default size.</desc>
-            <label>Large control points</label>
-          </info>
-          <value>true</value>
         </prop>
       </group>
       <group oor:name="Window">
@@ -690,6 +682,13 @@
         </info>
         <value>true</value>
       </prop>
+      <prop oor:name="UseScrollLock" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Toggles the scroll lock behavior allowing to disable it for special keyboards</desc>
+          <label>Toggles the scroll lock behavior allowing to disable it for special keyboards</label>
+        </info>
+        <value>true</value>
+      </prop>
       <prop oor:name="LastFunctions" oor:type="oor:int-list" oor:nillable="false">
         <info>
           <desc>Specifies the functions last used.</desc>
@@ -781,50 +780,6 @@
           </info>
           <value>true</value>
         </prop>
-        <group oor:name="XAxis">
-          <!-- UIHints: Tools  Options  Spreadsheet  Grid - [Section] Snap grid -->
-          <!-- Notice: Default-value in  (nonmetric: 1270 1/100 mm)-->
-          <info>
-            <desc>Defines the horizontal distance between the single grid points in 1/100th millimeters.</desc>
-            <label>X axis</label>
-          </info>
-          <prop oor:name="Metric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Specifies the distance that is used with locales that use the metric system.</desc>
-              <label/>
-            </info>
-            <value>1000</value>
-          </prop>
-          <prop oor:name="NonMetric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Specifies the distance that is used with locales that don't use the metric system.</desc>
-              <label/>
-            </info>
-            <value>1270</value>
-          </prop>
-        </group>
-        <group oor:name="YAxis">
-          <!-- UIHints: Tools  Options  Spreadsheet  Grid - [Section] Snap grid -->
-          <!-- Notice: Default-value in nonmetric: 1270 1/100 mm-->
-          <info>
-            <desc>Defines the vertical distance between the single grid points in 1/100th millimeters.</desc>
-            <label>Y axis</label>
-          </info>
-          <prop oor:name="Metric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Specifies the distance that is used with locales that use the metric system.</desc>
-              <label/>
-            </info>
-            <value>1000</value>
-          </prop>
-          <prop oor:name="NonMetric" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <desc>Specifies the distance that is used with locales that don't use the metric system.</desc>
-              <label/>
-            </info>
-            <value>1270</value>
-          </prop>
-        </group>
       </group>
       <group oor:name="Resolution">
         <info>
@@ -1032,6 +987,13 @@
           </info>
           <value>false</value>
         </prop>
+        <prop oor:name="DetectScientificNumbers" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>If true, Calc tries to detect numbers in scientific notation.</desc>
+            <label>DetectScientificNumbers</label>
+          </info>
+          <value>true</value>
+        </prop>
         <prop oor:name="Language" oor:type="xs:int" oor:nillable="false">
           <info>
             <desc>Language to use for CSV import.  This determines how the numbers are parsed.</desc>
@@ -1118,6 +1080,13 @@
           <info>
             <desc>If true, Calc tries to detect special number format, such as date and scientific notation.</desc>
             <label>DetectSpecialNumbers</label>
+          </info>
+          <value>true</value>
+        </prop>
+        <prop oor:name="DetectScientificNumbers" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>If true, Calc tries to detect numbers in scientific notation.</desc>
+            <label>DetectScientificNumbers</label>
           </info>
           <value>true</value>
         </prop>
@@ -1332,30 +1301,6 @@
             <label>Enable wildcards in formulas</label>
           </info>
           <value>true</value>
-        </prop>
-        <prop oor:name="FormulaSyntax" oor:type="xs:int">
-          <!-- UIHints: Tools - Options  Spreadsheet  Calculate -->
-          <!-- This node is deprecated, but we still need to keep it for migration purposes. -->
-          <info>
-            <desc>Specifies what formula syntax type to use.</desc>
-          </info>
-          <constraints>
-            <enumeration oor:value="0">
-              <info>
-                <desc>Calc A1</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="1">
-              <info>
-                <desc>Excel A1</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="2">
-              <info>
-                <desc>Excel R1C1</desc>
-              </info>
-            </enumeration>
-          </constraints>
         </prop>
         <node-ref oor:name="Date" oor:node-type="Date">
           <info>
@@ -1586,6 +1531,30 @@
             </enumeration>
           </constraints>
           <value>1</value>
+        </prop>
+        <prop oor:name="RecalcOptimalRowHeightMode" oor:type="xs:int" oor:nillable="false">
+          <!-- UIHint: Tools - Options - Spreadsheet - Formula -->
+          <info>
+            <desc>Specifies whether to force a hard recalc after load on optimal row heights.</desc>
+          </info>
+          <constraints>
+            <enumeration oor:value="0">
+              <info>
+                <desc>Recalc always</desc>
+              </info>
+            </enumeration>
+            <enumeration oor:value="1">
+              <info>
+                <desc>Recalc never</desc>
+              </info>
+            </enumeration>
+            <enumeration oor:value="2">
+              <info>
+                <desc>Ask before Recalc</desc>
+              </info>
+            </enumeration>
+          </constraints>
+          <value>0</value>
         </prop>
       </group>
     </group>
@@ -1866,7 +1835,7 @@
       </group>
       <prop oor:name="Links" oor:type="xs:boolean" oor:nillable="false">
         <info>
-          <desc>Insert link for the cell, instead of text fields in a cell.(Excel iteropability options)</desc>
+          <desc>Insert link for the cell, instead of text fields in a cell.(Excel interopability options)</desc>
           <label>Links like Excel</label>
         </info>
         <value>false</value>

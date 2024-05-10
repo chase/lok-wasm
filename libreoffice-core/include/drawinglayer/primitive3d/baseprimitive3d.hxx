@@ -17,13 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_DRAWINGLAYER_PRIMITIVE3D_BASEPRIMITIVE3D_HXX
-#define INCLUDED_DRAWINGLAYER_PRIMITIVE3D_BASEPRIMITIVE3D_HXX
+#pragma once
 
 #include <drawinglayer/drawinglayerdllapi.h>
 
-#include <cppuhelper/compbase.hxx>
-#include <cppuhelper/basemutex.hxx>
+#include <comphelper/compbase.hxx>
 #include <com/sun/star/graphic/XPrimitive3D.hpp>
 #include <basegfx/range/b3drange.hxx>
 #include <deque>
@@ -50,7 +48,7 @@ namespace drawinglayer::geometry {
 
 namespace drawinglayer::primitive3d {
     /// typedefs for basePrimitive3DImplBase, Primitive3DContainer and Primitive3DReference
-    typedef cppu::WeakComponentImplHelper< css::graphic::XPrimitive3D > BasePrimitive3DImplBase;
+    typedef comphelper::WeakComponentImplHelper< css::graphic::XPrimitive3D > BasePrimitive3DImplBase;
     typedef css::uno::Reference< css::graphic::XPrimitive3D > Primitive3DReference;
 
     class SAL_WARN_UNUSED DRAWINGLAYER_DLLPUBLIC Primitive3DContainer : public std::deque< Primitive3DReference >
@@ -93,8 +91,7 @@ namespace drawinglayer::primitive3d
             That's all for 3D!
          */
         class DRAWINGLAYER_DLLPUBLIC BasePrimitive3D
-        :   protected cppu::BaseMutex,
-            public BasePrimitive3DImplBase
+        :   public BasePrimitive3DImplBase
         {
             BasePrimitive3D(const BasePrimitive3D&) = delete;
             BasePrimitive3D& operator=( const BasePrimitive3D& ) = delete;
@@ -203,8 +200,5 @@ namespace drawinglayer::primitive3d
         bool DRAWINGLAYER_DLLPUBLIC arePrimitive3DReferencesEqual(const Primitive3DReference& rA, const Primitive3DReference& rB);
 
 } // end of namespace drawinglayer::primitive3d
-
-
-#endif //INCLUDED_DRAWINGLAYER_PRIMITIVE3D_BASEPRIMITIVE3D_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

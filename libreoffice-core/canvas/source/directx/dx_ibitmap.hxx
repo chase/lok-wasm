@@ -21,6 +21,7 @@
 
 #include <com/sun/star/rendering/XCanvas.hpp>
 #include <com/sun/star/rendering/XIntegerBitmap.hpp>
+#include <basegfx/vector/b2isize.hxx>
 #include <basegfx/vector/b2ivector.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/range/b2drange.hxx>
@@ -33,7 +34,7 @@ namespace dxcanvas
     struct IBitmap : public GraphicsProvider
     {
         virtual BitmapSharedPtr           getBitmap() const = 0;
-        virtual ::basegfx::B2IVector      getSize() const = 0;
+        virtual ::basegfx::B2ISize getSize() const = 0;
         virtual bool                      hasAlpha() const = 0;
 
         virtual css::uno::Sequence< sal_Int8 > getData(

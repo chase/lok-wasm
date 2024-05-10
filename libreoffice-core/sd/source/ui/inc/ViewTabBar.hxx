@@ -23,7 +23,6 @@
 #include <com/sun/star/drawing/framework/XTabBar.hpp>
 #include <com/sun/star/drawing/framework/XToolBar.hpp>
 #include <com/sun/star/drawing/framework/XConfigurationChangeListener.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <comphelper/compbase.hxx>
 #include <vcl/InterimItemWindow.hxx>
 
@@ -36,6 +35,7 @@ namespace com::sun::star::frame { class XController; }
 namespace vcl { class Window; }
 
 namespace sd {
+    class DrawController;
     class ViewShellBase;
     class ViewTabBar;
 }
@@ -55,15 +55,14 @@ private:
     ::rtl::Reference<ViewTabBar> mpViewTabBar;
     int mnAllocatedWidth;
 
-    DECL_LINK(ActivatePageHdl, const OString&, void);
+    DECL_LINK(ActivatePageHdl, const OUString&, void);
     DECL_LINK(NotebookSizeAllocHdl, const Size&, void);
 };
 
 typedef comphelper::WeakComponentImplHelper <
     css::drawing::framework::XToolBar,
     css::drawing::framework::XTabBar,
-    css::drawing::framework::XConfigurationChangeListener,
-    css::lang::XUnoTunnel
+    css::drawing::framework::XConfigurationChangeListener
     > ViewTabBarInterfaceBase;
 
 /** Tab control for switching between views in the center pane.
@@ -74,7 +73,7 @@ class ViewTabBar final
 public:
     ViewTabBar (
         const css::uno::Reference< css::drawing::framework::XResourceId>& rxViewTabBarId,
-        const css::uno::Reference< css::frame::XController>& rxController);
+        const rtl::Reference< ::sd::DrawController>& rxController);
     virtual ~ViewTabBar() override;
 
     virtual void disposing(std::unique_lock<std::mutex>&) override;
@@ -123,12 +122,6 @@ public:
 
     virtual sal_Bool SAL_CALL isAnchorOnly() override;
 
-    //----- XUnoTunnel --------------------------------------------------------
-
-    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId();
-
-    virtual sal_Int64 SAL_CALL getSomething (const css::uno::Sequence<sal_Int8>& rId) override;
-
     /** The returned value is calculated as the difference between the
         total height of the control and the height of its first tab page.
         This can be considered a hack.
@@ -156,7 +149,7 @@ public:
 
 private:
     VclPtr<TabBarControl> mpTabControl;
-    css::uno::Reference<css::frame::XController> mxController;
+    rtl::Reference<::sd::DrawController> mxController;
     css::uno::Reference<css::drawing::framework::XConfigurationController> mxConfigurationController;
     typedef ::std::vector<css::drawing::framework::TabBarButton> TabBarButtonList;
     TabBarButtonList maTabBarButtons;
@@ -176,7 +169,7 @@ private:
     */
     static vcl::Window* GetAnchorWindow(
         const css::uno::Reference<css::drawing::framework::XResourceId>& rxViewTabBarId,
-        const css::uno::Reference<css::frame::XController>& rxController);
+        const rtl::Reference<::sd::DrawController>& rxController);
 };
 
 } // end of namespace sd

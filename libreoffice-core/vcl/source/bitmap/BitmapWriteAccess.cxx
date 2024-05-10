@@ -21,10 +21,15 @@
 #include <sal/log.hxx>
 #include <tools/debug.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <bitmap/bmpfast.hxx>
 
 BitmapWriteAccess::BitmapWriteAccess(Bitmap& rBitmap)
+    : BitmapReadAccess(rBitmap, BitmapAccessMode::Write)
+{
+}
+
+BitmapWriteAccess::BitmapWriteAccess(AlphaMask& rBitmap)
     : BitmapReadAccess(rBitmap, BitmapAccessMode::Write)
 {
 }
@@ -87,9 +92,6 @@ void BitmapWriteAccess::CopyScanline(tools::Long nY, ConstScanline aSrcScanline,
         {
             case ScanlineFormat::N1BitMsbPal:
                 pFncGetPixel = GetPixelForN1BitMsbPal;
-                break;
-            case ScanlineFormat::N1BitLsbPal:
-                pFncGetPixel = GetPixelForN1BitLsbPal;
                 break;
             case ScanlineFormat::N8BitPal:
                 pFncGetPixel = GetPixelForN8BitPal;

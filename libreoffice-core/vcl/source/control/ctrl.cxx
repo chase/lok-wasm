@@ -141,14 +141,6 @@ tools::Long Control::GetIndexForPoint( const Point& rPoint ) const
     return mxLayoutData ? mxLayoutData->GetIndexForPoint( rPoint ) : -1;
 }
 
-tools::Long ControlLayoutData::GetLineCount() const
-{
-    tools::Long nLines = m_aLineIndices.size();
-    if( nLines == 0 && !m_aDisplayText.isEmpty() )
-        nLines = 1;
-    return nLines;
-}
-
 Pair ControlLayoutData::GetLineStartEnd( tools::Long nLine ) const
 {
     Pair aPair( -1, -1 );
@@ -289,7 +281,7 @@ void Control::AppendLayoutData( const Control& rSubControl ) const
     for( n = 1; n < nLines; n++ )
         mxLayoutData->m_aLineIndices.push_back( rSubControl.mxLayoutData->m_aLineIndices[n] + nCurrentIndex );
     int nRectangles = rSubControl.mxLayoutData->m_aUnicodeBoundRects.size();
-    tools::Rectangle aRel = rSubControl.GetWindowExtentsRelative(this);
+    tools::Rectangle aRel = rSubControl.GetWindowExtentsRelative(*this);
     for( n = 0; n < nRectangles; n++ )
     {
         tools::Rectangle aRect = rSubControl.mxLayoutData->m_aUnicodeBoundRects[n];
@@ -442,10 +434,7 @@ tools::Rectangle Control::DrawControlText( OutputDevice& _rTargetDevice, const t
     bool autoacc = ImplGetSVData()->maNWFData.mbAutoAccel;
 
     if (autoacc && !mbShowAccelerator)
-    {
         rPStr = removeMnemonicFromString( _rStr );
-        nPStyle &= ~DrawTextFlags::HideMnemonic;
-    }
 
     if( !GetReferenceDevice() || ( GetReferenceDevice() == &_rTargetDevice ) )
     {
@@ -467,10 +456,7 @@ tools::Rectangle Control::GetControlTextRect( OutputDevice& _rTargetDevice, cons
     bool autoacc = ImplGetSVData()->maNWFData.mbAutoAccel;
 
     if (autoacc && !mbShowAccelerator)
-    {
         rPStr = removeMnemonicFromString( _rStr );
-        nPStyle &= ~DrawTextFlags::HideMnemonic;
-    }
 
     if ( !GetReferenceDevice() || ( GetReferenceDevice() == &_rTargetDevice ) )
     {
@@ -500,7 +486,7 @@ void Control::LogicInvalidate(const tools::Rectangle* pRectangle)
     VclPtr<vcl::Window> pParent = GetParentWithLOKNotifier();
     if (!pParent || !dynamic_cast<vcl::DocWindow*>(GetParent()))
     {
-        // if control doesn't belong to a DocWindow, the overriden base class
+        // if control doesn't belong to a DocWindow, the overridden base class
         // method has to be invoked
         Window::LogicInvalidate(pRectangle);
         return;
@@ -514,14 +500,13 @@ void Control::LogicInvalidate(const tools::Rectangle* pRectangle)
     if (!pRectangle)
     {
         // we have to invalidate the whole control area not the whole document
-        aResultRectangle = tools::Rectangle(GetPosPixel(), GetSizePixel());
+        aResultRectangle = PixelToLogic(tools::Rectangle(GetPosPixel(), GetSizePixel()), MapMode(MapUnit::MapTwip));
     }
     else
     {
-        aResultRectangle = *pRectangle;
+        aResultRectangle = OutputDevice::LogicToLogic(*pRectangle, GetMapMode(), MapMode(MapUnit::MapTwip));
     }
 
-    aResultRectangle = PixelToLogic(aResultRectangle, MapMode(MapUnit::MapTwip));
     pParent->GetLOKNotifier()->notifyInvalidation(&aResultRectangle);
 }
 

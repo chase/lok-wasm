@@ -52,7 +52,7 @@ bool SvMetaAttribute::Test( SvTokenStream & rInStm )
 {
     if( GetType()->IsItem() && !GetSlotId().IsSet() )
     {
-        throw SvParseException( rInStm, "slot without id declared" );
+        throw SvParseException( rInStm, "slot without id declared"_ostr );
     }
     return true;
 }
@@ -239,36 +239,36 @@ void SvMetaType::WriteSfxItem(
             bReturn = true;
     }
 
-    rOutStm.WriteCharPtr( "extern " );
+    rOutStm.WriteOString( "extern " );
     if (bExport)
-        rOutStm.WriteCharPtr( "SFX2_DLLPUBLIC " );
+        rOutStm.WriteOString( "SFX2_DLLPUBLIC " );
     rOutStm.WriteOString( aTypeName )
            .WriteOString( aVarName ).WriteChar( ';' ) << endl;
     if (bReturn)
         return;
 
     // write the implementation part
-    rOutStm.WriteCharPtr( "#ifdef SFX_TYPEMAP" ) << endl;
-    rOutStm.WriteCharPtr( "#if !defined(_WIN32) && (defined(DISABLE_DYNLOADING) && (defined(ANDROID) || defined(IOS) || defined(EMSCRIPTEN) || defined(LINUX)))" ) << endl;
-    rOutStm.WriteCharPtr( "__attribute__((__weak__))" ) << endl;
-    rOutStm.WriteCharPtr( "#endif" ) << endl;
+    rOutStm.WriteOString( "#ifdef SFX_TYPEMAP" ) << endl;
+    rOutStm.WriteOString( "#if !defined(_WIN32) && (defined(DISABLE_DYNLOADING) && (defined(ANDROID) || defined(IOS) || defined(EMSCRIPTEN) || defined(LINUX)))" ) << endl;
+    rOutStm.WriteOString( "__attribute__((__weak__))" ) << endl;
+    rOutStm.WriteOString( "#endif" ) << endl;
     rOutStm.WriteOString( aTypeName ).WriteOString( aVarName )
-           .WriteCharPtr( " = " ) << endl;
+           .WriteOString( " = " ) << endl;
     rOutStm.WriteChar( '{' ) << endl;
 
-    rOutStm.WriteCharPtr( "\tcreateSfxPoolItem<" ).WriteOString( rItemName )
-        .WriteCharPtr(">, &typeid(").WriteOString( rItemName ).WriteCharPtr( "), " );
+    rOutStm.WriteOString( "\tcreateSfxPoolItem<" ).WriteOString( rItemName )
+        .WriteOString(">, &typeid(").WriteOString( rItemName ).WriteOString( "), " );
     rOutStm.WriteOString( aAttrCount );
     if( nAttrCount )
     {
-        rOutStm.WriteCharPtr( ", { " );
+        rOutStm.WriteOString( ", { " );
         // write the single attributes
-        rOutStm.WriteCharPtr( aAttrArray.getStr() );
-        rOutStm.WriteCharPtr( " }" );
+        rOutStm.WriteOString( aAttrArray );
+        rOutStm.WriteOString( " }" );
     }
     rOutStm << endl;
-    rOutStm.WriteCharPtr( "};" ) << endl;
-    rOutStm.WriteCharPtr( "#endif" ) << endl << endl;
+    rOutStm.WriteOString( "};" ) << endl;
+    rOutStm.WriteOString( "#endif" ) << endl << endl;
 }
 
 void SvMetaType::WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm )
@@ -300,7 +300,7 @@ bool SvMetaType::ReadMethodArgs( SvIdlDataBase & rBase,
 }
 
 SvMetaTypeString::SvMetaTypeString()
-    : SvMetaType( "String" )
+    : SvMetaType( "String"_ostr )
 {
 }
 
@@ -313,7 +313,7 @@ SvMetaTypeEnum::SvMetaTypeEnum()
 }
 
 SvMetaTypevoid::SvMetaTypevoid()
-    : SvMetaType( "void" )
+    : SvMetaType( "void"_ostr )
 {
 }
 

@@ -22,6 +22,7 @@
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRelationType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <toolkit/awt/vclxaccessiblecomponent.hxx>
@@ -78,17 +79,6 @@ VCLXAccessibleComponent::~VCLXAccessibleComponent()
     DisconnectEvents();
 }
 
-IMPLEMENT_FORWARD_XINTERFACE3( VCLXAccessibleComponent, OAccessibleExtendedComponentHelper, OAccessibleImplementationAccess, VCLXAccessibleComponent_BASE )
-css::uno::Sequence< css::uno::Type > SAL_CALL VCLXAccessibleComponent::getTypes()
-{
-    return ::comphelper::concatSequences(
-        OAccessibleExtendedComponentHelper::getTypes(),
-        OAccessibleImplementationAccess::getTypes(),
-        VCLXAccessibleComponent_BASE::getTypes()
-    );
-}
-IMPLEMENT_GET_IMPLEMENTATION_ID( VCLXAccessibleComponent )
-
 OUString VCLXAccessibleComponent::getImplementationName()
 {
     return "com.sun.star.comp.toolkit.AccessibleWindow";
@@ -143,7 +133,13 @@ uno::Reference< accessibility::XAccessible > VCLXAccessibleComponent::GetChildAc
 
     // MT: Change this later, normally a show/hide event shouldn't have the vcl::Window* in pData.
     vcl::Window* pChildWindow = static_cast<vcl::Window *>(rVclWindowEvent.GetData());
-    if( pChildWindow && GetWindow() == pChildWindow->GetAccessibleParentWindow() )
+    // tdf#141101/tdf#156561 Handle the event if this is either the a11y parent or the
+    // vcl::Window parent, since child events are sent for the vcl::Window hierarchy
+    // (s. Window::CallEventListeners) and e.g. DockingManager does manual partial reparenting
+    // that would cause child events to not be forwarded to the a11y level when
+    // not taking GetParent() into account here
+    if (pChildWindow && (GetWindow() == pChildWindow->GetAccessibleParentWindow()
+                         || GetWindow() == pChildWindow->GetParent()))
         return pChildWindow->GetAccessible( rVclWindowEvent.GetId() == VclEventId::WindowShow );
     else
         return uno::Reference< accessibility::XAccessible > ();
@@ -501,6 +497,7 @@ void VCLXAccessibleComponent::FillAccessibleStateSet( sal_Int64& rStateSet )
 
 MUST BE SET FROM DERIVED CLASSES:
 
+CHECKABLE
 CHECKED
 COLLAPSED
 EXPANDED
@@ -552,8 +549,10 @@ uno::Reference< accessibility::XAccessible > VCLXAccessibleComponent::getAccessi
     return xAcc;
 }
 
-uno::Reference< accessibility::XAccessible > VCLXAccessibleComponent::getVclParent() const
+uno::Reference< accessibility::XAccessible > VCLXAccessibleComponent::getAccessibleParent(  )
 {
+    OExternalLockGuard aGuard( this );
+
     uno::Reference< accessibility::XAccessible > xAcc;
     if ( GetWindow() )
     {
@@ -561,16 +560,6 @@ uno::Reference< accessibility::XAccessible > VCLXAccessibleComponent::getVclPare
         if ( pParent )
             xAcc = pParent->GetAccessible();
     }
-    return xAcc;
-}
-
-uno::Reference< accessibility::XAccessible > VCLXAccessibleComponent::getAccessibleParent(  )
-{
-    OExternalLockGuard aGuard( this );
-
-    // we do _not_ have a foreign-controlled parent -> default to our VCL parent
-    uno::Reference< accessibility::XAccessible > xAcc = getVclParent();
-
     return xAcc;
 }
 
@@ -647,7 +636,11 @@ OUString VCLXAccessibleComponent::getAccessibleName(  )
     {
         aName = GetWindow()->GetAccessibleName();
 #if OSL_DEBUG_LEVEL > 0
-        aName += " (Type = " + OUString::number(static_cast<sal_Int32>(GetWindow()->GetType())) + ")";
+        // append window type to accessible name for debugging purposes
+        // if LIBO_APPEND_WINDOW_TYPE_TO_ACCESSIBLE_NAME environment variable is set
+        static const char* pEnvAppendType = getenv("LIBO_APPEND_WINDOW_TYPE_TO_ACCESSIBLE_NAME");
+        if (pEnvAppendType && OUString::createFromAscii(pEnvAppendType) != u"0")
+            aName += " (Type = " + OUString::number(static_cast<sal_Int32>(GetWindow()->GetType())) + ")";
 #endif
     }
     return aName;
@@ -726,12 +719,12 @@ awt::Rectangle VCLXAccessibleComponent::implGetBounds()
     VclPtr<vcl::Window> pWindow = GetWindow();
     if ( pWindow )
     {
-        tools::Rectangle aRect = pWindow->GetWindowExtentsRelative( nullptr );
+        AbsoluteScreenPixelRectangle aRect = pWindow->GetWindowExtentsAbsolute();
         aBounds = AWTRectangle( aRect );
         vcl::Window* pParent = pWindow->GetAccessibleParentWindow();
         if ( pParent )
         {
-            tools::Rectangle aParentRect = pParent->GetWindowExtentsRelative( nullptr );
+            AbsoluteScreenPixelRectangle aParentRect = pParent->GetWindowExtentsAbsolute();
             awt::Point aParentScreenLoc = AWTPoint( aParentRect.TopLeft() );
             aBounds.X -= aParentScreenLoc.X;
             aBounds.Y -= aParentScreenLoc.Y;
@@ -748,7 +741,7 @@ awt::Point VCLXAccessibleComponent::getLocationOnScreen(  )
     awt::Point aPos;
     if ( GetWindow() )
     {
-        tools::Rectangle aRect = GetWindow()->GetWindowExtentsRelative( nullptr );
+        AbsoluteScreenPixelRectangle aRect = GetWindow()->GetWindowExtentsAbsolute();
         aPos.X = aRect.Left();
         aPos.Y = aRect.Top();
     }

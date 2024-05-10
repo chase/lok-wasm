@@ -30,7 +30,7 @@ class Outliner;
 
 //  SvxOutlinerForwarder - SvxTextForwarder for Outliner
 
-class EDITENG_DLLPUBLIC SvxOutlinerForwarder final : public SvxTextForwarder
+class EDITENG_DLLPUBLIC SvxOutlinerForwarder : public SvxTextForwarder
 {
 private:
     Outliner&           rOutliner;
@@ -63,6 +63,9 @@ public:
     virtual void        RemoveAttribs( const ESelection& rSelection ) override;
     virtual void        GetPortions( sal_Int32 nPara, std::vector<sal_Int32>& rList ) const override;
 
+    virtual OUString    GetStyleSheet(sal_Int32 nPara) const override;
+    virtual void        SetStyleSheet(sal_Int32 nPara, const OUString& rStyleName) override;
+
     virtual SfxItemState    GetItemState( const ESelection& rSel, sal_uInt16 nWhich ) const override;
     virtual SfxItemState    GetItemState( sal_Int32 nPara, sal_uInt16 nWhich ) const override;
 
@@ -73,7 +76,7 @@ public:
 
     virtual SfxItemPool* GetPool() const override;
 
-    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor ) override;
+    virtual OUString    CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle ) override;
     virtual void        FieldClicked( const SvxFieldItem& rField ) override;
 
     virtual bool        IsValid() const override;

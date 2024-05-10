@@ -360,7 +360,7 @@ sal_Int32 Outliner::GetBulletsNumberingStatus() const
 
 std::optional<OutlinerParaObject> Outliner::CreateParaObject( sal_Int32 nStartPara, sal_Int32 nCount ) const
 {
-    if ( static_cast<sal_uLong>(nStartPara) + nCount >
+    if ( static_cast<sal_uInt64>(nStartPara) + nCount >
             o3tl::make_unsigned(pParaList->GetParagraphCount()) )
         nCount = pParaList->GetParagraphCount() - nStartPara;
 
@@ -634,7 +634,7 @@ void Outliner::AddText( const OutlinerParaObject& rPObj, bool bAppend )
     pEditEngine->SetUpdateLayout( bUpdate );
 }
 
-OUString Outliner::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor )
+OUString Outliner::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle )
 {
     if ( !aCalcFieldValueHdl.IsSet() )
         return OUString( ' ' );
@@ -648,6 +648,11 @@ OUString Outliner::CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, 
     if ( aFldInfo.GetTextColor() )
     {
         rpTxtColor = *aFldInfo.GetTextColor();
+    }
+
+    if ( aFldInfo.GetFontLineStyle() )
+    {
+        rpFldLineStyle = *aFldInfo.GetFontLineStyle();
     }
 
     if (aFldInfo.GetFieldColor())
@@ -840,12 +845,10 @@ vcl::Font Outliner::ImpCalcBulletFont( sal_Int32 nPara ) const
     }
 
     // Use original scale...
-    double nStretchY = 100.0;
-    getGlobalScale(o3tl::temporary(double()), nStretchY, o3tl::temporary(double()), o3tl::temporary(double()));
 
-    double fScale = pFmt->GetBulletRelSize() * nStretchY / 100.0;
+    double fFontScaleY = pFmt->GetBulletRelSize() * (getScalingParameters().fFontY / 100.0);
     double fScaledLineHeight = aStdFont.GetFontSize().Height();
-    fScaledLineHeight *= fScale * 10;
+    fScaledLineHeight *= fFontScaleY * 10;
     fScaledLineHeight /= 1000.0;
 
     aBulletFont.SetAlignment( ALIGN_BOTTOM );
@@ -888,12 +891,10 @@ void Outliner::PaintBullet(sal_Int32 nPara, const Point& rStartPos, const Point&
 
     tools::Rectangle aBulletArea( ImpCalcBulletArea( nPara, true, false ) );
 
-    double nStretchX = 100.0;
-    getGlobalScale(o3tl::temporary(double()), o3tl::temporary(double()),
-                   nStretchX, o3tl::temporary(double()));
+    double fSpacingFactorX = getScalingParameters().fSpacingX / 100.0;
 
-    tools::Long nStretchBulletX = basegfx::fround(double(aBulletArea.Left()) * nStretchX / 100.0);
-    tools::Long nStretchBulletWidth = basegfx::fround(double(aBulletArea.GetWidth()) * nStretchX / 100.0);
+    tools::Long nStretchBulletX = basegfx::fround(double(aBulletArea.Left()) * fSpacingFactorX);
+    tools::Long nStretchBulletWidth = basegfx::fround(double(aBulletArea.GetWidth()) * fSpacingFactorX);
     aBulletArea = tools::Rectangle(Point(nStretchBulletX, aBulletArea.Top()),
                              Size(nStretchBulletWidth, aBulletArea.GetHeight()) );
 
@@ -940,18 +941,8 @@ void Outliner::PaintBullet(sal_Int32 nPara, const Point& rStartPos, const Point&
             {
                 // Both TopLeft and bottom left is not quite correct,
                 // since in EditEngine baseline ...
-                double nRealOrientation = toRadians(nOrientation);
-                double nCos = cos( nRealOrientation );
-                double nSin = sin( nRealOrientation );
-                Point aRotatedPos;
-                // Translation...
-                aTextPos -= rOrigin;
-                // Rotation...
-                aRotatedPos.setX(static_cast<tools::Long>(nCos*aTextPos.X() + nSin*aTextPos.Y()) );
-                aRotatedPos.setY(static_cast<tools::Long>(- (nSin*aTextPos.X() - nCos*aTextPos.Y())) );
-                aTextPos = aRotatedPos;
-                // Translation...
-                aTextPos += rOrigin;
+                rOrigin.RotateAround(aTextPos, nOrientation);
+
                 vcl::Font aRotatedFont( aBulletFont );
                 aRotatedFont.SetOrientation( nOrientation );
                 rOutDev.SetFont( aRotatedFont );
@@ -1147,12 +1138,12 @@ void Outliner::ImpFilterIndents( sal_Int32 nFirstPara, sal_Int32 nLastPara )
     pEditEngine->SetUpdateLayout( bUpdate );
 }
 
-SfxUndoManager& Outliner::GetUndoManager()
+EditUndoManager& Outliner::GetUndoManager()
 {
     return pEditEngine->GetUndoManager();
 }
 
-SfxUndoManager* Outliner::SetUndoManager(SfxUndoManager* pNew)
+EditUndoManager* Outliner::SetUndoManager(EditUndoManager* pNew)
 {
     return pEditEngine->SetUndoManager(pNew);
 }
@@ -1654,8 +1645,8 @@ void Outliner::StripPortions()
 }
 
 void Outliner::DrawingText( const Point& rStartPos, const OUString& rText, sal_Int32 nTextStart,
-                            sal_Int32 nTextLen, o3tl::span<const sal_Int32> pDXArray,
-                            o3tl::span<const sal_Bool> pKashidaArray, const SvxFont& rFont,
+                            sal_Int32 nTextLen, std::span<const sal_Int32> pDXArray,
+                            std::span<const sal_Bool> pKashidaArray, const SvxFont& rFont,
                             sal_Int32 nPara, sal_uInt8 nRightToLeft,
                             const EEngineData::WrongSpellVector* pWrongSpellVector,
                             const SvxFieldData* pFieldData,

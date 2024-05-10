@@ -227,7 +227,7 @@ namespace dbaui
         void            appendUndoAction(const OUString& _rOldValue,std::u16string_view _rNewValue,sal_Int32 _nRow);
         OTableFields&   getFields() const;
         static void     enableControl(const OTableFieldDescRef& _rEntry,Window* _pControl);
-        void            setTextCellContext(const OTableFieldDescRef& _rEntry,const OUString& _sText,const OString& _sHelpId);
+        void            setTextCellContext(const OTableFieldDescRef& _rEntry,const OUString& _sText,const OUString& _sHelpId);
         void            invalidateUndoRedo();
         OTableFieldDescRef getEntry(OTableFields::size_type _nPos);
 
@@ -306,7 +306,7 @@ namespace dbaui
             @param  _bListAction
                 When <TRUE/> a list action will be created.
         */
-        void            clearEntryFunctionField(const OUString& _sFieldName,OTableFieldDescRef const & _pEntry, bool& _bListAction,sal_uInt16 _nColumnId);
+        void            clearEntryFunctionField(std::u16string_view _sFieldName,OTableFieldDescRef const & _pEntry, bool& _bListAction,sal_uInt16 _nColumnId);
 
         /** remove or insert the necessary function types
             @param  _pEntry

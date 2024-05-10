@@ -82,11 +82,6 @@ public class RenderControllerThread extends Thread implements LayerView.Listener
     }
 
     @Override
-    public void compositionResumeRequested(int width, int height) {
-
-    }
-
-    @Override
     public void surfaceChanged(int width, int height) {
         this.width = width;
         this.height = height;
@@ -115,7 +110,7 @@ public class RenderControllerThread extends Thread implements LayerView.Listener
         }
         GLSurfaceView.Renderer renderer = getRenderer();
         if (renderer != null) {
-            renderer.onDrawFrame((GL10) controller.getGL());
+            renderer.onDrawFrame(controller.getGL());
         }
         controller.swapBuffers();
     }
@@ -123,7 +118,7 @@ public class RenderControllerThread extends Thread implements LayerView.Listener
     private void doSizeChanged() {
         GLSurfaceView.Renderer renderer = getRenderer();
         if (renderer != null) {
-            renderer.onSurfaceChanged((GL10) controller.getGL(), width, height);
+            renderer.onSurfaceChanged(controller.getGL(), width, height);
         }
     }
 

@@ -181,7 +181,7 @@ OString ImagePreparer::prepareNotes( sal_uInt32 aSlideNumber )
     OUStringBuffer aRet;
 
     if ( !xController->isRunning() )
-        return "";
+        return ""_ostr;
 
     uno::Reference<css::drawing::XDrawPage> aNotesPage;
     uno::Reference< drawing::XDrawPage > xSourceDoc(
@@ -192,10 +192,10 @@ OString ImagePreparer::prepareNotes( sal_uInt32 aSlideNumber )
     if (xPresentationPage.is())
         aNotesPage = xPresentationPage->getNotesPage();
     else
-        return "";
+        return ""_ostr;
 
-    static constexpr OUStringLiteral sNotesShapeName (
-        u"com.sun.star.presentation.NotesShape" );
+    static constexpr OUString sNotesShapeName (
+        u"com.sun.star.presentation.NotesShape"_ustr );
     static constexpr OUStringLiteral sTextShapeName (
         u"com.sun.star.drawing.TextShape" );
 
@@ -215,8 +215,7 @@ OString ImagePreparer::prepareNotes( sal_uInt32 aSlideNumber )
                 uno::Reference<text::XTextRange> xText (xServiceName, UNO_QUERY);
                 if (xText.is())
                 {
-                    aRet.append(xText->getString());
-                    aRet.append("<br/>");
+                    aRet.append(xText->getString() + "<br/>");
                 }
             }
             else
@@ -232,8 +231,7 @@ OString ImagePreparer::prepareNotes( sal_uInt32 aSlideNumber )
                             aNotesPage->getByIndex(nIndex), UNO_QUERY);
                         if (xText.is())
                         {
-                            aRet.append(xText->getString());
-                            aRet.append("<br/>");
+                            aRet.append(xText->getString() + "<br/>");
                         }
                     }
                 }

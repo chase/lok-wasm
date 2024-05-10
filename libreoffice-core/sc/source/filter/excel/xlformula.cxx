@@ -593,6 +593,22 @@ const XclFunctionInfo saFuncTable_2016[] =
     EXC_FUNCENTRY_V_VR(  ocMaxIfs_MS,           3,  MX, 0,  "MAXIFS" )
 };
 
+
+/** Functions new in Excel 2021.
+
+
+    @See sc/source/filter/oox/formulabase.cxx saFuncTable2021 for V,VR,RO,...
+ */
+const XclFunctionInfo saFuncTable_2021[] =
+{
+    EXC_FUNCENTRY_V_VR(  ocXLookup,    3,  6,  0,  "XLOOKUP" ),
+    EXC_FUNCENTRY_V_VR(  ocXMatch,     2,  4,  0,  "XMATCH" ),
+    EXC_FUNCENTRY_V_VR(  ocFilter,     2,  3,  0,  "FILTER" ),
+    EXC_FUNCENTRY_V_VR(  ocSort,       1,  4,  0,  "SORT" ),
+    EXC_FUNCENTRY_V_VR(  ocSortBy,     2,  3,  0,  "SORTBY" )
+};
+
+
 #define EXC_FUNCENTRY_ODF( opcode, minparam, maxparam, flags, asciiname ) \
     { opcode, NOID, minparam,     maxparam,     V, { VR },       EXC_FUNCFLAG_IMPORTONLY|(flags), EXC_FUNCNAME_ODF( asciiname ) }, \
     { opcode,  255, (minparam)+1, (maxparam)+1, V, { RO_E, RO }, EXC_FUNCFLAG_EXPORTONLY|(flags), EXC_FUNCNAME_ODF( asciiname ) }
@@ -656,21 +672,22 @@ XclFunctionProvider::XclFunctionProvider( const XclRoot& rRoot )
         from earlier tables. */
     XclBiff eBiff = rRoot.GetBiff();
     if( eBiff >= EXC_BIFF2 )
-        (this->*pFillFunc)(saFuncTable_2, saFuncTable_2 + SAL_N_ELEMENTS(saFuncTable_2));
+        (this->*pFillFunc)(saFuncTable_2, std::end(saFuncTable_2));
     if( eBiff >= EXC_BIFF3 )
-        (this->*pFillFunc)(saFuncTable_3, saFuncTable_3 + SAL_N_ELEMENTS(saFuncTable_3));
+        (this->*pFillFunc)(saFuncTable_3, std::end(saFuncTable_3));
     if( eBiff >= EXC_BIFF4 )
-        (this->*pFillFunc)(saFuncTable_4, saFuncTable_4 + SAL_N_ELEMENTS(saFuncTable_4));
+        (this->*pFillFunc)(saFuncTable_4, std::end(saFuncTable_4));
     if( eBiff >= EXC_BIFF5 )
-        (this->*pFillFunc)(saFuncTable_5, saFuncTable_5 + SAL_N_ELEMENTS(saFuncTable_5));
+        (this->*pFillFunc)(saFuncTable_5, std::end(saFuncTable_5));
     if( eBiff >= EXC_BIFF8 )
-        (this->*pFillFunc)(saFuncTable_8, saFuncTable_8 + SAL_N_ELEMENTS(saFuncTable_8));
-    (this->*pFillFunc)(saFuncTable_Oox, saFuncTable_Oox + SAL_N_ELEMENTS(saFuncTable_Oox));
-    (this->*pFillFunc)(saFuncTable_2010, saFuncTable_2010 + SAL_N_ELEMENTS(saFuncTable_2010));
-    (this->*pFillFunc)(saFuncTable_2013, saFuncTable_2013 + SAL_N_ELEMENTS(saFuncTable_2013));
-    (this->*pFillFunc)(saFuncTable_2016, saFuncTable_2016 + SAL_N_ELEMENTS(saFuncTable_2016));
-    (this->*pFillFunc)(saFuncTable_Odf, saFuncTable_Odf + SAL_N_ELEMENTS(saFuncTable_Odf));
-    (this->*pFillFunc)(saFuncTable_OOoLO, saFuncTable_OOoLO + SAL_N_ELEMENTS(saFuncTable_OOoLO));
+        (this->*pFillFunc)(saFuncTable_8, std::end(saFuncTable_8));
+    (this->*pFillFunc)(saFuncTable_Oox, std::end(saFuncTable_Oox));
+    (this->*pFillFunc)(saFuncTable_2010, std::end(saFuncTable_2010));
+    (this->*pFillFunc)(saFuncTable_2013, std::end(saFuncTable_2013));
+    (this->*pFillFunc)(saFuncTable_2016, std::end(saFuncTable_2016));
+    (this->*pFillFunc)(saFuncTable_2021, std::end(saFuncTable_2021));
+    (this->*pFillFunc)(saFuncTable_Odf, std::end(saFuncTable_Odf));
+    (this->*pFillFunc)(saFuncTable_OOoLO, std::end(saFuncTable_OOoLO));
 }
 
 const XclFunctionInfo* XclFunctionProvider::GetFuncInfoFromXclFunc( sal_uInt16 nXclFunc ) const

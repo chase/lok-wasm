@@ -44,6 +44,17 @@
 #include <unordered_map>
 #include <vector>
 
+#define TAB_OFFSET          3
+/// Space to the left and right of the tabitem
+#define TAB_ITEM_OFFSET_X     10
+/// Space to the top and bottom of the tabitem
+#define TAB_ITEM_OFFSET_Y     3
+#define TAB_EXTRASPACE_X    6
+#define TAB_BORDER_LEFT     1
+#define TAB_BORDER_TOP      1
+#define TAB_BORDER_RIGHT    2
+#define TAB_BORDER_BOTTOM   2
+
 class ImplTabItem final
 {
     sal_uInt16 m_nId;
@@ -55,7 +66,7 @@ public:
     OUString            maHelpText;
     OUString            maAccessibleName;
     OUString            maAccessibleDescription;
-    OString             maTabName;
+    OUString             maTabName;
     tools::Rectangle    maRect;
     sal_uInt16          mnLine;
     bool                mbFullVisible;
@@ -79,8 +90,6 @@ ImplTabItem::ImplTabItem(sal_uInt16 nId)
 
 struct ImplTabCtrlData
 {
-    std::unordered_map< int, int >        maLayoutPageIdToLine;
-    std::unordered_map< int, int >        maLayoutLineToPageId;
     std::vector< ImplTabItem >      maItemList;
     VclPtr<ListBox>                 mpListBox;
 };
@@ -176,16 +185,6 @@ void TabControl::ImplInitSettings( bool bBackground )
     }
 }
 
-void TabControl::ImplFreeLayoutData()
-{
-    if( HasLayoutData() )
-    {
-        ImplClearLayoutData();
-        mpTabCtrlData->maLayoutPageIdToLine.clear();
-        mpTabCtrlData->maLayoutLineToPageId.clear();
-    }
-}
-
 TabControl::TabControl( vcl::Window* pParent, WinBits nStyle ) :
     Control( WindowType::TABCONTROL )
 {
@@ -203,8 +202,6 @@ void TabControl::dispose()
     Window *pParent = GetParent();
     if (pParent && pParent->IsDialog())
         GetParent()->RemoveChildEventListener( LINK( this, TabControl, ImplWindowEventListener ) );
-
-    ImplFreeLayoutData();
 
     // delete TabCtrl data
     if (mpTabCtrlData)
@@ -239,14 +236,14 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, tools::Long nMaxWidth )
     if( aImageSize.Height() > aSize.Height() )
         aSize.setHeight( aImageSize.Height() );
 
-    aSize.AdjustWidth(TAB_TABOFFSET_X*2 );
-    aSize.AdjustHeight(TAB_TABOFFSET_Y*2 );
+    aSize.AdjustWidth(TAB_ITEM_OFFSET_X*2 );
+    aSize.AdjustHeight(TAB_ITEM_OFFSET_Y*2 );
 
     tools::Rectangle aCtrlRegion( Point( 0, 0 ), aSize );
     tools::Rectangle aBoundingRgn, aContentRgn;
-    const TabitemValue aControlValue(tools::Rectangle(TAB_TABOFFSET_X, TAB_TABOFFSET_Y,
-                                               aSize.Width() - TAB_TABOFFSET_X * 2,
-                                               aSize.Height() - TAB_TABOFFSET_Y * 2));
+    const TabitemValue aControlValue(tools::Rectangle(TAB_ITEM_OFFSET_X, TAB_ITEM_OFFSET_Y,
+                                               aSize.Width() - TAB_ITEM_OFFSET_X * 2,
+                                               aSize.Height() - TAB_ITEM_OFFSET_Y * 2));
     if(GetNativeControlRegion( ControlType::TabItem, ControlPart::Entire, aCtrlRegion,
                                            ControlState::ENABLED, aControlValue,
                                            aBoundingRgn, aContentRgn ) )
@@ -270,7 +267,7 @@ Size TabControl::ImplGetItemSize( ImplTabItem* pItem, tools::Long nMaxWidth )
                 pItem->maFormatText = pItem->maFormatText.replaceAt( pItem->maFormatText.getLength()-aAppendStr.getLength()-1, 1, u"" );
             aSize.setWidth( GetOutDev()->GetCtrlTextWidth( pItem->maFormatText ) );
             aSize.AdjustWidth(aImageSize.Width() );
-            aSize.AdjustWidth(TAB_TABOFFSET_X*2 );
+            aSize.AdjustWidth(TAB_ITEM_OFFSET_X*2 );
         }
         while ( (aSize.Width()+4 >= nMaxWidth) && (pItem->maFormatText.getLength() > aAppendStr.getLength()) );
         if ( aSize.Width()+4 >= nMaxWidth )
@@ -622,8 +619,6 @@ tools::Rectangle TabControl::ImplGetTabRect(const ImplTabItem* pItem, tools::Lon
 
 void TabControl::ImplChangeTabPage( sal_uInt16 nId, sal_uInt16 nOldId )
 {
-    ImplFreeLayoutData();
-
     ImplTabItem*    pOldItem = ImplGetItem( nOldId );
     ImplTabItem*    pItem = ImplGetItem( nId );
     TabPage*        pOldPage = pOldItem ? pOldItem->mpTabPage.get() : nullptr;
@@ -664,7 +659,7 @@ void TabControl::ImplChangeTabPage( sal_uInt16 nId, sal_uInt16 nOldId )
     if ( pOldPage )
     {
         if ( mbRestoreHelpId )
-            pCtrlParent->SetHelpId( OString() );
+            pCtrlParent->SetHelpId({});
     }
 
     if ( pPage )
@@ -879,10 +874,10 @@ void TabControl::ImplDrawItem(vcl::RenderContext& rRenderContext, ImplTabItem co
     bNativeOK = rRenderContext.IsNativeControlSupported(ControlType::TabItem, ControlPart::Entire);
     if ( bNativeOK )
     {
-        TabitemValue tiValue(tools::Rectangle(pItem->maRect.Left() + TAB_TABOFFSET_X,
-                                       pItem->maRect.Top() + TAB_TABOFFSET_Y,
-                                       pItem->maRect.Right() - TAB_TABOFFSET_X,
-                                       pItem->maRect.Bottom() - TAB_TABOFFSET_Y));
+        TabitemValue tiValue(tools::Rectangle(pItem->maRect.Left() + TAB_ITEM_OFFSET_X,
+                                       pItem->maRect.Top() + TAB_ITEM_OFFSET_Y,
+                                       pItem->maRect.Right() - TAB_ITEM_OFFSET_X,
+                                       pItem->maRect.Bottom() - TAB_ITEM_OFFSET_Y));
         if (pItem->maRect.Left() < 5)
             tiValue.mnAlignment |= TabitemFlags::LeftAligned;
         if (pItem->maRect.Right() > mnLastWidth - 5)
@@ -1265,8 +1260,6 @@ void TabControl::Paint( vcl::RenderContext& rRenderContext, const tools::Rectang
 
 void TabControl::setAllocation(const Size &rAllocation)
 {
-    ImplFreeLayoutData();
-
     if ( !IsReallyShown() )
         return;
 
@@ -1485,7 +1478,7 @@ void TabControl::Command( const CommandEvent& rCEvt )
                 aMenu->InsertItem(item.id(), item.maText, MenuItemBits::CHECKABLE | MenuItemBits::RADIOCHECK);
                 if (item.id() == mnCurPageId)
                     aMenu->CheckItem(item.id());
-                aMenu->SetHelpId(item.id(), OString());
+                aMenu->SetHelpId(item.id(), {});
             }
 
             sal_uInt16 nId = aMenu->Execute( this, aMenuPos );
@@ -1634,8 +1627,6 @@ bool TabControl::DeactivatePage()
 
 void TabControl::SetTabPageSizePixel( const Size& rSize )
 {
-    ImplFreeLayoutData();
-
     Size aNewSize( rSize );
     aNewSize.AdjustWidth(TAB_OFFSET*2 );
     tools::Rectangle aRect = ImplGetTabRect( TAB_PAGERECT,
@@ -1687,7 +1678,6 @@ void TabControl::InsertPage( sal_uInt16 nPageId, const OUString& rText,
     if ( IsUpdateMode() )
         Invalidate();
 
-    ImplFreeLayoutData();
     if( mpTabCtrlData->mpListBox ) // reposition/resize listbox
         Resize();
 
@@ -1734,8 +1724,6 @@ void TabControl::RemovePage( sal_uInt16 nPageId )
     mbFormat = true;
     if ( IsUpdateMode() )
         Invalidate();
-
-    ImplFreeLayoutData();
 
     CallEventListeners( VclEventId::TabpageRemoved, reinterpret_cast<void*>(nPageId) );
 }
@@ -1820,7 +1808,7 @@ sal_uInt16 TabControl::GetPageId( const Point& rPos ) const
     return (it != rList.end()) ? it->id() : 0;
 }
 
-sal_uInt16 TabControl::GetPageId( const OString& rName ) const
+sal_uInt16 TabControl::GetPageId( const OUString& rName ) const
 {
     const auto &rList = mpTabCtrlData->maItemList;
     const auto it = std::find_if(rList.begin(), rList.end(), [&rName](const auto &item) {
@@ -1874,8 +1862,6 @@ void TabControl::SelectTabPage( sal_uInt16 nPageId )
 {
     if ( !nPageId || (nPageId == mnCurPageId) )
         return;
-
-    ImplFreeLayoutData();
 
     CallEventListeners( VclEventId::TabpageDeactivate, reinterpret_cast<void*>(mnCurPageId) );
     if ( DeactivatePage() )
@@ -1945,7 +1931,6 @@ void TabControl::SetPageText( sal_uInt16 nPageId, const OUString& rText )
     }
     if ( IsUpdateMode() )
         Invalidate();
-    ImplFreeLayoutData();
     CallEventListeners( VclEventId::TabpagePageTextChanged, reinterpret_cast<void*>(nPageId) );
 }
 
@@ -2006,7 +1991,7 @@ OUString TabControl::GetAccessibleDescription( sal_uInt16 nPageId ) const
     return pItem->maHelpText;
 }
 
-void TabControl::SetPageName( sal_uInt16 nPageId, const OString& rName ) const
+void TabControl::SetPageName( sal_uInt16 nPageId, const OUString& rName ) const
 {
     ImplTabItem* pItem = ImplGetItem( nPageId );
 
@@ -2014,14 +1999,14 @@ void TabControl::SetPageName( sal_uInt16 nPageId, const OString& rName ) const
         pItem->maTabName = rName;
 }
 
-OString TabControl::GetPageName( sal_uInt16 nPageId ) const
+OUString TabControl::GetPageName( sal_uInt16 nPageId ) const
 {
     ImplTabItem* pItem = ImplGetItem( nPageId );
 
     if (pItem)
         return pItem->maTabName;
 
-    return OString();
+    return {};
 }
 
 void TabControl::SetPageImage( sal_uInt16 i_nPageId, const Image& i_rImage )
@@ -2035,65 +2020,6 @@ void TabControl::SetPageImage( sal_uInt16 i_nPageId, const Image& i_rImage )
         if ( IsUpdateMode() )
             Invalidate();
     }
-}
-
-tools::Rectangle TabControl::GetCharacterBounds( sal_uInt16 nPageId, tools::Long nIndex ) const
-{
-    tools::Rectangle aRet;
-
-    if( !HasLayoutData() || mpTabCtrlData->maLayoutPageIdToLine.empty() )
-        FillLayoutData();
-
-    if( HasLayoutData() )
-    {
-        std::unordered_map< int, int >::const_iterator it = mpTabCtrlData->maLayoutPageIdToLine.find( static_cast<int>(nPageId) );
-        if( it != mpTabCtrlData->maLayoutPageIdToLine.end() )
-        {
-            Pair aPair = mxLayoutData->GetLineStartEnd( it->second );
-            if( (aPair.B() - aPair.A()) >= nIndex )
-                aRet = mxLayoutData->GetCharacterBounds( aPair.A() + nIndex );
-        }
-    }
-
-    return aRet;
-}
-
-tools::Long TabControl::GetIndexForPoint( const Point& rPoint, sal_uInt16& rPageId ) const
-{
-    tools::Long nRet = -1;
-
-    if( !HasLayoutData() || mpTabCtrlData->maLayoutPageIdToLine.empty() )
-        FillLayoutData();
-
-    if( HasLayoutData() )
-    {
-        int nIndex = mxLayoutData->GetIndexForPoint( rPoint );
-        if( nIndex != -1 )
-        {
-            // what line (->pageid) is this index in ?
-            int nLines = mxLayoutData->GetLineCount();
-            int nLine = -1;
-            while( ++nLine < nLines )
-            {
-                Pair aPair = mxLayoutData->GetLineStartEnd( nLine );
-                if( aPair.A() <= nIndex && aPair.B() >= nIndex )
-                {
-                    nRet = nIndex - aPair.A();
-                    rPageId = static_cast<sal_uInt16>(mpTabCtrlData->maLayoutLineToPageId[ nLine ]);
-                    break;
-                }
-            }
-        }
-    }
-
-    return nRet;
-}
-
-void TabControl::FillLayoutData() const
-{
-    mpTabCtrlData->maLayoutLineToPageId.clear();
-    mpTabCtrlData->maLayoutPageIdToLine.clear();
-    const_cast<TabControl*>(this)->Invalidate();
 }
 
 tools::Rectangle TabControl::GetTabBounds( sal_uInt16 nPageId ) const
@@ -2203,7 +2129,7 @@ std::vector<sal_uInt16> TabControl::GetPageIDs() const
     return aIDs;
 }
 
-bool TabControl::set_property(const OString &rKey, const OUString &rValue)
+bool TabControl::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "show-tabs")
     {
@@ -2285,27 +2211,37 @@ void NotebookbarTabControlBase::SetContext( vcl::EnumContext::Context eContext )
 
     bool bHandled = false;
 
+    TabPage* pPage = GetTabPage(mnCurPageId);
+    // Try to stay on the current tab (unless the new context has a special tab)
+    if (pPage && eLastContext != vcl::EnumContext::Context::Any
+        && pPage->HasContext(vcl::EnumContext::Context::Any) && pPage->IsEnabled())
+    {
+        bHandled = true;
+    }
+
     for (int nChild = 0; nChild < GetPageCount(); ++nChild)
     {
         sal_uInt16 nPageId = TabControl::GetPageId(nChild);
-        TabPage* pPage = GetTabPage(nPageId);
+        pPage = GetTabPage(nPageId);
 
-        if (pPage)
+        if (!pPage)
+            continue;
+
+        SetPageVisible(nPageId, pPage->HasContext(eContext) || pPage->HasContext(vcl::EnumContext::Context::Any));
+
+        if (eContext != vcl::EnumContext::Context::Any
+            && (!bHandled || !pPage->HasContext(vcl::EnumContext::Context::Any))
+            && pPage->HasContext(eContext))
         {
-            SetPageVisible(nPageId, pPage->HasContext(eContext) || pPage->HasContext(vcl::EnumContext::Context::Any));
+            SetCurPageId(nPageId);
+            bHandled = true;
+            bLastContextWasSupported = true;
+        }
 
-            if (!bHandled && bLastContextWasSupported
-                && pPage->HasContext(vcl::EnumContext::Context::Default))
-            {
-                SetCurPageId(nPageId);
-            }
-
-            if (pPage->HasContext(eContext) && eContext != vcl::EnumContext::Context::Any)
-            {
-                SetCurPageId(nPageId);
-                bHandled = true;
-                bLastContextWasSupported = true;
-            }
+        if (!bHandled && bLastContextWasSupported
+            && pPage->HasContext(vcl::EnumContext::Context::Default))
+        {
+            SetCurPageId(nPageId);
         }
     }
 

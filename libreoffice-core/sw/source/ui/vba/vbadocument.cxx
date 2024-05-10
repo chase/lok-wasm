@@ -220,17 +220,34 @@ SwVbaDocument::Bookmarks( const uno::Any& rIndex )
     return xBookmarksVba->Item( rIndex, uno::Any() );
 }
 
-uno::Any SAL_CALL SwVbaDocument::ContentControls(const uno::Any& index)
+uno::Any SwVbaDocument::ContentControls(const uno::Any& index)
 {
     uno::Reference<XCollection> xContentControls(
         new SwVbaContentControls(this, mxContext, mxTextDocument, "", ""));
     if (index.hasValue())
-        return xContentControls->Item(index, uno::Any());
+    {
+        try
+        {
+            return xContentControls->Item(index, uno::Any());
+        }
+        catch (lang::IndexOutOfBoundsException&)
+        {
+            // Hack: Instead of an index, it might be a float that was mistakenly treated as a long,
+            // which can happen with any valid positive integer when specified as a double like
+            // ActiveDocument.ContentControls(1841581653#).
+            if (index.getValueTypeClass() == css::uno::TypeClass_LONG)
+            {
+                sal_Int32 nLong(0);
+                index >>= nLong;
+                return xContentControls->Item(uno::Any(static_cast<double>(nLong)), uno::Any());
+            }
+        }
+    }
 
     return uno::Any(xContentControls);
 }
 
-uno::Any SAL_CALL SwVbaDocument::SelectContentControlsByTag(const uno::Any& index)
+uno::Any SwVbaDocument::SelectContentControlsByTag(const uno::Any& index)
 {
     OUString sTag;
     index >>= sTag;
@@ -238,7 +255,7 @@ uno::Any SAL_CALL SwVbaDocument::SelectContentControlsByTag(const uno::Any& inde
                         new SwVbaContentControls(this, mxContext, mxTextDocument, sTag, "")));
 }
 
-uno::Any SAL_CALL SwVbaDocument::SelectContentControlsByTitle(const uno::Any& index)
+uno::Any SwVbaDocument::SelectContentControlsByTitle(const uno::Any& index)
 {
     OUString sTitle;
     index >>= sTitle;
@@ -248,7 +265,7 @@ uno::Any SAL_CALL SwVbaDocument::SelectContentControlsByTitle(const uno::Any& in
 
 uno::Reference<word::XWindow> SwVbaDocument::getActiveWindow()
 {
-    // copied from vbaappliction which has a #FIXME so far can't determine Parent
+    // copied from vbaapplication which has a #FIXME so far can't determine Parent
     return new SwVbaWindow(uno::Reference< XHelperInterface >(), mxContext, mxModel,
                            mxModel->getCurrentController());
 }
@@ -335,7 +352,7 @@ SwVbaDocument::TablesOfContents( const uno::Any& index )
 
 uno::Any SAL_CALL SwVbaDocument::FormFields(const uno::Any& index)
 {
-    uno::Reference<XCollection> xCol(new SwVbaFormFields(this, mxContext, mxModel));
+    uno::Reference<XCollection> xCol(new SwVbaFormFields(this, mxContext, mxTextDocument));
     if (index.hasValue())
         return xCol->Item(index, uno::Any());
     return uno::Any(xCol);

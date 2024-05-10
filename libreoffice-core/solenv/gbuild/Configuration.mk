@@ -64,7 +64,6 @@ endef
 gb_Configuration_LANGS := en-US $(filter-out en-US,$(gb_WITH_LANG))
 
 gb_XcsTarget_XSLT_SchemaVal := $(SRCDIR)/officecfg/util/schema_val.xsl
-gb_XcsTarget_XSLT_Sanity := $(SRCDIR)/officecfg/util/sanity.xsl
 gb_XcsTarget_XSLT_SchemaTrim := $(SRCDIR)/officecfg/util/schema_trim.xsl
 gb_XcsTarget_DTD_Schema := $(SRCDIR)/officecfg/registry/component-schema.dtd
 
@@ -79,10 +78,6 @@ $(call gb_Helper_abbreviate_dirs,\
 		$(gb_XcsTarget_XSLT_SchemaVal) \
 		$(3) && \
 	$(gb_Configuration_XSLTCOMMAND) --nonet \
-		--noout \
-		$(gb_XcsTarget_XSLT_Sanity) \
-		$(3) && \
-	$(gb_Configuration_XSLTCOMMAND) --nonet \
 		-o $(1) \
 		--stringparam LIBO_SHARE_FOLDER $(LIBO_SHARE_FOLDER) \
 		--stringparam LIBO_SHARE_HELP_FOLDER $(LIBO_SHARE_HELP_FOLDER) \
@@ -91,7 +86,7 @@ $(call gb_Helper_abbreviate_dirs,\
 endef
 
 $(call gb_XcsTarget_get_target,%) : \
-	    $(gb_XcsTarget_XSLT_SchemaVal) $(gb_XcsTarget_XSLT_Sanity) \
+	    $(gb_XcsTarget_XSLT_SchemaVal) \
 		$(gb_XcsTarget_XSLT_SchemaTrim) $(gb_XcsTarget_DTD_Schema) \
 		| $(gb_Configuration_XSLTCOMMAND_DEPS)
 	$(call gb_Output_announce,$*,$(true),XCS,1)
@@ -232,12 +227,12 @@ rm -rf $${MERGEINPUT}
 endef
 
 $(call gb_XcuMergeTarget_get_target,%) : $(gb_XcuMergeTarget_CFGEXDEPS)
+	$(call gb_Output_announce,$*,$(true),XCX,1)
+	$(call gb_Trace_StartRange,$*,XCX)
 	$(if $(filter $(words $(POFILES)),$(words $(wildcard $(POFILES)))),\
-		$(call gb_Output_announce,$*,$(true),XCX,1) \
-		$(call gb_Trace_StartRange,$*,XCX) \
 		$(call gb_XcuMergeTarget__command,$@,$*,$(filter %.xcu,$^)),\
-		$(call gb_Trace_EndRange,$*,XCX) \
 		mkdir -p $(dir $@) && cp $(filter %.xcu,$^) $@)
+	$(call gb_Trace_EndRange,$*,XCX)
 
 $(call gb_XcuMergeTarget_get_clean_target,%) :
 	$(call gb_Output_announce,$*,$(false),XCX,1)

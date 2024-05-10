@@ -20,8 +20,9 @@
 #include <sal/log.hxx>
 #include <osl/diagnose.h>
 #include <osl/mutex.hxx>
+#include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/weak.hxx>
-#include <cppuhelper/component.hxx>
+#include <cppuhelper/compbase.hxx>
 #include <cppuhelper/factory.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/queryinterface.hxx>
@@ -58,20 +59,25 @@ namespace cppu
 
 namespace {
 
-class OSingleFactoryHelper
-    : public XServiceInfo
-    , public XSingleServiceFactory
-    , public lang::XSingleComponentFactory
-    , public XUnloadingPreference
+class OFactoryComponentHelper
+    : public cppu::BaseMutex
+    , public WeakComponentImplHelper<
+          XServiceInfo,
+          XSingleServiceFactory,
+          lang::XSingleComponentFactory,
+          XUnloadingPreference>
 {
 public:
-    OSingleFactoryHelper(
+    OFactoryComponentHelper(
         const Reference<XMultiServiceFactory > & rServiceManager,
         OUString aImplementationName_,
         ComponentInstantiation pCreateFunction_,
         ComponentFactoryFunc fptr,
-        const Sequence< OUString > * pServiceNames_ )
-        : xSMgr( rServiceManager )
+        const Sequence< OUString > * pServiceNames_,
+        bool bOneInstance_ )
+        : WeakComponentImplHelper( m_aMutex )
+        , bOneInstance( bOneInstance_ )
+        , xSMgr( rServiceManager )
         , pCreateFunction( pCreateFunction_ )
         , m_fptr( fptr )
         , aImplementationName(std::move( aImplementationName_ ))
@@ -80,14 +86,9 @@ public:
                 aServiceNames = *pServiceNames_;
         }
 
-    virtual ~OSingleFactoryHelper();
-
-    // XInterface
-    Any SAL_CALL queryInterface( const Type & rType ) override;
-
     // XSingleServiceFactory
     Reference<XInterface > SAL_CALL createInstance() override;
-    virtual Reference<XInterface > SAL_CALL createInstanceWithArguments(const Sequence<Any>& Arguments) override;
+    Reference<XInterface > SAL_CALL createInstanceWithArguments( const Sequence<Any>& Arguments ) override;
     // XSingleComponentFactory
     virtual Reference< XInterface > SAL_CALL createInstanceWithContext(
         Reference< XComponentContext > const & xContext ) override;
@@ -100,7 +101,27 @@ public:
     sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
     Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
 
+    // XTypeProvider
+    virtual Sequence< Type > SAL_CALL getTypes() override;
+
+    // XUnloadingPreference
+    virtual sal_Bool SAL_CALL releaseOnNotification() override;
+
+    // WeakComponentImplHelper
+    void SAL_CALL disposing() override;
+
+private:
+    css::uno::Reference<css::uno::XInterface> createInstanceWithArgumentsEveryTime(
+        css::uno::Sequence<css::uno::Any> const & rArguments,
+        css::uno::Reference<css::uno::XComponentContext> const & xContext);
+
+    Reference<XInterface >  xTheInstance;
+    bool                bOneInstance;
 protected:
+    // needed for implementing XUnloadingPreference in inheriting classes
+    bool isOneInstance() const {return bOneInstance;}
+    bool isInstance() const {return xTheInstance.is();}
+
     /**
      * Create an instance specified by the factory. The one instance logic is implemented
      * in the createInstance and createInstanceWithArguments methods.
@@ -120,23 +141,22 @@ protected:
 
 }
 
-OSingleFactoryHelper::~OSingleFactoryHelper()
+// XTypeProvider
+Sequence< Type > OFactoryComponentHelper::getTypes()
 {
+    Type ar[ 4 ];
+    ar[ 0 ] = cppu::UnoType<XSingleServiceFactory>::get();
+    ar[ 1 ] = cppu::UnoType<XServiceInfo>::get();
+    ar[ 2 ] = cppu::UnoType<XUnloadingPreference>::get();
+
+    if (m_fptr)
+        ar[ 3 ] = cppu::UnoType<XSingleComponentFactory>::get();
+
+    return Sequence< Type >( ar, m_fptr ? 4 : 3 );
 }
 
-
-Any OSingleFactoryHelper::queryInterface( const Type & rType )
-{
-    return ::cppu::queryInterface(
-        rType,
-        static_cast< XSingleComponentFactory * >( this ),
-        static_cast< XSingleServiceFactory * >( this ),
-        static_cast< XServiceInfo * >( this ) ,
-        static_cast< XUnloadingPreference * >( this ));
-}
-
-// OSingleFactoryHelper
-Reference<XInterface > OSingleFactoryHelper::createInstanceEveryTime(
+// OFactoryComponentHelper
+Reference<XInterface > OFactoryComponentHelper::createInstanceEveryTime(
     Reference< XComponentContext > const & xContext )
 {
     if (m_fptr)
@@ -158,32 +178,82 @@ Reference<XInterface > OSingleFactoryHelper::createInstanceEveryTime(
 }
 
 // XSingleServiceFactory
-Reference<XInterface > OSingleFactoryHelper::createInstance()
+Reference<XInterface > OFactoryComponentHelper::createInstance()
 {
-    return createInstanceWithContext( Reference< XComponentContext >() );
+    if( bOneInstance )
+    {
+        if( !xTheInstance.is() )
+        {
+            MutexGuard aGuard( m_aMutex );
+            if( !xTheInstance.is() )
+                xTheInstance = createInstanceEveryTime( Reference< XComponentContext >() );
+        }
+        return xTheInstance;
+    }
+    return createInstanceEveryTime( Reference< XComponentContext >() );
 }
 
-// XSingleServiceFactory
-Reference<XInterface > OSingleFactoryHelper::createInstanceWithArguments(
+Reference<XInterface > OFactoryComponentHelper::createInstanceWithArguments(
     const Sequence<Any>& Arguments )
 {
-    return createInstanceWithArgumentsAndContext(
-        Arguments, Reference< XComponentContext >() );
+    if( bOneInstance )
+    {
+        if( !xTheInstance.is() )
+        {
+            MutexGuard aGuard( m_aMutex );
+//          OSL_ENSURE( !xTheInstance.is(), "### arguments will be ignored!" );
+            if( !xTheInstance.is() )
+                xTheInstance = createInstanceWithArgumentsEveryTime(
+                    Arguments, Reference< XComponentContext >() );
+        }
+        return xTheInstance;
+    }
+    return createInstanceWithArgumentsEveryTime( Arguments, Reference< XComponentContext >() );
 }
 
 // XSingleComponentFactory
 
-Reference< XInterface > OSingleFactoryHelper::createInstanceWithContext(
+Reference< XInterface > OFactoryComponentHelper::createInstanceWithContext(
     Reference< XComponentContext > const & xContext )
 {
+    if( bOneInstance )
+    {
+        if( !xTheInstance.is() )
+        {
+            MutexGuard aGuard( m_aMutex );
+//          OSL_ENSURE( !xTheInstance.is(), "### context will be ignored!" );
+            if( !xTheInstance.is() )
+                xTheInstance = createInstanceEveryTime( xContext );
+        }
+        return xTheInstance;
+    }
     return createInstanceEveryTime( xContext );
 }
 
-Reference< XInterface > OSingleFactoryHelper::createInstanceWithArgumentsAndContext(
+Reference< XInterface > OFactoryComponentHelper::createInstanceWithArgumentsAndContext(
     Sequence< Any > const & rArguments,
     Reference< XComponentContext > const & xContext )
 {
-    Reference< XInterface > xRet( createInstanceWithContext( xContext ) );
+    if( bOneInstance )
+    {
+        if( !xTheInstance.is() )
+        {
+            MutexGuard aGuard( m_aMutex );
+//          OSL_ENSURE( !xTheInstance.is(), "### context and arguments will be ignored!" );
+            if( !xTheInstance.is() )
+                xTheInstance = createInstanceWithArgumentsEveryTime( rArguments, xContext );
+        }
+        return xTheInstance;
+    }
+    return createInstanceWithArgumentsEveryTime( rArguments, xContext );
+}
+
+css::uno::Reference<css::uno::XInterface>
+OFactoryComponentHelper::createInstanceWithArgumentsEveryTime(
+    css::uno::Sequence<css::uno::Any> const & rArguments,
+    css::uno::Reference<css::uno::XComponentContext> const & xContext)
+{
+    Reference< XInterface > xRet( createInstanceEveryTime( xContext ) );
 
     Reference< lang::XInitialization > xInit( xRet, UNO_QUERY );
     // always call initialize, even if there are no arguments. #i63511#
@@ -210,209 +280,14 @@ Reference< XInterface > OSingleFactoryHelper::createInstanceWithArgumentsAndCont
     return xRet;
 }
 
-// XServiceInfo
-OUString OSingleFactoryHelper::getImplementationName()
+
+// WeakComponentImplHelper
+void OFactoryComponentHelper::disposing()
 {
-    return aImplementationName;
-}
-
-// XServiceInfo
-sal_Bool OSingleFactoryHelper::supportsService(
-    const OUString& ServiceName )
-{
-    return cppu::supportsService(this, ServiceName);
-}
-
-// XServiceInfo
-Sequence< OUString > OSingleFactoryHelper::getSupportedServiceNames()
-{
-    return aServiceNames;
-}
-
-namespace {
-
-struct OFactoryComponentHelper_Mutex
-{
-    Mutex   aMutex;
-};
-
-class OFactoryComponentHelper
-    : public OFactoryComponentHelper_Mutex
-    , public OComponentHelper
-    , public OSingleFactoryHelper
-{
-public:
-    OFactoryComponentHelper(
-        const Reference<XMultiServiceFactory > & rServiceManager,
-        const OUString & rImplementationName_,
-        ComponentInstantiation pCreateFunction_,
-        ComponentFactoryFunc fptr,
-        const Sequence< OUString > * pServiceNames_,
-        bool bOneInstance_ )
-        : OComponentHelper( aMutex )
-        , OSingleFactoryHelper( rServiceManager, rImplementationName_, pCreateFunction_, fptr, pServiceNames_ )
-        , bOneInstance( bOneInstance_ )
-        {
-        }
-
-    // XInterface
-    Any SAL_CALL queryInterface( const Type & rType ) override;
-    void SAL_CALL acquire() noexcept override
-        { OComponentHelper::acquire(); }
-    void SAL_CALL release() noexcept override
-        { OComponentHelper::release(); }
-
-    // XSingleServiceFactory
-    Reference<XInterface > SAL_CALL createInstance() override;
-    Reference<XInterface > SAL_CALL createInstanceWithArguments( const Sequence<Any>& Arguments ) override;
-    // XSingleComponentFactory
-    virtual Reference< XInterface > SAL_CALL createInstanceWithContext(
-        Reference< XComponentContext > const & xContext ) override;
-    virtual Reference< XInterface > SAL_CALL createInstanceWithArgumentsAndContext(
-        Sequence< Any > const & rArguments,
-        Reference< XComponentContext > const & xContext ) override;
-
-    // XTypeProvider
-    virtual Sequence< Type > SAL_CALL getTypes() override;
-    virtual Sequence< sal_Int8 > SAL_CALL getImplementationId() override;
-
-    // XAggregation
-    Any SAL_CALL queryAggregation( const Type & rType ) override;
-
-    // XUnloadingPreference
-    virtual sal_Bool SAL_CALL releaseOnNotification() override;
-
-    // OComponentHelper
-    void SAL_CALL dispose() override;
-
-private:
-    Reference<XInterface >  xTheInstance;
-    bool                bOneInstance;
-protected:
-    // needed for implementing XUnloadingPreference in inheriting classes
-    bool isOneInstance() const {return bOneInstance;}
-    bool isInstance() const {return xTheInstance.is();}
-};
-
-}
-
-Any SAL_CALL OFactoryComponentHelper::queryInterface( const Type & rType )
-{
-    if( rType == cppu::UnoType<XUnloadingPreference>::get() )
-    {
-        return Any(
-            Reference< XUnloadingPreference >(
-                static_cast< XUnloadingPreference * >(this) ) );
-    }
-    return OComponentHelper::queryInterface( rType );
-}
-
-// XAggregation
-Any OFactoryComponentHelper::queryAggregation( const Type & rType )
-{
-    Any aRet( OComponentHelper::queryAggregation( rType ) );
-    return (aRet.hasValue() ? aRet : OSingleFactoryHelper::queryInterface( rType ));
-}
-
-// XTypeProvider
-Sequence< Type > OFactoryComponentHelper::getTypes()
-{
-    Type ar[ 4 ];
-    ar[ 0 ] = cppu::UnoType<XSingleServiceFactory>::get();
-    ar[ 1 ] = cppu::UnoType<XServiceInfo>::get();
-    ar[ 2 ] = cppu::UnoType<XUnloadingPreference>::get();
-
-    if (m_fptr)
-        ar[ 3 ] = cppu::UnoType<XSingleComponentFactory>::get();
-
-    return Sequence< Type >( ar, m_fptr ? 4 : 3 );
-}
-
-Sequence< sal_Int8 > OFactoryComponentHelper::getImplementationId()
-{
-    return css::uno::Sequence<sal_Int8>();
-}
-
-// XSingleServiceFactory
-Reference<XInterface > OFactoryComponentHelper::createInstance()
-{
-    if( bOneInstance )
-    {
-        if( !xTheInstance.is() )
-        {
-            MutexGuard aGuard( aMutex );
-            if( !xTheInstance.is() )
-                xTheInstance = OSingleFactoryHelper::createInstance();
-        }
-        return xTheInstance;
-    }
-    return OSingleFactoryHelper::createInstance();
-}
-
-Reference<XInterface > OFactoryComponentHelper::createInstanceWithArguments(
-    const Sequence<Any>& Arguments )
-{
-    if( bOneInstance )
-    {
-        if( !xTheInstance.is() )
-        {
-            MutexGuard aGuard( aMutex );
-//          OSL_ENSURE( !xTheInstance.is(), "### arguments will be ignored!" );
-            if( !xTheInstance.is() )
-                xTheInstance = OSingleFactoryHelper::createInstanceWithArguments( Arguments );
-        }
-        return xTheInstance;
-    }
-    return OSingleFactoryHelper::createInstanceWithArguments( Arguments );
-}
-
-// XSingleComponentFactory
-
-Reference< XInterface > OFactoryComponentHelper::createInstanceWithContext(
-    Reference< XComponentContext > const & xContext )
-{
-    if( bOneInstance )
-    {
-        if( !xTheInstance.is() )
-        {
-            MutexGuard aGuard( aMutex );
-//          OSL_ENSURE( !xTheInstance.is(), "### context will be ignored!" );
-            if( !xTheInstance.is() )
-                xTheInstance = OSingleFactoryHelper::createInstanceWithContext( xContext );
-        }
-        return xTheInstance;
-    }
-    return OSingleFactoryHelper::createInstanceWithContext( xContext );
-}
-
-Reference< XInterface > OFactoryComponentHelper::createInstanceWithArgumentsAndContext(
-    Sequence< Any > const & rArguments,
-    Reference< XComponentContext > const & xContext )
-{
-    if( bOneInstance )
-    {
-        if( !xTheInstance.is() )
-        {
-            MutexGuard aGuard( aMutex );
-//          OSL_ENSURE( !xTheInstance.is(), "### context and arguments will be ignored!" );
-            if( !xTheInstance.is() )
-                xTheInstance = OSingleFactoryHelper::createInstanceWithArgumentsAndContext( rArguments, xContext );
-        }
-        return xTheInstance;
-    }
-    return OSingleFactoryHelper::createInstanceWithArgumentsAndContext( rArguments, xContext );
-}
-
-
-// OComponentHelper
-void OFactoryComponentHelper::dispose()
-{
-    OComponentHelper::dispose();
-
     Reference<XInterface > x;
     {
         // do not delete in the guard section
-        MutexGuard aGuard( aMutex );
+        MutexGuard aGuard( m_aMutex );
         x = xTheInstance;
         xTheInstance.clear();
     }
@@ -420,6 +295,25 @@ void OFactoryComponentHelper::dispose()
     Reference<XComponent > xComp( x, UNO_QUERY );
     if( xComp.is() )
         xComp->dispose();
+}
+
+// XServiceInfo
+OUString OFactoryComponentHelper::getImplementationName()
+{
+    return aImplementationName;
+}
+
+// XServiceInfo
+sal_Bool OFactoryComponentHelper::supportsService(
+    const OUString& ServiceName )
+{
+    return cppu::supportsService(this, ServiceName);
+}
+
+// XServiceInfo
+Sequence< OUString > OFactoryComponentHelper::getSupportedServiceNames()
+{
+    return aServiceNames;
 }
 
 // XUnloadingPreference
@@ -450,7 +344,7 @@ public:
         bool bOneInstance_ )
             : OFactoryComponentHelper(
                 rServiceManager, rImplementationName_, nullptr, nullptr, nullptr, bOneInstance_ ),
-              OPropertySetHelper( OComponentHelper::rBHelper ),
+              OPropertySetHelper( WeakComponentImplHelper::rBHelper ),
               xImplementationKey( xImplementationKey_ )
         {}
 
@@ -474,7 +368,7 @@ public:
     virtual void SAL_CALL getFastPropertyValue(
         Any & rValue, sal_Int32 nHandle ) const override;
 
-    // OSingleFactoryHelper
+    // OFactoryComponentHelper
     Reference<XInterface > createInstanceEveryTime(
         Reference< XComponentContext > const & xContext ) override;
 
@@ -551,7 +445,7 @@ Sequence< Type > ORegistryFactoryHelper::getTypes()
 Reference< beans::XPropertySetInfo >
 ORegistryFactoryHelper::getPropertySetInfo()
 {
-    ::osl::MutexGuard guard( aMutex );
+    ::osl::MutexGuard guard( m_aMutex );
     if (! m_xInfo.is())
         m_xInfo = createPropertySetInfo( getInfoHelper() );
     return m_xInfo;
@@ -561,7 +455,7 @@ ORegistryFactoryHelper::getPropertySetInfo()
 
 IPropertyArrayHelper & ORegistryFactoryHelper::getInfoHelper()
 {
-    ::osl::MutexGuard guard( aMutex );
+    ::osl::MutexGuard guard( m_aMutex );
     if (m_property_array_helper == nullptr)
     {
         beans::Property prop(
@@ -618,7 +512,7 @@ Reference<XInterface > ORegistryFactoryHelper::createInstanceEveryTime(
         Reference< XInterface > x( createModuleFactory() );
         if (x.is())
         {
-            MutexGuard aGuard( aMutex );
+            MutexGuard aGuard( m_aMutex );
             if( !xModuleFactory.is() && !xModuleFactoryDepr.is() )
             {
                 xModuleFactory.set( x, UNO_QUERY );
@@ -646,7 +540,7 @@ Reference<XInterface > SAL_CALL ORegistryFactoryHelper::createInstanceWithArgume
         Reference< XInterface > x( createModuleFactory() );
         if (x.is())
         {
-            MutexGuard aGuard( aMutex );
+            MutexGuard aGuard( m_aMutex );
             if( !xModuleFactory.is() && !xModuleFactoryDepr.is() )
             {
                 xModuleFactory.set( x, UNO_QUERY );
@@ -676,7 +570,7 @@ Reference< XInterface > ORegistryFactoryHelper::createInstanceWithArgumentsAndCo
         Reference< XInterface > x( createModuleFactory() );
         if (x.is())
         {
-            MutexGuard aGuard( aMutex );
+            MutexGuard aGuard( m_aMutex );
             if( !xModuleFactory.is() && !xModuleFactoryDepr.is() )
             {
                 xModuleFactory.set( x, UNO_QUERY );
@@ -698,7 +592,6 @@ Reference< XInterface > ORegistryFactoryHelper::createInstanceWithArgumentsAndCo
 }
 
 
-// OSingleFactoryHelper
 Reference< XInterface > ORegistryFactoryHelper::createModuleFactory()
 {
     OUString aActivatorUrl;
@@ -736,9 +629,9 @@ Reference< XInterface > ORegistryFactoryHelper::createModuleFactory()
             {
                 aActivatorName = aLocation.subView( 0, nPos );
                 if( aActivatorName == u"java" )
-                    aActivatorName = u"com.sun.star.loader.Java";
+                    aActivatorName = u"com.sun.star.loader.Java"_ustr;
                 else if( aActivatorName == u"module" )
-                    aActivatorName = u"com.sun.star.loader.SharedLibrary";
+                    aActivatorName = u"com.sun.star.loader.SharedLibrary"_ustr;
                 aLocation = aLocation.copy( nPos + 3 );
             }
         }
@@ -760,7 +653,7 @@ Reference< XInterface > ORegistryFactoryHelper::createModuleFactory()
 // XServiceInfo
 Sequence< OUString > ORegistryFactoryHelper::getSupportedServiceNames()
 {
-    MutexGuard aGuard( aMutex );
+    MutexGuard aGuard( m_aMutex );
     if( !aServiceNames.hasElements() )
     {
         // not yet loaded

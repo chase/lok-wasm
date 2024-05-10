@@ -51,7 +51,6 @@
 #include <vcl/ptrstyle.hxx>
 #include <vector>
 
-#include <svx/shapepropertynotifier.hxx>
 #include <svx/svdotable.hxx>
 
 #include <svx/sdr/contact/displayinfo.hxx>
@@ -136,9 +135,9 @@ void SdrObjUserCall::Changed(const SdrObject& /*rObj*/, SdrUserCallType /*eType*
 {
 }
 
-sal_Int32 SdrObjUserCall::GetPDFAnchorStructureElementId(SdrObject const&, OutputDevice const&)
+void const* SdrObjUserCall::GetPDFAnchorStructureElementKey(SdrObject const&)
 {
-    return -1;
+    return nullptr;
 }
 
 SdrObjMacroHitRec::SdrObjMacroHitRec() :
@@ -148,12 +147,12 @@ SdrObjMacroHitRec::SdrObjMacroHitRec() :
 
 
 SdrObjUserData::SdrObjUserData(SdrInventor nInv, sal_uInt16 nId) :
-    nInventor(nInv),
-    nIdentifier(nId) {}
+    m_nInventor(nInv),
+    m_nIdentifier(nId) {}
 
 SdrObjUserData::SdrObjUserData(const SdrObjUserData& rData) :
-    nInventor(rData.nInventor),
-    nIdentifier(rData.nIdentifier) {}
+    m_nInventor(rData.m_nInventor),
+    m_nIdentifier(rData.m_nIdentifier) {}
 
 SdrObjUserData::~SdrObjUserData() {}
 
@@ -211,11 +210,6 @@ const std::shared_ptr< svx::diagram::IDiagramHelper >& SdrObject::getDiagramHelp
 }
 
 // BaseProperties section
-
-std::unique_ptr<sdr::properties::BaseProperties> SdrObject::CreateObjectSpecificProperties()
-{
-    return std::make_unique<sdr::properties::EmptyProperties>(*this);
-}
 
 sdr::properties::BaseProperties& SdrObject::GetProperties() const
 {
@@ -328,7 +322,7 @@ SdrObjList* SdrObject::getChildrenOfSdrObject() const
 
 void SdrObject::SetBoundRectDirty()
 {
-    m_aOutRect = tools::Rectangle();
+    resetOutRectangle();
 }
 
 #ifdef DBG_UTIL
@@ -425,7 +419,7 @@ SdrObject::SdrObject(SdrModel& rSdrModel, SdrObject const & rSource)
     // draw object, an SdrObject needs to be provided, as in the normal constructor.
     mpProperties = rSource.GetProperties().Clone(*this);
 
-    m_aOutRect=rSource.m_aOutRect;
+    setOutRectangle(rSource.getOutRectangle());
     mnLayerID = rSource.mnLayerID;
     m_aAnchor =rSource.m_aAnchor;
     m_bVirtObj=rSource.m_bVirtObj;
@@ -647,16 +641,17 @@ SdrLayerID SdrObject::GetLayer() const
     return mnLayerID;
 }
 
-void SdrObject::getMergedHierarchySdrLayerIDSet(SdrLayerIDSet& rSet) const
+bool SdrObject::isVisibleOnAnyOfTheseLayers(const SdrLayerIDSet& rSet) const
 {
-    rSet.Set(GetLayer());
+    if (rSet.IsSet(GetLayer()))
+        return true;
     SdrObjList* pOL=GetSubList();
-    if (pOL!=nullptr) {
-        const size_t nObjCount = pOL->GetObjCount();
-        for (size_t nObjNum = 0; nObjNum<nObjCount; ++nObjNum) {
-            pOL->GetObj(nObjNum)->getMergedHierarchySdrLayerIDSet(rSet);
-        }
-    }
+    if (!pOL)
+        return false;
+    for (const rtl::Reference<SdrObject>& pObject : *pOL)
+        if (pObject->isVisibleOnAnyOfTheseLayers(rSet))
+            return true;
+    return false;
 }
 
 void SdrObject::NbcSetLayer(SdrLayerID nLayer)
@@ -768,7 +763,7 @@ void SdrObject::SetName(const OUString& rStr, const bool bSetChanged)
 
 const OUString & SdrObject::GetName() const
 {
-    static const OUString EMPTY = u"";
+    static const OUString EMPTY = u""_ustr;
 
     if(m_pPlusData)
     {
@@ -866,6 +861,40 @@ OUString SdrObject::GetDescription() const
     return OUString();
 }
 
+void SdrObject::SetDecorative(bool const isDecorative)
+{
+    ImpForcePlusData();
+
+    if (m_pPlusData->isDecorative == isDecorative)
+    {
+        return;
+    }
+
+    if (getSdrModelFromSdrObject().IsUndoEnabled())
+    {
+        std::unique_ptr<SdrUndoAction> pUndoAction(
+            SdrUndoFactory::CreateUndoObjectDecorative(
+                    *this, m_pPlusData->isDecorative));
+        getSdrModelFromSdrObject().BegUndo(pUndoAction->GetComment());
+        getSdrModelFromSdrObject().AddUndo(std::move(pUndoAction));
+    }
+
+    m_pPlusData->isDecorative = isDecorative;
+
+    if (getSdrModelFromSdrObject().IsUndoEnabled())
+    {
+        getSdrModelFromSdrObject().EndUndo();
+    }
+
+    SetChanged();
+    BroadcastObjectChange();
+}
+
+bool SdrObject::IsDecorative() const
+{
+    return m_pPlusData == nullptr ? false : m_pPlusData->isDecorative;
+}
+
 sal_uInt32 SdrObject::GetOrdNum() const
 {
     if (SdrObjList* pParentList = getParentSdrObjListFromSdrObject())
@@ -925,12 +954,13 @@ void SdrObject::SetNavigationPosition (const sal_uInt32 nNewPosition)
 // GetCurrentBoundRect().
 const tools::Rectangle& SdrObject::GetCurrentBoundRect() const
 {
-    if(m_aOutRect.IsEmpty())
+    auto const& rRectangle = getOutRectangle();
+    if (rRectangle.IsEmpty())
     {
         const_cast< SdrObject* >(this)->RecalcBoundRect();
     }
 
-    return m_aOutRect;
+    return rRectangle;
 }
 
 // To have a possibility to get the last calculated BoundRect e.g for producing
@@ -939,7 +969,7 @@ const tools::Rectangle& SdrObject::GetCurrentBoundRect() const
 // a new method for accessing the last BoundRect.
 const tools::Rectangle& SdrObject::GetLastBoundRect() const
 {
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 void SdrObject::RecalcBoundRect()
@@ -948,8 +978,10 @@ void SdrObject::RecalcBoundRect()
     if ((getSdrModelFromSdrObject().isLocked()) || utl::ConfigManager::IsFuzzing())
         return;
 
+    auto const& rRectangle = getOutRectangle();
+
     // central new method which will calculate the BoundRect using primitive geometry
-    if(!m_aOutRect.IsEmpty())
+    if (!rRectangle.IsEmpty())
         return;
 
     // Use view-independent data - we do not want any connections
@@ -957,20 +989,21 @@ void SdrObject::RecalcBoundRect()
     drawinglayer::primitive2d::Primitive2DContainer xPrimitives;
     GetViewContact().getViewIndependentPrimitive2DContainer(xPrimitives);
 
-    if(xPrimitives.empty())
+    if (xPrimitives.empty())
         return;
 
     // use neutral ViewInformation and get the range of the primitives
     const drawinglayer::geometry::ViewInformation2D aViewInformation2D;
     const basegfx::B2DRange aRange(xPrimitives.getB2DRange(aViewInformation2D));
 
-    if(!aRange.isEmpty())
+    if (!aRange.isEmpty())
     {
-        m_aOutRect = tools::Rectangle(
-            static_cast<tools::Long>(floor(aRange.getMinX())),
-            static_cast<tools::Long>(floor(aRange.getMinY())),
-            static_cast<tools::Long>(ceil(aRange.getMaxX())),
-            static_cast<tools::Long>(ceil(aRange.getMaxY())));
+        tools::Rectangle aNewRectangle(
+            tools::Long(floor(aRange.getMinX())),
+            tools::Long(floor(aRange.getMinY())),
+            tools::Long(ceil(aRange.getMaxX())),
+            tools::Long(ceil(aRange.getMaxY())));
+        setOutRectangle(aNewRectangle);
         return;
     }
 }
@@ -1042,11 +1075,6 @@ bool SdrObject::HasLimitedRotation() const
 {
     // RotGrfFlyFrame: Default is false, support full rotation
     return false;
-}
-
-rtl::Reference<SdrObject> SdrObject::CloneSdrObject(SdrModel& rTargetModel) const
-{
-    return new SdrObject(rTargetModel, *this);
 }
 
 OUString SdrObject::TakeObjNameSingul() const
@@ -1442,33 +1470,6 @@ void SdrObject::NbcRotate(const Point& rRef, Degree100 nAngle)
 
 namespace
 {
-
-tools::Rectangle lclRotateRectangle(tools::Rectangle const& rRectangle, Point const& rRef, double sn, double cs)
-{
-    tools::Rectangle aRectangle(rRectangle);
-    aRectangle.Move(-rRef.X(),-rRef.Y());
-    tools::Rectangle R(aRectangle);
-    if (sn==1.0 && cs==0.0) { // 90deg
-        aRectangle.SetLeft(-R.Bottom() );
-        aRectangle.SetRight(-R.Top() );
-        aRectangle.SetTop(R.Left() );
-        aRectangle.SetBottom(R.Right() );
-    } else if (sn==0.0 && cs==-1.0) { // 180deg
-        aRectangle.SetLeft(-R.Right() );
-        aRectangle.SetRight(-R.Left() );
-        aRectangle.SetTop(-R.Bottom() );
-        aRectangle.SetBottom(-R.Top() );
-    } else if (sn==-1.0 && cs==0.0) { // 270deg
-        aRectangle.SetLeft(R.Top() );
-        aRectangle.SetRight(R.Bottom() );
-        aRectangle.SetTop(-R.Right() );
-        aRectangle.SetBottom(-R.Left() );
-    }
-    aRectangle.Move(rRef.X(),rRef.Y());
-    aRectangle.Normalize(); // just in case
-    return aRectangle;
-}
-
 tools::Rectangle lclMirrorRectangle(tools::Rectangle const& rRectangle, Point const& rRef1, Point const& rRef2)
 {
     tools::Rectangle aRectangle(rRectangle);
@@ -1499,17 +1500,6 @@ tools::Rectangle lclMirrorRectangle(tools::Rectangle const& rRectangle, Point co
 }
 
 } // end anonymous namespace
-
-void SdrObject::NbcRotate(const Point& rRef,  Degree100 nAngle, double sn, double cs)
-{
-    SetGlueReallyAbsolute(true);
-    tools::Rectangle aRectangle = getOutRectangle();
-    aRectangle = lclRotateRectangle(aRectangle, rRef, sn, cs);
-    setOutRectangle(aRectangle);
-    SetBoundAndSnapRectsDirty();
-    NbcRotateGluePoints(rRef, nAngle, sn, cs);
-    SetGlueReallyAbsolute(false);
-}
 
 void SdrObject::NbcMirror(const Point& rRef1, const Point& rRef2)
 {
@@ -1664,7 +1654,7 @@ void SdrObject::RecalcSnapRect()
 
 const tools::Rectangle& SdrObject::GetSnapRect() const
 {
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 void SdrObject::NbcSetSnapRect(const tools::Rectangle& rRect)
@@ -1856,7 +1846,7 @@ SdrObject* SdrObject::CheckMacroHit(const SdrObjMacroHitRec& rRec) const
 {
     if(rRec.pPageView)
     {
-        return SdrObjectPrimitiveHit(*this, rRec.aPos, rRec.nTol, *rRec.pPageView, rRec.pVisiLayer, false);
+        return SdrObjectPrimitiveHit(*this, rRec.aPos, {static_cast<double>(rRec.nTol), static_cast<double>(rRec.nTol)}, *rRec.pPageView, rRec.pVisiLayer, false);
     }
 
     return nullptr;
@@ -2589,11 +2579,8 @@ rtl::Reference<SdrObject> SdrObject::ConvertToContourObj(SdrObject* pRet1, bool 
         SdrObjList* pObjList2 = pRet->GetSubList();
         rtl::Reference<SdrObject> pGroup = new SdrObjGroup(getSdrModelFromSdrObject());
 
-        for(size_t a=0; a<pObjList2->GetObjCount(); ++a)
-        {
-            SdrObject* pIterObj = pObjList2->GetObj(a);
-            pGroup->GetSubList()->NbcInsertObject(ConvertToContourObj(pIterObj, bForceLineDash).get());
-        }
+        for (const rtl::Reference<SdrObject>& pIterObj : *pObjList2)
+            pGroup->GetSubList()->NbcInsertObject(ConvertToContourObj(pIterObj.get(), bForceLineDash).get());
 
         pRet = pGroup;
     }
@@ -2813,10 +2800,10 @@ void SdrObject::SendUserCall(SdrUserCallType eUserCall, const tools::Rectangle& 
     switch ( eUserCall )
     {
     case SdrUserCallType::Resize:
-        notifyShapePropertyChange( svx::ShapePropertyProviderId::Size );
+        notifyShapePropertyChange( "Size" );
         [[fallthrough]]; // RESIZE might also imply a change of the position
     case SdrUserCallType::MoveOnly:
-        notifyShapePropertyChange( svx::ShapePropertyProviderId::Position );
+        notifyShapePropertyChange( "Position" );
         break;
     default:
         // not interested in
@@ -2956,24 +2943,14 @@ css::uno::Reference< css::drawing::XShape > SdrObject::getUnoShape()
     return xShape;
 }
 
-svx::PropertyChangeNotifier& SdrObject::getShapePropertyChangeNotifier()
-{
-    DBG_TESTSOLARMUTEX();
-
-    SvxShape* pSvxShape = getSvxShape();
-    ENSURE_OR_THROW( pSvxShape, "no SvxShape, yet!" );
-    return pSvxShape->getShapePropertyChangeNotifier();
-}
-
-void SdrObject::notifyShapePropertyChange( const svx::ShapePropertyProviderId _eProperty ) const
+void SdrObject::notifyShapePropertyChange( const OUString& rPropName ) const
 {
     DBG_TESTSOLARMUTEX();
 
     SvxShape* pSvxShape = const_cast< SdrObject* >( this )->getSvxShape();
     if ( pSvxShape )
-        return pSvxShape->getShapePropertyChangeNotifier().notifyPropertyChange( _eProperty );
+        return pSvxShape->notifyPropertyChange( rPropName );
 }
-
 
 // transformation interface for StarOfficeAPI. This implements support for
 // homogeneous 3x3 matrices containing the transformation of the SdrObject. At the
@@ -3235,6 +3212,57 @@ rtl::Reference<SdrObject> SdrObjFactory::CreateObjectFromFactory(SdrModel& rSdrM
     return nullptr;
 }
 
+namespace
+{
+
+// SdrObject subclass, which represents an empty object of a
+// certain type (kind).
+template <SdrObjKind OBJECT_KIND, SdrInventor OBJECT_INVENTOR>
+class EmptyObject final : public SdrObject
+{
+private:
+    virtual ~EmptyObject() override
+    {}
+
+public:
+    EmptyObject(SdrModel& rSdrModel)
+        : SdrObject(rSdrModel)
+    {
+    }
+
+    EmptyObject(SdrModel& rSdrModel, EmptyObject const& rSource)
+        : SdrObject(rSdrModel, rSource)
+    {
+    }
+
+    rtl::Reference<SdrObject> CloneSdrObject(SdrModel& rTargetModel) const override
+    {
+        return new EmptyObject(rTargetModel, *this);
+    }
+
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() override
+    {
+        return std::make_unique<sdr::properties::EmptyProperties>(*this);
+    }
+
+    SdrInventor GetObjInventor() const override
+    {
+        return OBJECT_INVENTOR;
+    }
+
+    SdrObjKind GetObjIdentifier() const override
+    {
+        return OBJECT_KIND;
+    }
+
+    void NbcRotate(const Point& /*rRef*/, Degree100 /*nAngle*/, double /*sinAngle*/, double /*cosAngle*/) override
+    {
+        assert(false); // should not be called for this kind of objects
+    }
+};
+
+} // end anonymous namespace
+
 rtl::Reference<SdrObject> SdrObjFactory::MakeNewObject(
     SdrModel& rSdrModel,
     SdrInventor nInventor,
@@ -3327,7 +3355,7 @@ rtl::Reference<SdrObject> SdrObjFactory::MakeNewObject(
                 }
             }
             break;
-            case SdrObjKind::NONE       : pObj=new SdrObject(rSdrModel);                   break;
+            case SdrObjKind::NONE: pObj = nullptr; break;
             case SdrObjKind::Group       : pObj=new SdrObjGroup(rSdrModel);                 break;
             case SdrObjKind::Polygon       : pObj=new SdrPathObj(rSdrModel, SdrObjKind::Polygon       ); break;
             case SdrObjKind::PolyLine       : pObj=new SdrPathObj(rSdrModel, SdrObjKind::PolyLine       ); break;
@@ -3350,7 +3378,11 @@ rtl::Reference<SdrObject> SdrObjFactory::MakeNewObject(
             case SdrObjKind::Media      : pObj=new SdrMediaObj(rSdrModel);               break;
 #endif
             case SdrObjKind::Table      : pObj=new sdr::table::SdrTableObj(rSdrModel);   break;
-            default: break;
+            case SdrObjKind::NewFrame: // used for frame creation in writer
+                pObj = new EmptyObject<SdrObjKind::NewFrame, SdrInventor::Default>(rSdrModel);
+                break;
+            default:
+                break;
         }
     }
 

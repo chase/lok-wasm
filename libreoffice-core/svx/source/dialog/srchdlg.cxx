@@ -168,26 +168,26 @@ static void ListToStrArr_Impl(sal_uInt16 nId, std::vector<OUString>& rStrLst, we
     }
 }
 
-static void StrArrToList_Impl( sal_uInt16 nId, const std::vector<OUString>& rStrLst )
+static void StrArrToList_Impl( TypedWhichId<SfxStringListItem> nId, const std::vector<OUString>& rStrLst )
 {
     DBG_ASSERT( !rStrLst.empty(), "check in advance");
     SfxGetpApp()->PutItem( SfxStringListItem( nId, &rStrLst ) );
 }
 
 SearchAttrItemList::SearchAttrItemList( SearchAttrItemList&& rList ) :
-    SrchAttrItemList(std::move(rList))
+    SrchAttrInfoList(std::move(rList))
 {
     for ( size_t i = 0; i < size(); ++i )
-        if ( !IsInvalidItem( (*this)[i].pItem ) )
-            (*this)[i].pItem = (*this)[i].pItem->Clone();
+        if ( !IsInvalidItem( (*this)[i].pItemPtr ) )
+            (*this)[i].pItemPtr = (*this)[i].pItemPtr->Clone();
 }
 
 SearchAttrItemList::SearchAttrItemList( const SearchAttrItemList& rList ) :
-    SrchAttrItemList(rList)
+    SrchAttrInfoList(rList)
 {
     for ( size_t i = 0; i < size(); ++i )
-        if ( !IsInvalidItem( (*this)[i].pItem ) )
-            (*this)[i].pItem = (*this)[i].pItem->Clone();
+        if ( !IsInvalidItem( (*this)[i].pItemPtr ) )
+            (*this)[i].pItemPtr = (*this)[i].pItemPtr->Clone();
 }
 
 SearchAttrItemList::~SearchAttrItemList()
@@ -202,7 +202,7 @@ void SearchAttrItemList::Put( const SfxItemSet& rSet )
 
     SfxItemPool* pPool = rSet.GetPool();
     SfxItemIter aIter( rSet );
-    SearchAttrItem aItem;
+    SearchAttrInfo aItem;
     const SfxPoolItem* pItem = aIter.GetCurItem();
     sal_uInt16 nWhich;
 
@@ -211,13 +211,13 @@ void SearchAttrItemList::Put( const SfxItemSet& rSet )
         // only test that it is available?
         if( IsInvalidItem( pItem ) )
         {
-            nWhich = rSet.GetWhichByPos( aIter.GetCurPos() );
-            aItem.pItem = const_cast<SfxPoolItem*>(pItem);
+            nWhich = rSet.GetWhichByOffset( aIter.GetCurPos() );
+            aItem.pItemPtr = pItem;
         }
         else
         {
             nWhich = pItem->Which();
-            aItem.pItem = pItem->Clone();
+            aItem.pItemPtr = pItem->Clone();
         }
 
         aItem.nSlot = pPool->GetSlotId( nWhich );
@@ -233,10 +233,10 @@ SfxItemSet& SearchAttrItemList::Get( SfxItemSet& rSet )
     SfxItemPool* pPool = rSet.GetPool();
 
     for ( size_t i = 0; i < size(); ++i )
-        if ( IsInvalidItem( (*this)[i].pItem ) )
+        if ( IsInvalidItem( (*this)[i].pItemPtr ) )
             rSet.InvalidateItem( pPool->GetWhich( (*this)[i].nSlot ) );
         else
-            rSet.Put( *(*this)[i].pItem );
+            rSet.Put( *(*this)[i].pItemPtr );
     return rSet;
 }
 
@@ -244,9 +244,9 @@ SfxItemSet& SearchAttrItemList::Get( SfxItemSet& rSet )
 void SearchAttrItemList::Clear()
 {
     for ( size_t i = 0; i < size(); ++i )
-        if ( !IsInvalidItem( (*this)[i].pItem ) )
-            delete (*this)[i].pItem;
-    SrchAttrItemList::clear();
+        if ( !IsInvalidItem( (*this)[i].pItemPtr ) )
+            delete (*this)[i].pItemPtr;
+    SrchAttrInfoList::clear();
 }
 
 
@@ -258,10 +258,10 @@ void SearchAttrItemList::Remove(size_t nPos)
         nLen = size() - nPos;
 
     for ( size_t i = nPos; i < nPos + nLen; ++i )
-        if ( !IsInvalidItem( (*this)[i].pItem ) )
-            delete (*this)[i].pItem;
+        if ( !IsInvalidItem( (*this)[i].pItemPtr ) )
+            delete (*this)[i].pItemPtr;
 
-    SrchAttrItemList::erase( begin() + nPos, begin() + nPos + nLen );
+    SrchAttrInfoList::erase( begin() + nPos, begin() + nPos + nLen );
 }
 
 SvxSearchDialog::SvxSearchDialog(weld::Window* pParent, SfxChildWindow* pChildWin, SfxBindings& rBind)
@@ -285,6 +285,8 @@ SvxSearchDialog::SvxSearchDialog(weld::Window* pParent, SfxChildWindow* pChildWi
     , m_xSearchTmplLB(m_xBuilder->weld_combo_box("searchlist"))
     , m_xSearchAttrText(m_xBuilder->weld_label("searchdesc"))
     , m_xSearchLabel(m_xBuilder->weld_label("searchlabel"))
+    , m_xSearchIcon(m_xBuilder->weld_image("searchicon"))
+    , m_xSearchBox(m_xBuilder->weld_box("searchbox"))
     , m_xReplaceFrame(m_xBuilder->weld_frame("replaceframe"))
     , m_xReplaceLB(m_xBuilder->weld_combo_box("replaceterm"))
     , m_xReplaceTmplLB(m_xBuilder->weld_combo_box("replacelist"))
@@ -339,6 +341,10 @@ SvxSearchDialog::SvxSearchDialog(weld::Window* pParent, SfxChildWindow* pChildWi
 
     m_xSearchTmplLB->make_sorted();
     m_xSearchAttrText->hide();
+
+    m_xSearchLabel->set_font_color(Color(0x00, 0x47, 0x85));
+    this->SetSearchLabel(""); // hide the message but keep the box height
+    m_xSearchIcon->set_size_request(24, 24); // vcl/res/infobar.png is 32x32 - too large here
 
     m_xReplaceTmplLB->make_sorted();
     m_xReplaceAttrText->hide();
@@ -418,14 +424,14 @@ void SvxSearchDialog::Construct_Impl()
 
     // Get attribute sets only once in constructor()
     const SfxPoolItem* ppArgs[] = { pSearchItem.get(), nullptr };
-    const SvxSetItem* pSrchSetItem =
-        static_cast<const SvxSetItem*>( rBindings.GetDispatcher()->Execute( FID_SEARCH_SEARCHSET, SfxCallMode::SLOT, ppArgs ) );
+    SfxPoolItemHolder aResult(rBindings.GetDispatcher()->Execute(FID_SEARCH_SEARCHSET, SfxCallMode::SLOT, ppArgs));
+    const SvxSetItem* pSrchSetItem(static_cast<const SvxSetItem*>(aResult.getItem()));
 
     if ( pSrchSetItem )
         InitAttrList_Impl( &pSrchSetItem->GetItemSet(), nullptr );
 
-    const SvxSetItem* pReplSetItem =
-        static_cast<const SvxSetItem*>( rBindings.GetDispatcher()->Execute( FID_SEARCH_REPLACESET, SfxCallMode::SLOT, ppArgs ) );
+    aResult = rBindings.GetDispatcher()->Execute(FID_SEARCH_REPLACESET, SfxCallMode::SLOT, ppArgs);
+    const SvxSetItem* pReplSetItem(static_cast<const SvxSetItem*>(aResult.getItem()));
 
     if ( pReplSetItem )
         InitAttrList_Impl( nullptr, &pReplSetItem->GetItemSet() );
@@ -451,13 +457,12 @@ void SvxSearchDialog::Construct_Impl()
     {
         m_xJapMatchFullHalfWidthCB->hide();
     }
-    SvtCTLOptions aCTLOptions;
     // Do not disable and hide the m_xIncludeDiacritics button.
     // Include Diacritics == Not Ignore Diacritics => A does not match A-Umlaut (Diaeresis).
     // Confusingly these have negated names (following the UI) but the actual
     // transliteration is to *ignore* diacritics if "included" (sensitive) is
     // _not_ checked.
-    if(!aCTLOptions.IsCTLFontEnabled())
+    if(!SvtCTLOptions::IsCTLFontEnabled())
     {
         m_xIncludeDiacritics->set_active( true );
         m_xIncludeKashida->set_active( true );
@@ -582,14 +587,18 @@ void SvxSearchDialog::SetSearchLabel(const OUString& rStr)
     m_xSearchLabel->set_label(rStr);
     if (!rStr.isEmpty())
     {
-        // hide/show to fire SHOWING state change event so search label text
-        // is announced by screen reader
-        m_xSearchLabel->hide();
         m_xSearchLabel->show();
+        m_xSearchIcon->show();
+        m_xSearchBox->set_background(Color(0xBD, 0xE5, 0xF8)); // same as InfobarType::INFO
     }
-
-    if (rStr == SvxResId(RID_SVXSTR_SEARCH_NOT_FOUND))
-        m_xSearchLB->set_entry_message_type(weld::EntryMessageType::Error);
+    else
+    {
+        const Size aSize = m_xSearchBox->get_preferred_size();
+        m_xSearchLabel->hide();
+        m_xSearchIcon->hide();
+        m_xSearchBox->set_size_request(-1, aSize.Height());
+        m_xSearchBox->set_background(COL_TRANSPARENT);
+    }
 }
 
 void SvxSearchDialog::ApplyTransliterationFlags_Impl( TransliterationFlags nSettings )
@@ -713,7 +722,6 @@ void SvxSearchDialog::ShowOptionalControls_Impl()
 {
     DBG_ASSERT( pSearchItem, "no search item" );
 
-    SvtCTLOptions aCTLOptions;
     SvtModuleOptions::EFactory eFactory = getModule(rBindings);
     bool bDrawApp = eFactory == SvtModuleOptions::EFactory::DRAW;
     bool bWriterApp =
@@ -731,7 +739,7 @@ void SvxSearchDialog::ShowOptionalControls_Impl()
     m_xSimilarityBtn->show();
     m_xSelectionBtn->show();
     m_xIncludeDiacritics->show();
-    m_xIncludeKashida->set_visible(aCTLOptions.IsCTLFontEnabled());
+    m_xIncludeKashida->set_visible(SvtCTLOptions::IsCTLFontEnabled());
     m_xJapMatchFullHalfWidthCB->set_visible(SvtCJKOptions::IsCJKFontEnabled());
     m_xJapOptionsCB->set_visible(SvtCJKOptions::IsJapaneseFindEnabled());
     m_xJapOptionsBtn->set_visible(SvtCJKOptions::IsJapaneseFindEnabled());
@@ -892,14 +900,14 @@ void SvxSearchDialog::Init_Impl( bool bSearchPattern )
             {
                 // Get attribute sets, if it not has been done already
                 const SfxPoolItem* ppArgs[] = { pSearchItem.get(), nullptr };
-                const SvxSetItem* pSrchSetItem =
-                    static_cast<const SvxSetItem*>(rBindings.GetDispatcher()->Execute( FID_SEARCH_SEARCHSET, SfxCallMode::SLOT, ppArgs ));
+                SfxPoolItemHolder aResult(rBindings.GetDispatcher()->Execute(FID_SEARCH_SEARCHSET, SfxCallMode::SLOT, ppArgs));
+                const SvxSetItem* pSrchSetItem(static_cast<const SvxSetItem*>(aResult.getItem()));
 
                 if ( pSrchSetItem )
                     InitAttrList_Impl( &pSrchSetItem->GetItemSet(), nullptr );
 
-                const SvxSetItem* pReplSetItem =
-                    static_cast<const SvxSetItem*>( rBindings.GetDispatcher()->Execute( FID_SEARCH_REPLACESET, SfxCallMode::SLOT, ppArgs ) );
+                aResult = rBindings.GetDispatcher()->Execute(FID_SEARCH_REPLACESET, SfxCallMode::SLOT, ppArgs);
+                const SvxSetItem* pReplSetItem(static_cast<const SvxSetItem*>(aResult.getItem()));
 
                 if ( pReplSetItem )
                     InitAttrList_Impl( nullptr, &pReplSetItem->GetItemSet() );
@@ -1598,20 +1606,22 @@ void SvxSearchDialog::Remember_Impl( const OUString &rStr, bool _bSearch )
     std::vector<OUString>* pArr = _bSearch ? &aSearchStrings : &aReplaceStrings;
     weld::ComboBox* pListBox = _bSearch ? m_xSearchLB.get() : m_xReplaceLB.get();
 
-    // ignore identical strings
-    if (std::find(pArr->begin(), pArr->end(), rStr) != pArr->end())
-        return;
+    // tdf#154818 - rearrange the search items
+    const auto nPos = pListBox->find_text(rStr);
+    if (nPos != -1)
+    {
+        pListBox->remove(nPos);
+        pArr->erase(pArr->begin() + nPos);
+    }
+    else if (pListBox->get_count() >= nRememberSize)
+    {
+        // delete oldest entry at maximum occupancy (ListBox and Array)
+        pListBox->remove(nRememberSize - 1);
+        pArr->erase(pArr->begin() + nRememberSize - 1);
+    }
 
     pArr->insert(pArr->begin(), rStr);
     pListBox->insert_text(0, rStr);
-
-    // delete oldest entry at maximum occupancy (ListBox and Array)
-    size_t nArrSize = pArr->size();
-    if (nArrSize > nRememberSize)
-    {
-        pListBox->remove(nArrSize - 1);
-        pArr->erase(pArr->begin() + nArrSize - 1);
-    }
 }
 
 void SvxSearchDialog::TemplatesChanged_Impl( SfxStyleSheetBasePool& rPool )
@@ -2003,14 +2013,14 @@ IMPL_LINK_NOARG(SvxSearchDialog, FormatHdl_Impl, weld::Button&, void)
     const SfxPoolItem* pItem;
     for( sal_uInt16 n = 0; n < pList->Count(); ++n )
     {
-        SearchAttrItem* pAItem = &pList->GetObject(n);
-        if( !IsInvalidItem( pAItem->pItem ) &&
+        SearchAttrInfo* pAItem = &pList->GetObject(n);
+        if( !IsInvalidItem( pAItem->pItemPtr ) &&
             SfxItemState::SET == aOutSet.GetItemState(
-                pAItem->pItem->Which(), false, &pItem ) )
+                pAItem->pItemPtr->Which(), false, &pItem ) )
         {
-            delete pAItem->pItem;
-            pAItem->pItem = pItem->Clone();
-            aOutSet.ClearItem( pAItem->pItem->Which() );
+            delete pAItem->pItemPtr;
+            pAItem->pItemPtr = pItem->Clone();
+            aOutSet.ClearItem( pAItem->pItemPtr->Which() );
         }
     }
 
@@ -2142,15 +2152,15 @@ OUString& SvxSearchDialog::BuildAttrText_Impl( OUString& rStr,
     IntlWrapper aIntlWrapper(SvtSysLocale().GetUILanguageTag());
     for ( sal_uInt16 i = 0; i < pList->Count(); ++i )
     {
-        const SearchAttrItem& rItem = pList->GetObject(i);
+        const SearchAttrInfo& rItem = pList->GetObject(i);
 
         if ( !rStr.isEmpty() )
             rStr += ", ";
 
-        if ( !IsInvalidItem( rItem.pItem ) )
+        if ( !IsInvalidItem( rItem.pItemPtr ) )
         {
             OUString aStr;
-            rPool.GetPresentation(*rItem.pItem, eMapUnit, aStr, aIntlWrapper);
+            rPool.GetPresentation(*rItem.pItemPtr, eMapUnit, aStr, aIntlWrapper);
             if (aStr.isEmpty())
             {
                 if (rStr.endsWith(", "))
@@ -2360,8 +2370,6 @@ SfxChildWinInfo SvxSearchDialogWrapper::GetInfo() const
 
 static void lcl_SetSearchLabelWindow(const OUString& rStr, SfxViewFrame& rViewFrame)
 {
-    bool bNotFound = rStr == SvxResId(RID_SVXSTR_SEARCH_NOT_FOUND);
-
     css::uno::Reference< css::beans::XPropertySet > xPropSet(
             rViewFrame.GetFrame().GetFrameInterface(), css::uno::UNO_QUERY_THROW);
     css::uno::Reference< css::frame::XLayoutManager > xLayoutManager;
@@ -2380,21 +2388,8 @@ static void lcl_SetSearchLabelWindow(const OUString& rStr, SfxViewFrame& rViewFr
         {
             LabelItemWindow* pSearchLabel = dynamic_cast<LabelItemWindow*>(pToolBox->GetItemWindow(id));
             assert(pSearchLabel);
-            pSearchLabel->set_label(rStr);
-            if (rStr.isEmpty())
-                pSearchLabel->SetSizePixel(Size(16, pSearchLabel->GetSizePixel().Height()));
-            else
-                pSearchLabel->SetOptimalSize();
-        }
-
-        if (pToolBox->GetItemCommand(id) == ".uno:FindText")
-        {
-            FindTextFieldControl* pFindText = dynamic_cast<FindTextFieldControl*>(pToolBox->GetItemWindow(id));
-            assert(pFindText);
-            if (bNotFound)
-                pFindText->set_entry_message_type(weld::EntryMessageType::Error);
-            else
-                pFindText->set_entry_message_type(weld::EntryMessageType::Normal);
+            pSearchLabel->set_label(rStr, LabelItemWindowType::Info);
+            pSearchLabel->SetOptimalSize();
         }
     }
     xLayoutManager->doLayout();

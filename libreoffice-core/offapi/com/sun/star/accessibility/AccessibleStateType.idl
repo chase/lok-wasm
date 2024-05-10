@@ -34,7 +34,7 @@ module com { module sun { module star { module accessibility {
 
     <p>These states are giving values corresponding to the bits of a 64-bit
     value, since we OR them together to create bitsets to represent the
-    combinated state of an accessibility object .</p>
+    combined state of an accessibility object .</p>
 
     @since OOo 1.1.2
 */
@@ -238,6 +238,12 @@ constants AccessibleStateType
     /** Indicates that the object is collapsed
     */
     const hyper COLLAPSE = 8589934592;
+
+    /** Indicates this object is checkable, i.e. it has the potential
+        to be checked.
+        See also the CHECKED state.
+    */
+    const hyper CHECKABLE = 17179869184;
 
 };
 

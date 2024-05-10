@@ -52,6 +52,7 @@ class OutlinerEditEng;
 class Outliner;
 class EditView;
 class EditUndo;
+class EditUndoManager;
 class ParagraphList;
 class OutlinerParaObject;
 class SvStream;
@@ -268,6 +269,8 @@ public:
     void        Paste( bool bUseSpecial = false, SotClipboardFormatId format = SotClipboardFormatId::NONE );
     void        PasteSpecial(SotClipboardFormatId format = SotClipboardFormatId::NONE);
 
+    void SetStyleSheet(const OUString& rStyleName);
+
     const SfxStyleSheet*  GetStyleSheet() const;
     SfxStyleSheet*  GetStyleSheet();
 
@@ -303,10 +306,8 @@ public:
 
     void                InsertField( const SvxFieldItem& rFld );
     const SvxFieldItem* GetFieldUnderMousePointer() const;
-    const SvxFieldItem* GetFieldAtSelection() const;
-    /// Return the field at the current cursor position or nullptr if no field found
-    const SvxFieldData* GetFieldAtCursor() const;
-    /// Select the field at the current cursor position
+    const SvxFieldItem* GetFieldAtSelection(bool bAlsoCheckBeforeCursor = false) const;
+    /// if no selection, select the field immediately after or before the current cursor
     void SelectFieldAtCursor();
 
     /** enables bullets for the selected paragraphs if the bullets/numbering of the first paragraph is off
@@ -370,8 +371,8 @@ public:
 class SAL_NO_VTABLE SAL_DLLPUBLIC_RTTI OutlinerViewShell
 {
 public:
-    virtual void libreOfficeKitViewCallback(int nType, const char* pPayload) const = 0;
-    virtual void libreOfficeKitViewCallbackWithViewId(int nType, const char* pPayload, int nViewId) const = 0;
+    virtual void libreOfficeKitViewCallback(int nType, const OString& pPayload) const = 0;
+    virtual void libreOfficeKitViewCallbackWithViewId(int nType, const OString& pPayload, int nViewId) const = 0;
     virtual void libreOfficeKitViewInvalidateTilesCallback(const tools::Rectangle* pRect, int nPart, int nMode) const = 0;
     virtual void libreOfficeKitViewUpdatedCallback(int nType) const = 0;
     virtual void libreOfficeKitViewUpdatedCallbackPerViewId(int nType, int nViewId, int nSourceViewId) const = 0;
@@ -403,8 +404,8 @@ public:
     sal_Int32           mnTextLen;
     sal_Int32           mnPara;
     const SvxFont&      mrFont;
-    o3tl::span<const sal_Int32> mpDXArray;
-    o3tl::span<const sal_Bool> mpKashidaArray;
+    std::span<const sal_Int32> mpDXArray;
+    std::span<const sal_Bool> mpKashidaArray;
 
     const EEngineData::WrongSpellVector*  mpWrongSpellVector;
     const SvxFieldData* mpFieldData;
@@ -430,8 +431,8 @@ public:
         sal_Int32 nTxtLen,
         const SvxFont& rFnt,
         sal_Int32 nPar,
-        o3tl::span<const sal_Int32> pDXArr,
-        o3tl::span<const sal_Bool> pKashidaArr,
+        std::span<const sal_Int32> pDXArr,
+        std::span<const sal_Bool> pKashidaArr,
         const EEngineData::WrongSpellVector* pWrongSpellVector,
         const SvxFieldData* pFieldData,
         const css::lang::Locale* pLocale,
@@ -503,6 +504,7 @@ private:
 
     std::optional<Color> mxTxtColor;
     std::optional<Color> mxFldColor;
+    std::optional<FontLineStyle> mxFldLineStyle;
 
     OUString            aRepresentation;
 
@@ -531,6 +533,9 @@ public:
 
     std::optional<Color> const & GetFieldColor() const { return mxFldColor; }
     void            SetFieldColor( std::optional<Color> xCol ) { mxFldColor = xCol; }
+
+    std::optional<FontLineStyle> const& GetFontLineStyle() const { return mxFldLineStyle; }
+    void            SetFontLineStyle( std::optional<FontLineStyle> xLineStyle ) { mxFldLineStyle = xLineStyle; }
 
     sal_Int32       GetPara() const { return nPara; }
     sal_Int32       GetPos() const { return nPos; }
@@ -779,7 +784,6 @@ public:
     void            SetPaintFirstLineHdl(const Link<PaintFirstLineInfo*,void>& rLink) { maPaintFirstLineHdl = rLink; }
 
     void            SetModifyHdl( const Link<LinkParamNone*,void>& rLink );
-    Link<LinkParamNone*,void> const & GetModifyHdl() const;
 
     void            SetNotifyHdl( const Link<EENotify&,void>& rLink );
 
@@ -824,8 +828,8 @@ public:
 
     void DrawingText( const Point& rStartPos, const OUString& rText,
                               sal_Int32 nTextStart, sal_Int32 nTextLen,
-                              o3tl::span<const sal_Int32> pDXArray,
-                              o3tl::span<const sal_Bool> pKashidaArray,
+                              std::span<const sal_Int32> pDXArray,
+                              std::span<const sal_Bool> pKashidaArray,
                               const SvxFont& rFont,
                               sal_Int32 nPara, sal_uInt8 nRightToLeft,
                               const EEngineData::WrongSpellVector* pWrongSpellVector,
@@ -880,8 +884,8 @@ public:
 
     ErrCode             Read( SvStream& rInput, const OUString& rBaseURL, EETextFormat, SvKeyValueIterator* pHTTPHeaderAttrs = nullptr );
 
-    SfxUndoManager& GetUndoManager();
-    SfxUndoManager* SetUndoManager(SfxUndoManager* pNew);
+    EditUndoManager& GetUndoManager();
+    EditUndoManager* SetUndoManager(EditUndoManager* pNew);
 
     void            QuickSetAttribs( const SfxItemSet& rSet, const ESelection& rSel );
     void            QuickInsertField( const SvxFieldItem& rFld, const ESelection& rSel );
@@ -893,12 +897,12 @@ public:
     /// Set attributes from rSet an all characters of nPara.
     void SetCharAttribs(sal_Int32 nPara, const SfxItemSet& rSet);
     void            RemoveCharAttribs( sal_Int32 nPara, sal_uInt16 nWhich = 0 );
-    void            QuickFormatDoc();
+    void QuickFormatDoc();
 
     bool            UpdateFields();
     void            RemoveFields( const std::function<bool ( const SvxFieldData* )>& isFieldData = [] (const SvxFieldData* ){return true;} );
 
-    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor );
+    virtual OUString CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor, std::optional<FontLineStyle>& rFldLineStyle );
 
     void            SetSpeller( css::uno::Reference< css::linguistic2::XSpellChecker1 > const &xSpeller );
     css::uno::Reference< css::linguistic2::XSpellChecker1 > const &
@@ -932,8 +936,13 @@ public:
     bool            IsTextPos( const Point& rPaperPos, sal_uInt16 nBorder );
     bool            IsTextPos( const Point& rPaperPos, sal_uInt16 nBorder, bool* pbBulletPos );
 
-    void setGlobalScale(double rFontX = 100.0, double rFontY = 100.0, double rSpacingX = 100.0, double rSpacingY = 100.0);
-    void getGlobalScale(double& rFontX, double& rFontY, double& rSpacingX, double& rSpacingY) const;
+    ScalingParameters getScalingParameters() const;
+    void setScalingParameters(ScalingParameters const& rScalingParameters);
+    void resetScalingParameters()
+    {
+        setScalingParameters(ScalingParameters());
+    }
+
     void setRoundFontSizeToPt(bool bRound) const;
 
     void            EraseVirtualDevice();
@@ -992,7 +1001,7 @@ public:
     // convenient method to determine the bullets/numbering status for all paragraphs
     sal_Int32 GetBulletsNumberingStatus() const;
 
-    // overriden in SdrOutliner
+    // overridden in SdrOutliner
     virtual std::optional<bool> GetCompatFlag(SdrCompatibilityFlag /*eFlag*/) const { return {}; };
 };
 

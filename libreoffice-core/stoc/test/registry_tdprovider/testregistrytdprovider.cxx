@@ -741,7 +741,7 @@ css::uno::Reference< css::uno::XInterface > Service::createInstance(
     css::uno::Reference< css::uno::XComponentContext > const & context)
     throw (css::uno::Exception)
 {
-    return static_cast< cppu::OWeakObject * >(new Service(context));
+    return cppu::getXWeak(new Service(context));
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT void * SAL_CALL component_getFactory(char const * implName,
@@ -776,9 +776,9 @@ bool writeInfo(void * registryKey, OUString const & implementationName,
         return false;
     }
     bool success = true;
-    for (sal_Int32 i = 0; i < serviceNames.getLength(); ++i) {
+    for (auto const& rServiceName : serviceNames) {
         try {
-            key->createKey(serviceNames[i]);
+            key->createKey(rServiceName);
         } catch (css::registry::InvalidRegistryException &) {
             success = false;
             break;

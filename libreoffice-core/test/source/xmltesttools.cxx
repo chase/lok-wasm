@@ -171,6 +171,14 @@ void XmlTestTools::assertXPath(const xmlDocUniquePtr& pXmlDoc, const OString& rX
                                  rExpectedValue, aValue);
 }
 
+void XmlTestTools::assertXPathDoubleValue(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath, const OString& rAttribute, double expectedValue, double delta)
+{
+    OUString aValue = getXPath(pXmlDoc, rXPath, rAttribute);
+    double pathValue = aValue.toDouble();
+    CPPUNIT_ASSERT_DOUBLES_EQUAL_MESSAGE(std::string("In <") + std::string(pXmlDoc->name ? pXmlDoc->name : "") + ">, attribute '" + std::string(rAttribute) + "' of '" + std::string(rXPath) + "' incorrect value.",
+                                         expectedValue, pathValue, delta);
+}
+
 void XmlTestTools::assertXPathAttrs(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath,
                                     const std::vector<std::pair<OString, OUString>>& aPairVector)
 {
@@ -284,8 +292,23 @@ int XmlTestTools::getXPathPosition(const xmlDocUniquePtr& pXmlDoc, const OString
     return nRet;
 }
 
+void XmlTestTools::assertXPathNodeName(const xmlDocUniquePtr& pXmlDoc, const OString& rXPath,
+                                          const OString& rExpectedName)
+{
+    xmlXPathObjectPtr pXmlObj = getXPathNode(pXmlDoc, rXPath);
+    xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
+    CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(OString::Concat("In <") + pXmlDoc->name + ">, XPath '" + rXPath + "' number of nodes is incorrect").getStr(),
+                                 1,
+                                 xmlXPathNodeSetGetLength(pXmlNodes));
+    xmlNodePtr pXmlNode = pXmlNodes->nodeTab[0];
+    CPPUNIT_ASSERT_EQUAL_MESSAGE(OString(OString::Concat("In XPath '" + rXPath + "' name of node is incorrect")).getStr(),
+                                 rExpectedName, oconvert(pXmlNode->name));
+}
+
 void XmlTestTools::registerODFNamespaces(xmlXPathContextPtr& pXmlXpathCtx)
 {
+    xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("manifest"),
+                       BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"));
     xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("office"),
                        BAD_CAST("urn:oasis:names:tc:opendocument:xmlns:office:1.0"));
     xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("style"),

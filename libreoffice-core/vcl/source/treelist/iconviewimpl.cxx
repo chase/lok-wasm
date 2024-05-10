@@ -464,19 +464,17 @@ void IconViewImpl::SyncVerThumb()
     m_aVerSBar->SetThumbPos(GetEntryRow(m_pStartEntry));
 }
 
-void IconViewImpl::UpdateAll( bool bInvalidateCompleteView )
+void IconViewImpl::UpdateAll()
 {
     FindMostRight();
+    AdjustScrollBars(m_aOutputSize);
     SyncVerThumb();
     FillView();
     ShowVerSBar();
     if( m_bSimpleTravel && m_pCursor && m_pView->HasFocus() )
         m_pView->Select( m_pCursor );
     ShowCursor( true );
-    if( bInvalidateCompleteView )
-        m_pView->Invalidate();
-    else
-        m_pView->Invalidate( GetVisibleArea() );
+    m_pView->Invalidate( GetVisibleArea() );
 }
 
 void IconViewImpl::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)

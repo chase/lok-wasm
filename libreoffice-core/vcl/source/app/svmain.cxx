@@ -27,6 +27,7 @@
 
 #include <desktop/exithelper.h>
 
+#include <comphelper/accessibleeventnotifier.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/asyncnotification.hxx>
 #include <i18nlangtag/mslangid.hxx>
@@ -193,10 +194,10 @@ int ImplSVMain()
 
     const bool bWasInitVCL = IsVCLInit();
 
-#if defined(LINUX) && !defined(SYSTEM_OPENSSL)
+#if !defined(_WIN32) && !defined(SYSTEM_OPENSSL)
     if (!bWasInitVCL)
     {
-        const OUString name("SSL_CERT_FILE");
+        OUString constexpr name(u"SSL_CERT_FILE"_ustr);
         OUString temp;
         if (osl_getEnvironment(name.pData, &temp.pData) == osl_Process_E_NotFound)
         {
@@ -481,13 +482,13 @@ void DeInitVCL()
             nBadTopWindows--;
         else
         {
-            aBuf.append( "text = \"" );
-            aBuf.append( OUStringToOString( pWin->GetText(), osl_getThreadTextEncoding() ) );
-            aBuf.append( "\" type = \"" );
-            aBuf.append( typeid(*pWin).name() );
-            aBuf.append( "\", ptr = 0x" );
-            aBuf.append( reinterpret_cast<sal_Int64>( pWin ), 16 );
-            aBuf.append( "\n" );
+            aBuf.append( "text = \""
+                + OUStringToOString( pWin->GetText(), osl_getThreadTextEncoding() )
+                + "\" type = \""
+                + typeid(*pWin).name()
+                + "\", ptr = 0x"
+                + OString::number(reinterpret_cast<sal_Int64>( pWin ), 16 )
+                + "\n" );
         }
     }
     SAL_WARN_IF( nBadTopWindows!=0, "vcl", aBuf.getStr() );
@@ -506,15 +507,6 @@ void DeInitVCL()
     // as this processes all pending events in debug builds.
     ImplGetSystemDependentDataManager().flushAll();
 
-    Scheduler::ImplDeInitScheduler();
-
-    pSVData->mpWinData->maMsgBoxImgList.clear();
-    pSVData->maCtrlData.maCheckImgList.clear();
-    pSVData->maCtrlData.maRadioImgList.clear();
-    pSVData->maCtrlData.mpDisclosurePlus.reset();
-    pSVData->maCtrlData.mpDisclosureMinus.reset();
-    pSVData->mpDefaultWin.disposeAndClear();
-
 #if defined _WIN32
     // See GetSystemClipboard (vcl/source/treelist/transfer2.cxx):
     if (auto const comp = css::uno::Reference<css::lang::XComponent>(
@@ -525,6 +517,15 @@ void DeInitVCL()
     }
     pSVData->m_xSystemClipboard.clear();
 #endif
+
+    Scheduler::ImplDeInitScheduler();
+
+    pSVData->mpWinData->maMsgBoxImgList.clear();
+    pSVData->maCtrlData.maCheckImgList.clear();
+    pSVData->maCtrlData.maRadioImgList.clear();
+    pSVData->maCtrlData.moDisclosurePlus.reset();
+    pSVData->maCtrlData.moDisclosureMinus.reset();
+    pSVData->mpDefaultWin.disposeAndClear();
 
 #ifndef NDEBUG
     DbgGUIDeInitSolarMutexCheck();
@@ -615,6 +616,8 @@ void DeInitVCL()
     pSVData->maGDIData.mxScreenFontCache.reset();
     pSVData->dropCaches();
 
+    comphelper::AccessibleEventNotifier::shutdown();
+
     // Deinit Sal
     if (pSVData->mpDefInst)
     {
@@ -656,7 +659,7 @@ struct WorkerThreadData
 
 #ifdef _WIN32
 static HANDLE hThreadID = nullptr;
-static DWORD WINAPI threadmain( _In_ LPVOID pArgs )
+static unsigned __stdcall threadmain(void* pArgs)
 {
     OleInitialize( nullptr );
     static_cast<WorkerThreadData*>(pArgs)->pWorker( static_cast<WorkerThreadData*>(pArgs)->pThreadData );
@@ -683,14 +686,13 @@ void CreateMainLoopThread( oslWorkerFunction pWorker, void * pThreadData )
 #ifdef _WIN32
     // sal thread always call CoInitializeEx, so a system dependent implementation is necessary
 
-    DWORD uThreadID;
-    hThreadID = CreateThread(
+    hThreadID = reinterpret_cast<HANDLE>(_beginthreadex(
         nullptr,       // no security handle
         0,          // stacksize 0 means default
         threadmain,    // thread worker function
         new WorkerThreadData( pWorker, pThreadData ),       // arguments for worker function
         0,          // 0 means: create immediately otherwise use CREATE_SUSPENDED
-        &uThreadID );   // thread id to fill
+        nullptr ));   // thread id to fill
 #else
     hThreadID = osl_createThread( MainWorkerFunction, new WorkerThreadData( pWorker, pThreadData ) );
 #endif

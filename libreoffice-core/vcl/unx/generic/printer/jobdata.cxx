@@ -45,8 +45,6 @@ JobData& JobData::operator=(const JobData& rRight)
     m_bPapersizeFromSetup   = rRight.m_bPapersizeFromSetup;
     m_pParser               = rRight.m_pParser;
     m_aContext              = rRight.m_aContext;
-    m_nPSLevel              = rRight.m_nPSLevel;
-    m_nPDFDevice            = rRight.m_nPDFDevice;
     m_nColorDevice          = rRight.m_nColorDevice;
 
     if( !m_pParser && !m_aPrinterName.isEmpty() )
@@ -59,29 +57,8 @@ JobData& JobData::operator=(const JobData& rRight)
 
 void JobData::setCollate( bool bCollate )
 {
-    if (m_nPDFDevice > 0)
-    {
-        m_bCollate = bCollate;
-        return;
-    }
-    const PPDParser* pParser = m_aContext.getParser();
-    if( !pParser )
-        return;
-
-    const PPDKey* pKey = pParser->getKey( "Collate" );
-    if( !pKey )
-        return;
-
-    const PPDValue* pVal = nullptr;
-    if( bCollate )
-        pVal = pKey->getValue( "True" );
-    else
-    {
-        pVal = pKey->getValue( "False" );
-        if( ! pVal )
-            pVal = pKey->getValue( "None" );
-    }
-    m_aContext.setValue( pKey, pVal );
+    m_bCollate = bCollate;
+    return;
 }
 
 void JobData::setPaper( int i_nWidth, int i_nHeight )
@@ -110,7 +87,7 @@ void JobData::setPaperBin( int i_nPaperBin )
     }
 }
 
-bool JobData::getStreamBuffer( void*& pData, sal_uInt32& bytes )
+bool JobData::getStreamBuffer( std::unique_ptr<sal_uInt8[]>& pData, sal_uInt32& bytes )
 {
     // consistency checks
     if( ! m_pParser )
@@ -124,10 +101,8 @@ bool JobData::getStreamBuffer( void*& pData, sal_uInt32& bytes )
     // write header job data
     aStream.WriteLine("JobData 1");
 
-    OStringBuffer aLine;
-
-    aLine.append("printer=");
-    aLine.append(OUStringToOString(m_aPrinterName, RTL_TEXTENCODING_UTF8));
+    OStringBuffer aLine("printer="
+        + OUStringToOString(m_aPrinterName, RTL_TEXTENCODING_UTF8));
     aStream.WriteLine(aLine);
     aLine.setLength(0);
 
@@ -139,49 +114,22 @@ bool JobData::getStreamBuffer( void*& pData, sal_uInt32& bytes )
     aStream.WriteLine(aLine);
     aLine.setLength(0);
 
-    aLine.append("copies=");
-    aLine.append(static_cast<sal_Int32>(m_nCopies));
-    aStream.WriteLine(aLine);
-    aLine.setLength(0);
+    aStream.WriteLine(Concat2View("copies=" + OString::number(static_cast<sal_Int32>(m_nCopies))));
+    aStream.WriteLine(Concat2View("collate=" + OString::boolean(m_bCollate)));
 
-    if (m_nPDFDevice > 0)
-    {
-        aLine.append("collate=");
-        aLine.append(OString::boolean(m_bCollate));
-        aStream.WriteLine(aLine);
-        aLine.setLength(0);
-    }
+    aStream.WriteLine(Concat2View(
+        "marginadjustment="
+        + OString::number(static_cast<sal_Int32>(m_nLeftMarginAdjust))
+        + ","
+        + OString::number(static_cast<sal_Int32>(m_nRightMarginAdjust))
+        + ",'"
+        + OString::number(static_cast<sal_Int32>(m_nTopMarginAdjust))
+        + ","
+        + OString::number(static_cast<sal_Int32>(m_nBottomMarginAdjust))));
 
-    aLine.append("marginadjustment=");
-    aLine.append(static_cast<sal_Int32>(m_nLeftMarginAdjust));
-    aLine.append(',');
-    aLine.append(static_cast<sal_Int32>(m_nRightMarginAdjust));
-    aLine.append(',');
-    aLine.append(static_cast<sal_Int32>(m_nTopMarginAdjust));
-    aLine.append(',');
-    aLine.append(static_cast<sal_Int32>(m_nBottomMarginAdjust));
-    aStream.WriteLine(aLine);
-    aLine.setLength(0);
+    aStream.WriteLine(Concat2View("colordepth=" + OString::number(static_cast<sal_Int32>(m_nColorDepth))));
 
-    aLine.append("colordepth=");
-    aLine.append(static_cast<sal_Int32>(m_nColorDepth));
-    aStream.WriteLine(aLine);
-    aLine.setLength(0);
-
-    aLine.append("pslevel=");
-    aLine.append(static_cast<sal_Int32>(m_nPSLevel));
-    aStream.WriteLine(aLine);
-    aLine.setLength(0);
-
-    aLine.append("pdfdevice=");
-    aLine.append(static_cast<sal_Int32>(m_nPDFDevice));
-    aStream.WriteLine(aLine);
-    aLine.setLength(0);
-
-    aLine.append("colordevice=");
-    aLine.append(static_cast<sal_Int32>(m_nColorDevice));
-    aStream.WriteLine(aLine);
-    aLine.setLength(0);
+    aStream.WriteLine(Concat2View("colordevice=" + OString::number(static_cast<sal_Int32>(m_nColorDevice))));
 
     // now append the PPDContext stream buffer
     aStream.WriteLine( "PPDContextData" );
@@ -193,8 +141,8 @@ bool JobData::getStreamBuffer( void*& pData, sal_uInt32& bytes )
 
     // success
     bytes = static_cast<sal_uInt32>(aStream.Tell());
-    pData = std::malloc( bytes );
-    memcpy( pData, aStream.GetData(), bytes );
+    pData = std::make_unique<sal_uInt8[]>( bytes );
+    memcpy( pData.get(), aStream.GetData(), bytes );
     return true;
 }
 
@@ -210,8 +158,6 @@ bool JobData::constructFromStreamBuffer( const void* pData, sal_uInt32 bytes, Jo
     bool bMargin        = false;
     bool bColorDepth    = false;
     bool bColorDevice   = false;
-    bool bPSLevel       = false;
-    bool bPDFDevice     = false;
 
     const char printerEquals[] = "printer=";
     const char orientatationEquals[] = "orientation=";
@@ -220,8 +166,6 @@ bool JobData::constructFromStreamBuffer( const void* pData, sal_uInt32 bytes, Jo
     const char marginadjustmentEquals[] = "marginadjustment=";
     const char colordepthEquals[] = "colordepth=";
     const char colordeviceEquals[] = "colordevice=";
-    const char pslevelEquals[] = "pslevel=";
-    const char pdfdeviceEquals[] = "pdfdevice=";
 
     while( ! aStream.eof() )
     {
@@ -266,16 +210,6 @@ bool JobData::constructFromStreamBuffer( const void* pData, sal_uInt32 bytes, Jo
             bColorDevice = true;
             rJobData.m_nColorDevice = o3tl::toInt32(aLine.subView(RTL_CONSTASCII_LENGTH(colordeviceEquals)));
         }
-        else if (aLine.startsWith(pslevelEquals))
-        {
-            bPSLevel = true;
-            rJobData.m_nPSLevel = o3tl::toInt32(aLine.subView(RTL_CONSTASCII_LENGTH(pslevelEquals)));
-        }
-        else if (aLine.startsWith(pdfdeviceEquals))
-        {
-            bPDFDevice = true;
-            rJobData.m_nPDFDevice = o3tl::toInt32(aLine.subView(RTL_CONSTASCII_LENGTH(pdfdeviceEquals)));
-        }
         else if (aLine == "PPDContextData" && bPrinter)
         {
             PrinterInfoManager& rManager = PrinterInfoManager::get();
@@ -298,19 +232,7 @@ bool JobData::constructFromStreamBuffer( const void* pData, sal_uInt32 bytes, Jo
         }
     }
 
-    return bVersion && bPrinter && bOrientation && bCopies && bContext && bMargin && bPSLevel && bPDFDevice && bColorDevice && bColorDepth;
-}
-
-void JobData::resolveDefaultBackend()
-{
-    if (m_nPSLevel == 0 && m_nPDFDevice == 0)
-        setDefaultBackend(officecfg::Office::Common::Print::Option::Printer::PDFAsStandardPrintJobFormat::get());
-}
-
-void JobData::setDefaultBackend(bool bUsePDF)
-{
-    if (bUsePDF && m_nPSLevel == 0 && m_nPDFDevice == 0)
-        m_nPDFDevice = 1;
+    return bVersion && bPrinter && bOrientation && bCopies && bContext && bMargin && bColorDevice && bColorDepth;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

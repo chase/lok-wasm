@@ -91,7 +91,7 @@ using namespace ::com::sun::star;
 using namespace nsSwDocInfoSubType;
 
 // case-corrected version of the first part for the service names (see #i67811)
-constexpr OUStringLiteral COM_TEXT_FLDMASTER_CC = u"com.sun.star.text.fieldmaster.";
+constexpr OUString COM_TEXT_FLDMASTER_CC = u"com.sun.star.text.fieldmaster."_ustr;
 
 // note: this thing is indexed as an array, so do not insert/remove entries!
 const sal_uInt16 aDocInfoSubTypeFromService[] =
@@ -183,9 +183,9 @@ const ServiceIdResId aServiceToRes[] =
 
 static SwFieldIds lcl_ServiceIdToResId(SwServiceType nServiceId)
 {
-    for (size_t i=0; i<SAL_N_ELEMENTS(aServiceToRes); ++i)
-        if (aServiceToRes[i].nServiceId == nServiceId)
-            return aServiceToRes[i].nResId;
+    for (auto const& aEntry : aServiceToRes)
+        if (aEntry.nServiceId == nServiceId)
+            return aEntry.nResId;
 #if OSL_DEBUG_LEVEL > 0
     OSL_FAIL("service id not found");
 #endif
@@ -457,18 +457,6 @@ protected:
     virtual void Notify(const SfxHint& rHint) override;
 };
 
-const uno::Sequence< sal_Int8 > & SwXFieldMaster::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXFieldMasterUnoTunnelId;
-    return theSwXFieldMasterUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXFieldMaster::getSomething(const uno::Sequence< sal_Int8 >& rId)
-{
-    return comphelper::getSomethingImpl<SwXFieldMaster>(rId, this);
-}
-
 OUString SAL_CALL
 SwXFieldMaster::getImplementationName()
 {
@@ -518,8 +506,8 @@ SwXFieldMaster::getSupportedServiceNames()
     return { "com.sun.star.text.TextFieldMaster", getServiceName(m_pImpl->m_nResTypeId) };
 }
 
-SwXFieldMaster::SwXFieldMaster(SwDoc *const pDoc, SwFieldIds const nResId)
-    : m_pImpl(new Impl(pDoc->getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD), pDoc, nResId))
+SwXFieldMaster::SwXFieldMaster(SwDoc& rDoc, SwFieldIds const nResId)
+    : m_pImpl(new Impl(rDoc.getIDocumentStylePoolAccess().GetPageDescFromPool(RES_POOLPAGE_STANDARD), &rDoc, nResId))
 {
 }
 
@@ -540,13 +528,13 @@ SwXFieldMaster::CreateXFieldMaster(SwDoc * pDoc, SwFieldType *const pType,
     rtl::Reference<SwXFieldMaster> xFM;
     if (pType)
     {
-        xFM = dynamic_cast<SwXFieldMaster*>(pType->GetXObject().get().get());
+        xFM = pType->GetXObject().get();
     }
     if (!xFM.is())
     {
         SwXFieldMaster *const pFM( pType
                 ? new SwXFieldMaster(*pType, pDoc)
-                : new SwXFieldMaster(pDoc, nResId));
+                : new SwXFieldMaster(*pDoc, nResId));
         xFM.set(pFM);
         if (pType)
         {
@@ -611,7 +599,7 @@ void SAL_CALL SwXFieldMaster::setPropertyValue(
             {
                 throw beans::UnknownPropertyException(
                     "Unknown property: " + rPropertyName,
-                    static_cast< cppu::OWeakObject * >( this ) );
+                    getXWeak() );
             }
 
             pType->PutValue( rValue, nMemberValueId );
@@ -768,7 +756,7 @@ void SAL_CALL SwXFieldMaster::setPropertyValue(
             }
             break;
         default:
-            throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+            throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, getXWeak() );
         }
     }
 }
@@ -835,7 +823,7 @@ SwXFieldMaster::getPropertyValue(const OUString& rPropertyName)
             {
                 throw beans::UnknownPropertyException(
                         "Unknown property: " + rPropertyName,
-                        static_cast<cppu::OWeakObject *>(this));
+                        getXWeak());
             }
             pType->QueryValue( aRet, nMId );
 
@@ -916,7 +904,7 @@ SwXFieldMaster::getPropertyValue(const OUString& rPropertyName)
                 }
                 break;
             default:
-                throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+                throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, getXWeak() );
             }
         }
     }
@@ -1173,18 +1161,6 @@ public:
     virtual void Notify(const SfxHint&) override;
 };
 
-const uno::Sequence< sal_Int8 > & SwXTextField::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXTextFieldUnoTunnelId;
-    return theSwXTextFieldUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXTextField::getSomething(const uno::Sequence< sal_Int8 >& rId)
-{
-    return comphelper::getSomethingImpl<SwXTextField>(rId, this);
-}
-
 SwXTextField::SwXTextField(
     SwServiceType nServiceId,
     SwDoc* pDoc)
@@ -1262,23 +1238,34 @@ SwServiceType SwXTextField::GetServiceId() const
     it has to be disconnected first and at the end connected to the
     new instance!
  */
-void SwXTextField::TransmuteLeadToInputField(SwSetExpField & rField)
+void SwXTextField::TransmuteLeadToInputField(SwSetExpField & rField,
+        sal_uInt16 const*const pSubType)
 {
-    assert(rField.GetFormatField()->Which() == (rField.GetInputFlag() ? RES_TXTATR_INPUTFIELD : RES_TXTATR_FIELD));
-    rtl::Reference<SwXTextField> const xField(
+#ifndef NDEBUG
+    auto const oldWhich(
+        (pSubType ? (rField.GetSubType() & nsSwGetSetExpType::GSE_STRING) != 0 : rField.GetInputFlag())
+            ? RES_TXTATR_INPUTFIELD : RES_TXTATR_FIELD);
+    auto const newWhich(oldWhich == RES_TXTATR_FIELD ? RES_TXTATR_INPUTFIELD : RES_TXTATR_FIELD);
+#endif
+    assert(rField.GetFormatField()->Which() == oldWhich);
+    rtl::Reference<SwXTextField> const pXField(
         rField.GetFormatField()->GetXTextField());
-    SwXTextField *const pXField = xField.is()
-        ? comphelper::getFromUnoTunnel<SwXTextField>(uno::Reference<lang::XUnoTunnel>(xField))
-        : nullptr;
     if (pXField)
         pXField->m_pImpl->SetFormatField(nullptr, nullptr);
     SwTextField *const pOldAttr(rField.GetFormatField()->GetTextField());
     SwSetExpField tempField(rField);
-    tempField.SetInputFlag(!rField.GetInputFlag());
+    if (pSubType)
+    {
+        tempField.SetSubType(*pSubType);
+    }
+    else
+    {
+        tempField.SetInputFlag(!rField.GetInputFlag());
+    }
     SwFormatField tempFormat(tempField);
     assert(tempFormat.GetField() != &rField);
     assert(tempFormat.GetField() != &tempField); // this copies it again?
-    assert(tempFormat.Which() == (static_cast<SwSetExpField const*>(tempFormat.GetField())->GetInputFlag() ? RES_TXTATR_INPUTFIELD : RES_TXTATR_FIELD));
+    assert(tempFormat.Which() == newWhich);
     SwTextNode & rNode(pOldAttr->GetTextNode());
     std::shared_ptr<SwPaM> pPamForTextField;
     IDocumentContentOperations & rIDCO(rNode.GetDoc().getIDocumentContentOperations());
@@ -1293,12 +1280,14 @@ void SwXTextField::TransmuteLeadToInputField(SwSetExpField & rField)
     SwTextField const* pNewAttr(rNode.GetFieldTextAttrAt(nStart, ::sw::GetTextAttrMode::Default));
     assert(pNewAttr);
     SwFormatField const& rNewFormat(pNewAttr->GetFormatField());
-    assert(rNewFormat.Which() == (static_cast<SwSetExpField const*>(rNewFormat.GetField())->GetInputFlag() ? RES_TXTATR_INPUTFIELD : RES_TXTATR_FIELD));
-    assert(static_cast<SwSetExpField const*>(rNewFormat.GetField())->GetInputFlag() == (dynamic_cast<SwTextInputField const*>(pNewAttr) != nullptr));
+    assert(rNewFormat.Which() == newWhich);
+    assert((dynamic_cast<SwTextInputField const*>(pNewAttr) != nullptr)
+        == ((static_cast<SwSetExpField const*>(rNewFormat.GetField())->GetSubType() & nsSwGetSetExpType::GSE_STRING)
+            && static_cast<SwSetExpField const*>(rNewFormat.GetField())->GetInputFlag()));
     if (pXField)
     {
         pXField->m_pImpl->SetFormatField(const_cast<SwFormatField*>(&rNewFormat), &rNode.GetDoc());
-        const_cast<SwFormatField&>(rNewFormat).SetXTextField(xField);
+        const_cast<SwFormatField&>(rNewFormat).SetXTextField(pXField);
     }
 }
 
@@ -1309,10 +1298,7 @@ void SAL_CALL SwXTextField::attachTextFieldMaster(
 
     if (!m_pImpl->IsDescriptor())
         throw uno::RuntimeException();
-    uno::Reference< lang::XUnoTunnel > xMasterTunnel(xFieldMaster, uno::UNO_QUERY);
-    if (!xMasterTunnel.is())
-        throw lang::IllegalArgumentException();
-    SwXFieldMaster* pMaster = comphelper::getFromUnoTunnel<SwXFieldMaster>(xMasterTunnel);
+    SwXFieldMaster* pMaster = dynamic_cast<SwXFieldMaster*>(xFieldMaster.get());
 
     SwFieldType* pFieldType = pMaster ? pMaster->GetFieldType() : nullptr;
     if (!pFieldType ||
@@ -1355,9 +1341,8 @@ void SAL_CALL SwXTextField::attach(
     SolarMutexGuard aGuard;
     if (m_pImpl->IsDescriptor())
     {
-        uno::Reference<lang::XUnoTunnel> xRangeTunnel( xTextRange, uno::UNO_QUERY);
-        SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-        OTextCursorHelper* pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+        SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+        OTextCursorHelper* pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
 
         SwDoc* pDoc = pRange ? &pRange->GetDoc() : pCursor ? pCursor->GetDoc() : nullptr;
         // if a FieldMaster was attached, then the document is already fixed!
@@ -2177,9 +2162,9 @@ SwXTextField::setPropertyValue(
     const SfxItemPropertyMapEntry*   pEntry = _pPropSet->getPropertyMap().getByName(rPropertyName);
 
     if (!pEntry)
-        throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, getXWeak() );
     if ( pEntry->nFlags & beans::PropertyAttribute::READONLY)
-        throw beans::PropertyVetoException( "Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::PropertyVetoException( "Property is read-only: " + rPropertyName, getXWeak() );
 
     if(pField)
     {
@@ -2320,8 +2305,8 @@ SwXTextField::setPropertyValue(
         }
         if (pBool)
         {
-            auto b = o3tl::tryAccess<bool>(rValue);
-            if( !b )
+            std::optional<const bool> b = o3tl::tryAccess<bool>(rValue);
+            if( !b.has_value() )
                 throw lang::IllegalArgumentException();
             *pBool = *b;
 
@@ -2345,7 +2330,7 @@ uno::Any SAL_CALL SwXTextField::getPropertyValue(const OUString& rPropertyName)
         pEntry = _pParaPropSet->getPropertyMap().getByName(rPropertyName);
     }
     if (!pEntry)
-        throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::UnknownPropertyException( "Unknown property: " + rPropertyName, getXWeak() );
 
     switch( pEntry->nWID )
     {
@@ -2594,7 +2579,7 @@ void SAL_CALL SwXTextField::update()
             default: break;
         }
         // Text formatting has to be triggered.
-        m_pImpl->GetFormatField()->UpdateTextNode(nullptr, nullptr);
+        m_pImpl->GetFormatField()->ForceUpdateTextNode();
     }
     else
         m_pImpl->m_bCallUpdate = true;
@@ -2758,8 +2743,6 @@ static SwFieldIds lcl_GetIdByName( OUString& rName, OUString& rTypeName )
 uno::Any SwXTextFieldMasters::getByName(const OUString& rName)
 {
     SolarMutexGuard aGuard;
-    if(!GetDoc())
-        throw uno::RuntimeException();
 
     OUString sName(rName), sTypeName;
     const SwFieldIds nResId = lcl_GetIdByName( sName, sTypeName );
@@ -2769,14 +2752,15 @@ uno::Any SwXTextFieldMasters::getByName(const OUString& rName)
             css::uno::Reference<css::uno::XInterface>());
 
     sName = sName.copy(std::min(sTypeName.getLength()+1, sName.getLength()));
-    SwFieldType* pType = GetDoc()->getIDocumentFieldsAccess().GetFieldType(nResId, sName, true);
+    auto& rDoc = GetDoc();
+    SwFieldType* pType = rDoc.getIDocumentFieldsAccess().GetFieldType(nResId, sName, true);
     if(!pType)
         throw container::NoSuchElementException(
             "SwXTextFieldMasters::getByName(" + rName + ")",
             css::uno::Reference<css::uno::XInterface>());
 
     uno::Reference<beans::XPropertySet> const xRet(
-            SwXFieldMaster::CreateXFieldMaster(GetDoc(), pType));
+            SwXFieldMaster::CreateXFieldMaster(&rDoc, pType));
     return uno::Any(xRet);
 }
 
@@ -2817,10 +2801,8 @@ bool SwXTextFieldMasters::getInstanceName(
 uno::Sequence< OUString > SwXTextFieldMasters::getElementNames()
 {
     SolarMutexGuard aGuard;
-    if(!GetDoc())
-        throw uno::RuntimeException();
 
-    const SwFieldTypes* pFieldTypes = GetDoc()->getIDocumentFieldsAccess().GetFieldTypes();
+    const SwFieldTypes* pFieldTypes = GetDoc().getIDocumentFieldsAccess().GetFieldTypes();
     const size_t nCount = pFieldTypes->size();
 
     std::vector<OUString> aFieldNames;
@@ -2841,8 +2823,6 @@ uno::Sequence< OUString > SwXTextFieldMasters::getElementNames()
 sal_Bool SwXTextFieldMasters::hasByName(const OUString& rName)
 {
     SolarMutexGuard aGuard;
-    if(!GetDoc())
-        throw uno::RuntimeException();
 
     OUString sName(rName), sTypeName;
     const SwFieldIds nResId = lcl_GetIdByName( sName, sTypeName );
@@ -2850,7 +2830,7 @@ sal_Bool SwXTextFieldMasters::hasByName(const OUString& rName)
     if( SwFieldIds::Unknown != nResId )
     {
         sName = sName.copy(std::min(sTypeName.getLength()+1, sName.getLength()));
-        bRet = nullptr != GetDoc()->getIDocumentFieldsAccess().GetFieldType(nResId, sName, true);
+        bRet = nullptr != GetDoc().getIDocumentFieldsAccess().GetFieldType(nResId, sName, true);
     }
     return bRet;
 }
@@ -2905,7 +2885,7 @@ SwXTextFieldTypes::~SwXTextFieldTypes()
 void SwXTextFieldTypes::Invalidate()
 {
     SwUnoCollection::Invalidate();
-    lang::EventObject const ev(static_cast< ::cppu::OWeakObject&>(*this));
+    lang::EventObject const ev(getXWeak());
     std::unique_lock aGuard(m_pImpl->m_Mutex);
     m_pImpl->m_RefreshListeners.disposeAndClear(aGuard, ev);
 }
@@ -2913,9 +2893,7 @@ void SwXTextFieldTypes::Invalidate()
 uno::Reference< container::XEnumeration >  SwXTextFieldTypes::createEnumeration()
 {
     SolarMutexGuard aGuard;
-    if(!IsValid())
-        throw uno::RuntimeException();
-    return new SwXFieldEnumeration(*GetDoc());
+    return new SwXFieldEnumeration(GetDoc());
 }
 
 uno::Type  SwXTextFieldTypes::getElementType()
@@ -2935,14 +2913,13 @@ void SAL_CALL SwXTextFieldTypes::refresh()
 {
     {
         SolarMutexGuard aGuard;
-        if (!IsValid())
-            throw uno::RuntimeException();
-        UnoActionContext aContext(GetDoc());
-        GetDoc()->getIDocumentStatistics().UpdateDocStat( false, true );
-        GetDoc()->getIDocumentFieldsAccess().UpdateFields(false);
+        auto& rDoc = GetDoc();
+        UnoActionContext aContext(&rDoc);
+        rDoc.getIDocumentStatistics().UpdateDocStat(false, true);
+        rDoc.getIDocumentFieldsAccess().UpdateFields(false);
     }
     // call refresh listeners (without SolarMutex locked)
-    lang::EventObject const event(static_cast< ::cppu::OWeakObject*>(this));
+    lang::EventObject const event(getXWeak());
     std::unique_lock aGuard(m_pImpl->m_Mutex);
     m_pImpl->m_RefreshListeners.notifyEach(aGuard,
             & util::XRefreshListener::refreshed, event);
@@ -3028,7 +3005,7 @@ SwXFieldEnumeration::SwXFieldEnumeration(SwDoc & rDoc)
     IDocumentMarkAccess& rMarksAccess(*rDoc.getIDocumentMarkAccess());
     for (auto iter = rMarksAccess.getFieldmarksBegin(); iter != rMarksAccess.getFieldmarksEnd(); ++iter)
     {
-        m_pImpl->m_Items.emplace_back(static_cast<cppu::OWeakObject*>(SwXFieldmark::CreateXFieldmark(rDoc, *iter).get()), uno::UNO_QUERY);
+        m_pImpl->m_Items.emplace_back(cppu::getXWeak(SwXFieldmark::CreateXFieldmark(rDoc, *iter).get()), uno::UNO_QUERY);
     }
 }
 

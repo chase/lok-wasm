@@ -110,7 +110,12 @@
 #include <vector>
 #include <list>
 #include <libxml/xmlwriter.h>
+#include <toolkit/awt/vclxmenu.hxx>
 #include <unordered_map>
+#include <unordered_set>
+
+#define ShellClass_SfxViewShell
+#include <sfxslots.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -118,10 +123,6 @@ using namespace ::com::sun::star::frame;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::util;
 using namespace ::cppu;
-
-#define ShellClass_SfxViewShell
-#include <sfxslots.hxx>
-
 
 class SfxClipboardChangeListener : public ::cppu::WeakImplHelper<
     datatransfer::clipboard::XClipboardListener >
@@ -182,7 +183,7 @@ void SfxClipboardChangeListener::ChangedContents()
     if (!m_pViewShell)
         return;
 
-    SfxBindings& rBind = m_pViewShell->GetViewFrame()->GetBindings();
+    SfxBindings& rBind = m_pViewShell->GetViewFrame().GetBindings();
     rBind.Invalidate(SID_PASTE);
     rBind.Invalidate(SID_PASTE_SPECIAL);
     rBind.Invalidate(SID_CLIPBOARD_FORMAT_ITEMS);
@@ -190,7 +191,7 @@ void SfxClipboardChangeListener::ChangedContents()
     if (comphelper::LibreOfficeKit::isActive())
     {
         // In the future we might send the payload as well.
-        SfxLokHelper::notifyAllViews(LOK_CALLBACK_CLIPBOARD_CHANGED, "");
+        SfxLokHelper::notifyAllViews(LOK_CALLBACK_CLIPBOARD_CHANGED, ""_ostr);
     }
 }
 
@@ -240,11 +241,14 @@ void SAL_CALL SfxClipboardChangeListener::changedContents( const datatransfer::c
         delete pInfo;
 }
 
+namespace
+{
 struct TableSizeType
 {
     sal_Int32 nRowCount;
     sal_Int32 nColCount;
 };
+}
 
 typedef std::list<uno::Reference<accessibility::XAccessibleTable>> XAccessibleTableList;
 
@@ -368,8 +372,8 @@ sal_Int64 getAccessibleSiblingCount(const Reference<accessibility::XAccessibleCo
 // The list is ordered from the ancient ancestor to xTable.
 // Return true if xAncestorTable is an ancestor of xTable.
 bool getAncestorList(XAccessibleTableList& rAncestorList,
-                     uno::Reference<accessibility::XAccessibleTable> xTable,
-                     uno::Reference<accessibility::XAccessibleTable> xAncestorTable = uno::Reference<accessibility::XAccessibleTable>())
+                     const uno::Reference<accessibility::XAccessibleTable>& xTable,
+                     const uno::Reference<accessibility::XAccessibleTable>& xAncestorTable = uno::Reference<accessibility::XAccessibleTable>())
 {
     uno::Reference<accessibility::XAccessibleTable> xCurrentTable = xTable;
     while (xCurrentTable.is() && xCurrentTable != xAncestorTable)
@@ -417,7 +421,7 @@ void lookForParentTable(const uno::Reference<accessibility::XAccessibleContext>&
     }
 }
 
-OUString truncateText(const OUString& sText, sal_Int32 nNewLength)
+OUString truncateText(OUString& sText, sal_Int32 nNewLength)
 {
     // truncate test to given length
     OUString sNewText = sText.copy(0, nNewLength);
@@ -430,21 +434,21 @@ OUString truncateText(const OUString& sText, sal_Int32 nNewLength)
 
 std::string stateSetToString(::sal_Int64 stateSet)
 {
-    static const std::string states[34] = {
+    static const std::string states[35] = {
             "ACTIVE", "ARMED", "BUSY", "CHECKED", "DEFUNC",
             "EDITABLE", "ENABLED", "EXPANDABLE", "EXPANDED", "FOCUSABLE",
             "FOCUSED", "HORIZONTAL", "ICONIFIED", "INDETERMINATE", "MANAGES_DESCENDANTS",
             "MODAL", "MULTI_LINE", "MULTI_SELECTABLE", "OPAQUE", "PRESSED",
             "RESIZABLE", "SELECTABLE", "SELECTED", "SENSITIVE", "SHOWING",
             "SINGLE_LINE", "STALE", "TRANSIENT", "VERTICAL", "VISIBLE",
-            "MOVEABLE", "DEFAULT", "OFFSCREEN", "COLLAPSE"
+            "MOVEABLE", "DEFAULT", "OFFSCREEN", "COLLAPSE", "CHECKABLE"
     };
 
     if (stateSet == 0)
         return "INVALID";
     ::sal_Int64 state = 1;
     std::string s;
-    for (int i = 0; i < 34; ++i)
+    for (int i = 0; i < 35; ++i)
     {
         if (stateSet & state)
         {
@@ -507,7 +511,7 @@ void aboutEvent(std::string msg, const accessibility::AccessibleEventObject& aEv
             if (xContext.is())
             {
                 SAL_INFO("lok.a11y", msg << ": "
-                        << "\n  xOldValue: " << xOldValue.get()
+                           "\n  xOldValue: " << xOldValue.get()
                         << "\n  role: " << xContext->getAccessibleRole()
                         << "\n  name: " << xContext->getAccessibleName()
                         << "\n  index in parent: " << xContext->getAccessibleIndexInParent()
@@ -526,7 +530,7 @@ void aboutEvent(std::string msg, const accessibility::AccessibleEventObject& aEv
             if (xContext.is())
             {
                 SAL_INFO("lok.a11y", msg << ": "
-                        << "\n  xNewValue: " << xNewValue.get()
+                           "\n  xNewValue: " << xNewValue.get()
                         << "\n  role: " << xContext->getAccessibleRole()
                         << "\n  name: " << xContext->getAccessibleName()
                         << "\n  index in parent: " << xContext->getAccessibleIndexInParent()
@@ -536,7 +540,7 @@ void aboutEvent(std::string msg, const accessibility::AccessibleEventObject& aEv
             }
         }
     }
-    catch( const lang::IndexOutOfBoundsException& )
+    catch( const lang::IndexOutOfBoundsException& /*e*/ )
     {
         LOK_WARN("lok.a11y", "Focused object has invalid index in parent");
     }
@@ -598,7 +602,7 @@ void aboutTextFormatting(std::string msg, const uno::Reference<css::accessibilit
         css::accessibility::TextSegment aTextSegment =
                 xAccText->getTextAtIndex(nPos, css::accessibility::AccessibleTextType::ATTRIBUTE_RUN);
         SAL_INFO("lok.a11y", msg << ": "
-                << "text segment: '" << aTextSegment.SegmentText
+                "text segment: '" << aTextSegment.SegmentText
                 << "', start: " << aTextSegment.SegmentStart
                 << ", end: " << aTextSegment.SegmentEnd);
 
@@ -626,19 +630,19 @@ void aboutTextFormatting(std::string msg, const uno::Reference<css::accessibilit
 
                 if (attribute.Name == "CharHeight" || attribute.Name == "CharWeight")
                 {
-                    float fValue(0.0);
+                    float fValue = 0;
                     attribute.Value >>= fValue;
                     sValue = OUString::number(fValue);
                 }
                 else if (attribute.Name == "CharPosture")
                 {
-                    awt::FontSlant nValue;
+                    awt::FontSlant nValue = awt::FontSlant_NONE;
                     attribute.Value >>= nValue;
-                    sValue = OUString::number((unsigned int)(nValue));
+                    sValue = OUString::number(static_cast<unsigned int>(nValue));
                 }
                 else if (attribute.Name == "CharUnderline")
                 {
-                    sal_Int16 nValue(0);
+                    sal_Int16 nValue = 0;
                     attribute.Value >>= nValue;
                     sValue = OUString::number(nValue);
                 }
@@ -648,7 +652,7 @@ void aboutTextFormatting(std::string msg, const uno::Reference<css::accessibilit
                 }
                 else if (attribute.Name == "Rsid")
                 {
-                    sal_uInt32 nValue(0);
+                    sal_uInt32 nValue = 0;
                     attribute.Value >>= nValue;
                     sValue = OUString::number(nValue);
                 }
@@ -673,28 +677,27 @@ void aboutTextFormatting(std::string msg, const uno::Reference<css::accessibilit
                 {
                     if (sAttributes != "{ ")
                         sAttributes += ", ";
-                    sAttributes += attribute.Name + ": ";
-                    sAttributes += sValue;
+                    sAttributes += attribute.Name + ": " + sValue;
                     sValue = "";
                 }
             }
             sAttributes += " }";
             SAL_INFO("lok.a11y",
                      msg << ": " << sAttributes);
-            }
+        }
         nPos = aTextSegment.SegmentEnd + 1;
     }
 }
 
 void aboutParagraph(std::string msg, const OUString& rsParagraphContent, sal_Int32 nCaretPosition,
-                    sal_Int32 nSelectionStart, sal_Int32 nSelectionEnd, sal_Int32 nlistPrefixLength,
+                    sal_Int32 nSelectionStart, sal_Int32 nSelectionEnd, sal_Int32 nListPrefixLength,
                     bool force = false)
 {
     SAL_INFO("lok.a11y", msg << ": "
-            << "\n text content: \"" << rsParagraphContent << "\""
-            << "\n caret pos: " << nCaretPosition
+            "\n text content: \"" << rsParagraphContent << "\""
+            "\n caret pos: " << nCaretPosition
             << "\n selection: start: " << nSelectionStart << ", end: " << nSelectionEnd
-            << "\n list prefix length: " << nlistPrefixLength
+            << "\n list prefix length: " << nListPrefixLength
             << "\n force: " << force
             );
 }
@@ -709,8 +712,8 @@ void aboutParagraph(std::string msg, const uno::Reference<css::accessibility::XA
     sal_Int32 nCaretPosition = xAccText->getCaretPosition();
     sal_Int32 nSelectionStart = xAccText->getSelectionStart();
     sal_Int32 nSelectionEnd = xAccText->getSelectionEnd();
-    sal_Int32 nlistPrefixLength = getListPrefixSize(xAccText);
-    aboutParagraph(msg, sText, nCaretPosition, nSelectionStart, nSelectionEnd, nlistPrefixLength, force);
+    sal_Int32 nListPrefixLength = getListPrefixSize(xAccText);
+    aboutParagraph(msg, sText, nCaretPosition, nSelectionStart, nSelectionEnd, nListPrefixLength, force);
 }
 
 void aboutFocusedCellChanged(sal_Int32 nOutCount, const std::vector<TableSizeType>& aInList,
@@ -725,7 +728,7 @@ void aboutFocusedCellChanged(sal_Int32 nOutCount, const std::vector<TableSizeTyp
     inListStream << "]";
 
     SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyFocusedCellChanged: "
-            << "\n outCount: " << nOutCount
+            "\n outCount: " << nOutCount
             << "\n inList: " << inListStream.str()
             << "\n row: " << nRow
             << "\n column: " << nCol
@@ -742,7 +745,7 @@ class LOKDocumentFocusListener :
 
     const SfxViewShell* m_pViewShell;
     sal_Int16 m_nDocumentType;
-    std::set<uno::Reference<uno::XInterface>> m_aRefList;
+    std::unordered_set<uno::Reference<uno::XInterface>> m_aRefList;
     OUString m_sFocusedParagraph;
     sal_Int32 m_nCaretPosition;
     sal_Int32 m_nSelectionStart;
@@ -1005,7 +1008,7 @@ void LOKDocumentFocusListener::notifyTextSelectionChanged()
     if (m_pViewShell)
     {
         SAL_INFO("lok.a11y",  "LOKDocumentFocusListener::notifyTextSelectionChanged: "
-                << "start: " << m_nSelectionStart << ", end: " << m_nSelectionEnd);
+                "start: " << m_nSelectionStart << ", end: " << m_nSelectionEnd);
         m_pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_A11Y_TEXT_SELECTION_CHANGED, aPayload.c_str());
     }
 }
@@ -1120,8 +1123,7 @@ void LOKDocumentFocusListener::notifySelectionChanged(const uno::Reference<acces
                     if (nTotalTextLength + nTextLength < nMaxTextContentLength)
                     {
                         nTotalTextLength += nTextLength;
-                        sTextContent += sText;
-                        sTextContent += " \n";
+                        sTextContent += sText + " \n";
                     }
                     else
                     {
@@ -1146,7 +1148,7 @@ void LOKDocumentFocusListener::notifySelectionChanged(const uno::Reference<acces
         if (m_pViewShell)
         {
             SAL_INFO("lok.a11y",  "LOKDocumentFocusListener::notifySelectionChanged: "
-                                     << "action: " << sAction << ", name: " << sName);
+                                     "action: " << sAction << ", name: " << sName);
             m_pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_A11Y_SELECTION_CHANGED, aPayload.c_str());
         }
     }
@@ -1242,8 +1244,7 @@ LOKDocumentFocusListener::getSelectedObject(const accessibility::AccessibleEvent
     uno::Reference< accessibility::XAccessible > xSelectedObject;
     if (isText(m_nDocumentType))
     {
-        uno::Reference< accessibility::XAccessible > xSource(aEvent.Source, uno::UNO_QUERY);
-        xSelectedObject = xSource;
+        xSelectedObject.set(aEvent.Source, uno::UNO_QUERY);
     }
     else
     {
@@ -1299,7 +1300,7 @@ void LOKDocumentFocusListener::onFocusedParagraphInWriterTable(
             {
                 // we have to notify row/col count for all xTable ancestors starting from the ancestor
                 // which is a child of m_xLastTable (isLastAncestorOfNew) or the first not-a-table ancestor
-                for (auto ancestor: newTableAncestorList)
+                for (const auto& ancestor: newTableAncestorList)
                 {
                     TableSizeType aTableSize{ancestor->getAccessibleRowCount(),
                                               ancestor->getAccessibleColumnCount()};
@@ -1314,7 +1315,7 @@ void LOKDocumentFocusListener::onFocusedParagraphInWriterTable(
         // we have to notify row/col count for all xTable ancestors starting from first not-a-table ancestor
         XAccessibleTableList newTableAncestorList;
         getAncestorList(newTableAncestorList, xTable);
-        for (auto ancestor: newTableAncestorList)
+        for (const auto& ancestor: newTableAncestorList)
         {
             TableSizeType aTableSize{ancestor->getAccessibleRowCount(),
                                       ancestor->getAccessibleColumnCount()};
@@ -1352,7 +1353,7 @@ void LOKDocumentFocusListener::notifyEvent(const accessibility::AccessibleEventO
                 sal_Int64 nOldState = accessibility::AccessibleStateType::INVALID;
                 aEvent.OldValue >>= nOldState;
                 SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyEvent: STATE_CHANGED: "
-                                     << " New State: " << stateSetToString(nState)
+                                        " New State: " << stateSetToString(nState)
                                      << ", Old State: " << stateSetToString(nOldState));
 
                 // check validity
@@ -1476,7 +1477,7 @@ void LOKDocumentFocusListener::notifyEvent(const accessibility::AccessibleEventO
                 if (nNewPos >= 0)
                 {
                     SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyEvent: CARET_CHANGED: "
-                                         << "new pos: " << nNewPos << ", nOldPos: " << nOldPos);
+                                         "new pos: " << nNewPos << ", nOldPos: " << nOldPos);
 
                     uno::Reference<XAccessibleText> xAccText(getAccessible(aEvent), uno::UNO_QUERY);
                     if (xAccText.is())
@@ -1511,12 +1512,12 @@ void LOKDocumentFocusListener::notifyEvent(const accessibility::AccessibleEventO
                 if (aEvent.OldValue >>= aDeletedText)
                 {
                     SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyEvent: TEXT_CHANGED: "
-                                             << "deleted text: >" << aDeletedText.SegmentText << "<");
+                                             "deleted text: >" << aDeletedText.SegmentText << "<");
                 }
                 if (aEvent.NewValue >>= aInsertedText)
                 {
                     SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyEvent: TEXT_CHANGED: "
-                                             << "inserted text: >" << aInsertedText.SegmentText << "<");
+                                             "inserted text: >" << aInsertedText.SegmentText << "<");
                 }
                 uno::Reference<XAccessibleText> xAccText(getAccessible(aEvent), uno::UNO_QUERY);
 
@@ -1584,7 +1585,7 @@ void LOKDocumentFocusListener::notifyEvent(const accessibility::AccessibleEventO
                 else
                     m_xSelectedObject = xSelectedObject;
                 SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyEvent: SELECTION_CHANGED: "
-                                         << "m_xSelectedObject.is(): " << m_xSelectedObject.is());
+                                         "m_xSelectedObject.is(): " << m_xSelectedObject.is());
 
                 OUString sAction = selectionEventTypeToString(aEvent.EventId);
                 sal_Int16 nRole = xContext->getAccessibleRole();
@@ -1612,7 +1613,7 @@ void LOKDocumentFocusListener::notifyEvent(const accessibility::AccessibleEventO
                                 sal_Int32 nDotIndex = m_sSelectedText.indexOf('.');
                                 OUString sCellAddress = m_sSelectedText.copy(nDotIndex + 1);
                                 SAL_INFO("lok.a11y", "LOKDocumentFocusListener::notifyEvent: SELECTION_CHANGED: "
-                                                         << "cell address: >" << sCellAddress << "<");
+                                                         "cell address: >" << sCellAddress << "<");
                                 if (m_sSelectedCellAddress == sCellAddress)
                                 {
                                     notifyFocusedParagraphChanged();
@@ -1743,8 +1744,7 @@ void LOKDocumentFocusListener::attachRecursive(
             << ", parent: " << xContext->getAccessibleParent().get()
             << ", child count: " << xContext->getAccessibleChildCount());
 
-    uno::Reference< accessibility::XAccessibleEventBroadcaster > xBroadcaster =
-        uno::Reference< accessibility::XAccessibleEventBroadcaster >(xContext, uno::UNO_QUERY);
+    uno::Reference< accessibility::XAccessibleEventBroadcaster > xBroadcaster(xContext, uno::UNO_QUERY);
 
     if (!xBroadcaster.is())
         return;
@@ -1864,8 +1864,7 @@ void LOKDocumentFocusListener::detachRecursive(
     bool bForce
 )
 {
-    uno::Reference< accessibility::XAccessibleEventBroadcaster > xBroadcaster =
-        uno::Reference< accessibility::XAccessibleEventBroadcaster >(xContext, uno::UNO_QUERY);
+    uno::Reference< accessibility::XAccessibleEventBroadcaster > xBroadcaster(xContext, uno::UNO_QUERY);
 
     if (xBroadcaster.is() && 0 < m_aRefList.erase(xBroadcaster))
     {
@@ -2062,7 +2061,7 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
         case SID_ACTIVATE_STYLE_APPLY:
         {
             uno::Reference< frame::XFrame > xFrame =
-                GetViewFrame()->GetFrame().GetFrameInterface();
+                GetViewFrame().GetFrame().GetFrameInterface();
 
             Reference< beans::XPropertySet > xPropSet( xFrame, UNO_QUERY );
             Reference< frame::XLayoutManager > xLayoutManager;
@@ -2122,11 +2121,9 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
         case SID_MAIL_SENDDOCASFORMAT:
         {
             SfxObjectShell* pDoc = GetObjectShell();
-            if ( pDoc && pDoc->QueryHiddenInformation(
-                             HiddenWarningFact::WhenSaving, GetViewFrame()->GetFrameWeld() ) != RET_YES )
+            if (!pDoc)
                 break;
-
-
+            pDoc->QueryHiddenInformation(HiddenWarningFact::WhenSaving);
             SfxMailModel  aModel;
             OUString aDocType;
 
@@ -2144,7 +2141,7 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
             if ( pMailDocType )
                 aDocType = pMailDocType->GetValue();
 
-            uno::Reference < frame::XFrame > xFrame( pFrame->GetFrame().GetFrameInterface() );
+            uno::Reference < frame::XFrame > xFrame( rFrame.GetFrame().GetFrameInterface() );
             SfxMailModel::SendMailResult eResult = SfxMailModel::SEND_MAIL_ERROR;
 
             if ( nId == SID_MAIL_SENDDOC )
@@ -2182,10 +2179,10 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
         {
             SfxBluetoothModel aModel;
             SfxObjectShell* pDoc = GetObjectShell();
-            if ( pDoc && pDoc->QueryHiddenInformation(
-                            HiddenWarningFact::WhenSaving, GetViewFrame()->GetFrameWeld() ) != RET_YES )
+            if (!pDoc)
                 break;
-            uno::Reference < frame::XFrame > xFrame( pFrame->GetFrame().GetFrameInterface() );
+            pDoc->QueryHiddenInformation(HiddenWarningFact::WhenSaving);
+            uno::Reference < frame::XFrame > xFrame( rFrame.GetFrame().GetFrameInterface() );
             SfxMailModel::SendMailResult eResult = aModel.SaveAndSend( xFrame );
             if( eResult == SfxMailModel::SEND_MAIL_ERROR )
             {
@@ -2206,7 +2203,7 @@ void SfxViewShell::ExecMisc_Impl( SfxRequest &rReq )
         {
             css::uno::Reference< lang::XMultiServiceFactory > xSMGR(::comphelper::getProcessServiceFactory(), css::uno::UNO_SET_THROW);
             css::uno::Reference< uno::XComponentContext >     xContext(::comphelper::getProcessComponentContext(), css::uno::UNO_SET_THROW);
-            css::uno::Reference< css::frame::XFrame >         xFrame( pFrame->GetFrame().GetFrameInterface() );
+            css::uno::Reference< css::frame::XFrame >         xFrame( rFrame.GetFrame().GetFrameInterface() );
             css::uno::Reference< css::frame::XModel >         xModel;
 
             css::uno::Reference< css::frame::XModuleManager2 > xModuleManager( css::frame::ModuleManager::create(xContext) );
@@ -2332,7 +2329,7 @@ void SfxViewShell::GetState_Impl( SfxItemSet &rSet )
 {
 
     SfxWhichIter aIter( rSet );
-    SfxObjectShell *pSh = GetViewFrame()->GetObjectShell();
+    SfxObjectShell *pSh = GetViewFrame().GetObjectShell();
     for ( sal_uInt16 nSID = aIter.FirstWhich(); nSID; nSID = aIter.NextWhich() )
     {
         switch ( nSID )
@@ -2379,10 +2376,26 @@ void SfxViewShell::GetState_Impl( SfxItemSet &rSet )
                     if ( pPrinter != nullptr )
                         aPrinterName = pPrinter->GetName();
                     else
-                        aPrinterName = Printer::GetDefaultPrinterName();
+                    {
+                        // tdf#109149 don't poll the Default Printer Name on every query.
+                        // We are queried on every change, so on every
+                        // keystroke, and we are only using this to fill in the
+                        // printername inside the label of "Print Directly (printer-name)"
+                        // On Printer::GetDefaultPrinterName() is implemented with
+                        // GetDefaultPrinter so don't call this excessively. 5 mins
+                        // seems a reasonable refresh time.
+                        std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+                        std::chrono::minutes five_mins(5);
+                        if (now > pImpl->m_nDefaultPrinterNameFetchTime + five_mins)
+                        {
+                            pImpl->m_sDefaultPrinterName = Printer::GetDefaultPrinterName();
+                            pImpl->m_nDefaultPrinterNameFetchTime = now;
+                        }
+                        aPrinterName = pImpl->m_sDefaultPrinterName;
+                    }
                     if ( !aPrinterName.isEmpty() )
                     {
-                        uno::Reference < frame::XFrame > xFrame( pFrame->GetFrame().GetFrameInterface() );
+                        uno::Reference < frame::XFrame > xFrame( rFrame.GetFrame().GetFrameInterface() );
 
                         auto aProperties = vcl::CommandInfoProvider::GetCommandProperties(".uno:PrintDefault",
                             vcl::CommandInfoProvider::GetModuleIdentifier(xFrame));
@@ -2434,25 +2447,23 @@ void SfxViewShell::OutplaceActivated( bool bActive )
 
 void SfxViewShell::UIActivating( SfxInPlaceClient* /*pClient*/ )
 {
-    uno::Reference < frame::XFrame > xOwnFrame( pFrame->GetFrame().GetFrameInterface() );
+    uno::Reference < frame::XFrame > xOwnFrame( rFrame.GetFrame().GetFrameInterface() );
     uno::Reference < frame::XFramesSupplier > xParentFrame = xOwnFrame->getCreator();
     if ( xParentFrame.is() )
         xParentFrame->setActiveFrame( xOwnFrame );
 
-    pFrame->GetBindings().HidePopups();
-    pFrame->GetDispatcher()->Update_Impl( true );
+    rFrame.GetBindings().HidePopups();
+    rFrame.GetDispatcher()->Update_Impl( true );
 }
-
 
 void SfxViewShell::UIDeactivated( SfxInPlaceClient* /*pClient*/ )
 {
-    if ( !pFrame->GetFrame().IsClosing_Impl() || SfxViewFrame::Current() != pFrame )
-        pFrame->GetDispatcher()->Update_Impl( true );
-    pFrame->GetBindings().HidePopups(false);
+    if ( !rFrame.GetFrame().IsClosing_Impl() || SfxViewFrame::Current() != &rFrame )
+        rFrame.GetDispatcher()->Update_Impl( true );
+    rFrame.GetBindings().HidePopups(false);
 
-    pFrame->GetBindings().InvalidateAll(true);
+    rFrame.GetBindings().InvalidateAll(true);
 }
-
 
 SfxInPlaceClient* SfxViewShell::FindIPClient
 (
@@ -2520,7 +2531,7 @@ void SfxViewShell::Activate( bool bMDI )
 {
     if ( bMDI )
     {
-        SfxObjectShell *pSh = GetViewFrame()->GetObjectShell();
+        SfxObjectShell *pSh = GetViewFrame().GetObjectShell();
         if (const auto xModel = pSh->GetModel())
             xModel->setCurrentController(GetController());
 
@@ -2653,24 +2664,18 @@ void SfxViewShell::InnerResizePixel
     SetBorderPixel( SvBorder() );
 }
 
-
 void SfxViewShell::InvalidateBorder()
 {
-    DBG_ASSERT( GetViewFrame(), "SfxViewShell without SfxViewFrame" );
-
-    GetViewFrame()->InvalidateBorderImpl( this );
+    GetViewFrame().InvalidateBorderImpl( this );
     if (pImpl->m_pController.is())
     {
         pImpl->m_pController->BorderWidthsChanged_Impl();
     }
 }
 
-
 void SfxViewShell::SetBorderPixel( const SvBorder &rBorder )
 {
-    DBG_ASSERT( GetViewFrame(), "SfxViewShell without SfxViewFrame" );
-
-    GetViewFrame()->SetBorderPixelImpl( this, rBorder );
+    GetViewFrame().SetBorderPixelImpl( this, rBorder );
 
     // notify related controller that border size is changed
     if (pImpl->m_pController.is())
@@ -2679,14 +2684,10 @@ void SfxViewShell::SetBorderPixel( const SvBorder &rBorder )
     }
 }
 
-
 const SvBorder& SfxViewShell::GetBorderPixel() const
 {
-    DBG_ASSERT( GetViewFrame(), "SfxViewShell without SfxViewFrame" );
-
-    return GetViewFrame()->GetBorderPixelImpl();
+    return GetViewFrame().GetBorderPixelImpl();
 }
-
 
 void SfxViewShell::SetWindow
 (
@@ -2729,14 +2730,14 @@ ViewShellDocId SfxViewShell::mnCurrentDocId(0);
 
 SfxViewShell::SfxViewShell
 (
-    SfxViewFrame*     pViewFrame,     /*  <SfxViewFrame>, which will be
+    SfxViewFrame&     rViewFrame,     /*  <SfxViewFrame>, which will be
                                           displayed in this View */
     SfxViewShellFlags nFlags          /*  See <SfxViewShell-Flags> */
 )
 
 :   SfxShell(this)
 ,   pImpl( new SfxViewShell_Impl(nFlags, SfxViewShell::mnCurrentDocId) )
-,   pFrame(pViewFrame)
+,   rFrame(rViewFrame)
 ,   pWindow(nullptr)
 ,   bNoNewWindow( nFlags & SfxViewShellFlags::NO_NEWWINDOW )
 ,   mbPrinterSettingsModified(false)
@@ -2744,12 +2745,11 @@ SfxViewShell::SfxViewShell
 ,   maLOKLocale(LANGUAGE_NONE)
 ,   maLOKDeviceFormFactor(LOKDeviceFormFactor::UNKNOWN)
 ,   mbLOKAccessibilityEnabled(false)
-,   mpLOKDocumentFocusListener(nullptr)
 {
-    SetMargin( pViewFrame->GetMargin_Impl() );
+    SetMargin( rViewFrame.GetMargin_Impl() );
 
-    SetPool( &pViewFrame->GetObjectShell()->GetPool() );
-    StartListening(*pViewFrame->GetObjectShell());
+    SetPool( &rViewFrame.GetObjectShell()->GetPool() );
+    StartListening(*rViewFrame.GetObjectShell());
 
     // Insert into list
     std::vector<SfxViewShell*> &rViewArr = SfxGetpApp()->GetViewShells_Impl();
@@ -2766,12 +2766,11 @@ SfxViewShell::SfxViewShell
 
         maLOKDeviceFormFactor = SfxLokHelper::getDeviceFormFactor();
 
-        vcl::Window* pFrameWin = pViewFrame->GetWindow().GetFrameWindow();
+        vcl::Window* pFrameWin = rViewFrame.GetWindow().GetFrameWindow();
         if (pFrameWin && !pFrameWin->GetLOKNotifier())
             pFrameWin->SetLOKNotifier(this, true);
     }
 }
-
 
 SfxViewShell::~SfxViewShell()
 {
@@ -2793,7 +2792,7 @@ SfxViewShell::~SfxViewShell()
         pImpl->m_pController.clear();
     }
 
-    vcl::Window* pFrameWin = GetViewFrame()->GetWindow().GetFrameWindow();
+    vcl::Window* pFrameWin = GetViewFrame().GetWindow().GetFrameWindow();
     if (pFrameWin && pFrameWin->GetLOKNotifier() == this)
         pFrameWin->ReleaseLOKNotifier();
 }
@@ -2815,15 +2814,15 @@ bool SfxViewShell::PrepareClose
     bool bUI     // TRUE: Allow Dialog and so on, FALSE: silent-mode
 )
 {
-    if (GetViewFrame()->GetWindow().GetLOKNotifier() == this)
-        GetViewFrame()->GetWindow().ReleaseLOKNotifier();
+    if (GetViewFrame().GetWindow().GetLOKNotifier() == this)
+        GetViewFrame().GetWindow().ReleaseLOKNotifier();
 
     SfxPrinter *pPrinter = GetPrinter();
     if ( pPrinter && pPrinter->IsPrinting() )
     {
         if ( bUI )
         {
-            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetViewFrame()->GetFrameWeld(),
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetViewFrame().GetFrameWeld(),
                                                                      VclMessageType::Info, VclButtonsType::Ok,
                                                                      SfxResId(STR_CANT_CLOSE)));
             xBox->run();
@@ -2832,10 +2831,10 @@ bool SfxViewShell::PrepareClose
         return false;
     }
 
-    if( GetViewFrame()->IsInModalMode() )
+    if( GetViewFrame().IsInModalMode() )
         return false;
 
-    if( bUI && GetViewFrame()->GetDispatcher()->IsLocked() )
+    if( bUI && GetViewFrame().GetDispatcher()->IsLocked() )
         return false;
 
     return true;
@@ -2848,6 +2847,13 @@ SfxViewShell* SfxViewShell::Current()
     return pCurrent ? pCurrent->GetViewShell() : nullptr;
 }
 
+bool SfxViewShell::IsCurrentLokViewReadOnly()
+{
+    if (!comphelper::LibreOfficeKit::isActive() || Current() == nullptr || !Current()->IsLokReadOnlyView())
+        return false;
+    else
+        return true;
+}
 
 SfxViewShell* SfxViewShell::Get( const Reference< XController>& i_rController )
 {
@@ -2927,7 +2933,7 @@ bool SfxViewShell::HasSelection( bool ) const
 void SfxViewShell::AddSubShell( SfxShell& rShell )
 {
     pImpl->aArr.push_back(&rShell);
-    SfxDispatcher *pDisp = pFrame->GetDispatcher();
+    SfxDispatcher *pDisp = rFrame.GetDispatcher();
     if ( pDisp->IsActive(*this) )
     {
         pDisp->Push(rShell);
@@ -2937,7 +2943,7 @@ void SfxViewShell::AddSubShell( SfxShell& rShell )
 
 void SfxViewShell::RemoveSubShell( SfxShell* pShell )
 {
-    SfxDispatcher *pDisp = pFrame->GetDispatcher();
+    SfxDispatcher *pDisp = rFrame.GetDispatcher();
     if ( !pShell )
     {
         size_t nCount = pImpl->aArr.size();
@@ -2974,7 +2980,7 @@ SfxShell* SfxViewShell::GetSubShell( sal_uInt16 nNo )
 
 void SfxViewShell::PushSubShells_Impl( bool bPush )
 {
-    SfxDispatcher *pDisp = pFrame->GetDispatcher();
+    SfxDispatcher *pDisp = rFrame.GetDispatcher();
     if ( bPush )
     {
         for (auto const& elem : pImpl->aArr)
@@ -3029,8 +3035,8 @@ SfxViewShell* SfxViewShell::GetFirst
             // a destroyed ViewFrame is not in the ViewFrame array anymore, so checking this array helps
             // That doesn't seem to be needed anymore, but keep an assert, just in case.
             assert(std::find(SfxGetpApp()->GetViewFrames_Impl().begin(), SfxGetpApp()->GetViewFrames_Impl().end(),
-                pShell->GetViewFrame()) != SfxGetpApp()->GetViewFrames_Impl().end());
-            if ( ( !bOnlyVisible || pShell->GetViewFrame()->IsVisible() ) && (!isViewShell || isViewShell(pShell)))
+                &pShell->GetViewFrame()) != SfxGetpApp()->GetViewFrames_Impl().end());
+            if ( ( !bOnlyVisible || pShell->GetViewFrame().IsVisible() ) && (!isViewShell || isViewShell(pShell)))
                 return pShell;
         }
     }
@@ -3038,9 +3044,7 @@ SfxViewShell* SfxViewShell::GetFirst
     return nullptr;
 }
 
-
 // returns the next shell of spec. type viewing the specified doc.
-
 SfxViewShell* SfxViewShell::GetNext
 (
     const SfxViewShell& rPrev,
@@ -3060,8 +3064,8 @@ SfxViewShell* SfxViewShell::GetNext
         if ( pShell )
         {
             assert(std::find(SfxGetpApp()->GetViewFrames_Impl().begin(), SfxGetpApp()->GetViewFrames_Impl().end(),
-                pShell->GetViewFrame()) != SfxGetpApp()->GetViewFrames_Impl().end());
-            if ( ( !bOnlyVisible || pShell->GetViewFrame()->IsVisible() ) && (!isViewShell || isViewShell(pShell)) )
+                &pShell->GetViewFrame()) != SfxGetpApp()->GetViewFrames_Impl().end());
+            if ( ( !bOnlyVisible || pShell->GetViewFrame().IsVisible() ) && (!isViewShell || isViewShell(pShell)) )
                 return pShell;
         }
     }
@@ -3086,14 +3090,14 @@ void SfxViewShell::Notify( SfxBroadcaster& rBC,
     auto &rFrames = SfxGetpApp()->GetViewFrames_Impl();
     for (SfxViewFrame* frame : rFrames)
     {
-        if ( frame == GetViewFrame() && &rBC == GetObjectShell() )
+        if ( frame == &GetViewFrame() && &rBC == GetObjectShell() )
         {
-            SfxItemSet* pSet = GetObjectShell()->GetMedium()->GetItemSet();
-            const SfxUnoAnyItem* pItem = SfxItemSet::GetItem<SfxUnoAnyItem>(pSet, SID_VIEW_DATA, false);
+            SfxItemSet& rSet = GetObjectShell()->GetMedium()->GetItemSet();
+            const SfxUnoAnyItem* pItem = rSet.GetItem(SID_VIEW_DATA, false);
             if ( pItem )
             {
                 pImpl->m_pController->restoreViewData( pItem->GetValue() );
-                pSet->ClearItem( SID_VIEW_DATA );
+                rSet.ClearItem( SID_VIEW_DATA );
             }
             break;
         }
@@ -3107,7 +3111,7 @@ bool SfxViewShell::ExecKey_Impl(const KeyEvent& aKey)
     {
         pImpl->m_xAccExec = ::svt::AcceleratorExecute::createAcceleratorHelper();
         pImpl->m_xAccExec->init(::comphelper::getProcessComponentContext(),
-            pFrame->GetFrame().GetFrameInterface());
+            rFrame.GetFrame().GetFrameInterface());
         setModuleConfig = true;
     }
 
@@ -3116,7 +3120,7 @@ bool SfxViewShell::ExecKey_Impl(const KeyEvent& aKey)
         // Get the module name.
         css::uno::Reference< css::uno::XComponentContext >  xContext      (::comphelper::getProcessComponentContext());
         css::uno::Reference< css::frame::XModuleManager2 >  xModuleManager(css::frame::ModuleManager::create(xContext));
-        OUString sModule = xModuleManager->identify(pFrame->GetFrame().GetFrameInterface());
+        OUString sModule = xModuleManager->identify(rFrame.GetFrame().GetFrameInterface());
 
         // Get the language name.
         OUString viewLang = GetLOKLanguageTag().getBcp47();
@@ -3229,7 +3233,7 @@ void SfxViewShell::libreOfficeKitViewInvalidateTilesCallback(const tools::Rectan
             "SfxViewShell::libreOfficeKitViewInvalidateTilesCallback no callback set!");
 }
 
-void SfxViewShell::libreOfficeKitViewCallbackWithViewId(int nType, const char* pPayload, int nViewId) const
+void SfxViewShell::libreOfficeKitViewCallbackWithViewId(int nType, const OString& pPayload, int nViewId) const
 {
     if (ignoreLibreOfficeKitViewCallback(nType, pImpl.get()))
         return;
@@ -3242,7 +3246,7 @@ void SfxViewShell::libreOfficeKitViewCallbackWithViewId(int nType, const char* p
             << lokCallbackTypeToString(nType) << ": [" << pPayload << ']');
 }
 
-void SfxViewShell::libreOfficeKitViewCallback(int nType, const char* pPayload) const
+void SfxViewShell::libreOfficeKitViewCallback(int nType, const OString& pPayload) const
 {
     if (ignoreLibreOfficeKitViewCallback(nType, pImpl.get()))
         return;
@@ -3590,12 +3594,10 @@ void SfxViewShell::CheckIPClient_Impl(
     }
 }
 
-
 SfxObjectShell* SfxViewShell::GetObjectShell()
 {
-    return pFrame ? pFrame->GetObjectShell() : nullptr;
+    return rFrame.GetObjectShell();
 }
-
 
 Reference< XModel > SfxViewShell::GetCurrentDocument() const
 {
@@ -3646,7 +3648,7 @@ void SfxViewShell::MarginChanged()
 void SfxViewShell::JumpToMark( const OUString& rMark )
 {
     SfxStringItem aMarkItem( SID_JUMPTOMARK, rMark );
-    GetViewFrame()->GetDispatcher()->ExecuteList(
+    GetViewFrame().GetDispatcher()->ExecuteList(
         SID_JUMPTOMARK,
         SfxCallMode::SYNCHRON|SfxCallMode::RECORD,
         { &aMarkItem });
@@ -3685,9 +3687,9 @@ void SfxViewShell::RemoveContextMenuInterceptor_Impl( const uno::Reference< ui::
     pImpl->aInterceptorContainer.removeInterface( g, xInterceptor );
 }
 
-bool SfxViewShell::TryContextMenuInterception(const css::uno::Reference<css::awt::XPopupMenu>& rIn,
+bool SfxViewShell::TryContextMenuInterception(const rtl::Reference<VCLXPopupMenu>& rIn,
                                               const OUString& rMenuIdentifier,
-                                              css::uno::Reference<css::awt::XPopupMenu>& rOut,
+                                              rtl::Reference<VCLXPopupMenu>& rOut,
                                               ui::ContextMenuExecuteEvent aEvent)
 {
     rOut.clear();
@@ -3748,15 +3750,14 @@ bool SfxViewShell::TryContextMenuInterception(const css::uno::Reference<css::awt
     if (bModified)
     {
         // container was modified, create a new menu out of it
-        css::uno::Reference<uno::XComponentContext> xContext(::comphelper::getProcessComponentContext(), css::uno::UNO_SET_THROW);
-        rOut.set(xContext->getServiceManager()->createInstanceWithContext("com.sun.star.awt.PopupMenu", xContext), css::uno::UNO_QUERY_THROW);
+        rOut = new VCLXPopupMenu();
         ::framework::ActionTriggerHelper::CreateMenuFromActionTriggerContainer(rOut, aEvent.ActionTriggerContainer);
     }
 
     return true;
 }
 
-bool SfxViewShell::TryContextMenuInterception(const css::uno::Reference<css::awt::XPopupMenu>& rPopupMenu,
+bool SfxViewShell::TryContextMenuInterception(const rtl::Reference<VCLXPopupMenu>& rPopupMenu,
                                               const OUString& rMenuIdentifier, css::ui::ContextMenuExecuteEvent aEvent)
 {
     bool bModified = false;
@@ -3843,7 +3844,7 @@ bool SfxViewShell::HasMouseClickListeners_Impl() const
 
 bool SfxViewShell::Escape()
 {
-    return GetViewFrame()->GetBindings().Execute( SID_TERMINATE_INPLACEACTIVATION );
+    return GetViewFrame().GetBindings().Execute(SID_TERMINATE_INPLACEACTIVATION);
 }
 
 Reference< view::XRenderable > SfxViewShell::GetRenderable()
@@ -3867,9 +3868,7 @@ void SfxViewShell::notifyWindow(vcl::LOKWindowId nDialogId, const OUString& rAct
 uno::Reference< datatransfer::clipboard::XClipboardNotifier > SfxViewShell::GetClipboardNotifier() const
 {
     uno::Reference< datatransfer::clipboard::XClipboardNotifier > xClipboardNotifier;
-    if ( GetViewFrame() )
-        xClipboardNotifier.set( GetViewFrame()->GetWindow().GetClipboard(), uno::UNO_QUERY );
-
+    xClipboardNotifier.set(GetViewFrame().GetWindow().GetClipboard(), uno::UNO_QUERY);
     return xClipboardNotifier;
 }
 
@@ -3877,19 +3876,16 @@ void SfxViewShell::AddRemoveClipboardListener( const uno::Reference < datatransf
 {
     try
     {
-        if ( GetViewFrame() )
+        uno::Reference< datatransfer::clipboard::XClipboard > xClipboard(GetViewFrame().GetWindow().GetClipboard());
+        if( xClipboard.is() )
         {
-            uno::Reference< datatransfer::clipboard::XClipboard > xClipboard( GetViewFrame()->GetWindow().GetClipboard() );
-            if( xClipboard.is() )
+            uno::Reference< datatransfer::clipboard::XClipboardNotifier > xClpbrdNtfr( xClipboard, uno::UNO_QUERY );
+            if( xClpbrdNtfr.is() )
             {
-                uno::Reference< datatransfer::clipboard::XClipboardNotifier > xClpbrdNtfr( xClipboard, uno::UNO_QUERY );
-                if( xClpbrdNtfr.is() )
-                {
-                    if( bAdd )
-                        xClpbrdNtfr->addClipboardListener( rClp );
-                    else
-                        xClpbrdNtfr->removeClipboardListener( rClp );
-                }
+                if( bAdd )
+                    xClpbrdNtfr->addClipboardListener( rClp );
+                else
+                    xClpbrdNtfr->removeClipboardListener( rClp );
             }
         }
     }
@@ -3917,7 +3913,7 @@ void SfxViewShell::setBlockedCommandList(const char* blockedCommandList)
     }
 }
 
-bool SfxViewShell::isBlockedCommand(OUString command)
+bool SfxViewShell::isBlockedCommand(OUString command) const
 {
     return mvLOKBlockedCommandList.find(command) != mvLOKBlockedCommandList.end();
 }

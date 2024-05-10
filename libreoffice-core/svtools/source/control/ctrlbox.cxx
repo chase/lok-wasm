@@ -831,7 +831,7 @@ OutputDevice& FontNameBox::CachePreview(size_t nIndex, Point* pTopLeft,
         {
             bool bIsLOK = comphelper::LibreOfficeKit::isActive();
             if (bIsLOK) // allow transparent background in LOK case
-                rVirtualDevs.emplace_back(VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT, DeviceFormat::DEFAULT));
+                rVirtualDevs.emplace_back(VclPtr<VirtualDevice>::Create(DeviceFormat::WITH_ALPHA));
             else
                 rVirtualDevs.emplace_back(m_xComboBox->create_render_virtual_device());
 
@@ -873,6 +873,7 @@ IMPL_LINK(FontNameBox, CustomRenderHdl, weld::ComboBox::render_args, aPayload, v
     {
         const FontMetric& rFontMetric = (*mpFontList)[nIndex];
         DrawPreview(rFontMetric, aDestPoint, rRenderContext, true);
+        m_aLivePreviewHdl.Call(rFontMetric);
     }
     else
     {
@@ -1186,8 +1187,8 @@ void FontSizeBox::Fill( const FontList* pList )
         if ( pAry == FontList::GetStdSizeAry() )
         {
             // for scalable fonts all font size names
-            sal_uLong nCount = aFontSizeNames.Count();
-            for( sal_uLong i = 0; i < nCount; i++ )
+            sal_uInt32 nCount = aFontSizeNames.Count();
+            for( sal_uInt32 i = 0; i < nCount; i++ )
             {
                 OUString aSizeName = aFontSizeNames.GetIndexName( i );
                 int nSize = aFontSizeNames.GetIndexSize( i );
@@ -1222,9 +1223,9 @@ void FontSizeBox::Fill( const FontList* pList )
         ++pTempAry;
     }
 
+    m_xComboBox->thaw();
     set_active_or_entry_text(aStr);
     m_xComboBox->select_entry_region(nSelectionStart, nSelectionEnd);
-    m_xComboBox->thaw();
 }
 
 void FontSizeBox::EnableRelativeMode( sal_uInt16 nNewMin, sal_uInt16 nNewMax, sal_uInt16 nStep )
@@ -1484,6 +1485,7 @@ SvtLineListBox::SvtLineListBox(std::unique_ptr<weld::MenuButton> pControl)
 
     m_xControl->set_popover(m_xTopLevel.get());
     m_xControl->connect_toggled(LINK(this, SvtLineListBox, ToggleHdl));
+    m_xControl->connect_style_updated(LINK(this, SvtLineListBox, StyleUpdatedHdl));
 
     // lock size to these maxes height/width so it doesn't jump around in size
     m_xControl->set_label(GetLineStyleName(SvxBorderLineStyle::NONE));
@@ -1513,6 +1515,12 @@ IMPL_LINK(SvtLineListBox, ToggleHdl, weld::Toggleable&, rButton, void)
 {
     if (rButton.get_active())
         GrabFocus();
+}
+
+IMPL_LINK_NOARG(SvtLineListBox, StyleUpdatedHdl, weld::Widget&, void)
+{
+    UpdateEntries();
+    UpdatePreview();
 }
 
 IMPL_LINK_NOARG(SvtLineListBox, NoneHdl, weld::Button&, void)

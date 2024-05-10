@@ -34,7 +34,6 @@
 
 using namespace ::com::sun::star;
 using ::com::sun::star::uno::Any;
-using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::beans::Property;
 
 namespace chart::wrapper
@@ -62,10 +61,12 @@ public:
 
     bool detectInnerValue( PROPERTYTYPE& rValue, bool& rHasAmbiguousValue ) const
     {
-        bool bHasDetectableInnerValue = false;
         rHasAmbiguousValue = false;
-        std::vector< rtl::Reference< ChartType > > aChartTypes(
-            ::chart::DiagramHelper::getChartTypesFromDiagram( m_spChart2ModelContact->getDiagram() ) );
+        rtl::Reference<Diagram> xDiagram = m_spChart2ModelContact->getDiagram();
+        if (!xDiagram)
+            return false;
+        bool bHasDetectableInnerValue = false;
+        std::vector< rtl::Reference< ChartType > > aChartTypes = xDiagram->getChartTypes();
         for( sal_Int32 nN = aChartTypes.size(); nN--; )
         {
             try
@@ -112,8 +113,8 @@ public:
         if( !(bHasAmbiguousValue || aNewValue != aOldValue) )
             return;
 
-        std::vector< rtl::Reference< ChartType > > aChartTypes(
-            ::chart::DiagramHelper::getChartTypesFromDiagram( m_spChart2ModelContact->getDiagram() ) );
+        std::vector< rtl::Reference< ChartType > > aChartTypes =
+            m_spChart2ModelContact->getDiagram()->getChartTypes();
         for( sal_Int32 nN = aChartTypes.size(); nN--; )
         {
             try

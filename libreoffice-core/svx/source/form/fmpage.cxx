@@ -31,14 +31,12 @@
 #include <vcl/help.hxx>
 #include <vcl/window.hxx>
 #include <osl/diagnose.h>
-
-
 #include <fmprop.hxx>
 #include <fmundo.hxx>
-using namespace ::svxform;
 #include <comphelper/property.hxx>
 #include <comphelper/types.hxx>
 
+using namespace ::svxform;
 using com::sun::star::uno::Reference;
 using com::sun::star::uno::UNO_QUERY;
 
@@ -141,22 +139,21 @@ bool FmFormPage::RequestHelp( vcl::Window* pWindow, SdrView const * pView,
                 }
         }
     }
-    if ( !aHelpText.isEmpty() )
-    {
-        // display the help
-        tools::Rectangle aItemRect = pObj->GetCurrentBoundRect();
-        aItemRect = pWindow->LogicToPixel( aItemRect );
-        Point aPt = pWindow->OutputToScreenPixel( aItemRect.TopLeft() );
-        aItemRect.SetLeft( aPt.X() );
-        aItemRect.SetTop( aPt.Y() );
-        aPt = pWindow->OutputToScreenPixel( aItemRect.BottomRight() );
-        aItemRect.SetRight( aPt.X() );
-        aItemRect.SetBottom( aPt.Y() );
-        if( rEvt.GetMode() == HelpEventMode::BALLOON )
-            Help::ShowBalloon( pWindow, aItemRect.Center(), aItemRect, aHelpText);
-        else
-            Help::ShowQuickHelp( pWindow, aItemRect, aHelpText );
-    }
+
+    // display the help
+    tools::Rectangle aItemRect = pObj->GetCurrentBoundRect();
+    aItemRect = pWindow->LogicToPixel( aItemRect );
+    Point aPt = pWindow->OutputToScreenPixel( aItemRect.TopLeft() );
+    aItemRect.SetLeft( aPt.X() );
+    aItemRect.SetTop( aPt.Y() );
+    aPt = pWindow->OutputToScreenPixel( aItemRect.BottomRight() );
+    aItemRect.SetRight( aPt.X() );
+    aItemRect.SetBottom( aPt.Y() );
+    if( rEvt.GetMode() == HelpEventMode::BALLOON )
+        Help::ShowBalloon( pWindow, aItemRect.Center(), aItemRect, aHelpText);
+    else
+        Help::ShowQuickHelp( pWindow, aItemRect, aHelpText );
+
     return true;
 }
 

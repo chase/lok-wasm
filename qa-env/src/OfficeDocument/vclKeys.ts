@@ -254,6 +254,18 @@ export function createKeyHandler(
         modifiers -= Modifiers.ALT_OR_OPTION;
       }
 
+      // handle Cmd+<char> on macOS
+      // convert Cmd to Ctrl only if Ctrl is not pressed
+      // which accounts for the case where the user presses Cmd+Ctrl+<char>
+      if (
+        IS_MAC && 
+        (modifiers & Modifiers.META_OR_CMD) !== 0 &&
+        (modifiers & Modifiers.CTRL) === 0
+      ) {
+        modifiers &= ~Modifiers.META_OR_CMD;
+        modifiers |= Modifiers.CTRL;
+      };
+
       let vclCode = vclKeyCode(
         evt.code as keyof typeof VCL_KEY_CODES,
         rawKeyCode

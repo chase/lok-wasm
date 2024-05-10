@@ -13,12 +13,10 @@ $(eval $(call gb_UnpackedTarball_set_tarball,zxing,$(ZXING_TARBALL)))
 
 $(eval $(call gb_UnpackedTarball_set_patchlevel,zxing,1))
 
+# patch 0001-android-Fix-build-with-NDK-26.patch is backport of
+# upstream commit https://github.com/zxing-cpp/zxing-cpp/commit/295b193b0105e68bb24747aefbff2653df892b4c
 $(eval $(call gb_UnpackedTarball_add_patches,zxing, \
-	external/zxing/assume.__cpp_lib_string_view.patch.0 \
-	external/zxing/android_include.patch.0 \
-	external/zxing/missing-include.patch.0 \
-	external/zxing/msvc-lambdacapture.patch.0 \
-	external/zxing/coroutine.patch.0 \
+	external/zxing/0001-android-Fix-build-with-NDK-26.patch \
 ))
 
 # vim: set noet sw=4 ts=4:

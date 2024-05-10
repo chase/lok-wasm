@@ -282,7 +282,7 @@ public:
     rtl::Reference< XMLPropertySetMapper > mxPropertySetMapper;
     rtl::Reference< XMLChartExportPropertyMapper > mxExpPropMapper;
 
-    static constexpr OUStringLiteral gsTableName = u"local-table";
+    static constexpr OUString gsTableName = u"local-table"_ustr;
     OUStringBuffer msStringBuffer;
     OUString msString;
 
@@ -1080,16 +1080,16 @@ SchXMLExportHelper_Impl::SchXMLExportHelper_Impl(
     // register chart auto-style family
     mrAutoStylePool.AddFamily(
         XmlStyleFamily::SCH_CHART_ID,
-        OUString( XML_STYLE_FAMILY_SCH_CHART_NAME ),
+        XML_STYLE_FAMILY_SCH_CHART_NAME,
         mxExpPropMapper.get(),
-        OUString( XML_STYLE_FAMILY_SCH_CHART_PREFIX ));
+        XML_STYLE_FAMILY_SCH_CHART_PREFIX);
 
     // register shape family
     mrAutoStylePool.AddFamily(
         XmlStyleFamily::SD_GRAPHICS_ID,
-        OUString( XML_STYLE_FAMILY_SD_GRAPHICS_NAME ),
+        XML_STYLE_FAMILY_SD_GRAPHICS_NAME,
         mxExpPropMapper.get(),
-        OUString( XML_STYLE_FAMILY_SD_GRAPHICS_PREFIX ));
+        XML_STYLE_FAMILY_SD_GRAPHICS_PREFIX);
     // register paragraph family also for shapes
     mrAutoStylePool.AddFamily(
         XmlStyleFamily::TEXT_PARAGRAPH,
@@ -1589,7 +1589,6 @@ void SchXMLExportHelper_Impl::parseDocument( Reference< chart::XChartDocument > 
                 // not the XShapes object used here. Thus the shapes have to be
                 // exported one by one
                 rtl::Reference< XMLShapeExport > rShapeExport = mrExport.GetShapeExport();
-                css::uno::Sequence<OUString> aAutoStylePropNames = mrAutoStylePool.GetPropertyNames();
                 Reference< drawing::XShape > xShape;
                 const sal_Int32 nShapeCount( mxAdditionalShapes->getCount());
                 for( sal_Int32 nShapeId = 0; nShapeId < nShapeCount; nShapeId++ )
@@ -1599,7 +1598,7 @@ void SchXMLExportHelper_Impl::parseDocument( Reference< chart::XChartDocument > 
                     if( ! xShape.is())
                         continue;
 
-                    rShapeExport->collectShapeAutoStyles( xShape, aAutoStylePropNames );
+                    rShapeExport->collectShapeAutoStyles( xShape );
                 }
             }
         }

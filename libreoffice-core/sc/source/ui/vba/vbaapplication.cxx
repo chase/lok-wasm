@@ -1330,11 +1330,16 @@ uno::Reference< excel::XRange > SAL_CALL ScVbaApplication::Union(
     return lclCreateVbaRange( mxContext, getCurrentDocument(), aList );
 }
 
-double
+double SAL_CALL
 ScVbaApplication::InchesToPoints( double Inches )
 {
-   double result = Inches * 72.0;
-   return result;
+   return o3tl::convert(Inches, o3tl::Length::in, o3tl::Length::pt);
+}
+
+double SAL_CALL
+ScVbaApplication::CentimetersToPoints( double Centimeters )
+{
+   return o3tl::convert(Centimeters, o3tl::Length::cm, o3tl::Length::pt);
 }
 
 void

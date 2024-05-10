@@ -31,10 +31,8 @@
 
 namespace svx::a11y {
 
-using ::com::sun::star::uno::Any;
 using ::com::sun::star::lang::IndexOutOfBoundsException;
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::uno::RuntimeException;
 
 using namespace ::com::sun::star::accessibility;
@@ -48,9 +46,6 @@ AccFrameSelector::AccFrameSelector(FrameSelector& rFrameSel)
 AccFrameSelector::~AccFrameSelector()
 {
 }
-
-IMPLEMENT_FORWARD_XINTERFACE2( AccFrameSelector, OAccessibleComponentHelper, OAccessibleHelper_Base )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( AccFrameSelector, OAccessibleComponentHelper, OAccessibleHelper_Base )
 
 Reference< XAccessibleContext > AccFrameSelector::getAccessibleContext(  )
 {
@@ -207,7 +202,7 @@ css::awt::Point AccFrameSelector::getLocationOnScreen()
 
     if (weld::DrawingArea* pDrawingArea = mpFrameSel->GetDrawingArea())
     {
-        Point aPos = pDrawingArea->get_accessible_location_on_screen();
+        AbsoluteScreenPixelPoint aPos = pDrawingArea->get_accessible_location_on_screen();
         aScreenLoc.X = aPos.X();
         aScreenLoc.Y = aPos.Y();
     }
@@ -235,9 +230,6 @@ AccFrameSelectorChild::AccFrameSelectorChild(FrameSelector& rFrameSel, FrameBord
 AccFrameSelectorChild::~AccFrameSelectorChild()
 {
 }
-
-IMPLEMENT_FORWARD_XINTERFACE2( AccFrameSelectorChild, OAccessibleComponentHelper, OAccessibleHelper_Base )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( AccFrameSelectorChild, OAccessibleComponentHelper, OAccessibleHelper_Base )
 
 Reference< XAccessibleContext > AccFrameSelectorChild::getAccessibleContext(  )
 {

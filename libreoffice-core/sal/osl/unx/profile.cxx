@@ -25,11 +25,13 @@
 
 #include <osl/diagnose.h>
 #include <osl/profile.h>
-#include <osl/process.h>
-#include <osl/thread.h>
-#include <osl/file.h>
-#include <rtl/alloc.h>
 #include <sal/log.hxx>
+
+#include <fcntl.h>
+#include <limits.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define LINES_INI       32
 #define LINES_ADD       10

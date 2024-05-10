@@ -44,7 +44,7 @@
 #include <cppuhelper/supportsservice.hxx>
 
 //  Defines
-constexpr OUStringLiteral aSlotNewDocDirect = u".uno:AddDirect";
+constexpr OUString aSlotNewDocDirect = u".uno:AddDirect"_ustr;
 constexpr OUStringLiteral aSlotAutoPilot = u".uno:AutoPilotMenu";
 
 using namespace com::sun::star::uno;
@@ -283,7 +283,7 @@ NewMenuController::~NewMenuController()
 // private function
 void NewMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu > const & rPopupMenu )
 {
-    VCLXPopupMenu* pPopupMenu    = static_cast<VCLXPopupMenu *>(comphelper::getFromUnoTunnel<VCLXMenu>( rPopupMenu ));
+    VCLXPopupMenu* pPopupMenu    = static_cast<VCLXPopupMenu *>(dynamic_cast<VCLXMenu*>( rPopupMenu.get() ));
     PopupMenu*     pVCLPopupMenu = nullptr;
 
     SolarMutexGuard aSolarMutexGuard;
@@ -297,7 +297,7 @@ void NewMenuController::fillPopupMenu( Reference< css::awt::XPopupMenu > const &
 
     Reference< XDispatchProvider > xDispatchProvider( m_xFrame, UNO_QUERY );
     URL aTargetURL;
-    aTargetURL.Complete = m_bNewMenu ? OUString(aSlotNewDocDirect) : OUString(aSlotAutoPilot);
+    aTargetURL.Complete = m_bNewMenu ? aSlotNewDocDirect : OUString(aSlotAutoPilot);
     m_xURLTransformer->parseStrict( aTargetURL );
     Reference< XDispatch > xMenuItemDispatch = xDispatchProvider->queryDispatch( aTargetURL, OUString(), 0 );
     if(xMenuItemDispatch == nullptr)
@@ -336,7 +336,7 @@ void SAL_CALL NewMenuController::disposing( const EventObject& )
 {
     Reference< css::awt::XMenuListener > xHolder(this);
 
-    osl::MutexGuard aLock( m_aMutex );
+    std::unique_lock aLock( m_aMutex );
     m_xFrame.clear();
     m_xDispatch.clear();
     m_xContext.clear();
@@ -359,7 +359,7 @@ void SAL_CALL NewMenuController::itemSelected( const css::awt::MenuEvent& rEvent
     Reference< XComponentContext >    xContext;
 
     {
-        osl::MutexGuard aLock(m_aMutex);
+        std::unique_lock aLock(m_aMutex);
         xPopupMenu = m_xPopupMenu;
         xContext = m_xContext;
     }
@@ -367,7 +367,7 @@ void SAL_CALL NewMenuController::itemSelected( const css::awt::MenuEvent& rEvent
     if ( !xPopupMenu.is() )
         return;
 
-    VCLXPopupMenu* pPopupMenu = static_cast<VCLXPopupMenu *>(comphelper::getFromUnoTunnel<VCLXMenu>( xPopupMenu ));
+    VCLXPopupMenu* pPopupMenu = static_cast<VCLXPopupMenu *>(dynamic_cast<VCLXMenu*>( xPopupMenu.get() ));
     if ( !pPopupMenu )
         return;
 
@@ -395,15 +395,11 @@ void SAL_CALL NewMenuController::itemActivated( const css::awt::MenuEvent& )
     if ( !(m_xFrame.is() && m_xPopupMenu.is()) )
         return;
 
-    VCLXPopupMenu* pPopupMenu = static_cast<VCLXPopupMenu *>(comphelper::getFromUnoTunnel<VCLXMenu>( m_xPopupMenu ));
-    if ( !pPopupMenu )
-        return;
-
     const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
     bool bShowImages( rSettings.GetUseImagesInMenus() );
     OUString aIconTheme( rSettings.DetermineIconTheme() );
 
-    PopupMenu* pVCLPopupMenu = static_cast<PopupMenu *>(pPopupMenu->GetMenu());
+    PopupMenu* pVCLPopupMenu = static_cast<PopupMenu *>(m_xPopupMenu->GetMenu());
 
     if ( m_bShowImages != bShowImages || m_aIconTheme != aIconTheme )
     {
@@ -439,15 +435,13 @@ void NewMenuController::impl_setPopupMenu()
 }
 
 // XInitialization
-void SAL_CALL NewMenuController::initialize( const Sequence< Any >& aArguments )
+void NewMenuController::initializeImpl( std::unique_lock<std::mutex>& rGuard, const Sequence< Any >& aArguments )
 {
-    osl::MutexGuard aLock( m_aMutex );
-
     bool bInitialized( m_bInitialized );
     if ( bInitialized )
         return;
 
-    svt::PopupMenuControllerBase::initialize( aArguments );
+    svt::PopupMenuControllerBase::initializeImpl( rGuard, aArguments );
 
     if ( m_bInitialized )
     {

@@ -29,9 +29,8 @@
 #include <comphelper/sequence.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/componentguard.hxx>
-#include <comphelper/interfacecontainer3.hxx>
-#include <cppuhelper/basemutex.hxx>
-#include <cppuhelper/compbase.hxx>
+#include <comphelper/interfacecontainer4.hxx>
+#include <comphelper/compbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <o3tl/safeint.hxx>
 #include <rtl/ref.hxx>
@@ -49,12 +48,11 @@ using namespace toolkit;
 
 namespace {
 
-typedef ::cppu::WeakComponentImplHelper    <   css::awt::grid::XGridColumnModel
+typedef ::comphelper::WeakComponentImplHelper    <   css::awt::grid::XGridColumnModel
                                             ,   css::lang::XServiceInfo
                                             >   DefaultGridColumnModel_Base;
 
-class DefaultGridColumnModel    :public ::cppu::BaseMutex
-                                ,public DefaultGridColumnModel_Base
+class DefaultGridColumnModel : public DefaultGridColumnModel_Base
 {
 public:
     DefaultGridColumnModel();
@@ -82,25 +80,20 @@ public:
     virtual css::uno::Reference< css::util::XCloneable > SAL_CALL createClone(  ) override;
 
     // OComponentHelper
-    virtual void SAL_CALL disposing() override;
+    virtual void disposing( std::unique_lock<std::mutex>& ) override;
 
 private:
-    typedef ::std::vector< css::uno::Reference< css::awt::grid::XGridColumn > >   Columns;
+    typedef ::std::vector< rtl::Reference< GridColumn > >   Columns;
 
-    ::comphelper::OInterfaceContainerHelper3<XContainerListener> m_aContainerListeners;
+    ::comphelper::OInterfaceContainerHelper4<XContainerListener> m_aContainerListeners;
     Columns                             m_aColumns;
 };
 
     DefaultGridColumnModel::DefaultGridColumnModel()
-        :DefaultGridColumnModel_Base( m_aMutex )
-        ,m_aContainerListeners( m_aMutex )
     {
     }
 
     DefaultGridColumnModel::DefaultGridColumnModel( DefaultGridColumnModel const & i_copySource )
-        :cppu::BaseMutex()
-        ,DefaultGridColumnModel_Base( m_aMutex )
-        ,m_aContainerListeners( m_aMutex )
     {
         Columns aColumns;
         aColumns.reserve( i_copySource.m_aColumns.size() );
@@ -111,16 +104,9 @@ private:
                     ++col
                 )
             {
-                Reference< css::util::XCloneable > const xCloneable( *col, UNO_QUERY_THROW );
-                Reference< XGridColumn > const xClone( xCloneable->createClone(), UNO_QUERY_THROW );
+                rtl::Reference< GridColumn > const xClone( new GridColumn(**col) );
 
-                GridColumn* const pGridColumn = comphelper::getFromUnoTunnel<GridColumn>( xClone );
-                if ( pGridColumn == nullptr )
-                    throw RuntimeException( "invalid clone source implementation", *this );
-                    // that's indeed a RuntimeException, not an IllegalArgumentException or some such:
-                    // a DefaultGridColumnModel implementation whose columns are not GridColumn implementations
-                    // is borked.
-                pGridColumn->setIndex( col - i_copySource.m_aColumns.begin() );
+                xClone->setIndex( col - i_copySource.m_aColumns.begin() );
 
                 aColumns.push_back( xClone );
             }
@@ -141,20 +127,22 @@ private:
 
     Reference< XGridColumn > SAL_CALL DefaultGridColumnModel::createColumn(  )
     {
-        ::comphelper::ComponentGuard aGuard( *this, rBHelper );
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
         return new GridColumn();
     }
 
 
     ::sal_Int32 SAL_CALL DefaultGridColumnModel::addColumn( const Reference< XGridColumn > & i_column )
     {
-        ::comphelper::ComponentGuard aGuard( *this, rBHelper );
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
 
-        GridColumn* const pGridColumn = comphelper::getFromUnoTunnel<GridColumn>( i_column );
+        GridColumn* const pGridColumn = dynamic_cast<GridColumn*>( i_column.get() );
         if ( pGridColumn == nullptr )
             throw css::lang::IllegalArgumentException( "invalid column implementation", *this, 1 );
 
-        m_aColumns.push_back( i_column );
+        m_aColumns.push_back( pGridColumn );
         sal_Int32 index = m_aColumns.size() - 1;
         pGridColumn->setIndex( index );
 
@@ -164,8 +152,7 @@ private:
         aEvent.Accessor <<= index;
         aEvent.Element <<= i_column;
 
-        aGuard.clear();
-        m_aContainerListeners.notifyEach( &XContainerListener::elementInserted, aEvent );
+        m_aContainerListeners.notifyEach( aGuard, &XContainerListener::elementInserted, aEvent );
 
         return index;
     }
@@ -173,7 +160,8 @@ private:
 
     void SAL_CALL DefaultGridColumnModel::removeColumn( ::sal_Int32 i_columnIndex )
     {
-        ::comphelper::ComponentGuard aGuard( *this, rBHelper );
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
 
         if ( ( i_columnIndex < 0 ) || ( o3tl::make_unsigned( i_columnIndex ) >= m_aColumns.size() ) )
             throw css::lang::IndexOutOfBoundsException( OUString(), *this );
@@ -189,13 +177,7 @@ private:
                 ++updatePos, ++columnIndex
             )
         {
-            GridColumn* pColumnImpl = comphelper::getFromUnoTunnel<GridColumn>( *updatePos );
-            if ( !pColumnImpl )
-            {
-                SAL_WARN( "toolkit.controls", "DefaultGridColumnModel::removeColumn: invalid column implementation!" );
-                continue;
-            }
-
+            GridColumn* pColumnImpl = updatePos->get();
             pColumnImpl->setIndex( columnIndex );
         }
 
@@ -205,8 +187,9 @@ private:
         aEvent.Accessor <<= i_columnIndex;
         aEvent.Element <<= xColumn;
 
-        aGuard.clear();
-        m_aContainerListeners.notifyEach( &XContainerListener::elementRemoved, aEvent );
+        m_aContainerListeners.notifyEach( aGuard, &XContainerListener::elementRemoved, aEvent );
+
+        aGuard.unlock();
 
         // dispose the removed column
         try
@@ -222,14 +205,16 @@ private:
 
     Sequence< Reference< XGridColumn > > SAL_CALL DefaultGridColumnModel::getColumns()
     {
-        ::comphelper::ComponentGuard aGuard( *this, rBHelper );
-        return ::comphelper::containerToSequence( m_aColumns );
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
+        return ::comphelper::containerToSequence<Reference<XGridColumn>>( m_aColumns );
     }
 
 
     Reference< XGridColumn > SAL_CALL DefaultGridColumnModel::getColumn(::sal_Int32 index)
     {
-        ::comphelper::ComponentGuard aGuard( *this, rBHelper );
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
 
         if ( index >=0 && o3tl::make_unsigned(index) < m_aColumns.size())
             return m_aColumns[index];
@@ -243,65 +228,66 @@ private:
         ::std::vector< ContainerEvent > aRemovedColumns;
         ::std::vector< ContainerEvent > aInsertedColumns;
 
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
+
+        // remove existing columns
+        while ( !m_aColumns.empty() )
         {
-            ::comphelper::ComponentGuard aGuard( *this, rBHelper );
+            const size_t lastColIndex = m_aColumns.size() - 1;
 
-            // remove existing columns
-            while ( !m_aColumns.empty() )
-            {
-                const size_t lastColIndex = m_aColumns.size() - 1;
+            ContainerEvent aEvent;
+            aEvent.Source = *this;
+            aEvent.Accessor <<= sal_Int32( lastColIndex );
+            aEvent.Element <<= Reference<XGridColumn>(m_aColumns[ lastColIndex ]);
+            aRemovedColumns.push_back( aEvent );
 
-                ContainerEvent aEvent;
-                aEvent.Source = *this;
-                aEvent.Accessor <<= sal_Int32( lastColIndex );
-                aEvent.Element <<= m_aColumns[ lastColIndex ];
-                aRemovedColumns.push_back( aEvent );
+            m_aColumns.erase( m_aColumns.begin() + lastColIndex );
+        }
 
-                m_aColumns.erase( m_aColumns.begin() + lastColIndex );
-            }
+        // add new columns
+        for ( sal_Int32 i=0; i<rowElements; ++i )
+        {
+            ::rtl::Reference< GridColumn > const pGridColumn = new GridColumn();
+            OUString colTitle = "Column " + OUString::number( i + 1 );
+            pGridColumn->setTitle( colTitle );
+            pGridColumn->setColumnWidth( 80 /* APPFONT */ );
+            pGridColumn->setFlexibility( 1 );
+            pGridColumn->setResizeable( true );
+            pGridColumn->setDataColumnIndex( i );
 
-            // add new columns
-            for ( sal_Int32 i=0; i<rowElements; ++i )
-            {
-                ::rtl::Reference< GridColumn > const pGridColumn = new GridColumn();
-                Reference< XGridColumn > const xColumn( pGridColumn );
-                OUString colTitle = "Column " + OUString::number( i + 1 );
-                pGridColumn->setTitle( colTitle );
-                pGridColumn->setColumnWidth( 80 /* APPFONT */ );
-                pGridColumn->setFlexibility( 1 );
-                pGridColumn->setResizeable( true );
-                pGridColumn->setDataColumnIndex( i );
+            ContainerEvent aEvent;
+            aEvent.Source = *this;
+            aEvent.Accessor <<= i;
+            aEvent.Element <<= Reference<XGridColumn>(pGridColumn);
+            aInsertedColumns.push_back( aEvent );
 
-                ContainerEvent aEvent;
-                aEvent.Source = *this;
-                aEvent.Accessor <<= i;
-                aEvent.Element <<= xColumn;
-                aInsertedColumns.push_back( aEvent );
-
-                m_aColumns.push_back( xColumn );
-                pGridColumn->setIndex( i );
-            }
+            m_aColumns.push_back( pGridColumn );
+            pGridColumn->setIndex( i );
         }
 
         // fire removal notifications
         for (const auto& rEvent : aRemovedColumns)
         {
-            m_aContainerListeners.notifyEach( &XContainerListener::elementRemoved, rEvent );
+            m_aContainerListeners.notifyEach( aGuard, &XContainerListener::elementRemoved, rEvent );
         }
 
         // fire insertion notifications
         for (const auto& rEvent : aInsertedColumns)
         {
-            m_aContainerListeners.notifyEach( &XContainerListener::elementInserted, rEvent );
+            m_aContainerListeners.notifyEach( aGuard, &XContainerListener::elementInserted, rEvent );
         }
+
+        aGuard.unlock();
 
         // dispose removed columns
         for (const auto& rEvent : aRemovedColumns)
         {
             try
             {
-                const Reference< XComponent > xColComp( rEvent.Element, UNO_QUERY_THROW );
-                xColComp->dispose();
+                const Reference< XComponent > xColComp( rEvent.Element, UNO_QUERY );
+                if (xColComp)
+                    xColComp->dispose();
             }
             catch( const Exception& )
             {
@@ -329,34 +315,33 @@ private:
 
     void SAL_CALL DefaultGridColumnModel::addContainerListener( const Reference< XContainerListener >& i_listener )
     {
+        std::unique_lock aGuard(m_aMutex);
         if ( i_listener.is() )
-            m_aContainerListeners.addInterface( i_listener );
+            m_aContainerListeners.addInterface( aGuard, i_listener );
     }
 
 
     void SAL_CALL DefaultGridColumnModel::removeContainerListener( const Reference< XContainerListener >& i_listener )
     {
+        std::unique_lock aGuard(m_aMutex);
         if ( i_listener.is() )
-            m_aContainerListeners.removeInterface( i_listener );
+            m_aContainerListeners.removeInterface( aGuard, i_listener );
     }
 
 
-    void SAL_CALL DefaultGridColumnModel::disposing()
+    void DefaultGridColumnModel::disposing( std::unique_lock<std::mutex>& rGuard )
     {
-        DefaultGridColumnModel_Base::disposing();
+        DefaultGridColumnModel_Base::disposing(rGuard);
 
         EventObject aEvent( *this );
-        m_aContainerListeners.disposeAndClear( aEvent );
-
-        ::osl::MutexGuard aGuard( m_aMutex );
+        m_aContainerListeners.disposeAndClear( rGuard, aEvent );
 
         // remove, dispose and clear columns
         while ( !m_aColumns.empty() )
         {
             try
             {
-                const Reference< XComponent > xColComponent( m_aColumns[ 0 ], UNO_QUERY_THROW );
-                xColComponent->dispose();
+                m_aColumns[ 0 ]->dispose();
             }
             catch( const Exception& )
             {
@@ -372,7 +357,8 @@ private:
 
     Reference< css::util::XCloneable > SAL_CALL DefaultGridColumnModel::createClone(  )
     {
-        ::comphelper::ComponentGuard aGuard( *this, rBHelper );
+        std::unique_lock aGuard(m_aMutex);
+        throwIfDisposed(aGuard);
         return new DefaultGridColumnModel( *this );
     }
 

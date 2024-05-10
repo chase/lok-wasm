@@ -143,7 +143,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
         return true;
     }
 
-    sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
+    sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
     sal_uInt16 nHitLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(HITPIX,0)).Width() );
 
     if (comphelper::LibreOfficeKit::isActive())
@@ -280,7 +280,7 @@ bool FuSelection::MouseButtonDown(const MouseEvent& rMEvt)
                 if (comphelper::LibreOfficeKit::isActive())
                 {
                     SfxViewShell& rSfxViewShell = mpViewShell->GetViewShellBase();
-                    rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED, aVEvt.mpURLField->GetURL().toUtf8().getStr());
+                    rSfxViewShell.libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED, aVEvt.mpURLField->GetURL().toUtf8());
                     return true;
                 }
 
@@ -657,7 +657,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
 
     Point aPnt( mpWindow->PixelToLogic( rMEvt.GetPosPixel() ) );
     sal_uInt16 nHitLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(HITPIX,0)).Width() );
-    sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
+    sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
 
     if (mpView->IsFrameDragSingles() || !mpView->HasMarkablePoints())
     {
@@ -903,7 +903,7 @@ bool FuSelection::MouseButtonUp(const MouseEvent& rMEvt)
             {
                 mpView->EndAction();
 
-                sal_uInt16 nDrgLog2 = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
+                sal_uInt16 nDrgLog2 = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
                 Point aPos = mpWindow->PixelToLogic( rMEvt.GetPosPixel() );
 
                 if (std::abs(aMDPos.X() - aPos.X()) < nDrgLog2 &&
@@ -1237,8 +1237,8 @@ bool FuSelection::HandleImageMapClick(const SdrObject* pObj, const Point& rPos)
     }
 
     const SdrLayerIDSet* pVisiLayer = &mpView->GetSdrPageView()->GetVisibleLayers();
-    sal_uInt16 nHitLog = sal_uInt16(mpWindow->PixelToLogic(Size(HITPIX, 0)).Width());
-    const ::tools::Long n2HitLog = nHitLog * 2;
+    double fHitLog = mpWindow->PixelToLogic(Size(HITPIX, 0)).Width();
+    const ::tools::Long n2HitLog = fHitLog * 2;
     Point aHitPosR(rPos);
     Point aHitPosL(rPos);
     Point aHitPosT(rPos);
@@ -1250,13 +1250,13 @@ bool FuSelection::HandleImageMapClick(const SdrObject* pObj, const Point& rPos)
     aHitPosB.AdjustY(-n2HitLog);
 
     if (!bClosed || !bFilled
-        || (SdrObjectPrimitiveHit(*pObj, aHitPosR, nHitLog, *mpView->GetSdrPageView(), pVisiLayer,
+        || (SdrObjectPrimitiveHit(*pObj, aHitPosR, {fHitLog, fHitLog}, *mpView->GetSdrPageView(), pVisiLayer,
                                   false)
-            && SdrObjectPrimitiveHit(*pObj, aHitPosL, nHitLog, *mpView->GetSdrPageView(),
+            && SdrObjectPrimitiveHit(*pObj, aHitPosL, {fHitLog, fHitLog}, *mpView->GetSdrPageView(),
                                      pVisiLayer, false)
-            && SdrObjectPrimitiveHit(*pObj, aHitPosT, nHitLog, *mpView->GetSdrPageView(),
+            && SdrObjectPrimitiveHit(*pObj, aHitPosT, {fHitLog, fHitLog}, *mpView->GetSdrPageView(),
                                      pVisiLayer, false)
-            && SdrObjectPrimitiveHit(*pObj, aHitPosB, nHitLog, *mpView->GetSdrPageView(),
+            && SdrObjectPrimitiveHit(*pObj, aHitPosB, {fHitLog, fHitLog}, *mpView->GetSdrPageView(),
                                      pVisiLayer, false)))
     {
         if (SvxIMapInfo::GetIMapInfo(pObj))

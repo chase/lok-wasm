@@ -9,6 +9,7 @@
 
 #include <test/unoapixml_test.hxx>
 
+#include <com/sun/star/awt/FontWeight.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/PropertyValues.hpp>
 #include <com/sun/star/frame/XStorable.hpp>
@@ -35,7 +36,6 @@ class XmloffStyleTest : public UnoApiXmlTest
 {
 public:
     XmloffStyleTest();
-    void registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx) override;
 };
 
 XmloffStyleTest::XmloffStyleTest()
@@ -43,16 +43,11 @@ XmloffStyleTest::XmloffStyleTest()
 {
 }
 
-void XmloffStyleTest::registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx)
-{
-    XmlTestTools::registerODFNamespaces(pXmlXpathCtx);
-}
-
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testMailMergeInEditeng)
 {
     // Without the accompanying fix in place, this test would have failed, as unexpected
     // <text:database-display> in editeng text aborted the whole import process.
-    loadFromURL(u"mail-merge-editeng.odt");
+    loadFromFile(u"mail-merge-editeng.odt");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCommentProperty)
@@ -86,7 +81,9 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCommentProperty)
     xField->getPropertyValue("Resolved") >>= bResolved;
     OUString parentName;
     xField->getPropertyValue("ParentName") >>= parentName;
-    CPPUNIT_ASSERT_EQUAL(OUString("parent_comment_name"), parentName); // Check if the parent comment name is written and read correctly.
+    CPPUNIT_ASSERT_EQUAL(
+        OUString("parent_comment_name"),
+        parentName); // Check if the parent comment name is written and read correctly.
     // Without the accompanying fix in place, this test would have failed, as the resolved state was
     // not saved for non-range comments.
     CPPUNIT_ASSERT(bResolved);
@@ -129,22 +126,68 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testBibliographyLocalUrl)
     uno::Reference<beans::XPropertySet> xPortion(xPortionEnum->nextElement(), uno::UNO_QUERY);
     xField.set(xPortion->getPropertyValue("TextField"), uno::UNO_QUERY);
     comphelper::SequenceAsHashMap aMap(xField->getPropertyValue("Fields"));
-    CPPUNIT_ASSERT(aMap.find("LocalURL") != aMap.end());
+    CPPUNIT_ASSERT(aMap.contains("LocalURL"));
     auto aActual = aMap["LocalURL"].get<OUString>();
     CPPUNIT_ASSERT_EQUAL(OUString("file:///home/me/test.pdf"), aActual);
+}
+
+CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testBibliographyTargetURL1)
+{
+    // Given a document with a biblio field, with non-empty LocalURL:
+    mxComponent = loadFromDesktop("private:factory/swriter");
+    uno::Reference<lang::XMultiServiceFactory> xFactory(mxComponent, uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xField(
+        xFactory->createInstance("com.sun.star.text.TextField.Bibliography"), uno::UNO_QUERY);
+    uno::Sequence<beans::PropertyValue> aFields = {
+        comphelper::makePropertyValue("Identifier", OUString("AT")),
+        comphelper::makePropertyValue("URL", OUString("https://display.url/test1.pdf#page=1")),
+        comphelper::makePropertyValue("TargetType", OUString("1")),
+        comphelper::makePropertyValue("TargetURL", OUString("https://target.url/test2.pdf#page=2")),
+    };
+    xField->setPropertyValue("Fields", uno::Any(aFields));
+    uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
+    uno::Reference<text::XText> xText = xTextDocument->getText();
+    uno::Reference<text::XTextCursor> xCursor = xText->createTextCursor();
+    uno::Reference<text::XTextContent> xContent(xField, uno::UNO_QUERY);
+    xText->insertTextContent(xCursor, xContent, /*bAbsorb=*/false);
+
+    // When invoking ODT export + import on it:
+    saveAndReload("writer8");
+
+    // Then make sure that URL, TargetURL and UseTargetURL are preserved and independent:
+    xTextDocument.set(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XEnumerationAccess> xParaEnumAccess(xTextDocument->getText(),
+                                                                  uno::UNO_QUERY);
+    uno::Reference<container::XEnumeration> xParaEnum = xParaEnumAccess->createEnumeration();
+    uno::Reference<container::XEnumerationAccess> xPara(xParaEnum->nextElement(), uno::UNO_QUERY);
+    uno::Reference<container::XEnumeration> xPortionEnum = xPara->createEnumeration();
+    uno::Reference<beans::XPropertySet> xPortion(xPortionEnum->nextElement(), uno::UNO_QUERY);
+    xField.set(xPortion->getPropertyValue("TextField"), uno::UNO_QUERY);
+    comphelper::SequenceAsHashMap aMap(xField->getPropertyValue("Fields"));
+
+    CPPUNIT_ASSERT(aMap.contains("URL"));
+    CPPUNIT_ASSERT_EQUAL(OUString("https://display.url/test1.pdf#page=1"),
+                         aMap["URL"].get<OUString>());
+
+    CPPUNIT_ASSERT(aMap.contains("TargetURL"));
+    CPPUNIT_ASSERT_EQUAL(OUString("https://target.url/test2.pdf#page=2"),
+                         aMap["TargetURL"].get<OUString>());
+
+    CPPUNIT_ASSERT(aMap.contains("TargetType"));
+    CPPUNIT_ASSERT_EQUAL(OUString("1"), aMap["TargetType"].get<OUString>());
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCommentTableBorder)
 {
     // Without the accompanying fix in place, this failed to load, as a comment that started in a
     // table and ended outside a table aborted the whole importer.
-    loadFromURL(u"comment-table-border.fodt");
+    loadFromFile(u"comment-table-border.fodt");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testParaStyleListLevel)
 {
     // Given a document with style:list-level="...":
-    loadFromURL(u"para-style-list-level.fodt");
+    loadFromFile(u"para-style-list-level.fodt");
 
     // Then make sure we map that to the paragraph style's numbering level:
     uno::Reference<style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(mxComponent,
@@ -166,14 +209,15 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testParaStyleListLevel)
     // Without the accompanying fix in place, this failed with:
     // - XPath '/office:document-styles/office:styles/style:style[@style:name='mystyle']' no attribute 'list-level' exist
     // i.e. a custom NumberingLevel was lost on save.
-    assertXPath(pXmlDoc, "/office:document-styles/office:styles/style:style[@style:name='mystyle']",
-                "list-level", "2");
+    assertXPath(pXmlDoc,
+                "/office:document-styles/office:styles/style:style[@style:name='mystyle']"_ostr,
+                "list-level"_ostr, "2");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testContinueNumberingWord)
 {
     // Given a document, which is produced by Word and contains text:continue-numbering="true":
-    loadFromURL(u"continue-numbering-word.odt");
+    loadFromFile(u"continue-numbering-word.odt");
 
     // Then make sure that the numbering from the 1st para is continued on the 3rd para:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -195,7 +239,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testContinueNumberingWord)
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListId)
 {
     // Given a document with a simple list (no continue-list="..." attribute):
-    loadFromURL(u"list-id.fodt");
+    loadFromFile(u"list-id.fodt");
 
     // When storing that document as ODF:
     save("writer8");
@@ -205,20 +249,19 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListId)
     // Without the accompanying fix in place, this failed with:
     // - XPath '//text:list' unexpected 'id' attribute
     // i.e. xml:id="..." was written unconditionally, even when no other list needed it.
-    assertXPathNoAttribute(pXmlDoc, "//text:list", "id");
+    assertXPathNoAttribute(pXmlDoc, "//text:list"_ostr, "id"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListId2)
 {
     // tdf#155823 Given a document with a list consisting of items having different list styles:
-    loadFromURL(u"differentListStylesInOneList.fodt");
+    loadFromFile(u"differentListStylesInOneList.fodt");
 
-    uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY_THROW);
-    uno::Reference<container::XEnumerationAccess> xParaEnumAccess(xTextDocument->getText(),
-                                                                  uno::UNO_QUERY_THROW);
+    auto xTextDocument(mxComponent.queryThrow<css::text::XTextDocument>());
+    auto xParaEnumAccess(xTextDocument->getText().queryThrow<css::container::XEnumerationAccess>());
     auto xParaEnum(xParaEnumAccess->createEnumeration());
 
-    uno::Reference<beans::XPropertySet> xPara(xParaEnum->nextElement(), uno::UNO_QUERY_THROW);
+    auto xPara(xParaEnum->nextElement().queryThrow<beans::XPropertySet>());
     auto aActual(xPara->getPropertyValue("ListLabelString").get<OUString>());
     CPPUNIT_ASSERT_EQUAL(OUString("1."), aActual);
     xParaEnum->nextElement(); // Skip empty intermediate paragraph
@@ -239,8 +282,8 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListId2)
     // Error: "list123456789012345" is referenced by an IDREF, but not defined.
     saveAndReload("writer8");
 
-    xTextDocument.set(mxComponent, uno::UNO_QUERY_THROW);
-    xParaEnumAccess.set(xTextDocument->getText(), uno::UNO_QUERY_THROW);
+    xTextDocument.set(mxComponent.queryThrow<css::text::XTextDocument>());
+    xParaEnumAccess.set(xTextDocument->getText().queryThrow<css::container::XEnumerationAccess>());
     xParaEnum.set(xParaEnumAccess->createEnumeration());
 
     xPara.set(xParaEnum->nextElement(), uno::UNO_QUERY);
@@ -271,11 +314,11 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListId2)
     CPPUNIT_ASSERT(pXmlDoc);
     // Without the fix in place, this would fail,
     // i.e. xml:id="..." was omitted, even though it was needed for the next item.
-    OUString id
-        = getXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:list[3]", "id");
+    OUString id = getXPath(
+        pXmlDoc, "/office:document-content/office:body/office:text/text:list[3]"_ostr, "id"_ostr);
     CPPUNIT_ASSERT(!id.isEmpty());
-    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:list[4]",
-                "continue-list", id);
+    assertXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:list[4]"_ostr,
+                "continue-list"_ostr, id);
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListIdState)
@@ -283,20 +326,20 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListIdState)
     // tdf#149668: given a document with 3 paragraphs: an outer numbering on para 1 & 3, an inner
     // numbering on para 2:
     mxComponent = loadFromDesktop("private:factory/swriter");
-    uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY_THROW);
+    auto xTextDocument(mxComponent.queryThrow<text::XTextDocument>());
     auto xText(xTextDocument->getText());
     xText->insertControlCharacter(xText->getEnd(), css::text::ControlCharacter::PARAGRAPH_BREAK,
                                   false);
     xText->insertControlCharacter(xText->getEnd(), css::text::ControlCharacter::PARAGRAPH_BREAK,
                                   false);
 
-    uno::Reference<container::XEnumerationAccess> paraEnumAccess(xText, uno::UNO_QUERY_THROW);
+    auto paraEnumAccess(xText.queryThrow<container::XEnumerationAccess>());
     auto paraEnum(paraEnumAccess->createEnumeration());
-    uno::Reference<beans::XPropertySet> xParaProps(paraEnum->nextElement(), uno::UNO_QUERY_THROW);
+    auto xParaProps(paraEnum->nextElement().queryThrow<beans::XPropertySet>());
     xParaProps->setPropertyValue("NumberingStyleName", css::uno::Any(OUString("Numbering ABC")));
-    xParaProps.set(paraEnum->nextElement(), uno::UNO_QUERY_THROW);
+    xParaProps.set(paraEnum->nextElement().queryThrow<beans::XPropertySet>());
     xParaProps->setPropertyValue("NumberingStyleName", css::uno::Any(OUString("Numbering 123")));
-    xParaProps.set(paraEnum->nextElement(), uno::UNO_QUERY_THROW);
+    xParaProps.set(paraEnum->nextElement().queryThrow<beans::XPropertySet>());
     xParaProps->setPropertyValue("NumberingStyleName", css::uno::Any(OUString("Numbering ABC")));
 
     // When storing that document as ODF:
@@ -307,9 +350,70 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListIdState)
     // Without the accompanying fix in place, this test would have failed,
     // i.e. para 1 didn't write an xml:id="..." but para 3 referred to it using continue-list="...",
     // which is inconsistent.
-    OUString id
-        = getXPath(pXmlDoc, "/office:document-content/office:body/office:text/text:list[1]", "id");
+    OUString id = getXPath(
+        pXmlDoc, "/office:document-content/office:body/office:text/text:list[1]"_ostr, "id"_ostr);
     CPPUNIT_ASSERT(!id.isEmpty());
+}
+
+CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testListIdOnRestart)
+{
+    // Test that a restart of a continued list, by itself, does not introduce a unneeded xml:id
+    // and text:continue-list, but uses text:continue-numbering, and is imported correctly.
+
+    // Given a document with a list with a restart after break:
+    loadFromFile(u"listRestartAfterBreak.fodt");
+
+    auto xTextDocument(mxComponent.queryThrow<css::text::XTextDocument>());
+    auto xParaEnumAccess(xTextDocument->getText().queryThrow<css::container::XEnumerationAccess>());
+    auto xParaEnum(xParaEnumAccess->createEnumeration());
+
+    auto xPara(xParaEnum->nextElement().queryThrow<beans::XPropertySet>());
+    auto aActual(xPara->getPropertyValue("ListLabelString").get<OUString>());
+    CPPUNIT_ASSERT_EQUAL(OUString("1."), aActual);
+    OUString list_id = xPara->getPropertyValue("ListId").get<OUString>();
+    xParaEnum->nextElement(); // Skip empty intermediate paragraph
+    xPara.set(xParaEnum->nextElement(), uno::UNO_QUERY_THROW);
+    aActual = xPara->getPropertyValue("ListLabelString").get<OUString>();
+    CPPUNIT_ASSERT_EQUAL(OUString("2."), aActual);
+    CPPUNIT_ASSERT_EQUAL(list_id, xPara->getPropertyValue("ListId").get<OUString>());
+    xParaEnum->nextElement(); // Skip empty intermediate paragraph
+    xPara.set(xParaEnum->nextElement(), uno::UNO_QUERY);
+    aActual = xPara->getPropertyValue("ListLabelString").get<OUString>();
+    // Check that restart was applied correctly, with simple 'text:continue-numbering="true"'
+    CPPUNIT_ASSERT_EQUAL(OUString("1."), aActual);
+    CPPUNIT_ASSERT_EQUAL(list_id, xPara->getPropertyValue("ListId").get<OUString>());
+
+    // When storing that document as ODF:
+    saveAndReload("writer8");
+
+    xTextDocument.set(mxComponent, uno::UNO_QUERY_THROW);
+    xParaEnumAccess.set(xTextDocument->getText(), uno::UNO_QUERY_THROW);
+    xParaEnum.set(xParaEnumAccess->createEnumeration());
+
+    xPara.set(xParaEnum->nextElement(), uno::UNO_QUERY_THROW);
+    aActual = xPara->getPropertyValue("ListLabelString").get<OUString>();
+    CPPUNIT_ASSERT_EQUAL(OUString("1."), aActual);
+    list_id = xPara->getPropertyValue("ListId").get<OUString>();
+    xParaEnum->nextElement(); // Skip empty intermediate paragraph
+    xPara.set(xParaEnum->nextElement(), uno::UNO_QUERY_THROW);
+    aActual = xPara->getPropertyValue("ListLabelString").get<OUString>();
+    CPPUNIT_ASSERT_EQUAL(OUString("2."), aActual);
+    CPPUNIT_ASSERT_EQUAL(list_id, xPara->getPropertyValue("ListId").get<OUString>());
+    xParaEnum->nextElement(); // Skip empty intermediate paragraph
+    xPara.set(xParaEnum->nextElement(), uno::UNO_QUERY_THROW);
+    aActual = xPara->getPropertyValue("ListLabelString").get<OUString>();
+    CPPUNIT_ASSERT_EQUAL(OUString("1."), aActual);
+    CPPUNIT_ASSERT_EQUAL(list_id, xPara->getPropertyValue("ListId").get<OUString>());
+
+    // Then make sure that no xml:id="..." attribute is written, even in restarted case:
+    xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
+    CPPUNIT_ASSERT(pXmlDoc);
+    assertXPath(pXmlDoc, "//text:list"_ostr, 3);
+    assertXPathNoAttribute(pXmlDoc, "//text:list[1]"_ostr, "id"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "//text:list[2]"_ostr, "id"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "//text:list[3]"_ostr, "id"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "//text:list[3]"_ostr, "continue-list"_ostr);
+    assertXPath(pXmlDoc, "//text:list[3]"_ostr, "continue-numbering"_ostr, "true");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testClearingBreakExport)
@@ -336,13 +440,13 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testClearingBreakExport)
     // Without the accompanying fix in place, this failed with:
     // - XPath '//text:line-break' number of nodes is incorrect
     // i.e. the clearing break was lost on export.
-    assertXPath(pXmlDoc, "//text:line-break", "clear", "all");
+    assertXPath(pXmlDoc, "//text:line-break"_ostr, "clear"_ostr, "all");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testClearingBreakImport)
 {
     // Given an ODF document with a clearing break:
-    loadFromURL(u"clearing-break.fodt");
+    loadFromFile(u"clearing-break.fodt");
 
     // Then make sure that the "clear" attribute is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -405,7 +509,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testRelativeWidth)
     // - Actual  : 0.0161in (0.04 cm)
     // i.e. the fallback width value wasn't the expected half of the body frame width, but a smaller
     // value.
-    assertXPath(pXmlDoc, "//draw:frame", "width", "3.1492in");
+    assertXPath(pXmlDoc, "//draw:frame"_ostr, "width"_ostr, "3.1492in");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testScaleWidthAndHeight)
@@ -435,7 +539,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testScaleWidthAndHeight)
     // - Expected: 0.7874in
     // - Actual  : 0in
     // i.e. the exported size was 0, not 2000 mm100 in inches.
-    assertXPath(pXmlDoc, "//draw:frame", "width", "0.7874in");
+    assertXPath(pXmlDoc, "//draw:frame"_ostr, "width"_ostr, "0.7874in");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testContentControlExport)
@@ -463,13 +567,13 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testContentControlExport)
     // Without the accompanying fix in place, this failed with:
     // - XPath '//loext:content-control' number of nodes is incorrect
     // i.e. the content control was lost on export.
-    assertXPath(pXmlDoc, "//loext:content-control", "showing-place-holder", "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "showing-place-holder"_ostr, "true");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testContentControlImport)
 {
     // Given an ODF document with a content control:
-    loadFromURL(u"content-control.fodt");
+    loadFromFile(u"content-control.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -505,7 +609,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCheckboxContentControlExport)
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xTextDocument->getText();
     uno::Reference<text::XTextCursor> xCursor = xText->createTextCursor();
-    xText->insertString(xCursor, OUString(u"☐"), /*bAbsorb=*/false);
+    xText->insertString(xCursor, u"☐"_ustr, /*bAbsorb=*/false);
     xCursor->gotoStart(/*bExpand=*/false);
     xCursor->gotoEnd(/*bExpand=*/true);
     uno::Reference<text::XTextContent> xContentControl(
@@ -513,8 +617,8 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCheckboxContentControlExport)
     uno::Reference<beans::XPropertySet> xContentControlProps(xContentControl, uno::UNO_QUERY);
     xContentControlProps->setPropertyValue("Checkbox", uno::Any(true));
     xContentControlProps->setPropertyValue("Checked", uno::Any(true));
-    xContentControlProps->setPropertyValue("CheckedState", uno::Any(OUString(u"☒")));
-    xContentControlProps->setPropertyValue("UncheckedState", uno::Any(OUString(u"☐")));
+    xContentControlProps->setPropertyValue("CheckedState", uno::Any(u"☒"_ustr));
+    xContentControlProps->setPropertyValue("UncheckedState", uno::Any(u"☐"_ustr));
     xText->insertTextContent(xCursor, xContentControl, /*bAbsorb=*/true);
 
     // When exporting to ODT:
@@ -522,16 +626,16 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCheckboxContentControlExport)
 
     // Then make sure the expected markup is used:
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
-    assertXPath(pXmlDoc, "//loext:content-control", "checkbox", "true");
-    assertXPath(pXmlDoc, "//loext:content-control", "checked", "true");
-    assertXPath(pXmlDoc, "//loext:content-control", "checked-state", u"☒");
-    assertXPath(pXmlDoc, "//loext:content-control", "unchecked-state", u"☐");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "checkbox"_ostr, "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "checked"_ostr, "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "checked-state"_ostr, u"☒"_ustr);
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "unchecked-state"_ostr, u"☐"_ustr);
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCheckboxContentControlImport)
 {
     // Given an ODF document with a checkbox content control:
-    loadFromURL(u"content-control-checkbox.fodt");
+    loadFromFile(u"content-control-checkbox.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -558,16 +662,16 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testCheckboxContentControlImport)
     CPPUNIT_ASSERT(bChecked);
     OUString aCheckedState;
     xContentControlProps->getPropertyValue("CheckedState") >>= aCheckedState;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☒"), aCheckedState);
+    CPPUNIT_ASSERT_EQUAL(u"☒"_ustr, aCheckedState);
     OUString aUncheckedState;
     xContentControlProps->getPropertyValue("UncheckedState") >>= aUncheckedState;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☐"), aUncheckedState);
+    CPPUNIT_ASSERT_EQUAL(u"☐"_ustr, aUncheckedState);
     uno::Reference<text::XTextRange> xContentControlRange(xContentControl, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xContentControlRange->getText();
     uno::Reference<container::XEnumerationAccess> xContentEnumAccess(xText, uno::UNO_QUERY);
     uno::Reference<container::XEnumeration> xContentEnum = xContentEnumAccess->createEnumeration();
     uno::Reference<text::XTextRange> xContent(xContentEnum->nextElement(), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☒"), xContent->getString());
+    CPPUNIT_ASSERT_EQUAL(u"☒"_ustr, xContent->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDropdownContentControlExport)
@@ -609,24 +713,27 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDropdownContentControlExport)
 
     // Then make sure the expected markup is used:
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
-    assertXPath(pXmlDoc, "//loext:content-control", "dropdown", "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "dropdown"_ostr, "true");
     // Without the accompanying fix in place, this failed with:
     // - Expected: 1
     // - Actual  : 0
     // - XPath '//loext:content-control/loext:list-item[1]' number of nodes is incorrect
     // i.e. the list items were lost on export.
-    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[1]", "display-text", "red");
-    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[1]", "value", "R");
-    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[2]", "display-text", "green");
-    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[2]", "value", "G");
-    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[3]", "display-text", "blue");
-    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[3]", "value", "B");
+    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[1]"_ostr, "display-text"_ostr,
+                "red");
+    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[1]"_ostr, "value"_ostr, "R");
+    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[2]"_ostr, "display-text"_ostr,
+                "green");
+    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[2]"_ostr, "value"_ostr, "G");
+    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[3]"_ostr, "display-text"_ostr,
+                "blue");
+    assertXPath(pXmlDoc, "//loext:content-control/loext:list-item[3]"_ostr, "value"_ostr, "B");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDropdownContentControlImport)
 {
     // Given an ODF document with a dropdown content control:
-    loadFromURL(u"content-control-dropdown.fodt");
+    loadFromFile(u"content-control-dropdown.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -696,13 +803,13 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testPictureContentControlExport)
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//loext:content-control' no attribute 'picture' exist
-    assertXPath(pXmlDoc, "//loext:content-control", "picture", "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "picture"_ostr, "true");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testPictureContentControlImport)
 {
     // Given an ODF document with a picture content control:
-    loadFromURL(u"content-control-picture.fodt");
+    loadFromFile(u"content-control-picture.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -754,16 +861,17 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDateContentControlExport)
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//loext:content-control' no attribute 'date' exist
-    assertXPath(pXmlDoc, "//loext:content-control", "date", "true");
-    assertXPath(pXmlDoc, "//loext:content-control", "date-format", "YYYY-MM-DD");
-    assertXPath(pXmlDoc, "//loext:content-control", "date-rfc-language-tag", "en-US");
-    assertXPath(pXmlDoc, "//loext:content-control", "current-date", "2022-05-25T00:00:00Z");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "date"_ostr, "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "date-format"_ostr, "YYYY-MM-DD");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "date-rfc-language-tag"_ostr, "en-US");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "current-date"_ostr,
+                "2022-05-25T00:00:00Z");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDateContentControlImport)
 {
     // Given an ODF document with a date content control:
-    loadFromURL(u"content-control-date.fodt");
+    loadFromFile(u"content-control-date.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -821,13 +929,13 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testPlainTextContentControlExport)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//loext:content-control' no attribute 'plain-text' exist
     // i.e. the plain text content control was turned into a rich text one on export.
-    assertXPath(pXmlDoc, "//loext:content-control", "plain-text", "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "plain-text"_ostr, "true");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testPlainTextContentControlImport)
 {
     // Given an ODF document with a plain-text content control:
-    loadFromURL(u"content-control-plain-text.fodt");
+    loadFromFile(u"content-control-plain-text.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -876,7 +984,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testComboBoxContentControlExport)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//loext:content-control' no attribute 'combobox' exist
     // i.e. the combo box content control was turned into a drop-down one on export.
-    assertXPath(pXmlDoc, "//loext:content-control", "combobox", "true");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "combobox"_ostr, "true");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testAliasContentControlExport)
@@ -909,17 +1017,17 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testAliasContentControlExport)
     // - Expression: prop
     // - XPath '//loext:content-control' no attribute 'alias' exist
     // i.e. alias was lost on export.
-    assertXPath(pXmlDoc, "//loext:content-control", "alias", "my alias");
-    assertXPath(pXmlDoc, "//loext:content-control", "tag", "my tag");
-    assertXPath(pXmlDoc, "//loext:content-control", "id", "-2147483648");
-    assertXPath(pXmlDoc, "//loext:content-control", "tab-index", "3");
-    assertXPath(pXmlDoc, "//loext:content-control", "lock", "unlocked");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "alias"_ostr, "my alias");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "tag"_ostr, "my tag");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "id"_ostr, "-2147483648");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "tab-index"_ostr, "3");
+    assertXPath(pXmlDoc, "//loext:content-control"_ostr, "lock"_ostr, "unlocked");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testComboBoxContentControlImport)
 {
     // Given an ODF document with a plain-text content control:
-    loadFromURL(u"content-control-combo-box.fodt");
+    loadFromFile(u"content-control-combo-box.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -946,7 +1054,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testComboBoxContentControlImport)
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testAliasContentControlImport)
 {
     // Given an ODF document with a content control and its alias/tag:
-    loadFromURL(u"content-control-alias.fodt");
+    loadFromFile(u"content-control-alias.fodt");
 
     // Then make sure that the content control is not lost on import:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -988,7 +1096,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDropdownContentControlAutostyleExport)
 {
     // Given a document with a dropdown content control, and formatting that forms an autostyle in
     // ODT:
-    loadFromURL(u"content-control-dropdown.docx");
+    loadFromFile(u"content-control-dropdown.docx");
 
     // When saving that document to ODT, then make sure no assertion failure happens:
     uno::Reference<frame::XStorable> xStorable(mxComponent, uno::UNO_QUERY);
@@ -1003,7 +1111,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testDropdownContentControlAutostyleExport)
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testScaleWidthRedline)
 {
     // Given a document with change tracking enabled, one image is part of a delete redline:
-    loadFromURL(u"scale-width-redline.fodt");
+    loadFromFile(u"scale-width-redline.fodt");
     dispatchCommand(mxComponent, ".uno:TrackChanges", {});
     dispatchCommand(mxComponent, ".uno:GoToEndOfLine", {});
     dispatchCommand(mxComponent, ".uno:EndOfParaSel", {});
@@ -1018,7 +1126,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testScaleWidthRedline)
     // - Expected: 6.1728in
     // - Actual  : 0in
     // i.e. the deleted image had zero size, which is incorrect.
-    assertXPath(pXmlDoc, "//draw:frame[@draw:name='Image45']", "width", "6.1728in");
+    assertXPath(pXmlDoc, "//draw:frame[@draw:name='Image45']"_ostr, "width"_ostr, "6.1728in");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testThemeExport)
@@ -1053,14 +1161,14 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testThemeExport)
 
     // Check if the 12 colors are written in the XML:
     xmlDocUniquePtr pXmlDoc = parseExport("styles.xml");
-    OString aThemePath = "//office:styles/loext:theme/loext:theme-colors/loext:color";
+    OString aThemePath = "//office:styles/loext:theme/loext:theme-colors/loext:color"_ostr;
     assertXPath(pXmlDoc, aThemePath, 12);
-    assertXPath(pXmlDoc, aThemePath + "[1]", "name", "dark1");
-    assertXPath(pXmlDoc, aThemePath + "[1]", "color", "#101010");
-    assertXPath(pXmlDoc, aThemePath + "[2]", "name", "light1");
-    assertXPath(pXmlDoc, aThemePath + "[2]", "color", "#202020");
-    assertXPath(pXmlDoc, aThemePath + "[12]", "name", "followed-hyperlink");
-    assertXPath(pXmlDoc, aThemePath + "[12]", "color", "#c0c0c0");
+    assertXPath(pXmlDoc, aThemePath + "[1]", "name"_ostr, "dark1");
+    assertXPath(pXmlDoc, aThemePath + "[1]", "color"_ostr, "#101010");
+    assertXPath(pXmlDoc, aThemePath + "[2]", "name"_ostr, "light1");
+    assertXPath(pXmlDoc, aThemePath + "[2]", "color"_ostr, "#202020");
+    assertXPath(pXmlDoc, aThemePath + "[12]", "name"_ostr, "followed-hyperlink");
+    assertXPath(pXmlDoc, aThemePath + "[12]", "color"_ostr, "#c0c0c0");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testFloatingTableExport)
@@ -1094,14 +1202,14 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testFloatingTableExport)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//draw:frame' no attribute 'may-break-between-pages' exist
     // i.e. no floating table was exported.
-    assertXPath(pXmlDoc, "//draw:frame", "may-break-between-pages", "true");
+    assertXPath(pXmlDoc, "//draw:frame"_ostr, "may-break-between-pages"_ostr, "true");
 }
 
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testFloatingTableImport)
 {
     // Given a document with a floating table (loext:may-break-between-pages="true"), when importing
     // that document:
-    loadFromURL(u"floattable.fodt");
+    loadFromFile(u"floattable.fodt");
 
     // Then make sure that the matching text frame property is set:
     uno::Reference<text::XTextFramesSupplier> xTextFramesSupplier(mxComponent, uno::UNO_QUERY);
@@ -1116,7 +1224,7 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testFloatingTableImport)
 CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testParagraphScopedTabDistance)
 {
     // Given a document with paragraph scoped default tab stop distance (loext:tab-stop-distance="0.5cm")
-    loadFromURL(u"paragraph-tab-stop-distance.fodp");
+    loadFromFile(u"paragraph-tab-stop-distance.fodp");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDoc(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xPage(xDoc->getDrawPages()->getByIndex(0),
@@ -1147,10 +1255,35 @@ CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testParagraphScopedTabDistance)
 
     // Then make sure we write the tab-stop-distance
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
-    assertXPath(pXmlDoc, "//style:style[@style:name='P1']/style:paragraph-properties",
-                "tab-stop-distance", "10cm");
+    assertXPath(pXmlDoc, "//style:style[@style:name='P1']/style:paragraph-properties"_ostr,
+                "tab-stop-distance"_ostr, "10cm");
 
-    assertXPath(pXmlDoc, "//text:p[@text:style-name='P1']");
+    assertXPath(pXmlDoc, "//text:p[@text:style-name='P1']"_ostr);
+}
+
+CPPUNIT_TEST_FIXTURE(XmloffStyleTest, testNestedSpans)
+{
+    // Given a document with a first paragraph that has a nested span, the outer span setting the
+    // boldness:
+    // When importing that document:
+    loadFromFile(u"nested-spans.odt");
+
+    // Then make sure the text portion is bold, not normal:
+    uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XEnumerationAccess> xParagraphsAccess(xTextDocument->getText(),
+                                                                    uno::UNO_QUERY);
+    uno::Reference<container::XEnumeration> xParagraphs = xParagraphsAccess->createEnumeration();
+    uno::Reference<container::XEnumerationAccess> xParagraph(xParagraphs->nextElement(),
+                                                             uno::UNO_QUERY);
+    uno::Reference<container::XEnumeration> xPortions = xParagraph->createEnumeration();
+    uno::Reference<beans::XPropertySet> xTextPortion(xPortions->nextElement(), uno::UNO_QUERY);
+    float fWeight{};
+    xTextPortion->getPropertyValue("CharWeight") >>= fWeight;
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 150 (awt::FontWeight::BOLD)
+    // - Actual  : 100 (awt::FontWeight::NORMAL)
+    // i.e. the boldness was lost on import.
+    CPPUNIT_ASSERT_EQUAL(awt::FontWeight::BOLD, fWeight);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -626,8 +626,7 @@ OUString ScVbaEventsHelper::getImplementationName()
 
 css::uno::Sequence<OUString> ScVbaEventsHelper::getSupportedServiceNames()
 {
-    return css::uno::Sequence<OUString>{
-        "com.sun.star.script.vba.VBASpreadsheetEventProcessor"};
+    return {"com.sun.star.script.vba.VBASpreadsheetEventProcessor"};
 }
 
 // protected ------------------------------------------------------------------
@@ -831,8 +830,8 @@ bool ScVbaEventsHelper::isSelectionChanged( const uno::Sequence< uno::Any >& rAr
 {
     uno::Reference< uno::XInterface > xOldSelection( maOldSelection, uno::UNO_QUERY );
     uno::Reference< uno::XInterface > xNewSelection = getXSomethingFromArgs< uno::XInterface >( rArgs, nIndex, false );
-    ScCellRangesBase* pOldCellRanges = comphelper::getFromUnoTunnel<ScCellRangesBase>( xOldSelection );
-    ScCellRangesBase* pNewCellRanges = comphelper::getFromUnoTunnel<ScCellRangesBase>( xNewSelection );
+    ScCellRangesBase* pOldCellRanges = dynamic_cast<ScCellRangesBase*>( xOldSelection.get() );
+    ScCellRangesBase* pNewCellRanges = dynamic_cast<ScCellRangesBase*>( xNewSelection.get() );
     bool bChanged = !pOldCellRanges || !pNewCellRanges || lclSelectionChanged( pOldCellRanges->GetRangeList(), pNewCellRanges->GetRangeList() );
     maOldSelection <<= xNewSelection;
     return bChanged;

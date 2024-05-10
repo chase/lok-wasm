@@ -35,8 +35,6 @@ namespace chart
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::uno::Sequence;
-using ::com::sun::star::uno::Any;
 
 namespace
 {
@@ -68,19 +66,13 @@ bool lcl_getPropertySwapXAndYAxis(const rtl::Reference<Diagram>& xDiagram)
 } // end anonymous namespace
 
 sal_Int32 ExplicitValueProvider::getExplicitNumberFormatKeyForAxis(
-    const Reference<chart2::XAxis>& xAxis,
+    const rtl::Reference<::chart::Axis>& xAxis,
     const rtl::Reference<::chart::BaseCoordinateSystem>& xCorrespondingCoordinateSystem,
     const rtl::Reference<::chart::ChartModel>& xChartDoc)
 {
     return AxisHelper::getExplicitNumberFormatKeyForAxis(
         xAxis, xCorrespondingCoordinateSystem, xChartDoc,
         true /*bSearchForParallelAxisIfNothingIsFound*/);
-}
-
-const uno::Sequence<sal_Int8>& ExplicitValueProvider::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theExplicitValueProviderUnoTunnelId;
-    return theExplicitValueProviderUnoTunnelId.getSeq();
 }
 
 sal_Int32 ExplicitValueProvider::getExplicitNumberFormatKeyForDataLabel(
@@ -126,13 +118,13 @@ awt::Rectangle ExplicitValueProvider::AddSubtractAxisTitleSizes(
     awt::Rectangle aRet(rPositionAndSize);
 
     //add axis title sizes to the diagram size
-    uno::Reference<chart2::XTitle> xTitle_Height(
+    rtl::Reference<::chart::Title> xTitle_Height(
         TitleHelper::getTitle(TitleHelper::TITLE_AT_STANDARD_X_AXIS_POSITION, rModel));
-    uno::Reference<chart2::XTitle> xTitle_Width(
+    rtl::Reference<::chart::Title> xTitle_Width(
         TitleHelper::getTitle(TitleHelper::TITLE_AT_STANDARD_Y_AXIS_POSITION, rModel));
-    uno::Reference<chart2::XTitle> xSecondTitle_Height(
+    rtl::Reference<::chart::Title> xSecondTitle_Height(
         TitleHelper::getTitle(TitleHelper::SECONDARY_X_AXIS_TITLE, rModel));
-    uno::Reference<chart2::XTitle> xSecondTitle_Width(
+    rtl::Reference<::chart::Title> xSecondTitle_Width(
         TitleHelper::getTitle(TitleHelper::SECONDARY_Y_AXIS_TITLE, rModel));
     if (xTitle_Height.is() || xTitle_Width.is() || xSecondTitle_Height.is()
         || xSecondTitle_Width.is())

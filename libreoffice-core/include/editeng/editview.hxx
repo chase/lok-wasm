@@ -220,6 +220,8 @@ public:
     void            SelectCurrentWord( sal_Int16 nWordType = css::i18n::WordType::ANYWORD_IGNOREWHITESPACES );
     /// Returns the rectangles of the current selection in TWIPs.
     void GetSelectionRectangles(std::vector<tools::Rectangle>& rLogicRects) const;
+    bool IsSelectionFullPara() const;
+    bool IsSelectionWithinSinglePara() const;
 
     bool            IsInsertMode() const;
     void            SetInsertMode( bool bInsert );
@@ -327,9 +329,13 @@ public:
     const SvxFieldItem* GetFieldUnderMousePointer( sal_Int32& nPara, sal_Int32& nPos ) const;
     const SvxFieldItem* GetField( const Point& rPos, sal_Int32* pnPara = nullptr, sal_Int32* pnPos = nullptr ) const;
 
-    const SvxFieldItem* GetFieldAtSelection() const;
-    /// Select and return the field at the current cursor position
-    const SvxFieldData* GetFieldAtCursor() const;
+    /// return the selected field or the field immediately after (or before) the current cursor
+    const SvxFieldItem* GetFieldAtSelection(bool bAlsoCheckBeforeCursor = false) const;
+    const SvxFieldItem* GetFieldAtSelection(bool* pIsBeforeCursor) const;
+
+    /// return field under mouse, at selection, or immediately after (or before) the current cursor
+    const SvxFieldData* GetFieldUnderMouseOrInSelectionOrAtCursor(bool bAlsoCheckBeforeCursor = false) const;
+    /// if no selection, select the field immediately after or before the current cursor
     void SelectFieldAtCursor();
     /// Converts position in paragraph to logical position without unfolding fields
     sal_Int32       GetPosNoField(sal_Int32 nPara, sal_Int32 nPos) const;

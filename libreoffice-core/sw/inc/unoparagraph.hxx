@@ -22,7 +22,6 @@
 
 #include <memory>
 
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
@@ -49,7 +48,6 @@ class SwXTextPortionEnumeration;
 
 typedef ::cppu::ImplInheritanceHelper
 <   ::sfx2::MetadatableMixin
-,   css::lang::XUnoTunnel
 ,   css::lang::XServiceInfo
 ,   css::beans::XPropertySet
 ,   css::beans::XPropertyState
@@ -72,7 +70,7 @@ private:
 
     virtual ~SwXParagraph() override;
 
-    SwXParagraph(css::uno::Reference< css::text::XText > const & xParent,
+    SwXParagraph(css::uno::Reference< SwXText > const & xParent,
             SwTextNode & rTextNode,
             const sal_Int32 nSelStart, const sal_Int32 nSelEnd);
 
@@ -83,8 +81,7 @@ public:
 
     static rtl::Reference<SwXParagraph>
         CreateXParagraph(SwDoc & rDoc, SwTextNode * pTextNode,
-            css::uno::Reference< css::text::XText>
-            const& xParentText = nullptr,
+            css::uno::Reference<SwXText> const& xParentText,
             const sal_Int32 nSelStart = -1, const sal_Int32 nSelEnd = - 1);
 
     const SwTextNode * GetTextNode() const;
@@ -98,12 +95,6 @@ public:
     virtual ::sfx2::Metadatable* GetCoreObject() override;
     virtual css::uno::Reference< css::frame::XModel >
         GetModel() override;
-
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& rIdentifier) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

@@ -18,7 +18,7 @@
  */
 
 #include <basegfx/matrix/b2dhommatrix.hxx>
-#include <hommatrixtemplate.hxx>
+#include <basegfx/matrix/hommatrixtemplate.hxx>
 #include <basegfx/tuple/b2dtuple.hxx>
 #include <basegfx/vector/b2dvector.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
@@ -26,125 +26,100 @@
 
 namespace basegfx
 {
-    typedef ::basegfx::internal::ImplHomMatrixTemplate< 3 > Impl2DHomMatrix_Base;
-    class Impl2DHomMatrix : public Impl2DHomMatrix_Base
-    {
-    };
-
-    static o3tl::cow_wrapper<Impl2DHomMatrix> DEFAULT;
-
-    B2DHomMatrix::B2DHomMatrix() : mpImpl(DEFAULT) {}
-
-    B2DHomMatrix::B2DHomMatrix(const B2DHomMatrix&) = default;
-
-    B2DHomMatrix::B2DHomMatrix(B2DHomMatrix&&) = default;
-
-    B2DHomMatrix::~B2DHomMatrix() = default;
-
-    B2DHomMatrix::B2DHomMatrix(double f_0x0, double f_0x1, double f_0x2, double f_1x0, double f_1x1, double f_1x2)
-    {
-        mpImpl->set(0, 0, f_0x0);
-        mpImpl->set(0, 1, f_0x1);
-        mpImpl->set(0, 2, f_0x2);
-        mpImpl->set(1, 0, f_1x0);
-        mpImpl->set(1, 1, f_1x1);
-        mpImpl->set(1, 2, f_1x2);
-    }
-
-    B2DHomMatrix& B2DHomMatrix::operator=(const B2DHomMatrix&) = default;
-
-    B2DHomMatrix& B2DHomMatrix::operator=(B2DHomMatrix&&) = default;
-
-    double B2DHomMatrix::get(sal_uInt16 nRow, sal_uInt16 nColumn) const
-    {
-        return mpImpl->get(nRow, nColumn);
-    }
-
-    void B2DHomMatrix::set(sal_uInt16 nRow, sal_uInt16 nColumn, double fValue)
-    {
-        mpImpl->set(nRow, nColumn, fValue);
-    }
+    constexpr int RowSize = 3;
 
     void B2DHomMatrix::set3x2(double f_0x0, double f_0x1, double f_0x2, double f_1x0, double f_1x1, double f_1x2)
     {
-        mpImpl->set(0, 0, f_0x0);
-        mpImpl->set(0, 1, f_0x1);
-        mpImpl->set(0, 2, f_0x2);
-        mpImpl->set(1, 0, f_1x0);
-        mpImpl->set(1, 1, f_1x1);
-        mpImpl->set(1, 2, f_1x2);
-    }
-
-    bool B2DHomMatrix::isLastLineDefault() const
-    {
-        return mpImpl->isLastLineDefault();
+        mfValues[0][0] = f_0x0;
+        mfValues[0][1] = f_0x1;
+        mfValues[0][2] = f_0x2;
+        mfValues[1][0] = f_1x0;
+        mfValues[1][1] = f_1x1;
+        mfValues[1][2] = f_1x2;
     }
 
     bool B2DHomMatrix::isIdentity() const
     {
-        return mpImpl.same_object(DEFAULT) || mpImpl->isIdentity();
+        for(sal_uInt16 a(0); a < RowSize - 1; a++)
+        {
+            for(sal_uInt16 b(0); b < RowSize; b++)
+            {
+                const double fDefault(internal::implGetDefaultValue(a, b));
+                const double fValueAB(get(a, b));
+
+                if(!::basegfx::fTools::equal(fDefault, fValueAB))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     void B2DHomMatrix::identity()
     {
-        *mpImpl = Impl2DHomMatrix();
+        for(sal_uInt16 a(0); a < RowSize - 1; a++)
+        {
+            for(sal_uInt16 b(0); b < RowSize; b++)
+                mfValues[a][b] = internal::implGetDefaultValue(a, b);
+        }
     }
 
     bool B2DHomMatrix::isInvertible() const
     {
-        return mpImpl->isInvertible();
+        double dst[6];
+        /* Compute adjoint: */
+        computeAdjoint(dst);
+        /* Compute determinant: */
+        double det = computeDeterminant(dst);
+        if (fTools::equalZero(det))
+            return false;
+        return true;
     }
 
     bool B2DHomMatrix::invert()
     {
         if(isIdentity())
-        {
             return true;
-        }
 
-        Impl2DHomMatrix aWork(*mpImpl);
-        sal_uInt16* pIndex = static_cast<sal_uInt16*>(alloca( sizeof(sal_uInt16) * Impl2DHomMatrix_Base::getEdgeLength() ));
-        sal_Int16 nParity;
+        double dst[6];
 
-        if(aWork.ludcmp(pIndex, nParity))
-        {
-            mpImpl->doInvert(aWork, pIndex);
-            return true;
-        }
+        /* Compute adjoint: */
+        computeAdjoint(dst);
 
-        return false;
+        /* Compute determinant: */
+        double det = computeDeterminant(dst);
+        if (fTools::equalZero(det))
+            return false;
+
+        /* Multiply adjoint with reciprocal of determinant: */
+        det = 1.0 / det;
+        mfValues[0][0] = dst[0] * det;
+        mfValues[0][1] = dst[1] * det;
+        mfValues[0][2] = dst[2] * det;
+        mfValues[1][0] = dst[3] * det;
+        mfValues[1][1] = dst[4] * det;
+        mfValues[1][2] = dst[5] * det;
+
+        return true;
     }
 
-    B2DHomMatrix& B2DHomMatrix::operator+=(const B2DHomMatrix& rMat)
+    /* Compute adjoint, optimised for the case where the last (not stored) row is { 0, 0, 1 } */
+    void B2DHomMatrix::computeAdjoint(double (&dst)[6]) const
     {
-        mpImpl->doAddMatrix(*rMat.mpImpl);
-        return *this;
+        dst[0] = + get(1, 1);
+        dst[1] = - get(0, 1);
+        dst[2] = + get(0, 1) * get(1, 2) - get(0, 2) * get(1, 1);
+        dst[3] = - get(1, 0);
+        dst[4] = + get(0, 0);
+        dst[5] = - get(0, 0) * get(1, 2) + get(0, 2) * get(1, 0);
     }
 
-    B2DHomMatrix& B2DHomMatrix::operator-=(const B2DHomMatrix& rMat)
+    /* Compute the determinant, given the adjoint matrix */
+    double B2DHomMatrix::computeDeterminant(double (&dst)[6]) const
     {
-        mpImpl->doSubMatrix(*rMat.mpImpl);
-        return *this;
-    }
-
-    B2DHomMatrix& B2DHomMatrix::operator*=(double fValue)
-    {
-        const double fOne(1.0);
-
-        if(!fTools::equal(fOne, fValue))
-            mpImpl->doMulMatrix(fValue);
-
-        return *this;
-    }
-
-    B2DHomMatrix& B2DHomMatrix::operator/=(double fValue)
-    {
-        const double fOne(1.0);
-
-        if(!fTools::equal(fOne, fValue))
-            mpImpl->doMulMatrix(1.0 / fValue);
-
-        return *this;
+        return mfValues[0][0] * dst[0] + mfValues[0][1] * dst[3];
     }
 
     B2DHomMatrix& B2DHomMatrix::operator*=(const B2DHomMatrix& rMat)
@@ -161,18 +136,50 @@ namespace basegfx
         else
         {
             // multiply
-            mpImpl->doMulMatrix(*rMat.mpImpl);
+            doMulMatrix(rMat);
         }
 
         return *this;
     }
 
+    void B2DHomMatrix::doMulMatrix(const B2DHomMatrix& rMat)
+    {
+        // create a copy as source for the original values
+        const B2DHomMatrix aCopy(*this);
+
+        for(sal_uInt16 a(0); a < 2; ++a)
+        {
+            for(sal_uInt16 b(0); b < 3; ++b)
+            {
+                double fValue = 0.0;
+
+                for(sal_uInt16 c(0); c < 2; ++c)
+                    fValue += aCopy.mfValues[c][b] * rMat.mfValues[a][c];
+
+                mfValues[a][b] = fValue;
+            }
+            mfValues[a][2] += rMat.mfValues[a][2];
+        }
+    }
+
     bool B2DHomMatrix::operator==(const B2DHomMatrix& rMat) const
     {
-        if(mpImpl.same_object(rMat.mpImpl))
+        if (&rMat == this)
             return true;
+        for(sal_uInt16 a(0); a < 2; a++)
+        {
+            for(sal_uInt16 b(0); b < 3; b++)
+            {
+                const double fValueA(mfValues[a][b]);
+                const double fValueB(rMat.mfValues[a][b]);
 
-        return mpImpl->isEqual(*rMat.mpImpl);
+                if(!::basegfx::fTools::equal(fValueA, fValueB))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     bool B2DHomMatrix::operator!=(const B2DHomMatrix& rMat) const
@@ -189,26 +196,26 @@ namespace basegfx
         double fCos(1.0);
 
         utils::createSinCosOrthogonal(fSin, fCos, fRadiant);
-        Impl2DHomMatrix aRotMat;
+        B2DHomMatrix aRotMat;
 
         aRotMat.set(0, 0, fCos);
         aRotMat.set(1, 1, fCos);
         aRotMat.set(1, 0, fSin);
         aRotMat.set(0, 1, -fSin);
 
-        mpImpl->doMulMatrix(aRotMat);
+        doMulMatrix(aRotMat);
     }
 
     void B2DHomMatrix::translate(double fX, double fY)
     {
         if(!fTools::equalZero(fX) || !fTools::equalZero(fY))
         {
-            Impl2DHomMatrix aTransMat;
+            B2DHomMatrix aTransMat;
 
             aTransMat.set(0, 2, fX);
             aTransMat.set(1, 2, fY);
 
-            mpImpl->doMulMatrix(aTransMat);
+            doMulMatrix(aTransMat);
         }
     }
 
@@ -223,12 +230,12 @@ namespace basegfx
 
         if(!fTools::equal(fOne, fX) || !fTools::equal(fOne, fY))
         {
-            Impl2DHomMatrix aScaleMat;
+            B2DHomMatrix aScaleMat;
 
             aScaleMat.set(0, 0, fX);
             aScaleMat.set(1, 1, fY);
 
-            mpImpl->doMulMatrix(aScaleMat);
+            doMulMatrix(aScaleMat);
         }
     }
 
@@ -242,11 +249,11 @@ namespace basegfx
         // #i76239# do not test against 1.0, but against 0.0. We are talking about a value not on the diagonal (!)
         if(!fTools::equalZero(fSx))
         {
-            Impl2DHomMatrix aShearXMat;
+            B2DHomMatrix aShearXMat;
 
             aShearXMat.set(0, 1, fSx);
 
-            mpImpl->doMulMatrix(aShearXMat);
+            doMulMatrix(aShearXMat);
         }
     }
 
@@ -255,11 +262,11 @@ namespace basegfx
         // #i76239# do not test against 1.0, but against 0.0. We are talking about a value not on the diagonal (!)
         if(!fTools::equalZero(fSy))
         {
-            Impl2DHomMatrix aShearYMat;
+            B2DHomMatrix aShearYMat;
 
             aShearYMat.set(1, 0, fSy);
 
-            mpImpl->doMulMatrix(aShearYMat);
+            doMulMatrix(aShearYMat);
         }
     }
 
@@ -272,12 +279,6 @@ namespace basegfx
     */
     bool B2DHomMatrix::decompose(B2DTuple& rScale, B2DTuple& rTranslate, double& rRotate, double& rShearX) const
     {
-        // when perspective is used, decompose is not made here
-        if(!mpImpl->isLastLineDefault())
-        {
-            return false;
-        }
-
         // reset rotate and shear and copy translation values in every case
         rRotate = rShearX = 0.0;
         rTranslate.setX(get(0, 2));

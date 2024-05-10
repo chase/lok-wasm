@@ -30,6 +30,7 @@
 #include <vcl/svapp.hxx>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/awt/XTextComponent.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/form/XConfirmDeleteListener.hpp>
 #include <com/sun/star/form/runtime/XFormController.hpp>
 #include <com/sun/star/beans/PropertyValue.hpp>
@@ -227,12 +228,15 @@ void BibFrameController_Impl::dispose()
 
     if (xFrame.is())
         xFrame->removeFrameActionListener( m_xImpl );
+    m_xFrame.clear();
 
     aObject.Source = static_cast<XController*>(this);
     m_xImpl->aLC.disposeAndClear(aObject);
     m_xDatMan.clear();
     m_aStatusListeners.clear();
     m_xLastQueriedFocusWin.clear();
+    m_xWindow.clear();
+    m_xImpl.clear();
 }
 
 void BibFrameController_Impl::addEventListener( const uno::Reference< lang::XEventListener > & aListener )
@@ -481,7 +485,7 @@ void BibFrameController_Impl::dispatch(const util::URL& _rURL, const uno::Sequen
     {
         RemoveFilter();
     }
-    else if( _rURL.Complete == "slot:5503" || aCommand == "CloseDoc" )
+    else if( _rURL.Complete == ".uno:CloseDoc" || aCommand == "CloseDoc" )
     {
         Application::PostUserEvent( LINK( this, BibFrameController_Impl,
                                     DisposeHdl ) );

@@ -114,13 +114,13 @@ static void lcl_emitSearchResultCallbacks(SvxSearchItem const * pSearchItem, SwW
     boost::property_tree::ptree aTree;
     aTree.put("searchString", pSearchItem->GetSearchString().toUtf8().getStr());
     aTree.put("highlightAll", bHighlightAll);
-    lcl_addContainerToJson(aTree, "searchResultSelection", aMatches);
+    lcl_addContainerToJson(aTree, "searchResultSelection"_ostr, aMatches);
 
     std::stringstream aStream;
     boost::property_tree::write_json(aStream, aTree);
-    OString aPayload = aStream.str().c_str();
+    OString aPayload( aStream.str() );
 
-    pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload.getStr());
+    pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_RESULT_SELECTION, aPayload);
 
     if(bHighlightAll)
     {   // FindAll disables this during find, do it once when done.
@@ -162,7 +162,7 @@ void SwView::ExecSearch(SfxRequest& rReq)
 
     case FID_SEARCH_ON:
         s_bJustOpened = true;
-        GetViewFrame()->GetBindings().Invalidate(SID_SEARCH_ITEM);
+        GetViewFrame().GetBindings().Invalidate(SID_SEARCH_ITEM);
         break;
 
     case FID_SEARCH_OFF:
@@ -264,7 +264,7 @@ void SwView::ExecSearch(SfxRequest& rReq)
 #if HAVE_FEATURE_DESKTOP
                     if( !bQuiet )
                     {
-                        m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8().getStr());
+                        m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8());
                         SvxSearchDialogWrapper::SetSearchLabel(SearchLabel::NotFound);
                     }
 #endif
@@ -373,7 +373,7 @@ void SwView::ExecSearch(SfxRequest& rReq)
 #if HAVE_FEATURE_DESKTOP
                         if( !bQuiet )
                         {
-                            m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8().getStr());
+                            m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8());
                             SvxSearchDialogWrapper::SetSearchLabel(SearchLabel::NotFound);
                         }
 #endif
@@ -393,7 +393,7 @@ void SwView::ExecSearch(SfxRequest& rReq)
             }
 
             uno::Reference< frame::XDispatchRecorder > xRecorder =
-                    GetViewFrame()->GetBindings().GetRecorder();
+                    GetViewFrame().GetBindings().GetRecorder();
             //prevent additional dialogs in recorded macros
             if ( xRecorder.is() )
                 rReq.AppendItem(SfxBoolItem(SID_SEARCH_QUIET, true));
@@ -418,13 +418,14 @@ void SwView::ExecSearch(SfxRequest& rReq)
 /*16 */         RES_PARATR_LINESPACING, RES_PARATR_HYPHENZONE,
 /*18 */         RES_PARATR_REGISTER,    RES_PARATR_REGISTER,
 /*20 */         RES_PARATR_VERTALIGN,   RES_PARATR_VERTALIGN,
-/*22 */         RES_LR_SPACE,           RES_UL_SPACE,
+                RES_MARGIN_FIRSTLINE,   RES_MARGIN_RIGHT,
+                RES_UL_SPACE,           RES_UL_SPACE,
 /*24 */         SID_ATTR_PARA_MODEL,    SID_ATTR_PARA_KEEP
             >);
 
             SfxItemSet aSet(m_pWrtShell->GetAttrPool(), aNormalAttr);
 
-            if( SW_MOD()->GetCTLOptions().IsCTLFontEnabled() )
+            if( SvtCTLOptions::IsCTLFontEnabled() )
             {
                 aSet.MergeRange(RES_CHRATR_CTL_FONT, RES_CHRATR_CTL_WEIGHT);
             }
@@ -541,7 +542,7 @@ bool SwView::SearchAndWrap(bool bApi)
         if( !bApi )
         {
 #if HAVE_FEATURE_DESKTOP
-            m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8().getStr());
+            m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8());
             SvxSearchDialogWrapper::SetSearchLabel(SearchLabel::NotFound);
 #endif
         }
@@ -596,7 +597,7 @@ bool SwView::SearchAndWrap(bool bApi)
     }
     else if(!bApi)
     {
-        m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8().getStr());
+        m_pWrtShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SEARCH_NOT_FOUND, s_pSrchItem->GetSearchString().toUtf8());
         SvxSearchDialogWrapper::SetSearchLabel(SearchLabel::NotFound);
     }
 #endif
@@ -830,10 +831,10 @@ SvxSearchDialog* SwView::GetSearchDialog()
 {
 #if HAVE_FEATURE_DESKTOP
     const sal_uInt16 nId = SvxSearchDialogWrapper::GetChildWindowId();
-    SfxViewFrame* pFrame = SfxViewFrame::Current();
-    if (!pFrame)
+    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
+    if (!pViewFrm)
         return nullptr;
-    SvxSearchDialogWrapper *pWrp = static_cast<SvxSearchDialogWrapper*>(pFrame->GetChildWindow(nId));
+    SvxSearchDialogWrapper *pWrp = static_cast<SvxSearchDialogWrapper*>(pViewFrm->GetChildWindow(nId));
     if (!pWrp)
         return nullptr;
     return pWrp->getDialog();

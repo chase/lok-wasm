@@ -18,13 +18,16 @@
  */
 #include <rtl/ustring.hxx>
 #include "PropertyIds.hxx"
-#include <unordered_map>
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
 
 namespace writerfilter::dmapper{
 
-const OUString & getPropertyName( PropertyIds eId )
+namespace
 {
-    static const std::unordered_map<PropertyIds, OUString> map {
+    constexpr auto constPropertyMap = frozen::make_unordered_map<PropertyIds, std::u16string_view>(
+    {
         { PROP_CHAR_WEIGHT, u"CharWeight"},
         { PROP_CHAR_POSTURE, u"CharPosture"},
         { PROP_CHAR_STRIKEOUT, u"CharStrikeout"},
@@ -172,6 +175,7 @@ const OUString & getPropertyName( PropertyIds eId )
         { PROP_BACK_COLOR, u"BackColor"},
         { PROP_BACK_COMPLEX_COLOR, u"BackComplexColor"},
         { PROP_BACK_COLOR_TRANSPARENCY, u"BackColorTransparency"},
+        { PROP_ALLOW_OVERLAP, u"AllowOverlap"},
         { PROP_ALTERNATIVE_TEXT, u"AlternativeText"},
         { PROP_HEADER_TEXT_LEFT, u"HeaderTextLeft"},
         { PROP_HEADER_TEXT_FIRST, u"HeaderTextFirst"},
@@ -379,8 +383,17 @@ const OUString & getPropertyName( PropertyIds eId )
         { PROP_CURSOR_NOT_IGNORE_TABLES_IN_HF, u"CursorNotIgnoreTables"},
         { PROP_PARA_CONNECT_BORDERS, u"ParaIsConnectBorder"},
         { PROP_DECORATIVE, u"Decorative"},
-    };
-    return map.at(eId);
+        { PROP_PAPER_TRAY, u"PrinterPaperTray"},
+    });
+} // end anonymous ns
+
+OUString getPropertyName( PropertyIds eId )
+{
+    auto iterator = constPropertyMap.find(eId);
+    if (iterator != constPropertyMap.end())
+        return OUString(iterator->second);
+
+    return OUString();
 }
 
 bool isCharacterProperty( const PropertyIds eId )

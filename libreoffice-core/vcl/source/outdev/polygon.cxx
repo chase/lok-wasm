@@ -61,13 +61,10 @@ void OutputDevice::DrawPolyPolygon( const tools::PolyPolygon& rPolyPoly )
         InitFillColor();
 
     // use b2dpolygon drawing if possible
-    if(mpGraphics->supportsOperation(OutDevSupportType::B2DDraw) &&
-       RasterOp::OverPaint == GetRasterOp() &&
-       (IsLineColor() || IsFillColor()))
+    if (RasterOp::OverPaint == GetRasterOp() && (IsLineColor() || IsFillColor()))
     {
         const basegfx::B2DHomMatrix aTransform(ImplGetDeviceTransformation());
         basegfx::B2DPolyPolygon aB2DPolyPolygon(rPolyPoly.getB2DPolyPolygon());
-        bool bSuccess(true);
 
         // ensure closed - may be asserted, will prevent buffering
         if(!aB2DPolyPolygon.isClosed())
@@ -75,16 +72,17 @@ void OutputDevice::DrawPolyPolygon( const tools::PolyPolygon& rPolyPoly )
             aB2DPolyPolygon.setClosed(true);
         }
 
-        if(IsFillColor())
+        if (IsFillColor())
         {
-            bSuccess = mpGraphics->DrawPolyPolygon(
+            mpGraphics->DrawPolyPolygon(
                 aTransform,
                 aB2DPolyPolygon,
                 0.0,
                 *this);
         }
 
-        if(bSuccess && IsLineColor())
+        bool bSuccess(true);
+        if (IsLineColor())
         {
             const bool bPixelSnapHairline(mnAntialiasing & AntialiasingFlags::PixelSnapHairline);
 
@@ -181,13 +179,10 @@ void OutputDevice::DrawPolygon( const tools::Polygon& rPoly )
         InitFillColor();
 
     // use b2dpolygon drawing if possible
-    if(mpGraphics->supportsOperation(OutDevSupportType::B2DDraw) &&
-       RasterOp::OverPaint == GetRasterOp() &&
-       (IsLineColor() || IsFillColor()))
+    if (RasterOp::OverPaint == GetRasterOp() && (IsLineColor() || IsFillColor()))
     {
         const basegfx::B2DHomMatrix aTransform(ImplGetDeviceTransformation());
         basegfx::B2DPolygon aB2DPolygon(rPoly.getB2DPolygon());
-        bool bSuccess(true);
 
         // ensure closed - maybe assert, hinders buffering
         if(!aB2DPolygon.isClosed())
@@ -195,16 +190,17 @@ void OutputDevice::DrawPolygon( const tools::Polygon& rPoly )
             aB2DPolygon.setClosed(true);
         }
 
-        if(IsFillColor())
+        if (IsFillColor())
         {
-            bSuccess = mpGraphics->DrawPolyPolygon(
+            mpGraphics->DrawPolyPolygon(
                 aTransform,
                 basegfx::B2DPolyPolygon(aB2DPolygon),
                 0.0,
                 *this);
         }
 
-        if(bSuccess && IsLineColor())
+        bool bSuccess(true);
+        if (IsLineColor())
         {
             const bool bPixelSnapHairline(mnAntialiasing & AntialiasingFlags::PixelSnapHairline);
 
@@ -291,9 +287,7 @@ void OutputDevice::ImplDrawPolyPolygonWithB2DPolyPolygon(const basegfx::B2DPolyP
 
     bool bSuccess(false);
 
-    if(mpGraphics->supportsOperation(OutDevSupportType::B2DDraw) &&
-       RasterOp::OverPaint == GetRasterOp() &&
-       (IsLineColor() || IsFillColor()))
+    if (RasterOp::OverPaint == GetRasterOp() && (IsLineColor() || IsFillColor()))
     {
         const basegfx::B2DHomMatrix aTransform(ImplGetDeviceTransformation());
         basegfx::B2DPolyPolygon aB2DPolyPolygon(rB2DPolyPoly);
@@ -305,16 +299,16 @@ void OutputDevice::ImplDrawPolyPolygonWithB2DPolyPolygon(const basegfx::B2DPolyP
             aB2DPolyPolygon.setClosed(true);
         }
 
-        if(IsFillColor())
+        if (IsFillColor())
         {
-            bSuccess = mpGraphics->DrawPolyPolygon(
+            mpGraphics->DrawPolyPolygon(
                 aTransform,
                 aB2DPolyPolygon,
                 0.0,
                 *this);
         }
 
-        if(bSuccess && IsLineColor())
+        if (IsLineColor())
         {
             const bool bPixelSnapHairline(mnAntialiasing & AntialiasingFlags::PixelSnapHairline);
 
@@ -444,7 +438,7 @@ void OutputDevice::ImplDrawPolygon( const tools::Polygon& rPoly, const tools::Po
 {
     if( pClipPolyPoly )
     {
-        ImplDrawPolyPolygon( rPoly, pClipPolyPoly );
+        ImplDrawPolyPolygon( tools::PolyPolygon(rPoly), pClipPolyPoly );
     }
     else
     {

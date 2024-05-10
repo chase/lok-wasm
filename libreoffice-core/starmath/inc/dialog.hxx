@@ -40,16 +40,26 @@ void SetFontStyle(std::u16string_view rStyleName, vcl::Font &rFont);
 class SmPrintOptionsTabPage final : public SfxTabPage
 {
     std::unique_ptr<weld::CheckButton>      m_xTitle;
+    std::unique_ptr<weld::Widget>      m_xTitleImg;
     std::unique_ptr<weld::CheckButton>      m_xText;
+    std::unique_ptr<weld::Widget>      m_xTextImg;
     std::unique_ptr<weld::CheckButton>      m_xFrame;
+    std::unique_ptr<weld::Widget>      m_xFrameImg;
     std::unique_ptr<weld::RadioButton>      m_xSizeNormal;
     std::unique_ptr<weld::RadioButton>      m_xSizeScaled;
     std::unique_ptr<weld::RadioButton>      m_xSizeZoomed;
+    std::unique_ptr<weld::Widget>      m_xLockPrintImg;
     std::unique_ptr<weld::MetricSpinButton> m_xZoom;
+    std::unique_ptr<weld::CheckButton>      m_xEnableInlineEdit;
+    std::unique_ptr<weld::Widget>      m_xEnableInlineEditImg;
     std::unique_ptr<weld::CheckButton>      m_xNoRightSpaces;
+    std::unique_ptr<weld::Widget>      m_xNoRightSpacesImg;
     std::unique_ptr<weld::CheckButton>      m_xSaveOnlyUsedSymbols;
+    std::unique_ptr<weld::Widget>      m_xSaveOnlyUsedSymbolsImg;
     std::unique_ptr<weld::CheckButton>      m_xAutoCloseBrackets;
+    std::unique_ptr<weld::Widget>      m_xAutoCloseBracketsImg;
     std::unique_ptr<weld::MetricSpinButton> m_xSmZoom;
+    std::unique_ptr<weld::Widget> m_xSmZoomImg;
 
     DECL_LINK(SizeButtonClickHdl, weld::Toggleable&, void);
 
@@ -61,6 +71,8 @@ public:
 
     SmPrintOptionsTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet &rOptions);
     virtual ~SmPrintOptionsTabPage() override;
+
+    virtual OUString GetAllStrings() override;
 };
 
 /**************************************************************************/
@@ -131,6 +143,7 @@ class SmFontTypeDialog final : public weld::GenericDialogController
 {
     VclPtr<OutputDevice> pFontListDev;
 
+    std::unique_ptr<SmFontPickListBox> m_xMathFont;
     std::unique_ptr<SmFontPickListBox> m_xVariableFont;
     std::unique_ptr<SmFontPickListBox> m_xFunctionFont;
     std::unique_ptr<SmFontPickListBox> m_xNumberFont;
@@ -141,7 +154,7 @@ class SmFontTypeDialog final : public weld::GenericDialogController
     std::unique_ptr<weld::MenuButton> m_xMenuButton;
     std::unique_ptr<weld::Button> m_xDefaultButton;
 
-    DECL_LINK(MenuSelectHdl, const OString&, void);
+    DECL_LINK(MenuSelectHdl, const OUString&, void);
     DECL_LINK(DefaultButtonClickHdl, weld::Button&, void);
 
 public:
@@ -205,7 +218,7 @@ class SmDistanceDialog final : public weld::GenericDialogController
     bool            bScaleAllBrackets;
 
     DECL_LINK(GetFocusHdl, weld::Widget&, void);
-    DECL_LINK(MenuSelectHdl, const OString&, void);
+    DECL_LINK(MenuSelectHdl, const OUString&, void);
     DECL_LINK(DefaultButtonClickHdl, weld::Button&, void);
     DECL_LINK(CheckBoxClickHdl, weld::Toggleable&, void);
 
@@ -243,6 +256,7 @@ public:
 
 class SmShowSymbolSet final : public weld::CustomWidgetController
 {
+    SmViewShell &m_rViewShell;
     Size m_aOldSize;
     SymbolPtrVec_t aSymbolSet;
     Link<SmShowSymbolSet&,void> aSelectHdlLink;
@@ -264,7 +278,7 @@ class SmShowSymbolSet final : public weld::CustomWidgetController
     DECL_LINK(ScrollHdl, weld::ScrolledWindow&, void);
 
 public:
-    SmShowSymbolSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow);
+    SmShowSymbolSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow, SmViewShell &rViewShell);
 
     virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override
     {
@@ -287,6 +301,7 @@ public:
 class SmShowSymbol final : public weld::CustomWidgetController
 {
 private:
+    SmViewShell &m_rViewShell;
     vcl::Font m_aFont;
     OUString m_aText;
 
@@ -298,7 +313,7 @@ private:
     void setFontSize(vcl::Font &rFont) const;
 
 public:
-    SmShowSymbol();
+    SmShowSymbol(SmViewShell &rViewShell);
 
     virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override
     {

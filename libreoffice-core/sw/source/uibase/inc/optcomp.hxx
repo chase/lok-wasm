@@ -40,15 +40,11 @@ private:
     std::unique_ptr<SwCompatibilityOptPage_Impl> m_pImpl;
     // saved options after "Reset"; used in "FillItemSet" for comparison
     sal_uInt32                  m_nSavedOptions;
-    bool                        m_bSavedMSFormsMenuOption;
 
     // controls
     std::unique_ptr<weld::Frame> m_xMain;
-    std::unique_ptr<weld::Frame> m_xGlobalOptionsFrame;
     std::unique_ptr<weld::ComboBox> m_xFormattingLB;
-    std::unique_ptr<weld::ComboBox> m_xGlobalOptionsLB;
     std::unique_ptr<weld::TreeView> m_xOptionsLB;
-    std::unique_ptr<weld::TreeView> m_xGlobalOptionsCLB;
     std::unique_ptr<weld::Button> m_xDefaultPB;
 
     // handler
@@ -66,6 +62,8 @@ public:
     virtual ~SwCompatibilityOptPage() override;
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool            FillItemSet( SfxItemSet* rSet ) override;
     virtual void            Reset( const SfxItemSet* rSet ) override;

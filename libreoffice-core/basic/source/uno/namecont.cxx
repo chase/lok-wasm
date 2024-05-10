@@ -144,7 +144,7 @@ void NameContainer::replaceByName( const OUString& aName, const Any& aElement )
     const Type& aAnyType = aElement.getValueType();
     if( mType != aAnyType )
     {
-        throw IllegalArgumentException("types do not match", static_cast<cppu::OWeakObject*>(this), 2);
+        throw IllegalArgumentException("types do not match", getXWeak(), 2);
     }
     NameContainerNameMap::iterator aIt = mHashMap.find( aName );
     if( aIt == mHashMap.end() )
@@ -195,7 +195,7 @@ void NameContainer::insertNoCheck(const OUString& aName, const Any& aElement)
     const Type& aAnyType = aElement.getValueType();
     if( mType != aAnyType )
     {
-        throw IllegalArgumentException("types do not match", static_cast<cppu::OWeakObject*>(this), 2);
+        throw IllegalArgumentException("types do not match", getXWeak(), 2);
     }
 
     sal_Int32 nCount = mNames.size();
@@ -288,7 +288,7 @@ void SAL_CALL NameContainer::addContainerListener( const Reference< XContainerLi
 {
     if( !xListener.is() )
     {
-        throw RuntimeException("addContainerListener called with null xListener",static_cast< cppu::OWeakObject * >(this));
+        throw RuntimeException("addContainerListener called with null xListener",getXWeak());
     }
     maContainerListeners.addInterface( xListener );
 }
@@ -297,7 +297,7 @@ void SAL_CALL NameContainer::removeContainerListener( const Reference< XContaine
 {
     if( !xListener.is() )
     {
-        throw RuntimeException("removeContainerListener called with null xListener",static_cast< cppu::OWeakObject * >(this));
+        throw RuntimeException("removeContainerListener called with null xListener",getXWeak());
     }
     maContainerListeners.removeInterface( xListener );
 }
@@ -307,7 +307,7 @@ void SAL_CALL NameContainer::addChangesListener( const Reference< XChangesListen
 {
     if( !xListener.is() )
     {
-        throw RuntimeException("addChangesListener called with null xListener",static_cast< cppu::OWeakObject * >(this));
+        throw RuntimeException("addChangesListener called with null xListener",getXWeak());
     }
     maChangesListeners.addInterface( xListener );
 }
@@ -316,7 +316,7 @@ void SAL_CALL NameContainer::removeChangesListener( const Reference< XChangesLis
 {
     if( !xListener.is() )
     {
-        throw RuntimeException("removeChangesListener called with null xListener",static_cast< cppu::OWeakObject * >(this));
+        throw RuntimeException("removeChangesListener called with null xListener",getXWeak());
     }
     maChangesListeners.removeInterface( xListener );
 }
@@ -422,7 +422,7 @@ void SAL_CALL SfxLibraryContainer::setRootStorage( const Reference< XStorage >& 
     LibraryContainerMethodGuard aGuard( *this );
     if ( !_rxRootStorage.is() )
     {
-        throw IllegalArgumentException("no root storage", static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("no root storage", getXWeak(), 1);
     }
     mxStorage = _rxRootStorage;
     onNewRootStorage();
@@ -433,7 +433,7 @@ void SAL_CALL SfxLibraryContainer::storeLibrariesToStorage( const Reference< XSt
     LibraryContainerMethodGuard aGuard( *this );
     if ( !_rxRootStorage.is() )
     {
-        throw IllegalArgumentException("no root storage", static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("no root storage", getXWeak(), 1);
     }
     try
     {
@@ -537,7 +537,9 @@ void SAL_CALL SfxLibraryContainer::storeLibraries(  )
     }
 }
 
-static void checkAndCopyFileImpl( const INetURLObject& rSourceFolderInetObj,
+namespace
+{
+void checkAndCopyFileImpl( const INetURLObject& rSourceFolderInetObj,
                                   const INetURLObject& rTargetFolderInetObj,
                                   std::u16string_view rCheckFileName,
                                   std::u16string_view rCheckExtension,
@@ -559,18 +561,21 @@ static void checkAndCopyFileImpl( const INetURLObject& rSourceFolderInetObj,
     }
 }
 
-static void createVariableURL( OUString& rStr, std::u16string_view rLibName,
+constexpr OUString sUserBasicVariablePrefix = u"$(USER)/basic/"_ustr;
+
+void createVariableURL( OUString& rStr, std::u16string_view rLibName,
                                std::u16string_view rInfoFileName, bool bUser )
 {
     if( bUser )
     {
-        rStr = "$(USER)/basic/";
+        rStr = sUserBasicVariablePrefix;
     }
     else
     {
         rStr = "$(INST)/" LIBO_SHARE_FOLDER "/basic/";
     }
     rStr += OUString::Concat(rLibName) + "/" + rInfoFileName + ".xlb/";
+}
 }
 
 void SfxLibraryContainer::init( const OUString& rInitialDocumentURL, const uno::Reference< embed::XStorage >& rxInitialStorage )
@@ -1261,6 +1266,11 @@ void SfxLibraryContainer::checkStorageURL( const OUString& aSourceURL,
     {
         aUnexpandedStorageURL = aSourceURL;
     }
+    else
+    {
+        aUnexpandedStorageURL.clear();
+    }
+
     INetURLObject aInetObj( aExpandedSourceURL );
     OUString aExtension = aInetObj.getExtension();
     if( aExtension == "xlb" )
@@ -1788,10 +1798,7 @@ void SfxLibraryContainer::storeLibraries_Impl( const uno::Reference< embed::XSto
                 sal_Int32 index = 0;
                 do
                 {
-                    OUStringBuffer aTempTargetName( aTempTargetNameBase );
-                    aTempTargetName.append( index++ );
-
-                    sTargetLibrariesStoreName = aTempTargetName.makeStringAndClear();
+                    sTargetLibrariesStoreName = aTempTargetNameBase + OUString::number( index++ );
                     if ( !i_rStorage->hasByName( sTargetLibrariesStoreName ) )
                     {
                         break;
@@ -2146,6 +2153,9 @@ Reference< XNameContainer > SAL_CALL SfxLibraryContainer::createLibrary( const O
     pNewLib->maLibElementFileExtension = maLibElementFileExtension;
 
     createVariableURL( pNewLib->maUnexpandedStorageURL, Name, maInfoFileName, true );
+    // tdf#151741 - fill various storage URLs for the newly created library
+    checkStorageURL(pNewLib->maUnexpandedStorageURL, pNewLib->maLibInfoFileURL,
+                    pNewLib->maStorageURL, pNewLib->maUnexpandedStorageURL);
 
     Reference< XNameAccess > xNameAccess( pNewLib );
     Any aElement;
@@ -2211,7 +2221,7 @@ void SAL_CALL SfxLibraryContainer::removeLibrary( const OUString& Name )
     SfxLibrary* pImplLib = static_cast< SfxLibrary* >( xNameAccess.get() );
     if( pImplLib->mbReadOnly && !pImplLib->mbLink )
     {
-        throw IllegalArgumentException("readonly && !link", static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("readonly && !link", getXWeak(), 1);
     }
     // Remove from container
     maNameContainer->removeByName( Name );
@@ -2317,7 +2327,7 @@ void SAL_CALL SfxLibraryContainer::loadLibrary( const OUString& Name )
                  " storage!"));
             if ( !xLibrariesStor.is() )
             {
-                throw uno::RuntimeException("null returned from openStorageElement",static_cast< cppu::OWeakObject * >(this));
+                throw uno::RuntimeException("null returned from openStorageElement",getXWeak());
             }
 
             xLibraryStor = xLibrariesStor->openStorageElement( Name, embed::ElementModes::READ );
@@ -2327,7 +2337,7 @@ void SAL_CALL SfxLibraryContainer::loadLibrary( const OUString& Name )
                  " storage!"));
             if ( !xLibrariesStor.is() )
             {
-                throw uno::RuntimeException("null returned from openStorageElement",static_cast< cppu::OWeakObject * >(this));
+                throw uno::RuntimeException("null returned from openStorageElement",getXWeak());
             }
 #if OSL_DEBUG_LEVEL > 0
         }
@@ -2434,7 +2444,7 @@ OUString SAL_CALL SfxLibraryContainer::getLibraryLinkURL( const OUString& Name )
     bool bLink = pImplLib->mbLink;
     if( !bLink )
     {
-        throw IllegalArgumentException("!link", static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("!link", getXWeak(), 1);
     }
     OUString aRetStr = pImplLib->maLibInfoFileURL;
     return aRetStr;
@@ -2491,10 +2501,6 @@ void SAL_CALL SfxLibraryContainer::renameLibrary( const OUString& Name, const OU
     }
     loadLibrary( Name );
 
-    // Remove from container
-    maNameContainer->removeByName( Name );
-    maModifiable.setModified( true );
-
     // Rename library folder, but not for linked libraries
     bool bMovedSuccessful = true;
 
@@ -2505,15 +2511,32 @@ void SAL_CALL SfxLibraryContainer::renameLibrary( const OUString& Name, const OU
         bMovedSuccessful = false;
 
         OUString aLibDirPath = pImplLib->maStorageURL;
+        // tdf#151741 - fill various storage URLs for the library
+        // These URLs should not be empty for newly created libraries after
+        // the change in SfxLibraryContainer::createLibrary.
+        if (aLibDirPath.isEmpty())
+        {
+            checkStorageURL(pImplLib->maUnexpandedStorageURL, pImplLib->maLibInfoFileURL,
+                            pImplLib->maStorageURL, pImplLib->maUnexpandedStorageURL);
+        }
 
         INetURLObject aDestInetObj( o3tl::getToken(maLibraryPath, 1, ';'));
         aDestInetObj.insertName( NewName, true, INetURLObject::LAST_SEGMENT,
                                  INetURLObject::EncodeMechanism::All );
         OUString aDestDirPath = aDestInetObj.GetMainURL( INetURLObject::DecodeMechanism::NONE );
 
+        OUString aDestDirUnexpandedPath = aDestDirPath;
+        if (pImplLib->maUnexpandedStorageURL.startsWith(sUserBasicVariablePrefix))
+        {
+            // try to re-create the variable URL: helps moving the profile
+            OUString aUserBasicURL = expand_url(sUserBasicVariablePrefix);
+            if (OUString aRest; aDestDirPath.startsWith(aUserBasicURL, &aRest))
+                aDestDirUnexpandedPath = sUserBasicVariablePrefix + aRest;
+        }
+
         // Store new URL
         OUString aLibInfoFileURL = pImplLib->maLibInfoFileURL;
-        checkStorageURL( aDestDirPath, pImplLib->maLibInfoFileURL, pImplLib->maStorageURL,
+        checkStorageURL(aDestDirUnexpandedPath, pImplLib->maLibInfoFileURL, pImplLib->maStorageURL,
                          pImplLib->maUnexpandedStorageURL );
 
         try
@@ -2581,12 +2604,13 @@ void SAL_CALL SfxLibraryContainer::renameLibrary( const OUString& Name, const OU
 
                 bMovedSuccessful = true;
                 pImplLib->implSetModified( true );
+                // Remove old library from container
+                maNameContainer->removeByName( Name );
+                maModifiable.setModified( true );
             }
         }
         catch(const Exception& )
         {
-            // Restore old library
-            maNameContainer->insertByName( Name, aLibAny ) ;
         }
     }
 
@@ -2607,7 +2631,7 @@ void SAL_CALL SfxLibraryContainer::initialize( const Sequence< Any >& _rArgument
     LibraryContainerMethodGuard aGuard( *this );
     sal_Int32 nArgCount = _rArguments.getLength();
     if ( nArgCount != 1 )
-        throw IllegalArgumentException("too many args", static_cast<cppu::OWeakObject*>(this), -1);
+        throw IllegalArgumentException("too many args", getXWeak(), -1);
 
     OUString sInitialDocumentURL;
     Reference< XStorageBasedDocument > xDocument;
@@ -2622,7 +2646,7 @@ void SAL_CALL SfxLibraryContainer::initialize( const Sequence< Any >& _rArgument
         initializeFromDocument( xDocument );
         return;
     }
-    throw IllegalArgumentException("arg1 unknown type", static_cast<cppu::OWeakObject*>(this), 1);
+    throw IllegalArgumentException("arg1 unknown type", getXWeak(), 1);
 
 }
 
@@ -2647,7 +2671,7 @@ void SfxLibraryContainer::initializeFromDocument( const Reference< XStorageBased
 
     if ( !xDocStorage.is() )
     {
-        throw IllegalArgumentException("no doc storage", static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("no doc storage", getXWeak(), 1);
     }
     init( OUString(), xDocStorage );
 }
@@ -2701,7 +2725,7 @@ void SAL_CALL SfxLibraryContainer::changeLibraryPassword(const OUString&, const 
 void SAL_CALL SfxLibraryContainer::addContainerListener( const Reference< XContainerListener >& xListener )
 {
     LibraryContainerMethodGuard aGuard( *this );
-    maNameContainer->setEventSource( static_cast< XInterface* >( static_cast<OWeakObject*>(this) ) );
+    maNameContainer->setEventSource( getXWeak() );
     maNameContainer->addContainerListener( xListener );
 }
 
@@ -2773,7 +2797,7 @@ OUString SAL_CALL SfxLibraryContainer::getOriginalLibraryLinkURL( const OUString
     bool bLink = pImplLib->mbLink;
     if( !bLink )
     {
-        throw IllegalArgumentException("!link", static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("!link", getXWeak(), 1);
     }
     OUString aRetStr = pImplLib->maOriginalStorageURL;
     return aRetStr;
@@ -2884,7 +2908,7 @@ void SAL_CALL SfxLibraryContainer::setPropertyValue(const OUString& aPropertyNam
                                                     const uno::Any& aValue)
 {
     if (aPropertyName != sVBATextEncodingPropName)
-        throw UnknownPropertyException(aPropertyName, static_cast<uno::XWeak*>(this));
+        throw UnknownPropertyException(aPropertyName, getXWeak());
     aValue >>= meVBATextEncoding;
 }
 
@@ -2892,7 +2916,7 @@ css::uno::Any SAL_CALL SfxLibraryContainer::getPropertyValue(const OUString& aPr
 {
     if (aPropertyName == sVBATextEncodingPropName)
         return uno::Any(meVBATextEncoding);
-    throw UnknownPropertyException(aPropertyName, static_cast<uno::XWeak*>(this));
+    throw UnknownPropertyException(aPropertyName, getXWeak());
 }
 
 void SAL_CALL SfxLibraryContainer::addPropertyChangeListener(
@@ -2930,8 +2954,7 @@ sal_Bool SAL_CALL SfxLibraryContainer::supportsService( const OUString& _rServic
 // Ctor
 SfxLibrary::SfxLibrary( ModifiableHelper& _rModifiable, const Type& aType,
     const Reference< XSimpleFileAccess3 >& xSFI )
-        : OComponentHelper( m_aMutex )
-        , mxSFI( xSFI )
+        : mxSFI( xSFI )
         , mrModifiable( _rModifiable )
         , maNameContainer( new NameContainer(aType) )
         , mbLoaded( true )
@@ -2952,8 +2975,7 @@ SfxLibrary::SfxLibrary( ModifiableHelper& _rModifiable, const Type& aType,
 SfxLibrary::SfxLibrary( ModifiableHelper& _rModifiable, const Type& aType,
     const Reference< XSimpleFileAccess3 >& xSFI,
     OUString aLibInfoFileURL, OUString aStorageURL, bool ReadOnly )
-        : OComponentHelper( m_aMutex )
-        , mxSFI( xSFI )
+        : mxSFI( xSFI )
         , mrModifiable( _rModifiable )
         , maNameContainer( new NameContainer(aType) )
         , mbLoaded( false )
@@ -3004,7 +3026,7 @@ Any SAL_CALL SfxLibrary::queryInterface( const Type& rType )
             static_cast< XChangesNotifier * >( this ) );
     if( !aRet.hasValue() )
     {
-        aRet = OComponentHelper::queryInterface( rType );
+        aRet = WeakComponentImplHelper::queryInterface( rType );
     }
     return aRet;
 }
@@ -3140,7 +3162,7 @@ Sequence< Type > SfxLibrary::getTypes()
                 cppu::UnoType<XNameContainer>::get(),
                 cppu::UnoType<XContainer>::get(),
                 cppu::UnoType<XChangesNotifier>::get(),
-                OComponentHelper::getTypes() );
+                WeakComponentImplHelper::getTypes() );
 
     return ourTypes_NameContainer.getTypes();
 }
@@ -3154,7 +3176,7 @@ Sequence< sal_Int8 > SfxLibrary::getImplementationId()
 // Methods XContainer
 void SAL_CALL SfxLibrary::addContainerListener( const Reference< XContainerListener >& xListener )
 {
-    maNameContainer->setEventSource( static_cast< XInterface* >( static_cast<OWeakObject*>(this) ) );
+    maNameContainer->setEventSource( getXWeak() );
     maNameContainer->addContainerListener( xListener );
 }
 
@@ -3166,7 +3188,7 @@ void SAL_CALL SfxLibrary::removeContainerListener( const Reference< XContainerLi
 // Methods XChangesNotifier
 void SAL_CALL SfxLibrary::addChangesListener( const Reference< XChangesListener >& xListener )
 {
-    maNameContainer->setEventSource( static_cast< XInterface* >( static_cast<OWeakObject*>(this) ) );
+    maNameContainer->setEventSource( getXWeak() );
     maNameContainer->addChangesListener( xListener );
 }
 

@@ -24,6 +24,10 @@ $(eval $(call gb_Library_add_defs,package2,\
 
 $(eval $(call gb_Library_set_precompiled_header,package2,package/inc/pch/precompiled_package2))
 
+$(eval $(call gb_Library_use_custom_headers,package2,\
+	officecfg/registry \
+))
+
 $(eval $(call gb_Library_use_libraries,package2,\
 	comphelper \
 	cppu \
@@ -38,6 +42,7 @@ $(eval $(call gb_Library_use_libraries,package2,\
 
 $(eval $(call gb_Library_use_externals,package2,\
 	boost_headers \
+	argon2 \
 	zlib \
 ))
 

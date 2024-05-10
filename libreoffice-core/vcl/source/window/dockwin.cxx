@@ -247,7 +247,7 @@ void DockingWindow::ImplStartDocking( const Point& rPos )
     if ( !mpFloatWin )
         pWin.disposeAndClear();
 
-    Point   aPos    = ImplOutputToFrame( Point() );
+    Point   aPos    = OutputToScreenPixel( Point() );
     Size    aSize   = Window::GetOutputSizePixel();
     mnTrackX        = aPos.X();
     mnTrackY        = aPos.Y();
@@ -368,7 +368,7 @@ void DockingWindow::doDeferredInit(WinBits nBits)
     mbIsDeferredInit = false;
 }
 
-void DockingWindow::loadUI(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription,
+void DockingWindow::loadUI(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription,
     const css::uno::Reference<css::frame::XFrame> &rFrame)
 {
     mbIsDeferredInit = true;
@@ -376,7 +376,7 @@ void DockingWindow::loadUI(vcl::Window* pParent, const OString& rID, const OUStr
     m_pUIBuilder.reset( new VclBuilder(this, AllSettings::GetUIRootDir(), rUIXMLDescription, rID, rFrame) );
 }
 
-DockingWindow::DockingWindow(vcl::Window* pParent, const OString& rID,
+DockingWindow::DockingWindow(vcl::Window* pParent, const OUString& rID,
     const OUString& rUIXMLDescription, const char* pIdleDebugName,
     const css::uno::Reference<css::frame::XFrame> &rFrame)
     : Window(WindowType::DOCKINGWINDOW),
@@ -445,7 +445,7 @@ void DockingWindow::Tracking( const TrackingEvent& rTEvt )
     else if ( !rTEvt.GetMouseEvent().IsSynthetic() || rTEvt.GetMouseEvent().IsModifierChanged() )
     {
         Point   aMousePos = rTEvt.GetMouseEvent().GetPosPixel();
-        Point   aFrameMousePos = ImplOutputToFrame( aMousePos );
+        Point   aFrameMousePos = OutputToScreenPixel( aMousePos );
         Size    aFrameSize = mpWindowImpl->mpFrameWindow->GetOutputSizePixel();
         if ( aFrameMousePos.X() < 0 )
             aFrameMousePos.setX( 0 );
@@ -455,10 +455,10 @@ void DockingWindow::Tracking( const TrackingEvent& rTEvt )
             aFrameMousePos.setX( aFrameSize.Width()-1 );
         if ( aFrameMousePos.Y() > aFrameSize.Height()-1 )
             aFrameMousePos.setY( aFrameSize.Height()-1 );
-        aMousePos = ImplFrameToOutput( aFrameMousePos );
+        aMousePos = ScreenToOutputPixel( aFrameMousePos );
         aMousePos.AdjustX( -(maMouseOff.X()) );
         aMousePos.AdjustY( -(maMouseOff.Y()) );
-        Point aFramePos = ImplOutputToFrame( aMousePos );
+        Point aFramePos = OutputToScreenPixel( aMousePos );
         tools::Rectangle aTrackRect( aFramePos, Size( mnTrackWidth, mnTrackHeight ) );
         tools::Rectangle aCompRect = aTrackRect;
         aFramePos.AdjustX(maMouseOff.X() );
@@ -507,7 +507,7 @@ void DockingWindow::Tracking( const TrackingEvent& rTEvt )
             else
                 nTrackStyle = ShowTrackFlags::Object;
             tools::Rectangle aShowTrackRect = aTrackRect;
-            aShowTrackRect.SetPos( ImplFrameToOutput( aShowTrackRect.TopLeft() ) );
+            aShowTrackRect.SetPos( ScreenToOutputPixel( aShowTrackRect.TopLeft() ) );
             ShowTracking( aShowTrackRect, nTrackStyle );
 
             // recalculate mouse offset, as the rectangle was changed
@@ -925,11 +925,11 @@ Point DockingWindow::GetFloatingPos() const
             vcl::WindowData aData;
             aData.setMask(vcl::WindowDataMask::Pos);
             pWrapper->mpFloatWin->GetWindowState( aData );
-            Point aPos(aData.x(), aData.y());
+            AbsoluteScreenPixelPoint aPos(aData.x(), aData.y());
             // LOK needs logic coordinates not absolute screen position for autofilter menu
             if (!comphelper::LibreOfficeKit::isActive())
-                aPos = pWrapper->mpFloatWin->GetParent()->ImplGetFrameWindow()->AbsoluteScreenToOutputPixel( aPos );
-            return aPos;
+                return pWrapper->mpFloatWin->GetParent()->ImplGetFrameWindow()->AbsoluteScreenToOutputPixel( aPos );
+            return Point(aPos);
         }
         else
             return maFloatPos;
@@ -940,9 +940,8 @@ Point DockingWindow::GetFloatingPos() const
         vcl::WindowData aData;
         aData.setMask(vcl::WindowDataMask::Pos);
         mpFloatWin->GetWindowState( aData );
-        Point aPos(aData.x(), aData.y());
-        aPos = mpFloatWin->GetParent()->ImplGetFrameWindow()->AbsoluteScreenToOutputPixel( aPos );
-        return aPos;
+        AbsoluteScreenPixelPoint aPos(aData.x(), aData.y());
+        return mpFloatWin->GetParent()->ImplGetFrameWindow()->AbsoluteScreenToOutputPixel( aPos );
     }
     else
         return maFloatPos;
@@ -989,7 +988,7 @@ void DockingWindow::setOptimalLayoutSize()
     //resize DockingWindow to fit requisition on initial show
     Size aSize = get_preferred_size();
 
-    Size aMax(bestmaxFrameSizeForScreenSize(GetDesktopRectPixel().GetSize()));
+    Size aMax(bestmaxFrameSizeForScreenSize(Size(GetDesktopRectPixel().GetSize())));
 
     aSize.setWidth( std::min(aMax.Width(), aSize.Width()) );
     aSize.setHeight( std::min(aMax.Height(), aSize.Height()) );
@@ -1089,7 +1088,7 @@ SystemWindow* DockingWindow::GetFloatingWindow() const
 
 DropdownDockingWindow::DropdownDockingWindow(vcl::Window* pParent, const css::uno::Reference<css::frame::XFrame>& rFrame, bool bTearable)
     : DockingWindow(pParent,
-                    !bTearable ? OString("InterimDockParent") : OString("InterimTearableParent"),
+                    !bTearable ? OUString("InterimDockParent") : OUString("InterimTearableParent"),
                     !bTearable ? OUString("vcl/ui/interimdockparent.ui") : OUString("vcl/ui/interimtearableparent.ui"),
                     "vcl::DropdownDockingWindow maLayoutIdle",
                     rFrame)

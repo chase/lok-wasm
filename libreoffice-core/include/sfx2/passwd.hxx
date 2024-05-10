@@ -50,12 +50,16 @@ private:
     std::unique_ptr<weld::Entry> m_xUserED;
     std::unique_ptr<weld::Label> m_xPassword1FT;
     std::unique_ptr<weld::Entry> m_xPassword1ED;
+    std::unique_ptr<weld::LevelBar> m_xPassword1StrengthBar;
+    std::unique_ptr<weld::Label> m_xPassword1PolicyLabel;
     std::unique_ptr<weld::Label> m_xConfirm1FT;
     std::unique_ptr<weld::Entry> m_xConfirm1ED;
 
     std::unique_ptr<weld::Frame> m_xPassword2Box;
     std::unique_ptr<weld::Label> m_xPassword2FT;
     std::unique_ptr<weld::Entry> m_xPassword2ED;
+    std::unique_ptr<weld::LevelBar> m_xPassword2StrengthBar;
+    std::unique_ptr<weld::Label> m_xPassword2PolicyLabel;
     std::unique_ptr<weld::Label> m_xConfirm2FT;
     std::unique_ptr<weld::Entry> m_xConfirm2ED;
 
@@ -72,6 +76,7 @@ private:
     OUString        maMainPwdStr;
     sal_uInt16      mnMinLen;
     SfxShowExtras  mnExtras;
+    std::optional<OUString> moPasswordPolicy;
 
     bool            mbAsciiOnly;
     DECL_DLLPRIVATE_LINK(OKHdl, weld::Button&, void);
@@ -105,13 +110,13 @@ public:
         m_xPassword2Box->set_label(i_rText);
     }
     void SetMinLen(sal_uInt16 Len);
-    void SetEditHelpId(const OString& rId)
+    void SetEditHelpId(const OUString& rId)
     {
         m_xPassword1ED->set_help_id(rId);
     }
     /* tdf#60874 we need a custom help ID for the Confirm
        field of the Protect Document window */
-    void SetConfirmHelpId(const OString& rId)
+    void SetConfirmHelpId(const OUString& rId)
     {
         m_xConfirm1ED->set_help_id(rId);
     }

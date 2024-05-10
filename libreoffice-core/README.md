@@ -38,16 +38,16 @@ run and compile LibreOffice, also used by the TDF builds:
     * Runtime: Windows 7
     * Build: Cygwin + Visual Studio 2019 version 16.10
 * macOS:
-    * Runtime: 10.14
+    * Runtime: 10.15
     * Build: 12 (13 for aarch64) + Xcode 14
 * Linux:
-    * Runtime: RHEL 7 or CentOS 7
-    * Build: either GCC 7.0.0; or Clang 8.0.1 with libstdc++ 7.3.0
+    * Runtime: RHEL 8 or CentOS 8 and comparable
+    * Build: either GCC 12; or Clang 12 with libstdc++ 8.5
 * iOS (only for LibreOfficeKit):
     * Runtime: 11.4 (only support for newer i devices == 64 bit)
     * Build: Xcode 9.3 and iPhone SDK 11.4
 * Android:
-    * Build: NDK r19c and SDK 22.6.2
+    * Build: NDK r23 and SDK 30.0.3
 * Emscripten / WASM:
     * Runtime: a browser with SharedMemory support (threads + atomics)
     * Build: Qt 5.15 with Qt supported Emscripten 1.39.8
@@ -57,9 +57,7 @@ Java is required for building many parts of LibreOffice. In TDF Wiki article
 [Development/Java](https://wiki.documentfoundation.org/Development/Java), the
 exact modules that depend on Java are listed.
 
-The baseline for Java is Java Development Kit (JDK) Version 11 or later. It is
-possible to build LibreOffice with JDK version 9, but it is no longer supported
-by the JDK vendors, thus it should be avoided.
+The baseline for Java is Java Development Kit (JDK) Version 17 or later.
 
 If you want to use Clang with the LibreOffice compiler plugins, the minimal
 version of Clang is 12.0.1. Since Xcode doesn't provide the compiler plugin

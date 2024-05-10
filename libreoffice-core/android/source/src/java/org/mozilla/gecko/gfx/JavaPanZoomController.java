@@ -21,6 +21,7 @@ import org.mozilla.gecko.util.FloatUtils;
 
 import java.util.Timer;
 import java.util.TimerTask;
+import java.lang.StrictMath;
 
 /*
  * Handles the kinetic scrolling and zooming physics for a layer controller.
@@ -426,7 +427,7 @@ class JavaPanZoomController
     private float panDistance(MotionEvent move) {
         float dx = mX.panDistance(move.getX(0));
         float dy = mY.panDistance(move.getY(0));
-        return (float) Math.sqrt(dx * dx + dy * dy);
+        return (float) Math.hypot(dx , dy);
     }
 
     private void track(float x, float y, long time) {
@@ -543,7 +544,7 @@ class JavaPanZoomController
     private float getVelocity() {
         float xvel = mX.getRealVelocity();
         float yvel = mY.getRealVelocity();
-        return (float) Math.sqrt(xvel * xvel + yvel * yvel);
+        return (float) StrictMath.hypot(xvel, yvel);
     }
 
     public PointF getVelocityVector() {
@@ -744,11 +745,6 @@ class JavaPanZoomController
         if (constraints.getMaxZoom() > 0)
             maxZoomFactor = constraints.getMaxZoom();
 
-        if (!constraints.getAllowZoom()) {
-            // If allowZoom is false, clamp to the default zoom level.
-            maxZoomFactor = minZoomFactor = constraints.getDefaultZoom();
-        }
-
         maxZoomFactor = Math.max(maxZoomFactor, minZoomFactor);
 
         if (zoomFactor < minZoomFactor) {
@@ -821,7 +817,7 @@ class JavaPanZoomController
         if (mState == PanZoomState.ANIMATED_ZOOM)
             return false;
 
-        if (null == mTarget.getZoomConstraints() || !mTarget.getZoomConstraints().getAllowZoom())
+        if (null == mTarget.getZoomConstraints())
             return false;
 
         setState(PanZoomState.PINCHING);
@@ -927,10 +923,7 @@ class JavaPanZoomController
 
     @Override
     public boolean onDown(MotionEvent motionEvent) {
-        if (mTarget.getZoomConstraints() != null)
-            mWaitForDoubleTap = mTarget.getZoomConstraints().getAllowDoubleTapZoom();
-        else
-            mWaitForDoubleTap = false;
+        mWaitForDoubleTap = mTarget.getZoomConstraints() != null;
         return false;
     }
 
@@ -984,14 +977,14 @@ class JavaPanZoomController
 
     @Override
     public boolean onDoubleTap(MotionEvent motionEvent) {
-        if (null == mTarget.getZoomConstraints() || !mTarget.getZoomConstraints().getAllowDoubleTapZoom()) {
+        if (null == mTarget.getZoomConstraints()) {
             return true;
         }
         // Double tap zooms in or out depending on the current zoom factor
         PointF pointOfTap = getMotionInDocumentCoordinates(motionEvent);
         ImmutableViewportMetrics metrics = getMetrics();
         float newZoom = metrics.getZoomFactor() >=
-                DOUBLE_TAP_THRESHOLD ? mTarget.getZoomConstraints().getMinZoom() : DOUBLE_TAP_THRESHOLD;
+                DOUBLE_TAP_THRESHOLD ? mTarget.getZoomConstraints().getDefaultZoom() : DOUBLE_TAP_THRESHOLD;
         // calculate new top_left point from the point of tap
         float ratio = newZoom/metrics.getZoomFactor();
         float newLeft = pointOfTap.x - 1/ratio * (pointOfTap.x - metrics.getOrigin().x / metrics.getZoomFactor());

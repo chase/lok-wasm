@@ -85,10 +85,10 @@ SwFieldRefPage::SwFieldRefPage(weld::Container* pPage, weld::DialogController* p
 {
     m_xSelectionLB->make_sorted();
     // #i83479#
-    for (size_t i = 0; i < SAL_N_ELEMENTS(FLD_REF_PAGE_TYPES); ++i)
+    for (auto const& aID : FLD_REF_PAGE_TYPES)
     {
-        m_xTypeLB->append_text(SwResId(FLD_REF_PAGE_TYPES[i]));
-        m_xFormatLB->append_text(SwResId(FLD_REF_PAGE_TYPES[i]));
+        m_xTypeLB->append_text(SwResId(aID));
+        m_xFormatLB->append_text(SwResId(aID));
     }
 
     m_sBookmarkText = m_xTypeLB->get_text(0);
@@ -268,7 +268,7 @@ void SwFieldRefPage::Reset(const SfxItemSet* )
     nFieldDlgFormatSel = 0;
 
     sal_uInt16 nFormatBoxPosition = USHRT_MAX;
-    if( !IsRefresh() )
+    if( !IsFieldEdit() )
     {
         sal_Int32 nIdx{ 0 };
         const OUString sUserData = GetUserData();
@@ -1015,7 +1015,7 @@ bool SwFieldRefPage::FillItemSet(SfxItemSet* )
 
     sal_uInt16 nSubType = 0;
     const sal_Int32 nEntryPos = m_xFormatLB->get_selected_index();
-    const sal_uLong nFormat = (nEntryPos == -1)
+    const sal_uInt32 nFormat = (nEntryPos == -1)
         ? 0 : m_xFormatLB->get_id(nEntryPos).toUInt32();
 
     OUString aVal(m_xValueED->get_text());

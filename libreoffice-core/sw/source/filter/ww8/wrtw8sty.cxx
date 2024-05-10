@@ -268,7 +268,7 @@ sal_uInt16 MSWordStyles::GetWWId( const SwFormat& rFormat )
         case RES_POOLCOLL_FOOTER:           nRet = ww::stiFooter;            break;
         case RES_POOLCOLL_TOX_IDXH:         nRet = ww::stiIndexHeading;      break;
         case RES_POOLCOLL_LABEL:            nRet = ww::stiCaption;           break;
-        case RES_POOLCOLL_LABEL_DRAWING:    nRet = ww::stiToCaption;         break;
+        case RES_POOLCOLL_TOX_ILLUS1:       nRet = ww::stiToCaption;         break;
         case RES_POOLCOLL_ENVELOPE_ADDRESS: nRet = ww::stiEnvAddr;           break;
         case RES_POOLCOLL_SEND_ADDRESS:     nRet = ww::stiEnvRet;            break;
         case RES_POOLCHR_FOOTNOTE_ANCHOR:   nRet = ww::stiFootnoteRef;       break;
@@ -364,7 +364,7 @@ void MSWordStyles::BuildStylesTable()
 static OUString StripWWSuffix(const OUString& s)
 {
     OUString ret = s;
-    ret.endsWith(" (WW)", &ret);
+    (void)ret.endsWith(" (WW)", &ret);
     return ret;
 }
 
@@ -387,7 +387,7 @@ void MSWordStyles::BuildWwNames()
 
     // We want to map LO's default style to Word's "Normal" style.
     // Word looks for this specific style name when reading docx files.
-    // (It must be the English word regardless of language settings)
+    // (It must be the English word regardless of languages and locales)
     assert(!m_aStyles.empty());
     assert(!m_aStyles[0].format || m_aStyles[0].ww_id == ww::stiNormal);
     m_aStyles[0].ww_name = "Normal";
@@ -423,20 +423,7 @@ void MSWordStyles::BuildWwNames()
 
 OString MSWordStyles::CreateStyleId(std::u16string_view aName)
 {
-    OStringBuffer aStyleIdBuf(aName.size());
-    for (size_t i = 0; i < aName.size(); ++i)
-    {
-        sal_Unicode nChar = aName[i];
-        if (rtl::isAsciiAlphanumeric(nChar) || nChar == '-')
-        {
-            // first letter should be uppercase
-            if (aStyleIdBuf.isEmpty())
-                aStyleIdBuf.append(char(rtl::toAsciiUpperCase(nChar)));
-            else
-                aStyleIdBuf.append(char(nChar));
-        }
-    }
-    return aStyleIdBuf.makeStringAndClear();
+    return OUStringToOString(msfilter::util::CreateDOCXStyleId(aName), RTL_TEXTENCODING_UTF8);
 }
 
 void MSWordStyles::BuildStyleIds()
@@ -448,7 +435,7 @@ void MSWordStyles::BuildStyleIds()
         OString aStyleId = CreateStyleId(entry.ww_name);
 
         if (aStyleId.isEmpty())
-            aStyleId = "Style";
+            aStyleId = "Style"_ostr;
 
         OString aLower(aStyleId.toAsciiLowerCase());
 
@@ -721,7 +708,7 @@ void MSWordStyles::OutputStyle(sal_uInt16 nSlot)
 
         m_rExport.AttrOutput().StartStyle(entry.ww_name, (bFormatColl ? STYLE_TYPE_PARA : STYLE_TYPE_CHAR),
                 nBase, nWwNext, nWwLink, m_aStyles[nSlot].ww_id, nSlot,
-                entry.format->IsAutoUpdateFormat() );
+                entry.format->IsAutoUpdateOnDirectFormat() );
 
         if ( bFormatColl )
             WriteProperties( entry.format, true, nSlot, nBase==0xfff );           // UPX.papx
@@ -1732,7 +1719,7 @@ void MSWordExportBase::SectionProperties( const WW8_SepInfo& rSepInfo, WW8_PdAtt
 
             SvxLRSpaceItem aResultLR( rPageLR.GetLeft() +
                     rSectionLR.GetLeft(), rPageLR.GetRight() +
-                    rSectionLR.GetRight(), 0, 0, RES_LR_SPACE );
+                    rSectionLR.GetRight(), 0, RES_LR_SPACE );
             //i120133: The Section width should consider section indent value.
             if (rSectionLR.GetLeft()+rSectionLR.GetRight()!=0)
             {

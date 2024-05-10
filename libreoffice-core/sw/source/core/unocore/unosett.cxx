@@ -287,10 +287,10 @@ void SwXFootnoteProperties::setPropertyValue(const OUString& rPropertyName, cons
 
     const SfxItemPropertyMapEntry*  pEntry = m_pPropertySet->getPropertyMap().getByName( rPropertyName );
     if(!pEntry)
-        throw beans::UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     if ( pEntry->nFlags & PropertyAttribute::READONLY)
-        throw PropertyVetoException("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw PropertyVetoException("Property is read-only: " + rPropertyName, getXWeak() );
     SwFootnoteInfo aFootnoteInfo(m_pDoc->GetFootnoteInfo());
     switch(pEntry->nWID)
     {
@@ -408,7 +408,7 @@ uno::Any SwXFootnoteProperties::getPropertyValue(const OUString& rPropertyName)
 
     const SfxItemPropertyMapEntry*  pEntry = m_pPropertySet->getPropertyMap().getByName( rPropertyName );
     if(!pEntry)
-        throw UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     const SwFootnoteInfo& rFootnoteInfo = m_pDoc->GetFootnoteInfo();
     switch(pEntry->nWID)
@@ -566,10 +566,10 @@ void SwXEndnoteProperties::setPropertyValue(const OUString& rPropertyName, const
 
     const SfxItemPropertyMapEntry*  pEntry = m_pPropertySet->getPropertyMap().getByName( rPropertyName );
     if(!pEntry)
-        throw UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     if ( pEntry->nFlags & PropertyAttribute::READONLY)
-        throw PropertyVetoException("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw PropertyVetoException("Property is read-only: " + rPropertyName, getXWeak() );
     SwEndNoteInfo aEndInfo(m_pDoc->GetEndNoteInfo());
     switch(pEntry->nWID)
     {
@@ -640,7 +640,7 @@ uno::Any SwXEndnoteProperties::getPropertyValue(const OUString& rPropertyName)
     {
         const SfxItemPropertyMapEntry*  pEntry = m_pPropertySet->getPropertyMap().getByName( rPropertyName );
         if(!pEntry)
-            throw UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+            throw UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
         const SwEndNoteInfo& rEndInfo = m_pDoc->GetEndNoteInfo();
         switch(pEntry->nWID)
@@ -769,10 +769,10 @@ void SwXLineNumberingProperties::setPropertyValue(
 
     const SfxItemPropertyMapEntry*  pEntry = m_pPropertySet->getPropertyMap().getByName( rPropertyName );
     if(!pEntry)
-        throw UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     if ( pEntry->nFlags & PropertyAttribute::READONLY)
-        throw PropertyVetoException("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw PropertyVetoException("Property is read-only: " + rPropertyName, getXWeak() );
     SwLineNumberInfo  aFontMetric(m_pDoc->GetLineNumberInfo());
     switch(pEntry->nWID)
     {
@@ -883,7 +883,7 @@ Any SwXLineNumberingProperties::getPropertyValue(const OUString& rPropertyName)
 
     const SfxItemPropertyMapEntry*  pEntry = m_pPropertySet->getPropertyMap().getByName( rPropertyName );
     if(!pEntry)
-        throw UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     const SwLineNumberInfo& rInfo = m_pDoc->GetLineNumberInfo();
     switch(pEntry->nWID)
@@ -980,7 +980,7 @@ void SwXLineNumberingProperties::removeVetoableChangeListener(const OUString& /*
 OSL_FAIL("not implemented");
 }
 
-constexpr OUStringLiteral aInvalidStyle = u"__XXX___invalid";
+constexpr OUString aInvalidStyle = u"__XXX___invalid"_ustr;
 
 class SwXNumberingRules::Impl
     : public SvtListener
@@ -994,22 +994,6 @@ class SwXNumberingRules::Impl
 bool SwXNumberingRules::isInvalidStyle(std::u16string_view rName)
 {
     return rName == aInvalidStyle;
-}
-
-namespace
-{
-}
-
-const uno::Sequence< sal_Int8 > & SwXNumberingRules::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXNumberingRulesUnoTunnelId;
-    return theSwXNumberingRulesUnoTunnelId.getSeq();
-}
-
-// return implementation specific data
-sal_Int64 SwXNumberingRules::getSomething( const uno::Sequence< sal_Int8 > & rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
 }
 
 OUString SwXNumberingRules::getImplementationName()
@@ -1065,6 +1049,8 @@ SwXNumberingRules::SwXNumberingRules(SwDocShell& rDocSh) :
     m_pPropertySet(GetNumberingRulesSet()),
     m_bOwnNumRuleCreated(false)
 {
+    if (!m_pDocShell->GetDoc())
+        throw uno::RuntimeException("Unitialized shell passed to SwXNumberingRules constructor");
     m_pImpl->StartListening(GetPageDescNotifier(m_pDocShell->GetDoc()));
 }
 
@@ -1902,8 +1888,7 @@ void SwXNumberingRules::SetPropertiesToNumFormat(
         else
         {
             // Invalid property name
-            SAL_WARN("sw.uno", "Unknown/incorrect property " << rProp.Name << ", failing");
-            throw uno::RuntimeException("Unknown/incorrect property " + rProp.Name);
+            throw beans::UnknownPropertyException("Unknown property " + rProp.Name);
         }
     }
     if(!bWrongArg && (pSetBrush || pSetSize || pSetVOrient))
@@ -2100,9 +2085,7 @@ OUString SwXNumberingRules::getName()
 
 void SwXNumberingRules::setName(const OUString& /*rName*/)
 {
-    RuntimeException aExcept;
-    aExcept.Message = "readonly";
-    throw aExcept;
+    throw RuntimeException("readonly");
 }
 
 void SwXNumberingRules::Impl::Notify(const SfxHint& rHint)

@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <LibreOfficeKit/LibreOfficeKitEnums.h>
-#include <sfx2/dllapi.h>
 #include <sfx2/lokhelper.hxx>
 #include <svx/svdouno.hxx>
 #include <svx/svditer.hxx>
@@ -25,16 +23,14 @@
 #include <toolkit/helper/vclunohelper.hxx>
 #include <tools/UnitConversion.hxx>
 
-#include <sal/log.hxx>
-
 #include <optional>
 
 class LokControlHandler
 {
 public:
     static bool postMouseEvent(const SdrPage* pPage, const SdrView* pDrawView,
-                               vcl::DocWindow& rMainWindow, int nType, Point aPointHmm,
-                               int nCount, int nButtons, int nModifier)
+                               vcl::DocWindow& rMainWindow, int nType, Point aPointHmm, int nCount,
+                               int nButtons, int nModifier)
     {
         static std::optional<PointerStyle> eDocPointerStyle;
 
@@ -47,8 +43,8 @@ public:
             if (pUnoObect)
             {
                 tools::Rectangle aControlRect = pUnoObect->GetLogicRect();
-                tools::Rectangle aControlRectHMM = o3tl::convert(
-                        aControlRect, eControlUnitLength, o3tl::Length::mm100);
+                tools::Rectangle aControlRectHMM
+                    = o3tl::convert(aControlRect, eControlUnitLength, o3tl::Length::mm100);
 
                 if (aControlRectHMM.Contains(aPointHmm))
                 {
@@ -67,8 +63,8 @@ public:
                     VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow(xWindowPeer);
                     if (pWindow)
                     {
-                        tools::Rectangle aControlRectPx = o3tl::convert(
-                                aControlRectHMM, o3tl::Length::mm100, o3tl::Length::px);
+                        tools::Rectangle aControlRectPx
+                            = o3tl::convert(aControlRectHMM, o3tl::Length::mm100, o3tl::Length::px);
                         // used by Control::LogicInvalidate
                         pWindow->SetPosPixel(aControlRectPx.TopLeft());
 
@@ -76,7 +72,7 @@ public:
                         // and set pointer style to arrow
                         if (!eDocPointerStyle)
                         {
-                            *eDocPointerStyle = rMainWindow.GetPointer();
+                            eDocPointerStyle = rMainWindow.GetPointer();
                             rMainWindow.SetPointer(pWindow->GetPointer());
                         }
 
@@ -126,10 +122,10 @@ public:
 
         o3tl::Length eControlUnitLength = MapToO3tlLength(rMainWindow.GetMapMode().GetMapUnit());
         tools::Rectangle aControlRect = pUnoObect->GetLogicRect();
-        tools::Rectangle aObjectRectHMM = o3tl::convert(
-                aControlRect, eControlUnitLength, o3tl::Length::mm100);
-        tools::Rectangle aControltRectPx = o3tl::convert(
-                aObjectRectHMM, o3tl::Length::mm100, o3tl::Length::px);
+        tools::Rectangle aObjectRectHMM
+            = o3tl::convert(aControlRect, eControlUnitLength, o3tl::Length::mm100);
+        tools::Rectangle aControltRectPx
+            = o3tl::convert(aObjectRectHMM, o3tl::Length::mm100, o3tl::Length::px);
 
         Point aOffsetFromTile(aObjectRectHMM.Left() - rTileRectHMM.Left(),
                               aObjectRectHMM.Top() - rTileRectHMM.Top());
@@ -137,14 +133,13 @@ public:
         tools::Rectangle aRectanglePx
             = o3tl::convert(aRectangleHMM, o3tl::Length::mm100, o3tl::Length::px);
 
-        xControlWindow->setPosSize(
-                aControltRectPx.Left(), aControltRectPx.Top(),
-                aRectanglePx.GetWidth(), aRectanglePx.GetHeight(),
-                css::awt::PosSize::POSSIZE);
+        xControlWindow->setPosSize(aControltRectPx.Left(), aControltRectPx.Top(),
+                                   aRectanglePx.GetWidth(), aRectanglePx.GetHeight(),
+                                   css::awt::PosSize::POSSIZE);
 
         xControlView->setGraphics(xGraphics);
         // required for getting text label rendered with the correct scale
-        xControlView->setZoom(1,1);
+        xControlView->setZoom(1, 1);
 
         xControlView->draw(aRectanglePx.Left() * scaleX, aRectanglePx.Top() * scaleY);
     }
@@ -180,8 +175,8 @@ public:
             if (pUnoObect)
             {
                 tools::Rectangle aControlRect = pUnoObect->GetLogicRect();
-                tools::Rectangle aObjectRectHMM = o3tl::convert(
-                        aControlRect, eControlUnitLength, o3tl::Length::mm100);
+                tools::Rectangle aObjectRectHMM
+                    = o3tl::convert(aControlRect, eControlUnitLength, o3tl::Length::mm100);
 
                 // Check if we intersect with the tile rectangle and we
                 // need to draw the control.

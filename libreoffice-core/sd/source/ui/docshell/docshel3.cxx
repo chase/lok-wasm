@@ -118,13 +118,9 @@ static void lcl_setLanguage( const SdDrawDocument *pDoc, std::u16string_view rLa
     for( sal_uInt16 nPage = 0; nPage < nPageCount; nPage++ )
     {
         const SdrPage *pPage = pDoc->GetPage( nPage );
-        const size_t nObjCount = pPage->GetObjCount();
-        for( size_t nObj = 0; nObj < nObjCount; ++nObj )
-        {
-            SdrObject *pObj = pPage->GetObj( nObj );
+        for (const rtl::Reference<SdrObject>& pObj : *pPage)
             if (pObj->GetObjIdentifier() != SdrObjKind::Page)
-                lcl_setLanguageForObj( pObj, nLang, bLanguageNone );
-        }
+                lcl_setLanguageForObj( pObj.get(), nLang, bLanguageNone );
     }
 }
 
@@ -283,7 +279,7 @@ void DrawDocShell::Execute( SfxRequest& rReq )
 
             if (aNewLangTxt == "*" )
             {
-                // open the dialog "Tools/Options/Language Settings - Language"
+                // open the dialog "Tools/Options/Languages and Locales - General"
                 if (mpViewShell)
                 {
                     SfxAbstractDialogFactory* pFact = SfxAbstractDialogFactory::Create();
@@ -298,9 +294,9 @@ void DrawDocShell::Execute( SfxRequest& rReq )
                     // setting the new language...
                     if (!aNewLangTxt.isEmpty())
                     {
-                        static const OUStringLiteral aSelectionLangPrefix(u"Current_");
-                        static const OUStringLiteral aParagraphLangPrefix(u"Paragraph_");
-                        static const OUStringLiteral aDocumentLangPrefix(u"Default_");
+                        static constexpr OUString aSelectionLangPrefix(u"Current_"_ustr);
+                        static constexpr OUString aParagraphLangPrefix(u"Paragraph_"_ustr);
+                        static constexpr OUString aDocumentLangPrefix(u"Default_"_ustr);
 
                         bool bSelection = false;
                         bool bParagraph = false;
@@ -407,7 +403,7 @@ void DrawDocShell::Execute( SfxRequest& rReq )
             if (pItem2)
                 sApplyText = pItem2->GetValue();
 
-            static const OUStringLiteral sSpellingRule(u"Spelling_");
+            static constexpr OUString sSpellingRule(u"Spelling_"_ustr);
             sal_Int32 nPos = 0;
             if(-1 != (nPos = sApplyText.indexOf( sSpellingRule )))
             {

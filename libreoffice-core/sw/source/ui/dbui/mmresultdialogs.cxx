@@ -164,10 +164,10 @@ public:
 
 class SwSendQueryBox_Impl : public SwMessageAndEditDialog
 {
-    bool            bIsEmptyAllowed;
+    bool            m_bIsEmptyAllowed;
     DECL_LINK( ModifyHdl, weld::Entry&, void);
 public:
-    SwSendQueryBox_Impl(weld::Window* pParent, const OString& rID,
+    SwSendQueryBox_Impl(weld::Window* pParent, const OUString& rID,
         const OUString& rUIXMLDescription);
 
     void SetValue(const OUString& rSet)
@@ -183,7 +183,7 @@ public:
 
     void SetIsEmptyTextAllowed(bool bSet)
     {
-        bIsEmptyAllowed = bSet;
+        m_bIsEmptyAllowed = bSet;
         ModifyHdl(*m_xEdit);
     }
 };
@@ -209,10 +209,10 @@ IMPL_LINK( SwSaveWarningBox_Impl, ModifyHdl, weld::Entry&, rEdit, void)
     m_xOKPB->set_sensitive(!rEdit.get_text().isEmpty());
 }
 
-SwSendQueryBox_Impl::SwSendQueryBox_Impl(weld::Window* pParent, const OString& rID,
+SwSendQueryBox_Impl::SwSendQueryBox_Impl(weld::Window* pParent, const OUString& rID,
         const OUString& rUIXMLDescription)
     : SwMessageAndEditDialog(pParent, rID, rUIXMLDescription)
-    , bIsEmptyAllowed(true)
+    , m_bIsEmptyAllowed(true)
 {
     m_xEdit->connect_changed(LINK(this, SwSendQueryBox_Impl, ModifyHdl));
     ModifyHdl(*m_xEdit);
@@ -220,7 +220,7 @@ SwSendQueryBox_Impl::SwSendQueryBox_Impl(weld::Window* pParent, const OString& r
 
 IMPL_LINK( SwSendQueryBox_Impl, ModifyHdl, weld::Entry&, rEdit, void)
 {
-    m_xOKPB->set_sensitive(bIsEmptyAllowed  || !rEdit.get_text().isEmpty());
+    m_xOKPB->set_sensitive(m_bIsEmptyAllowed  || !rEdit.get_text().isEmpty());
 }
 
 namespace {
@@ -833,7 +833,7 @@ IMPL_LINK_NOARG(SwMMResultPrintDialog, PrintHdl_Impl, weld::Button&, void)
         pTargetView->SetPrinter(pDocumentPrinter);
     }
 
-    SfxObjectShell* pObjSh = pTargetView->GetViewFrame()->GetObjectShell();
+    SfxObjectShell* pObjSh = pTargetView->GetViewFrame().GetObjectShell();
     SfxGetpApp()->NotifyEvent(SfxEventHint(SfxEventHintId::SwMailMerge, SwDocShell::GetEventName(STR_SW_EVENT_MAIL_MERGE), pObjSh));
 
     uno::Sequence aProps{ comphelper::makePropertyValue("MonitorVisible", true),
@@ -1087,9 +1087,9 @@ IMPL_LINK_NOARG(SwMMResultEmailDialog, SendDocumentsHdl_Impl, weld::Button&, voi
     {
         SwAsciiOptions aOpt;
         sal_uInt16 nAppScriptType = SvtLanguageOptions::GetI18NScriptTypeOfLanguage( GetAppLanguage() );
-        sal_uInt16 nWhich = GetWhichOfScript( RES_CHRATR_LANGUAGE, nAppScriptType);
-        aOpt.SetLanguage( static_cast<const SvxLanguageItem&>(pTargetView->GetWrtShell().
-                            GetDefault( nWhich )).GetLanguage());
+        TypedWhichId<SvxLanguageItem> nWhich = GetWhichOfScript( RES_CHRATR_LANGUAGE, nAppScriptType);
+        const SvxLanguageItem& rDefLangItem = pTargetView->GetWrtShell().GetDefault( nWhich );
+        aOpt.SetLanguage( rDefLangItem.GetLanguage() );
         aOpt.SetParaFlags( LINEEND_CR );
         aOpt.WriteUserData( sFilterOptions );
     }
@@ -1215,8 +1215,7 @@ IMPL_LINK_NOARG(SwMMResultEmailDialog, SendDocumentsHdl_Impl, weld::Button&, voi
                 bool bDone = pInStream->ReadLine( sLine );
                 while ( bDone )
                 {
-                    sBody.append( OStringToOUString(sLine, eEncoding) );
-                    sBody.append("\n");
+                    sBody.append( OStringToOUString(sLine, eEncoding) + "\n");
                     bDone = pInStream->ReadLine( sLine );
                 }
             }

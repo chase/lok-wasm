@@ -127,7 +127,7 @@ namespace dbaxml
         /** this method is called for every item that has the
         MID_FLAG_SPECIAL_ITEM_EXPORT flag set */
         virtual void handleSpecialItem(
-                SvXMLAttributeList& /*rAttrList*/,
+                comphelper::AttributeList& /*rAttrList*/,
                 const XMLPropertyState& /*rProperty*/,
                 const SvXMLUnitConverter& /*rUnitConverter*/,
                 const SvXMLNamespaceMap& /*rNamespaceMap*/,
@@ -183,27 +183,27 @@ ODBExport::ODBExport(const Reference< XComponentContext >& _rxContext, OUString 
 
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::TABLE_TABLE,
-        OUString(XML_STYLE_FAMILY_TABLE_TABLE_STYLES_NAME ),
+        XML_STYLE_FAMILY_TABLE_TABLE_STYLES_NAME,
         m_xExportHelper.get(),
-        OUString(XML_STYLE_FAMILY_TABLE_TABLE_STYLES_PREFIX ));
+        XML_STYLE_FAMILY_TABLE_TABLE_STYLES_PREFIX);
 
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::TABLE_COLUMN,
-        OUString(XML_STYLE_FAMILY_TABLE_COLUMN_STYLES_NAME ),
+        XML_STYLE_FAMILY_TABLE_COLUMN_STYLES_NAME,
         m_xColumnExportHelper.get(),
-        OUString(XML_STYLE_FAMILY_TABLE_COLUMN_STYLES_PREFIX ));
+        XML_STYLE_FAMILY_TABLE_COLUMN_STYLES_PREFIX);
 
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::TABLE_CELL,
-        OUString(XML_STYLE_FAMILY_TABLE_CELL_STYLES_NAME ),
+        XML_STYLE_FAMILY_TABLE_CELL_STYLES_NAME,
         m_xCellExportHelper.get(),
-        OUString(XML_STYLE_FAMILY_TABLE_CELL_STYLES_PREFIX ));
+        XML_STYLE_FAMILY_TABLE_CELL_STYLES_PREFIX);
 
     GetAutoStylePool()->AddFamily(
         XmlStyleFamily::TABLE_ROW,
-        OUString(XML_STYLE_FAMILY_TABLE_ROW_STYLES_NAME ),
+        XML_STYLE_FAMILY_TABLE_ROW_STYLES_NAME,
         m_xRowExportHelper.get(),
-        OUString(XML_STYLE_FAMILY_TABLE_ROW_STYLES_PREFIX ));
+        XML_STYLE_FAMILY_TABLE_ROW_STYLES_PREFIX);
 }
 
 void ODBExport::exportDataSource()
@@ -417,7 +417,7 @@ void ODBExport::exportDataSource()
             aSettingsMap.emplace(eToken,sValue);
         }
         if ( bAutoIncrementEnabled && !(aAutoIncrement.first.isEmpty() && aAutoIncrement.second.isEmpty()) )
-            m_aAutoIncrement.reset( new TStringPair(aAutoIncrement));
+            m_oAutoIncrement = aAutoIncrement;
         if ( aDelimiter.bUsed )
             m_aDelimiter.reset( new TDelimiter( aDelimiter ) );
 
@@ -561,7 +561,7 @@ void ODBExport::exportConnectionData()
                         Reference< XPropertySetInfo > xSettingsInfo( xDataSourceSettings->getPropertySetInfo(), UNO_SET_THROW );
 
 
-                        static const OUStringLiteral sPropertyName = u"LocalSocket";
+                        static constexpr OUString sPropertyName = u"LocalSocket"_ustr;
                         if ( xSettingsInfo->hasPropertyByName( sPropertyName ) )
                         {
                             OUString sPropertyValue;
@@ -699,10 +699,10 @@ void ODBExport::exportDelimiter()
 
 void ODBExport::exportAutoIncrement()
 {
-    if (m_aAutoIncrement)
+    if (m_oAutoIncrement)
     {
-        AddAttribute(XML_NAMESPACE_DB, XML_ADDITIONAL_COLUMN_STATEMENT,m_aAutoIncrement->second);
-        AddAttribute(XML_NAMESPACE_DB, XML_ROW_RETRIEVING_STATEMENT,m_aAutoIncrement->first);
+        AddAttribute(XML_NAMESPACE_DB, XML_ADDITIONAL_COLUMN_STATEMENT,m_oAutoIncrement->second);
+        AddAttribute(XML_NAMESPACE_DB, XML_ROW_RETRIEVING_STATEMENT,m_oAutoIncrement->first);
         SvXMLElementExport aElem(*this,XML_NAMESPACE_DB, XML_AUTO_INCREMENT, true, true);
     }
 }
@@ -840,7 +840,7 @@ void ODBExport::exportTable(XPropertySet* _xProp)
     exportFilter(_xProp,PROPERTY_ORDER,XML_ORDER_STATEMENT);
 }
 
-void ODBExport::exportStyleName(XPropertySet* _xProp,SvXMLAttributeList& _rAtt)
+void ODBExport::exportStyleName(XPropertySet* _xProp,comphelper::AttributeList& _rAtt)
 {
     Reference<XPropertySet> xFind(_xProp);
     exportStyleName(XML_STYLE_NAME,xFind,_rAtt,m_aAutoStyleNames);
@@ -848,7 +848,7 @@ void ODBExport::exportStyleName(XPropertySet* _xProp,SvXMLAttributeList& _rAtt)
     exportStyleName(XML_DEFAULT_ROW_STYLE_NAME,xFind,_rAtt,m_aRowAutoStyleNames);
 }
 
-void ODBExport::exportStyleName(const ::xmloff::token::XMLTokenEnum _eToken,const uno::Reference<beans::XPropertySet>& _xProp,SvXMLAttributeList& _rAtt,TPropertyStyleMap& _rMap)
+void ODBExport::exportStyleName(const ::xmloff::token::XMLTokenEnum _eToken,const uno::Reference<beans::XPropertySet>& _xProp,comphelper::AttributeList& _rAtt,TPropertyStyleMap& _rMap)
 {
     TPropertyStyleMap::const_iterator aFind = _rMap.find(_xProp);
     if ( aFind != _rMap.end() )
@@ -862,15 +862,15 @@ void ODBExport::exportStyleName(const ::xmloff::token::XMLTokenEnum _eToken,cons
 void ODBExport::exportTableName(XPropertySet* _xProp,bool _bUpdate)
 {
     OUString sValue;
-    _xProp->getPropertyValue(_bUpdate ? OUString(PROPERTY_UPDATE_TABLENAME) : OUString(PROPERTY_NAME)) >>= sValue;
+    _xProp->getPropertyValue(_bUpdate ? PROPERTY_UPDATE_TABLENAME : PROPERTY_NAME) >>= sValue;
     if ( sValue.isEmpty() )
         return;
 
     AddAttribute(XML_NAMESPACE_DB, XML_NAME,sValue);
-    _xProp->getPropertyValue(_bUpdate ? OUString(PROPERTY_UPDATE_SCHEMANAME) : OUString(PROPERTY_SCHEMANAME)) >>= sValue;
+    _xProp->getPropertyValue(_bUpdate ? PROPERTY_UPDATE_SCHEMANAME : PROPERTY_SCHEMANAME) >>= sValue;
     if ( !sValue.isEmpty() )
         AddAttribute(XML_NAMESPACE_DB, XML_SCHEMA_NAME,sValue);
-    _xProp->getPropertyValue(_bUpdate ? OUString(PROPERTY_UPDATE_CATALOGNAME) : OUString(PROPERTY_CATALOGNAME)) >>= sValue;
+    _xProp->getPropertyValue(_bUpdate ? PROPERTY_UPDATE_CATALOGNAME : PROPERTY_CATALOGNAME) >>= sValue;
     if ( !sValue.isEmpty() )
         AddAttribute(XML_NAMESPACE_DB, XML_CATALOG_NAME,sValue);
 
@@ -911,7 +911,7 @@ void ODBExport::exportColumns(const Reference<XColumnsSupplier>& _xColSup)
             if ( aFind != m_aTableDummyColumns.end() )
             {
                 SvXMLElementExport aColumns(*this,XML_NAMESPACE_DB, XML_COLUMNS, true, true);
-                rtl::Reference<SvXMLAttributeList> pAtt = new SvXMLAttributeList;
+                rtl::Reference<comphelper::AttributeList> pAtt = new comphelper::AttributeList;
                 exportStyleName(aFind->second.get(),*pAtt);
                 AddAttributeList(pAtt);
                 SvXMLElementExport aColumn(*this,XML_NAMESPACE_DB, XML_COLUMN, true, true);
@@ -929,7 +929,7 @@ void ODBExport::exportColumns(const Reference<XColumnsSupplier>& _xColSup)
             Reference<XPropertySet> xProp(xNameAccess->getByName(*pIter),UNO_QUERY);
             if ( xProp.is() )
             {
-                rtl::Reference<SvXMLAttributeList> pAtt = new SvXMLAttributeList;
+                rtl::Reference<comphelper::AttributeList> pAtt = new comphelper::AttributeList;
                 exportStyleName(xProp.get(),*pAtt);
 
                 bool bHidden = getBOOL(xProp->getPropertyValue(PROPERTY_HIDDEN));

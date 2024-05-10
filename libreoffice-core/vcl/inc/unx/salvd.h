@@ -17,10 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_SALVD_H
-#define INCLUDED_VCL_INC_UNX_SALVD_H
+#pragma once
 
 #include <X11/Xlib.h>
+
+#include <vcl/salgtype.hxx>
 
 #include <unx/saldisp.hxx>
 #include <unx/saltype.h>
@@ -30,6 +31,7 @@
 
 class SalDisplay;
 class X11SalGraphics;
+typedef struct _cairo_surface cairo_surface_t;
 
 class X11SalVirtualDevice final : public SalVirtualDevice
 {
@@ -44,6 +46,8 @@ class X11SalVirtualDevice final : public SalVirtualDevice
     sal_uInt16      nDepth_;
     bool        bGraphics_;         // is Graphics used
     bool        bExternPixmap_;
+    cairo_surface_t* m_pSurface;
+    bool m_bOwnsSurface; // nearly always true, except for edge case of tdf#127529
 
 public:
     X11SalVirtualDevice(const SalGraphics& rGraphics, tools::Long &nDX, tools::Long &nDY,
@@ -60,6 +64,7 @@ public:
         return pDisplay_;
     }
     Pixmap          GetDrawable() const { return hDrawable_; }
+    cairo_surface_t* GetSurface() const { return m_pSurface; }
     sal_uInt16      GetDepth() const { return nDepth_; }
     const SalX11Screen&     GetXScreenNumber() const { return m_nXScreen; }
 
@@ -73,7 +78,5 @@ public:
     virtual tools::Long GetWidth() const override { return nDX_; }
     virtual tools::Long GetHeight() const override { return nDY_; }
 };
-
-#endif // INCLUDED_VCL_INC_UNX_SALVD_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

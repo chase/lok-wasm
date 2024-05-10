@@ -18,6 +18,7 @@
 #include "config_clang.h"
 
 #include "check.hxx"
+#include "compat.hxx"
 #include "plugin.hxx"
 
 /**
@@ -72,7 +73,7 @@ bool ColorCheck::VisitCXXConstructExpr(const CXXConstructExpr* constructExpr)
     {
         if (!arg0->isValueDependent())
         {
-            llvm::Optional<llvm::APSInt> xVal
+            compat::optional<llvm::APSInt> xVal
                 = arg0->getIntegerConstantExpr(compiler.getASTContext());
             if (xVal && *xVal > 0xffffff)
                 report(DiagnosticsEngine::Warning,

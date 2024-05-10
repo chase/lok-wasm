@@ -47,7 +47,6 @@
 #include <rangecache.hxx>
 #include <refdata.hxx>
 
-#include <o3tl/safeint.hxx>
 #include <tools/fract.hxx>
 #include <editeng/editobj.hxx>
 #include <svl/sharedstring.hxx>
@@ -61,16 +60,20 @@
 
 template< ScQueryCellIteratorAccess accessType, ScQueryCellIteratorType queryType >
 ScQueryCellIteratorBase< accessType, queryType >::ScQueryCellIteratorBase(ScDocument& rDocument,
-    ScInterpreterContext& rContext, SCTAB nTable, const ScQueryParam& rParam, bool bMod )
-    : AccessBase( rDocument, rContext, rParam )
+    ScInterpreterContext& rContext, SCTAB nTable, const ScQueryParam& rParam, bool bMod, bool bReverse )
+    : AccessBase( rDocument, rContext, rParam, bReverse )
     , nStopOnMismatch( nStopOnMismatchDisabled )
     , nTestEqualCondition( nTestEqualConditionDisabled )
+    , nSortedBinarySearch( nBinarySearchDisabled )
     , bAdvanceQuery( false )
     , bIgnoreMismatchOnLeadingStrings( false )
+    , nSearchOpCode( SC_OPCODE_NONE )
+    , nBestFitCol(SCCOL_MAX)
+    , nBestFitRow(SCROW_MAX)
 {
     nTab = nTable;
-    nCol = maParam.nCol1;
-    nRow = maParam.nRow1;
+    nCol = !bReverse ? maParam.nCol1 : maParam.nCol2;
+    nRow = !bReverse ? maParam.nRow1 : maParam.nRow2;
     SCSIZE i;
     if (!bMod) // Or else it's already inserted
         return;
@@ -122,13 +125,13 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
         bAdvanceQuery = true;
     }
 
-    ScColumn* pCol = &(rDoc.maTabs[nTab])->aCol[nCol];
+    const ScColumn* pCol = &(rDoc.maTabs[nTab])->aCol[nCol];
     while (true)
     {
         bool bNextColumn = maCurPos.first == pCol->maCells.end();
         if (!bNextColumn)
         {
-            if (nRow > maParam.nRow2)
+            if ((!mbReverseSearch && nRow > maParam.nRow2) || (mbReverseSearch && nRow < maParam.nRow1))
                 bNextColumn = true;
         }
 
@@ -136,9 +139,18 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
         {
             do
             {
-                ++nCol;
-                if (nCol > maParam.nCol2 || nCol >= rDoc.maTabs[nTab]->GetAllocatedColumnsCount())
-                    return;
+                if (!mbReverseSearch)
+                {
+                    ++nCol;
+                    if (nCol > maParam.nCol2 || nCol >= rDoc.maTabs[nTab]->GetAllocatedColumnsCount())
+                        return;
+                }
+                else
+                {
+                    --nCol;
+                    if (nCol < maParam.nCol1 || nCol < static_cast<SCCOL>(0))
+                        return;
+                }
                 if ( bAdvanceQuery )
                 {
                     AdvanceQueryParamEntryField();
@@ -170,12 +182,12 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
                 // ValidQuery().
                 if(HandleItemFound())
                     return;
-                IncPos();
+                !mbReverseSearch ? IncPos() : DecPos();
                 continue;
             }
             else
             {
-                IncBlock();
+                !mbReverseSearch ? IncBlock() : DecBlock();
                 continue;
             }
         }
@@ -183,7 +195,7 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
         ScRefCellValue aCell = sc::toRefCell(maCurPos.first, maCurPos.second);
 
         if (bAllStringIgnore && aCell.hasString())
-            IncPos();
+            !mbReverseSearch ? IncPos() : DecPos();
         else
         {
             if ( queryEvaluator.ValidQuery( nRow,
@@ -193,9 +205,55 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
                     nTestEqualCondition |= nTestEqualConditionMatched;
                 if ( aCell.isEmpty())
                     return;
-                if( HandleItemFound())
+
+                // XLookUp/XMatch: Forward/asc/backward/desc search for best fit value, except if we have an exact match
+                if ((nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH) &&
+                    (rEntry.eOp == SC_LESS_EQUAL || rEntry.eOp == SC_GREATER_EQUAL) &&
+                    (nBestFitCol != nCol || nBestFitRow != nRow))
+                {
+                    bool bNumSearch = rItem.meType == ScQueryEntry::ByValue && aCell.hasNumeric();
+                    bool bStringSearch = rItem.meType == ScQueryEntry::ByString && aCell.hasString();
+                    if (bNumSearch || bStringSearch)
+                    {
+                        if (nTestEqualCondition == nTestEqualConditionFulfilled || (nBestFitCol == SCCOL_MAX && nBestFitRow == SCROW_MAX))
+                            HandleBestFitItemFound(nCol, nRow);
+                        else
+                        {
+                            ScAddress aBFAddr(nBestFitCol, nBestFitRow, nTab);
+                            ScRefCellValue aBFCell(rDoc, aBFAddr);
+                            ScQueryParam aParamTmp(maParam);
+                            ScQueryEntry& rEntryTmp = aParamTmp.GetEntry(0);
+
+                            if (rEntry.eOp == SC_LESS_EQUAL)
+                                rEntryTmp.eOp = SC_GREATER;
+                            else if (rEntry.eOp == SC_GREATER_EQUAL)
+                                rEntryTmp.eOp = SC_LESS;
+
+                            ScQueryEntry::Item& rItemTmp = rEntryTmp.GetQueryItem();
+                            if (bNumSearch)
+                                rItemTmp.mfVal = aBFCell.getValue();
+                            else if (bStringSearch)
+                                rItemTmp.maString = svl::SharedString(aBFCell.getString(&rDoc));
+
+                            ScQueryEvaluator queryEvaluatorTmp(rDoc, *rDoc.maTabs[nTab], aParamTmp, &mrContext, nullptr);
+                            if (queryEvaluatorTmp.ValidQuery(nRow, (nCol == static_cast<SCCOL>(nFirstQueryField) ? &aCell : nullptr)))
+                                HandleBestFitItemFound(nCol, nRow);
+                            else
+                            {
+                                !mbReverseSearch ? IncPos() : DecPos();
+                                continue;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        !mbReverseSearch ? IncPos() : DecPos();
+                        continue;
+                    }
+                }
+                if (HandleItemFound())
                     return;
-                IncPos();
+                !mbReverseSearch ? IncPos() : DecPos();
                 continue;
             }
             else if ( nStopOnMismatch )
@@ -214,7 +272,7 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
                 {
                     if (aCell.hasString())
                     {
-                        IncPos();
+                        !mbReverseSearch ? IncPos() : DecPos();
                         bStop = false;
                     }
                     else
@@ -229,7 +287,7 @@ void ScQueryCellIteratorBase< accessType, queryType >::PerformQuery()
                 }
             }
             else
-                IncPos();
+                !mbReverseSearch ? IncPos() : DecPos();
         }
         bFirstStringIgnore = false;
     }
@@ -257,14 +315,18 @@ void ScQueryCellIteratorBase< accessType, queryType >::InitPos()
                 // non-matching position using SC_LESS and the start position
                 // is the one after it.
                 lastRow = nRow;
-                ScQueryOp saveOp = op;
-                op = SC_LESS;
-                if( BinarySearch( nCol, true ))
-                    beforeRow = nRow;
-                // If BinarySearch() returns false, there was no match, which means
-                // there's no value smaller. In that case BinarySearch() has set
-                // the position to the first row in the range.
-                op = saveOp; // back to SC_EQUAL
+                // BinarySearch() looks for the first match for XLOOKUP/XMATCH
+                if (nSearchOpCode != SC_OPCODE_X_LOOKUP && nSearchOpCode != SC_OPCODE_X_MATCH)
+                {
+                    ScQueryOp saveOp = op;
+                    op = SC_LESS;
+                    if( BinarySearch( nCol, true ))
+                        beforeRow = nRow;
+                    // If BinarySearch() returns false, there was no match, which means
+                    // there's no value smaller. In that case BinarySearch() has set
+                    // the position to the first row in the range.
+                    op = saveOp; // back to SC_EQUAL
+                }
             }
             else if( maParam.GetEntry(0).GetQueryItem().mbMatchEmpty
                 && rDoc.IsEmptyData(nCol, maParam.nRow1, nCol, maParam.nRow2, nTab))
@@ -280,7 +342,8 @@ void ScQueryCellIteratorBase< accessType, queryType >::InitPos()
             if( BinarySearch( nCol ))
                 lastRow = nRow;
         }
-        AccessBase::InitPosFinish( beforeRow, lastRow );
+        AccessBase::InitPosFinish(beforeRow, lastRow,
+            (nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH));
     }
 }
 
@@ -293,11 +356,13 @@ void ScQueryCellIteratorBase< accessType, queryType >::AdvanceQueryParamEntryFie
         ScQueryEntry& rEntry = maParam.GetEntry( j );
         if ( rEntry.bDoQuery )
         {
-            if ( rEntry.nField < rDoc.MaxCol() )
+            if (!mbReverseSearch && rEntry.nField < rDoc.MaxCol())
                 rEntry.nField++;
+            else if (mbReverseSearch && rEntry.nField > static_cast<SCCOLROW>(0))
+                rEntry.nField--;
             else
             {
-                assert(!"AdvanceQueryParamEntryField: ++rEntry.nField > MAXCOL");
+                assert(!"AdvanceQueryParamEntryField: ++rEntry.nField > MAXCOL || --rEntry.nField < 0");
             }
         }
         else
@@ -347,7 +412,7 @@ bool ScQueryCellIteratorBase< accessType, queryType >::BinarySearch( SCCOL col, 
     if (nCol >= rDoc.maTabs[nTab]->GetAllocatedColumnsCount())
         return false;
 
-    ScColumn* pCol = &(rDoc.maTabs[nTab])->aCol[nCol];
+    const ScColumn* pCol = &(rDoc.maTabs[nTab])->aCol[nCol];
     if (pCol->IsEmptyData())
         return false;
 
@@ -427,8 +492,7 @@ bool ScQueryCellIteratorBase< accessType, queryType >::BinarySearch( SCCOL col, 
     if (bForceStr || aCell.hasString())
     {
         sal_uInt32 nFormat = pCol->GetNumberFormat(mrContext, aCellData.second);
-        OUString aStr = ScCellFormat::GetInputString(aCell, nFormat, rFormatter, rDoc);
-        aLastInRangeString = aStr;
+        aLastInRangeString = ScCellFormat::GetInputString(aCell, nFormat, rFormatter, rDoc);
     }
     else
     {
@@ -483,8 +547,15 @@ bool ScQueryCellIteratorBase< accessType, queryType >::BinarySearch( SCCOL col, 
                 {
                     if (fLastInRangeValue <= nCellVal)
                     {
-                        fLastInRangeValue = nCellVal;
-                        nLastInRange = i;
+                        if ((nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH) &&
+                            nSortedBinarySearch != nSearchbDesc && fLastInRangeValue == nCellVal &&
+                            aIndexer.getLowIndex() != i)
+                            bDone = true;
+                        else
+                        {
+                            fLastInRangeValue = nCellVal;
+                            nLastInRange = i;
+                        }
                     }
                     else if (fLastInRangeValue >= nCellVal)
                     {
@@ -526,8 +597,15 @@ bool ScQueryCellIteratorBase< accessType, queryType >::BinarySearch( SCCOL col, 
                         aCellStr);
                 if (nTmp <= 0)
                 {
-                    aLastInRangeString = aCellStr;
-                    nLastInRange = i;
+                    if ((nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH) &&
+                        nSortedBinarySearch != nSearchbDesc && nTmp == 0 &&
+                        aIndexer.getLowIndex() != i)
+                        bDone = true;
+                    else
+                    {
+                        aLastInRangeString = aCellStr;
+                        nLastInRange = i;
+                    }
                 }
                 else if (nTmp > 0)
                 {
@@ -595,8 +673,11 @@ bool ScQueryCellIteratorBase< accessType, queryType >::BinarySearch( SCCOL col, 
             {
                 found = i;
                 nLastInRange = i;
-                // But keep searching to find the last matching one.
-                nLo = nMid + 1;
+                if ((nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH) &&
+                    (nSortedBinarySearch == nSearchbAscd && (rEntry.eOp == SC_LESS_EQUAL || rEntry.eOp == SC_EQUAL)))
+                    bDone = true;
+                else // But keep searching to find the last matching one.
+                    nLo = nMid + 1;
             }
             else if (bAscending)
             {
@@ -672,14 +753,27 @@ bool ScQueryCellIterator< accessType >::FindEqualOrSortedLastInRange( SCCOL& nFo
 
     nFoundCol = rDoc.MaxCol()+1;
     nFoundRow = rDoc.MaxRow()+1;
-    SetStopOnMismatch( true ); // assume sorted keys
+
+    if ((nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH) &&
+        nSortedBinarySearch == nBinarySearchDisabled)
+        SetStopOnMismatch( false ); // assume not sorted keys for XLookup/XMatch
+    else
+        SetStopOnMismatch( true ); // assume sorted keys
+
     SetTestEqualCondition( true );
     bIgnoreMismatchOnLeadingStrings = true;
+
     bool bLiteral = maParam.eSearchType == utl::SearchParam::SearchType::Normal &&
         maParam.GetEntry(0).GetQueryItem().meType == ScQueryEntry::ByString;
     bool bBinary = maParam.bByRow &&
         (bLiteral || maParam.GetEntry(0).GetQueryItem().meType == ScQueryEntry::ByValue) &&
         (maParam.GetEntry(0).eOp == SC_LESS_EQUAL || maParam.GetEntry(0).eOp == SC_GREATER_EQUAL);
+
+    // assume not sorted properly if we are using XLookup/XMatch with forward or backward search
+    if (bBinary && (nSearchOpCode == SC_OPCODE_X_LOOKUP || nSearchOpCode == SC_OPCODE_X_MATCH) &&
+        nSortedBinarySearch == nBinarySearchDisabled)
+        bBinary = false;
+
     bool bFound = false;
     if (bBinary)
     {
@@ -702,11 +796,28 @@ bool ScQueryCellIterator< accessType >::FindEqualOrSortedLastInRange( SCCOL& nFo
         // First equal entry or last smaller than (greater than) entry.
         PositionType aPosSave;
         bool bNext = false;
+        SCSIZE nEntries = maParam.GetEntryCount();
+        std::vector<SCCOL> aFoundFieldPositions(nEntries);
         do
         {
             nFoundCol = GetCol();
             nFoundRow = GetRow();
             aPosSave = maCurPos;
+            // If we might need to rewind below, save the position to rewind to
+            // rather than calculate it as a diff between nCol and nFoundCol as
+            // PerformQuery can return early if nCol is greater than
+            // maParam.nCol2 or AllocatedColumns
+            if (maParam.mbRangeLookup && bAdvanceQuery)
+            {
+                for (SCSIZE j=0; j < nEntries; ++j)
+                {
+                    ScQueryEntry& rEntry = maParam.GetEntry( j );
+                    if (rEntry.bDoQuery)
+                        aFoundFieldPositions[j] = maParam.GetEntry(j).nField;
+                    else
+                        break;  // for
+                }
+            }
             if (IsEqualConditionFulfilled())
                 break;
             bNext = GetNext();
@@ -719,7 +830,7 @@ bool ScQueryCellIterator< accessType >::FindEqualOrSortedLastInRange( SCCOL& nFo
         {
             // Step back to last in range and adjust position markers for
             // GetNumberFormat() or similar.
-            SCCOL nColDiff = nCol - nFoundCol;
+            bool bColDiff = nCol != nFoundCol;
             nCol = nFoundCol;
             nRow = nFoundRow;
             maCurPos = aPosSave;
@@ -730,20 +841,15 @@ bool ScQueryCellIterator< accessType >::FindEqualOrSortedLastInRange( SCCOL& nFo
                 // if query is ByString and vice versa.
                 maParam.mbRangeLookup = false;
                 // Step back the last field advance if GetNext() did one.
-                if (bAdvanceQuery && nColDiff)
+                if (bAdvanceQuery && bColDiff)
                 {
-                    SCSIZE nEntries = maParam.GetEntryCount();
                     for (SCSIZE j=0; j < nEntries; ++j)
                     {
                         ScQueryEntry& rEntry = maParam.GetEntry( j );
                         if (rEntry.bDoQuery)
                         {
-                            if (rEntry.nField - nColDiff >= 0)
-                                rEntry.nField -= nColDiff;
-                            else
-                            {
-                                assert(!"FindEqualOrSortedLastInRange: rEntry.nField -= nColDiff < 0");
-                            }
+                            rEntry.nField = aFoundFieldPositions[j];
+                            assert(rEntry.nField >= 0);
                         }
                         else
                             break;  // for
@@ -758,9 +864,11 @@ bool ScQueryCellIterator< accessType >::FindEqualOrSortedLastInRange( SCCOL& nFo
             }
         }
     }
-    if ( IsEqualConditionFulfilled() )
+    if (IsEqualConditionFulfilled() && (nSearchOpCode != SC_OPCODE_X_LOOKUP &&
+        nSearchOpCode != SC_OPCODE_X_MATCH))
     {
-        // Position on last equal entry.
+        // Position on last equal entry, except for XLOOKUP,
+        // which looking for the first equal entry
         SCSIZE nEntries = maParam.GetEntryCount();
         for ( SCSIZE j = 0; j < nEntries; j++  )
         {
@@ -851,19 +959,27 @@ bool ScQueryCellIterator< accessType >::FindEqualOrSortedLastInRange( SCCOL& nFo
 
 ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >
     ::ScQueryCellIteratorAccessSpecific( ScDocument& rDocument,
-        ScInterpreterContext& rContext, const ScQueryParam& rParam )
+        ScInterpreterContext& rContext, const ScQueryParam& rParam, bool bReverseSearch )
     : maParam( rParam )
     , rDoc( rDocument )
     , mrContext( rContext )
+    , mbReverseSearch( bReverseSearch )
 {
     // coverity[uninit_member] - this just contains data, subclass will initialize some of it
 }
 
 void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >::InitPos()
 {
-    nRow = maParam.nRow1;
-    if (maParam.bHasHeader && maParam.bByRow)
-        ++nRow;
+    if (!mbReverseSearch)
+    {
+        nRow = maParam.nRow1;
+        if (maParam.bHasHeader && maParam.bByRow)
+            ++nRow;
+    }
+    else
+    {
+        nRow = maParam.nRow2;
+    }
     const ScColumn& rCol = rDoc.maTabs[nTab]->CreateColumnIfNotExists(nCol);
     maCurPos = rCol.maCells.position(nRow);
 }
@@ -881,12 +997,45 @@ void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >::Inc
         IncBlock();
 }
 
+void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >::DecPos()
+{
+    if (maCurPos.second > 0)
+    {
+        // Move within the same block.
+        --maCurPos.second;
+        --nRow;
+    }
+    else
+        // Move to the prev block.
+        DecBlock();
+}
+
 void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >::IncBlock()
 {
     ++maCurPos.first;
     maCurPos.second = 0;
 
     nRow = maCurPos.first->position;
+}
+
+void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >::DecBlock()
+{
+    // Set current position to the last possible row.
+    const ScColumn& rCol = rDoc.maTabs[nTab]->CreateColumnIfNotExists(nCol);
+    if (maCurPos.first != rCol.maCells.begin())
+    {
+        --maCurPos.first;
+        maCurPos.second = maCurPos.first->size - 1;
+
+        nRow = maCurPos.first->position + maCurPos.second;
+    }
+    else
+    {
+        // No rows, set to end. This will make PerformQuery() go to next column.
+        nRow = maParam.nRow1 - 1;
+        maCurPos.first = rCol.maCells.end();
+        maCurPos.second = 0;
+    }
 }
 
 /**
@@ -1063,10 +1212,11 @@ ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::Direct >::MakeBina
 
 ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::SortedCache >
     ::ScQueryCellIteratorAccessSpecific( ScDocument& rDocument,
-        ScInterpreterContext& rContext, const ScQueryParam& rParam )
+        ScInterpreterContext& rContext, const ScQueryParam& rParam, bool bReverseSearch )
     : maParam( rParam )
     , rDoc( rDocument )
     , mrContext( rContext )
+    , mbReverseSearch( bReverseSearch )
 {
     // coverity[uninit_member] - this just contains data, subclass will initialize some of it
 }
@@ -1091,7 +1241,7 @@ void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::SortedCache >
 }
 
 void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::SortedCache >::InitPosFinish(
-    SCROW beforeRow, SCROW lastRow )
+    SCROW beforeRow, SCROW lastRow, bool bFirstMatch )
 {
     pColumn = &rDoc.maTabs[nTab]->CreateColumnIfNotExists(nCol);
     if(lastRow >= 0)
@@ -1100,7 +1250,10 @@ void ScQueryCellIteratorAccessSpecific< ScQueryCellIteratorAccess::SortedCache >
         sortedCachePosLast = sortedCache->indexForRow(lastRow);
         if(sortedCachePos <= sortedCachePosLast)
         {
-            nRow = sortedCache->rowForIndex(sortedCachePos);
+            if (!bFirstMatch)
+                nRow = sortedCache->rowForIndex(sortedCachePos);
+            else
+                nRow = sortedCache->rowForIndex(sortedCachePosLast);
             maCurPos = pColumn->maCells.position(nRow);
             return;
         }
@@ -1312,7 +1465,10 @@ template< ScQueryCellIteratorAccess accessType >
 bool ScQueryCellIterator< accessType >::GetFirst()
 {
     assert(nTab < rDoc.GetTableCount() && "index out of bounds, FIX IT");
-    nCol = maParam.nCol1;
+    if (!mbReverseSearch)
+        nCol = maParam.nCol1;
+    else
+        nCol = maParam.nCol2;
     InitPos();
     return GetThis();
 }
@@ -1320,7 +1476,10 @@ bool ScQueryCellIterator< accessType >::GetFirst()
 template< ScQueryCellIteratorAccess accessType >
 bool ScQueryCellIterator< accessType >::GetNext()
 {
-    IncPos();
+    if (!mbReverseSearch)
+        IncPos();
+    else
+        DecPos();
     if ( nStopOnMismatch )
         nStopOnMismatch = nStopOnMismatchEnabled;
     if ( nTestEqualCondition )

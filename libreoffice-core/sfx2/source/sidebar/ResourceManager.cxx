@@ -278,6 +278,7 @@ void ResourceManager::ReadDeckList()
         rDeckDescriptor.msTitleBarIconURL = getString(aDeckNode, "TitleBarIconURL");
         rDeckDescriptor.msHighContrastTitleBarIconURL = getString(aDeckNode, "HighContrastTitleBarIconURL");
         rDeckDescriptor.msHelpText = rDeckDescriptor.msTitle;
+        rDeckDescriptor.msHelpId = "SIDEBAR_" + rDeckDescriptor.msId.toAsciiUpperCase();
         rDeckDescriptor.mnOrderIndex = getInt32(aDeckNode, "OrderIndex");
         rDeckDescriptor.mbExperimental = getBool(aDeckNode, "IsExperimental");
 
@@ -699,7 +700,6 @@ void ResourceManager::ReadLegacyAddons (const Reference<frame::XController>& rxC
         rPanelDescriptor.mbShowForReadOnlyDocuments = false;
         rPanelDescriptor.mbWantsCanvas = false;
         rPanelDescriptor.mbWantsAWT = true;
-        fprintf(stderr, "THIS PLACE\n");
         rPanelDescriptor.maContextList.AddContextDescription(Context(sModuleName, "any"), true, OUString());
     }
 }

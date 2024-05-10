@@ -40,6 +40,7 @@
 #include <svl/srchitem.hxx>
 #include <svl/slstitm.hxx>
 #include <svl/stritem.hxx>
+#include <svl/voiditem.hxx>
 #include <sfx2/viewsh.hxx>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
@@ -111,6 +112,7 @@ protected:
     int m_nRedlineTableSizeChanged;
     int m_nRedlineTableEntryModified;
     int m_nTrackedChangeIndex;
+    bool m_bFullInvalidateSeen;
     OString m_sHyperlinkText;
     OString m_sHyperlinkLink;
     OString m_aFormFieldButton;
@@ -133,6 +135,7 @@ SwTiledRenderingTest::SwTiledRenderingTest()
     m_nRedlineTableSizeChanged(0),
     m_nRedlineTableEntryModified(0),
     m_nTrackedChangeIndex(-1),
+    m_bFullInvalidateSeen(false),
     m_callbackWrapper(&callback, this)
 {
 }
@@ -203,7 +206,11 @@ void SwTiledRenderingTest::callbackImpl(int nType, const char* pPayload)
                 tools::Rectangle aInvalidation;
                 uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(OUString::createFromAscii(pPayload));
                 if (std::string_view("EMPTY") == pPayload)
+                {
+                    m_bFullInvalidateSeen = true;
                     return;
+                }
+
                 CPPUNIT_ASSERT(aSeq.getLength() == 4 || aSeq.getLength() == 5);
                 aInvalidation.SetLeft(aSeq[0].toInt32());
                 aInvalidation.SetTop(aSeq[1].toInt32());
@@ -264,7 +271,7 @@ void SwTiledRenderingTest::callbackImpl(int nType, const char* pPayload)
             break;
         case LOK_CALLBACK_STATE_CHANGED:
             {
-                OString aTrackedChangeIndexPrefix(".uno:TrackedChangeIndex=");
+                OString aTrackedChangeIndexPrefix(".uno:TrackedChangeIndex="_ostr);
                 if (aPayload.startsWith(aTrackedChangeIndexPrefix))
                 {
                     OString sIndex = aPayload.copy(aTrackedChangeIndexPrefix.getLength());
@@ -283,8 +290,8 @@ void SwTiledRenderingTest::callbackImpl(int nType, const char* pPayload)
                     std::stringstream aStream(pPayload);
                     boost::property_tree::read_json(aStream, aTree);
                     boost::property_tree::ptree &aChild = aTree.get_child("hyperlink");
-                    m_sHyperlinkText = aChild.get("text", "").c_str();
-                    m_sHyperlinkLink = aChild.get("link", "").c_str();
+                    m_sHyperlinkText = OString(aChild.get("text", ""));
+                    m_sHyperlinkLink = OString(aChild.get("link", ""));
                 }
             }
             break;
@@ -340,9 +347,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPostKeyEvent)
     // Did we manage to go after the first character?
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1), pShellCursor->GetPoint()->GetContentIndex());
 
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     // Did we manage to insert the character after the first one?
     CPPUNIT_ASSERT_EQUAL(OUString("Axaa bbb."), pShellCursor->GetPoint()->GetNode().GetTextNode()->GetText());
 }
@@ -394,7 +399,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelection)
 {
     SwXTextDocument* pXTextDocument = createDoc("shape-with-text.fodt");
     // No crash, just empty output for unexpected mime type.
-    CPPUNIT_ASSERT_EQUAL(OString(), apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "foo/bar"));
+    CPPUNIT_ASSERT_EQUAL(OString(), apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "foo/bar"_ostr));
 
     SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
     // Move the cursor into the first word.
@@ -403,10 +408,10 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelection)
     pWrtShell->SelWrd();
 
     // Make sure that we selected text from the body text.
-    CPPUNIT_ASSERT_EQUAL(OString("Hello"), apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8"));
+    CPPUNIT_ASSERT_EQUAL("Hello"_ostr, apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8"_ostr));
 
     // Make sure we produce something for HTML.
-    CPPUNIT_ASSERT(!apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/html").isEmpty());
+    CPPUNIT_ASSERT(!apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/html"_ostr).isEmpty());
 
     // Now select some shape text and check again.
     SdrPage* pPage = pWrtShell->GetDoc()->getIDocumentDrawModelAccess().GetDrawModel()->GetPage(0);
@@ -417,7 +422,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelection)
     EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
     ESelection aWordSelection(0, 0, 0, 5);
     rEditView.SetSelection(aWordSelection);
-    CPPUNIT_ASSERT_EQUAL(OString("Shape"), apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8"));
+    CPPUNIT_ASSERT_EQUAL("Shape"_ostr, apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelectionLineLimit)
@@ -433,11 +438,11 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelectionLineLimit)
     // Create a selection.
     pWrtShell->SelAll();
 
-    OString sPlainText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8");
+    OString sPlainText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8"_ostr);
 
     CPPUNIT_ASSERT_EQUAL(OString(sOriginalText), sPlainText.trim());
 
-    OString sHtmlText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/html");
+    OString sHtmlText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/html"_ostr);
 
     int nStart = sHtmlText.indexOf(u8"Estonian");
 
@@ -447,7 +452,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelectionLineLimit)
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetTextSelectionMultiLine)
 {
     // Test will check if correct number of new line marks / paragraphs is generated
-    const char sOriginalText[] = u8"Heading\n\
+    static OStringLiteral sOriginalText(u8"Heading\n\
 Let's have text; we need to be able to select the text inside the shape, but also the various individual ones too:\n\
 \n\
 \n\
@@ -455,9 +460,9 @@ Let's have text; we need to be able to select the text inside the shape, but als
 \n\
 \n\
 And this is all for Writer shape objects\n\
-Heading on second page";
+Heading on second page");
 
-    const char sExpectedHtml[] = u8"Heading</h2>\n\
+    static OStringLiteral sExpectedHtml(u8"Heading</h2>\n\
 <p>Let's have text; we need to be able to select the text inside the shape, but also the various individual ones too:</p>\n\
 <p><br/><br/></p>\n\
 <p><br/><br/></p>\n\
@@ -465,7 +470,7 @@ Heading on second page";
 <p><br/><br/></p>\n\
 <p><br/><br/></p>\n\
 <h1 class=\"western\">And this is all for Writer shape objects</h1>\n\
-<h2 class=\"western\">Heading on second page</h2>";
+<h2 class=\"western\">Heading on second page</h2>");
 
     SwXTextDocument* pXTextDocument = createDoc("multiline.odt");
 
@@ -473,11 +478,11 @@ Heading on second page";
     // Create a selection.
     pWrtShell->SelAll();
 
-    OString sPlainText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8");
+    OString sPlainText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/plain;charset=utf-8"_ostr);
 
     CPPUNIT_ASSERT_EQUAL(OString(sOriginalText), sPlainText.trim());
 
-    OString sHtmlText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/html");
+    OString sHtmlText = apitest::helper::transferable::getTextSelection(pXTextDocument->getSelection(), "text/html"_ostr);
 
     int nStart = sHtmlText.indexOf(u8"Heading");
 
@@ -835,7 +840,7 @@ namespace {
                             std::stringstream aStream(pPayload);
                             boost::property_tree::ptree aTree;
                             boost::property_tree::read_json(aStream, aTree);
-                            sRect = aTree.get_child("rectangle").get_value<std::string>().c_str();
+                            sRect = OString(aTree.get_child("rectangle").get_value<std::string>());
                             m_nOwnCursorInvalidatedBy = aTree.get_child("viewId").get_value<int>();
                         }
                         else
@@ -858,7 +863,7 @@ namespace {
                         std::stringstream aStream(pPayload);
                         boost::property_tree::ptree aTree;
                         boost::property_tree::read_json(aStream, aTree);
-                        OString aRect = aTree.get_child("rectangle").get_value<std::string>().c_str();
+                        OString aRect( aTree.get_child("rectangle").get_value<std::string>() );
 
                         uno::Sequence<OUString> aSeq = comphelper::string::convertCommaSeparated(OUString::fromUtf8(aRect));
                         if (std::string_view("EMPTY") == pPayload)
@@ -1058,9 +1063,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testShapeViewCursors)
     SdrObject* pObject = pPage->GetObj(0);
     SdrView* pView = pWrtShell2->GetDrawView();
     pWrtShell2->GetView().BeginTextEdit(pObject, pView->GetSdrPageView(), pWrtShell2->GetWin());
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     // Press a key in the second view, while the first one observes this.
     aView1.m_bViewCursorInvalidated = false;
     aView2.m_bOwnCursorInvalidated = false;
@@ -1069,9 +1072,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testShapeViewCursors)
     const tools::Rectangle aLastOwnCursor2 = aView2.m_aOwnCursor;
     const tools::Rectangle aLastViewCursor2 = aView2.m_aViewCursor;
 
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'y', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'y', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"y");
     // Make sure that aView1 gets a view-only cursor notification, while
     // aView2 gets a real cursor notification.
     CPPUNIT_ASSERT_EQUAL(aView1.m_aOwnCursor, aLastOwnCursor1);
@@ -1176,15 +1177,11 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTextEditViewInvalidations)
     SdrObject* pObject = pPage->GetObj(0);
     SdrView* pView = pWrtShell->GetDrawView();
     pWrtShell->GetView().BeginTextEdit(pObject, pView->GetSdrPageView(), pWrtShell->GetWin());
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
 
     // Assert that both views are invalidated when pressing a key while in text edit.
     aView1.m_bTilesInvalidated = false;
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'y', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'y', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"y");
 
     CPPUNIT_ASSERT(aView1.m_bTilesInvalidated);
 
@@ -1205,9 +1202,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoInvalidations)
     // Insert a character the end of the document.
     SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
     pWrtShell->EndOfSection();
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"c");
     // ProcessEventsToIdle resets the view; set it again
     SfxLokHelper::setView(nView1);
     SwShellCursor* pShellCursor = pWrtShell->getShellCursor(false);
@@ -1236,9 +1231,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoLimiting)
     // Insert a character the end of the document in the second view.
     SwWrtShell* pWrtShell2 = pXTextDocument->GetDocShell()->GetWrtShell();
     pWrtShell2->EndOfSection();
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"c");
     SwShellCursor* pShellCursor = pWrtShell2->getShellCursor(false);
     CPPUNIT_ASSERT_EQUAL(OUString("Aaa bbb.c"), pShellCursor->GetPoint()->GetNode().GetTextNode()->GetText());
 
@@ -1266,23 +1259,18 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoReordering)
     pWrtShell1->SttEndDoc(/*bStt=*/true);
     SwTextNode* pTextNode1 = pWrtShell1->GetCursor()->GetPointNode().GetTextNode();
     // View 1 types into the first paragraph.
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'a', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"a");
     SfxLokHelper::setView(nView2);
     pWrtShell2->SttEndDoc(/*bStt=*/false);
     SwTextNode* pTextNode2 = pWrtShell2->GetCursor()->GetPointNode().GetTextNode();
     // View 2 types into the second paragraph.
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'z', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'z', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"z");
     CPPUNIT_ASSERT_EQUAL(OUString("a"), pTextNode1->GetText());
     CPPUNIT_ASSERT_EQUAL(OUString("z"), pTextNode2->GetText());
 
     // When view 1 presses undo:
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Then make sure view 1's last undo action is invoked, out of order:
     // Without the accompanying fix in place, this test would have failed with:
@@ -1311,32 +1299,24 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoReorderingRedo)
     pWrtShell1->SttEndDoc(/*bStt=*/true);
     SwTextNode* pTextNode1 = pWrtShell1->GetCursor()->GetPointNode().GetTextNode();
     // View 1 types into the first paragraph, twice.
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'f', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'f', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"f");
     // Go to the start of the paragraph, to avoid grouping.
     pWrtShell1->SttEndDoc(/*bStt=*/true);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 's', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 's', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"s");
     SfxLokHelper::setView(nView2);
     pWrtShell2->SttEndDoc(/*bStt=*/false);
     SwTextNode* pTextNode2 = pWrtShell2->GetCursor()->GetPointNode().GetTextNode();
     // View 2 types into the second paragraph.
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'z', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'z', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"z");
     CPPUNIT_ASSERT_EQUAL(OUString("sf"), pTextNode1->GetText());
     CPPUNIT_ASSERT_EQUAL(OUString("z"), pTextNode2->GetText());
 
     // When view 1 presses undo, twice:
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     // First just s(econd) is erased:
     CPPUNIT_ASSERT_EQUAL(OUString("f"), pTextNode1->GetText());
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Then make sure view 1's undo actions are invoked, out of order:
     // Without the accompanying fix in place, this test would have failed with:
@@ -1407,33 +1387,26 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoReorderingMulti)
     pWrtShell1->SttEndDoc(/*bStt=*/true);
     SwTextNode* pTextNode1 = pWrtShell1->GetCursor()->GetPointNode().GetTextNode();
     // View 1 types into the first paragraph.
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'a', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"a");
     SfxLokHelper::setView(nView2);
     pWrtShell2->SttEndDoc(/*bStt=*/false);
     SwTextNode* pTextNode2 = pWrtShell2->GetCursor()->GetPointNode().GetTextNode();
     // View 2 types into the second paragraph, twice.
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     // Go to the start of the paragraph, to avoid grouping.
     pWrtShell2->SttPara();
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'y', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'y', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"y");
     CPPUNIT_ASSERT_EQUAL(OUString("a"), pTextNode1->GetText());
     CPPUNIT_ASSERT_EQUAL(OUString("yx"), pTextNode2->GetText());
 
     // When view 1 presses undo:
     SfxLokHelper::setView(nView1);
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Then make sure view 1's undo action is invoked, out of order:
     // Without the accompanying fix in place, this test would have failed with:
     // - Expression: pTextNode1->GetText().isEmpty()
-    // i.e. out of order undo was not executed, the first paragrph was still "a".
+    // i.e. out of order undo was not executed, the first paragraph was still "a".
     CPPUNIT_ASSERT(pTextNode1->GetText().isEmpty());
     // The top 2 undo actions are not invoked, as they belong to view 2.
     CPPUNIT_ASSERT_EQUAL(OUString("yx"), pTextNode2->GetText());
@@ -1458,9 +1431,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoShapeLimiting)
     SdrObject* pObject = pPage->GetObj(0);
     SdrView* pView = pWrtShell2->GetDrawView();
     pWrtShell2->GetView().BeginTextEdit(pObject, pView->GetSdrPageView(), pWrtShell2->GetWin());
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     pWrtShell2->EndTextEdit();
 
     // Assert that the first view can't and the second view can undo the insertion.
@@ -1491,9 +1462,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoDispatch)
 
     // Insert a character in the first view.
     SfxLokHelper::setView(nView1);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"c");
 
     // Click before the first word in the second view.
     SfxLokHelper::setView(nView2);
@@ -1530,9 +1499,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoRepairDispatch)
 
     // Insert a character in the first view.
     SfxLokHelper::setView(nView1);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"c");
 
     // Assert that by default the second view can't undo the action.
     SfxLokHelper::setView(nView2);
@@ -1573,9 +1540,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testShapeTextUndoShells)
     SdrObject* pObject = pPage->GetObj(0);
     SdrView* pView = pWrtShell->GetDrawView();
     pWrtShell->GetView().BeginTextEdit(pObject, pView->GetSdrPageView(), pWrtShell->GetWin());
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     pWrtShell->EndTextEdit();
 
     // Make sure that the undo item remembers who created it.
@@ -1601,8 +1566,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testShapeTextUndoGroupShells)
     SdrObject* pObject = pPage->GetObj(0);
     SdrView* pView = pWrtShell->GetDrawView();
     pWrtShell->GetView().BeginTextEdit(pObject, pView->GetSdrPageView(), pWrtShell->GetWin());
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
+    emulateTyping(*pXTextDocument, u"x");
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 0, awt::Key::BACKSPACE);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 0, awt::Key::BACKSPACE);
     Scheduler::ProcessEventsToIdle();
@@ -1623,9 +1587,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testShapeTextUndoGroupShells)
 
     // Create an editeng text selection in the first view.
     EditView& rEditView = pView->GetTextEditOutlinerView()->GetEditView();
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     // 0th para, 0th char -> 0th para, 1st char.
     ESelection aWordSelection(0, 0, 0, 1);
     rEditView.SetSelection(aWordSelection);
@@ -1756,7 +1718,8 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetViewRenderState)
         aViewOptions.SetOnlineSpell(true);
         pXTextDocument->GetDocShell()->GetWrtShell()->ApplyViewOptions(aViewOptions);
     }
-    CPPUNIT_ASSERT_EQUAL(OString("PS;Default"), pXTextDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("PS;Default"_ostr, pXTextDocument->getViewRenderState());
+
     // Create a second view
     SfxLokHelper::createView();
     int nSecondViewId = SfxLokHelper::getView();
@@ -1768,16 +1731,18 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetViewRenderState)
         aViewOptions.SetOnlineSpell(true);
         pXTextDocument->GetDocShell()->GetWrtShell()->ApplyViewOptions(aViewOptions);
     }
-    CPPUNIT_ASSERT_EQUAL(OString("S;Default"), pXTextDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Default"_ostr, pXTextDocument->getViewRenderState());
+
     // Switch back to the first view, and check that the options string is the same
     SfxLokHelper::setView(nFirstViewId);
-    CPPUNIT_ASSERT_EQUAL(OString("PS;Default"), pXTextDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("PS;Default"_ostr, pXTextDocument->getViewRenderState());
+
     // Switch back to the second view, and change to dark mode
     SfxLokHelper::setView(nSecondViewId);
     {
         SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
         SwView* pView = pDoc->GetDocShell()->GetView();
-        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame()->GetFrame().GetFrameInterface();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
             {
                 { "NewTheme", uno::Any(OUString("Dark")) },
@@ -1785,10 +1750,10 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testGetViewRenderState)
         );
         comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
     }
-    CPPUNIT_ASSERT_EQUAL(OString("S;Dark"), pXTextDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Dark"_ostr, pXTextDocument->getViewRenderState());
     // Switch back to the first view, and check that the options string is the same
     SfxLokHelper::setView(nFirstViewId);
-    CPPUNIT_ASSERT_EQUAL(OString("PS;Default"), pXTextDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("PS;Default"_ostr, pXTextDocument->getViewRenderState());
 }
 
 // Helper function to get a tile to a bitmap
@@ -1797,7 +1762,7 @@ static Bitmap getTile(SwXTextDocument* pXTextDocument)
     size_t nCanvasSize = 1024;
     size_t nTileSize = 256;
     std::vector<unsigned char> aPixmap(nCanvasSize * nCanvasSize * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasSize, nCanvasSize),
             Fraction(1.0), Point(), aPixmap.data());
@@ -1810,7 +1775,7 @@ static Bitmap getTile(SwXTextDocument* pXTextDocument)
 static void assertTilePixelColor(SwXTextDocument* pXTextDocument, int nPixelX, int nPixelY, Color aColor)
 {
     Bitmap aBitmap = getTile(pXTextDocument);
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
     Color aActualColor(pAccess->GetPixel(nPixelX, nPixelY));
     CPPUNIT_ASSERT_EQUAL(aColor, aActualColor);
 }
@@ -1824,7 +1789,7 @@ static void addDarkLightThemes(const Color& rDarkColor, const Color& rLightColor
         aValue.bIsVisible = true;
         aValue.nColor = rDarkColor;
         aColorConfig.SetColorValue(svtools::DOCCOLOR, aValue);
-        aColorConfig.AddScheme(u"Dark");
+        aColorConfig.AddScheme(u"Dark"_ustr);
     }
     // Add a minimal light scheme
     {
@@ -1833,7 +1798,7 @@ static void addDarkLightThemes(const Color& rDarkColor, const Color& rLightColor
         aValue.bIsVisible = true;
         aValue.nColor = rLightColor;
         aColorConfig.SetColorValue(svtools::DOCCOLOR, aValue);
-        aColorConfig.AddScheme(u"Light");
+        aColorConfig.AddScheme(u"Light"_ustr);
     }
 }
 
@@ -1849,7 +1814,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeViewSeparation)
     {
         SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
         SwView* pView = pDoc->GetDocShell()->GetView();
-        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame()->GetFrame().GetFrameInterface();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
             {
                 { "NewTheme", uno::Any(OUString("Light")) },
@@ -1867,7 +1832,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeViewSeparation)
     {
         SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
         SwView* pView = pDoc->GetDocShell()->GetView();
-        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame()->GetFrame().GetFrameInterface();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
             {
                 { "NewTheme", uno::Any(OUString("Dark")) },
@@ -1886,7 +1851,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeViewSeparation)
     {
         SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
         SwView* pView = pDoc->GetDocShell()->GetView();
-        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame()->GetFrame().GetFrameInterface();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
         uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
             {
                 { "NewTheme", uno::Any(OUString("Light")) },
@@ -1996,7 +1961,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testRedlineColors)
     // Assert that info about exactly one author is returned.
     tools::JsonWriter aJsonWriter;
     pXTextDocument->getTrackedChangeAuthors(aJsonWriter);
-    std::stringstream aStream(aJsonWriter.extractAsOString().getStr());
+    std::stringstream aStream((std::string(aJsonWriter.finishAndGetAsOString())));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aTree.get_child("authors").size());
@@ -2007,18 +1972,14 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testCommentEndTextEdit)
     // Create a document, type a character and remember the cursor position.
     SwXTextDocument* pXTextDocument = createDoc();
     ViewCallback aView1;
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     tools::Rectangle aBodyCursor = aView1.m_aOwnCursor;
 
     // Create a comment and type a character there as well.
     const int nCtrlAltC = KEY_MOD1 + KEY_MOD2 + 512 + 'c' - 'a';
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'c', nCtrlAltC);
     pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'c', nCtrlAltC);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
     // End comment text edit by clicking in the body text area, and assert that
     // no unexpected cursor callbacks are emitted at origin (top left corner of
     // the document).
@@ -2050,7 +2011,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testCommentInsert)
     selectShape(1);
 
     // Add a comment.
-    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame()->GetFrame().GetFrameInterface();
+    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
     uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
             {
             {"Text", uno::Any(OUString("some text"))},
@@ -2059,12 +2020,12 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testCommentInsert)
     ViewCallback aView;
     comphelper::dispatchCommand(".uno:InsertAnnotation", xFrame, aPropertyValues);
     Scheduler::ProcessEventsToIdle();
-    OString aAnchorPos(aView.m_aComment.get_child("anchorPos").get_value<std::string>().c_str());
+    OString aAnchorPos(aView.m_aComment.get_child("anchorPos").get_value<std::string>());
     // Without the accompanying fix in place, this test would have failed with
     // - Expected: 1418, 1418, 0, 0
     // - Actual  : 1418, 1418, 1024, 1024
     // i.e. the anchor position was a non-empty rectangle.
-    CPPUNIT_ASSERT_EQUAL(OString("1418, 1418, 0, 0"), aAnchorPos);
+    CPPUNIT_ASSERT_EQUAL("1418, 1418, 0, 0"_ostr, aAnchorPos);
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
 
@@ -2099,7 +2060,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPaintCallbacks)
     int nCanvasWidth = 256;
     int nCanvasHeight = 256;
     std::vector<unsigned char> aBuffer(nCanvasWidth * nCanvasHeight * 4);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight), Fraction(1.0), Point(), aBuffer.data());
     // Make sure that painting a tile in the second view doesn't invoke
     // callbacks on the first view.
@@ -2120,15 +2081,11 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testUndoRepairResult)
 
     // Insert a character in the second view.
     SfxLokHelper::setView(nView2);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'b', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'b', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"b");
 
     // Insert a character in the first view.
     SfxLokHelper::setView(nView1);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'a', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"a");
 
     // Assert that by default the second view can't undo the action.
     SfxLokHelper::setView(nView2);
@@ -2154,15 +2111,11 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testRedoRepairResult)
 
     // Insert a character in the second view.
     SfxLokHelper::setView(nView2);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'b', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'b', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"b");
 
     // Insert a character in the first view.
     SfxLokHelper::setView(nView1);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'a', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'a', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"a");
 
     comphelper::dispatchCommand(".uno:Undo", {}, pResult2);
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt32>(0), pResult2->m_nDocRepair);
@@ -2225,16 +2178,12 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDisableUndoRepair)
 
     // Insert a character in the first view.
     SfxLokHelper::setView(nView1);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'k', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'k', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"k");
     checkUndoRepairStates(pXTextDocument, pView1, pView2);
 
     // Insert a character in the second view.
     SfxLokHelper::setView(nView2);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'u', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'u', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"u");
     {
         SfxItemSet aItemSet1(pXTextDocument->GetDocShell()->GetDoc()->GetAttrPool(), svl::Items<SID_UNDO, SID_UNDO>);
         SfxItemSet aItemSet2(pXTextDocument->GetDocShell()->GetDoc()->GetAttrPool(), svl::Items<SID_UNDO, SID_UNDO>);
@@ -2253,9 +2202,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDisableUndoRepair)
 
     // Insert a character in the first view.
     SfxLokHelper::setView(nView1);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'l', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'l', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"l");
     checkUndoRepairStates(pXTextDocument, pView1, pView2);
 }
 
@@ -2293,7 +2240,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testAllTrackedChanges)
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(2), rTable.size());
     {
         SfxVoidItem aItem(FN_REDLINE_REJECT_ALL);
-        pView1->GetViewFrame()->GetDispatcher()->ExecuteList(FN_REDLINE_REJECT_ALL,
+        pView1->GetViewFrame().GetDispatcher()->ExecuteList(FN_REDLINE_REJECT_ALL,
                 SfxCallMode::SYNCHRON, { &aItem });
     }
 
@@ -2316,7 +2263,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testAllTrackedChanges)
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(2), rTable.size());
     {
         SfxVoidItem aItem(FN_REDLINE_ACCEPT_ALL);
-        pView1->GetViewFrame()->GetDispatcher()->ExecuteList(FN_REDLINE_ACCEPT_ALL,
+        pView1->GetViewFrame().GetDispatcher()->ExecuteList(FN_REDLINE_ACCEPT_ALL,
                 SfxCallMode::SYNCHRON, { &aItem });
     }
 
@@ -2349,8 +2296,8 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDocumentRepair)
     {
         std::unique_ptr<SfxBoolItem> pItem1;
         std::unique_ptr<SfxBoolItem> pItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT(pItem2);
         CPPUNIT_ASSERT_EQUAL(false, pItem1->GetValue());
@@ -2359,14 +2306,12 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDocumentRepair)
 
     // Insert a character in the second view.
     SfxLokHelper::setView(nView2);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'u', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'u', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"u");
     {
         std::unique_ptr<SfxBoolItem> pItem1;
         std::unique_ptr<SfxBoolItem> pItem2;
-        pView1->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
-        pView2->GetViewFrame()->GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
+        pView1->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem1);
+        pView2->GetViewFrame().GetBindings().QueryState(SID_DOC_REPAIR, pItem2);
         CPPUNIT_ASSERT(pItem1);
         CPPUNIT_ASSERT(pItem2);
         CPPUNIT_ASSERT_EQUAL(true, pItem1->GetValue());
@@ -2384,8 +2329,9 @@ namespace {
     void checkPageHeaderOrFooter(const SfxViewShell* pViewShell, TypedWhichId<SfxStringListItem> nWhich, bool bValue)
     {
         uno::Sequence<OUString> aSeq;
-        const SfxStringListItem* pListItem = nullptr;
-        pViewShell->GetDispatcher()->QueryState(nWhich, pListItem);
+        SfxPoolItemHolder aResult;
+        pViewShell->GetDispatcher()->QueryState(nWhich, aResult);
+        const SfxStringListItem* pListItem(static_cast<const SfxStringListItem*>(aResult.getItem()));
         CPPUNIT_ASSERT(pListItem);
         pListItem->GetStringList(aSeq);
         if (bValue)
@@ -2513,7 +2459,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMESupport)
     SwWrtShell* pWrtShell = pView->GetWrtShellPtr();
 
     // sequence of chinese IME compositions when 'nihao' is typed in an IME
-    const std::vector<OString> aUtf8Inputs{ "年", "你", "你好", "你哈", "你好", "你好" };
+    const std::vector<OString> aUtf8Inputs{ "年"_ostr, "你"_ostr, "你好"_ostr, "你哈"_ostr, "你好"_ostr, "你好"_ostr };
     std::vector<OUString> aInputs;
     std::transform(aUtf8Inputs.begin(), aUtf8Inputs.end(),
             std::back_inserter(aInputs), [](OString aInput) {
@@ -2574,7 +2520,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAtEndOfParagraph)
     pDocWindow->PostExtTextInputEvent(VclEventId::EndExtTextInput, "");
 
     std::unique_ptr<SvxWeightItem> pWeightItem;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem);
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem);
     CPPUNIT_ASSERT(pWeightItem);
 
     CPPUNIT_ASSERT_EQUAL(FontWeight::WEIGHT_BOLD, pWeightItem->GetWeight());
@@ -2593,7 +2539,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAtEndOfParagraph)
     pDocWindow->PostExtTextInputEvent(VclEventId::EndExtTextInput, "");
 
     std::unique_ptr<SvxWeightItem> pWeightItem2;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem2);
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem2);
     CPPUNIT_ASSERT(pWeightItem2);
 
     CPPUNIT_ASSERT_EQUAL(FontWeight::WEIGHT_NORMAL, pWeightItem2->GetWeight());
@@ -2609,7 +2555,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAtEndOfParagraph)
     pDocWindow->PostExtTextInputEvent(VclEventId::EndExtTextInput, "");
 
     std::unique_ptr<SvxWeightItem> pWeightItem3;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem3);
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem3);
     CPPUNIT_ASSERT(pWeightItem3);
 
     CPPUNIT_ASSERT_EQUAL(FontWeight::WEIGHT_BOLD, pWeightItem3->GetWeight());
@@ -2621,7 +2567,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAtEndOfParagraph)
     pDocWindow->PostExtTextInputEvent(VclEventId::EndExtTextInput, "");
 
     std::unique_ptr<SvxWeightItem> pWeightItem4;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem4);
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem4);
     CPPUNIT_ASSERT(pWeightItem4);
 
     CPPUNIT_ASSERT_EQUAL(FontWeight::WEIGHT_NORMAL, pWeightItem4->GetWeight());
@@ -2679,7 +2625,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAfterHeader)
     Scheduler::ProcessEventsToIdle();
 
     std::unique_ptr<SvxWeightItem> pWeightItem;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem);
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem);
     CPPUNIT_ASSERT(pWeightItem);
 
     CPPUNIT_ASSERT_EQUAL(FontWeight::WEIGHT_BOLD, pWeightItem->GetWeight());
@@ -2700,7 +2646,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAfterHeader)
     //          c"
 
     std::unique_ptr<SvxWeightItem> pWeightItem2;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem2);
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_WEIGHT, pWeightItem2);
     CPPUNIT_ASSERT(pWeightItem2);
 
     CPPUNIT_ASSERT_EQUAL(FontWeight::WEIGHT_NORMAL, pWeightItem2->GetWeight());
@@ -2861,9 +2807,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testVisCursorInvalidation)
     aView2.m_bOwnCursorInvalidated = false;
     aView2.m_bViewCursorInvalidated = false;
 
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
 
     CPPUNIT_ASSERT(aView1.m_bViewCursorInvalidated);
     CPPUNIT_ASSERT(aView1.m_bOwnCursorInvalidated);
@@ -2887,9 +2831,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testVisCursorInvalidation)
     aView2.m_bOwnCursorInvalidated = false;
     aView2.m_bViewCursorInvalidated = false;
 
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYINPUT, 'x', 0);
-    pXTextDocument->postKeyEvent(LOK_KEYEVENT_KEYUP, 'x', 0);
-    Scheduler::ProcessEventsToIdle();
+    emulateTyping(*pXTextDocument, u"x");
 
     CPPUNIT_ASSERT(aView1.m_bViewCursorInvalidated);
     CPPUNIT_ASSERT(aView1.m_bOwnCursorInvalidated);
@@ -2935,7 +2877,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSemiTransparent)
     size_t nCanvasHeight = 512;
     size_t nTileSize = 256;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -2943,7 +2885,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSemiTransparent)
             /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
     Color aColor(pAccess->GetPixel(255, 255));
 
     // Without the accompanying fix in place, this test would have failed with 'Expected greater or
@@ -2964,7 +2906,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testHighlightNumbering)
     size_t nCanvasHeight = 512;
     size_t nTileSize = 256;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -2972,7 +2914,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testHighlightNumbering)
             /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
 
     // Yellow highlighting over numbering
     Color aColor(pAccess->GetPixel(103, 148));
@@ -2989,7 +2931,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testHighlightNumbering_shd)
     size_t nCanvasHeight = 512;
     size_t nTileSize = 256;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -2997,7 +2939,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testHighlightNumbering_shd)
             /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
 
     // No highlighting over numbering - w:shd does not apply to numbering.
     Color aColor(pAccess->GetPixel(103, 148));
@@ -3019,7 +2961,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPilcrowRedlining)
     size_t nCanvasHeight = 1024;
     size_t nTileSize = 512;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3027,7 +2969,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPilcrowRedlining)
             /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(100, 100), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
 
     const char* aTexts[] = {
         "Insert paragraph break",
@@ -3082,7 +3024,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDoubleUnderlineAndStrikeOut)
     size_t nCanvasHeight = 350;
     size_t nTileSize = 350;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3090,7 +3032,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDoubleUnderlineAndStrikeOut)
             /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
     bool bGreenLine = false;
     size_t nGreenLine = 0;
     // count green horizontal lines by tracking a column of pixels counting the
@@ -3128,7 +3070,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf43244_SpacesOnMargin)
     size_t nCanvasHeight = 512;
     size_t nTileSize = 64;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3136,7 +3078,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf43244_SpacesOnMargin)
         /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(730, 120), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
 
     //Test if we see any spaces on the right margin in a 47x48 rectangle
     bool bSpaceFound = false;
@@ -3171,7 +3113,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testClipText)
     size_t nCanvasHeight = 512;
     size_t nTileSize = 256;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3179,7 +3121,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testClipText)
             /*nTilePosY=*/0, /*nTileWidth=*/15360, /*nTileHeight=*/7680);
     pDevice->EnableMapMode(false);
     Bitmap aBitmap = pDevice->GetBitmap(Point(0, 0), Size(nTileSize, nTileSize));
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
+    BitmapScopedReadAccess pAccess(aBitmap);
 
     // check top margin, it's not white completely (i.e. showing top of letter "T")
     bool bClipTop = true;
@@ -3232,7 +3174,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testLanguageStatus)
     SwXTextDocument* pXTextDocument = createDoc("dummy.fodt");
     SwView* pView = pXTextDocument->GetDocShell()->GetView();
     std::unique_ptr<SfxPoolItem> pItem;
-    pView->GetViewFrame()->GetBindings().QueryState(SID_LANGUAGE_STATUS, pItem);
+    pView->GetViewFrame().GetBindings().QueryState(SID_LANGUAGE_STATUS, pItem);
     auto pStringListItem = dynamic_cast<SfxStringListItem*>(pItem.get());
     CPPUNIT_ASSERT(pStringListItem);
 
@@ -3275,8 +3217,8 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testHyperlink)
             MOUSE_LEFT, 0);
     Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT_EQUAL(OString("hyperlink"), m_sHyperlinkText);
-    CPPUNIT_ASSERT_EQUAL(OString("http://example.com/"), m_sHyperlinkLink);
+    CPPUNIT_ASSERT_EQUAL("hyperlink"_ostr, m_sHyperlinkText);
+    CPPUNIT_ASSERT_EQUAL("http://example.com/"_ostr, m_sHyperlinkLink);
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testFieldmark)
@@ -3301,7 +3243,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButton)
     size_t nCanvasWidth = 1024;
     size_t nCanvasHeight = 512;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3310,18 +3252,18 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButton)
 
     CPPUNIT_ASSERT(!m_aFormFieldButton.isEmpty());
     {
-        std::stringstream aStream(m_aFormFieldButton.getStr());
+        std::stringstream aStream((std::string(m_aFormFieldButton)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
 
-        OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("show"), sAction);
+        OString sAction( aTree.get_child("action").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("show"_ostr, sAction);
 
-        OString sType = aTree.get_child("type").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("drop-down"), sType);
+        OString sType( aTree.get_child("type").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("drop-down"_ostr, sType);
 
-        OString sTextArea = aTree.get_child("textArea").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("1538, 1418, 1026, 275"), sTextArea);
+        OString sTextArea( aTree.get_child("textArea").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("1538, 1418, 1026, 275"_ostr, sTextArea);
 
         boost::property_tree::ptree aItems = aTree.get_child("params").get_child("items");
         CPPUNIT_ASSERT_EQUAL(size_t(6), aItems.size());
@@ -3329,16 +3271,16 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButton)
         OStringBuffer aItemList;
         for (auto &item : aItems)
         {
-            aItemList.append(item.second.get_value<std::string>().c_str());
-            aItemList.append(";");
+            aItemList.append(item.second.get_value<std::string>().c_str()
+                + OString::Concat(";"));
         }
-        CPPUNIT_ASSERT_EQUAL(OString("2019/2020;2020/2021;2021/2022;2022/2023;2023/2024;2024/2025;"), aItemList.toString());
+        CPPUNIT_ASSERT_EQUAL("2019/2020;2020/2021;2021/2022;2022/2023;2023/2024;2024/2025;"_ostr, aItemList.toString());
 
-        OString sSelected = aTree.get_child("params").get_child("selected").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("1"), sSelected);
+        OString sSelected( aTree.get_child("params").get_child("selected").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("1"_ostr, sSelected);
 
-        OString sPlaceholder = aTree.get_child("params").get_child("placeholderText").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("No Item specified"), sPlaceholder);
+        OString sPlaceholder( aTree.get_child("params").get_child("placeholderText").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("No Item specified"_ostr, sPlaceholder);
     }
 
     // Move the cursor back so the button becomes hidden.
@@ -3346,15 +3288,15 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButton)
 
     CPPUNIT_ASSERT(!m_aFormFieldButton.isEmpty());
     {
-        std::stringstream aStream(m_aFormFieldButton.getStr());
+        std::stringstream aStream((std::string(m_aFormFieldButton)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
 
-        OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("hide"), sAction);
+        OString sAction( aTree.get_child("action").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("hide"_ostr, sAction);
 
-        OString sType = aTree.get_child("type").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("drop-down"), sType);
+        OString sType( aTree.get_child("type").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("drop-down"_ostr, sType);
     }
 }
 
@@ -3374,7 +3316,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonEditing)
     size_t nCanvasWidth = 1024;
     size_t nCanvasHeight = 512;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3384,14 +3326,14 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonEditing)
     // The item with the index '1' is selected by default
     CPPUNIT_ASSERT(!m_aFormFieldButton.isEmpty());
     {
-        std::stringstream aStream(m_aFormFieldButton.getStr());
+        std::stringstream aStream((std::string(m_aFormFieldButton)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
 
-        OString sSelected = aTree.get_child("params").get_child("selected").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("1"), sSelected);
+        OString sSelected( aTree.get_child("params").get_child("selected").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("1"_ostr, sSelected);
     }
-    m_aFormFieldButton = "";
+    m_aFormFieldButton = ""_ostr;
 
     // Trigger a form field event to select a different item.
     vcl::ITiledRenderable::StringMap aArguments;
@@ -3406,12 +3348,12 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonEditing)
 
     CPPUNIT_ASSERT(!m_aFormFieldButton.isEmpty());
     {
-        std::stringstream aStream(m_aFormFieldButton.getStr());
+        std::stringstream aStream((std::string(m_aFormFieldButton)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
 
-        OString sSelected = aTree.get_child("params").get_child("selected").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("3"), sSelected);
+        OString sSelected( aTree.get_child("params").get_child("selected").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("3"_ostr, sSelected);
     }
 }
 
@@ -3431,7 +3373,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonNoSelectio
     size_t nCanvasWidth = 1024;
     size_t nCanvasHeight = 512;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
             Fraction(1.0), Point(), aPixmap.data());
@@ -3441,19 +3383,19 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonNoSelectio
     // None of the items is selected
     CPPUNIT_ASSERT(!m_aFormFieldButton.isEmpty());
     {
-        std::stringstream aStream(m_aFormFieldButton.getStr());
+        std::stringstream aStream((std::string(m_aFormFieldButton)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
 
-        OString sSelected = aTree.get_child("params").get_child("selected").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("-1"), sSelected);
+        OString sSelected( aTree.get_child("params").get_child("selected").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("-1"_ostr, sSelected);
     }
 }
 
 static void lcl_extractHandleParameters(std::string_view selection, sal_Int32& id, sal_Int32& x, sal_Int32& y)
 {
     OString extraInfo( selection.substr(selection.find("{")) );
-    std::stringstream aStream(extraInfo.getStr());
+    std::stringstream aStream((std::string(extraInfo)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     boost::property_tree::ptree
@@ -3517,7 +3459,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonNoItem)
     size_t nCanvasWidth = 1024;
     size_t nCanvasHeight = 512;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
                                                     Fraction(1.0), Point(), aPixmap.data());
@@ -3527,15 +3469,15 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownFormFieldButtonNoItem)
     // There is not item specified for the field
     CPPUNIT_ASSERT(!m_aFormFieldButton.isEmpty());
     {
-        std::stringstream aStream(m_aFormFieldButton.getStr());
+        std::stringstream aStream((std::string(m_aFormFieldButton)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
 
         boost::property_tree::ptree aItems = aTree.get_child("params").get_child("items");
         CPPUNIT_ASSERT_EQUAL(size_t(0), aItems.size());
 
-        OString sSelected = aTree.get_child("params").get_child("selected").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("-1"), sSelected);
+        OString sSelected( aTree.get_child("params").get_child("selected").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("-1"_ostr, sSelected);
     }
 }
 
@@ -3554,7 +3496,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTablePaintInvalidate)
     size_t nCanvasWidth = 256;
     size_t nCanvasHeight = 256;
     std::vector<unsigned char> aPixmap(nCanvasWidth * nCanvasHeight * 4, 0);
-    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance<VirtualDevice> pDevice(DeviceFormat::WITHOUT_ALPHA);
     pDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
     pDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(Size(nCanvasWidth, nCanvasHeight),
                                                     Fraction(1.0), Point(), aPixmap.data());
@@ -3589,8 +3531,8 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTableCommentRemoveCallback)
     Scheduler::ProcessEventsToIdle();
 
     //check for comment remove callback
-    OString sAction(aView.m_aComment.get_child("action").get_value<std::string>().c_str());
-    CPPUNIT_ASSERT_EQUAL(OString("Remove"), sAction);
+    OString sAction(aView.m_aComment.get_child("action").get_value<std::string>());
+    CPPUNIT_ASSERT_EQUAL("Remove"_ostr, sAction);
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSpellOnlineRenderParameter)
@@ -3680,6 +3622,21 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testBulletDeleteInvalidation)
     CPPUNIT_ASSERT(!aFirstTextRect.Overlaps(m_aInvalidations));
 }
 
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf155349)
+{
+    SwXTextDocument* pXTextDocument = createDoc();
+    SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
+    Scheduler::ProcessEventsToIdle();
+    setupLibreOfficeKitViewCallback(pWrtShell->GetSfxViewShell());
+    pWrtShell->Insert2("a");
+    Scheduler::ProcessEventsToIdle();
+    pWrtShell->Insert2("b");
+    m_bFullInvalidateSeen = false;
+    Scheduler::ProcessEventsToIdle();
+    // before fix for tdf#155349 the total area got invalidated when changing one line
+    CPPUNIT_ASSERT(!m_bFullInvalidateSeen);
+}
+
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testBulletNoNumInvalidation)
 {
     // Given a document with 3 paragraphs: all are bulleted.
@@ -3753,7 +3710,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testCondCollCopy)
     // Given a document with a custom Text Body cond style:
     SwXTextDocument* pXTextDocument = createDoc("cond-coll-copy.odt");
     uno::Sequence<beans::PropertyValue> aPropertyValues
-        = { comphelper::makePropertyValue("Style", OUString("Text Body")),
+        = { comphelper::makePropertyValue("Style", OUString("Text body")),
             comphelper::makePropertyValue("FamilyName", OUString("ParagraphStyles")) };
     dispatchCommand(mxComponent, ".uno:StyleApply", aPropertyValues);
     SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
@@ -3797,14 +3754,14 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testRedlinePortions)
     // Then make sure that the portion list is updated, so "bar" can be marked as deleted without
     // marking " after" as well:
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[1]", "portion", "foo");
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[2]", "portion", "ins");
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[1]"_ostr, "portion"_ostr, "foo");
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[2]"_ostr, "portion"_ostr, "ins");
     // Without the accompanying fix in place, this test would have failed width:
     // - Expected: bar
     // - Actual  : bar after
     // i.e. the portion list was outdated, even " after" was marked as deleted.
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[3]", "portion", "bar");
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[4]", "portion", " after");
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[3]"_ostr, "portion"_ostr, "bar");
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion[4]"_ostr, "portion"_ostr, " after");
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testContentControl)
@@ -3833,29 +3790,29 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testContentControl)
     // Without the accompanying fix in place, this test would have failed, no callback was emitted.
     CPPUNIT_ASSERT(!m_aContentControl.isEmpty());
     {
-        std::stringstream aStream(m_aContentControl.getStr());
+        std::stringstream aStream((std::string(m_aContentControl)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
-        OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("show"), sAction);
-        OString sRectangles = aTree.get_child("rectangles").get_value<std::string>().c_str();
+        OString sAction( aTree.get_child("action").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("show"_ostr, sAction);
+        OString sRectangles( aTree.get_child("rectangles").get_value<std::string>() );
         CPPUNIT_ASSERT(!sRectangles.isEmpty());
         // Without the accompanying fix in place, this test would have failed width:
         // uncaught exception of type std::exception (or derived).
         // - No such node (alias)
-        OString sAlias = aTree.get_child("alias").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("my alias"), sAlias);
+        OString sAlias( aTree.get_child("alias").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("my alias"_ostr, sAlias);
     }
 
     // And when leaving that content control:
     pWrtShell->SttEndDoc(/*bStt=*/true);
 
     // Then make sure that the callback is emitted again:
-    std::stringstream aStream(m_aContentControl.getStr());
+    std::stringstream aStream((std::string(m_aContentControl)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
-    OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-    CPPUNIT_ASSERT_EQUAL(OString("hide"), sAction);
+    OString sAction( aTree.get_child("action").get_value<std::string>() );
+    CPPUNIT_ASSERT_EQUAL("hide"_ostr, sAction);
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownContentControl)
@@ -3901,12 +3858,12 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDropDownContentControl)
     // Then make sure that the callback is emitted:
     CPPUNIT_ASSERT(!m_aContentControl.isEmpty());
     {
-        std::stringstream aStream(m_aContentControl.getStr());
+        std::stringstream aStream((std::string(m_aContentControl)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
-        OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("show"), sAction);
-        OString sRectangles = aTree.get_child("rectangles").get_value<std::string>().c_str();
+        OString sAction( aTree.get_child("action").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("show"_ostr, sAction);
+        OString sRectangles( aTree.get_child("rectangles").get_value<std::string>() );
         CPPUNIT_ASSERT(!sRectangles.isEmpty());
         boost::optional<boost::property_tree::ptree&> oItems = aTree.get_child_optional("items");
         CPPUNIT_ASSERT(oItems);
@@ -3976,11 +3933,11 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPictureContentControl)
     // Then make sure that the callback is emitted:
     // Without the accompanying fix in place, this test would have failed, no callback was emitted.
     CPPUNIT_ASSERT(!m_aContentControl.isEmpty());
-    std::stringstream aStream(m_aContentControl.getStr());
+    std::stringstream aStream((std::string(m_aContentControl)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
-    OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-    CPPUNIT_ASSERT_EQUAL(OString("change-picture"), sAction);
+    OString sAction( aTree.get_child("action").get_value<std::string>() );
+    CPPUNIT_ASSERT_EQUAL("change-picture"_ostr, sAction);
 
     // And when replacing the image:
     std::map<OUString, OUString> aArguments;
@@ -4028,12 +3985,12 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDateContentControl)
     // Then make sure that the callback is emitted:
     CPPUNIT_ASSERT(!m_aContentControl.isEmpty());
     {
-        std::stringstream aStream(m_aContentControl.getStr());
+        std::stringstream aStream((std::string(m_aContentControl)));
         boost::property_tree::ptree aTree;
         boost::property_tree::read_json(aStream, aTree);
-        OString sAction = aTree.get_child("action").get_value<std::string>().c_str();
-        CPPUNIT_ASSERT_EQUAL(OString("show"), sAction);
-        OString sRectangles = aTree.get_child("rectangles").get_value<std::string>().c_str();
+        OString sAction( aTree.get_child("action").get_value<std::string>() );
+        CPPUNIT_ASSERT_EQUAL("show"_ostr, sAction);
+        OString sRectangles( aTree.get_child("rectangles").get_value<std::string>() );
         CPPUNIT_ASSERT(!sRectangles.isEmpty());
         boost::optional<boost::property_tree::ptree&> oDate = aTree.get_child_optional("date");
         CPPUNIT_ASSERT(oDate);
@@ -4057,7 +4014,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testDateContentControl)
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testAuthorField)
 {
     SwXTextDocument* pXTextDocument = createDoc();
-    const OUString sAuthor("Abcd Xyz");
+    static constexpr OUString sAuthor(u"Abcd Xyz"_ustr);
 
     uno::Sequence<beans::PropertyValue> aPropertyValues1(comphelper::InitPropertySequence(
     {
@@ -4090,13 +4047,13 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testAuthorField)
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion[1]/SwLineLayout[1]/SwFieldPortion[1]", "expand", sAuthor);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion[1]/SwLineLayout[1]/SwFieldPortion[1]"_ostr, "expand"_ostr, sAuthor);
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSavedAuthorField)
 {
     SwXTextDocument* pXTextDocument = createDoc("savedauthorfield.odt");
-    const OUString sAuthor("XYZ ABCD");
+    static constexpr OUString sAuthor(u"XYZ ABCD"_ustr);
     uno::Sequence<beans::PropertyValue> aPropertyValues1(comphelper::InitPropertySequence(
     {
         {".uno:Author", uno::Any(sAuthor)},
@@ -4106,7 +4063,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSavedAuthorField)
     Scheduler::ProcessEventsToIdle();
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion[1]/SwLineLayout[1]/SwFieldPortion[1]", "expand", sAuthor);
+    assertXPath(pXmlDoc, "/root/page[1]/body/txt[1]/SwParaPortion[1]/SwLineLayout[1]/SwFieldPortion[1]"_ostr, "expand"_ostr, sAuthor);
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testRedlineTooltip)
@@ -4130,7 +4087,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testRedlineTooltip)
     pXTextDoc->postMouseEvent(LOK_MOUSEEVENT_MOUSEMOVE, aMiddle.getX(), aMiddle.getY(), 1, 0, 0);
     Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT(OString(m_aTooltip.text).startsWith("Inserted: "));
+    CPPUNIT_ASSERT(m_aTooltip.text.starts_with("Inserted: "));
 
     std::vector<OUString> vec = comphelper::string::split(OUString::fromUtf8(m_aTooltip.rect), ',');
     CPPUNIT_ASSERT_EQUAL(size_t(4), vec.size());
@@ -4178,14 +4135,14 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSwitchingChartToDarkMode)
 
     SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
     SwView* pView = pDoc->GetDocShell()->GetView();
-    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame()->GetFrame().GetFrameInterface();
+    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
     uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
         {
             { "NewTheme", uno::Any(OUString("Dark")) },
         }
     );
     comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
-    CPPUNIT_ASSERT_EQUAL(OString("S;Dark"), pXTextDocument->getViewRenderState());
+    CPPUNIT_ASSERT_EQUAL("S;Dark"_ostr, pXTextDocument->getViewRenderState());
 
     Bitmap aBitmap(getTile(pXTextDocument));
     Size aSize = aBitmap.GetSizePixel();
@@ -4198,10 +4155,10 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSwitchingChartToDarkMode)
 
     int nBlackPixels = 0;
     int nWhitePixels = 0;
-    Bitmap::ScopedReadAccess pAccess(aBitmap);
-    for (int x = 0; x < aSize.Width(); ++x)
+    BitmapScopedReadAccess pAccess(aBitmap);
+    for (tools::Long x = 0; x < aSize.Width(); ++x)
     {
-        for (int y = 0; y < aSize.Height(); ++y)
+        for (tools::Long y = 0; y < aSize.Height(); ++y)
         {
             Color aActualColor(pAccess->GetPixel(y, x));
             if (aActualColor.IsDark()) // ignore antialiasing
@@ -4245,23 +4202,23 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testStatusBarPageNumber)
     pWrtShell2->GetView().SetVisArea(pPage2->getFrameArea().SVRect());
     {
         // Listen to StatePageNumber changes in view 2:
-        SfxViewFrame* pFrame = pWrtShell2->GetView().GetViewFrame();
-        SfxSlotPool& rSlotPool = SfxSlotPool::GetSlotPool(pFrame);
+        SfxViewFrame& rFrame = pWrtShell2->GetView().GetViewFrame();
+        SfxSlotPool& rSlotPool = SfxSlotPool::GetSlotPool(&rFrame);
         uno::Reference<util::XURLTransformer> xParser(util::URLTransformer::create(m_xContext));
         util::URL aCommandURL;
         aCommandURL.Complete = ".uno:StatePageNumber";
         xParser->parseStrict(aCommandURL);
         const SfxSlot* pSlot = rSlotPool.GetUnoSlot(aCommandURL.Path);
-        pFrame->GetBindings().GetDispatch(pSlot, aCommandURL, false);
+        rFrame.GetBindings().GetDispatch(pSlot, aCommandURL, false);
     }
     aView2.m_aStateChanges.clear();
 
     // When deleting a character in view 2 and processing jobs with view 1 set to active:
     pWrtShell2->DelLeft();
     SfxLokHelper::setView(nView1);
-    pWrtShell2->GetView().GetViewFrame()->GetBindings().GetTimer().Invoke();
+    pWrtShell2->GetView().GetViewFrame().GetBindings().GetTimer().Invoke();
     // Once more to hit the pImpl->bMsgDirty = false case in SfxBindings::NextJob_Impl().
-    pWrtShell2->GetView().GetViewFrame()->GetBindings().GetTimer().Invoke();
+    pWrtShell2->GetView().GetViewFrame().GetBindings().GetTimer().Invoke();
 
     // Then maks sure the page number in view 2 is correct:
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aView2.m_aStateChanges.size());
@@ -4269,7 +4226,104 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testStatusBarPageNumber)
     // - Expected: .uno:StatePageNumber=Page 2 of 2
     // - Actual  : .uno:StatePageNumber=Page 1 of 2
     // i.e. view 2 got the page number of view 1.
-    CPPUNIT_ASSERT_EQUAL(OString(".uno:StatePageNumber=Page 2 of 2"), aView2.m_aStateChanges[0]);
+    CPPUNIT_ASSERT_EQUAL(".uno:StatePageNumber=Page 2 of 2"_ostr, aView2.m_aStateChanges[0]);
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf159626_yellowPatternFill)
+{
+    SwXTextDocument* pXTextDocument = createDoc("tdf159626_yellowPatternFill.docx");
+    CPPUNIT_ASSERT(pXTextDocument);
+
+    SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+    SwView* pView = pDoc->GetDocShell()->GetView();
+    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+
+    Bitmap aBitmap(getTile(pXTextDocument));
+    Size aSize = aBitmap.GetSizePixel();
+
+    int nPureYellowPixels = 0;
+    int nEdgePlusGrayPlusAntialiasPixels = 0;
+    BitmapScopedReadAccess pAccess(aBitmap);
+    for (tools::Long x = 0; x < aSize.Width(); ++x)
+    {
+        for (tools::Long y = 0; y < aSize.Height(); ++y)
+        {
+            Color aActualColor(pAccess->GetPixel(y, x));
+            if (aActualColor == COL_YELLOW)
+                ++nPureYellowPixels;
+            else
+                ++nEdgePlusGrayPlusAntialiasPixels;
+        }
+    }
+    // The page background pattern is 62 yellow/2 gray pixels - first pixel is gray(foreground)
+    // Without the patch, the document was primarily gray.
+    CPPUNIT_ASSERT(nPureYellowPixels > 0);
+    CPPUNIT_ASSERT(nPureYellowPixels / 2 > nEdgePlusGrayPlusAntialiasPixels);
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf159626_yellowPatternFillB)
+{
+    SwXTextDocument* pXTextDocument = createDoc("tdf159626_yellowPatternFillB.docx");
+    CPPUNIT_ASSERT(pXTextDocument);
+
+    SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+    SwView* pView = pDoc->GetDocShell()->GetView();
+    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+
+    Bitmap aBitmap(getTile(pXTextDocument));
+    Size aSize = aBitmap.GetSizePixel();
+
+    int nPureYellowPixels = 0;
+    int nEdgePlusGrayPlusAntialiasPixels = 0;
+    BitmapScopedReadAccess pAccess(aBitmap);
+    for (tools::Long x = 0; x < aSize.Width(); ++x)
+    {
+        for (tools::Long y = 0; y < aSize.Height(); ++y)
+        {
+            Color aActualColor(pAccess->GetPixel(y, x));
+            if (aActualColor == COL_YELLOW)
+                ++nPureYellowPixels;
+            else
+                ++nEdgePlusGrayPlusAntialiasPixels;
+        }
+    }
+    // The page background pattern is 62 yellow/2 gray pixels - first pixel is yellow(background)
+    // LO already imported this correctly, as primarily yellow - ensure it stays that way.
+    CPPUNIT_ASSERT(nPureYellowPixels > 0);
+    CPPUNIT_ASSERT(nPureYellowPixels / 2 > nEdgePlusGrayPlusAntialiasPixels);
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf159626_blackPatternFill)
+{
+    SwXTextDocument* pXTextDocument = createDoc("tdf159626_blackPatternFill.docx");
+    CPPUNIT_ASSERT(pXTextDocument);
+
+    SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+    SwView* pView = pDoc->GetDocShell()->GetView();
+    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+
+    Bitmap aBitmap(getTile(pXTextDocument));
+    Size aSize = aBitmap.GetSizePixel();
+
+    int nPureBlackPixels = 0;
+    int nEdgePlusWhitePlusAntialiasPixels = 0;
+    BitmapScopedReadAccess pAccess(aBitmap);
+    for (tools::Long x = 0; x < aSize.Width(); ++x)
+    {
+        for (tools::Long y = 0; y < aSize.Height(); ++y)
+        {
+            Color aActualColor(pAccess->GetPixel(y, x));
+            if (aActualColor == COL_BLACK)
+                ++nPureBlackPixels;
+            else
+                ++nEdgePlusWhitePlusAntialiasPixels;
+        }
+    }
+    // Both the foreground and background are defined as black, represented by a pattern with
+    // 48 white/16 black pixels.
+    // The document should be entirely black (except for text margin markings).
+    CPPUNIT_ASSERT(nEdgePlusWhitePlusAntialiasPixels > 0);
+    CPPUNIT_ASSERT(nPureBlackPixels / 10 > nEdgePlusWhitePlusAntialiasPixels);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

@@ -31,6 +31,7 @@
 #include <svtools/imgdef.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
+#include <officecfg/Office/Common.hxx>
 
 #include <mutex>
 #include <vector>
@@ -43,12 +44,11 @@ using namespace ::com::sun::star;
 constexpr OUStringLiteral ROOTNODE_MISC = u"Office.Common/Misc";
 
 // PROPERTYHANDLE defines must be sequential from zero for Commit/Load
-constexpr OUStringLiteral PROPERTYNAME_SYMBOLSET = u"SymbolSet";
-#define PROPERTYHANDLE_SYMBOLSET                0
-constexpr OUStringLiteral PROPERTYNAME_ICONTHEME = u"SymbolStyle";
+constexpr OUString PROPERTYNAME_SYMBOLSET = u"SymbolSet"_ustr;
+constexpr OUString PROPERTYNAME_ICONTHEME = u"SymbolStyle"_ustr;
 #define PROPERTYHANDLE_SYMBOLSTYLE              1
-constexpr OUStringLiteral PROPERTYNAME_SIDEBARICONSIZE = u"SidebarIconSize";
-constexpr OUStringLiteral PROPERTYNAME_NOTEBOOKBARICONSIZE = u"NotebookbarIconSize";
+constexpr OUString PROPERTYNAME_SIDEBARICONSIZE = u"SidebarIconSize"_ustr;
+constexpr OUString PROPERTYNAME_NOTEBOOKBARICONSIZE = u"NotebookbarIconSize"_ustr;
 
 static std::mutex & GetInitMutex()
 {
@@ -61,8 +61,6 @@ class SvtMiscOptions_Impl : public ConfigItem
 {
 private:
     ::std::vector<Link<LinkParamNone*,void>> aList;
-    sal_Int16   m_nSymbolsSize;
-    bool        m_bIsSymbolsSizeRO;
     bool        m_bIsSymbolsStyleRO;
     bool        m_bIconThemeWasSetAutomatically;
 
@@ -93,11 +91,6 @@ public:
         void Load( const Sequence< OUString >& rPropertyNames );
 
         //  public interface
-
-        sal_Int16 GetSymbolsSize() const
-        { return m_nSymbolsSize; }
-
-        void SetSymbolsSize( sal_Int16 nSet );
 
         static OUString GetIconTheme();
 
@@ -148,8 +141,6 @@ SvtMiscOptions_Impl::SvtMiscOptions_Impl()
     // Init baseclasses first
     : ConfigItem( ROOTNODE_MISC )
 
-    , m_nSymbolsSize( 0 )
-    , m_bIsSymbolsSizeRO( false )
     , m_bIsSymbolsStyleRO( false )
     , m_bIconThemeWasSetAutomatically( false )
 {
@@ -172,16 +163,6 @@ SvtMiscOptions_Impl::SvtMiscOptions_Impl()
             continue;
         switch( nProperty )
         {
-            case PROPERTYHANDLE_SYMBOLSET :
-            {
-                if( !(seqValues[nProperty] >>= m_nSymbolsSize) )
-                {
-                    OSL_FAIL("Wrong type of \"Misc\\SymbolSet\"!" );
-                }
-                m_bIsSymbolsSizeRO = seqRO[nProperty];
-                break;
-            }
-
             case PROPERTYHANDLE_SYMBOLSTYLE :
             {
                 OUString aIconTheme;
@@ -228,13 +209,6 @@ void SvtMiscOptions_Impl::Load( const Sequence< OUString >& rPropertyNames )
             continue;
         switch( comphelper::findValue(aInternalPropertyNames, rPropertyNames[nProperty]) )
         {
-            case PROPERTYHANDLE_SYMBOLSET           :   {
-                                                            if( !(seqValues[nProperty] >>= m_nSymbolsSize) )
-                                                            {
-                                                                OSL_FAIL("Wrong type of \"Misc\\SymbolSet\"!" );
-                                                            }
-                                                        }
-                                                    break;
             case PROPERTYHANDLE_SYMBOLSTYLE         :   {
                                                             OUString aIconTheme;
                                                             if (seqValues[nProperty] >>= aIconTheme)
@@ -254,20 +228,13 @@ void SvtMiscOptions_Impl::AddListenerLink( const Link<LinkParamNone*,void>& rLin
 
 void SvtMiscOptions_Impl::RemoveListenerLink( const Link<LinkParamNone*,void>& rLink )
 {
-    aList.erase(std::remove(aList.begin(), aList.end(), rLink), aList.end());
+    std::erase(aList, rLink);
 }
 
 void SvtMiscOptions_Impl::CallListeners()
 {
     for (auto const& elem : aList)
         elem.Call( nullptr );
-}
-
-void SvtMiscOptions_Impl::SetSymbolsSize( sal_Int16 nSet )
-{
-    m_nSymbolsSize = nSet;
-    SetModified();
-    CallListeners();
 }
 
 OUString SvtMiscOptions_Impl::GetIconTheme()
@@ -315,41 +282,24 @@ void SvtMiscOptions_Impl::Notify( const Sequence< OUString >& rPropertyNames )
 
 void SvtMiscOptions_Impl::ImplCommit()
 {
-    // Get names of supported properties, create a list for values and copy current values to it.
-    Sequence< OUString >    seqNames    = GetPropertyNames  ();
-    sal_Int32               nCount      = seqNames.getLength();
-    Sequence< Any >         seqValues   ( nCount );
-    auto seqValuesRange = asNonConstRange(seqValues);
-    for( sal_Int32 nProperty=0; nProperty<nCount; ++nProperty )
+    if ( !m_bIsSymbolsStyleRO )
     {
-        switch( nProperty )
-        {
-            case PROPERTYHANDLE_SYMBOLSET :
-            {
-                if ( !m_bIsSymbolsSizeRO )
-                   seqValuesRange[nProperty] <<= m_nSymbolsSize;
-                break;
-            }
-
-            case PROPERTYHANDLE_SYMBOLSTYLE :
-            {
-                if ( !m_bIsSymbolsStyleRO ) {
-                    OUString value;
-                    if (m_bIconThemeWasSetAutomatically) {
-                        value = "auto";
-                    }
-                    else {
-                        value = GetIconTheme();
-                    }
-                    seqValuesRange[nProperty] <<= value;
-                }
-                break;
-            }
-
+        // Get names of supported properties, create a list for values and copy current values to it.
+        Sequence< OUString > seqNames { PROPERTYNAME_ICONTHEME };
+        sal_Int32               nCount      = seqNames.getLength();
+        Sequence< Any >         seqValues   ( nCount );
+        auto seqValuesRange = asNonConstRange(seqValues);
+        OUString value;
+        if (m_bIconThemeWasSetAutomatically) {
+            value = "auto";
         }
+        else {
+            value = GetIconTheme();
+        }
+        seqValuesRange[0] <<= value;
+        // Set properties in configuration.
+        PutProperties( seqNames, seqValues );
     }
-    // Set properties in configuration.
-    PutProperties( seqNames, seqValues );
 }
 
 
@@ -399,19 +349,25 @@ SvtMiscOptions::~SvtMiscOptions()
 }
 
 
-sal_Int16 SvtMiscOptions::GetSymbolsSize() const
+sal_Int16 SvtMiscOptions::GetSymbolsSize()
 {
-    return m_pImpl->GetSymbolsSize();
+    return officecfg::Office::Common::Misc::SymbolSet::get();
 }
 
 void SvtMiscOptions::SetSymbolsSize( sal_Int16 nSet )
 {
-    m_pImpl->SetSymbolsSize( nSet );
+    if (!officecfg::Office::Common::Misc::SymbolSet::isReadOnly())
+    {
+        std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
+        officecfg::Office::Common::Misc::SymbolSet::set(nSet, batch);
+        batch->commit();
+        m_pImpl->CallListeners();
+    }
 }
 
-sal_Int16 SvtMiscOptions::GetCurrentSymbolsSize() const
+sal_Int16 SvtMiscOptions::GetCurrentSymbolsSize()
 {
-    sal_Int16 eOptSymbolsSize = m_pImpl->GetSymbolsSize();
+    sal_Int16 eOptSymbolsSize = GetSymbolsSize();
 
     if ( eOptSymbolsSize == SFX_SYMBOLS_SIZE_AUTO )
     {
@@ -429,12 +385,12 @@ sal_Int16 SvtMiscOptions::GetCurrentSymbolsSize() const
     return eOptSymbolsSize;
 }
 
-bool SvtMiscOptions::AreCurrentSymbolsLarge() const
+bool SvtMiscOptions::AreCurrentSymbolsLarge()
 {
     return ( GetCurrentSymbolsSize() == SFX_SYMBOLS_SIZE_LARGE || GetCurrentSymbolsSize() == SFX_SYMBOLS_SIZE_32);
 }
 
-OUString SvtMiscOptions::GetIconTheme() const
+OUString SvtMiscOptions::GetIconTheme()
 {
     return SvtMiscOptions_Impl::GetIconTheme();
 }

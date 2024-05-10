@@ -34,6 +34,7 @@ class SvxShapeText;
 
 namespace chart
 {
+class Title;
 
 class VTitle final
 {
@@ -54,7 +55,7 @@ public:
     css::awt::Size getFinalSize() const;
     void    changePosition( const css::awt::Point& rPos );
     static bool isVisible(
-            const css::uno::Reference< css::chart2::XTitle > & xTitle);
+            const rtl::Reference< ::chart::Title > & xTitle);
 
 private:
     rtl::Reference<SvxShapeGroupAnyD>            m_xTarget;

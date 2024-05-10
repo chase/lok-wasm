@@ -34,7 +34,6 @@ namespace pcr
 {
 
 
-    using ::com::sun::star::uno::Reference;
     using ::com::sun::star::uno::Sequence;
     using ::com::sun::star::uno::Any;
     using ::com::sun::star::uno::XInterface;
@@ -131,8 +130,8 @@ namespace pcr
         {
             const char* programmaticName;
             TranslateId uiNameResId;
-            rtl::OUStringConstExpr helpId;
-        } const aCategories[] = {
+            OUString helpId;
+        } constexpr aCategories[] = {
             { "General",    RID_STR_PROPPAGE_DEFAULT,   HID_FM_PROPDLG_TAB_GENERAL },
             { "Data",       RID_STR_PROPPAGE_DATA,      HID_FM_PROPDLG_TAB_DATA },
             { "Events",     RID_STR_EVENTS,             HID_FM_PROPDLG_TAB_EVT }
@@ -145,7 +144,7 @@ namespace pcr
         {
             pReturn->ProgrammaticName = OUString::createFromAscii( aCategories[i].programmaticName );
             pReturn->UIName = PcrRes( aCategories[i].uiNameResId );
-            pReturn->HelpURL = HelpIdUrl::getHelpURL( aCategories[i].helpId.asView() );
+            pReturn->HelpURL = HelpIdUrl::getHelpURL( aCategories[i].helpId );
         }
 
         return aReturn;

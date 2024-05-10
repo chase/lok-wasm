@@ -912,6 +912,24 @@ interface BaseTextEditView
         StateMethod = StateViewOptions ;
     ]
 
+    FN_HIGHLIGHT_CHAR_DF
+    [
+        ExecMethod = ExecViewOptions ;
+        StateMethod = StateViewOptions ;
+    ]
+
+    SID_SPOTLIGHT_PARASTYLES
+    [
+        ExecMethod = ExecViewOptions ;
+        StateMethod = StateViewOptions ;
+    ]
+
+    SID_SPOTLIGHT_CHARSTYLES
+    [
+        ExecMethod = ExecViewOptions ;
+        StateMethod = StateViewOptions ;
+    ]
+
     FN_VIEW_META_CHARS // status()
     [
         ExecMethod = ExecViewOptions ;

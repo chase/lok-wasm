@@ -56,13 +56,13 @@ public final class AnyConverter_Test {
     @Before public void setUp()
     {
         aBool= Boolean.TRUE;
-        aChar= new Character('A');
+        aChar= Character.valueOf('A');
         aByte= Byte.valueOf((byte) 111);
         aShort= Short.valueOf((short) 11111);
         aInt= Integer.valueOf( 1111111);
         aLong= Long.valueOf( 0xffffffff);
-        aFloat= new Float( 3.14);
-        aDouble= new Double( 3.145);
+        aFloat= Float.valueOf( 3.14f);
+        aDouble= Double.valueOf( 3.145);
         aObj= new ATypeProvider();
         aStr= "I am a string";
         aType= new Type(String.class);

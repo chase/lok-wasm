@@ -34,6 +34,8 @@
 #include <editeng/frmdiritem.hxx>
 #include <editeng/shaditem.hxx>
 #include <svx/autoformathelper.hxx>
+#include <unotools/weakref.hxx>
+#include <rtl/ref.hxx>
 #include "fmtornt.hxx"
 #include "swdllapi.h"
 
@@ -41,8 +43,10 @@ struct SwAfVersions;
 
 class SvNumberFormatter;
 class SwTable;
+class SwXTextCellStyle;
+class SwXTextTableStyle;
 
-class SwBoxAutoFormat : public AutoFormatBase
+class SW_DLLPUBLIC SwBoxAutoFormat : public AutoFormatBase
 {
 private:
     // Writer specific
@@ -54,7 +58,8 @@ private:
     LanguageType                            m_eSysLanguage;
     LanguageType                            m_eNumFormatLanguage;
 
-    css::uno::WeakReference<css::uno::XInterface> m_wXObject;
+    // associated UNO object, if such exists
+    unotools::WeakReference<SwXTextCellStyle> m_xAutoFormatUnoObject;
 
 public:
     SwBoxAutoFormat();
@@ -89,10 +94,9 @@ public:
     void SetSysLanguage(const LanguageType& rNew) { m_eSysLanguage = rNew; }
     void SetNumFormatLanguage(const LanguageType& rNew) { m_eNumFormatLanguage = rNew; }
 
-    css::uno::WeakReference<css::uno::XInterface> const& GetXObject() const
-        { return m_wXObject; }
-    void SetXObject(css::uno::Reference<css::uno::XInterface> const& xObject)
-        { m_wXObject = xObject; }
+    unotools::WeakReference<SwXTextCellStyle> const& GetXObject() const
+        { return m_xAutoFormatUnoObject; }
+    void SetXObject(rtl::Reference<SwXTextCellStyle> const& xObject);
 
     bool Load( SvStream& rStream, const SwAfVersions& rVersions, sal_uInt16 nVer );
     bool Save( SvStream& rStream, sal_uInt16 fileVersion ) const;
@@ -153,7 +157,7 @@ class SW_DLLPUBLIC SwTableAutoFormat
     friend void FinitCore();       // To destroy default pointer.
     static SwBoxAutoFormat* s_pDefaultBoxAutoFormat;
 
-    css::uno::WeakReference<css::uno::XInterface> m_wXObject;
+    unotools::WeakReference<SwXTextTableStyle> m_xUnoTextTableStyle;
 
     OUString m_aName;
     sal_uInt16 m_nStrResId;
@@ -243,10 +247,9 @@ public:
     bool Load( SvStream& rStream, const SwAfVersions& );
     bool Save( SvStream& rStream, sal_uInt16 fileVersion ) const;
 
-    css::uno::WeakReference<css::uno::XInterface> const& GetXObject() const
-        { return m_wXObject; }
-    void SetXObject(css::uno::Reference<css::uno::XInterface> const& xObject)
-        { m_wXObject = xObject; }
+    unotools::WeakReference<SwXTextTableStyle> const& GetXObject() const
+        { return m_xUnoTextTableStyle; }
+    void SetXObject(rtl::Reference<SwXTextTableStyle> const& xObject);
 
     /// Returns the cell's name postfix. eg. ".1"
     OUString GetTableTemplateCellSubName(const SwBoxAutoFormat& rBoxFormat) const;

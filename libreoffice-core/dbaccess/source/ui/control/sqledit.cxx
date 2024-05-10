@@ -54,7 +54,7 @@ private:
 
     virtual void SAL_CALL disposing(css::lang::EventObject const &) override
     {
-        osl::MutexGuard g(editor_.m_mutex);
+        std::unique_lock g(editor_.m_mutex);
         editor_.m_notifier.clear();
     }
 
@@ -145,7 +145,7 @@ void SQLEditView::SetDrawingArea(weld::DrawingArea* pDrawingArea)
         officecfg::Office::Common::Font::SourceViewFont::get(),
         css::uno::UNO_QUERY_THROW);
     {
-        osl::MutexGuard g(m_mutex);
+        std::unique_lock g(m_mutex);
         m_notifier = n;
     }
     css::uno::Sequence< OUString > s { "FontHeight", "FontName" };
@@ -157,7 +157,7 @@ SQLEditView::~SQLEditView()
 {
     css::uno::Reference< css::beans::XMultiPropertySet > n;
     {
-        osl::MutexGuard g(m_mutex);
+        std::unique_lock g(m_mutex);
         n = m_notifier;
     }
     if (n.is()) {
@@ -403,7 +403,7 @@ bool SQLEditView::Command(const CommandEvent& rCEvt)
         xContextMenu->set_visible("undo", false);
         xContextMenu->set_visible("specialchar", vcl::GetGetSpecialCharsFunction() != nullptr);
 
-        OString sCommand = xContextMenu->popup_at_rect(pPopupParent, aRect);
+        OUString sCommand = xContextMenu->popup_at_rect(pPopupParent, aRect);
 
         if (sCommand == "cut")
             pEditView->Cut();

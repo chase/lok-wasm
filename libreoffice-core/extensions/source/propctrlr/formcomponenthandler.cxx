@@ -192,14 +192,14 @@ namespace pcr
 
     namespace
     {
-        bool lcl_isLanguageDependentProperty( const OUString& aName )
+        bool lcl_isLanguageDependentProperty( std::u16string_view aName )
         {
             bool bRet = false;
 
             const LanguageDependentProp* pLangDepProp = aLanguageDependentProp;
             while( pLangDepProp->pPropName != nullptr )
             {
-                if( aName.equalsAsciiL( pLangDepProp->pPropName, pLangDepProp->nPropNameLength ))
+                if( o3tl::equalsAscii( aName, std::string_view(pLangDepProp->pPropName, pLangDepProp->nPropNameLength) ))
                 {
                     bRet = true;
                     break;
@@ -210,7 +210,7 @@ namespace pcr
         }
 
         Reference< resource::XStringResourceResolver > lcl_getStringResourceResolverForProperty
-            ( const Reference< XPropertySet >& _xComponent, const OUString& _rPropertyName,
+            ( const Reference< XPropertySet >& _xComponent, std::u16string_view _rPropertyName,
               const Any& _rPropertyValue )
         {
             Reference< resource::XStringResourceResolver > xRet;
@@ -739,8 +739,7 @@ namespace pcr
             else
             {
                 // font name
-                displayName.append( aFont.Name );
-                displayName.append( ", " );
+                displayName.append( aFont.Name + ", " );
 
                 // font style
                 ::FontWeight  eWeight = vcl::unohelper::ConvertFontWeight( aFont.Weight );
@@ -762,8 +761,7 @@ namespace pcr
                 // font size
                 if ( aFont.Height )
                 {
-                    displayName.append( ", " );
-                    displayName.append( sal_Int32( aFont.Height ) );
+                    displayName.append( ", " + OUString::number( sal_Int32( aFont.Height ) ) );
                 }
             }
 
@@ -881,7 +879,6 @@ namespace pcr
 
     Sequence< OUString > SAL_CALL FormComponentPropertyHandler::getActuatingProperties( )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
         return
         {
             PROPERTY_DATASOURCE,
@@ -1003,8 +1000,8 @@ namespace pcr
             aDescriptor.Control = pControl;
 
             aDescriptor.PrimaryButtonId = PROPERTY_ID_TARGET_URL == nPropId
-                ? OUString(UID_PROP_DLG_ATTR_TARGET_URL)
-                : OUString(UID_PROP_DLG_IMAGE_URL);
+                ? UID_PROP_DLG_ATTR_TARGET_URL
+                : UID_PROP_DLG_IMAGE_URL;
             break;
         }
 
@@ -1674,7 +1671,7 @@ namespace pcr
         // ----- TriState -----
         case PROPERTY_ID_TRISTATE:
             if ( !_bFirstTimeInit )
-                _rxInspectorUI->rebuildPropertyUI( m_eComponentClass == eFormControl ? OUString(PROPERTY_DEFAULT_STATE) : OUString(PROPERTY_STATE) );
+                _rxInspectorUI->rebuildPropertyUI( m_eComponentClass == eFormControl ? PROPERTY_DEFAULT_STATE : PROPERTY_STATE );
             break;  // case PROPERTY_ID_TRISTATE
 
         // ----- DecimalAccuracy -----
@@ -1697,7 +1694,7 @@ namespace pcr
             }
 
             // propagate the changes to the min/max/default fields
-            OUString aAffectedProps[] = { OUString(PROPERTY_VALUE), OUString(PROPERTY_DEFAULT_VALUE), OUString(PROPERTY_VALUEMIN), OUString(PROPERTY_VALUEMAX) };
+            OUString aAffectedProps[] = { PROPERTY_VALUE, PROPERTY_DEFAULT_VALUE, PROPERTY_VALUEMIN, PROPERTY_VALUEMAX };
             for (const OUString & aAffectedProp : aAffectedProps)
             {
                 Reference< XPropertyControl > xControl;
@@ -1742,7 +1739,7 @@ namespace pcr
 
                 // give each control which has to know this an own copy of the description
                 OUString aFormattedPropertyControls[] = {
-                    OUString(PROPERTY_EFFECTIVE_MIN), OUString(PROPERTY_EFFECTIVE_MAX), OUString(PROPERTY_EFFECTIVE_DEFAULT), OUString(PROPERTY_EFFECTIVE_VALUE)
+                    PROPERTY_EFFECTIVE_MIN, PROPERTY_EFFECTIVE_MAX, PROPERTY_EFFECTIVE_DEFAULT, PROPERTY_EFFECTIVE_VALUE
                 };
                 for (const OUString & aFormattedPropertyControl : aFormattedPropertyControls)
                 {
@@ -2273,7 +2270,7 @@ namespace pcr
             break;
 
         case PROPERTY_ID_WRITING_MODE:
-            if ( !SvtCTLOptions().IsCTLFontEnabled() )
+            if ( !SvtCTLOptions::IsCTLFontEnabled() )
                 return true;
             break;
         }
@@ -2425,9 +2422,7 @@ namespace pcr
             if ( aParser.GetProtocol() != INetProtocol::NotValid )
                 sDataSourceName = aParser.getBase( INetURLObject::LAST_SEGMENT, true, INetURLObject::DecodeMechanism::WithCharset );
             OUString sInfo(PcrRes(RID_STR_UNABLETOCONNECT).replaceAll("$name$", sDataSourceName));
-            SQLContext aContext;
-            aContext.Message = sInfo;
-            aContext.NextException = aError.get();
+            SQLContext aContext(sInfo, {}, {}, 0, aError.get(), {});
             impl_displaySQLError_nothrow( aContext );
         }
 
@@ -2527,8 +2522,7 @@ namespace pcr
             OUStringBuffer sTemp;
             if ( bAdd )
             {
-                sTemp.append(_sName);
-                sTemp.append("/");
+                sTemp.append(OUString::Concat(_sName) + "/");
             }
             sTemp.append(rQueryName);
             Reference< XNameAccess > xSubQueries(_xQueryNames->getByName(rQueryName),UNO_QUERY);
@@ -3039,10 +3033,10 @@ namespace pcr
         OUString* FormSQLCommandUI::getPropertiesToDisable()
         {
             static OUString s_aCommandProps[] = {
-                OUString(PROPERTY_DATASOURCE),
-                OUString(PROPERTY_COMMAND),
-                OUString(PROPERTY_COMMANDTYPE),
-                OUString(PROPERTY_ESCAPE_PROCESSING),
+                PROPERTY_DATASOURCE,
+                PROPERTY_COMMAND,
+                PROPERTY_COMMANDTYPE,
+                PROPERTY_ESCAPE_PROCESSING,
                 OUString()
             };
             return s_aCommandProps;
@@ -3134,8 +3128,8 @@ namespace pcr
         OUString* ValueListCommandUI::getPropertiesToDisable()
         {
             static OUString s_aListSourceProps[] = {
-                OUString(PROPERTY_LISTSOURCETYPE),
-                OUString(PROPERTY_LISTSOURCE),
+                PROPERTY_LISTSOURCETYPE,
+                PROPERTY_LISTSOURCE,
                 OUString()
             };
             return s_aListSourceProps;
@@ -3155,7 +3149,7 @@ namespace pcr
                     return true;
                 }
                 m_xCommandDesigner->dispose();
-                m_xCommandDesigner.set( nullptr );
+                m_xCommandDesigner.clear();
             }
 
             if ( !impl_ensureRowsetConnection_nothrow() )

@@ -36,6 +36,7 @@ enum PropertyIds
         ,PROP_ADJUST
         ,PROP_ADJUST_CONTRAST
         ,PROP_ADJUST_LUMINANCE
+        ,PROP_ALLOW_OVERLAP
         ,PROP_ALTERNATIVE_TEXT
         ,PROP_ANCHOR_TYPE
         ,PROP_AUTOMATIC_DISTANCE
@@ -261,6 +262,7 @@ enum PropertyIds
         ,PROP_PARA_TOP_MARGIN
         ,PROP_PARA_VERT_ALIGNMENT
         ,PROP_PARA_WIDOWS
+        ,PROP_PAPER_TRAY
         ,PROP_PARENT_NUMBERING
         ,PROP_POSITION_AND_SPACE_MODE
         ,PROP_POSITION_PROTECTED
@@ -384,7 +386,7 @@ enum PropertyIds
     };
 
 //Returns the UNO string equivalent to eId.
-const OUString & getPropertyName(PropertyIds eId);
+OUString getPropertyName(PropertyIds eId);
 
 bool isCharacterProperty(const PropertyIds eId);
 

@@ -265,7 +265,7 @@ void SfxVersionDialog::Open_Impl()
     SfxStringItem aFile( SID_FILE_NAME, pObjShell->GetMedium()->GetName() );
 
     uno::Sequence< beans::NamedValue > aEncryptionData;
-    if ( GetEncryptionData_Impl( pObjShell->GetMedium()->GetItemSet(), aEncryptionData ) )
+    if ( GetEncryptionData_Impl( &pObjShell->GetMedium()->GetItemSet(), aEncryptionData ) )
     {
         // there is a password, it should be used during the opening
         SfxUnoAnyItem aEncryptionDataItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) );
@@ -297,9 +297,9 @@ IMPL_LINK_NOARG(SfxVersionDialog, SelectHdl_Impl, weld::TreeView&, void)
     m_xOpenButton->set_sensitive(bEnable);
     m_xViewButton->set_sensitive(bEnable);
 
-    const SfxPoolItem *pDummy=nullptr;
-    m_pViewFrame->GetDispatcher()->QueryState( SID_DOCUMENT_MERGE, pDummy );
-    SfxItemState eState = m_pViewFrame->GetDispatcher()->QueryState( SID_DOCUMENT_COMPARE, pDummy );
+    SfxPoolItemHolder aResult;
+    m_pViewFrame->GetDispatcher()->QueryState(SID_DOCUMENT_MERGE, aResult);
+    SfxItemState eState = m_pViewFrame->GetDispatcher()->QueryState(SID_DOCUMENT_COMPARE, aResult);
     m_xCompareButton->set_sensitive(bEnable && eState >= SfxItemState::DEFAULT);
 }
 
@@ -355,9 +355,9 @@ IMPL_LINK(SfxVersionDialog, ButtonHdl_Impl, weld::Button&, rButton, void)
         aSet.Put(SfxInt16Item(SID_VERSION, nEntry + 1));
         aSet.Put(SfxStringItem(SID_FILE_NAME, pObjShell->GetMedium()->GetName()));
 
-        SfxItemSet* pSet = pObjShell->GetMedium()->GetItemSet();
-        const SfxStringItem* pFilterItem = SfxItemSet::GetItem<SfxStringItem>(pSet, SID_FILTER_NAME, false);
-        const SfxStringItem* pFilterOptItem = SfxItemSet::GetItem<SfxStringItem>(pSet, SID_FILE_FILTEROPTIONS, false);
+        SfxItemSet& rSet = pObjShell->GetMedium()->GetItemSet();
+        const SfxStringItem* pFilterItem = rSet.GetItem(SID_FILTER_NAME, false);
+        const SfxStringItem* pFilterOptItem = rSet.GetItem(SID_FILE_FILTEROPTIONS, false);
         if ( pFilterItem )
             aSet.Put( *pFilterItem );
         if ( pFilterOptItem )

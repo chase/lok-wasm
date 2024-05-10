@@ -52,7 +52,7 @@ using namespace com::sun::star;
 
 //  everything without Which-ID, map only for PropertySetInfo
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSettingsPropertyMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetSettingsPropertyMap()
 {
     static const SfxItemPropertyMapEntry aSettingsPropertyMap_Impl[] =
     {
@@ -78,9 +78,9 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSettingsPropertyMap()
     return aSettingsPropertyMap_Impl;
 }
 
-constexpr OUStringLiteral SCFUNCTIONLISTOBJ_SERVICE = u"com.sun.star.sheet.FunctionDescriptions";
-constexpr OUStringLiteral SCRECENTFUNCTIONSOBJ_SERVICE = u"com.sun.star.sheet.RecentFunctions";
-constexpr OUStringLiteral SCSPREADSHEETSETTINGS_SERVICE = u"com.sun.star.sheet.GlobalSheetSettings";
+constexpr OUString SCFUNCTIONLISTOBJ_SERVICE = u"com.sun.star.sheet.FunctionDescriptions"_ustr;
+constexpr OUString SCRECENTFUNCTIONSOBJ_SERVICE = u"com.sun.star.sheet.RecentFunctions"_ustr;
+constexpr OUString SCSPREADSHEETSETTINGS_SERVICE = u"com.sun.star.sheet.GlobalSheetSettings"_ustr;
 
 SC_SIMPLE_SERVICE_INFO( ScFunctionListObj, "stardiv.StarCalc.ScFunctionListObj", SCFUNCTIONLISTOBJ_SERVICE )
 SC_SIMPLE_SERVICE_INFO( ScRecentFunctionsObj, "stardiv.StarCalc.ScRecentFunctionsObj", SCRECENTFUNCTIONSOBJ_SERVICE )
@@ -258,8 +258,7 @@ void SAL_CALL ScSpreadsheetSettings::setPropertyValue(
             pUserList->clear();
             for (const OUString& aEntry : std::as_const(aSeq))
             {
-                ScUserListData* pData = new ScUserListData(aEntry);
-                pUserList->push_back(pData);
+                pUserList->emplace_back(aEntry);
             }
             bSaveApp = true;    // List with App-Options are saved
         }

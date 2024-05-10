@@ -24,7 +24,6 @@
 #include <vcl/settings.hxx>
 #include <vcl/virdev.hxx>
 #include <vcl/window.hxx>
-#include <vcl/skia/SkiaHelper.hxx>
 
 #include <salgdi.hxx>
 
@@ -148,7 +147,7 @@ void OutputDevice::DrawGradient( const tools::PolyPolygon& rPolyPoly,
     if( mpAlphaVDev )
     {
         const Color aFillCol( mpAlphaVDev->GetFillColor() );
-        mpAlphaVDev->SetFillColor( COL_BLACK );
+        mpAlphaVDev->SetFillColor( COL_ALPHA_OPAQUE );
         mpAlphaVDev->DrawPolyPolygon( rPolyPoly );
         mpAlphaVDev->SetFillColor( aFillCol );
     }
@@ -156,36 +155,14 @@ void OutputDevice::DrawGradient( const tools::PolyPolygon& rPolyPoly,
 
 void OutputDevice::ClipAndDrawGradientMetafile ( const Gradient &rGradient, const tools::PolyPolygon &rPolyPoly )
 {
-    const tools::Rectangle aBoundRect( rPolyPoly.GetBoundRect() );
     const bool  bOldOutput = IsOutputEnabled();
-
     EnableOutput( false );
-#if HAVE_FEATURE_SKIA
-    // tdf#156539 Draw the gradient with polypolygonal clip when using Skia
-    // For some unkown reason, the previous "draw gradient with XOR, draw
-    // polygon with N0, and draw gradient again with XOR" does not work
-    // with Skia/Raster (at least on macOS). Fortunately, Skia supports
-    // polypolygonal clipping so just clip and draw the gradient.
-    if ( SkiaHelper::isVCLSkiaEnabled() )
-    {
-        Push( vcl::PushFlags::CLIPREGION );
-        SetClipRegion( vcl::Region( rPolyPoly ) );
-        DrawGradient( aBoundRect, rGradient );
-        Pop();
-    }
-    else
-#endif
-    {
-        Push( vcl::PushFlags::RASTEROP );
-        SetRasterOp( RasterOp::Xor );
-        DrawGradient( aBoundRect, rGradient );
-        SetFillColor( COL_BLACK );
-        SetRasterOp( RasterOp::N0 );
-        DrawPolyPolygon( rPolyPoly );
-        SetRasterOp( RasterOp::Xor );
-        DrawGradient( aBoundRect, rGradient );
-        Pop();
-    }
+
+    Push( vcl::PushFlags::CLIPREGION );
+    SetClipRegion( vcl::Region( rPolyPoly ) );
+    DrawGradient( rPolyPoly.GetBoundRect(), rGradient );
+    Pop();
+
     EnableOutput( bOldOutput );
 }
 
@@ -216,12 +193,12 @@ void OutputDevice::DrawGradientToMetafile ( const tools::PolyPolygon& rPolyPoly,
     }
     else
     {
-        mpMetaFile->AddAction( new MetaCommentAction( "XGRAD_SEQ_BEGIN" ) );
+        mpMetaFile->AddAction( new MetaCommentAction( "XGRAD_SEQ_BEGIN"_ostr ) );
         mpMetaFile->AddAction( new MetaGradientExAction( rPolyPoly, rGradient ) );
 
         ClipAndDrawGradientMetafile ( rGradient, rPolyPoly );
 
-        mpMetaFile->AddAction( new MetaCommentAction( "XGRAD_SEQ_END" ) );
+        mpMetaFile->AddAction( new MetaCommentAction( "XGRAD_SEQ_END"_ostr ) );
     }
 }
 
@@ -494,7 +471,7 @@ void OutputDevice::DrawComplexGradient( const tools::Rectangle& rRect,
 
     if( xPolyPoly )
     {
-        aPoly = rRect;
+        aPoly = tools::Polygon(rRect);
         xPolyPoly->Insert( aPoly );
         xPolyPoly->Insert( aPoly );
     }
@@ -508,7 +485,7 @@ void OutputDevice::DrawComplexGradient( const tools::Rectangle& rRect,
         aExtRect.AdjustRight(1 );
         aExtRect.AdjustBottom(1 );
 
-        aPoly = aExtRect;
+        aPoly = tools::Polygon(aExtRect);
         ImplDrawPolygon( aPoly, pClixPolyPoly );
     }
 

@@ -31,6 +31,7 @@ private:
     void checkUsage();
     void checkNonConstUsage();
     void checkBuffer();
+    void checkOstr();
 
     void testcall( const char str[] );
 
@@ -46,6 +47,7 @@ CPPUNIT_TEST(checkConstexprCtor);
 CPPUNIT_TEST(checkUsage);
 CPPUNIT_TEST(checkNonConstUsage);
 CPPUNIT_TEST(checkBuffer);
+CPPUNIT_TEST(checkOstr);
 CPPUNIT_TEST_SUITE_END();
 };
 
@@ -117,10 +119,7 @@ void test::ostring::StringLiterals::testcall( const char str[] )
 
 void test::ostring::StringLiterals::checkConstexprCtor()
 {
-#if __cplusplus >= 202002L
-    static constinit
-#endif
-    rtl::OString s(dummy);
+    static constinit rtl::OString s(dummy);
     CPPUNIT_ASSERT_EQUAL(oslInterlockedCount(0x40000000), s.pData->refCount);
         // SAL_STRING_STATIC_FLAG (sal/rtl/strimp.hxx)
     CPPUNIT_ASSERT_EQUAL(sal_Int32(5), s.getLength());
@@ -271,6 +270,16 @@ void test::ostring::StringLiterals::checkBuffer()
     CPPUNIT_ASSERT_EQUAL( foodbazbard, buf.insert( 3, d ).toString() );
     CPPUNIT_ASSERT( !rtl_string_unittest_const_literal );
     CPPUNIT_ASSERT( !rtl_string_unittest_const_literal_function );
+}
+
+void test::ostring::StringLiterals::checkOstr() {
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), ""_ostr.getLength());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), "foobar"_ostr.getLength());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), "foo\0bar"_ostr.getLength());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), u8"\U00010000"_ostr.getLength());
+    CPPUNIT_ASSERT_EQUAL(""_ostr, rtl::OString(""_tstr));
+    CPPUNIT_ASSERT_EQUAL("foobar"_ostr, rtl::OString("foobar"_tstr));
+    CPPUNIT_ASSERT_EQUAL("foo\0bar"_ostr, rtl::OString("foo\0bar"_tstr));
 }
 
 #undef CONST_CTOR_USED

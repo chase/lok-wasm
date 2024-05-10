@@ -70,8 +70,8 @@ Font::Font( vcl::Font&& rFont ) noexcept : mpImplFont( std::move(rFont.mpImplFon
 
 Font::Font( const OUString& rFamilyName, const Size& rSize )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maFamilyName != rFamilyName
-        || const_cast<const ImplType&>(mpImplFont)->maAverageFontSize != rSize)
+    if (GetFamilyName() != rFamilyName
+        || GetAverageFontSize() != rSize)
     {
         mpImplFont->SetFamilyName( rFamilyName );
         mpImplFont->SetFontSize( rSize );
@@ -80,9 +80,9 @@ Font::Font( const OUString& rFamilyName, const Size& rSize )
 
 Font::Font( const OUString& rFamilyName, const OUString& rStyleName, const Size& rSize )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maFamilyName != rFamilyName
-        || const_cast<const ImplType&>(mpImplFont)->maStyleName != rStyleName
-        || const_cast<const ImplType&>(mpImplFont)->maAverageFontSize != rSize)
+    if (GetFamilyName() != rFamilyName
+        || GetStyleName() != rStyleName
+        || GetAverageFontSize() != rSize)
     {
         mpImplFont->SetFamilyName( rFamilyName );
         mpImplFont->SetStyleName( rStyleName );
@@ -92,8 +92,8 @@ Font::Font( const OUString& rFamilyName, const OUString& rStyleName, const Size&
 
 Font::Font( FontFamily eFamily, const Size& rSize )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->meFamily != eFamily
-        || const_cast<const ImplType&>(mpImplFont)->maAverageFontSize != rSize)
+    if (GetFontFamily() != eFamily
+        || GetAverageFontSize() != rSize)
     {
         mpImplFont->SetFamilyType( eFamily );
         mpImplFont->SetFontSize( rSize );
@@ -106,7 +106,7 @@ Font::~Font()
 
 void Font::SetColor( const Color& rColor )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maColor != rColor)
+    if (GetColor() != rColor)
     {
         mpImplFont->maColor = rColor;
     }
@@ -114,7 +114,7 @@ void Font::SetColor( const Color& rColor )
 
 void Font::SetFillColor( const Color& rColor )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maFillColor != rColor)
+    if (GetFillColor() != rColor)
     {
         mpImplFont->maFillColor = rColor;
         if ( rColor.IsTransparent() )
@@ -124,7 +124,7 @@ void Font::SetFillColor( const Color& rColor )
 
 void Font::SetTransparent( bool bTransparent )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->mbTransparent != bTransparent)
+    if (IsTransparent() != bTransparent)
         mpImplFont->mbTransparent = bTransparent;
 }
 
@@ -136,13 +136,13 @@ void Font::SetAlignment( TextAlign eAlign )
 
 void Font::SetFamilyName( const OUString& rFamilyName )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maFamilyName != rFamilyName)
+    if (GetFamilyName() != rFamilyName)
         mpImplFont->SetFamilyName( rFamilyName );
 }
 
 void Font::SetStyleName( const OUString& rStyleName )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maStyleName != rStyleName)
+    if (GetStyleName() != rStyleName)
         mpImplFont->maStyleName = rStyleName;
 }
 
@@ -166,25 +166,25 @@ void Font::SetCharSet( rtl_TextEncoding eCharSet )
 
 void Font::SetLanguageTag( const LanguageTag& rLanguageTag )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maLanguageTag != rLanguageTag)
+    if (GetLanguageTag() != rLanguageTag)
         mpImplFont->maLanguageTag = rLanguageTag;
 }
 
 void Font::SetCJKContextLanguageTag( const LanguageTag& rLanguageTag )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maCJKLanguageTag != rLanguageTag)
+    if (GetCJKContextLanguageTag() != rLanguageTag)
         mpImplFont->maCJKLanguageTag = rLanguageTag;
 }
 
 void Font::SetLanguage( LanguageType eLanguage )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maLanguageTag.getLanguageType(false) != eLanguage)
+    if (GetLanguage() != eLanguage)
         mpImplFont->maLanguageTag.reset( eLanguage);
 }
 
 void Font::SetCJKContextLanguage( LanguageType eLanguage )
 {
-    if (const_cast<const ImplType&>(mpImplFont)->maCJKLanguageTag.getLanguageType(false) != eLanguage)
+    if (GetCJKContextLanguage() != eLanguage)
         mpImplFont->maCJKLanguageTag.reset( eLanguage);
 }
 
@@ -440,7 +440,7 @@ tools::Long Font::GetOrCalculateAverageFontWidth() const
         // as close as possible (discussion see documentation in task),
         // so calculate it. For discussion of method used, see task
         // buffer measure string creation, will always use the same
-        static constexpr OUStringLiteral aMeasureString
+        static constexpr OUString aMeasureString
             = u"\u0020\u0021\u0022\u0023\u0024\u0025\u0026\u0027"
                "\u0028\u0029\u002A\u002B\u002C\u002D\u002E\u002F"
                "\u0030\u0031\u0032\u0033\u0034\u0035\u0036\u0037"
@@ -452,7 +452,7 @@ tools::Long Font::GetOrCalculateAverageFontWidth() const
                "\u0060\u0061\u0062\u0063\u0064\u0065\u0066\u0067"
                "\u0068\u0069\u006A\u006B\u006C\u006D\u006E\u006F"
                "\u0070\u0071\u0072\u0073\u0074\u0075\u0076\u0077"
-               "\u0078\u0079\u007A\u007B\u007C\u007D\u007E";
+               "\u0078\u0079\u007A\u007B\u007C\u007D\u007E"_ustr;
 
         const double fAverageFontWidth(
             pTempVirtualDevice->GetTextWidth(aMeasureString) /
@@ -514,7 +514,8 @@ SvStream& ReadImplFont( SvStream& rIStm, ImplFont& rImplFont, tools::Long& rnNor
         rIStm.ReadUChar( nTmp8 );     rImplFont.meRelief = static_cast<FontRelief>(nTmp8);
         rIStm.ReadUInt16( nTmp16 );   rImplFont.maCJKLanguageTag.reset( LanguageType(nTmp16) );
         rIStm.ReadCharAsBool( bTmp ); rImplFont.mbVertical = bTmp;
-        rIStm.ReadUInt16( nTmp16 );   rImplFont.meEmphasisMark = static_cast<FontEmphasisMark>(nTmp16);
+        rIStm.ReadUInt16( nTmp16 );
+        rImplFont.meEmphasisMark = static_cast<FontEmphasisMark>(nTmp16 & o3tl::typed_flags<FontEmphasisMark>::mask);
     }
 
     if( aCompat.GetVersion() >= 3 )
@@ -902,12 +903,14 @@ TextAlign Font::GetAlignment() const { return mpImplFont->GetAlignment(); }
 
 const OUString& Font::GetFamilyName() const { return mpImplFont->GetFamilyName(); }
 const OUString& Font::GetStyleName() const { return mpImplFont->maStyleName; }
+const FontFamily& Font::GetFontFamily() const { return mpImplFont->meFamily; }
 
 const Size& Font::GetFontSize() const { return mpImplFont->GetFontSize(); }
 void Font::SetFontHeight( tools::Long nHeight ) { SetFontSize( Size( std::as_const(mpImplFont)->GetFontSize().Width(), nHeight ) ); }
 tools::Long Font::GetFontHeight() const { return mpImplFont->GetFontSize().Height(); }
 void Font::SetAverageFontWidth( tools::Long nWidth ) { SetFontSize( Size( nWidth, std::as_const(mpImplFont)->GetFontSize().Height() ) ); }
 tools::Long Font::GetAverageFontWidth() const { return mpImplFont->GetFontSize().Width(); }
+const Size& Font::GetAverageFontSize() const { return mpImplFont->maAverageFontSize; }
 
 rtl_TextEncoding Font::GetCharSet() const { return mpImplFont->GetCharSet(); }
 

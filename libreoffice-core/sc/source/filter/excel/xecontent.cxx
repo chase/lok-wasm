@@ -36,6 +36,7 @@
 #include <scitems.hxx>
 #include <editeng/flditem.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <validat.hxx>
 #include <unonames.hxx>
 #include <convuno.hxx>
@@ -670,7 +671,7 @@ XclExpCFImpl::XclExpCFImpl( const XclExpRoot& rRoot, const ScCondFormatEntry& rF
             vcl::Font aFont;
             model::ComplexColor aComplexColor;
             ScPatternAttr::fillFontOnly(aFont, rItemSet);
-            ScPatternAttr::fillColor(aComplexColor, rItemSet, SC_AUTOCOL_RAW);
+            ScPatternAttr::fillColor(aComplexColor, rItemSet, ScAutoFontColorMode::Raw);
             maFontData.FillFromVclFont(aFont, aComplexColor);
             mnFontColorId = GetPalette().InsertColor(maFontData.maComplexColor.getFinalColor(), EXC_COLOR_CELLTEXT);
         }
@@ -1025,7 +1026,7 @@ OString GetFixedFormula(ScConditionMode eMode, const ScAddress& rAddress, std::s
         break;
     }
 
-    return "";
+    return ""_ostr;
 }
 
 }
@@ -1213,25 +1214,25 @@ OString getColorScaleType( const ScColorScaleEntry& rEntry, bool bFirst )
     switch(rEntry.GetType())
     {
         case COLORSCALE_MIN:
-            return "min";
+            return "min"_ostr;
         case COLORSCALE_MAX:
-            return "max";
+            return "max"_ostr;
         case COLORSCALE_PERCENT:
-            return "percent";
+            return "percent"_ostr;
         case COLORSCALE_FORMULA:
-            return "formula";
+            return "formula"_ostr;
         case COLORSCALE_AUTO:
             if(bFirst)
-                return "min";
+                return "min"_ostr;
             else
-                return "max";
+                return "max"_ostr;
         case COLORSCALE_PERCENTILE:
-            return "percentile";
+            return "percentile"_ostr;
         default:
             break;
     }
 
-    return "num";
+    return "num"_ostr;
 }
 
 }
@@ -1290,8 +1291,7 @@ OString createHexStringFromDigit(sal_uInt8 nDigit)
 
 OString createGuidStringFromInt(sal_uInt8 nGuid[16])
 {
-    OStringBuffer aBuffer;
-    aBuffer.append('{');
+    OStringBuffer aBuffer("{");
     for(size_t i = 0; i < 16; ++i)
     {
         aBuffer.append(createHexStringFromDigit(nGuid[i]));
@@ -1768,8 +1768,7 @@ XclExpDV::XclExpDV( const XclExpRoot& rRoot, sal_uInt32 nScHandle ) :
                 {
                     bool bList = false;
                     OUStringBuffer sListBuf;
-                    OUStringBuffer sFormulaBuf;
-                    sFormulaBuf.append( '"' );
+                    OUStringBuffer sFormulaBuf("\"");
                     /*  Formula is a list of string tokens -> build the Excel string.
                         Data validity is BIFF8 only (important for the XclExpString object).
                         Excel uses the NUL character as string list separator. */
@@ -1782,9 +1781,7 @@ XclExpDV::XclExpDV( const XclExpRoot& rRoot, sal_uInt32 nScHandle ) :
                             const std::u16string_view aToken( o3tl::getToken(aString, 0, '\n', nStringIx ) );
                             if (aToken.find(',') != std::u16string_view::npos)
                             {
-                                sListBuf.append('"');
-                                sListBuf.append(aToken);
-                                sListBuf.append('"');
+                                sListBuf.append(OUString::Concat("\"") + aToken + "\"");
                                 bList = true;
                             }
                             else
@@ -2161,7 +2158,7 @@ void XclExpWebQuery::Save( XclExpStream& rStrm )
 XclExpWebQueryBuffer::XclExpWebQueryBuffer( const XclExpRoot& rRoot )
 {
     SCTAB nScTab = rRoot.GetCurrScTab();
-    SfxObjectShell* pShell = rRoot.GetDocShell();
+    ScDocShell* pShell = rRoot.GetDocShell();
     if( !pShell ) return;
     ScfPropertySet aModelProp( pShell->GetModel() );
     if( !aModelProp.Is() ) return;

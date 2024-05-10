@@ -44,10 +44,10 @@
 
 #include <osl/mutex.hxx>
 #include <unotools/eventlisteneradapter.hxx>
+#include <comphelper/compbase.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/compbase.hxx>
 #include <cppuhelper/weakref.hxx>
-#include <cppuhelper/component.hxx>
 #include <cppuhelper/basemutex.hxx>
 #include <rtl/ref.hxx>
 #include <comphelper/interfacecontainer3.hxx>
@@ -331,7 +331,7 @@ private:
     void init_Impl( const OUString& rInitialDocumentURL,
                     const css::uno::Reference< css::embed::XStorage >& _rxInitialStorage );
     void implScanExtensions();
-    static constexpr OUStringLiteral sVBATextEncodingPropName = u"VBATextEncoding";
+    static constexpr OUString sVBATextEncodingPropName = u"VBATextEncoding"_ustr;
 
 public:
     SfxLibraryContainer();
@@ -469,8 +469,7 @@ class SfxLibrary
     : public css::container::XNameContainer
     , public css::container::XContainer
     , public css::util::XChangesNotifier
-    , public ::cppu::BaseMutex
-    , public ::cppu::OComponentHelper
+    , public ::comphelper::WeakComponentImplHelper<>
 {
     friend class SfxLibraryContainer;
     friend class SfxDialogLibraryContainer;
@@ -550,8 +549,8 @@ public:
 
     // Methods XInterface
     virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& rType ) override;
-    virtual void SAL_CALL acquire() noexcept override { OComponentHelper::acquire(); }
-    virtual void SAL_CALL release() noexcept override { OComponentHelper::release(); }
+    virtual void SAL_CALL acquire() noexcept override { WeakComponentImplHelper::acquire(); }
+    virtual void SAL_CALL release() noexcept override { WeakComponentImplHelper::release(); }
 
     // Methods XElementAccess
     virtual css::uno::Type SAL_CALL getElementType(  ) override;

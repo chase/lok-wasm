@@ -43,14 +43,12 @@ sal_uInt16 SfxSlot::GetWhich( const SfxItemPool &rPool ) const
     return nMasterSlotId;
 }
 
-OString SfxSlot::GetCommand() const
+OUString SfxSlot::GetCommand() const
 {
-    return OString::Concat(".uno:") + pUnoName;
-}
-
-OUString SfxSlot::GetCommandString() const
-{
-    return OStringToOUString(GetCommand(), RTL_TEXTENCODING_UTF8);
+    if("FocusToFindbar" == pUnoName)
+        return "vnd.sun.star.findbar:" + pUnoName;
+    else
+        return ".uno:" + pUnoName;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

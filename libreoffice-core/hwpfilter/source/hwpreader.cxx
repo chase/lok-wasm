@@ -45,7 +45,7 @@
 #include <sal/log.hxx>
 
 // xmloff/xmlkyd.hxx
-constexpr OUStringLiteral sXML_CDATA = u"CDATA";
+constexpr OUString sXML_CDATA = u"CDATA"_ustr;
 
 namespace
 {
@@ -53,7 +53,7 @@ double WTI(double x) { return x / 1800.; } // unit => inch
 double WTMM(double x) { return x / 1800. * 25.4; } // unit => mm
 int WTSM(double x) { return x / 1800. * 2540; } // unit ==> 1/100 mm
 
-constexpr OUStringLiteral sBeginOfDoc(u"[\uBB38\uC11C\uC758 \uCC98\uC74C]");
+constexpr OUString sBeginOfDoc(u"[\uBB38\uC11C\uC758 \uCC98\uC74C]"_ustr);
     // U+BB38 HANGUL SYLLABLE MUN, U+C11C HANGUL SYLLABLE SEO,
     // U+C758 HANGUL SYLLABLE YI, U+CC98 HANGUL SYLLABLE CEO,
     // U+C74C HANGUL SYLLABLE EUM: "Begin of Document"
@@ -510,7 +510,7 @@ void HwpReader::makeDrawMiscStyle( HWPDrawingObject *hdo )
                 if (emp)
                 {
                     startEl("office:binary-data");
-                    chars(base64_encode_string(emp->data.get(), emp->size));
+                    chars(base64_encode_string(emp->data.data(), emp->size));
                     endEl("office:binary-data");
                 }
                 endEl("draw:fill-image");
@@ -1475,6 +1475,12 @@ void HwpReader::makePageStyle()
 {
      HWPInfo& hwpinfo = hwpfile.GetHWPInfo();
      int pmCount = hwpfile.getColumnCount();
+
+     if (pmCount > 512 && utl::ConfigManager::IsFuzzing())
+     {
+         SAL_WARN("filter.hwp", "too many pages: " << pmCount << " clip to " << 512);
+         pmCount = 512;
+     }
 
      for( int i = 0 ; i < pmCount ; i++ ){
          mxList->addAttribute("style:name", sXML_CDATA, "pm" + OUString::number(i + 1));
@@ -3824,7 +3830,7 @@ void HwpReader::makePicture(Picture * hbox)
                          EmPicture *emp = hwpfile.GetEmPicture(hbox);
                          if( emp )
                          {
-                             chars(base64_encode_string(emp->data.get(), emp->size));
+                             chars(base64_encode_string(emp->data.data(), emp->size));
                          }
                 }
                 else{
@@ -4713,8 +4719,8 @@ namespace
 {
 
 constexpr OUStringLiteral IMPLEMENTATION_NAME = u"com.sun.comp.hwpimport.HwpImportFilter";
-constexpr OUStringLiteral SERVICE_NAME1 = u"com.sun.star.document.ImportFilter";
-constexpr OUStringLiteral SERVICE_NAME2 = u"com.sun.star.document.ExtendedTypeDetection";
+constexpr OUString SERVICE_NAME1 = u"com.sun.star.document.ImportFilter"_ustr;
+constexpr OUString SERVICE_NAME2 = u"com.sun.star.document.ExtendedTypeDetection"_ustr;
 
 class HwpImportFilter : public WeakImplHelper< XFilter, XImporter, XServiceInfo, XExtendedFilterDetection >
 {
@@ -4757,7 +4763,7 @@ HwpImportFilter::HwpImportFilter(const Reference< XComponentContext >& rxContext
     }
     catch( Exception & )
     {
-        printf(" fail to instantiate %s\n", OUString(WRITER_IMPORTER_NAME).toUtf8().getStr() );
+        printf(" fail to instantiate %s\n", WRITER_IMPORTER_NAME.toUtf8().getStr() );
         exit( 1 );
     }
 }

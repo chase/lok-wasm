@@ -124,29 +124,47 @@ RTFError RTFDocumentImpl::dispatchSymbol(RTFKeyword nKeyword)
             }
             // but don't emit properties yet, since they may change till the first text token arrives
             m_bNeedPap = true;
-            if (!m_aStates.top().getFrame().inFrame())
+            if (!m_aStates.top().getFrame().hasProperties())
                 m_bNeedPar = false;
             m_bNeedFinalPar = false;
         }
         break;
         case RTFKeyword::SECT:
         {
-            if (m_bNeedCr)
-                dispatchSymbol(RTFKeyword::PAR);
-
             m_bHadSect = true;
-            if (m_bIgnoreNextContSectBreak)
+            if (m_bIgnoreNextContSectBreak || m_aStates.top().getFrame().hasProperties())
+            {
+                // testContSectionPageBreak: need \par now
+                dispatchSymbol(RTFKeyword::PAR);
                 m_bIgnoreNextContSectBreak = false;
+            }
             else
             {
+                bool bPendingFloatingTable = false;
+                RTFValue::Pointer_t pTblpPr
+                    = m_aStates.top().getTableRowSprms().find(NS_ooxml::LN_CT_TblPrBase_tblpPr);
+                if (pTblpPr)
+                {
+                    // We have a pending floating table, provide an anchor for it still in this
+                    // section.
+                    bPendingFloatingTable = true;
+                }
+
+                if (m_bNeedCr || bPendingFloatingTable)
+                { // tdf#158586 don't dispatch \par here, it eats deferred page breaks
+                    setNeedPar(true);
+                }
+
                 sectBreak();
                 if (m_nResetBreakOnSectBreak != RTFKeyword::invalid)
                 {
                     // this should run on _second_ \sect after \page
-                    dispatchSymbol(m_nResetBreakOnSectBreak); // lazy reset
+                    dispatchFlag(m_nResetBreakOnSectBreak); // lazy reset
                     m_nResetBreakOnSectBreak = RTFKeyword::invalid;
                     m_bNeedSect = false; // dispatchSymbol set it
                 }
+                setNeedPar(true); // testFdo52052: need \par at end of document
+                // testNestedTable: but not m_bNeedCr, that creates a page break
             }
         }
         break;
@@ -174,9 +192,6 @@ RTFError RTFDocumentImpl::dispatchSymbol(RTFKeyword nKeyword)
         case RTFKeyword::CELL:
         case RTFKeyword::NESTCELL:
         {
-            if (nKeyword == RTFKeyword::CELL)
-                m_bAfterCellBeforeRow = true;
-
             checkFirstRun();
             if (m_bNeedPap)
             {
@@ -230,7 +245,6 @@ RTFError RTFDocumentImpl::dispatchSymbol(RTFKeyword nKeyword)
         break;
         case RTFKeyword::ROW:
         {
-            m_bAfterCellBeforeRow = false;
             if (m_aStates.top().getTableRowWidthAfter() > 0)
             {
                 // Add fake cellx / cell, RTF equivalent of
@@ -368,7 +382,8 @@ RTFError RTFDocumentImpl::dispatchSymbol(RTFKeyword nKeyword)
                 = m_aStates.top().getSectionSprms().find(NS_ooxml::LN_EG_SectPrContents_titlePg);
             if (((pBreak
                   && pBreak->getInt()
-                         == static_cast<sal_Int32>(NS_ooxml::LN_Value_ST_SectionMark_continuous))
+                         == static_cast<sal_Int32>(NS_ooxml::LN_Value_ST_SectionMark_continuous)
+                  && m_bHadSect) // tdf#158983 before first \sect, ignore \sbknone!
                  || m_nResetBreakOnSectBreak == RTFKeyword::SBKNONE)
                 && !(pTitlePg && pTitlePg->getInt()))
             {
@@ -396,20 +411,15 @@ RTFError RTFDocumentImpl::dispatchSymbol(RTFKeyword nKeyword)
                     // Only send the paragraph properties early if we'll create a new paragraph in a
                     // bit anyway.
                     checkNeedPap();
+                    // flush previously deferred break - needed for testFdo49893_2
+                    // which has consecutive \page with no text between
+                    sal_Unicode const nothing[] = { 0 /*MSVC doesn't allow it to be empty*/ };
+                    Mapper().utext(nothing, 0);
                 }
                 sal_uInt8 const sBreak[] = { 0xc };
                 Mapper().text(sBreak, 1);
-                if (bFirstRun || m_bNeedCr)
-                {
-                    // If we don't have content in the document yet (so the break-before can't move
-                    // to a second layout page) or we already have characters sent (so the paragraph
-                    // properties are already finalized), then continue inserting a fake paragraph.
-                    if (!m_bNeedPap)
-                    {
-                        parBreak();
-                        m_bNeedPap = true;
-                    }
-                }
+                // testFdo81892 don't do another \par break directly; because of
+                // GetSplitPgBreakAndParaMark() it does finishParagraph *twice*
                 m_bNeedCr = true;
             }
         }
@@ -426,7 +436,7 @@ RTFError RTFDocumentImpl::dispatchSymbol(RTFKeyword nKeyword)
         case RTFKeyword::CHFTNSEP:
         {
             static const sal_Unicode uFtnEdnSep = 0x3;
-            Mapper().utext(reinterpret_cast<const sal_uInt8*>(&uFtnEdnSep), 1);
+            Mapper().utext(&uFtnEdnSep, 1);
         }
         break;
         default:

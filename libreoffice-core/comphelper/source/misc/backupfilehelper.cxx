@@ -354,7 +354,7 @@ namespace
 
     typedef std::vector< ExtensionInfoEntry > ExtensionInfoEntryVector;
 
-    constexpr OUStringLiteral gaRegPath { u"/registry/com.sun.star.comp.deployment.bundle.PackageRegistryBackend/backenddb.xml" };
+    constexpr OUString gaRegPath { u"/registry/com.sun.star.comp.deployment.bundle.PackageRegistryBackend/backenddb.xml"_ustr };
 
     class ExtensionInfo
     {
@@ -661,8 +661,8 @@ namespace
             const ExtensionInfoEntryVector& rToBeEnabled,
             const ExtensionInfoEntryVector& rToBeDisabled)
         {
-            static const OUStringLiteral aRegPathFront(u"/uno_packages/cache/registry/com.sun.star.comp.deployment.");
-            static const OUStringLiteral aRegPathBack(u".PackageRegistryBackend/backenddb.xml");
+            static constexpr OUString aRegPathFront(u"/uno_packages/cache/registry/com.sun.star.comp.deployment."_ustr);
+            static constexpr OUString aRegPathBack(u".PackageRegistryBackend/backenddb.xml"_ustr);
             // first appearance to check
             {
                 const OUString aUnoPackagReg(OUString::Concat(rUserConfigWorkURL) + aRegPathFront + "bundle" + aRegPathBack);
@@ -1467,7 +1467,7 @@ namespace comphelper
             // points to registrymodifications.xcu
             OUString conf("${CONFIGURATION_LAYERS}");
             rtl::Bootstrap::expandMacros(conf);
-            static const OUStringLiteral aTokenUser(u"user:");
+            static constexpr OUString aTokenUser(u"user:"_ustr);
             sal_Int32 nStart(conf.indexOf(aTokenUser));
 
             if (-1 != nStart)
@@ -1512,7 +1512,7 @@ namespace comphelper
 
     const OUString& BackupFileHelper::getSafeModeName()
     {
-        static const OUString aSafeMode("SafeMode");
+        static constexpr OUString aSafeMode(u"SafeMode"_ustr);
 
         return aSafeMode;
     }

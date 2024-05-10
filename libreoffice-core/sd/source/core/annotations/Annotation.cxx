@@ -108,7 +108,7 @@ protected:
 
 }
 
-void createAnnotation(uno::Reference<office::XAnnotation>& xAnnotation, SdPage* pPage )
+void createAnnotation(rtl::Reference<Annotation>& xAnnotation, SdPage* pPage )
 {
     xAnnotation.set(
         new Annotation(comphelper::getProcessComponentContext(), pPage));
@@ -342,7 +342,7 @@ const SdPage* getAnnotationPage(const uno::Reference<office::XAnnotation>& xAnno
 
 namespace
 {
-std::string lcl_LOKGetCommentPayload(CommentNotificationType nType, uno::Reference<office::XAnnotation> const & rxAnnotation)
+OString lcl_LOKGetCommentPayload(CommentNotificationType nType, uno::Reference<office::XAnnotation> const & rxAnnotation)
 {
     ::tools::JsonWriter aJsonWriter;
     {
@@ -370,7 +370,7 @@ std::string lcl_LOKGetCommentPayload(CommentNotificationType nType, uno::Referen
             aJsonWriter.put("rectangle", sRectangle.getStr());
         }
     }
-    return aJsonWriter.extractData();
+    return aJsonWriter.finishAndGetAsOString();
 }
 } // anonymous ns
 
@@ -380,8 +380,8 @@ void LOKCommentNotify(CommentNotificationType nType, const SfxViewShell* pViewSh
     if (!comphelper::LibreOfficeKit::isActive() || comphelper::LibreOfficeKit::isTiledAnnotations())
         return ;
 
-    std::string aPayload = lcl_LOKGetCommentPayload(nType, rxAnnotation);
-    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload.c_str());
+    OString aPayload = lcl_LOKGetCommentPayload(nType, rxAnnotation);
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload);
 }
 
 void LOKCommentNotifyAll(CommentNotificationType nType, uno::Reference<office::XAnnotation> const & rxAnnotation)
@@ -390,12 +390,12 @@ void LOKCommentNotifyAll(CommentNotificationType nType, uno::Reference<office::X
     if (!comphelper::LibreOfficeKit::isActive() || comphelper::LibreOfficeKit::isTiledAnnotations())
         return ;
 
-    std::string aPayload = lcl_LOKGetCommentPayload(nType, rxAnnotation);
+    OString aPayload = lcl_LOKGetCommentPayload(nType, rxAnnotation);
 
     const SfxViewShell* pViewShell = SfxViewShell::GetFirst();
     while (pViewShell)
     {
-        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload.c_str());
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload);
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }
 }
@@ -409,10 +409,8 @@ UndoInsertOrRemoveAnnotation::UndoInsertOrRemoveAnnotation( Annotation& rAnnotat
     SdPage* pPage = rAnnotation.GetPage();
     if( pPage )
     {
-        uno::Reference<office::XAnnotation> xAnnotation( &rAnnotation );
-
         const AnnotationVector& rVec = pPage->getAnnotations();
-        auto iter = std::find(rVec.begin(), rVec.end(), xAnnotation);
+        auto iter = std::find(rVec.begin(), rVec.end(), &rAnnotation);
         mnIndex += std::distance(rVec.begin(), iter);
     }
 }
@@ -424,14 +422,14 @@ void UndoInsertOrRemoveAnnotation::Undo()
     if( !(pPage && pModel) )
         return;
 
-    uno::Reference<office::XAnnotation> xAnnotation( mxAnnotation );
     if( mbInsert )
     {
-        pPage->removeAnnotation( xAnnotation );
+        pPage->removeAnnotation( mxAnnotation );
     }
     else
     {
-        pPage->addAnnotation( xAnnotation, mnIndex );
+        pPage->addAnnotation( mxAnnotation, mnIndex );
+        uno::Reference<office::XAnnotation> xAnnotation( mxAnnotation );
         LOKCommentNotifyAll( CommentNotificationType::Add, xAnnotation );
     }
 }
@@ -443,16 +441,15 @@ void UndoInsertOrRemoveAnnotation::Redo()
     if( !(pPage && pModel) )
         return;
 
-    uno::Reference<office::XAnnotation> xAnnotation( mxAnnotation );
-
     if( mbInsert )
     {
-        pPage->addAnnotation( xAnnotation, mnIndex );
+        pPage->addAnnotation( mxAnnotation, mnIndex );
+        uno::Reference<office::XAnnotation> xAnnotation( mxAnnotation );
         LOKCommentNotifyAll( CommentNotificationType::Add, xAnnotation );
     }
     else
     {
-        pPage->removeAnnotation( xAnnotation );
+        pPage->removeAnnotation( mxAnnotation );
     }
 }
 

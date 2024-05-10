@@ -105,7 +105,7 @@ SdrTextObj::SdrTextObj(SdrModel& rSdrModel, SdrTextObj const & rSource)
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = true;
 
-    maRect = rSource.maRect;
+    maRectangle = rSource.maRectangle;
     maGeo = rSource.maGeo;
     maTextSize = rSource.maTextSize;
 
@@ -139,7 +139,6 @@ SdrTextObj::SdrTextObj(SdrModel& rSdrModel, SdrTextObj const & rSource)
 
 SdrTextObj::SdrTextObj(SdrModel& rSdrModel, const tools::Rectangle& rNewRect)
     : SdrAttrObj(rSdrModel)
-    , maRect(rNewRect)
     , mpEditingOutliner(nullptr)
     , meTextKind(SdrObjKind::Text)
     , maTextEditOffset(Point(0, 0))
@@ -151,7 +150,9 @@ SdrTextObj::SdrTextObj(SdrModel& rSdrModel, const tools::Rectangle& rNewRect)
     , mbTextAnimationAllowed(true)
     , mbInDownScale(false)
 {
-    ImpJustifyRect(maRect);
+    tools::Rectangle aRectangle(rNewRect);
+    ImpJustifyRect(aRectangle);
+    setRectangle(aRectangle);
 
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = true;
@@ -177,7 +178,6 @@ SdrTextObj::SdrTextObj(SdrModel& rSdrModel, SdrObjKind eNewTextKind)
 SdrTextObj::SdrTextObj(SdrModel& rSdrModel, SdrObjKind eNewTextKind,
                        const tools::Rectangle& rNewRect)
     : SdrAttrObj(rSdrModel)
-    , maRect(rNewRect)
     , mpEditingOutliner(nullptr)
     , meTextKind(eNewTextKind)
     , maTextEditOffset(Point(0, 0))
@@ -189,7 +189,9 @@ SdrTextObj::SdrTextObj(SdrModel& rSdrModel, SdrObjKind eNewTextKind,
     , mbTextAnimationAllowed(true)
     , mbInDownScale(false)
 {
-    ImpJustifyRect(maRect);
+    tools::Rectangle aRectangle(rNewRect);
+    ImpJustifyRect(aRectangle);
+    setRectangle(aRectangle);
 
     // #i25616#
     mbSupportTextIndentingOnLineWidthChange = true;
@@ -203,14 +205,14 @@ SdrTextObj::~SdrTextObj()
 
 void SdrTextObj::FitFrameToTextSize()
 {
-    ImpJustifyRect(maRect);
+    ImpJustifyRect(maRectangle);
 
     SdrText* pText = getActiveText();
     if(pText==nullptr || !pText->GetOutlinerParaObject())
         return;
 
     SdrOutliner& rOutliner=ImpGetDrawOutliner();
-    rOutliner.SetPaperSize(Size(maRect.Right()-maRect.Left(),maRect.Bottom()-maRect.Top()));
+    rOutliner.SetPaperSize(Size(getRectangle().Right() - getRectangle().Left(), getRectangle().Bottom() - getRectangle().Top()));
     rOutliner.SetUpdateLayout(true);
     rOutliner.SetText(*pText->GetOutlinerParaObject());
     Size aNewSize(rOutliner.CalcTextSize());
@@ -218,12 +220,12 @@ void SdrTextObj::FitFrameToTextSize()
     aNewSize.AdjustWidth( 1 ); // because of possible rounding errors
     aNewSize.AdjustWidth(GetTextLeftDistance()+GetTextRightDistance() );
     aNewSize.AdjustHeight(GetTextUpperDistance()+GetTextLowerDistance() );
-    tools::Rectangle aNewRect(maRect);
+    tools::Rectangle aNewRect(getRectangle());
     aNewRect.SetSize(aNewSize);
     ImpJustifyRect(aNewRect);
-    if (aNewRect!=maRect) {
+
+    if (aNewRect != getRectangle())
         SetLogicRect(aNewRect);
-    }
 }
 
 void SdrTextObj::NbcSetText(const OUString& rStr)
@@ -417,9 +419,9 @@ void SdrTextObj::ImpJustifyRect(tools::Rectangle& rRect)
 
 void SdrTextObj::ImpCheckShear()
 {
-    if (mbNoShear && maGeo.nShearAngle)
+    if (mbNoShear && maGeo.m_nShearAngle)
     {
-        maGeo.nShearAngle = 0_deg100;
+        maGeo.m_nShearAngle = 0_deg100;
         maGeo.mfTanShearAngle = 0;
     }
 }
@@ -427,7 +429,7 @@ void SdrTextObj::ImpCheckShear()
 void SdrTextObj::TakeObjInfo(SdrObjTransformInfoRec& rInfo) const
 {
     bool bNoTextFrame=!IsTextFrame();
-    rInfo.bResizeFreeAllowed=bNoTextFrame || ((maGeo.nRotationAngle.get() % 9000) == 0);
+    rInfo.bResizeFreeAllowed=bNoTextFrame || ((maGeo.m_nRotationAngle.get() % 9000) == 0);
     rInfo.bResizePropAllowed=true;
     rInfo.bRotateFreeAllowed=true;
     rInfo.bRotate90Allowed  =true;
@@ -527,7 +529,7 @@ void SdrTextObj::AdaptTextMinSize()
     {
         // Set minimum width.
         const tools::Long nDist = GetTextLeftDistance() + GetTextRightDistance();
-        const tools::Long nW = std::max<tools::Long>(0, maRect.GetWidth() - 1 - nDist); // text width without margins
+        const tools::Long nW = std::max<tools::Long>(0, getRectangle().GetWidth() - 1 - nDist); // text width without margins
 
         aSet.Put(makeSdrTextMinFrameWidthItem(nW));
 
@@ -542,7 +544,7 @@ void SdrTextObj::AdaptTextMinSize()
     {
         // Set Minimum height.
         const tools::Long nDist = GetTextUpperDistance() + GetTextLowerDistance();
-        const tools::Long nH = std::max<tools::Long>(0, maRect.GetHeight() - 1 - nDist); // text height without margins
+        const tools::Long nH = std::max<tools::Long>(0, getRectangle().GetHeight() - 1 - nDist); // text height without margins
 
         aSet.Put(makeSdrTextMinFrameHeightItem(nH));
 
@@ -563,10 +565,10 @@ void SdrTextObj::ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle 
     basegfx::B2DHomMatrix aMatrix(basegfx::utils::createTranslateB2DHomMatrix(
         -rAnchorRect.Left(), -rAnchorRect.Top()));
 
-    if(maGeo.nRotationAngle)
+    if(maGeo.m_nRotationAngle)
     {
         // Unrotate!
-        aMatrix.rotate(-toRadians(maGeo.nRotationAngle));
+        aMatrix.rotate(-toRadians(maGeo.m_nRotationAngle));
     }
 
     aXorPolyPolygon.transform(aMatrix);
@@ -614,7 +616,7 @@ void SdrTextObj::ImpSetContourPolygon( SdrOutliner& rOutliner, tools::Rectangle 
 
 void SdrTextObj::TakeUnrotatedSnapRect(tools::Rectangle& rRect) const
 {
-    rRect=maRect;
+    rRect = getRectangle();
 }
 
 // See also: <unnamed>::getTextAnchorRange in svx/source/sdr/primitive2d/sdrdecompositiontools.cxx
@@ -653,7 +655,7 @@ void SdrTextObj::AdjustRectToTextDistance(tools::Rectangle& rAnchorRect) const
 
 void SdrTextObj::TakeTextAnchorRect(tools::Rectangle& rAnchorRect) const
 {
-    tools::Rectangle aAnkRect(maRect); // the rectangle in which we anchor
+    tools::Rectangle aAnkRect(getRectangle()); // the rectangle in which we anchor
     bool bFrame=IsTextFrame();
     if (!bFrame) {
         TakeUnrotatedSnapRect(aAnkRect);
@@ -666,7 +668,7 @@ void SdrTextObj::TakeTextAnchorRect(tools::Rectangle& rAnchorRect) const
         if (aAnkRect.GetWidth()<2) aAnkRect.SetRight(aAnkRect.Left()+1 ); // minimum size h and v: 2 px
         if (aAnkRect.GetHeight()<2) aAnkRect.SetBottom(aAnkRect.Top()+1 );
     }
-    if (maGeo.nRotationAngle) {
+    if (maGeo.m_nRotationAngle) {
         Point aTmpPt(aAnkRect.TopLeft());
         RotatePoint(aTmpPt,aRotateRef,maGeo.mfSinRotationAngle,maGeo.mfCosRotationAngle);
         aTmpPt-=aAnkRect.TopLeft();
@@ -836,7 +838,7 @@ void SdrTextObj::TakeTextRect( SdrOutliner& rOutliner, tools::Rectangle& rTextRe
         if (eVAdj==SDRTEXTVERTADJUST_BOTTOM)
             aTextPos.AdjustY(nFreeHgt );
     }
-    if (maGeo.nRotationAngle)
+    if (maGeo.m_nRotationAngle)
         RotatePoint(aTextPos,aAnkRect.TopLeft(),maGeo.mfSinRotationAngle,maGeo.mfCosRotationAngle);
 
     if (pAnchorRect)
@@ -987,7 +989,7 @@ void SdrTextObj::ImpSetCharStretching(SdrOutliner& rOutliner, const Size& rTextS
             nY = nX;
             bNoMoreLoop = true;
         }
-        rOutliner.setGlobalScale(nX, nY);
+        rOutliner.setScalingParameters({nX, nY});
         nLoopCount++;
         Size aSiz(rOutliner.CalcTextSize());
         tools::Long nXDiff = aSiz.Width() - nWantWdt;
@@ -1097,9 +1099,11 @@ rtl::Reference<SdrObject> SdrTextObj::CloneSdrObject(SdrModel& rTargetModel) con
 
 basegfx::B2DPolyPolygon SdrTextObj::TakeXorPoly() const
 {
-    tools::Polygon aPol(maRect);
-    if (maGeo.nShearAngle) ShearPoly(aPol,maRect.TopLeft(),maGeo.mfTanShearAngle);
-    if (maGeo.nRotationAngle) RotatePoly(aPol,maRect.TopLeft(),maGeo.mfSinRotationAngle,maGeo.mfCosRotationAngle);
+    tools::Polygon aPol(getRectangle());
+    if (maGeo.m_nShearAngle)
+        ShearPoly(aPol, getRectangle().TopLeft(), maGeo.mfTanShearAngle);
+    if (maGeo.m_nRotationAngle)
+        RotatePoly(aPol, getRectangle().TopLeft(), maGeo.mfSinRotationAngle, maGeo.mfCosRotationAngle);
 
     basegfx::B2DPolyPolygon aRetval;
     aRetval.append(aPol.getB2DPolygon());
@@ -1125,7 +1129,7 @@ basegfx::B2DPolyPolygon SdrTextObj::TakeContour() const
         bool bFitToSize(IsFitToSize());
         if (bFitToSize) aR=aAnchor2;
         tools::Polygon aPol(aR);
-        if (maGeo.nRotationAngle) RotatePoly(aPol,aR.TopLeft(), maGeo.mfSinRotationAngle, maGeo.mfCosRotationAngle);
+        if (maGeo.m_nRotationAngle) RotatePoly(aPol,aR.TopLeft(), maGeo.mfSinRotationAngle, maGeo.mfCosRotationAngle);
 
         aRetval.append(aPol.getB2DPolygon());
     }
@@ -1135,11 +1139,11 @@ basegfx::B2DPolyPolygon SdrTextObj::TakeContour() const
 
 void SdrTextObj::RecalcSnapRect()
 {
-    if (maGeo.nRotationAngle || maGeo.nShearAngle)
+    if (maGeo.m_nRotationAngle || maGeo.m_nShearAngle)
     {
-        maSnapRect = Rect2Poly(maRect, maGeo).GetBoundRect();
+        maSnapRect = Rect2Poly(getRectangle(), maGeo).GetBoundRect();
     } else {
-        maSnapRect = maRect;
+        maSnapRect = getRectangle();
     }
 }
 
@@ -1151,15 +1155,18 @@ sal_uInt32 SdrTextObj::GetSnapPointCount() const
 Point SdrTextObj::GetSnapPoint(sal_uInt32 i) const
 {
     Point aP;
+    auto aRectangle = getRectangle();
     switch (i) {
-        case 0: aP=maRect.TopLeft(); break;
-        case 1: aP=maRect.TopRight(); break;
-        case 2: aP=maRect.BottomLeft(); break;
-        case 3: aP=maRect.BottomRight(); break;
-        default: aP=maRect.Center(); break;
+        case 0: aP = aRectangle.TopLeft(); break;
+        case 1: aP = aRectangle.TopRight(); break;
+        case 2: aP = aRectangle.BottomLeft(); break;
+        case 3: aP = aRectangle.BottomRight(); break;
+        default: aP = aRectangle.Center(); break;
     }
-    if (maGeo.nShearAngle) ShearPoint(aP,maRect.TopLeft(),maGeo.mfTanShearAngle);
-    if (maGeo.nRotationAngle) RotatePoint(aP,maRect.TopLeft(),maGeo.mfSinRotationAngle,maGeo.mfCosRotationAngle);
+    if (maGeo.m_nShearAngle)
+        ShearPoint(aP, aRectangle.TopLeft(), maGeo.mfTanShearAngle);
+    if (maGeo.m_nRotationAngle)
+        RotatePoint(aP, aRectangle.TopLeft(), maGeo.mfSinRotationAngle, maGeo.mfCosRotationAngle);
     return aP;
 }
 
@@ -1172,7 +1179,7 @@ void SdrTextObj::ImpInitDrawOutliner( SdrOutliner& rOutl ) const
         nOutlinerMode = OutlinerMode::TextObject;
     rOutl.Init( nOutlinerMode );
 
-    rOutl.setGlobalScale(100.0, 100.0, 100.0, 100.0);
+    rOutl.resetScalingParameters();
 
     EEControlBits nStat=rOutl.GetControlWord();
     nStat &= ~EEControlBits(EEControlBits::STRETCHING|EEControlBits::AUTOPAGESIZE);
@@ -1227,220 +1234,57 @@ void SdrTextObj::ImpSetupDrawOutlinerForPaint( bool             bContourFrame,
     }
     else if (IsAutoFit())
     {
-        ImpAutoFitText(rOutliner);
+        setupAutoFitText(rOutliner);
     }
 }
 
 double SdrTextObj::GetFontScale() const
 {
     SdrOutliner& rOutliner = ImpGetDrawOutliner();
-    // This eventually calls ImpAutoFitText
+    // This eventually calls setupAutoFitText
     UpdateOutlinerFormatting(rOutliner, o3tl::temporary(tools::Rectangle()));
 
-    double fScaleY;
-    rOutliner.getGlobalScale(o3tl::temporary(double()), fScaleY, o3tl::temporary(double()), o3tl::temporary(double()));
-    return fScaleY;
+    return rOutliner.getScalingParameters().fFontY;
 }
 
 double SdrTextObj::GetSpacingScale() const
 {
     SdrOutliner& rOutliner = ImpGetDrawOutliner();
-    // This eventually calls ImpAutoFitText
+    // This eventually calls setupAutoFitText
     UpdateOutlinerFormatting(rOutliner, o3tl::temporary(tools::Rectangle()));
 
-    double fSpacingScaleY;
-    rOutliner.getGlobalScale(o3tl::temporary(double()), o3tl::temporary(double()), o3tl::temporary(double()), fSpacingScaleY);
-    return fSpacingScaleY;
+    return rOutliner.getScalingParameters().fSpacingY;
 }
 
-void SdrTextObj::ImpAutoFitText( SdrOutliner& rOutliner ) const
+void SdrTextObj::setupAutoFitText(SdrOutliner& rOutliner) const
 {
-    const Size aShapeSize=GetSnapRect().GetSize();
-    ImpAutoFitText( rOutliner,
-                    Size(aShapeSize.Width()-GetTextLeftDistance()-GetTextRightDistance(),
-                         aShapeSize.Height()-GetTextUpperDistance()-GetTextLowerDistance()),
-                    IsVerticalWriting() );
+    const Size aShapeSize = GetSnapRect().GetSize();
+    Size aSize(aShapeSize.Width() - GetTextLeftDistance() - GetTextRightDistance(),
+               aShapeSize.Height() - GetTextUpperDistance() - GetTextLowerDistance());
+
+    setupAutoFitText(rOutliner, aSize);
 }
-
-void SdrTextObj::ImpAutoFitText(SdrOutliner& rOutliner, const Size& rTextSize,
-                                bool bIsVerticalWriting) const
+void SdrTextObj::setupAutoFitText(SdrOutliner& rOutliner, const Size& rTextBoxSize) const
 {
-    if (!bIsVerticalWriting)
-    {
-        autoFitTextForCompatibility(rOutliner, rTextSize);
-        return;
-    }
-
-    // EditEngine formatting is unstable enough for
-    // line-breaking text that we need some more samples
-
-    // loop early-exits if we detect an already attained value
-    double nMinStretchX = 0.0;
-    double nMinStretchY = 0.0;
-    std::array<sal_Int32, 10> aOldStretchXVals = {0,0,0,0,0,0,0,0,0,0};
-    rOutliner.setRoundFontSizeToPt(false);
-    for (size_t i = 0; i < aOldStretchXVals.size(); ++i)
-    {
-        const Size aCurrTextSize = rOutliner.CalcTextSizeNTP();
-        double fFactor = 1.0;
-        if( bIsVerticalWriting )
-        {
-            if (aCurrTextSize.Width() != 0)
-            {
-                fFactor = double(rTextSize.Width())/aCurrTextSize.Width();
-            }
-        }
-        else if (aCurrTextSize.Height() != 0)
-        {
-            fFactor = double(rTextSize.Height())/aCurrTextSize.Height();
-        }
-        // fFactor scales in both x and y directions
-        // - this is fine for bulleted words
-        // - but it scales too much for a long paragraph
-        // - taking sqrt scales long paragraphs the best
-        // - bulleted words will have to go through more iterations
-        fFactor = std::sqrt(fFactor);
-
-        double nCurrStretchX, nCurrStretchY;
-        rOutliner.getGlobalScale(nCurrStretchX, nCurrStretchY, o3tl::temporary(double()), o3tl::temporary(double()));
-
-        if (fFactor >= 0.98)
-        {
-            // resulting text area fits into available shape rect -
-            // err on the larger stretching, to optimally fill area
-            nMinStretchX = std::max(nMinStretchX, nCurrStretchX);
-            nMinStretchY = std::max(nMinStretchY, nCurrStretchY);
-        }
-
-        aOldStretchXVals[i] = basegfx::fround(nCurrStretchX * 10.0);
-        if (std::find(aOldStretchXVals.begin(), aOldStretchXVals.begin() + i, basegfx::fround(nCurrStretchX * 10.0)) != aOldStretchXVals.begin() + i)
-            break; // same value already attained once; algo is looping, exit
-
-        if (fFactor < 1.0 || nCurrStretchX != 100)
-        {
-            nCurrStretchX = double(basegfx::fround(nCurrStretchX * fFactor * 100.0)) / 100.00;
-            nCurrStretchY = double(basegfx::fround(nCurrStretchY * fFactor * 100.0)) / 100.00;
-
-            double nStretchX = std::min(100.0, nCurrStretchX);
-            double nStretchY = std::min(100.0, nCurrStretchY);
-
-            rOutliner.setGlobalScale(nStretchX, nStretchY, nStretchX, nStretchY);
-            SAL_INFO("svx", "zoom is " << nCurrStretchX);
-        }
-    }
+    rOutliner.setRoundFontSizeToPt(true); // We need to round the font size nearest integer pt size
+    rOutliner.SetMaxAutoPaperSize(rTextBoxSize);
+    rOutliner.SetPaperSize(rTextBoxSize);
 
     const SdrTextFitToSizeTypeItem& rItem = GetObjectItem(SDRATTR_TEXT_FITTOSIZE);
-    if (rItem.GetMaxScale() > 0.0)
+
+    double fFontScale = rItem.getFontScale();
+    double fSpacingScale = rItem.getSpacingScale();
+
+    if (fFontScale > 0.0 && fSpacingScale > 0.0 && !mbInEditMode)
     {
-        nMinStretchX = std::min(rItem.GetMaxScale(), nMinStretchX);
-        nMinStretchY = std::min(rItem.GetMaxScale(), nMinStretchY);
-    }
-
-    SAL_INFO("svx", "final zoom is " << nMinStretchX);
-
-    nMinStretchX = std::min(100.0, nMinStretchX);
-    nMinStretchY = std::min(100.0, nMinStretchY);
-
-    rOutliner.setGlobalScale(nMinStretchX, nMinStretchY, nMinStretchX, nMinStretchY);
-}
-
-void SdrTextObj::autoFitTextForCompatibility(SdrOutliner& rOutliner, const Size& rTextBoxSize) const
-{
-    rOutliner.setRoundFontSizeToPt(true);
-
-    const SdrTextFitToSizeTypeItem& rItem = GetObjectItem(SDRATTR_TEXT_FITTOSIZE);
-    double fMaxScale = rItem.GetMaxScale();
-    if (fMaxScale > 0.0)
-    {
-        rOutliner.setGlobalScale(fMaxScale, fMaxScale, 100.0, 100.0);
+        rOutliner.setScalingParameters({ fFontScale, fFontScale, 100.0, fSpacingScale });
     }
     else
     {
-        fMaxScale = 100.0;
+        rOutliner.resetScalingParameters();
     }
 
-    Size aCurrentTextBoxSize = rOutliner.CalcTextSizeNTP();
-    if (aCurrentTextBoxSize.Height() == 0)
-        return;
-
-    tools::Long nExtendTextBoxBy = -50;
-    aCurrentTextBoxSize.extendBy(0, nExtendTextBoxBy);
-    double fCurrentFitFactor = double(rTextBoxSize.Height()) / aCurrentTextBoxSize.Height();
-
-    double fInitialFontScaleY = 0.0;
-    double fInitialSpacing = 0.0;
-    rOutliner.getGlobalScale(o3tl::temporary(double()), fInitialFontScaleY, o3tl::temporary(double()), fInitialSpacing);
-
-    if (fCurrentFitFactor >= 1.0 && fInitialFontScaleY >= 100.0 && fInitialSpacing >= 100.0)
-        return;
-
-    sal_Int32 nFontHeight = GetObjectItemSet().Get(EE_CHAR_FONTHEIGHT).GetHeight();
-
-    double fFontHeightPt = o3tl::convert(double(nFontHeight), o3tl::Length::mm100, o3tl::Length::pt);
-    double fMinY = 0.0;
-    double fMaxY = fMaxScale;
-
-    double fBestFontScale = 0.0;
-    double fBestSpacing = 100.0;
-    double fBestFitFactor = fCurrentFitFactor;
-
-    if (fCurrentFitFactor >= 1.0)
-    {
-        fMinY = fInitialFontScaleY;
-        fBestFontScale = fInitialFontScaleY;
-        fBestSpacing = fInitialSpacing;
-        fBestFitFactor = fCurrentFitFactor;
-    }
-    else
-    {
-        fMaxY = std::min(fInitialFontScaleY, fMaxScale);
-    }
-
-    double fInTheMidle = 0.5;
-
-    int iteration = 0;
-    double fFitFactorTarget = 1.00;
-
-    while (iteration < 10)
-    {
-        iteration++;
-        double fScaleY = fMinY + (fMaxY - fMinY) * fInTheMidle;
-
-        double fScaledFontHeight = fFontHeightPt * (fScaleY / 100.0);
-        double fRoundedScaledFontHeight = std::floor(fScaledFontHeight * 10.0) / 10.0;
-        double fCurrentFontScale = (fRoundedScaledFontHeight / fFontHeightPt) * 100.0;
-
-        fCurrentFitFactor = 0.0; // reset fit factor;
-
-        for (double fCurrentSpacing : {100.0, 90.0, 80.0})
-        {
-            if (fCurrentFitFactor >= fFitFactorTarget)
-                continue;
-
-            rOutliner.setGlobalScale(fCurrentFontScale, fCurrentFontScale, 100.0, fCurrentSpacing);
-
-            aCurrentTextBoxSize = rOutliner.CalcTextSizeNTP();
-            aCurrentTextBoxSize.extendBy(0, nExtendTextBoxBy);
-            fCurrentFitFactor = double(rTextBoxSize.Height()) / aCurrentTextBoxSize.Height();
-
-            if (fCurrentSpacing == 100.0)
-            {
-                if (fCurrentFitFactor > fFitFactorTarget)
-                    fMinY = fCurrentFontScale;
-                else
-                    fMaxY = fCurrentFontScale;
-            }
-
-            if ((fBestFitFactor < fFitFactorTarget && fCurrentFitFactor > fBestFitFactor)
-            ||  (fCurrentFitFactor >= fFitFactorTarget && fCurrentFitFactor < fBestFitFactor))
-            {
-                fBestFontScale = fCurrentFontScale;
-                fBestSpacing = fCurrentSpacing;
-                fBestFitFactor = fCurrentFitFactor;
-            }
-        }
-    }
-    rOutliner.setGlobalScale(fBestFontScale, fBestFontScale, 100.0, fBestSpacing);
+    rOutliner.QuickFormatDoc();
 }
 
 void SdrTextObj::SetupOutlinerFormatting( SdrOutliner& rOutl, tools::Rectangle& rPaintRect ) const
@@ -1456,11 +1300,7 @@ void SdrTextObj::UpdateOutlinerFormatting( SdrOutliner& rOutl, tools::Rectangle&
     Fraction aFitXCorrection(1,1);
 
     const bool bContourFrame(IsContourTextFrame());
-    const MapMode aMapMode(
-        getSdrModelFromSdrObject().GetScaleUnit(),
-        Point(0,0),
-        getSdrModelFromSdrObject().GetScaleFraction(),
-        getSdrModelFromSdrObject().GetScaleFraction());
+    const MapMode aMapMode(getSdrModelFromSdrObject().GetScaleUnit());
 
     rOutl.SetRefMapMode(aMapMode);
     ImpSetupDrawOutlinerForPaint(
@@ -1564,7 +1404,7 @@ void SdrTextObj::SaveGeoData(SdrObjGeoData& rGeo) const
 {
     SdrAttrObj::SaveGeoData(rGeo);
     SdrTextObjGeoData& rTGeo=static_cast<SdrTextObjGeoData&>(rGeo);
-    rTGeo.maRect = maRect;
+    rTGeo.maRect = getRectangle();
     rTGeo.maGeo = maGeo;
 }
 
@@ -1589,7 +1429,7 @@ drawing::TextFitToSizeType SdrTextObj::GetFitToSize() const
 
 const tools::Rectangle& SdrTextObj::GetGeoRect() const
 {
-    return maRect;
+    return getRectangle();
 }
 
 void SdrTextObj::ForceOutlinerParaObject()
@@ -1718,11 +1558,11 @@ bool SdrTextObj::IsTopToBottom() const
 bool SdrTextObj::TRGetBaseGeometry(basegfx::B2DHomMatrix& rMatrix, basegfx::B2DPolyPolygon& /*rPolyPolygon*/) const
 {
     // get turn and shear
-    double fRotate = toRadians(maGeo.nRotationAngle);
-    double fShearX = toRadians(maGeo.nShearAngle);
+    double fRotate = toRadians(maGeo.m_nRotationAngle);
+    double fShearX = toRadians(maGeo.m_nShearAngle);
 
     // get aRect, this is the unrotated snaprect
-    tools::Rectangle aRectangle(maRect);
+    tools::Rectangle aRectangle(getRectangle());
 
     // fill other values
     basegfx::B2DTuple aScale(aRectangle.GetWidth(), aRectangle.GetHeight());
@@ -1772,9 +1612,9 @@ void SdrTextObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, const b
     }
 
     // reset object shear and rotations
-    maGeo.nRotationAngle = 0_deg100;
+    maGeo.m_nRotationAngle = 0_deg100;
     maGeo.RecalcSinCos();
-    maGeo.nShearAngle = 0_deg100;
+    maGeo.m_nShearAngle = 0_deg100;
     maGeo.RecalcTan();
 
     // if anchor is used, make position relative to it
@@ -1805,9 +1645,9 @@ void SdrTextObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, const b
     if(!basegfx::fTools::equalZero(fShearX))
     {
         GeoStat aGeoStat;
-        aGeoStat.nShearAngle = Degree100(FRound(basegfx::rad2deg<100>(atan(fShearX))));
+        aGeoStat.m_nShearAngle = Degree100(FRound(basegfx::rad2deg<100>(atan(fShearX))));
         aGeoStat.RecalcTan();
-        Shear(Point(), aGeoStat.nShearAngle, aGeoStat.mfTanShearAngle, false);
+        Shear(Point(), aGeoStat.m_nShearAngle, aGeoStat.mfTanShearAngle, false);
     }
 
     // rotation?
@@ -1818,9 +1658,9 @@ void SdrTextObj::TRSetBaseGeometry(const basegfx::B2DHomMatrix& rMatrix, const b
         // #i78696#
         // fRotate is matematically correct, but aGeoStat.nRotationAngle is
         // mirrored -> mirror value here
-        aGeoStat.nRotationAngle = NormAngle36000(Degree100(FRound(-basegfx::rad2deg<100>(fRotate))));
+        aGeoStat.m_nRotationAngle = NormAngle36000(Degree100(FRound(-basegfx::rad2deg<100>(fRotate))));
         aGeoStat.RecalcSinCos();
-        Rotate(Point(), aGeoStat.nRotationAngle, aGeoStat.mfSinRotationAngle, aGeoStat.mfCosRotationAngle);
+        Rotate(Point(), aGeoStat.m_nRotationAngle, aGeoStat.mfSinRotationAngle, aGeoStat.mfCosRotationAngle);
     }
 
     // translate?
@@ -1955,10 +1795,10 @@ GDIMetaFile* SdrTextObj::GetTextScrollMetaFileAndRectangle(
 
     // get outliner set up. To avoid getting a somehow rotated MetaFile,
     // temporarily disable object rotation.
-    Degree100 nAngle(maGeo.nRotationAngle);
-    maGeo.nRotationAngle = 0_deg100;
+    Degree100 nAngle(maGeo.m_nRotationAngle);
+    maGeo.m_nRotationAngle = 0_deg100;
     ImpSetupDrawOutlinerForPaint( bContourFrame, rOutliner, aTextRect, aAnchorRect, aPaintRect, aFitXCorrection );
-    maGeo.nRotationAngle = nAngle;
+    maGeo.m_nRotationAngle = nAngle;
 
     tools::Rectangle aScrollFrameRect(aPaintRect);
     const SfxItemSet& rSet = GetObjectItemSet();
@@ -2035,10 +1875,13 @@ void SdrTextObj::onEditOutlinerStatusEvent( EditStatus* pEditStatus )
         assert(mpEditingOutliner);
         mbInDownScale = true;
 
+        // Need to reset scaling so it searches for the fitting size again
+        mpEditingOutliner->resetScalingParameters();
+
         // sucks that we cannot disable paints via
         // mpEditingOutliner->SetUpdateMode(FALSE) - but EditEngine skips
         // formatting as well, then.
-        ImpAutoFitText(*mpEditingOutliner);
+        setupAutoFitText(*mpEditingOutliner);
         mbInDownScale = false;
     }
 }
@@ -2049,14 +1892,9 @@ void SdrTextObj::onEditOutlinerStatusEvent( EditStatus* pEditStatus )
 static SdrObject *ImpGetObjByName(SdrObjList const *pObjList, std::u16string_view aObjName)
 {
     // scan the whole list
-    size_t nObjCount = pObjList->GetObjCount();
-    for (size_t i = 0; i < nObjCount; i++) {
-        SdrObject *pCurObj = pObjList->GetObj(i);
-
-        if (pCurObj->GetName() == aObjName) {
-            return pCurObj;
-        }
-    }
+    for (const rtl::Reference<SdrObject>& pCurObj : *pObjList)
+        if (pCurObj->GetName() == aObjName)
+            return pCurObj.get();
     // not found
     return nullptr;
 }

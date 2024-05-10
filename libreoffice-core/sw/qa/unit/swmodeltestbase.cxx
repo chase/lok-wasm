@@ -22,11 +22,13 @@
 #include <rtl/ustrbuf.hxx>
 #include <unotools/streamwrap.hxx>
 #include <unotools/ucbstreamhelper.hxx>
+#include <vcl/scheduler.hxx>
 #include <comphelper/configuration.hxx>
 #include <officecfg/Office/Writer.hxx>
 
 #include <IDocumentLayoutAccess.hxx>
 #include <docsh.hxx>
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <rootfrm.hxx>
 #include <unotxdoc.hxx>
 #include <view.hxx>
@@ -34,11 +36,11 @@
 
 using namespace css;
 
-void SwModelTestBase::paste(std::u16string_view aFilename,
+void SwModelTestBase::paste(std::u16string_view aFilename, OUString aInstance,
                             uno::Reference<text::XTextRange> const& xTextRange)
 {
-    uno::Reference<document::XFilter> xFilter(
-        m_xSFactory->createInstance("com.sun.star.comp.Writer.RtfFilter"), uno::UNO_QUERY_THROW);
+    uno::Reference<document::XFilter> xFilter(m_xSFactory->createInstance(aInstance),
+                                              uno::UNO_QUERY_THROW);
     uno::Reference<document::XImporter> xImporter(xFilter, uno::UNO_QUERY_THROW);
     xImporter->setTargetDocument(mxComponent);
     std::unique_ptr<SvStream> pStream = utl::UcbStreamHelper::CreateStream(
@@ -51,7 +53,7 @@ void SwModelTestBase::paste(std::u16string_view aFilename,
     CPPUNIT_ASSERT(xFilter->filter(aDescriptor));
 }
 
-SwModelTestBase::SwModelTestBase(const OUString& pTestDocumentPath, const char* pFilter)
+SwModelTestBase::SwModelTestBase(const OUString& pTestDocumentPath, const OUString& pFilter)
     : UnoApiXmlTest(pTestDocumentPath)
     , mbExported(false)
     , mpXmlBuffer(nullptr)
@@ -64,8 +66,7 @@ void SwModelTestBase::executeImportTest(const char* filename, const char* pPassw
 {
     maTempFile.EnableKillingFile(false);
     header();
-    std::unique_ptr<Resetter> const pChanges(preTest(filename));
-    load(filename, pPassword);
+    loadURL(createFileURL(OUString::createFromAscii(filename)), pPassword);
     verify();
     finish();
     maTempFile.EnableKillingFile();
@@ -75,11 +76,10 @@ void SwModelTestBase::executeLoadVerifyReloadVerify(const char* filename, const 
 {
     maTempFile.EnableKillingFile(false);
     header();
-    std::unique_ptr<Resetter> const pChanges(preTest(filename));
-    load(filename, pPassword);
+    loadURL(createFileURL(OUString::createFromAscii(filename)), pPassword);
     verify();
     postLoad(filename);
-    reload(mpFilter, filename, pPassword);
+    saveAndReload(mpFilter, pPassword);
     verify();
     finish();
     maTempFile.EnableKillingFile();
@@ -89,10 +89,9 @@ void SwModelTestBase::executeLoadReloadVerify(const char* filename, const char* 
 {
     maTempFile.EnableKillingFile(false);
     header();
-    std::unique_ptr<Resetter> const pChanges(preTest(filename));
-    load(filename, pPassword);
+    loadURL(createFileURL(OUString::createFromAscii(filename)), pPassword);
     postLoad(filename);
-    reload(mpFilter, filename, pPassword);
+    saveAndReload(mpFilter, pPassword);
     verify();
     finish();
     maTempFile.EnableKillingFile();
@@ -102,9 +101,7 @@ void SwModelTestBase::executeImportExport(const char* filename, const char* pPas
 {
     maTempFile.EnableKillingFile(false);
     header();
-    std::unique_ptr<Resetter> const pChanges(preTest(filename));
-    load(filename, pPassword);
-    save(OUString::createFromAscii(mpFilter));
+    loadAndSave(filename, pPassword);
     maTempFile.EnableKillingFile(false);
     verify();
     finish();
@@ -209,8 +206,9 @@ OUString SwModelTestBase::parseDump(const OString& aXPath, const OString& aAttri
     if (pXmlXpathObj->type == XPATH_NODESET)
     {
         xmlNodeSetPtr pXmlNodes = pXmlXpathObj->nodesetval;
-        CPPUNIT_ASSERT_EQUAL_MESSAGE("xpath should match exactly 1 node", 1,
-                                     xmlXPathNodeSetGetLength(pXmlNodes));
+        int nNodes = xmlXPathNodeSetGetLength(pXmlNodes);
+        OString aMessage("xpath ('" + aXPath + "') should match exactly 1 node");
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(aMessage.getStr(), 1, nNodes);
         xmlNodePtr pXmlNode = pXmlNodes->nodeTab[0];
         if (aAttribute.getLength())
             pXpathStrResult = xmlGetProp(pXmlNode, BAD_CAST(aAttribute.getStr()));
@@ -342,7 +340,8 @@ SwModelTestBase::getParagraphOfText(int number, uno::Reference<text::XText> cons
                                     const OUString& content) const
 {
     uno::Reference<text::XTextRange> const xParagraph(getParagraphOrTable(number, xText),
-                                                      uno::UNO_QUERY_THROW);
+                                                      uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xParagraph.is());
     if (!content.isEmpty())
         CPPUNIT_ASSERT_EQUAL_MESSAGE("paragraph does not contain expected content", content,
                                      xParagraph->getString());
@@ -455,13 +454,12 @@ uno::Reference<drawing::XShape> SwModelTestBase::getTextFrameByName(const OUStri
 
 void SwModelTestBase::header() {}
 
-void SwModelTestBase::loadURL(OUString const& rURL, const char* pName, const char* pPassword)
+void SwModelTestBase::loadURL(OUString const& rURL, const char* pPassword)
 {
     // Output name at load time, so in the case of a hang, the name of the hanging input file is visible.
     if (!isExported())
     {
-        if (pName)
-            std::cout << pName << ":\n";
+        std::cout << rURL << ":\n";
         mnStartTime = osl_getGlobalTimer();
     }
 
@@ -470,62 +468,28 @@ void SwModelTestBase::loadURL(OUString const& rURL, const char* pName, const cha
     CPPUNIT_ASSERT(!getSwDocShell()->GetMedium()->GetWarningError());
 
     discardDumpedLayout();
-    if (pName && mustCalcLayoutOf(pName))
-        calcLayout();
+    calcLayout();
 }
 
-void SwModelTestBase::reload(const char* pFilter, const char* pName, const char* pPassword)
+void SwModelTestBase::saveAndReload(const OUString& pFilter, const char* pPassword)
 {
-    save(OUString::createFromAscii(pFilter), pName, pPassword);
-
-    loadURL(maTempFile.GetURL(), pName, pPassword);
-}
-
-void SwModelTestBase::save(const OUString& aFilterName, const char* pName, const char* pPassword)
-{
-    // FIXME: Merge skipValidation and mustValidate
-    skipValidation();
-
-    UnoApiXmlTest::save(aFilterName, pPassword);
-
-    // TODO: for now, validate only ODF here
-    if (mustValidate(pName) || aFilterName == "writer8"
-        || aFilterName == "OpenDocument Text Flat XML")
-    {
-        if (aFilterName == "Office Open XML Text")
-        {
-            // too many validation errors right now
-            validate(maTempFile.GetFileName(), test::OOXML);
-        }
-        else if (aFilterName == "writer8" || aFilterName == "OpenDocument Text Flat XML")
-        {
-            validate(maTempFile.GetFileName(), test::ODF);
-        }
-        else if (aFilterName == "MS Word 97")
-        {
-            validate(maTempFile.GetFileName(), test::MSBINARY);
-        }
-        else
-        {
-            OString aMessage
-                = OString::Concat("validation requested, but don't know how to validate ") + pName
-                  + " (" + OUStringToOString(aFilterName, RTL_TEXTENCODING_UTF8) + ")";
-            CPPUNIT_FAIL(aMessage.getStr());
-        }
-    }
+    save(pFilter, pPassword);
     mbExported = true;
+
+    loadURL(maTempFile.GetURL(), pPassword);
 }
 
-void SwModelTestBase::loadAndSave(const char* pName)
+void SwModelTestBase::loadAndSave(const char* pName, const char* pPassword)
 {
-    load(pName);
-    save(OUString::createFromAscii(mpFilter));
+    loadURL(createFileURL(OUString::createFromAscii(pName)), pPassword);
+    save(mpFilter);
+    mbExported = true;
 }
 
 void SwModelTestBase::loadAndReload(const char* pName)
 {
-    load(pName);
-    reload(mpFilter, pName);
+    loadURL(createFileURL(OUString::createFromAscii(pName)));
+    saveAndReload(mpFilter);
 }
 
 void SwModelTestBase::finish()
@@ -553,29 +517,12 @@ int SwModelTestBase::getShapes() const
     return xDraws->getCount();
 }
 
-xmlDocUniquePtr SwModelTestBase::parseExportedFile()
-{
-    auto stream(SvFileStream(maTempFile.GetURL(), StreamMode::READ | StreamMode::TEMPORARY));
-    return parseXmlStream(&stream);
-}
-
-void SwModelTestBase::registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx)
-{
-    // docx
-    XmlTestTools::registerOOXMLNamespaces(pXmlXpathCtx);
-    // odt
-    XmlTestTools::registerODFNamespaces(pXmlXpathCtx);
-    // reqif-xhtml
-    xmlXPathRegisterNs(pXmlXpathCtx, BAD_CAST("reqif-xhtml"),
-                       BAD_CAST("http://www.w3.org/1999/xhtml"));
-}
-
 void SwModelTestBase::createSwDoc(const char* pName, const char* pPassword)
 {
     if (!pName)
-        loadURL("private:factory/swriter", pName, nullptr);
+        loadURL("private:factory/swriter");
     else
-        load(pName, pPassword);
+        loadURL(createFileURL(OUString::createFromAscii(pName)), pPassword);
 
     uno::Reference<lang::XServiceInfo> xServiceInfo(mxComponent, uno::UNO_QUERY_THROW);
     CPPUNIT_ASSERT(xServiceInfo->supportsService("com.sun.star.text.TextDocument"));
@@ -584,9 +531,9 @@ void SwModelTestBase::createSwDoc(const char* pName, const char* pPassword)
 void SwModelTestBase::createSwWebDoc(const char* pName)
 {
     if (!pName)
-        loadURL("private:factory/swriter/web", pName, nullptr);
+        loadURL("private:factory/swriter/web");
     else
-        load(pName);
+        loadURL(createFileURL(OUString::createFromAscii(pName)));
 
     uno::Reference<lang::XServiceInfo> xServiceInfo(mxComponent, uno::UNO_QUERY_THROW);
     CPPUNIT_ASSERT(xServiceInfo->supportsService("com.sun.star.text.WebDocument"));
@@ -595,9 +542,9 @@ void SwModelTestBase::createSwWebDoc(const char* pName)
 void SwModelTestBase::createSwGlobalDoc(const char* pName)
 {
     if (!pName)
-        loadURL("private:factory/swriter/GlobalDocument", pName, nullptr);
+        loadURL("private:factory/swriter/GlobalDocument");
     else
-        load(pName);
+        loadURL(createFileURL(OUString::createFromAscii(pName)));
 
     uno::Reference<lang::XServiceInfo> xServiceInfo(mxComponent, uno::UNO_QUERY_THROW);
     CPPUNIT_ASSERT(xServiceInfo->supportsService("com.sun.star.text.GlobalDocument"));
@@ -613,13 +560,18 @@ SwDocShell* SwModelTestBase::getSwDocShell()
     return pTextDoc->GetDocShell();
 }
 
-void SwModelTestBase::WrapReqifFromTempFile(SvMemoryStream& rStream)
+xmlDocUniquePtr SwModelTestBase::WrapReqifFromTempFile()
 {
-    rStream.WriteCharPtr("<reqif-xhtml:html xmlns:reqif-xhtml=\"http://www.w3.org/1999/xhtml\">\n");
+    SvMemoryStream aStream;
+    aStream.WriteOString("<reqif-xhtml:html xmlns:reqif-xhtml=\"http://www.w3.org/1999/xhtml\">\n");
     SvFileStream aFileStream(maTempFile.GetURL(), StreamMode::READ);
-    rStream.WriteStream(aFileStream);
-    rStream.WriteCharPtr("</reqif-xhtml:html>\n");
-    rStream.Seek(0);
+    aStream.WriteStream(aFileStream);
+    aStream.WriteOString("</reqif-xhtml:html>\n");
+    aStream.Seek(0);
+    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    // Make sure the output is well-formed.
+    CPPUNIT_ASSERT(pXmlDoc);
+    return pXmlDoc;
 }
 
 void SwModelTestBase::WrapFromTempFile(SvMemoryStream& rStream)
@@ -627,6 +579,16 @@ void SwModelTestBase::WrapFromTempFile(SvMemoryStream& rStream)
     SvFileStream aFileStream(maTempFile.GetURL(), StreamMode::READ);
     rStream.WriteStream(aFileStream);
     rStream.Seek(0);
+}
+
+void SwModelTestBase::emulateTyping(SwXTextDocument& rTextDoc, const std::u16string_view& rStr)
+{
+    for (const char16_t c : rStr)
+    {
+        rTextDoc.postKeyEvent(LOK_KEYEVENT_KEYINPUT, c, 0);
+        rTextDoc.postKeyEvent(LOK_KEYEVENT_KEYUP, c, 0);
+        Scheduler::ProcessEventsToIdle();
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

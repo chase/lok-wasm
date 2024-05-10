@@ -14,13 +14,17 @@
 #include <defaultsoptions.hxx>
 #include <document.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <officecfg/Office/Calc.hxx>
 #include <config_features.h>
 
 ScTpDefaultsOptions::ScTpDefaultsOptions(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet &rCoreSet)
     : SfxTabPage(pPage, pController, "modules/scalc/ui/optdefaultpage.ui", "OptDefaultPage", &rCoreSet)
     , m_xEdNSheets(m_xBuilder->weld_spin_button("sheetsnumber"))
+    , m_xEdNSheetsImg(m_xBuilder->weld_widget("locksheetsnumber"))
     , m_xEdSheetPrefix(m_xBuilder->weld_entry("sheetprefix"))
+    , m_xEdSheetPrefixImg(m_xBuilder->weld_widget("locksheetprefix"))
     , m_xEdJumboSheets(m_xBuilder->weld_check_button("jumbo_sheets"))
+    , m_xEdJumboSheetsImg(m_xBuilder->weld_widget("lockjumbo_sheets"))
 {
     m_xEdNSheets->connect_changed( LINK(this, ScTpDefaultsOptions, NumModifiedHdl) );
     m_xEdSheetPrefix->connect_changed( LINK(this, ScTpDefaultsOptions, PrefixModifiedHdl) );
@@ -38,6 +42,22 @@ ScTpDefaultsOptions::~ScTpDefaultsOptions()
 std::unique_ptr<SfxTabPage> ScTpDefaultsOptions::Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet *rCoreAttrs)
 {
     return std::make_unique<ScTpDefaultsOptions>(pPage, pController, *rCoreAttrs);
+}
+
+OUString ScTpDefaultsOptions::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "textsheetsnumber", "textsheetprefix" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    sAllStrings += m_xEdJumboSheets->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool ScTpDefaultsOptions::FillItemSet(SfxItemSet *rCoreSet)
@@ -74,6 +94,22 @@ void ScTpDefaultsOptions::Reset(const SfxItemSet* rCoreSet)
     m_xEdNSheets->set_value(aOpt.GetInitTabCount());
     m_xEdSheetPrefix->set_text( aOpt.GetInitTabPrefix() );
     m_xEdJumboSheets->set_state( aOpt.GetInitJumboSheets() ? TRISTATE_TRUE : TRISTATE_FALSE );
+
+    bool bReadOnly = officecfg::Office::Calc::Defaults::Sheet::SheetCount::isReadOnly();
+    m_xEdNSheets->set_sensitive(!bReadOnly);
+    m_xEdNSheetsImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Calc::Defaults::Sheet::SheetPrefix::isReadOnly();
+    m_xEdSheetPrefix->set_sensitive(!bReadOnly);
+    m_xEdSheetPrefixImg->set_visible(bReadOnly);
+
+    if (m_xEdJumboSheets->is_visible())
+    {
+        bReadOnly = officecfg::Office::Calc::Defaults::Sheet::JumboSheets::isReadOnly();
+        m_xEdJumboSheets->set_sensitive(!bReadOnly);
+        m_xEdJumboSheetsImg->set_visible(bReadOnly);
+    }
+
     m_xEdNSheets->save_value();
     m_xEdSheetPrefix->save_value();
     m_xEdJumboSheets->save_state();

@@ -235,8 +235,7 @@ BibToolBar::BibToolBar(vcl::Window* pParent, Link<void*,void> aLink)
     , aLayoutManager(aLink)
     , nSymbolsSize(SFX_SYMBOLS_SIZE_SMALL)
 {
-    SvtMiscOptions aSvtMiscOptions;
-    nSymbolsSize = aSvtMiscOptions.GetCurrentSymbolsSize();
+    nSymbolsSize = SvtMiscOptions::GetCurrentSymbolsSize();
 
     xSource->Show();
     pLbSource->connect_changed(LINK( this, BibToolBar, SelHdl));
@@ -424,7 +423,7 @@ sal_uInt16 BibToolBar::InsertFilterItem(const OUString& rMenuEntry)
 
 void BibToolBar::SelectFilterItem(sal_uInt16 nId)
 {
-    OString sId = OString::number(nId);
+    OUString sId = OUString::number(nId);
     xPopupMenu->set_active(sId, true);
     sSelMenuItem = sId;
     aQueryField = MnemonicGenerator::EraseAllMnemonicChars(xPopupMenu->get_label(sId));
@@ -521,7 +520,7 @@ IMPL_LINK_NOARG(BibToolBar, MenuHdl, ToolBox*, void)
 
     tools::Rectangle aRect(GetItemRect(nTBC_BT_AUTOFILTER));
     weld::Window* pParent = weld::GetPopupParent(*this, aRect);
-    OString sId = xPopupMenu->popup_at_rect(pParent, aRect);
+    OUString sId = xPopupMenu->popup_at_rect(pParent, aRect);
 
     if (!sId.isEmpty())
     {
@@ -561,7 +560,7 @@ void BibToolBar::DataChanged( const DataChangedEvent& rDCEvt )
 IMPL_LINK_NOARG( BibToolBar, OptionsChanged_Impl, LinkParamNone*, void )
 {
     bool bRebuildToolBar = false;
-    sal_Int16 eSymbolsSize = SvtMiscOptions().GetCurrentSymbolsSize();
+    sal_Int16 eSymbolsSize = SvtMiscOptions::GetCurrentSymbolsSize();
     if ( nSymbolsSize != eSymbolsSize )
     {
         nSymbolsSize = eSymbolsSize;
@@ -575,7 +574,7 @@ IMPL_LINK_NOARG( BibToolBar, OptionsChanged_Impl, LinkParamNone*, void )
 IMPL_LINK_NOARG( BibToolBar, SettingsChanged_Impl, VclSimpleEvent&, void )
 {
     // Check if toolbar button size have changed and we have to use system settings
-    sal_Int16 eSymbolsSize = SvtMiscOptions().GetCurrentSymbolsSize();
+    sal_Int16 eSymbolsSize = SvtMiscOptions::GetCurrentSymbolsSize();
     if ( eSymbolsSize != nSymbolsSize )
     {
         nSymbolsSize = eSymbolsSize;
@@ -592,9 +591,9 @@ void BibToolBar::RebuildToolbar()
 
 void BibToolBar::ApplyImageList()
 {
-    SetItemImage(nTBC_BT_AUTOFILTER, Image(StockImage::Yes, nSymbolsSize == SFX_SYMBOLS_SIZE_SMALL ? OUString(RID_EXTBMP_AUTOFILTER_SC) : OUString(RID_EXTBMP_AUTOFILTER_LC)));
-    SetItemImage(nTBC_BT_FILTERCRIT, Image(StockImage::Yes, nSymbolsSize == SFX_SYMBOLS_SIZE_SMALL ? OUString(RID_EXTBMP_FILTERCRIT_SC) : OUString(RID_EXTBMP_FILTERCRIT_LC)));
-    SetItemImage(nTBC_BT_REMOVEFILTER, Image(StockImage::Yes, nSymbolsSize == SFX_SYMBOLS_SIZE_SMALL ? OUString(RID_EXTBMP_REMOVE_FILTER_SORT_SC) : OUString(RID_EXTBMP_REMOVE_FILTER_SORT_LC)));
+    SetItemImage(nTBC_BT_AUTOFILTER, Image(StockImage::Yes, nSymbolsSize == SFX_SYMBOLS_SIZE_SMALL ? RID_EXTBMP_AUTOFILTER_SC : RID_EXTBMP_AUTOFILTER_LC));
+    SetItemImage(nTBC_BT_FILTERCRIT, Image(StockImage::Yes, nSymbolsSize == SFX_SYMBOLS_SIZE_SMALL ? RID_EXTBMP_FILTERCRIT_SC : RID_EXTBMP_FILTERCRIT_LC));
+    SetItemImage(nTBC_BT_REMOVEFILTER, Image(StockImage::Yes, nSymbolsSize == SFX_SYMBOLS_SIZE_SMALL ? RID_EXTBMP_REMOVE_FILTER_SORT_SC : RID_EXTBMP_REMOVE_FILTER_SORT_LC));
     AdjustToolBox();
 }
 

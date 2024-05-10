@@ -754,7 +754,7 @@ bool Window::ImplDlgCtrl( const KeyEvent& rKEvt, bool bKeyInput )
         {
             if ( mpWindowImpl->mpDlgCtrlDownWindow.get() != pButtonWindow )
             {
-                static_cast<PushButton*>(mpWindowImpl->mpDlgCtrlDownWindow.get())->SetPressed( false );
+                mpWindowImpl->mpDlgCtrlDownWindow->SetPressed( false );
                 mpWindowImpl->mpDlgCtrlDownWindow = nullptr;
                 return true;
             }
@@ -941,7 +941,7 @@ bool Window::ImplDlgCtrl( const KeyEvent& rKEvt, bool bKeyInput )
                 }
             }
         }
-        else if (aKeyCode.IsMod2()) // tdf#151385
+        else
         {
             sal_Unicode c = rKEvt.GetCharCode();
             if ( c )
@@ -952,8 +952,17 @@ bool Window::ImplDlgCtrl( const KeyEvent& rKEvt, bool bKeyInput )
                     GetFocusFlags nGetFocusFlags = GetFocusFlags::Mnemonic;
                     if ( pSWindow == ::ImplFindAccelWindow( this, i, c, nFormStart, nFormEnd ) )
                         nGetFocusFlags |= GetFocusFlags::UniqueMnemonic;
-                    pSWindow->ImplControlFocus( nGetFocusFlags );
-                    return true;
+#ifdef _WIN32
+                    // tdf#157649 Allow omitting the Alt key when focus is in the dialog action area:
+                    bool bIsButtonBox = dynamic_cast<VclButtonBox*>(pSWindow->GetParent()) != nullptr;
+                    if ((bIsButtonBox && pSWindow->GetParent()->HasChildPathFocus(true)) || aKeyCode.IsMod2())
+#else
+                    if (aKeyCode.IsMod2())
+#endif
+                    {
+                        pSWindow->ImplControlFocus( nGetFocusFlags );
+                        return true;
+                    }
                 }
             }
         }
@@ -965,12 +974,12 @@ bool Window::ImplDlgCtrl( const KeyEvent& rKEvt, bool bKeyInput )
         {
             if ( mpWindowImpl->mpDlgCtrlDownWindow && (mpWindowImpl->mpDlgCtrlDownWindow.get() != pButtonWindow) )
             {
-                static_cast<PushButton*>(mpWindowImpl->mpDlgCtrlDownWindow.get())->SetPressed( false );
+                mpWindowImpl->mpDlgCtrlDownWindow->SetPressed( false );
                 mpWindowImpl->mpDlgCtrlDownWindow = nullptr;
             }
 
             static_cast<PushButton*>(pButtonWindow)->SetPressed( true );
-            mpWindowImpl->mpDlgCtrlDownWindow = pButtonWindow;
+            mpWindowImpl->mpDlgCtrlDownWindow = static_cast<PushButton*>(pButtonWindow);
         }
         else if ( mpWindowImpl->mpDlgCtrlDownWindow.get() == pButtonWindow )
         {
@@ -1092,7 +1101,7 @@ void Window::ImplDlgCtrlFocusChanged( vcl::Window* pWindow, bool bGetFocus )
 {
     if ( mpWindowImpl->mpDlgCtrlDownWindow && !bGetFocus )
     {
-        static_cast<PushButton*>(mpWindowImpl->mpDlgCtrlDownWindow.get())->SetPressed( false );
+        mpWindowImpl->mpDlgCtrlDownWindow->SetPressed( false );
         mpWindowImpl->mpDlgCtrlDownWindow = nullptr;
     }
 

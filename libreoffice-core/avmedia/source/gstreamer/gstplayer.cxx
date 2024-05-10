@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <set>
 #include <vector>
 #include <math.h>
@@ -50,7 +51,7 @@
 #include <gst/pbutils/pbutils.h>
 
 constexpr OUStringLiteral AVMEDIA_GST_PLAYER_IMPLEMENTATIONNAME = u"com.sun.star.comp.avmedia.Player_GStreamer";
-constexpr OUStringLiteral AVMEDIA_GST_PLAYER_SERVICENAME        = u"com.sun.star.media.Player_GStreamer";
+constexpr OUString AVMEDIA_GST_PLAYER_SERVICENAME        = u"com.sun.star.media.Player_GStreamer"_ustr;
 #define AVVERSION "gst 1.0: "
 
 using namespace ::com::sun::star;
@@ -98,7 +99,7 @@ private:
 
     DECL_STATIC_LINK(MissingPluginInstaller, launchUi, void*, void);
 
-    osl::Mutex mutex_;
+    std::recursive_mutex mutex_;
     std::set<OString> reported_;
     std::map<OString, std::set<rtl::Reference<Player>>> queued_;
     rtl::Reference<MissingPluginInstallerThread> currentThread_;
@@ -110,7 +111,7 @@ private:
 
 
 MissingPluginInstaller::~MissingPluginInstaller() {
-    osl::MutexGuard g(mutex_);
+    std::unique_lock g(mutex_);
     SAL_WARN_IF(currentThread_.is(), "avmedia.gstreamer", "unjoined thread");
     inCleanUp_ = true;
 }
@@ -138,7 +139,7 @@ void MissingPluginInstaller::report(
     rtl::Reference<MissingPluginInstallerThread> join;
     rtl::Reference<MissingPluginInstallerThread> launch;
     {
-        osl::MutexGuard g(mutex_);
+        std::unique_lock g(mutex_);
         if (reported_.find(detStr) != reported_.end()) {
             return;
         }
@@ -183,7 +184,7 @@ void eraseSource(std::set<rtl::Reference<Player>> & set, Player const * source)
 void MissingPluginInstaller::detach(Player const * source) {
     rtl::Reference<MissingPluginInstallerThread> join;
     {
-        osl::MutexGuard g(mutex_);
+        std::unique_lock g(mutex_);
         if (inCleanUp_) {
             // Guard against ~MissingPluginInstaller with erroneously un-joined
             // currentThread_ (thus non-empty currentSources_) calling
@@ -245,17 +246,19 @@ IMPL_STATIC_LINK(MissingPluginInstaller, launchUi, void *, p, void)
 }
 
 
-struct TheMissingPluginInstaller:
-    public rtl::Static<MissingPluginInstaller, TheMissingPluginInstaller>
-{};
+MissingPluginInstaller& TheMissingPluginInstaller()
+{
+    static MissingPluginInstaller theInstaller;
+    return theInstaller;
+}
 
 
 void MissingPluginInstallerThread::execute() {
-    MissingPluginInstaller & inst = TheMissingPluginInstaller::get();
+    MissingPluginInstaller & inst = TheMissingPluginInstaller();
     for (;;) {
         std::vector<OString> details;
         {
-            osl::MutexGuard g(inst.mutex_);
+            std::unique_lock g(inst.mutex_);
             assert(!inst.currentDetails_.empty());
             details.swap(inst.currentDetails_);
         }
@@ -268,7 +271,7 @@ void MissingPluginInstallerThread::execute() {
         args.push_back(nullptr);
         gst_install_plugins_sync(args.data(), nullptr);
         {
-            osl::MutexGuard g(inst.mutex_);
+            std::unique_lock g(inst.mutex_);
             if (inst.queued_.empty() || inst.launchNewThread_) {
                 inst.launchNewThread_ = true;
                 break;
@@ -330,7 +333,7 @@ Player::~Player()
 
 void SAL_CALL Player::disposing()
 {
-    TheMissingPluginInstaller::get().detach(this);
+    TheMissingPluginInstaller().detach(this);
 
     ::osl::MutexGuard aGuard(m_aMutex);
 
@@ -532,7 +535,7 @@ GstBusSyncReply Player::processSyncMessage( GstMessage *message )
             maSizeCondition.set();
         }
     } else if (gst_is_missing_plugin_message(message)) {
-        TheMissingPluginInstaller::get().report(this, message);
+        TheMissingPluginInstaller().report(this, message);
         if( mnWidth == 0 ) {
             // an error occurred, set condition so that OOo thread doesn't wait for us
             maSizeCondition.set();

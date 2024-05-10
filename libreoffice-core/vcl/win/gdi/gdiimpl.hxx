@@ -72,7 +72,7 @@ public:
 
     virtual OUString getRenderBackendName() const override { return "gdi"; }
 
-    virtual bool setClipRegion( const vcl::Region& ) override;
+    virtual void setClipRegion( const vcl::Region& ) override;
     //
     // get the depth of the device
     virtual sal_uInt16 GetBitCount() const override;
@@ -120,7 +120,7 @@ public:
 
     virtual void drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, const Point** pPtAry ) override;
 
-    virtual bool drawPolyPolygon(
+    virtual void drawPolyPolygon(
                 const basegfx::B2DHomMatrix& rObjectToDevice,
                 const basegfx::B2DPolyPolygon&,
                 double fTransparency) override;

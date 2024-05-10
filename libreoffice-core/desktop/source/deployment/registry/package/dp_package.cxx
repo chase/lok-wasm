@@ -309,7 +309,7 @@ sal_Bool BackendImpl::supportsService(OUString const & ServiceName)
 
 Sequence<OUString> BackendImpl::getSupportedServiceNames()
 {
-    return { OUString(BACKEND_SERVICE_NAME) };
+    return { BACKEND_SERVICE_NAME };
 }
 
 // XPackageRegistry
@@ -781,7 +781,7 @@ uno::Reference< graphic::XGraphic > BackendImpl::PackageImpl::getIcon( sal_Bool 
 
 
 void BackendImpl::PackageImpl::processPackage_(
-    ::osl::ResettableMutexGuard &,
+    ::osl::ResettableMutexGuard & guard,
     bool doRegisterPackage,
     bool startup,
     ::rtl::Reference<AbortChannel> const & abortChannel,
@@ -802,10 +802,20 @@ void BackendImpl::PackageImpl::processPackage_(
                 xPackage->createAbortChannel() );
             AbortChannel::Chain chain( abortChannel, xSubAbortChannel );
             try {
+                // tdf#159790 temporarily release mutex for child packages
+                // This code is normally run on a separate thread so if a
+                // child package tries to acquire the solar mutex, a deadlock
+                // can occur if the main thread calls isRegistered() on this
+                // package or any of its parents. So, temporarily release
+                // this package's mutex while registering the child package.
+                guard.clear();
                 xPackage->registerPackage( startup, xSubAbortChannel, xCmdEnv );
+                guard.reset();
             }
             catch (const Exception &)
             {
+                guard.reset();
+
                //We even try a rollback if the user cancelled the action (CommandAbortedException)
                 //in order to prevent invalid database entries.
                 Any exc( ::cppu::getCaughtException() );
@@ -856,6 +866,11 @@ void BackendImpl::PackageImpl::processPackage_(
                     ::cppu::throwException(exc);
                 }
             }
+            catch (...) {
+                guard.reset();
+                throw;
+            }
+
             data.items.emplace_back(xPackage->getURL(),
                                  xPackage->getPackageType()->getMediaType());
         }
@@ -1057,9 +1072,9 @@ void BackendImpl::PackageImpl::exportTo(
         manifest.reserve( bundle.getLength() );
         sal_Int32 baseURLlen = m_url_expanded.getLength();
         Reference<deployment::XPackage> const *pbundle = bundle.getConstArray();
-        static const OUStringLiteral strMediaType( u"MediaType" );
-        static const OUStringLiteral strFullPath( u"FullPath" );
-        static const OUStringLiteral strIsFolder( u"IsFolder" );
+        static constexpr OUStringLiteral strMediaType( u"MediaType" );
+        static constexpr OUStringLiteral strFullPath( u"FullPath" );
+        static constexpr OUStringLiteral strIsFolder( u"IsFolder" );
         for ( sal_Int32 pos = bundle.getLength(); pos--; )
         {
             Reference<deployment::XPackage> const & xPackage = pbundle[ pos ];
@@ -1383,7 +1398,7 @@ void BackendImpl::PackageImpl::scanBundle(
             continue;
 
         {
-            auto const iter = params.find("platform");
+            auto const iter = params.find("platform"_ostr);
             if (iter != params.end() && !platform_fits(iter->second.m_sValue))
                 continue;
         }
@@ -1394,7 +1409,7 @@ void BackendImpl::PackageImpl::scanBundle(
             subType.equalsIgnoreAsciiCase( "vnd.sun.star.package-bundle-description"))
         {
             // check locale:
-            auto const iter = params.find("locale");
+            auto const iter = params.find("locale"_ostr);
             if (iter == params.end())
             {
                 if (descrFile.isEmpty())

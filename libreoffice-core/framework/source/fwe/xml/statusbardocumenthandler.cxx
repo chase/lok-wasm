@@ -38,12 +38,12 @@ using namespace ::com::sun::star::xml::sax;
 using namespace ::com::sun::star::ui;
 using namespace ::com::sun::star::container;
 
-constexpr OUStringLiteral XMLNS_STATUSBAR = u"http://openoffice.org/2001/statusbar";
-constexpr OUStringLiteral XMLNS_XLINK = u"http://www.w3.org/1999/xlink";
+constexpr OUString XMLNS_STATUSBAR = u"http://openoffice.org/2001/statusbar"_ustr;
+constexpr OUString XMLNS_XLINK = u"http://www.w3.org/1999/xlink"_ustr;
 constexpr OUStringLiteral XMLNS_STATUSBAR_PREFIX = u"statusbar:";
 constexpr OUStringLiteral XMLNS_XLINK_PREFIX = u"xlink:";
 
-constexpr OUStringLiteral XMLNS_FILTER_SEPARATOR = u"^";
+constexpr OUString XMLNS_FILTER_SEPARATOR = u"^"_ustr;
 
 #define ELEMENT_STATUSBAR           "statusbar"
 #define ELEMENT_STATUSBARITEM       "statusbaritem"
@@ -58,24 +58,22 @@ constexpr OUStringLiteral XMLNS_FILTER_SEPARATOR = u"^";
 #define ATTRIBUTE_HELPURL           "helpid"
 #define ATTRIBUTE_MANDATORY         "mandatory"
 
-constexpr OUStringLiteral ELEMENT_NS_STATUSBAR = u"statusbar:statusbar";
-constexpr OUStringLiteral ELEMENT_NS_STATUSBARITEM = u"statusbar:statusbaritem";
+constexpr OUString ELEMENT_NS_STATUSBAR = u"statusbar:statusbar"_ustr;
+constexpr OUString ELEMENT_NS_STATUSBARITEM = u"statusbar:statusbaritem"_ustr;
 
 constexpr OUStringLiteral ATTRIBUTE_XMLNS_STATUSBAR = u"xmlns:statusbar";
 constexpr OUStringLiteral ATTRIBUTE_XMLNS_XLINK = u"xmlns:xlink";
 
-constexpr OUStringLiteral ATTRIBUTE_TYPE_CDATA = u"CDATA";
+constexpr OUString ATTRIBUTE_BOOLEAN_TRUE = u"true"_ustr;
+constexpr OUString ATTRIBUTE_BOOLEAN_FALSE = u"false"_ustr;
 
-constexpr OUStringLiteral ATTRIBUTE_BOOLEAN_TRUE = u"true";
-constexpr OUStringLiteral ATTRIBUTE_BOOLEAN_FALSE = u"false";
-
-constexpr OUStringLiteral ATTRIBUTE_ALIGN_LEFT = u"left";
-constexpr OUStringLiteral ATTRIBUTE_ALIGN_RIGHT = u"right";
-constexpr OUStringLiteral ATTRIBUTE_ALIGN_CENTER = u"center";
+constexpr OUString ATTRIBUTE_ALIGN_LEFT = u"left"_ustr;
+constexpr OUString ATTRIBUTE_ALIGN_RIGHT = u"right"_ustr;
+constexpr OUString ATTRIBUTE_ALIGN_CENTER = u"center"_ustr;
 
 constexpr OUStringLiteral ATTRIBUTE_STYLE_IN = u"in";
-constexpr OUStringLiteral ATTRIBUTE_STYLE_OUT = u"out";
-constexpr OUStringLiteral ATTRIBUTE_STYLE_FLAT = u"flat";
+constexpr OUString ATTRIBUTE_STYLE_OUT = u"out"_ustr;
+constexpr OUString ATTRIBUTE_STYLE_FLAT = u"flat"_ustr;
 
 constexpr OUStringLiteral STATUSBAR_DOCTYPE = u"<!DOCTYPE statusbar:statusbar PUBLIC \"-//OpenOffice.org//DTD OfficeDocument 1.0//EN\" \"statusbar.dtd\">";
 
@@ -83,12 +81,12 @@ namespace framework
 {
 
 // Property names of a menu/menu item ItemDescriptor
-constexpr OUStringLiteral ITEM_DESCRIPTOR_COMMANDURL  = u"CommandURL";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_HELPURL     = u"HelpURL";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_OFFSET      = u"Offset";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_STYLE       = u"Style";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_WIDTH       = u"Width";
-constexpr OUStringLiteral ITEM_DESCRIPTOR_TYPE        = u"Type";
+constexpr OUString ITEM_DESCRIPTOR_COMMANDURL  = u"CommandURL"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_HELPURL     = u"HelpURL"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_OFFSET      = u"Offset"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_STYLE       = u"Style"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_WIDTH       = u"Width"_ustr;
+constexpr OUString ITEM_DESCRIPTOR_TYPE        = u"Type"_ustr;
 
 static void ExtractStatusbarItemParameters(
     const Sequence< PropertyValue >& rProp,
@@ -103,7 +101,6 @@ static void ExtractStatusbarItemParameters(
         if ( rEntry.Name == ITEM_DESCRIPTOR_COMMANDURL )
         {
             rEntry.Value >>= rCommandURL;
-            rCommandURL = rCommandURL.intern();
         }
         else if ( rEntry.Name == ITEM_DESCRIPTOR_HELPURL )
         {
@@ -461,7 +458,6 @@ OWriteStatusBarDocumentHandler::OWriteStatusBarDocumentHandler(
     m_xWriteDocumentHandler( rWriteDocumentHandler )
 {
     m_xEmptyList = new ::comphelper::AttributeList;
-    m_aAttributeType    = ATTRIBUTE_TYPE_CDATA;
     m_aXMLXlinkNS       = XMLNS_XLINK_PREFIX;
     m_aXMLStatusBarNS   = XMLNS_STATUSBAR_PREFIX;
 }
@@ -485,11 +481,9 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarDocument()
     rtl::Reference<::comphelper::AttributeList> pList = new ::comphelper::AttributeList;
 
     pList->AddAttribute( ATTRIBUTE_XMLNS_STATUSBAR,
-                         m_aAttributeType,
                          XMLNS_STATUSBAR );
 
     pList->AddAttribute( ATTRIBUTE_XMLNS_XLINK,
-                         m_aAttributeType,
                          XMLNS_XLINK );
 
     m_xWriteDocumentHandler->startElement( ELEMENT_NS_STATUSBAR, pList );
@@ -545,25 +539,22 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     }
 
     // save required attribute (URL)
-    pList->AddAttribute( m_aAttributeURL, m_aAttributeType, rCommandURL );
+    pList->AddAttribute( m_aAttributeURL, rCommandURL );
 
     // alignment
     if ( nStyle & ItemStyle::ALIGN_RIGHT )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_ALIGN,
-                             m_aAttributeType,
                              ATTRIBUTE_ALIGN_RIGHT );
     }
     else if ( nStyle & ItemStyle::ALIGN_CENTER )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_ALIGN,
-                             m_aAttributeType,
                              ATTRIBUTE_ALIGN_CENTER );
     }
     else
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_ALIGN,
-                             m_aAttributeType,
                              ATTRIBUTE_ALIGN_LEFT );
     }
 
@@ -571,13 +562,11 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     if ( nStyle & ItemStyle::DRAW_FLAT )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_STYLE,
-                             m_aAttributeType,
                              ATTRIBUTE_STYLE_FLAT );
     }
     else if ( nStyle & ItemStyle::DRAW_OUT3D )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_STYLE,
-                             m_aAttributeType,
                              ATTRIBUTE_STYLE_OUT );
     }
 
@@ -585,7 +574,6 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     if ( nStyle & ItemStyle::AUTO_SIZE )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_AUTOSIZE,
-                             m_aAttributeType,
                              ATTRIBUTE_BOOLEAN_TRUE );
     }
 
@@ -593,7 +581,6 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     if ( nStyle & ItemStyle::OWNER_DRAW )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_OWNERDRAW,
-                             m_aAttributeType,
                              ATTRIBUTE_BOOLEAN_TRUE );
     }
 
@@ -601,7 +588,6 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     if ( nWidth > 0 )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_WIDTH,
-                             m_aAttributeType,
                              OUString::number( nWidth ) );
     }
 
@@ -609,7 +595,6 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     if ( nOffset != STATUSBAR_OFFSET )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_OFFSET,
-                             m_aAttributeType,
                              OUString::number( nOffset ) );
     }
 
@@ -617,7 +602,6 @@ void OWriteStatusBarDocumentHandler::WriteStatusBarItem(
     if ( !( nStyle & ItemStyle::MANDATORY ) )
     {
         pList->AddAttribute( m_aXMLStatusBarNS + ATTRIBUTE_MANDATORY,
-                             m_aAttributeType,
                              ATTRIBUTE_BOOLEAN_FALSE );
     }
 

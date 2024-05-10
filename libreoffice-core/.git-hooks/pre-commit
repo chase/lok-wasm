@@ -15,8 +15,8 @@ $ENV{LC_ALL} = "C";
 sub check_whitespaces($)
 {
     my ($h) = @_;
-    my $src_limited = "c|cpp|cxx|h|hrc|hxx|idl|inl|java|swift|map|MK|pmk|pl|pm|sdi|sh|src|tab|ui|xcu|xml|xsl|py";
-    my $src_full = "c|cpp|cxx|h|hrc|hxx|idl|inl|java|swift|map|mk|MK|pmk|pl|pm|sdi|sh|src|tab|ui|xcu|xml|xsl|py";
+    my $src_limited = "bas|c|cpp|cxx|h|hrc|hxx|idl|inl|java|swift|map|MK|mm|pmk|pl|pm|sdi|sh|src|tab|ui|vb|xcu|xml|xsl|py";
+    my $src_full = "bas|c|cpp|cxx|h|hrc|hxx|idl|inl|java|swift|map|mk|MK|mm|pmk|pl|pm|sdi|sh|src|tab|ui|vb|xcu|xml|xsl|py";
 
     my %modules = (basctl=>'basctl', chart2=>'chart', cui=>'cui', dbaccess=>'dba', desktop=>'dkt', editeng=>'editeng',
                    extensions=>'pcr', filter=>'flt', formula=>'for', fpicker=>'fps', framework=>'fwk', reportdesign=>'rpt',
@@ -48,7 +48,7 @@ sub check_whitespaces($)
             print STDERR "$filename:$lineno:$line\n";
         }
     }
-    open( FILES, "git-diff-index -p -M --cached $h |" ) ||  die "Cannot run git diff-index.";
+    open( FILES, "git diff-index -p -M --cached $h |" ) ||  die "Cannot run git diff-index.";
     while (<FILES>)
     {
         if (m|^diff --git a/(.*) b/\1$|)
@@ -97,6 +97,10 @@ sub check_whitespaces($)
             if ((/OOXMLEXPORT/) and ($filename =~ /ooxmlimport/))
             {
                 bad_line("OOXMLEXPORT definition used in a ooxmlimport file", $_, "cxx");
+            }
+            if ((/<toolbar:toolbaritem/) and not(/\/>/))
+            {
+                bad_line("Use /> to close toolbar:toolbaritem", $_, "xml");
             }
             if (/<property name="use[-_]markup">True<\/property>/)
             {

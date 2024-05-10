@@ -16,6 +16,10 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
+
+#include <sal/config.h>
+
+#include <config_features.h>
 #include <config_wasm_strip.h>
 #include <wrtsh.hxx>
 #include <pam.hxx>
@@ -40,7 +44,7 @@
 
 namespace SwTranslateHelper
 {
-OString ExportPaMToHTML(SwPaM* pCursor, bool bReplacePTag)
+OString ExportPaMToHTML(SwPaM* pCursor)
 {
     SolarMutexGuard gMutex;
     OString aResult;
@@ -50,32 +54,29 @@ OString ExportPaMToHTML(SwPaM* pCursor, bool bReplacePTag)
     {
         SvMemoryStream aMemoryStream;
         SwWriter aWriter(aMemoryStream, *pCursor);
-        ErrCode nError = aWriter.Write(xWrt);
+        ErrCodeMsg nError = aWriter.Write(xWrt);
         if (nError.IsError())
         {
-            SAL_WARN("sw.ui", "ExportPaMToHTML: failed to export selection to HTML");
+            SAL_WARN("sw.ui", "ExportPaMToHTML: failed to export selection to HTML " << nError);
             return {};
         }
         aResult
             = OString(static_cast<const char*>(aMemoryStream.GetData()), aMemoryStream.GetSize());
-        if (bReplacePTag)
-        {
-            aResult = aResult.replaceAll("<p", "<span");
-            aResult = aResult.replaceAll("</p>", "</span>");
-        }
+        aResult = aResult.replaceAll("<p"_ostr, "<span"_ostr);
+        aResult = aResult.replaceAll("</p>"_ostr, "</span>"_ostr);
 
         // HTML has for that <br> and <p> also does new line
-        aResult = aResult.replaceAll("<ul>", "");
-        aResult = aResult.replaceAll("</ul>", "");
-        aResult = aResult.replaceAll("<ol>", "");
-        aResult = aResult.replaceAll("</ol>", "");
-        aResult = aResult.replaceAll("\n", "").trim();
+        aResult = aResult.replaceAll("<ul>"_ostr, ""_ostr);
+        aResult = aResult.replaceAll("</ul>"_ostr, ""_ostr);
+        aResult = aResult.replaceAll("<ol>"_ostr, ""_ostr);
+        aResult = aResult.replaceAll("</ol>"_ostr, ""_ostr);
+        aResult = aResult.replaceAll("\n"_ostr, ""_ostr).trim();
         return aResult;
     }
     return {};
 }
 
-void PasteHTMLToPaM(SwWrtShell& rWrtSh, SwPaM* pCursor, const OString& rData, bool bSetSelection)
+void PasteHTMLToPaM(SwWrtShell& rWrtSh, SwPaM* pCursor, const OString& rData)
 {
     SolarMutexGuard gMutex;
     rtl::Reference<vcl::unohelper::HtmlTransferable> pHtmlTransferable
@@ -86,17 +87,14 @@ void PasteHTMLToPaM(SwWrtShell& rWrtSh, SwPaM* pCursor, const OString& rData, bo
         if (aDataHelper.GetXTransferable().is()
             && SwTransferable::IsPasteSpecial(rWrtSh, aDataHelper))
         {
-            if (bSetSelection)
-            {
-                rWrtSh.SetSelection(*pCursor);
-            }
+            rWrtSh.SetSelection(*pCursor);
             SwTransferable::Paste(rWrtSh, aDataHelper);
             rWrtSh.KillSelection(nullptr, false);
         }
     }
 }
 
-#if !ENABLE_WASM_STRIP_EXTRA
+#if HAVE_FEATURE_CURL && !ENABLE_WASM_STRIP_EXTRA
 void TranslateDocument(SwWrtShell& rWrtSh, const TranslateAPIConfig& rConfig)
 {
     bool bCancel = false;
@@ -180,7 +178,7 @@ void TranslateDocumentCancellable(SwWrtShell& rWrtSh, const TranslateAPIConfig& 
                 else if (n == startNode)
                 {
                     cursor->SetMark();
-                    cursor->GetPoint()->nContent = std::min(aPoint.nContent, aMark.nContent);
+                    cursor->GetPoint()->nContent = aPoint.nContent;
                 }
                 else if (n == endNode)
                 {
@@ -190,12 +188,12 @@ void TranslateDocumentCancellable(SwWrtShell& rWrtSh, const TranslateAPIConfig& 
                 }
             }
 
-            const auto aOut = SwTranslateHelper::ExportPaMToHTML(cursor.get(), true);
+            const auto aOut = SwTranslateHelper::ExportPaMToHTML(cursor.get());
             const auto aTranslatedOut = linguistic::Translate(
                 rConfig.m_xTargetLanguage, rConfig.m_xAPIUrl, rConfig.m_xAuthKey, aOut);
-            SwTranslateHelper::PasteHTMLToPaM(rWrtSh, cursor.get(), aTranslatedOut, true);
+            SwTranslateHelper::PasteHTMLToPaM(rWrtSh, cursor.get(), aTranslatedOut);
 
-            if (xStatusIndicator.is())
+            if (xStatusIndicator.is() && nCount)
                 xStatusIndicator->setValue((100 * ++nProgress) / nCount);
 
             Idle aIdle("ProgressBar::SetValue aIdle");
@@ -214,5 +212,5 @@ void TranslateDocumentCancellable(SwWrtShell& rWrtSh, const TranslateAPIConfig& 
     if (xStatusIndicator.is())
         xStatusIndicator->end();
 }
-#endif // !ENABLE_WASM_STRIP_EXTRA
+#endif // HAVE_FEATURE_CURL && !ENABLE_WASM_STRIP_EXTRA
 }

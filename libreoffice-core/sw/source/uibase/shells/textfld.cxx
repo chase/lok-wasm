@@ -56,6 +56,8 @@
 #include <doc.hxx>
 #include <PostItMgr.hxx>
 #include <swmodule.hxx>
+#include <svtools/strings.hrc>
+#include <svtools/svtresid.hxx>
 
 #include <editeng/ulspitem.hxx>
 #include <xmloff/odffields.hxx>
@@ -68,6 +70,7 @@
 #include <svx/pageitem.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <IMark.hxx>
+#include <officecfg/Office/Common.hxx>
 #include <officecfg/Office/Compatibility.hxx>
 #include <ndtxt.hxx>
 #include <translatehelper.hxx>
@@ -137,6 +140,16 @@ void SwTextShell::ExecField(SfxRequest &rReq)
                                                 GetBaseLink();
                         if(rLink.IsVisible())
                         {
+                            if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                            {
+                                std::unique_ptr<weld::MessageDialog> xError(
+                                    Application::CreateMessageDialog(
+                                        nullptr, VclMessageType::Warning, VclButtonsType::Ok,
+                                        SvtResId(STR_WARNING_EXTERNAL_LINK_EDIT_DISABLED)));
+                                xError->run();
+                                break;
+                            }
+
                             SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                             ScopedVclPtr<SfxAbstractLinksDialog> pDlg(pFact->CreateLinksDialog(GetView().GetFrameWeld(), &rSh.GetLinkManager(), false, &rLink));
                             pDlg->Execute();
@@ -150,6 +163,16 @@ void SwTextShell::ExecField(SfxRequest &rReq)
                         pDlg->Execute();
                     }
                 }
+            }
+            break;
+        }
+        case FN_UPDATE_SEL_FIELD:
+        {
+            SwField *pField = rSh.GetCurField();
+
+            if (pField)
+            {
+               rSh.UpdateOneField(*pField);
             }
             break;
         }
@@ -324,11 +347,11 @@ void SwTextShell::ExecField(SfxRequest &rReq)
             else
             {
                 //#i5788# prevent closing of the field dialog while a modal dialog ( Input field dialog ) is active
-                if(!GetView().GetViewFrame()->IsInModalMode())
+                if(!GetView().GetViewFrame().IsInModalMode())
                 {
-                    SfxViewFrame* pVFrame = GetView().GetViewFrame();
-                    pVFrame->ToggleChildWindow(FN_INSERT_FIELD);
-                    bRes = pVFrame->GetChildWindow( nSlot ) != nullptr;
+                    SfxViewFrame& rVFrame = GetView().GetViewFrame();
+                    rVFrame.ToggleChildWindow(FN_INSERT_FIELD);
+                    bRes = rVFrame.GetChildWindow( nSlot ) != nullptr;
                     Invalidate(rReq.GetSlot());
                     Invalidate(FN_INSERT_FIELD_CTRL);
                     rReq.Ignore();
@@ -340,13 +363,13 @@ void SwTextShell::ExecField(SfxRequest &rReq)
 
         case FN_INSERT_REF_FIELD:
         {
-            SfxViewFrame* pVFrame = GetView().GetViewFrame();
-            if (!pVFrame->HasChildWindow(FN_INSERT_FIELD))
-                pVFrame->ToggleChildWindow(FN_INSERT_FIELD);    // Show dialog
+            SfxViewFrame& rVFrame = GetView().GetViewFrame();
+            if (!rVFrame.HasChildWindow(FN_INSERT_FIELD))
+                rVFrame.ToggleChildWindow(FN_INSERT_FIELD);    // Show dialog
 
             // Switch Fielddlg at a new TabPage
             sal_uInt16 nId = SwFieldDlgWrapper::GetChildWindowId();
-            SwFieldDlgWrapper *pWrp = static_cast<SwFieldDlgWrapper*>(pVFrame->GetChildWindow(nId));
+            SwFieldDlgWrapper *pWrp = static_cast<SwFieldDlgWrapper*>(rVFrame.GetChildWindow(nId));
             if (pWrp)
                 pWrp->ShowReferencePage();
             rReq.Ignore();
@@ -681,8 +704,10 @@ void SwTextShell::ExecField(SfxRequest &rReq)
         break;
 
         case FN_INSERT_FLD_DATE    :
+        case FN_INSERT_FLD_DATE_VAR:
         {
             nInsertType = SwFieldTypesEnum::Date;
+            nInsertSubType = nSlot == FN_INSERT_FLD_DATE ? 0 : 1;
             bIsText = false;
             // use long date format for Hungarian
             SwPaM* pCursorPos = rSh.GetCursor();
@@ -695,7 +720,9 @@ void SwTextShell::ExecField(SfxRequest &rReq)
             goto FIELD_INSERT;
         }
         case FN_INSERT_FLD_TIME    :
+        case FN_INSERT_FLD_TIME_VAR:
             nInsertType = SwFieldTypesEnum::Time;
+            nInsertSubType = nSlot == FN_INSERT_FLD_TIME ? 0 : 1;
             bIsText = false;
             goto FIELD_INSERT;
         case FN_INSERT_FLD_PGNUMBER:
@@ -809,8 +836,7 @@ FIELD_INSERT:
                     if (pFieldResult)
                     {
                         // Paste HTML content.
-                        SwTranslateHelper::PasteHTMLToPaM(rSh, pCursorPos, aFieldResult.toUtf8(),
-                                                          true);
+                        SwTranslateHelper::PasteHTMLToPaM(rSh, pCursorPos, aFieldResult.toUtf8());
                         if (pCursorPos->GetPoint()->GetContentIndex() == 0)
                         {
                             // The paste created a last empty text node, remove it.
@@ -845,7 +871,7 @@ FIELD_INSERT:
             }
 
             rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
-            rSh.GetView().GetViewFrame()->GetBindings().Invalidate( SID_UNDO );
+            rSh.GetView().GetViewFrame().GetBindings().Invalidate( SID_UNDO );
         }
         break;
         case FN_INSERT_CHECKBOX_FORMFIELD:
@@ -860,7 +886,7 @@ FIELD_INSERT:
             }
 
             rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
-            rSh.GetView().GetViewFrame()->GetBindings().Invalidate( SID_UNDO );
+            rSh.GetView().GetViewFrame().GetBindings().Invalidate( SID_UNDO );
         }
         break;
         case FN_INSERT_DROPDOWN_FORMFIELD:
@@ -875,7 +901,7 @@ FIELD_INSERT:
             }
 
             rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
-            rSh.GetView().GetViewFrame()->GetBindings().Invalidate( SID_UNDO );
+            rSh.GetView().GetViewFrame().GetBindings().Invalidate( SID_UNDO );
         }
         break;
     case FN_INSERT_DATE_FORMFIELD:
@@ -908,7 +934,7 @@ FIELD_INSERT:
         }
 
         rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
-        rSh.GetView().GetViewFrame()->GetBindings().Invalidate( SID_UNDO );
+        rSh.GetView().GetViewFrame().GetBindings().Invalidate( SID_UNDO );
     }
     break;
     case FN_UPDATE_TEXT_FORMFIELDS:
@@ -934,7 +960,7 @@ FIELD_INSERT:
             pFields->GetValue() >>= aFields;
         }
 
-        rSh.GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
+        rSh.GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::UPDATE_FORM_FIELDS, nullptr);
         rSh.StartAction();
 
         IDocumentMarkAccess* pMarkAccess = rSh.GetDoc()->getIDocumentMarkAccess();
@@ -977,11 +1003,11 @@ FIELD_INSERT:
             rSh.GetDoc()->getIDocumentContentOperations().DeleteAndJoin(aPaM);
             OUString aFieldResult;
             aMap["FieldResult"] >>= aFieldResult;
-            SwTranslateHelper::PasteHTMLToPaM(rSh, &aPaM, aFieldResult.toUtf8(), true);
+            SwTranslateHelper::PasteHTMLToPaM(rSh, &aPaM, aFieldResult.toUtf8());
         }
 
         rSh.EndAction();
-        rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
+        rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::UPDATE_FORM_FIELDS, nullptr);
     }
     break;
     case FN_DELETE_TEXT_FORMFIELDS:
@@ -999,7 +1025,7 @@ FIELD_INSERT:
         {
             aFieldCommandPrefix = pFieldCommandPrefix->GetValue();
         }
-        rSh.GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
+        rSh.GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::DELETE_FORM_FIELDS, nullptr);
         rSh.StartAction();
 
         IDocumentMarkAccess* pMarkAccess = rSh.GetDoc()->getIDocumentMarkAccess();
@@ -1013,17 +1039,20 @@ FIELD_INSERT:
                 continue;
             }
 
-            auto itParam = pFieldmark->GetParameters()->find(ODF_CODE_PARAM);
-            if (itParam == pFieldmark->GetParameters()->end())
+            if (!aFieldCommandPrefix.isEmpty())
             {
-                continue;
-            }
+                auto itParam = pFieldmark->GetParameters()->find(ODF_CODE_PARAM);
+                if (itParam == pFieldmark->GetParameters()->end())
+                {
+                    continue;
+                }
 
-            OUString aCommand;
-            itParam->second >>= aCommand;
-            if (!aCommand.startsWith(aFieldCommandPrefix))
-            {
-                continue;
+                OUString aCommand;
+                itParam->second >>= aCommand;
+                if (!aCommand.startsWith(aFieldCommandPrefix))
+                {
+                    continue;
+                }
             }
 
             aRemovals.push_back(pFieldmark);
@@ -1035,7 +1064,7 @@ FIELD_INSERT:
         }
 
         rSh.EndAction();
-        rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
+        rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::DELETE_FORM_FIELDS, nullptr);
     }
     break;
     case FN_PGNUMBER_WIZARD:
@@ -1334,7 +1363,7 @@ FIELD_INSERT:
     break;
     case FN_UPDATE_TEXT_FORMFIELD:
     {
-        // This updates a single fieldmarks under the current cursor.
+        // This updates a single fieldmark under the current cursor.
         OUString aFieldType;
         const SfxStringItem* pFieldType = rReq.GetArg<SfxStringItem>(FN_PARAM_1);
         if (pFieldType)
@@ -1356,7 +1385,7 @@ FIELD_INSERT:
 
         IDocumentMarkAccess& rIDMA = *rSh.getIDocumentMarkAccess();
         SwPosition& rCursor = *rSh.GetCursor()->GetPoint();
-        sw::mark::IFieldmark* pFieldmark = rIDMA.getFieldmarkFor(rCursor);
+        sw::mark::IFieldmark* pFieldmark = rIDMA.getInnerFieldmarkFor(rCursor);
         if (!pFieldmark)
         {
             break;
@@ -1380,7 +1409,7 @@ FIELD_INSERT:
             break;
         }
 
-        rSh.GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
+        rSh.GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::UPDATE_FORM_FIELD, nullptr);
         rSh.StartAction();
         comphelper::SequenceAsHashMap aMap(aField);
         itParam->second = aMap["FieldCommand"];
@@ -1393,10 +1422,10 @@ FIELD_INSERT:
         rSh.GetDoc()->getIDocumentContentOperations().DeleteAndJoin(aPaM);
         OUString aFieldResult;
         aMap["FieldResult"] >>= aFieldResult;
-        SwTranslateHelper::PasteHTMLToPaM(rSh, &aPaM, aFieldResult.toUtf8(), true);
+        SwTranslateHelper::PasteHTMLToPaM(rSh, &aPaM, aFieldResult.toUtf8());
 
         rSh.EndAction();
-        rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_FORM_FIELD, nullptr);
+        rSh.GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::UPDATE_FORM_FIELD, nullptr);
     }
     break;
         default:
@@ -1462,6 +1491,16 @@ void SwTextShell::StateField( SfxItemSet &rSet )
             }
             break;
 
+        case FN_UPDATE_SEL_FIELD:
+            {
+                pField = rSh.GetCurField();
+
+                if (!pField)
+                    rSet.DisableItem( nWhich );
+            }
+
+            break;
+
         case FN_EXECUTE_MACROFIELD:
             {
                 if(!bGetField)
@@ -1482,11 +1521,11 @@ void SwTextShell::StateField( SfxItemSet &rSet )
                 }
                 else
                 {
-                    SfxViewFrame* pVFrame = GetView().GetViewFrame();
+                    SfxViewFrame& rVFrame = GetView().GetViewFrame();
                     //#i5788# prevent closing of the field dialog while a modal dialog ( Input field dialog ) is active
-                    if(!pVFrame->IsInModalMode() &&
-                        pVFrame->KnowsChildWindow(FN_INSERT_FIELD) && !pVFrame->HasChildWindow(FN_INSERT_FIELD_DATA_ONLY) )
-                        rSet.Put(SfxBoolItem( FN_INSERT_FIELD, pVFrame->HasChildWindow(nWhich)));
+                    if(!rVFrame.IsInModalMode() &&
+                        rVFrame.KnowsChildWindow(FN_INSERT_FIELD) && !rVFrame.HasChildWindow(FN_INSERT_FIELD_DATA_ONLY) )
+                        rSet.Put(SfxBoolItem( FN_INSERT_FIELD, rVFrame.HasChildWindow(nWhich)));
                     else
                         rSet.DisableItem(FN_INSERT_FIELD);
                 }
@@ -1495,8 +1534,8 @@ void SwTextShell::StateField( SfxItemSet &rSet )
 
         case FN_INSERT_REF_FIELD:
             {
-                SfxViewFrame* pVFrame = GetView().GetViewFrame();
-                if ( !pVFrame->KnowsChildWindow(FN_INSERT_FIELD)
+                SfxViewFrame& rVFrame = GetView().GetViewFrame();
+                if ( !rVFrame.KnowsChildWindow(FN_INSERT_FIELD)
                      || rSh.CursorInsideInputField() )
                 {
                     rSet.DisableItem(FN_INSERT_REF_FIELD);
@@ -1511,7 +1550,7 @@ void SwTextShell::StateField( SfxItemSet &rSet )
                 }
                 else
                 {
-                    rSet.Put(SfxBoolItem( nWhich, GetView().GetViewFrame()->HasChildWindow(FN_INSERT_FIELD)));
+                    rSet.Put(SfxBoolItem( nWhich, GetView().GetViewFrame().HasChildWindow(FN_INSERT_FIELD)));
                 }
             break;
 
@@ -1581,12 +1620,12 @@ void SwTextShell::StateField( SfxItemSet &rSet )
             {
                 // Check whether we are in a text form field
                 SwPosition aCursorPos(*rSh.GetCursor()->GetPoint());
-                sw::mark::IFieldmark* pFieldBM = GetShell().getIDocumentMarkAccess()->getFieldmarkFor(aCursorPos);
+                sw::mark::IFieldmark* pFieldBM = GetShell().getIDocumentMarkAccess()->getInnerFieldmarkFor(aCursorPos);
                 if ((!pFieldBM || pFieldBM->GetFieldname() != ODF_FORMTEXT)
                     && aCursorPos.GetContentIndex() > 0)
                 {
                     SwPosition aPos(*aCursorPos.GetContentNode(), aCursorPos.GetContentIndex() - 1);
-                    pFieldBM = GetShell().getIDocumentMarkAccess()->getFieldmarkFor(aPos);
+                    pFieldBM = GetShell().getIDocumentMarkAccess()->getInnerFieldmarkFor(aPos);
                 }
                 if (pFieldBM && pFieldBM->GetFieldname() == ODF_FORMTEXT &&
                     (aCursorPos > pFieldBM->GetMarkStart() && aCursorPos < pFieldBM->GetMarkEnd() ))

@@ -11,8 +11,7 @@
 #include <vcl/bitmap.hxx>
 #include <vcl/bitmapex.hxx>
 #include <vcl/BitmapMosaicFilter.hxx>
-
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 BitmapEx BitmapMosaicFilter::execute(BitmapEx const& rBitmapEx) const
 {
@@ -22,19 +21,20 @@ BitmapEx BitmapMosaicFilter::execute(BitmapEx const& rBitmapEx) const
 
     if (mnTileWidth > 1 || mnTileHeight > 1)
     {
-        std::unique_ptr<Bitmap> pNewBmp;
-        BitmapReadAccess* pReadAcc;
-        BitmapWriteAccess* pWriteAcc;
+        std::optional<Bitmap> pNewBmp;
+        BitmapScopedReadAccess pReadAcc;
+        BitmapScopedWriteAccess pWriteAcc;
 
         if (!isPalettePixelFormat(aBitmap.getPixelFormat()))
         {
-            pReadAcc = pWriteAcc = aBitmap.AcquireWriteAccess();
+            pReadAcc = aBitmap;
+            pWriteAcc = aBitmap;
         }
         else
         {
-            pNewBmp.reset(new Bitmap(aBitmap.GetSizePixel(), vcl::PixelFormat::N24_BPP));
-            pReadAcc = aBitmap.AcquireReadAccess();
-            pWriteAcc = pNewBmp->AcquireWriteAccess();
+            pNewBmp.emplace(aBitmap.GetSizePixel(), vcl::PixelFormat::N24_BPP);
+            pReadAcc = aBitmap;
+            pWriteAcc = *pNewBmp;
         }
 
         bool bConditionsMet = false;
@@ -156,14 +156,11 @@ BitmapEx BitmapMosaicFilter::execute(BitmapEx const& rBitmapEx) const
             bRet = true;
         }
 
-        if (pWriteAcc == pReadAcc)
-            pWriteAcc = nullptr;
-        Bitmap::ReleaseAccess(pReadAcc);
+        pReadAcc.reset();
+        pWriteAcc.reset();
 
         if (pNewBmp)
         {
-            Bitmap::ReleaseAccess(pWriteAcc);
-
             if (bRet)
             {
                 const MapMode aMap(aBitmap.GetPrefMapMode());

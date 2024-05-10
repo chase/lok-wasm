@@ -73,6 +73,7 @@
 #include <libxml/xmlwriter.h>
 #include <o3tl/enumrange.hxx>
 #include <o3tl/safeint.hxx>
+#include <sal/log.hxx>
 #include <vcl/GraphicLoader.hxx>
 #include <unotools/securityoptions.hxx>
 #include <docmodel/uno/UnoComplexColor.hxx>
@@ -286,19 +287,16 @@ bool SvxSizeItem::HasMetrics() const
 }
 
 
-SvxLRSpaceItem::SvxLRSpaceItem( const sal_uInt16 nId ) :
-
-    SfxPoolItem( nId ),
-
-    nTxtLeft        ( 0 ),
-    nLeftMargin     ( 0 ),
-    nRightMargin    ( 0 ),
-    m_nGutterMargin(0),
-    m_nRightGutterMargin(0),
+SvxLRSpaceItem::SvxLRSpaceItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+    , nFirstLineOffset(0)
+    , nLeftMargin(0)
+    , nRightMargin(0)
+    , m_nGutterMargin(0)
+    , m_nRightGutterMargin(0),
     nPropFirstLineOffset( 100 ),
     nPropLeftMargin( 100 ),
     nPropRightMargin( 100 ),
-    nFirstLineOffset  ( 0 ),
     bAutoFirst      ( false ),
     bExplicitZeroMarginValRight(false),
     bExplicitZeroMarginValLeft(false)
@@ -307,19 +305,17 @@ SvxLRSpaceItem::SvxLRSpaceItem( const sal_uInt16 nId ) :
 
 
 SvxLRSpaceItem::SvxLRSpaceItem( const tools::Long nLeft, const tools::Long nRight,
-                                const tools::Long nTLeft, const short nOfset,
+                                const short nOfset,
                                 const sal_uInt16 nId )
-:   SfxPoolItem( nId ),
-
-    nTxtLeft        ( nTLeft ),
-    nLeftMargin     ( nLeft ),
-    nRightMargin    ( nRight ),
-    m_nGutterMargin(0),
-    m_nRightGutterMargin(0),
+    : SfxPoolItem(nId)
+    , nFirstLineOffset(nOfset)
+    , nLeftMargin(nLeft)
+    , nRightMargin(nRight)
+    , m_nGutterMargin(0)
+    , m_nRightGutterMargin(0),
     nPropFirstLineOffset( 100 ),
     nPropLeftMargin( 100 ),
     nPropRightMargin( 100 ),
-    nFirstLineOffset  ( nOfset ),
     bAutoFirst      ( false ),
     bExplicitZeroMarginValRight(false),
     bExplicitZeroMarginValLeft(false)
@@ -339,7 +335,7 @@ bool SvxLRSpaceItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
         {
             css::frame::status::LeftRightMarginScale aLRSpace;
             aLRSpace.Left = static_cast<sal_Int32>(bConvert ? convertTwipToMm100(nLeftMargin) : nLeftMargin);
-            aLRSpace.TextLeft = static_cast<sal_Int32>(bConvert ? convertTwipToMm100(nTxtLeft) : nTxtLeft);
+            aLRSpace.TextLeft = static_cast<sal_Int32>(bConvert ? convertTwipToMm100(GetTextLeft()) : GetTextLeft());
             aLRSpace.Right = static_cast<sal_Int32>(bConvert ? convertTwipToMm100(nRightMargin) : nRightMargin);
             aLRSpace.ScaleLeft = static_cast<sal_Int16>(nPropLeftMargin);
             aLRSpace.ScaleRight = static_cast<sal_Int16>(nPropRightMargin);
@@ -354,7 +350,7 @@ bool SvxLRSpaceItem::QueryValue( uno::Any& rVal, sal_uInt8 nMemberId ) const
             break;
 
         case MID_TXT_LMARGIN :
-            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(nTxtLeft) : nTxtLeft);
+            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(GetTextLeft()) : GetTextLeft());
         break;
         case MID_R_MARGIN:
             rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(nRightMargin) : nRightMargin);
@@ -469,14 +465,1027 @@ bool SvxLRSpaceItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
     return true;
 }
 
-
-/// Adapt nLeftMargin and nTxtLeft.
-void SvxLRSpaceItem::AdjustLeft()
+void SvxLeftMarginItem::SetLeft(const tools::Long nL, const sal_uInt16 nProp)
 {
+    m_nLeftMargin = (nL * nProp) / 100;
+    m_nPropLeftMargin = nProp;
+}
+
+void SvxLRSpaceItem::SetLeft(const tools::Long nL, const sal_uInt16 nProp)
+{
+    nLeftMargin = (nL * nProp) / 100;
+    SAL_WARN_IF(nFirstLineOffset != 0, "editeng", "probably call SetTextLeft instead? looks inconsistent otherwise");
+    nPropLeftMargin = nProp;
+}
+
+void SvxRightMarginItem::SetRight(const tools::Long nR, const sal_uInt16 nProp)
+{
+    m_nRightMargin = (nR * nProp) / 100;
+    m_nPropRightMargin = nProp;
+}
+
+void SvxLRSpaceItem::SetRight(const tools::Long nR, const sal_uInt16 nProp)
+{
+    if (0 == nR)
+    {
+        SetExplicitZeroMarginValRight(true);
+    }
+    nRightMargin = (nR * nProp) / 100;
+    nPropRightMargin = nProp;
+}
+
+void SvxFirstLineIndentItem::SetTextFirstLineOffset(
+    const short nF, const sal_uInt16 nProp)
+{
+    m_nFirstLineOffset = short((tools::Long(nF) * nProp ) / 100);
+    m_nPropFirstLineOffset = nProp;
+}
+
+void SvxLRSpaceItem::SetTextFirstLineOffset(const short nF, const sal_uInt16 nProp)
+{
+    // note: left margin contains any negative first line offset - preserve it!
+    if (nFirstLineOffset < 0)
+    {
+        nLeftMargin -= nFirstLineOffset;
+    }
+    nFirstLineOffset = short((tools::Long(nF) * nProp ) / 100);
+    nPropFirstLineOffset = nProp;
+    if (nFirstLineOffset < 0)
+    {
+        nLeftMargin += nFirstLineOffset;
+    }
+}
+
+#if 0
+void SvxTextLeftMarginItem::SetLeft(SvxFirstLineIndentItem const& rFirstLine,
+        const tools::Long nL, const sal_uInt16 nProp)
+{
+    m_nTextLeftMargin = (nL * nProp) / 100;
+    m_nPropLeftMargin = nProp;
+    // note: text left margin contains any negative first line offset
+    if (rFirstLine.GetTextFirstLineOffset() < 0)
+    {
+        m_nTextLeftMargin += rFirstLine.GetTextFirstLineOffset();
+    }
+}
+#endif
+
+void SvxTextLeftMarginItem::SetTextLeft(const tools::Long nL, const sal_uInt16 nProp)
+{
+    m_nTextLeftMargin = (nL * nProp) / 100;
+    m_nPropLeftMargin = nProp;
+}
+
+void SvxLRSpaceItem::SetTextLeft(const tools::Long nL, const sal_uInt16 nProp)
+{
+    if (0 == nL)
+    {
+        SetExplicitZeroMarginValLeft(true);
+    }
+    auto const nTxtLeft = (nL * nProp) / 100;
+    nPropLeftMargin = nProp;
+    // note: left margin contains any negative first line offset
     if ( 0 > nFirstLineOffset )
         nLeftMargin = nTxtLeft + nFirstLineOffset;
     else
         nLeftMargin = nTxtLeft;
+}
+
+tools::Long SvxTextLeftMarginItem::GetTextLeft() const
+{
+    return m_nTextLeftMargin;
+}
+
+tools::Long SvxTextLeftMarginItem::GetLeft(SvxFirstLineIndentItem const& rFirstLine) const
+{
+    // add any negative first line offset to text left margin to get left
+    return (rFirstLine.GetTextFirstLineOffset() < 0)
+        ? m_nTextLeftMargin + rFirstLine.GetTextFirstLineOffset()
+        : m_nTextLeftMargin;
+}
+
+tools::Long SvxLRSpaceItem::GetTextLeft() const
+{
+    // remove any negative first line offset from left margin to get text-left
+    return (nFirstLineOffset < 0)
+        ? nLeftMargin - nFirstLineOffset
+        : nLeftMargin;
+}
+
+SvxLeftMarginItem::SvxLeftMarginItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+{
+}
+
+SvxLeftMarginItem::SvxLeftMarginItem(const tools::Long nLeft, const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+    , m_nLeftMargin(nLeft)
+{
+}
+
+bool SvxLeftMarginItem::QueryValue(uno::Any& rVal, sal_uInt8 nMemberId) const
+{
+    bool bRet = true;
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+    switch (nMemberId)
+    {
+        case MID_L_MARGIN:
+            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(m_nLeftMargin) : m_nLeftMargin);
+            break;
+        case MID_L_REL_MARGIN:
+            rVal <<= static_cast<sal_Int16>(m_nPropLeftMargin);
+        break;
+        default:
+            assert(false);
+            bRet = false;
+            // SfxDispatchController_Impl::StateChanged calls this with hardcoded 0 triggering this; there used to be a MID_LR_MARGIN 0 but what type would it have?
+            OSL_FAIL("unknown MemberId");
+    }
+    return bRet;
+}
+
+bool SvxLeftMarginItem::PutValue(const uno::Any& rVal, sal_uInt8 nMemberId)
+{
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+
+    switch (nMemberId)
+    {
+        case MID_L_MARGIN:
+        {
+            sal_Int32 nVal = 0;
+            if (!(rVal >>= nVal))
+            {
+                return false;
+            }
+            SetLeft(bConvert ? o3tl::toTwips(nVal, o3tl::Length::mm100) : nVal);
+            break;
+        }
+        case MID_L_REL_MARGIN:
+        {
+            sal_Int32 nRel = 0;
+            if ((rVal >>= nRel) && nRel >= 0 && nRel < SAL_MAX_UINT16)
+            {
+                m_nPropLeftMargin = static_cast<sal_uInt16>(nRel);
+            }
+            else
+            {
+                return false;
+            }
+        }
+        break;
+        default:
+            assert(false);
+            OSL_FAIL("unknown MemberId");
+            return false;
+    }
+    return true;
+}
+
+bool SvxLeftMarginItem::operator==(const SfxPoolItem& rAttr) const
+{
+    assert(SfxPoolItem::operator==(rAttr));
+
+    const SvxLeftMarginItem& rOther = static_cast<const SvxLeftMarginItem&>(rAttr);
+
+    return (m_nLeftMargin == rOther.GetLeft()
+        && m_nPropLeftMargin == rOther.GetPropLeft());
+}
+
+SvxLeftMarginItem* SvxLeftMarginItem::Clone(SfxItemPool *) const
+{
+    return new SvxLeftMarginItem(*this);
+}
+
+bool SvxLeftMarginItem::GetPresentation
+(
+    SfxItemPresentation ePres,
+    MapUnit             eCoreUnit,
+    MapUnit             ePresUnit,
+    OUString&           rText, const IntlWrapper& rIntl
+)   const
+{
+    switch (ePres)
+    {
+        case SfxItemPresentation::Nameless:
+        {
+            if (100 != m_nPropLeftMargin)
+            {
+                rText = unicode::formatPercent(m_nPropLeftMargin,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText = GetMetricText(m_nLeftMargin,
+                                      eCoreUnit, ePresUnit, &rIntl);
+            }
+            return true;
+        }
+        case SfxItemPresentation::Complete:
+        {
+            rText = EditResId(RID_SVXITEMS_LRSPACE_LEFT);
+            if (100 != m_nPropLeftMargin)
+            {
+                rText += unicode::formatPercent(m_nPropLeftMargin,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText += GetMetricText(m_nLeftMargin, eCoreUnit, ePresUnit, &rIntl)
+                    + " " + EditResId(GetMetricId(ePresUnit));
+            }
+            return true;
+        }
+        default: ; // prevent warning
+    }
+    return false;
+}
+
+void SvxLeftMarginItem::ScaleMetrics(tools::Long const nMult, tools::Long const nDiv)
+{
+    m_nLeftMargin = BigInt::Scale(m_nLeftMargin, nMult, nDiv);
+}
+
+bool SvxLeftMarginItem::HasMetrics() const
+{
+    return true;
+}
+
+void SvxLeftMarginItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxLeftMarginItem"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nLeftMargin"), BAD_CAST(OString::number(m_nLeftMargin).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nPropLeftMargin"), BAD_CAST(OString::number(m_nPropLeftMargin).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
+boost::property_tree::ptree SvxLeftMarginItem::dumpAsJSON() const
+{
+    boost::property_tree::ptree aTree = SfxPoolItem::dumpAsJSON();
+
+    boost::property_tree::ptree aState;
+
+    MapUnit eTargetUnit = MapUnit::MapInch;
+
+    OUString sLeft = GetMetricText(GetLeft(),
+                        MapUnit::MapTwip, eTargetUnit, nullptr);
+
+    aState.put("left", sLeft);
+    aState.put("unit", "inch");
+
+    aTree.push_back(std::make_pair("state", aState));
+
+    return aTree;
+}
+
+SvxTextLeftMarginItem::SvxTextLeftMarginItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+{
+}
+
+SvxTextLeftMarginItem::SvxTextLeftMarginItem(const tools::Long nLeft, const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+    , m_nTextLeftMargin(nLeft)
+{
+}
+
+bool SvxTextLeftMarginItem::QueryValue(uno::Any& rVal, sal_uInt8 nMemberId) const
+{
+    bool bRet = true;
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+    switch (nMemberId)
+    {
+        // tdf#154282 - return both values for the hardcoded 0 in SfxDispatchController_Impl::StateChanged
+        case 0:
+        {
+            css::frame::status::LeftRightMarginScale aLRSpace;
+            aLRSpace.TextLeft = static_cast<sal_Int32>(bConvert ? convertTwipToMm100(GetTextLeft()) : GetTextLeft());
+            aLRSpace.ScaleLeft = static_cast<sal_Int16>(m_nPropLeftMargin);
+            rVal <<= aLRSpace;
+            break;
+        }
+        case MID_TXT_LMARGIN :
+            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(GetTextLeft()) : GetTextLeft());
+        break;
+        case MID_L_REL_MARGIN:
+            rVal <<= static_cast<sal_Int16>(m_nPropLeftMargin);
+        break;
+        default:
+            assert(false);
+            bRet = false;
+            // SfxDispatchController_Impl::StateChanged calls this with hardcoded 0 triggering this; there used to be a MID_LR_MARGIN 0 but what type would it have?
+            OSL_FAIL("unknown MemberId");
+    }
+    return bRet;
+}
+
+bool SvxTextLeftMarginItem::PutValue(const uno::Any& rVal, sal_uInt8 nMemberId)
+{
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+
+    switch (nMemberId)
+    {
+        case MID_TXT_LMARGIN:
+        {
+            sal_Int32 nVal = 0;
+            if (!(rVal >>= nVal))
+            {
+                return false;
+            }
+            SetTextLeft(bConvert ? o3tl::toTwips(nVal, o3tl::Length::mm100) : nVal);
+        }
+        break;
+        case MID_L_REL_MARGIN:
+        {
+            sal_Int32 nRel = 0;
+            if ((rVal >>= nRel) && nRel >= 0 && nRel < SAL_MAX_UINT16)
+            {
+                m_nPropLeftMargin = static_cast<sal_uInt16>(nRel);
+            }
+            else
+            {
+                return false;
+            }
+        }
+        break;
+        default:
+            assert(false);
+            OSL_FAIL("unknown MemberId");
+            return false;
+    }
+    return true;
+}
+
+bool SvxTextLeftMarginItem::operator==(const SfxPoolItem& rAttr) const
+{
+    assert(SfxPoolItem::operator==(rAttr));
+
+    const SvxTextLeftMarginItem& rOther = static_cast<const SvxTextLeftMarginItem&>(rAttr);
+
+    return (m_nTextLeftMargin == rOther.GetTextLeft()
+        && m_nPropLeftMargin == rOther.GetPropLeft());
+}
+
+SvxTextLeftMarginItem* SvxTextLeftMarginItem::Clone(SfxItemPool *) const
+{
+    return new SvxTextLeftMarginItem(*this);
+}
+
+bool SvxTextLeftMarginItem::GetPresentation
+(
+    SfxItemPresentation ePres,
+    MapUnit             eCoreUnit,
+    MapUnit             ePresUnit,
+    OUString&           rText, const IntlWrapper& rIntl
+)   const
+{
+    switch (ePres)
+    {
+        case SfxItemPresentation::Nameless:
+        {
+            if (100 != m_nPropLeftMargin)
+            {
+                rText = unicode::formatPercent(m_nPropLeftMargin,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText = GetMetricText(m_nTextLeftMargin,
+                                      eCoreUnit, ePresUnit, &rIntl);
+            }
+            return true;
+        }
+        case SfxItemPresentation::Complete:
+        {
+            rText = EditResId(RID_SVXITEMS_LRSPACE_LEFT);
+            if (100 != m_nPropLeftMargin)
+            {
+                rText += unicode::formatPercent(m_nPropLeftMargin,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText += GetMetricText(m_nTextLeftMargin, eCoreUnit, ePresUnit, &rIntl)
+                    + " " + EditResId(GetMetricId(ePresUnit));
+            }
+            return true;
+        }
+        default: ; // prevent warning
+    }
+    return false;
+}
+
+void SvxTextLeftMarginItem::ScaleMetrics(tools::Long const nMult, tools::Long const nDiv)
+{
+    m_nTextLeftMargin = BigInt::Scale(m_nTextLeftMargin, nMult, nDiv);
+}
+
+bool SvxTextLeftMarginItem::HasMetrics() const
+{
+    return true;
+}
+
+void SvxTextLeftMarginItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxTextLeftMarginItem"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nTextLeftMargin"), BAD_CAST(OString::number(m_nTextLeftMargin).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nPropLeftMargin"), BAD_CAST(OString::number(m_nPropLeftMargin).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
+boost::property_tree::ptree SvxTextLeftMarginItem::dumpAsJSON() const
+{
+    boost::property_tree::ptree aTree = SfxPoolItem::dumpAsJSON();
+
+    boost::property_tree::ptree aState;
+
+    MapUnit eTargetUnit = MapUnit::MapInch;
+
+    OUString sLeft = GetMetricText(GetTextLeft(),
+                        MapUnit::MapTwip, eTargetUnit, nullptr);
+
+    aState.put("left", sLeft);
+    aState.put("unit", "inch");
+
+    aTree.push_back(std::make_pair("state", aState));
+
+    return aTree;
+}
+
+SvxFirstLineIndentItem::SvxFirstLineIndentItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+{
+}
+
+SvxFirstLineIndentItem::SvxFirstLineIndentItem(const short nFirst, const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+    , m_nFirstLineOffset(nFirst)
+{
+}
+
+bool SvxFirstLineIndentItem::QueryValue(uno::Any& rVal, sal_uInt8 nMemberId) const
+{
+    bool bRet = true;
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+    switch (nMemberId)
+    {
+        case MID_FIRST_LINE_INDENT:
+            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(m_nFirstLineOffset) : m_nFirstLineOffset);
+            break;
+        case MID_FIRST_LINE_REL_INDENT:
+            rVal <<= static_cast<sal_Int16>(m_nPropFirstLineOffset);
+            break;
+        case MID_FIRST_AUTO:
+            rVal <<= IsAutoFirst();
+            break;
+        default:
+            assert(false);
+            bRet = false;
+            // SfxDispatchController_Impl::StateChanged calls this with hardcoded 0 triggering this; there used to be a MID_LR_MARGIN 0 but what type would it have?
+            OSL_FAIL("unknown MemberId");
+    }
+    return bRet;
+}
+
+bool SvxFirstLineIndentItem::PutValue(const uno::Any& rVal, sal_uInt8 nMemberId)
+{
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+
+    switch (nMemberId)
+    {
+        case MID_FIRST_LINE_INDENT:
+        {
+            sal_Int32 nVal = 0;
+            if (!(rVal >>= nVal))
+            {
+                return false;
+            }
+            m_nFirstLineOffset = bConvert ? o3tl::toTwips(nVal, o3tl::Length::mm100) : nVal;
+            m_nPropFirstLineOffset = 100;
+            break;
+        }
+        case MID_FIRST_LINE_REL_INDENT:
+        {
+            sal_Int32 nRel = 0;
+            if ((rVal >>= nRel) && nRel >= 0 && nRel < SAL_MAX_UINT16)
+            {
+                SetPropTextFirstLineOffset(nRel);
+            }
+            else
+            {
+                return false;
+            }
+            break;
+        }
+        case MID_FIRST_AUTO:
+            SetAutoFirst(Any2Bool(rVal));
+            break;
+        default:
+            assert(false);
+            OSL_FAIL("unknown MemberId");
+            return false;
+    }
+    return true;
+}
+
+bool SvxFirstLineIndentItem::operator==(const SfxPoolItem& rAttr) const
+{
+    assert(SfxPoolItem::operator==(rAttr));
+
+    const SvxFirstLineIndentItem& rOther = static_cast<const SvxFirstLineIndentItem&>(rAttr);
+
+    return (m_nFirstLineOffset == rOther.GetTextFirstLineOffset()
+        && m_nPropFirstLineOffset == rOther.GetPropTextFirstLineOffset()
+        && m_bAutoFirst == rOther.IsAutoFirst());
+}
+
+SvxFirstLineIndentItem* SvxFirstLineIndentItem::Clone(SfxItemPool *) const
+{
+    return new SvxFirstLineIndentItem(*this);
+}
+
+bool SvxFirstLineIndentItem::GetPresentation
+(
+    SfxItemPresentation ePres,
+    MapUnit             eCoreUnit,
+    MapUnit             ePresUnit,
+    OUString&           rText, const IntlWrapper& rIntl
+)   const
+{
+    switch (ePres)
+    {
+        case SfxItemPresentation::Nameless:
+        {
+            if (100 != m_nPropFirstLineOffset)
+            {
+                rText += unicode::formatPercent(m_nPropFirstLineOffset,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText += GetMetricText(static_cast<tools::Long>(m_nFirstLineOffset),
+                                       eCoreUnit, ePresUnit, &rIntl);
+            }
+            return true;
+        }
+        case SfxItemPresentation::Complete:
+        {
+            rText += EditResId(RID_SVXITEMS_LRSPACE_FLINE);
+            if (100 != m_nPropFirstLineOffset)
+            {
+                rText += unicode::formatPercent(m_nPropFirstLineOffset,
+                            Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText += GetMetricText(static_cast<tools::Long>(m_nFirstLineOffset),
+                                       eCoreUnit, ePresUnit, &rIntl)
+                    + " " + EditResId(GetMetricId(ePresUnit));
+            }
+            return true;
+        }
+        default: ; // prevent warning
+    }
+    return false;
+}
+
+void SvxFirstLineIndentItem::ScaleMetrics(tools::Long const nMult, tools::Long const nDiv)
+{
+    m_nFirstLineOffset = static_cast<short>(BigInt::Scale(m_nFirstLineOffset, nMult, nDiv));
+}
+
+bool SvxFirstLineIndentItem::HasMetrics() const
+{
+    return true;
+}
+
+void SvxFirstLineIndentItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxFirstLineIndentItem"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nFirstLineOffset"), BAD_CAST(OString::number(m_nFirstLineOffset).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nPropFirstLineOffset"), BAD_CAST(OString::number(m_nPropFirstLineOffset).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_bAutoFirst"), BAD_CAST(OString::number(int(m_bAutoFirst)).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
+boost::property_tree::ptree SvxFirstLineIndentItem::dumpAsJSON() const
+{
+    boost::property_tree::ptree aTree = SfxPoolItem::dumpAsJSON();
+
+    boost::property_tree::ptree aState;
+
+    MapUnit eTargetUnit = MapUnit::MapInch;
+
+    OUString sFirstline = GetMetricText(GetTextFirstLineOffset(),
+                        MapUnit::MapTwip, eTargetUnit, nullptr);
+
+    aState.put("firstline", sFirstline);
+    aState.put("unit", "inch");
+
+    aTree.push_back(std::make_pair("state", aState));
+
+    return aTree;
+}
+
+SvxRightMarginItem::SvxRightMarginItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+{
+}
+
+SvxRightMarginItem::SvxRightMarginItem(const tools::Long nRight, const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+    , m_nRightMargin(nRight)
+{
+}
+
+bool SvxRightMarginItem::QueryValue(uno::Any& rVal, sal_uInt8 nMemberId) const
+{
+    bool bRet = true;
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+    switch (nMemberId)
+    {
+        // tdf#154282 - return both values for the hardcoded 0 in SfxDispatchController_Impl::StateChanged
+        case 0:
+        {
+            css::frame::status::LeftRightMarginScale aLRSpace;
+            aLRSpace.Right = static_cast<sal_Int32>(bConvert ? convertTwipToMm100(m_nRightMargin) : m_nRightMargin);
+            aLRSpace.ScaleRight = static_cast<sal_Int16>(m_nPropRightMargin);
+            rVal <<= aLRSpace;
+            break;
+        }
+        case MID_R_MARGIN:
+            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(m_nRightMargin) : m_nRightMargin);
+            break;
+        case MID_R_REL_MARGIN:
+            rVal <<= static_cast<sal_Int16>(m_nPropRightMargin);
+        break;
+        default:
+            assert(false);
+            bRet = false;
+            // SfxDispatchController_Impl::StateChanged calls this with hardcoded 0 triggering this; there used to be a MID_LR_MARGIN 0 but what type would it have?
+            OSL_FAIL("unknown MemberId");
+    }
+    return bRet;
+}
+
+bool SvxRightMarginItem::PutValue(const uno::Any& rVal, sal_uInt8 nMemberId)
+{
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+
+    switch (nMemberId)
+    {
+        case MID_R_MARGIN:
+        {
+            sal_Int32 nVal = 0;
+            if (!(rVal >>= nVal))
+            {
+                return false;
+            }
+            SetRight(bConvert ? o3tl::toTwips(nVal, o3tl::Length::mm100) : nVal);
+            break;
+        }
+        case MID_R_REL_MARGIN:
+        {
+            sal_Int32 nRel = 0;
+            if ((rVal >>= nRel) && nRel >= 0 && nRel < SAL_MAX_UINT16)
+            {
+                m_nPropRightMargin = static_cast<sal_uInt16>(nRel);
+            }
+            else
+            {
+                return false;
+            }
+        }
+        break;
+        default:
+            assert(false);
+            OSL_FAIL("unknown MemberId");
+            return false;
+    }
+    return true;
+}
+
+bool SvxRightMarginItem::operator==(const SfxPoolItem& rAttr) const
+{
+    assert(SfxPoolItem::operator==(rAttr));
+
+    const SvxRightMarginItem& rOther = static_cast<const SvxRightMarginItem&>(rAttr);
+
+    return (m_nRightMargin == rOther.GetRight()
+        && m_nPropRightMargin == rOther.GetPropRight());
+}
+
+SvxRightMarginItem* SvxRightMarginItem::Clone(SfxItemPool *) const
+{
+    return new SvxRightMarginItem(*this);
+}
+
+bool SvxRightMarginItem::GetPresentation
+(
+    SfxItemPresentation ePres,
+    MapUnit             eCoreUnit,
+    MapUnit             ePresUnit,
+    OUString&           rText, const IntlWrapper& rIntl
+)   const
+{
+    switch (ePres)
+    {
+        case SfxItemPresentation::Nameless:
+        {
+            if (100 != m_nRightMargin)
+            {
+                rText += unicode::formatPercent(m_nRightMargin,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText += GetMetricText(m_nRightMargin,
+                                       eCoreUnit, ePresUnit, &rIntl);
+            }
+            return true;
+        }
+        case SfxItemPresentation::Complete:
+        {
+            rText += EditResId(RID_SVXITEMS_LRSPACE_RIGHT);
+            if (100 != m_nPropRightMargin)
+            {
+                rText += unicode::formatPercent(m_nPropRightMargin,
+                    Application::GetSettings().GetUILanguageTag());
+            }
+            else
+            {
+                rText += GetMetricText(m_nRightMargin,
+                                       eCoreUnit, ePresUnit, &rIntl)
+                    + " " + EditResId(GetMetricId(ePresUnit));
+            }
+            return true;
+        }
+        default: ; // prevent warning
+    }
+    return false;
+}
+
+void SvxRightMarginItem::ScaleMetrics(tools::Long const nMult, tools::Long const nDiv)
+{
+    m_nRightMargin = BigInt::Scale(m_nRightMargin, nMult, nDiv);
+}
+
+bool SvxRightMarginItem::HasMetrics() const
+{
+    return true;
+}
+
+void SvxRightMarginItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxRightMarginItem"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nRightMargin"), BAD_CAST(OString::number(m_nRightMargin).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nPropRightMargin"), BAD_CAST(OString::number(m_nPropRightMargin).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
+boost::property_tree::ptree SvxRightMarginItem::dumpAsJSON() const
+{
+    boost::property_tree::ptree aTree = SfxPoolItem::dumpAsJSON();
+
+    boost::property_tree::ptree aState;
+
+    MapUnit eTargetUnit = MapUnit::MapInch;
+
+    OUString sRight = GetMetricText(GetRight(),
+                        MapUnit::MapTwip, eTargetUnit, nullptr);
+
+    aState.put("right", sRight);
+    aState.put("unit", "inch");
+
+    aTree.push_back(std::make_pair("state", aState));
+
+    return aTree;
+}
+
+SvxGutterLeftMarginItem::SvxGutterLeftMarginItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+{
+}
+
+bool SvxGutterLeftMarginItem::QueryValue(uno::Any& rVal, sal_uInt8 nMemberId) const
+{
+    bool bRet = true;
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+    switch (nMemberId)
+    {
+        case MID_GUTTER_MARGIN:
+            rVal <<= static_cast<sal_Int32>(bConvert ? convertTwipToMm100(m_nGutterMargin)
+                                                     : m_nGutterMargin);
+            break;
+        default:
+            assert(false);
+            bRet = false;
+            // SfxDispatchController_Impl::StateChanged calls this with hardcoded 0 triggering this; there used to be a MID_LR_MARGIN 0 but what type would it have?
+            OSL_FAIL("unknown MemberId");
+    }
+    return bRet;
+}
+
+bool SvxGutterLeftMarginItem::PutValue(const uno::Any& rVal, sal_uInt8 nMemberId)
+{
+    bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+
+    switch (nMemberId)
+    {
+        case MID_GUTTER_MARGIN:
+        {
+            sal_Int32 nVal = 0;
+            if (!(rVal >>= nVal))
+            {
+                return false;
+            }
+            SetGutterMargin(bConvert ? o3tl::toTwips(nVal, o3tl::Length::mm100) : nVal);
+            break;
+        }
+        default:
+            assert(false);
+            OSL_FAIL("unknown MemberId");
+            return false;
+    }
+    return true;
+}
+
+bool SvxGutterLeftMarginItem::operator==(const SfxPoolItem& rAttr) const
+{
+    assert(SfxPoolItem::operator==(rAttr));
+
+    const SvxGutterLeftMarginItem& rOther = static_cast<const SvxGutterLeftMarginItem&>(rAttr);
+
+    return (m_nGutterMargin == rOther.GetGutterMargin());
+}
+
+SvxGutterLeftMarginItem* SvxGutterLeftMarginItem::Clone(SfxItemPool * ) const
+{
+    return new SvxGutterLeftMarginItem(*this);
+}
+
+bool SvxGutterLeftMarginItem::GetPresentation
+(
+    SfxItemPresentation /*ePres*/,
+    MapUnit             /*eCoreUnit*/,
+    MapUnit             /*ePresUnit*/,
+    OUString&           /*rText*/, const IntlWrapper& /*rIntl*/
+)   const
+{
+    // TODO?
+    return false;
+}
+
+void SvxGutterLeftMarginItem::ScaleMetrics(tools::Long const /*nMult*/, tools::Long const /*nDiv*/)
+{
+    // TODO?
+}
+
+bool SvxGutterLeftMarginItem::HasMetrics() const
+{
+    return true;
+}
+
+void SvxGutterLeftMarginItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxGutterLeftMarginItem"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nGutterMargin"),
+            BAD_CAST(OString::number(m_nGutterMargin).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
+boost::property_tree::ptree SvxGutterLeftMarginItem::dumpAsJSON() const
+{
+    boost::property_tree::ptree aTree = SfxPoolItem::dumpAsJSON();
+
+    boost::property_tree::ptree aState;
+
+    // TODO?
+    aState.put("unit", "inch");
+
+    aTree.push_back(std::make_pair("state", aState));
+
+    return aTree;
+}
+
+SvxGutterRightMarginItem::SvxGutterRightMarginItem(const sal_uInt16 nId)
+    : SfxPoolItem(nId)
+{
+}
+
+bool SvxGutterRightMarginItem::QueryValue(uno::Any& /*rVal*/, sal_uInt8 nMemberId) const
+{
+    bool bRet = true;
+    //bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+#ifndef _MSC_VER
+    switch (nMemberId)
+    {
+        // TODO?
+        default:
+            assert(false);
+            bRet = false;
+            // SfxDispatchController_Impl::StateChanged calls this with hardcoded 0 triggering this; there used to be a MID_LR_MARGIN 0 but what type would it have?
+            OSL_FAIL("unknown MemberId");
+    }
+#else
+    (void) nMemberId;
+#endif
+    return bRet;
+}
+
+bool SvxGutterRightMarginItem::PutValue(const uno::Any& /*rVal*/, sal_uInt8 nMemberId)
+{
+    //bool bConvert = 0 != (nMemberId & CONVERT_TWIPS);
+    nMemberId &= ~CONVERT_TWIPS;
+
+#ifndef _MSC_VER
+    switch (nMemberId)
+    {
+        // TODO?
+        default:
+            assert(false);
+            OSL_FAIL("unknown MemberId");
+            return false;
+    }
+#else
+    (void) nMemberId;
+#endif
+    return true;
+}
+
+
+bool SvxGutterRightMarginItem::operator==(const SfxPoolItem& rAttr) const
+{
+    assert(SfxPoolItem::operator==(rAttr));
+
+    const SvxGutterRightMarginItem& rOther = static_cast<const SvxGutterRightMarginItem&>(rAttr);
+
+    return (m_nRightGutterMargin == rOther.GetRightGutterMargin());
+}
+
+SvxGutterRightMarginItem* SvxGutterRightMarginItem::Clone(SfxItemPool *) const
+{
+    return new SvxGutterRightMarginItem(*this);
+}
+
+bool SvxGutterRightMarginItem::GetPresentation
+(
+    SfxItemPresentation /*ePres*/,
+    MapUnit             /*eCoreUnit*/,
+    MapUnit             /*ePresUnit*/,
+    OUString&           /*rText*/, const IntlWrapper& /*rIntl*/
+)   const
+{
+    // TODO?
+    return false;
+}
+
+void SvxGutterRightMarginItem::ScaleMetrics(tools::Long const /*nMult*/, tools::Long const /*nDiv*/)
+{
+    // TODO?
+}
+
+bool SvxGutterRightMarginItem::HasMetrics() const
+{
+    return true;
+}
+
+void SvxGutterRightMarginItem::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxGutterRightMarginItem"));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nRightGutterMargin"),
+            BAD_CAST(OString::number(m_nRightGutterMargin).getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
+boost::property_tree::ptree SvxGutterRightMarginItem::dumpAsJSON() const
+{
+    boost::property_tree::ptree aTree = SfxPoolItem::dumpAsJSON();
+
+    boost::property_tree::ptree aState;
+
+    // TODO?
+    aState.put("unit", "inch");
+
+    aTree.push_back(std::make_pair("state", aState));
+
+    return aTree;
 }
 
 
@@ -488,7 +1497,6 @@ bool SvxLRSpaceItem::operator==( const SfxPoolItem& rAttr ) const
 
     return (
         nFirstLineOffset == rOther.GetTextFirstLineOffset() &&
-        nTxtLeft == rOther.GetTextLeft() &&
         m_nGutterMargin == rOther.GetGutterMargin() &&
         m_nRightGutterMargin == rOther.GetRightGutterMargin() &&
         nLeftMargin == rOther.GetLeft()  &&
@@ -593,7 +1601,6 @@ bool SvxLRSpaceItem::GetPresentation
 void SvxLRSpaceItem::ScaleMetrics( tools::Long nMult, tools::Long nDiv )
 {
     nFirstLineOffset = static_cast<short>(BigInt::Scale( nFirstLineOffset, nMult, nDiv ));
-    nTxtLeft = BigInt::Scale( nTxtLeft, nMult, nDiv );
     nLeftMargin = BigInt::Scale( nLeftMargin, nMult, nDiv );
     nRightMargin = BigInt::Scale( nRightMargin, nMult, nDiv );
 }
@@ -610,7 +1617,6 @@ void SvxLRSpaceItem::dumpAsXml(xmlTextWriterPtr pWriter) const
     (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SvxLRSpaceItem"));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"), BAD_CAST(OString::number(Which()).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("nFirstLineOffset"), BAD_CAST(OString::number(nFirstLineOffset).getStr()));
-    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("nTxtLeft"), BAD_CAST(OString::number(nTxtLeft).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("nLeftMargin"), BAD_CAST(OString::number(nLeftMargin).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("nRightMargin"), BAD_CAST(OString::number(nRightMargin).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("m_nGutterMargin"),

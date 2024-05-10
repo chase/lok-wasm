@@ -461,10 +461,10 @@ IMPL_LINK( LibPage, ButtonHdl, weld::Button&, rButton, void )
         {
             Shell* pShell = GetShell();
             if (pShell)
-                pShell->GetViewFrame()->GetWindow().EnterWait();
+                pShell->GetViewFrame().GetWindow().EnterWait();
             xModLibContainer->loadLibrary( aLibName );
             if (pShell)
-                pShell->GetViewFrame()->GetWindow().LeaveWait();
+                pShell->GetViewFrame().GetWindow().LeaveWait();
         }
 
         // load dialog library (if not loaded)
@@ -473,10 +473,10 @@ IMPL_LINK( LibPage, ButtonHdl, weld::Button&, rButton, void )
         {
             Shell* pShell = GetShell();
             if (pShell)
-                pShell->GetViewFrame()->GetWindow().EnterWait();
+                pShell->GetViewFrame().GetWindow().EnterWait();
             xDlgLibContainer->loadLibrary( aLibName );
             if (pShell)
-                pShell->GetViewFrame()->GetWindow().LeaveWait();
+                pShell->GetViewFrame().GetWindow().LeaveWait();
         }
 
         // check, if library is password protected
@@ -1320,6 +1320,22 @@ void createLibImpl(weld::Window* pWin, const ScriptDocument& rDocument,
             if ( !rDocument.createModule( aLibName, aModName, true, sModuleCode ) )
                 throw Exception("could not create module " + aModName, nullptr);
 
+            // tdf#151741 - store all libraries to the file system, otherwise they
+            // cannot be renamed/moved since the SfxLibraryContainer::renameLibrary
+            // moves the folders/files on the file system
+            Reference<script::XLibraryContainer2> xModLibContainer(
+                rDocument.getLibraryContainer(E_SCRIPTS), UNO_QUERY);
+            Reference<script::XLibraryContainer2> xDlgLibContainer(
+                rDocument.getLibraryContainer(E_DIALOGS), UNO_QUERY);
+            Reference<script::XPersistentLibraryContainer> xModPersLibContainer(xModLibContainer,
+                                                                                UNO_QUERY);
+            if (xModPersLibContainer.is())
+                xModPersLibContainer->storeLibraries();
+            Reference<script::XPersistentLibraryContainer> xDlgPersLibContainer(xDlgLibContainer,
+                                                                                UNO_QUERY);
+            if (xDlgPersLibContainer.is())
+                xDlgPersLibContainer->storeLibraries();
+
             SbxItem aSbxItem( SID_BASICIDE_ARG_SBX, rDocument, aLibName, aModName, TYPE_MODULE );
             if (SfxDispatcher* pDispatcher = GetDispatcher())
                 pDispatcher->ExecuteList(SID_BASICIDE_SBXINSERTED,
@@ -1338,7 +1354,7 @@ void createLibImpl(weld::Window* pWin, const ScriptDocument& rDocument,
 
                 BrowseMode nMode = pBasicBox->GetMode();
                 bool bDlgMode = ( nMode & BrowseMode::Dialogs ) && !( nMode & BrowseMode::Modules );
-                const auto sId = bDlgMode ? OUString(RID_BMP_DLGLIB) : OUString(RID_BMP_MODLIB);
+                const auto sId = bDlgMode ? RID_BMP_DLGLIB : RID_BMP_MODLIB;
                 pBasicBox->AddEntry(aLibName, sId, xRootEntry.get(), false, std::make_unique<Entry>(OBJ_TYPE_LIBRARY));
                 pBasicBox->AddEntry(aModName, RID_BMP_MODULE, xRootEntry.get(), false, std::make_unique<Entry>(OBJ_TYPE_MODULE));
                 pBasicBox->set_cursor(*xRootEntry);

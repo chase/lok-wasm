@@ -20,7 +20,7 @@
 #ifndef SC_GLOBSTR_HRC
 #define SC_GLOBSTR_HRC
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 #define NNC_(Context, StringSingular, StringPlural) TranslateNId(Context, reinterpret_cast<char const *>(u8##StringSingular), reinterpret_cast<char const *>(u8##StringPlural))
 
 /*
@@ -84,6 +84,7 @@
 #define STR_UNDO_EDITCELLSTYLE                  NC_("STR_UNDO_EDITCELLSTYLE", "Edit Cell Style")
 #define STR_UNDO_APPLYPAGESTYLE                 NC_("STR_UNDO_APPLYPAGESTYLE", "Apply Page Style")
 #define STR_UNDO_EDITPAGESTYLE                  NC_("STR_UNDO_EDITPAGESTYLE", "Edit Page Style")
+#define STR_UNDO_EDITGRAPHICSTYLE               NC_("STR_UNDO_EDITGRAPHICSTYLE", "Edit Drawing Style")
 #define STR_UNDO_DETADDPRED                     NC_("STR_UNDO_DETADDPRED", "Trace Precedents")
 #define STR_UNDO_DETDELPRED                     NC_("STR_UNDO_DETDELPRED", "Remove Precedent")
 #define STR_UNDO_DETADDSUCC                     NC_("STR_UNDO_DETADDSUCC", "Trace Dependents")
@@ -138,7 +139,6 @@
 #define STR_MSSG_SOLVE_2                        NC_("STR_MSSG_SOLVE_2", "Goal Seek failed.\n\n")
 #define STR_MSSG_SOLVE_3                        NC_("STR_MSSG_SOLVE_3", "Insert the closest value (")
 #define STR_MSSG_SOLVE_4                        NC_("STR_MSSG_SOLVE_4", ") into the variable cell anyway?")
-#define STR_TABLE_GRAND                         NC_("STR_TABLE_GRAND", "Grand")
 #define STR_TABLE_ERGEBNIS                      NC_("STR_TABLE_ERGEBNIS", "Result")
 #define STR_UNDO_SPELLING                       NC_("STR_UNDO_SPELLING", "Spellcheck")
 #define STR_TABLE_AND                           NC_("STR_TABLE_AND", "AND")
@@ -157,14 +157,14 @@
 #define STR_PIVOT_GROUP                         NC_("STR_PIVOT_GROUP", "Group")
 #define STR_PIVOT_ROW_LABELS                    NC_("STR_PIVOT_ROW_LABELS", "Row Labels")
 #define STR_PIVOT_COL_LABELS                    NC_("STR_PIVOT_COL_LABELS", "Column Labels")
-/* To translators: $1 == will be replaced by STR_SELCOUNT_ROWARG, and $2 by STR_SELCOUNT_COLARG
+/* %1 will be replaced by STR_SELCOUNT_ROWARG, and %2 by STR_SELCOUNT_COLARG
    e.g. Selected: 1 row, 2 columns */
-#define STR_SELCOUNT                            NC_("STR_SELCOUNT", "Selected: $1, $2")
-// To translators: STR_SELCOUNT_ROWARG is $1 of STR_SELCOUNT. $1 of STR_SELCOUNT_ROWARG is number of rows
-#define STR_SELCOUNT_ROWARG                     NNC_("STR_SELCOUNT_ROWARG", "$1 row", "$1 rows")
-// To translators: STR_SELCOUNT_COLARG is $1 of STR_SELCOUNT. $1 of STR_SELCOUNT_ROWARG is number of columns
-#define STR_SELCOUNT_COLARG                     NNC_("STR_SELCOUNT_COLARG", "$1 column", "$1 columns")
-#define STR_FILTER_SELCOUNT                     NC_("STR_FILTER_SELCOUNT", "$1 of $2 records found")
+#define STR_SELCOUNT                            NC_("STR_SELCOUNT", "Selected: %1, %2")
+// STR_SELCOUNT_ROWARG is %1 of STR_SELCOUNT. %d of STR_SELCOUNT_ROWARG is number of rows
+#define STR_SELCOUNT_ROWARG                     NNC_("STR_SELCOUNT_ROWARG", "%d row", "%d rows")
+// STR_SELCOUNT_COLARG is %2 of STR_SELCOUNT. %d of STR_SELCOUNT_ROWARG is number of columns
+#define STR_SELCOUNT_COLARG                     NNC_("STR_SELCOUNT_COLARG", "%d column", "%d columns")
+#define STR_FILTER_SELCOUNT                     NC_("STR_FILTER_SELCOUNT", "%1 of %2 records found")
 #define STR_COLUMN                              NC_("STR_COLUMN", "Column")
 #define STR_ROW                                 NC_("STR_ROW", "Row")
 #define STR_PAGE                                NC_("STR_PAGE", "Page")
@@ -198,6 +198,14 @@
 #define STR_FUN_TEXT_PRODUCT                    NC_("STR_FUN_TEXT_PRODUCT", "Product")
 #define STR_FUN_TEXT_STDDEV                     NC_("STR_FUN_TEXT_STDDEV", "StDev")
 #define STR_FUN_TEXT_VAR                        NC_("STR_FUN_TEXT_VAR", "Var")
+#define STR_TABLE_GRAND_AVG                     NC_("STR_TABLE_GRAND_AVG", "Grand Average")
+#define STR_TABLE_GRAND_COUNT                   NC_("STR_TABLE_GRAND_COUNT", "Grand Count")
+#define STR_TABLE_GRAND_MAX                     NC_("STR_TABLE_GRAND_MAX", "Grand Max")
+#define STR_TABLE_GRAND_MIN                     NC_("STR_TABLE_GRAND_MIN", "Grand Min")
+#define STR_TABLE_GRAND_PRODUCT                 NC_("STR_TABLE_GRAND_PRODUCT", "Grand Product")
+#define STR_TABLE_GRAND_STDDEV                  NC_("STR_TABLE_GRAND_STDDEV", "Grand StdDev")
+#define STR_TABLE_GRAND_SUM                     NC_("STR_TABLE_GRAND_SUM", "Grand Sum")
+#define STR_TABLE_GRAND_VAR                     NC_("STR_TABLE_GRAND_VAR", "Grand Var")
 #define STR_NOCHARTATCURSOR                     NC_("STR_NOCHARTATCURSOR", "No chart found at this position.")
 #define STR_PIVOT_NOTFOUND                      NC_("STR_PIVOT_NOTFOUND", "No pivot table found at this position.")
 #define STR_EMPTYDATA                           NC_("STR_EMPTYDATA", "(empty)")
@@ -233,6 +241,7 @@
 #define STR_NO_MACRO                            NC_("STR_NO_MACRO", "#MACRO?")
 #define STR_LONG_ERR_NO_MACRO                   NC_("STR_LONG_ERR_NO_MACRO", "Error: Macro not found")
 #define STR_LONG_ERR_SYNTAX                     NC_("STR_LONG_ERR_SYNTAX", "Internal syntactical error")
+#define STR_LONG_ERR_NO_CODE                    NC_("STR_LONG_ERR_NO_CODE", "Error: No code or intersection")
 #define STR_LONG_ERR_ILL_ARG                    NC_("STR_LONG_ERR_ILL_ARG", "Error: Invalid argument")
 #define STR_LONG_ERR_ILL_PAR                    NC_("STR_LONG_ERR_ILL_PAR", "Error in parameter list")
 #define STR_LONG_ERR_ILL_CHAR                   NC_("STR_LONG_ERR_ILL_CHAR", "Error: Invalid character")
@@ -263,7 +272,9 @@
 #define STR_OPTIONAL                            NC_("STR_OPTIONAL", "(optional)")
 #define STR_REQUIRED                            NC_("STR_REQUIRED", "(required)")
 #define STR_NOTES                               NC_("STR_NOTES", "Comments")
-#define STR_QUERY_DELTAB                        NC_("STR_QUERY_DELTAB", "Are you sure you want to delete the selected sheet(s)?")
+/* %d will be replaced by the number of selected sheets
+     e.g. Are you sure you want to delete the 3 selected sheets? */
+#define STR_QUERY_DELTAB                        NNC_("STR_QUERY_DELTAB", "Are you sure you want to delete the selected sheet?", "Are you sure you want to delete the %d selected sheets?")
 #define STR_QUERY_DELSCENARIO                   NC_("STR_QUERY_DELSCENARIO", "Are you sure you want to delete the selected scenario?")
 #define STR_EXPORT_ASCII                        NC_("STR_EXPORT_ASCII", "Export Text File")
 #define STR_IMPORT_LOTUS                        NC_("STR_IMPORT_LOTUS", "Import Lotus files")
@@ -309,8 +320,6 @@
 #define STR_UNDO_HIDETAB                        NC_("STR_UNDO_HIDETAB", "Hide sheet")
 #define STR_UNDO_HIDETABS                       NC_("STR_UNDO_HIDETABS", "Hide sheets")
 #define STR_UNDO_TAB_RTL                        NC_("STR_UNDO_TAB_RTL", "Flip sheet")
-#define STR_ABSREFLOST                          NC_("STR_ABSREFLOST", "The new table contains absolute references to other tables which may be incorrect!")
-#define STR_NAMECONFLICT                        NC_("STR_NAMECONFLICT", "Due to identical names, an existing range name in the destination document has been altered!")
 #define STR_ERR_AUTOFILTER                      NC_("STR_ERR_AUTOFILTER", "AutoFilter not possible")
 #define STR_CREATENAME_REPLACE                  NC_("STR_CREATENAME_REPLACE", "Replace existing definition of #?")
 #define STR_CREATENAME_MARKERR                  NC_("STR_CREATENAME_MARKERR", "Invalid selection for range names")
@@ -348,6 +357,8 @@
 #define STR_BY                                  NC_("STR_BY", "by")
 #define STR_ON                                  NC_("STR_ON", "on")
 #define STR_RELOAD_TABLES                       NC_("STR_RELOAD_TABLES", "Automatic update of external links has been disabled.")
+#define STR_TRUST_DOCUMENT_WARNING              NC_("STR_TRUST_DOCUMENT_WARNING", "Are you sure you trust this document?")
+#define STR_WEBSERVICE_WITH_LINKS_WARNING       NC_("STR_WEBSERVICE_WITH_LINKS_WARNING", "Links to remote locations can be constructed that transmit local data to the remote server.")
 #define STR_REIMPORT_AFTER_LOAD                 NC_("STR_REIMPORT_AFTER_LOAD", "This file contains queries. The results of these queries were not saved.\nDo you want these queries to be repeated?")
 #define STR_INSERT_FULL                         NC_("STR_INSERT_FULL", "Filled cells cannot be shifted\nbeyond the sheet.")
 #define STR_TABINSERT_ERROR                     NC_("STR_TABINSERT_ERROR", "The table could not be inserted.")
@@ -436,6 +447,7 @@
 #define STR_FORM_SCROLLBAR                      NC_("STR_FORM_SCROLLBAR", "Scroll Bar")
 #define STR_STYLE_FAMILY_CELL                   NC_("STR_STYLE_FAMILY_CELL", "Cell Styles")
 #define STR_STYLE_FAMILY_PAGE                   NC_("STR_STYLE_FAMILY_PAGE", "Page Styles")
+#define STR_STYLE_FAMILY_GRAPHICS               NC_("STR_STYLE_FAMILY_GRAPHICS", "Drawing Styles")
 #define STR_ERR_DATAPILOTSOURCE                 NC_("STR_ERR_DATAPILOTSOURCE", "Pivot table source data is invalid.")
 #define STR_OPTIONS_WARN_SEPARATORS             NC_("STR_OPTIONS_WARN_SEPARATORS", "Because the current formula separator settings conflict with the locale, the formula separators have been reset to their default values.")
 #define STR_UNDO_INSERT_CURRENT_DATE            NC_("STR_UNDO_INSERT_CURRENT_DATE", "Insert Current Date")
@@ -491,6 +503,7 @@
 #define STR_EDIT_EXISTING_COND_FORMATS          NC_("STR_EDIT_EXISTING_COND_FORMATS", "The selected cell already contains conditional formatting. You can either edit the existing conditional format or you define a new overlapping conditional format.\n\n Do you want to edit the existing conditional format?")
 #define STR_QUERY_FORMULA_RECALC_ONLOAD_ODS     NC_("STR_QUERY_FORMULA_RECALC_ONLOAD_ODS", "This document was last saved by an application other than %PRODUCTNAME.  Some formula cells may produce different results when recalculated.\n\nDo you want to recalculate all formula cells in this document now?")
 #define STR_QUERY_FORMULA_RECALC_ONLOAD_XLS     NC_("STR_QUERY_FORMULA_RECALC_ONLOAD_XLS", "This document was saved in Excel file format (.xlsx). Some formula cells may produce different results when recalculated. \n\nDo you want to recalculate all formula cells now?")
+#define STR_QUERY_OPT_ROW_HEIGHT_RECALC_ONLOAD  NC_("STR_QUERY_OPT_ROW_HEIGHT_RECALC_ONLOAD", "The content of some cells may not be entirely visible. Recalculating row heights will make them visible, but may take some time.\n\nDo you want to recalculate all row heights now?")
 #define STR_NO_INSERT_DELETE_OVER_PIVOT_TABLE   NC_("STR_NO_INSERT_DELETE_OVER_PIVOT_TABLE", "You cannot insert or delete cells when the affected range intersects with pivot table.")
 #define STR_DPFIELD_GROUP_BY_SECONDS            NC_("STR_DPFIELD_GROUP_BY_SECONDS", "Seconds")
 #define STR_DPFIELD_GROUP_BY_MINUTES            NC_("STR_DPFIELD_GROUP_BY_MINUTES", "Minutes")
@@ -528,7 +541,9 @@
 #define STR_FRACTION                            NC_("STR_FRACTION", "Fraction")
 #define STR_BOOLEAN_VALUE                       NC_("STR_BOOLEAN_VALUE", "Boolean Value")
 #define STR_TEXT                                NC_("STR_TEXT", "Text")
-#define STR_QUERY_PIVOTTABLE_DELTAB             NC_("STR_QUERY_PIVOTTABLE_DELTAB", "The selected sheet(s) contain source data of related pivot tables that will be lost. Are you sure you want to delete the selected sheet(s)?")
+/* %d will be replaced by the number of selected sheets
+    e.g. The 3 selected sheets contain source data of related pivot tables that will be lost. */
+#define STR_QUERY_PIVOTTABLE_DELTAB             NNC_("STR_QUERY_PIVOTTABLE_DELTAB", "The selected sheet contains source data of related pivot tables that will be lost.", "The %d selected sheets contain source data of related pivot tables that will be lost.")
 #define STR_ERR_NAME_INVALID_CELL_REF           NC_("STR_ERR_NAME_INVALID_CELL_REF", "Invalid name. Reference to a cell, or a range of cells not allowed.")
 #define STR_ERR_LONG_LINK_FORMULA_NEEDING_CHECK NC_("STR_ERR_LONG_LINK_FORMULA_NEEDING_CHECK", "External content disabled.")
 #define STR_TEXTORIENTANGLE                     NC_("STR_TEXTORIENTANGLE", "Text orientation angle")

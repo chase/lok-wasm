@@ -7,6 +7,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include <config_wasm_strip.h>
+
 #include <sfx2/thumbnailview.hxx>
 #include <sfx2/thumbnailviewitem.hxx>
 
@@ -40,6 +42,9 @@
 #include <com/sun/star/embed/XStorage.hpp>
 
 #include <memory>
+#if !ENABLE_WASM_STRIP_RECENT
+#include "recentdocsviewitem.hxx"
+#endif
 
 using namespace basegfx;
 using namespace basegfx::utils;
@@ -160,10 +165,8 @@ ThumbnailView::ThumbnailView(std::unique_ptr<weld::ScrolledWindow> xWindow, std:
 
 ThumbnailView::~ThumbnailView()
 {
-    css::uno::Reference< css::lang::XComponent> xComponent(mxAccessible, css::uno::UNO_QUERY);
-
-    if (xComponent.is())
-        xComponent->dispose();
+    if (mxAccessible.is())
+        mxAccessible->dispose();
 
     mpItemAttrs.reset();
 
@@ -243,6 +246,7 @@ void ThumbnailView::ImplInit()
     mbHasVisibleItems = false;
     mbShowTooltips = false;
     mbDrawMnemonics = false;
+    mbAllowMultiSelection = true;
     maFilterFunc = ViewFilterAll();
 
     const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
@@ -250,8 +254,6 @@ void ThumbnailView::ImplInit()
     maTextColor = rSettings.GetWindowTextColor();
     maHighlightColor = rSettings.GetHighlightColor();
     maHighlightTextColor = rSettings.GetHighlightTextColor();
-    maSelectHighlightColor = rSettings.GetActiveColor();
-    maSelectHighlightTextColor = rSettings.GetActiveTextColor();
 
     mfHighlightTransparence = SvtOptionsDrawinglayer::GetTransparentSelectionPercent() * 0.01;
 
@@ -268,8 +270,6 @@ void ThumbnailView::UpdateColors()
     mpItemAttrs->aTextColor = maTextColor.getBColor();
     mpItemAttrs->aHighlightColor = maHighlightColor.getBColor();
     mpItemAttrs->aHighlightTextColor = maHighlightTextColor.getBColor();
-    mpItemAttrs->aSelectHighlightColor = maSelectHighlightColor.getBColor();
-    mpItemAttrs->aSelectHighlightTextColor = maSelectHighlightTextColor.getBColor();
     mpItemAttrs->fHighlightTransparence = mfHighlightTransparence;
 }
 
@@ -294,7 +294,7 @@ void ThumbnailView::ImplDeleteItems()
         {
             css::uno::Any aOldAny, aNewAny;
 
-            aOldAny <<= pItem->GetAccessible( false );
+            aOldAny <<= css::uno::Reference<css::accessibility::XAccessible>(pItem->GetAccessible( false ));
             ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
         }
 
@@ -328,7 +328,7 @@ css::uno::Reference< css::accessibility::XAccessible > ThumbnailView::CreateAcce
     return mxAccessible;
 }
 
-const css::uno::Reference< css::accessibility::XAccessible > & ThumbnailView::getAccessible() const
+const rtl::Reference< ThumbnailViewAcc > & ThumbnailView::getAccessible() const
 {
     return mxAccessible;
 }
@@ -411,10 +411,29 @@ void ThumbnailView::CalculateItemPositions(bool bScrollBarUsed)
     // If want also draw parts of items in the last line,
     // then we add one more line if parts of this line are visible
 
+    bool bPinnedItems = true;
     size_t nCurCount = 0;
     for ( size_t i = 0; i < nItemCount; i++ )
     {
         ThumbnailViewItem *const pItem = mFilteredItemList[i];
+
+#if !ENABLE_WASM_STRIP_RECENT
+        // tdf#38742 - show pinned items in a separate line
+        if (auto const pRecentDocsItem = dynamic_cast<RecentDocsViewItem*>(pItem))
+        {
+            if (bPinnedItems && !pRecentDocsItem->isPinned())
+            {
+                bPinnedItems = false;
+                // Start a new line only if the entire line is not filled
+                if (nCurCount % mnCols && nCurCount > nFirstItem)
+                {
+                    x = nStartX;
+                    y += mnItemHeight + nVItemSpace;
+                }
+                nCurCount = 0;
+            }
+        }
+#endif
 
         if ((nCurCount >= nFirstItem) && (nCurCount < nLastItem))
         {
@@ -424,7 +443,7 @@ void ThumbnailView::CalculateItemPositions(bool bScrollBarUsed)
                 {
                     css::uno::Any aOldAny, aNewAny;
 
-                    aNewAny <<= pItem->GetAccessible( false );
+                    aNewAny <<= css::uno::Reference<css::accessibility::XAccessible>(pItem->GetAccessible( false ));
                     ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
                 }
 
@@ -452,7 +471,7 @@ void ThumbnailView::CalculateItemPositions(bool bScrollBarUsed)
                 {
                     css::uno::Any aOldAny, aNewAny;
 
-                    aOldAny <<= pItem->GetAccessible( false );
+                    aOldAny <<= css::uno::Reference<css::accessibility::XAccessible>(pItem->GetAccessible( false ));
                     ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
                 }
 
@@ -536,16 +555,13 @@ ThumbnailViewItem* ThumbnailView::ImplGetVisibleItem( sal_uInt16 nVisiblePos )
 
 void ThumbnailView::ImplFireAccessibleEvent( short nEventId, const css::uno::Any& rOldValue, const css::uno::Any& rNewValue )
 {
-    ThumbnailViewAcc* pAcc = ThumbnailViewAcc::getImplementation(mxAccessible);
-
-    if( pAcc )
-        pAcc->FireAccessibleEvent( nEventId, rOldValue, rNewValue );
+    if( mxAccessible )
+        mxAccessible->FireAccessibleEvent( nEventId, rOldValue, rNewValue );
 }
 
 bool ThumbnailView::ImplHasAccessibleListeners() const
 {
-    ThumbnailViewAcc* pAcc = ThumbnailViewAcc::getImplementation(mxAccessible);
-    return( pAcc && pAcc->HasAccessibleListeners() );
+    return mxAccessible && mxAccessible->HasAccessibleListeners();
 }
 
 IMPL_LINK_NOARG(ThumbnailView, ImplScrollHdl, weld::ScrolledWindow&, void)
@@ -666,7 +682,7 @@ bool ThumbnailView::KeyInput( const KeyEvent& rKEvt )
 
     if ( pNext )
     {
-        if (aKeyCode.IsShift() && bValidRange)
+        if (aKeyCode.IsShift() && bValidRange && mbAllowMultiSelection)
         {
             std::pair<size_t,size_t> aRange;
             size_t nSelPos = mpStartSelRange - mFilteredItemList.begin();
@@ -936,9 +952,8 @@ void ThumbnailView::GetFocus()
     }
 
     // Tell the accessible object that we got the focus.
-    ThumbnailViewAcc* pAcc = ThumbnailViewAcc::getImplementation(mxAccessible);
-    if( pAcc )
-        pAcc->GetFocus();
+    if( mxAccessible )
+        mxAccessible->GetFocus();
 
     CustomWidgetController::GetFocus();
 }
@@ -948,9 +963,8 @@ void ThumbnailView::LoseFocus()
     CustomWidgetController::LoseFocus();
 
     // Tell the accessible object that we lost the focus.
-    ThumbnailViewAcc* pAcc = ThumbnailViewAcc::getImplementation(mxAccessible);
-    if( pAcc )
-        pAcc->LoseFocus();
+    if( mxAccessible )
+        mxAccessible->LoseFocus();
 }
 
 void ThumbnailView::Resize()
@@ -1110,13 +1124,12 @@ void ThumbnailView::SelectItem( sal_uInt16 nItemId )
         return;
 
     // focus event (select)
-    ThumbnailViewItemAcc* pItemAcc = ThumbnailViewItemAcc::getImplementation( pItem->GetAccessible( false ) );
+    const rtl::Reference<ThumbnailViewItemAcc> & pItemAcc = pItem->GetAccessible( false );
 
     if( pItemAcc )
     {
         css::uno::Any aOldAny, aNewAny;
-        aNewAny <<= css::uno::Reference< css::uno::XInterface >(
-            static_cast< ::cppu::OWeakObject* >( pItemAcc ));
+        aNewAny <<= css::uno::Reference<css::accessibility::XAccessible>( pItemAcc );
         ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, aOldAny, aNewAny );
     }
 
@@ -1194,7 +1207,7 @@ void ThumbnailView::filterItems(const std::function<bool (const ThumbnailViewIte
                 {
                     css::uno::Any aOldAny, aNewAny;
 
-                    aOldAny <<= pItem->GetAccessible( false );
+                    aOldAny <<= css::uno::Reference<css::accessibility::XAccessible>(pItem->GetAccessible( false ));
                     ImplFireAccessibleEvent( css::accessibility::AccessibleEventId::CHILD, aOldAny, aNewAny );
                 }
 

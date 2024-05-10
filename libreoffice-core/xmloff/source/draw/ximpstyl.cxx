@@ -902,7 +902,7 @@ SvXMLStyleContext* SdXMLStylesContext::CreateStyleChildContext(
         case XML_ELEMENT(STYLE, XML_STYLE):
             break; // ignore
         default:
-            XMLOFF_WARN_UNKNOWN_ELEMENT("xmloff", nElement);
+            XMLOFF_INFO_UNKNOWN_ELEMENT("xmloff", nElement);
     }
 
     // call base class

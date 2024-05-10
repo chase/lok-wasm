@@ -46,7 +46,7 @@ namespace o3tl {
     template<> struct typed_flags<SwSectionFrameInvFlags> : is_typed_flags<SwSectionFrameInvFlags, 0x0011> {};
 }
 
-class SwSectionFrame final: public SwLayoutFrame, public SwFlowFrame
+class SW_DLLPUBLIC SwSectionFrame final: public SwLayoutFrame, public SwFlowFrame
     , public SvtListener // TODO?
 {
     SwSection* m_pSection;
@@ -87,6 +87,8 @@ public:
 
     virtual void Cut() override;
     virtual void Paste( SwFrame* pParent, SwFrame* pSibling = nullptr ) override;
+
+    virtual bool IsHiddenNow() const override;
 
     inline const SwSectionFrame *GetFollow() const;
     inline       SwSectionFrame *GetFollow();
@@ -155,7 +157,8 @@ public:
 
     bool IsBalancedSection() const;
 
-    virtual void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
+    virtual void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
+    void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
 
     bool IsFootnoteAtEnd() const { return m_bFootnoteAtEnd; }
     bool IsEndnAtEnd() const { return m_bEndnAtEnd;   }

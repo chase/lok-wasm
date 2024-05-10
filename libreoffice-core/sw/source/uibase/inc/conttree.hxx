@@ -34,6 +34,7 @@
 
 #include <svx/sdr/overlay/overlayobject.hxx>
 #include <editsh.hxx>
+#include <edglbldc.hxx>
 
 class SwWrtShell;
 class SwContentType;
@@ -42,7 +43,6 @@ class SwNavigationConfig;
 class Menu;
 class ToolBox;
 class SwGlblDocContents;
-class SwGlblDocContent;
 class SfxObjectShell;
 class SdrObject;
 
@@ -106,12 +106,15 @@ class SwContentTree final : public SfxListener
     SwWrtShell*         m_pActiveShell;   // the active or a const. open view
     SwNavigationConfig* m_pConfig;
 
+    // these maps store the expand state of nodes with children
     std::map< void*, bool > mOutLineNodeMap;
+    std::map<const void*, bool> m_aRegionNodeExpandMap;
+    std::map<const void*, bool> m_aPostItNodeExpandMap;
 
-    sal_Int32           m_nActiveBlock; // used to restore content types/categories expand state
+    sal_Int32           m_nActiveBlock;  // used to restore content types expand state
     sal_Int32           m_nHiddenBlock;
     size_t              m_nEntryCount;
-    ContentTypeId       m_nRootType;
+    ContentTypeId       m_nRootType;    // content type that is currently displayed in the tree
     ContentTypeId       m_nLastSelType;
     sal_uInt8           m_nOutlineLevel;
 
@@ -134,6 +137,9 @@ class SwContentTree final : public SfxListener
     bool m_bDocHasChanged = true;
     bool m_bIgnoreDocChange = false; // used to prevent tracking update
 
+    ImplSVEvent* m_nRowActivateEventId = nullptr;
+    bool m_bSelectTo = false;
+
     std::unique_ptr<weld::TreeIter> m_xOverlayCompareEntry;
     std::unique_ptr<sdr::overlay::OverlayObject> m_xOverlayObject;
 
@@ -148,13 +154,16 @@ class SwContentTree final : public SfxListener
     void BringDrawingObjectsToAttention(std::vector<const SdrObject*>& rDrawingObjectsArr);
     void BringTextFieldsToAttention(std::vector<const SwTextAttr*>& rTextAttrsArr);
     void BringFootnotesToAttention(std::vector<const SwTextAttr*>& rTextAttrsArr);
-    void BringTypesWithFlowFramesToAttention(const std::vector<const SwNode*>& rNodes);
+    void BringTypesWithFlowFramesToAttention(const std::vector<const SwNode*>& rNodes,
+                                             const bool bIncludeTopMargin = true);
 
     /**
      * Before any data will be deleted, the last active entry has to be found.
      * After this the UserData will be deleted
      */
     void                FindActiveTypeAndRemoveUserData();
+
+    void InsertContent(const weld::TreeIter& rParent);
 
     void insert(const weld::TreeIter* pParent, const OUString& rStr, const OUString& rId,
                 bool bChildrenOnDemand, weld::TreeIter* pRet);
@@ -175,7 +184,7 @@ class SwContentTree final : public SfxListener
 
     void            GotoContent(const SwContent* pCnt);
 
-    void            ExecuteContextMenuAction(const OString& rSelectedPopupEntry);
+    void            ExecuteContextMenuAction(const OUString& rSelectedPopupEntry);
 
     void DeleteOutlineSelections();
     void CopyOutlineSelections();
@@ -197,6 +206,7 @@ class SwContentTree final : public SfxListener
     /** Collapse - Remember the state for content types. */
     DECL_LINK(CollapseHdl, const weld::TreeIter&, bool);
     DECL_LINK(ContentDoubleClickHdl, weld::TreeView&, bool);
+    DECL_LINK(AsyncContentDoubleClickHdl, void*, void);
     DECL_LINK(SelectHdl, weld::TreeView&, void);
     DECL_LINK(FocusInHdl, weld::Widget&, void);
     DECL_LINK(KeyInputHdl, const KeyEvent&, bool);
@@ -206,6 +216,7 @@ class SwContentTree final : public SfxListener
     DECL_LINK(TimerUpdate, Timer *, void);
     DECL_LINK(OverlayObjectDelayTimerHdl, Timer *, void);
     DECL_LINK(MouseMoveHdl, const MouseEvent&, bool);
+    DECL_LINK(MousePressHdl, const MouseEvent&, bool);
 
 public:
     SwContentTree(std::unique_ptr<weld::TreeView> xTreeView, SwNavigationPI* pDialog);
@@ -245,7 +256,7 @@ public:
     void            SetContentTypeTracking(ContentTypeId eCntTypeId, bool bSet);
 
     /** Execute commands of the Navigator */
-    void            ExecCommand(std::string_view rCmd, bool bModifier);
+    void            ExecCommand(std::u16string_view rCmd, bool bModifier);
 
     void            ShowTree();
     void            HideTree();
@@ -328,7 +339,7 @@ private:
     SwWrtShell*             m_pActiveShell;
     std::unique_ptr<SwGlblDocContents> m_pSwGlblDocContents; // array with sorted content
 
-    std::unique_ptr<SwGlblDocContent>       m_pDocContent;
+    std::optional<SwGlblDocContent>       m_oDocContent;
     std::unique_ptr<sfx2::DocumentInserter> m_pDocInserter;
 
     static const SfxObjectShell* s_pShowShell;
@@ -385,7 +396,7 @@ public:
 
     void MoveSelectionTo(const weld::TreeIter* pDropTarget);
 
-    void                TbxMenuHdl(std::string_view rCommand, weld::Menu& rMenu);
+    void                TbxMenuHdl(std::u16string_view rCommand, weld::Menu& rMenu);
     void                InsertRegion( const SwGlblDocContent* pCont,
                                         const OUString* pFileName = nullptr );
     void                EditContent(const SwGlblDocContent* pCont );
@@ -393,13 +404,13 @@ public:
     void                ShowTree();
     void                HideTree();
 
-    void                ExecCommand(std::string_view rCmd);
+    void                ExecCommand(std::u16string_view rCmd);
 
     void                Display(bool bOnlyUpdateUserData = false);
 
     bool                Update(bool bHard);
 
-    void                ExecuteContextMenuAction(std::string_view rSelectedPopupEntry);
+    void                ExecuteContextMenuAction(std::u16string_view rSelectedPopupEntry);
 
     const SwWrtShell*   GetActiveWrtShell() const {return m_pActiveShell;}
 

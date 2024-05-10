@@ -108,7 +108,7 @@ void SvxHyperlinkMailTp::FillDlgFields(const OUString& rStrURL)
 |* retrieve and prepare data from dialog-fields
 |*
 |************************************************************************/
-void SvxHyperlinkMailTp::GetCurentItemData ( OUString& rStrURL, OUString& aStrName,
+void SvxHyperlinkMailTp::GetCurrentItemData ( OUString& rStrURL, OUString& aStrName,
                                              OUString& aStrIntName, OUString& aStrFrame,
                                              SvxLinkInsertMode& eMode )
 {
@@ -209,8 +209,7 @@ IMPL_LINK_NOARG(SvxHyperlinkMailTp, ModifiedReceiverHdl_Impl, weld::ComboBox&, v
 |************************************************************************/
 IMPL_STATIC_LINK_NOARG(SvxHyperlinkMailTp, ClickAdrBookHdl_Impl, weld::Button&, void)
 {
-    SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-    if( pViewFrame )
+    if (SfxViewFrame* pViewFrame = SfxViewFrame::Current())
     {
         SfxItemPool &rPool = pViewFrame->GetPool();
         SfxRequest aReq(SID_VIEW_DATA_SOURCE_BROWSER, SfxCallMode::SLOT, rPool);

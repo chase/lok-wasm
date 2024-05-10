@@ -43,7 +43,6 @@
 
 using namespace ::com::sun::star;
 using ::com::sun::star::beans::Property;
-using ::osl::MutexGuard;
 using ::com::sun::star::uno::Any;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
@@ -75,12 +74,12 @@ WrappedTitleStringProperty::WrappedTitleStringProperty( const Reference< uno::XC
 
 void WrappedTitleStringProperty::setPropertyValue( const Any& rOuterValue, const Reference< beans::XPropertySet >& xInnerPropertySet ) const
 {
-    Reference< chart2::XTitle > xTitle(xInnerPropertySet,uno::UNO_QUERY);
-    if(xTitle.is())
+    Title* pTitle = dynamic_cast<Title*>(xInnerPropertySet.get());
+    if(pTitle)
     {
         OUString aString;
         rOuterValue >>= aString;
-        TitleHelper::setCompleteString( aString, xTitle, m_xContext );
+        TitleHelper::setCompleteString( aString, pTitle, m_xContext );
     }
 }
 Any WrappedTitleStringProperty::getPropertyValue( const Reference< beans::XPropertySet >& xInnerPropertySet ) const
@@ -128,6 +127,7 @@ namespace
 enum
 {
     PROP_TITLE_STRING,
+    PROP_TITLE_VISIBLE,
     PROP_TITLE_TEXT_ROTATION,
     PROP_TITLE_TEXT_STACKED
 };
@@ -137,6 +137,12 @@ void lcl_AddPropertiesToVector(
 {
     rOutProperties.emplace_back( "String",
                   PROP_TITLE_STRING,
+                  cppu::UnoType<OUString>::get(),
+                  beans::PropertyAttribute::BOUND
+                  | beans::PropertyAttribute::MAYBEVOID );
+
+    rOutProperties.emplace_back( "Visible",
+                  PROP_TITLE_VISIBLE,
                   cppu::UnoType<OUString>::get(),
                   beans::PropertyAttribute::BOUND
                   | beans::PropertyAttribute::MAYBEVOID );
@@ -153,36 +159,27 @@ void lcl_AddPropertiesToVector(
                   | beans::PropertyAttribute::MAYBEDEFAULT );
 }
 
-struct StaticTitleWrapperPropertyArray_Initializer
+const Sequence< Property > & StaticTitleWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< beans::Property > aProperties;
+            lcl_AddPropertiesToVector( aProperties );
+            ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::FillProperties::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+            ::chart::wrapper::WrappedAutomaticPositionProperties::addProperties( aProperties );
+            ::chart::wrapper::WrappedScaleTextProperties::addProperties( aProperties );
 
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< beans::Property > aProperties;
-        lcl_AddPropertiesToVector( aProperties );
-        ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::FillProperties::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-        ::chart::wrapper::WrappedAutomaticPositionProperties::addProperties( aProperties );
-        ::chart::wrapper::WrappedScaleTextProperties::addProperties( aProperties );
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
 
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 };
 
-struct StaticTitleWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticTitleWrapperPropertyArray_Initializer >
-{
-};
 
 } // anonymous namespace
 
@@ -192,7 +189,6 @@ namespace chart::wrapper
 TitleWrapper::TitleWrapper( ::chart::TitleHelper::eTitleType eTitleType,
     std::shared_ptr<Chart2ModelContact> spChart2ModelContact ) :
         m_spChart2ModelContact(std::move( spChart2ModelContact )),
-        m_aEventListenerContainer( m_aMutex ),
         m_eTitleType(eTitleType)
 {
     ControllerLockGuardUNO aCtrlLockGuard( m_spChart2ModelContact->getDocumentModel() );
@@ -244,23 +240,25 @@ OUString SAL_CALL TitleWrapper::getShapeType()
 // ____ XComponent ____
 void SAL_CALL TitleWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
-    MutexGuard aGuard( m_aMutex);
     clearWrappedPropertySet();
 }
 
 void SAL_CALL TitleWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL TitleWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 Reference< beans::XPropertySet > TitleWrapper::getFirstCharacterPropertySet()
@@ -469,7 +467,7 @@ Reference< beans::XPropertySet > TitleWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& TitleWrapper::getPropertySequence()
 {
-    return *StaticTitleWrapperPropertyArray::get();
+    return StaticTitleWrapperPropertyArray();
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > TitleWrapper::createWrappedProperties()

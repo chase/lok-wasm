@@ -33,6 +33,7 @@
 #include <bitmaps.hlst>
 #include <window.h>
 #include "bufferdevice.hxx"
+#include <menubarvalue.hxx>
 
 // document closing button
 #define IID_DOCUMENTCLOSE 1
@@ -105,7 +106,7 @@ void DecoToolBox::SetImages( tools::Long nMaxHeight, bool bForce )
                             (lastSize - maImage.GetSizePixel().Height())/2 ),
                         maImage.GetSizePixel() );
 
-    aBmpExDst.CopyPixel( aDestRect, aSrcRect, &aBmpExSrc );
+    aBmpExDst.CopyPixel( aDestRect, aSrcRect, aBmpExSrc );
     SetItemImage( ToolBoxItemId(IID_DOCUMENTCLOSE), Image( aBmpExDst ) );
 
 }
@@ -223,7 +224,7 @@ IMPL_LINK_NOARG(MenuBarWindow, CloseHdl, ToolBox *, void)
         // #i106052# call close hdl asynchronously to ease handler implementation
         // this avoids still being in the handler while the DecoToolBox already
         // gets destroyed
-        Application::PostUserEvent(static_cast<MenuBar*>(m_pMenu.get())->GetCloseButtonClickHdl());
+        Application::PostUserEvent(m_pMenu->GetCloseButtonClickHdl());
     }
     else
     {
@@ -286,7 +287,7 @@ void MenuBarWindow::ImplCreatePopup( bool bPreSelectFirst )
          ( pItemData->pSubMenu != m_pActivePopup )) )
         return;
 
-    m_pActivePopup = static_cast<PopupMenu*>(pItemData->pSubMenu.get());
+    m_pActivePopup = pItemData->pSubMenu.get();
     tools::Long nX = 0;
     MenuItemData* pData = nullptr;
     for ( sal_uLong n = 0; n < m_nHighlightedItem; n++ )
@@ -1009,7 +1010,7 @@ void MenuBarWindow::LayoutChanged()
 
     // depending on the native implementation or the displayable flag
     // the menubar windows is suppressed (ie, height=0)
-    if (!static_cast<MenuBar*>(m_pMenu.get())->IsDisplayable() ||
+    if (!m_pMenu->IsDisplayable() ||
         (m_pMenu->ImplGetSalMenu() && m_pMenu->ImplGetSalMenu()->VisibleMenuBar()))
     {
         nHeight = 0;

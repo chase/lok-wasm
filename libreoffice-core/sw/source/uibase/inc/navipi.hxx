@@ -23,6 +23,7 @@
 #include <svl/lstner.hxx>
 #include <vcl/transfer.hxx>
 #include <sfx2/childwin.hxx>
+#include <sfx2/objsh.hxx>
 #include <sfx2/sidebar/ControllerItem.hxx>
 #include <sfx2/navigat.hxx>
 #include <sfx2/weldutils.hxx>
@@ -30,12 +31,12 @@
 #include "conttree.hxx"
 #include <ndarr.hxx>
 #include <memory>
+#include <optional>
 
 class SwWrtShell;
 class SfxBindings;
 class SwNavigationConfig;
 class SwView;
-class SfxObjectShellLock;
 enum class RegionMode;
 class SpinField;
 
@@ -75,7 +76,7 @@ class SwNavigationPI final : public PanelLayout
 
     VclPtr<SfxNavigator> m_xNavigatorDlg;
 
-    std::unique_ptr<SfxObjectShellLock>  m_pxObjectShell;
+    std::optional<SfxObjectShellLock>  m_oObjectShell;
     SwView              *m_pContentView;
     SwWrtShell          *m_pContentWrtShell;
     SwView              *m_pActContView;
@@ -99,19 +100,20 @@ class SwNavigationPI final : public PanelLayout
     void FillBox();
 
     DECL_LINK( DocListBoxSelectHdl, weld::ComboBox&, void );
-    DECL_LINK( ToolBoxSelectHdl, const OString&, void );
-    DECL_LINK( ToolBoxClickHdl, const OString&, void );
-    DECL_LINK( ToolBox5DropdownClickHdl, const OString&, void );
-    DECL_LINK( ToolBox6DropdownClickHdl, const OString&, void );
+    DECL_LINK( ToolBoxSelectHdl, const OUString&, void );
+    DECL_LINK( ToolBoxClickHdl, const OUString&, void );
+    DECL_LINK( ToolBox5DropdownClickHdl, const OUString&, void );
+    DECL_LINK( ToolBox6DropdownClickHdl, const OUString&, void );
     DECL_LINK( DoneLink, SfxPoolItem const *, void );
-    DECL_LINK( DropModeMenuSelectHdl, const OString&, void );
-    DECL_LINK( HeadingsMenuSelectHdl, const OString&, void );
-    DECL_LINK( GlobalMenuSelectHdl, const OString&, void );
+    DECL_LINK( DropModeMenuSelectHdl, const OUString&, void );
+    DECL_LINK( HeadingsMenuSelectHdl, const OUString&, void );
+    DECL_LINK( GlobalMenuSelectHdl, const OUString&, void );
     DECL_LINK( ChangePageHdl, Timer*, void );
     DECL_LINK( PageEditModifyHdl, weld::SpinButton&, void );
     DECL_LINK( EditActionHdl, weld::Entry&, bool );
     DECL_LINK( SetFocusChildHdl, weld::Container&, void );
     DECL_LINK( NavigateByComboBoxSelectHdl, weld::ComboBox&, void );
+    DECL_LINK( PageModifiedHdl, weld::Entry&, void );
 
     bool EditAction();
     void UsePage();

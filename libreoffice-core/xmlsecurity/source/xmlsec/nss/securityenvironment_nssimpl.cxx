@@ -57,7 +57,6 @@ using namespace com::sun::star;
 using namespace ::com::sun::star::uno ;
 using namespace ::com::sun::star::lang ;
 
-using ::com::sun::star::xml::crypto::XSecurityEnvironment ;
 using ::com::sun::star::security::XCertificate ;
 
 namespace std
@@ -151,25 +150,12 @@ Sequence< OUString > SAL_CALL SecurityEnvironment_NssImpl::getSupportedServiceNa
     return seqServiceNames;
 }
 
-/* XUnoTunnel */
-sal_Int64 SAL_CALL SecurityEnvironment_NssImpl::getSomething( const Sequence< sal_Int8 >& aIdentifier )
-{
-    return comphelper::getSomethingImpl(aIdentifier, this);
-}
-
-/* XUnoTunnel extension */
-
-const Sequence< sal_Int8>& SecurityEnvironment_NssImpl::getUnoTunnelId() {
-    static const comphelper::UnoIdInit theSecurityEnvironment_NssImplUnoTunnelId;
-    return theSecurityEnvironment_NssImplUnoTunnelId.getSeq();
-}
-
 OUString SecurityEnvironment_NssImpl::getSecurityEnvironmentInformation()
 {
     OUStringBuffer buff;
     for (auto& slot : m_Slots)
     {
-        buff.append(OUString::createFromAscii(PK11_GetTokenName(slot)));
+        buff.appendAscii(PK11_GetTokenName(slot));
         buff.append("\n");
     }
     return buff.makeStringAndClear();
@@ -358,14 +344,14 @@ Reference< XCertificate > SecurityEnvironment_NssImpl::getCertificate( const OUS
 }
 
 Sequence< Reference < XCertificate > > SecurityEnvironment_NssImpl::buildCertificatePath( const Reference< XCertificate >& begin ) {
-    // Remember the signing certificate.
-    m_xSigningCertificate = begin;
 
-    Reference< XUnoTunnel > xCertTunnel( begin, UNO_QUERY_THROW ) ;
-    const X509Certificate_NssImpl* xcert = comphelper::getFromUnoTunnel<X509Certificate_NssImpl>(xCertTunnel);
+    X509Certificate_NssImpl* xcert = dynamic_cast<X509Certificate_NssImpl*>(begin.get());
     if( xcert == nullptr ) {
         throw RuntimeException() ;
     }
+
+    // Remember the signing certificate.
+    m_xSigningCertificate = xcert;
 
     const CERTCertificate* cert = xcert->getNssCert() ;
     if (!cert)
@@ -495,11 +481,10 @@ verifyCertificate( const Reference< csss::XCertificate >& aCert,
 {
     sal_Int32 validity = csss::CertificateValidity::INVALID;
     const CERTCertificate* cert ;
-    Reference< XUnoTunnel > xCertTunnel( aCert, UNO_QUERY_THROW ) ;
 
     SAL_INFO("xmlsecurity.xmlsec", "Start verification of certificate: " << aCert->getSubjectName());
 
-    const X509Certificate_NssImpl* xcert = comphelper::getFromUnoTunnel<X509Certificate_NssImpl>(xCertTunnel);
+    const X509Certificate_NssImpl* xcert = dynamic_cast<X509Certificate_NssImpl*>(aCert.get());
     if( xcert == nullptr ) {
         throw RuntimeException() ;
     }
@@ -711,8 +696,7 @@ sal_Int32 SecurityEnvironment_NssImpl::getCertificateCharacters(
     sal_Int32 characters ;
     const CERTCertificate* cert ;
 
-    Reference< XUnoTunnel > xCertTunnel( aCert, UNO_QUERY_THROW ) ;
-    const X509Certificate_NssImpl* xcert = comphelper::getFromUnoTunnel<X509Certificate_NssImpl>(xCertTunnel);
+    const X509Certificate_NssImpl* xcert = dynamic_cast<X509Certificate_NssImpl*>(aCert.get());
     if( xcert == nullptr ) {
         throw RuntimeException() ;
     }
@@ -813,9 +797,9 @@ xmlSecKeysMngrPtr SecurityEnvironment_NssImpl::createKeysManager() {
         throw RuntimeException();
 
     // Adopt the private key of the signing certificate, if it has any.
-    if (auto pCertificate = dynamic_cast<X509Certificate_NssImpl*>(m_xSigningCertificate.get()))
+    if (m_xSigningCertificate)
     {
-        SECKEYPrivateKey* pPrivateKey = SECKEY_CopyPrivateKey(pCertificate->getPrivateKey());
+        SECKEYPrivateKey* pPrivateKey = SECKEY_CopyPrivateKey(m_xSigningCertificate->getPrivateKey());
         if (pPrivateKey)
         {
             xmlSecKeyDataPtr pKeyData = xmlSecNssPKIAdoptKey(pPrivateKey, nullptr);

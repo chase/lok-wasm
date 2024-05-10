@@ -1245,12 +1245,11 @@ void WMFWriter::WriteRecords( const GDIMetaFile & rMTF )
             {
                 const MetaBmpExAction*  pA = static_cast<const MetaBmpExAction *>(pMA);
                 Bitmap                  aBmp( pA->GetBitmapEx().GetBitmap() );
-                Bitmap                  aMsk( pA->GetBitmapEx().GetAlpha() );
+                AlphaMask               aMsk( pA->GetBitmapEx().GetAlphaMask() );
 
                 if( !aMsk.IsEmpty() )
                 {
                     aBmp.Replace( aMsk, COL_WHITE );
-                    aMsk.Invert();
                     WMFRecord_StretchDIB( pA->GetPoint(), aMsk.GetSizePixel(), aBmp, W_SRCPAINT );
                     WMFRecord_StretchDIB( pA->GetPoint(), aBmp.GetSizePixel(), aBmp, W_SRCAND );
                 }
@@ -1263,13 +1262,12 @@ void WMFWriter::WriteRecords( const GDIMetaFile & rMTF )
             {
                 const MetaBmpExScaleAction* pA = static_cast<const MetaBmpExScaleAction*>(pMA);
                 Bitmap                      aBmp( pA->GetBitmapEx().GetBitmap() );
-                Bitmap                      aMsk( pA->GetBitmapEx().GetAlpha() );
+                AlphaMask                   aMsk( pA->GetBitmapEx().GetAlphaMask() );
 
                 if( !aMsk.IsEmpty() )
                 {
                     aBmp.Replace( aMsk, COL_WHITE );
-                    aMsk.Invert();
-                    WMFRecord_StretchDIB( pA->GetPoint(), pA->GetSize(), aMsk, W_SRCPAINT );
+                    WMFRecord_StretchDIB( pA->GetPoint(), pA->GetSize(), aMsk.GetBitmap(), W_SRCPAINT );
                     WMFRecord_StretchDIB( pA->GetPoint(), pA->GetSize(), aBmp, W_SRCAND );
                 }
                 else
@@ -1283,13 +1281,12 @@ void WMFWriter::WriteRecords( const GDIMetaFile & rMTF )
                 BitmapEx                        aBmpEx( pA->GetBitmapEx() );
                 aBmpEx.Crop( tools::Rectangle( pA->GetSrcPoint(), pA->GetSrcSize() ) );
                 Bitmap                          aBmp( aBmpEx.GetBitmap() );
-                Bitmap                          aMsk( aBmpEx.GetAlpha() );
+                AlphaMask                       aMsk( aBmpEx.GetAlphaMask() );
 
                 if( !aMsk.IsEmpty() )
                 {
                     aBmp.Replace( aMsk, COL_WHITE );
-                    aMsk.Invert();
-                    WMFRecord_StretchDIB( pA->GetDestPoint(), pA->GetDestSize(), aMsk, W_SRCPAINT );
+                    WMFRecord_StretchDIB( pA->GetDestPoint(), pA->GetDestSize(), aMsk.GetBitmap(), W_SRCPAINT );
                     WMFRecord_StretchDIB( pA->GetDestPoint(), pA->GetDestSize(), aBmp, W_SRCAND );
                 }
                 else

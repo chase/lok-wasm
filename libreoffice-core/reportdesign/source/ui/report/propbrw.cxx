@@ -274,11 +274,11 @@ uno::Sequence< Reference<uno::XInterface> > PropBrw::CreateCompPropSet(const Sdr
     {
         SdrObject* pCurrent = _rMarkList.GetMark(i)->GetMarkedSdrObj();
 
-        ::std::unique_ptr<SdrObjListIter> pGroupIterator;
+        ::std::optional<SdrObjListIter> oGroupIterator;
         if (pCurrent->IsGroupObject())
         {
-            pGroupIterator.reset(new SdrObjListIter(pCurrent->GetSubList()));
-            pCurrent = pGroupIterator->IsMore() ? pGroupIterator->Next() : nullptr;
+            oGroupIterator.emplace(pCurrent->GetSubList());
+            pCurrent = oGroupIterator->IsMore() ? oGroupIterator->Next() : nullptr;
         }
 
         while (pCurrent)
@@ -288,7 +288,7 @@ uno::Sequence< Reference<uno::XInterface> > PropBrw::CreateCompPropSet(const Sdr
                 aSets.push_back(CreateComponentPair(pObj));
 
             // next element
-            pCurrent = pGroupIterator && pGroupIterator->IsMore() ? pGroupIterator->Next() : nullptr;
+            pCurrent = oGroupIterator && oGroupIterator->IsMore() ? oGroupIterator->Next() : nullptr;
         }
     }
     return uno::Sequence< Reference<uno::XInterface> >(aSets.data(), aSets.size());
@@ -421,7 +421,7 @@ void PropBrw::Update( OSectionView* pNewView )
     {
         if ( m_pView )
         {
-            EndListening( *(m_pView->GetModel()) );
+            EndListening(m_pView->GetModel());
             m_pView = nullptr;
         }
 
@@ -480,7 +480,7 @@ void PropBrw::Update( OSectionView* pNewView )
             implSetNewObject( uno::Sequence< uno::Reference< uno::XInterface> >(&xTemp,1) );
         }
 
-        StartListening( *(m_pView->GetModel()) );
+        StartListening(m_pView->GetModel());
     }
     catch ( Exception& )
     {
@@ -498,7 +498,7 @@ void PropBrw::Update( const uno::Reference< uno::XInterface>& _xReportComponent)
     {
         if ( m_pView )
         {
-            EndListening( *(m_pView->GetModel()) );
+            EndListening(m_pView->GetModel());
             m_pView = nullptr;
         }
 

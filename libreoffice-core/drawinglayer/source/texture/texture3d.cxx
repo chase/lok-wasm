@@ -26,6 +26,7 @@
 #include <vcl/BitmapTools.hxx>
 #include <primitive3d/hatchtextureprimitive3d.hxx>
 #include <sal/log.hxx>
+#include <osl/diagnose.h>
 
 namespace drawinglayer::texture
 {
@@ -74,12 +75,12 @@ namespace drawinglayer::texture
 
             if(mbIsAlpha)
             {
-                maTransparence = rBitmapEx.GetAlpha().GetBitmap();
-                mpReadTransparence = Bitmap::ScopedReadAccess(maTransparence);
+                maTransparence = rBitmapEx.GetAlphaMask().GetBitmap();
+                mpReadTransparence = maTransparence;
             }
 
             if (!maBitmap.IsEmpty())
-                mpReadBitmap = Bitmap::ScopedReadAccess(maBitmap);
+                mpReadBitmap = maBitmap;
             SAL_WARN_IF(!mpReadBitmap, "drawinglayer", "GeoTexSvxBitmapEx: Got no read access to Bitmap");
             if (mpReadBitmap)
             {
@@ -102,7 +103,7 @@ namespace drawinglayer::texture
         {
         }
 
-        sal_uInt8 GeoTexSvxBitmapEx::impGetTransparence(sal_Int32 rX, sal_Int32 rY) const
+        sal_uInt8 GeoTexSvxBitmapEx::impGetAlpha(sal_Int32 rX, sal_Int32 rY) const
         {
             if(mbIsAlpha)
             {
@@ -147,10 +148,10 @@ namespace drawinglayer::texture
 
                 if(mbIsAlpha)
                 {
-                    // when we have a transparence, make use of it
-                    const sal_uInt8 aLuminance(impGetTransparence(nX, nY));
+                    // when we have alpha, make use of it
+                    const sal_uInt8 aAlpha(impGetAlpha(nX, nY));
 
-                    rfOpacity = (static_cast<double>(0xff - aLuminance) * (1.0 / 255.0));
+                    rfOpacity = (static_cast<double>(aAlpha) * (1.0 / 255.0));
                 }
                 else
                 {
@@ -172,8 +173,8 @@ namespace drawinglayer::texture
                 if(mbIsAlpha)
                 {
                     // this texture has an alpha part, use it
-                    const sal_uInt8 aLuminance(impGetTransparence(nX, nY));
-                    const double fNewOpacity(static_cast<double>(0xff - aLuminance) * (1.0 / 255.0));
+                    const sal_uInt8 aAlpha(impGetAlpha(nX, nY));
+                    const double fNewOpacity(static_cast<double>(aAlpha) * (1.0 / 255.0));
 
                     rfOpacity = 1.0 - ((1.0 - fNewOpacity) * (1.0 - rfOpacity));
                 }

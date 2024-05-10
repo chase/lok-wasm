@@ -139,12 +139,8 @@ void SdPage::SetPresentationLayout(std::u16string_view rLayoutName,
     std::vector<StyleReplaceData> aReplList;
     bool bListsFilled = false;
 
-    const size_t nObjCount = GetObjCount();
-
-    for (size_t nObj = 0; nObj < nObjCount; ++nObj)
+    for (const rtl::Reference<SdrObject>& pObj : *this)
     {
-        auto pObj = GetObj(nObj);
-
         if (pObj->GetObjInventor() == SdrInventor::Default &&
             pObj->GetObjIdentifier() == SdrObjKind::OutlineText)
         {
@@ -233,7 +229,7 @@ void SdPage::SetPresentationLayout(std::u16string_view rLayoutName,
         }
         else
         {
-            SfxStyleSheet* pSheet = GetStyleSheetForPresObj(GetPresObjKind(pObj));
+            SfxStyleSheet* pSheet = GetStyleSheetForPresObj(GetPresObjKind(pObj.get()));
 
             if (pSheet)
                 pObj->SetStyleSheet(pSheet, true);
@@ -382,9 +378,9 @@ void SdPage::lateInit(const SdPage& rSrcPage)
     rSrcPage.cloneAnimations(*this);
 
     // annotations
-    for(const Reference< XAnnotation >& srcAnnotation : rSrcPage.maAnnotations)
+    for(const rtl::Reference< Annotation >& srcAnnotation : rSrcPage.maAnnotations)
     {
-        Reference< XAnnotation > ref;
+        rtl::Reference< Annotation > ref;
         createAnnotation(ref);
         ref->setPosition(srcAnnotation->getPosition());
         ref->setSize(srcAnnotation->getSize());
@@ -557,12 +553,12 @@ bool SdPage::Equals(const SdPage& rOtherPage) const
     return true;
  }
 
-void SdPage::createAnnotation( css::uno::Reference< css::office::XAnnotation >& xAnnotation )
+void SdPage::createAnnotation( rtl::Reference< Annotation >& xAnnotation )
 {
     sd::createAnnotation( xAnnotation, this );
 }
 
-void SdPage::addAnnotation( const Reference< XAnnotation >& xAnnotation, int nIndex )
+void SdPage::addAnnotation( const rtl::Reference< Annotation >& xAnnotation, int nIndex )
 {
     if( (nIndex == -1) || (nIndex > static_cast<int>(maAnnotations.size())) )
     {
@@ -585,10 +581,10 @@ void SdPage::addAnnotation( const Reference< XAnnotation >& xAnnotation, int nIn
     NotifyDocumentEvent(
         static_cast< SdDrawDocument& >(getSdrModelFromSdrPage()),
         "OnAnnotationInserted",
-        Reference<XInterface>(xAnnotation, UNO_QUERY));
+        Reference<XInterface>(static_cast<cppu::OWeakObject*>(xAnnotation.get()), UNO_QUERY));
 }
 
-void SdPage::removeAnnotation( const Reference< XAnnotation >& xAnnotation )
+void SdPage::removeAnnotation( const rtl::Reference< Annotation >& xAnnotation )
 {
     if( getSdrModelFromSdrPage().IsUndoEnabled() )
     {
@@ -605,15 +601,14 @@ void SdPage::removeAnnotation( const Reference< XAnnotation >& xAnnotation )
     NotifyDocumentEvent(
         static_cast< SdDrawDocument& >( getSdrModelFromSdrPage() ),
         "OnAnnotationRemoved",
-        Reference<XInterface>( xAnnotation, UNO_QUERY ) );
+        Reference<XInterface>( static_cast<cppu::OWeakObject*>(xAnnotation.get()), UNO_QUERY ) );
 }
 
 void SdPage::getGraphicsForPrefetch(std::vector<Graphic*>& graphics) const
 {
-    for( size_t i = 0; i < GetObjCount(); ++i)
+    for (const rtl::Reference<SdrObject>& obj : *this)
     {
-        SdrObject* obj = GetObj(i);
-        if( SdrGrafObj* grafObj = dynamic_cast<SdrGrafObj*>(obj))
+        if( SdrGrafObj* grafObj = dynamic_cast<SdrGrafObj*>(obj.get()))
             if(!grafObj->GetGraphic().isAvailable())
                 graphics.push_back( const_cast<Graphic*>(&grafObj->GetGraphic()));
         if( const Graphic* fillGraphic = obj->getFillGraphic())

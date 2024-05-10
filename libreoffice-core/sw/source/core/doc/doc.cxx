@@ -53,6 +53,8 @@
 #include <editeng/pbinitem.hxx>
 #include <unotools/localedatawrapper.hxx>
 
+#include <officecfg/Office/Writer.hxx>
+
 #include <swatrset.hxx>
 #include <swmodule.hxx>
 #include <fmtrfmrk.hxx>
@@ -104,6 +106,12 @@
    Probably unwanted dependency on SwDocShell
 */
 #include <docsh.hxx>
+
+#include <com/sun/star/text/XTextRange.hpp>
+#include <editeng/unoprnms.hxx>
+#include <unotextrange.hxx>
+#include <unoprnms.hxx>
+#include <unomap.hxx>
 
 using namespace ::com::sun::star;
 
@@ -479,7 +487,7 @@ struct PostItField_ : public SetGetExpField
 
     sal_uInt16 GetPageNo( const StringRangeEnumerator &rRangeEnum,
             const o3tl::sorted_vector< sal_Int32 > &rPossiblePages,
-            sal_uInt16& rVirtPgNo, sal_uInt16& rLineNo );
+            sal_uInt16& rVirtPgNo, sal_Int32& rLineNo );
 
     const SwPostItField* GetPostIt() const
     {
@@ -492,7 +500,7 @@ struct PostItField_ : public SetGetExpField
 sal_uInt16 PostItField_::GetPageNo(
     const StringRangeEnumerator &rRangeEnum,
     const o3tl::sorted_vector< sal_Int32 > &rPossiblePages,
-    /* out */ sal_uInt16& rVirtPgNo, /* out */ sal_uInt16& rLineNo )
+    /* out */ sal_uInt16& rVirtPgNo, /* out */ sal_Int32& rLineNo )
 {
     //Problem: If a PostItField is contained in a Node that is represented
     //by more than one layout instance,
@@ -511,7 +519,7 @@ sal_uInt16 PostItField_::GetPageNo(
         sal_uInt16 nPgNo = pFrame->GetPhyPageNum();
         if( rRangeEnum.hasValue( nPgNo, &rPossiblePages ))
         {
-            rLineNo = o3tl::narrowing<sal_uInt16>(pFrame->GetLineCount( nPos ) +
+            rLineNo = o3tl::narrowing<sal_Int32>(pFrame->GetLineCount( nPos ) +
                       pFrame->GetAllLines() - pFrame->GetThisLines());
             rVirtPgNo = pFrame->GetVirtPageNum();
             return nPgNo;
@@ -543,7 +551,7 @@ static void lcl_FormatPostIt(
     SwPaM& aPam,
     const SwPostItField* pField,
     bool bNewPage, bool bIsFirstPostIt,
-    sal_uInt16 nPageNo, sal_uInt16 nLineNo )
+    sal_uInt16 nPageNo, sal_Int32 nLineNo )
 {
     static char const sTmp[] = " : ";
 
@@ -561,21 +569,21 @@ static void lcl_FormatPostIt(
         pIDCO->SplitNode( *aPam.GetPoint(), false );
     }
 
-    OUString aStr( SwViewShell::GetShellRes()->aPostItPage );
-    aStr += sTmp +
+    OUString aStr = SwViewShell::GetShellRes()->aPostItPage +
+        sTmp +
         OUString::number( nPageNo ) +
         " ";
     if( nLineNo )
     {
-        aStr += SwViewShell::GetShellRes()->aPostItLine;
-        aStr += sTmp +
+        aStr += SwViewShell::GetShellRes()->aPostItLine +
+            sTmp +
             OUString::number( nLineNo ) +
             " ";
     }
-    aStr += SwViewShell::GetShellRes()->aPostItAuthor;
-    aStr += sTmp + pField->GetPar1() + " ";
     SvtSysLocale aSysLocale;
-    aStr += /*(LocaleDataWrapper&)*/aSysLocale.GetLocaleData().getDate( pField->GetDate() );
+    aStr += SwViewShell::GetShellRes()->aPostItAuthor +
+        sTmp + pField->GetPar1() + " " +
+        /*(LocaleDataWrapper&)*/aSysLocale.GetLocaleData().getDate( pField->GetDate() );
     if(pField->GetResolved())
         aStr += " " + SwResId(STR_RESOLVED);
     pIDCO->InsertString( aPam, aStr );
@@ -799,7 +807,8 @@ void SwDoc::UpdatePagesForPrintingWithPostItData(
     // temporary post-it document.
     // Since the array of post-it fields is sorted by page and line number we will
     // already get them in the correct order
-    sal_uInt16 nVirtPg = 0, nLineNo = 0, nLastPageNum = 0, nPhyPageNum = 0;
+    sal_uInt16 nVirtPg = 0, nLastPageNum = 0, nPhyPageNum = 0;
+    sal_Int32 nLineNo = 0;
     bool bIsFirstPostIt = true;
     for (SetGetExpFields::size_type i = 0; i < nPostItCount; ++i)
     {
@@ -982,7 +991,17 @@ void SwDoc::CalculatePagePairsForProspectPrinting(
 
     // just one page is special ...
     if ( 1 == aVec.size() )
+    {
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12 && __cplusplus == 202002L
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
         aVec.insert( aVec.begin() + 1, nullptr ); // insert a second empty page
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12 && __cplusplus == 202002L
+#pragma GCC diagnostic pop
+#endif
+    }
     else
     {
         // now extend the number of pages to fit a multiple of 4
@@ -1601,11 +1620,31 @@ bool SwDoc::RestoreInvisibleContent()
     return false;
 }
 
+static bool IsMailMergeField(SwFieldIds fieldId)
+{
+    switch (fieldId)
+    {
+        case SwFieldIds::Database: // Mail merge fields
+        case SwFieldIds::DatabaseName: // Database name
+        case SwFieldIds::HiddenText: // Hidden text may use database fields in condition
+        case SwFieldIds::HiddenPara: // Hidden paragraph may use database fields in condition
+        case SwFieldIds::DbNextSet: // Moving to next mail merge record
+        case SwFieldIds::DbNumSet: // Moving to a specific mail merge record
+        case SwFieldIds::DbSetNumber: // Number of current mail merge record
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool SwDoc::ConvertFieldsToText(SwRootFrame const& rLayout)
 {
     bool bRet = false;
     getIDocumentFieldsAccess().LockExpFields();
     GetIDocumentUndoRedo().StartUndo( SwUndoId::UI_REPLACE, nullptr );
+
+    const bool bOnlyConvertDBFields
+        = officecfg::Office::Writer::FormLetter::ConvertToTextOnlyMMFields::get();
 
     const SwFieldTypes* pMyFieldTypes = getIDocumentFieldsAccess().GetFieldTypes();
     const SwFieldTypes::size_type nCount = pMyFieldTypes->size();
@@ -1615,6 +1654,9 @@ bool SwDoc::ConvertFieldsToText(SwRootFrame const& rLayout)
         const SwFieldType *pCurType = (*pMyFieldTypes)[nType - 1].get();
 
         if ( SwFieldIds::Postit == pCurType->Which() )
+            continue;
+
+        if (bOnlyConvertDBFields && !IsMailMergeField(pCurType->Which()))
             continue;
 
         std::vector<SwFormatField*> vFieldFormats;
@@ -1627,67 +1669,66 @@ bool SwDoc::ConvertFieldsToText(SwRootFrame const& rLayout)
 
             bool bSkip = !pTextField ||
                          !pTextField->GetpTextNode()->GetNodes().IsDocNodes();
+            if (bSkip)
+                continue;
 
-            if (!bSkip)
+            bool bInHeaderFooter = IsInHeaderFooter(*pTextField->GetpTextNode());
+            const SwFormatField& rFormatField = pTextField->GetFormatField();
+            const SwField*  pField = rFormatField.GetField();
+
+            //#i55595# some fields have to be excluded in headers/footers
+            SwFieldIds nWhich = pField->GetTyp()->Which();
+            if(!bInHeaderFooter ||
+                    (nWhich != SwFieldIds::PageNumber &&
+                    nWhich != SwFieldIds::Chapter &&
+                    nWhich != SwFieldIds::GetExp&&
+                    nWhich != SwFieldIds::SetExp&&
+                    nWhich != SwFieldIds::Input&&
+                    nWhich != SwFieldIds::RefPageGet&&
+                    nWhich != SwFieldIds::RefPageSet))
             {
-                bool bInHeaderFooter = IsInHeaderFooter(*pTextField->GetpTextNode());
-                const SwFormatField& rFormatField = pTextField->GetFormatField();
-                const SwField*  pField = rFormatField.GetField();
+                OUString sText = pField->ExpandField(true, &rLayout);
 
-                //#i55595# some fields have to be excluded in headers/footers
-                SwFieldIds nWhich = pField->GetTyp()->Which();
-                if(!bInHeaderFooter ||
-                        (nWhich != SwFieldIds::PageNumber &&
-                        nWhich != SwFieldIds::Chapter &&
-                        nWhich != SwFieldIds::GetExp&&
-                        nWhich != SwFieldIds::SetExp&&
-                        nWhich != SwFieldIds::Input&&
-                        nWhich != SwFieldIds::RefPageGet&&
-                        nWhich != SwFieldIds::RefPageSet))
+                // database fields should not convert their command into text
+                if( SwFieldIds::Database == pCurType->Which() && !static_cast<const SwDBField*>(pField)->IsInitialized())
+                    sText.clear();
+
+                SwPaM aInsertPam(*pTextField->GetpTextNode(), pTextField->GetStart());
+                aInsertPam.SetMark();
+
+                // go to the end of the field
+                const SwTextField *pFieldAtEnd = sw::DocumentFieldsManager::GetTextFieldAtPos(*aInsertPam.End());
+                if (pFieldAtEnd && pFieldAtEnd->Which() == RES_TXTATR_INPUTFIELD)
                 {
-                    OUString sText = pField->ExpandField(true, &rLayout);
-
-                    // database fields should not convert their command into text
-                    if( SwFieldIds::Database == pCurType->Which() && !static_cast<const SwDBField*>(pField)->IsInitialized())
-                        sText.clear();
-
-                    SwPaM aInsertPam(*pTextField->GetpTextNode(), pTextField->GetStart());
-                    aInsertPam.SetMark();
-
-                    // go to the end of the field
-                    const SwTextField *pFieldAtEnd = sw::DocumentFieldsManager::GetTextFieldAtPos(*aInsertPam.End());
-                    if (pFieldAtEnd && pFieldAtEnd->Which() == RES_TXTATR_INPUTFIELD)
-                    {
-                        SwPosition &rEndPos = *aInsertPam.GetPoint();
-                        rEndPos.SetContent( SwCursorShell::EndOfInputFieldAtPos( *aInsertPam.End() ) );
-                    }
-                    else
-                    {
-                        aInsertPam.Move();
-                    }
-
-                    // first insert the text after field to keep the field's attributes,
-                    // then delete the field
-                    if (!sText.isEmpty())
-                    {
-                        // to keep the position after insert
-                        SwPaM aDelPam( *aInsertPam.GetMark(), *aInsertPam.GetPoint() );
-                        aDelPam.Move( fnMoveBackward );
-                        aInsertPam.DeleteMark();
-
-                        getIDocumentContentOperations().InsertString( aInsertPam, sText );
-
-                        aDelPam.Move();
-                        // finally remove the field
-                        getIDocumentContentOperations().DeleteAndJoin( aDelPam );
-                    }
-                    else
-                    {
-                        getIDocumentContentOperations().DeleteAndJoin( aInsertPam );
-                    }
-
-                    bRet = true;
+                    SwPosition &rEndPos = *aInsertPam.GetPoint();
+                    rEndPos.SetContent( SwCursorShell::EndOfInputFieldAtPos( *aInsertPam.End() ) );
                 }
+                else
+                {
+                    aInsertPam.Move();
+                }
+
+                // first insert the text after field to keep the field's attributes,
+                // then delete the field
+                if (!sText.isEmpty())
+                {
+                    // to keep the position after insert
+                    SwPaM aDelPam( *aInsertPam.GetMark(), *aInsertPam.GetPoint() );
+                    aDelPam.Move( fnMoveBackward );
+                    aInsertPam.DeleteMark();
+
+                    getIDocumentContentOperations().InsertString( aInsertPam, sText );
+
+                    aDelPam.Move();
+                    // finally remove the field
+                    getIDocumentContentOperations().DeleteAndJoin( aDelPam );
+                }
+                else
+                {
+                    getIDocumentContentOperations().DeleteAndJoin( aInsertPam );
+                }
+
+                bRet = true;
             }
         }
     }
@@ -1857,6 +1898,54 @@ void SwDoc::SetMissingDictionaries( bool bIsMissing )
 void SwDoc::SetLanguage(const LanguageType eLang, const sal_uInt16 nId)
 {
     mpAttrPool->SetPoolDefaultItem(SvxLanguageItem(eLang, nId));
+}
+
+bool SwDoc::HasParagraphDirectFormatting(const SwPosition& rPos)
+{
+    rtl::Reference<SwXTextRange> xRange(SwXTextRange::CreateXTextRange(rPos.GetDoc(), rPos,
+                                                                           &rPos));
+    uno::Reference<container::XEnumeration> xParaEnum = xRange->createEnumeration();
+    uno::Reference<text::XTextRange> xThisParagraphRange(xParaEnum->nextElement(), uno::UNO_QUERY);
+    if (xThisParagraphRange.is())
+    {
+        const std::vector<OUString> aHiddenProperties{ UNO_NAME_RSID,
+                    UNO_NAME_PARA_IS_NUMBERING_RESTART,
+                    UNO_NAME_PARA_STYLE_NAME,
+                    UNO_NAME_PARA_CONDITIONAL_STYLE_NAME,
+                    UNO_NAME_PAGE_STYLE_NAME,
+                    UNO_NAME_NUMBERING_START_VALUE,
+                    UNO_NAME_NUMBERING_IS_NUMBER,
+                    UNO_NAME_PARA_CONTINUEING_PREVIOUS_SUB_TREE,
+                    UNO_NAME_CHAR_STYLE_NAME,
+                    UNO_NAME_NUMBERING_LEVEL,
+                    UNO_NAME_SORTED_TEXT_ID,
+                    UNO_NAME_PARRSID,
+                    UNO_NAME_CHAR_COLOR_THEME,
+                    UNO_NAME_CHAR_COLOR_TINT_OR_SHADE };
+
+        SfxItemPropertySet const& rPropSet(*aSwMapProvider.GetPropertySet(
+                                               PROPERTY_MAP_PARA_AUTO_STYLE));
+        SfxItemPropertyMap const& rMap(rPropSet.getPropertyMap());
+
+        uno::Reference<beans::XPropertySet> xPropertySet(xThisParagraphRange,
+                                                         uno::UNO_QUERY_THROW);
+        uno::Reference<beans::XPropertyState> xPropertyState(xThisParagraphRange,
+                                                             uno::UNO_QUERY_THROW);
+        const uno::Sequence<beans::Property> aProperties
+                = xPropertySet->getPropertySetInfo()->getProperties();
+        for (const beans::Property& rProperty : aProperties)
+        {
+            const OUString& rPropName = rProperty.Name;
+            if (!rMap.hasPropertyByName(rPropName))
+                continue;
+            if (std::find(aHiddenProperties.begin(), aHiddenProperties.end(), rPropName)
+                    != aHiddenProperties.end())
+                continue;
+            if (xPropertyState->getPropertyState(rPropName) == beans::PropertyState_DIRECT_VALUE)
+                return true;
+        }
+    }
+    return false;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

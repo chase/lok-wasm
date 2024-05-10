@@ -168,7 +168,7 @@ struct FilterBaseImpl
 
 FilterBaseImpl::FilterBaseImpl( const Reference< XComponentContext >& rxContext ) :
     meDirection( FILTERDIRECTION_UNKNOWN ),
-    meVersion( ECMA_DIALECT ),
+    meVersion(ECMA_376_1ST_EDITION),
     mxComponentContext( rxContext, UNO_SET_THROW ),
     mbExportVBA(false),
     mbExportTemplate(false)
@@ -269,10 +269,10 @@ OUString FilterBase::getAbsoluteUrl( const OUString& rUrl ) const
 {
     // handle some special cases before calling ::rtl::Uri::convertRelToAbs()
 
-    static const OUStringLiteral aFileSchema = u"file:";
-    static const OUStringLiteral aFilePrefix = u"file:///";
+    static constexpr OUString aFileSchema = u"file:"_ustr;
+    static constexpr OUString aFilePrefix = u"file:///"_ustr;
     const sal_Int32 nFilePrefixLen = aFilePrefix.getLength();
-    static const OUStringLiteral aUncPrefix = u"//";
+    static constexpr OUString aUncPrefix = u"//"_ustr;
 
     /*  (1) convert all backslashes to slashes, and check that passed URL is
         not empty. */
@@ -492,7 +492,7 @@ sal_Bool SAL_CALL FilterBase::filter( const Sequence< PropertyValue >& rMediaDes
                 if( mxImpl->mxOutStream.is() )
                 {
                     mxImpl->mxStorage = implCreateStorage( mxImpl->mxOutStream );
-                    bRet = mxImpl->mxStorage && exportDocument() && implFinalizeExport( getMediaDescriptor() );
+                    bRet = mxImpl->mxStorage && mxImpl->mxStorage->isStorage() && exportDocument() && implFinalizeExport( getMediaDescriptor() );
                 }
             break;
         }

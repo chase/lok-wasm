@@ -19,6 +19,7 @@
 
 #include <RegressionCurveModel.hxx>
 #include <LinePropertiesHelper.hxx>
+#include <RegressionCurveCalculator.hxx>
 #include <RegressionCurveHelper.hxx>
 #include "RegressionEquation.hxx"
 #include <CloneHelper.hxx>
@@ -98,7 +99,7 @@ void lcl_AddPropertiesToVector(
                 beans::PropertyAttribute::BOUND );
 }
 
-::chart::tPropertyValueMap GetStaticXXXDefaults()
+const ::chart::tPropertyValueMap & GetStaticXXXDefaults()
 {
     static ::chart::tPropertyValueMap aStaticDefaults =
         [](){

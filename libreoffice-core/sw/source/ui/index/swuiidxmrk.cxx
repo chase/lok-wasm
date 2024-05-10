@@ -168,6 +168,7 @@ SwIndexMarkPane::SwIndexMarkPane(std::shared_ptr<weld::Dialog> xDialog, weld::Bu
     , m_xNextSameBT(rBuilder.weld_button("last"))
     , m_xPrevBT(rBuilder.weld_button("previous"))
     , m_xNextBT(rBuilder.weld_button("next"))
+    , m_xForSelectedEntry(rBuilder.weld_label("selectedentrytitle"))
 {
     m_xSyncED->show();
 
@@ -286,19 +287,20 @@ void SwIndexMarkPane::InitControls()
         bool bShow = false;
 
         pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_PRV );
-        if( pMoveMark != pMark )
+        // tdf#158783 ptr compare OK for SwTOXMark (more below)
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
         {
             m_pSh->GotoTOXMark( *pMoveMark, TOX_NXT );
             bShow = true;
         }
-        m_xPrevBT->set_sensitive(pMoveMark != pMark);
+        m_xPrevBT->set_sensitive(!areSfxPoolItemPtrsEqual(pMoveMark, pMark));
         pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_NXT );
-        if( pMoveMark != pMark )
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
         {
             m_pSh->GotoTOXMark( *pMoveMark, TOX_PRV );
             bShow = true;
         }
-        m_xNextBT->set_sensitive(pMoveMark != pMark);
+        m_xNextBT->set_sensitive(!areSfxPoolItemPtrsEqual(pMoveMark, pMark));
         if( bShow )
         {
             m_xPrevBT->show();
@@ -307,19 +309,19 @@ void SwIndexMarkPane::InitControls()
         }
 
         pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_SAME_PRV );
-        if( pMoveMark != pMark )
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
         {
             m_pSh->GotoTOXMark( *pMoveMark, TOX_SAME_NXT );
             bShow = true;
         }
-        m_xPrevSameBT->set_sensitive(pMoveMark != pMark);
+        m_xPrevSameBT->set_sensitive(!areSfxPoolItemPtrsEqual(pMoveMark, pMark));
         pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_SAME_NXT );
-        if( pMoveMark != pMark )
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
         {
             m_pSh->GotoTOXMark( *pMoveMark, TOX_SAME_PRV );
             bShow = true;
         }
-        m_xNextSameBT->set_sensitive(pMoveMark != pMark);
+        m_xNextSameBT->set_sensitive(!areSfxPoolItemPtrsEqual(pMoveMark, pMark));
         if( bShow )
         {
             m_xNextSameBT->show();
@@ -345,6 +347,7 @@ void SwIndexMarkPane::InitControls()
             //to include all equal entries may only be allowed in the body and even there
             //only when a simple selection exists
             const FrameTypeFlags nFrameType = m_pSh->GetFrameType(nullptr,true);
+            m_xForSelectedEntry->show();
             m_xApplyToAllCB->show();
             m_xSearchCaseSensitiveCB->show();
             m_xSearchCaseWordOnlyCB->show();
@@ -438,6 +441,7 @@ IMPL_LINK_NOARG(SwIndexMarkPane, SyncSelectionHdl, weld::Button&, void)
     m_xApplyToAllCB->show();
     m_xSearchCaseSensitiveCB->show();
     m_xSearchCaseWordOnlyCB->show();
+    m_xDialog->resize_to_request();
     m_xApplyToAllCB->set_sensitive(!m_aOrgStr.isEmpty() &&
         !(nFrameType & ( FrameTypeFlags::HEADER | FrameTypeFlags::FOOTER | FrameTypeFlags::FLY_ANY )));
     SearchTypeHdl(*m_xApplyToAllCB);
@@ -496,7 +500,6 @@ static void lcl_SelectSameStrings(SwWrtShell& rSh, bool bWordOnly, bool bCaseSen
     rSh.Push();
 
     i18nutil::SearchOptions2 aSearchOpt(
-                        SearchAlgorithms_ABSOLUTE,
                         ( bWordOnly ? SearchFlags::NORM_WORD_ONLY : 0 ),
                         rSh.GetSelText(), OUString(),
                         GetAppLanguageTag().getLocale(),
@@ -893,25 +896,26 @@ void SwIndexMarkPane::UpdateDialog()
     if( m_xPrevBT->get_visible() )
     {
         const SwTOXMark* pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_PRV );
-        if( pMoveMark != pMark )
+        // tdf#158783 ptr compare OK for SwTOXMark (more below)
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
             m_pSh->GotoTOXMark( *pMoveMark, TOX_NXT );
-        m_xPrevBT->set_sensitive( pMoveMark != pMark );
+        m_xPrevBT->set_sensitive( !areSfxPoolItemPtrsEqual(pMoveMark, pMark) );
         pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_NXT );
-        if( pMoveMark != pMark )
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
             m_pSh->GotoTOXMark( *pMoveMark, TOX_PRV );
-        m_xNextBT->set_sensitive( pMoveMark != pMark );
+        m_xNextBT->set_sensitive( !areSfxPoolItemPtrsEqual(pMoveMark, pMark) );
     }
 
     if (m_xPrevSameBT->get_visible())
     {
         const SwTOXMark* pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_SAME_PRV );
-        if( pMoveMark != pMark )
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
             m_pSh->GotoTOXMark( *pMoveMark, TOX_SAME_NXT );
-        m_xPrevSameBT->set_sensitive( pMoveMark != pMark );
+        m_xPrevSameBT->set_sensitive( !areSfxPoolItemPtrsEqual(pMoveMark, pMark) );
         pMoveMark = &m_pSh->GotoTOXMark( *pMark, TOX_SAME_NXT );
-        if( pMoveMark != pMark )
+        if (!areSfxPoolItemPtrsEqual( pMoveMark, pMark ))
             m_pSh->GotoTOXMark( *pMoveMark, TOX_SAME_PRV );
-        m_xNextSameBT->set_sensitive( pMoveMark != pMark );
+        m_xNextSameBT->set_sensitive( !areSfxPoolItemPtrsEqual(pMoveMark, pMark) );
     }
 
     const bool bEnable = !m_pSh->HasReadonlySel();
@@ -1012,7 +1016,8 @@ void SwIndexMarkPane::ReInitDlg(SwWrtShell& rWrtShell, SwTOXMark const * pCurTOX
     if(pCurTOXMark)
     {
         for(sal_uInt16 i = 0; i < m_pTOXMgr->GetTOXMarkCount(); i++)
-            if(m_pTOXMgr->GetTOXMark(i) == pCurTOXMark)
+            // tdf#158783 ptr compare OK for SwTOXMark (more below)
+            if (areSfxPoolItemPtrsEqual(m_pTOXMgr->GetTOXMark(i), pCurTOXMark))
             {
                 m_pTOXMgr->SetCurTOXMark(i);
                 break;
@@ -1091,12 +1096,15 @@ class SwCreateAuthEntryDlg_Impl : public weld::GenericDialogController
     std::unique_ptr<weld::Button> m_xLocalBrowseButton;
     std::unique_ptr<weld::CheckButton> m_xLocalPageCB;
     std::unique_ptr<weld::SpinButton> m_xLocalPageSB;
+    std::unique_ptr<weld::ComboBox> m_xTargetTypeListBox;
+    weld::Entry* m_pTargetURLField;
 
     DECL_LINK(IdentifierHdl, weld::ComboBox&, void);
     DECL_LINK(ShortNameHdl, weld::Entry&, void);
     DECL_LINK(EnableHdl, weld::ComboBox&, void);
     DECL_LINK(BrowseHdl, weld::Button&, void);
     DECL_LINK(PageNumHdl, weld::Toggleable&, void);
+    DECL_LINK(TargetTypeHdl, weld::ComboBox&, void);
 
 public:
     SwCreateAuthEntryDlg_Impl(weld::Window* pParent,
@@ -1114,7 +1122,7 @@ public:
 struct TextInfo
 {
     ToxAuthorityField nToxField;
-    const char* pHelpId;
+    const OUString pHelpId;
 };
 
 }
@@ -1147,6 +1155,8 @@ const TextInfo aTextInfoArr[] =
     {AUTH_FIELD_ANNOTE,          HID_AUTH_FIELD_ANNOTE          },
     {AUTH_FIELD_NOTE,            HID_AUTH_FIELD_NOTE            },
     {AUTH_FIELD_URL,             HID_AUTH_FIELD_URL             },
+    {AUTH_FIELD_TARGET_TYPE,     HID_AUTH_FIELD_TARGET_TYPE     },
+    {AUTH_FIELD_TARGET_URL,      HID_AUTH_FIELD_TARGET_URL      },
     {AUTH_FIELD_LOCAL_URL,       HID_AUTH_FIELD_LOCAL_URL       },
     {AUTH_FIELD_CUSTOM1,         HID_AUTH_FIELD_CUSTOM1         },
     {AUTH_FIELD_CUSTOM2,         HID_AUTH_FIELD_CUSTOM2         },
@@ -1182,7 +1192,7 @@ SwAuthorMarkPane::SwAuthorMarkPane(weld::DialogController &rDialog, weld::Builde
     , m_xTitleFI(rBuilder.weld_label("title"))
     , m_xEntryED(rBuilder.weld_entry("entryed"))
     , m_xEntryLB(rBuilder.weld_combo_box("entrylb"))
-    , m_xActionBT(rBuilder.weld_button(m_bNewEntry ? OString("insert") : OString("modify")))
+    , m_xActionBT(rBuilder.weld_button(m_bNewEntry ? OUString("insert") : OUString("modify")))
     , m_xCloseBT(rBuilder.weld_button("close"))
     , m_xCreateEntryPB(rBuilder.weld_button("new"))
     , m_xEditEntryPB(rBuilder.weld_button("edit"))
@@ -1206,6 +1216,8 @@ SwAuthorMarkPane::SwAuthorMarkPane(weld::DialogController &rDialog, weld::Builde
 
     m_xEntryED->set_visible(!m_bNewEntry);
     m_xEntryLB->set_visible(m_bNewEntry);
+    // tdf#90641 - sort bibliography entries by identifier
+    m_xEntryLB->make_sorted();
     if (m_bNewEntry)
     {
         m_xEntryLB->connect_changed(LINK(this, SwAuthorMarkPane, CompEntryHdl));
@@ -1309,7 +1321,7 @@ IMPL_LINK_NOARG(SwAuthorMarkPane, InsertHdl, weld::Button&, void)
         OUStringBuffer sFields;
         for(OUString & s : m_sFields)
         {
-            sFields.append(s).append(TOX_STYLE_DELIMITER);
+            sFields.append(s + OUStringChar(TOX_STYLE_DELIMITER));
         }
         if(m_bNewEntry)
         {
@@ -1565,6 +1577,8 @@ namespace
         STR_AUTH_FIELD_CUSTOM5,
         STR_AUTH_FIELD_ISBN,
         STR_AUTH_FIELD_LOCAL_URL,
+        STR_AUTH_FIELD_TARGET_TYPE,
+        STR_AUTH_FIELD_TARGET_URL,
     };
 }
 
@@ -1581,6 +1595,7 @@ SwCreateAuthEntryDlg_Impl::SwCreateAuthEntryDlg_Impl(weld::Window* pParent,
     , m_xBox(m_xBuilder->weld_container("box"))
     , m_xLeft(m_xBuilder->weld_container("leftgrid"))
     , m_xRight(m_xBuilder->weld_container("rightgrid"))
+    , m_pTargetURLField(nullptr)
 {
     bool bLeft = true;
     sal_Int32 nLeftRow(0), nRightRow(0);
@@ -1653,10 +1668,44 @@ SwCreateAuthEntryDlg_Impl::SwCreateAuthEntryDlg_Impl(weld::Window* pParent,
             m_xIdentifierBox->set_help_id(aCurInfo.pHelpId);
             m_aFixedTexts.back()->set_mnemonic_widget(m_xIdentifierBox.get());
         }
+        else if (AUTH_FIELD_TARGET_TYPE == aCurInfo.nToxField)
+        {
+            m_xTargetTypeListBox = m_aBuilders.back()->weld_combo_box("listbox-target-type");
+            if (bLeft)
+                m_aOrigContainers.back()->move(m_xTargetTypeListBox.get(), m_xLeft.get());
+            else
+                m_aOrigContainers.back()->move(m_xTargetTypeListBox.get(), m_xRight.get());
+
+            if(!pFields[aCurInfo.nToxField].isEmpty())
+            {
+                m_xTargetTypeListBox->set_active(pFields[aCurInfo.nToxField].toInt32());
+            }
+            else if(m_bNewEntryMode)
+            {
+                // For new documents, set value to "BibliographyTableRow"
+                m_xTargetTypeListBox->set_active(SwAuthorityField::TargetType::BibliographyTableRow);
+            }
+            m_xTargetTypeListBox->set_grid_left_attach(1);
+            m_xTargetTypeListBox->set_grid_top_attach(bLeft ? nLeftRow : nRightRow);
+            m_xTargetTypeListBox->set_hexpand(true);
+            m_xTargetTypeListBox->show();
+            m_xTargetTypeListBox->connect_changed(LINK(this, SwCreateAuthEntryDlg_Impl, TargetTypeHdl));
+            m_xTargetTypeListBox->set_help_id(aCurInfo.pHelpId);
+            m_aFixedTexts.back()->set_mnemonic_widget(m_xTargetTypeListBox.get());
+        }
         else
         {
             m_pBoxes[nIndex] = m_aBuilders.back()->weld_box("vbox");
             m_pEdits[nIndex] = m_aBuilders.back()->weld_entry("entry");
+
+            if (AUTH_FIELD_TARGET_URL == aCurInfo.nToxField)
+            {
+                m_pTargetURLField = m_pEdits[nIndex].get();
+                assert(m_xTargetTypeListBox);
+                m_pTargetURLField->set_sensitive(
+                    m_xTargetTypeListBox->get_active() == SwAuthorityField::TargetType::UseTargetURL);
+            }
+
             if (bLeft)
                 m_aOrigContainers.back()->move(m_pBoxes[nIndex].get(), m_xLeft.get());
             else
@@ -1745,6 +1794,12 @@ OUString  SwCreateAuthEntryDlg_Impl::GetEntryText(ToxAuthorityField eField) cons
         return m_xIdentifierBox->get_active_text();
     }
 
+    if (AUTH_FIELD_TARGET_TYPE == eField)
+    {
+        assert(m_xTargetTypeListBox && "No TargetType ListBox");
+        return OUString::number(m_xTargetTypeListBox->get_active());
+    }
+
     for(int nIndex = 0; nIndex < AUTH_FIELD_END; nIndex++)
     {
         const TextInfo aCurInfo = aTextInfoArr[nIndex];
@@ -1805,6 +1860,12 @@ IMPL_LINK(SwCreateAuthEntryDlg_Impl, EnableHdl, weld::ComboBox&, rBox, void)
     m_xOKBT->set_sensitive(m_bNameAllowed && rBox.get_active() != -1);
     m_xLocalBrowseButton->show();
 };
+
+IMPL_LINK(SwCreateAuthEntryDlg_Impl, TargetTypeHdl, weld::ComboBox&, rBox, void)
+{
+    assert(m_pTargetURLField);
+    m_pTargetURLField->set_sensitive(rBox.get_active() == SwAuthorityField::TargetType::UseTargetURL);
+}
 
 IMPL_LINK(SwCreateAuthEntryDlg_Impl, BrowseHdl, weld::Button&, rButton, void)
 {

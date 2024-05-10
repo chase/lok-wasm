@@ -12,7 +12,6 @@
 
 #include <sal/types.h>
 #include <rtl/strbuf.hxx>
-#include <rtl/ustring.hxx>
 #include <vcl/bitmapex.hxx>
 #include <vcl/animate/Animation.hxx>
 #include <vcl/vectorgraphicdata.hxx>
@@ -55,7 +54,7 @@ public:
     static Manager& get();
 
     void dropCache();
-    void dumpState(rtl::OStringBuffer &rState);
+    void dumpState(rtl::OStringBuffer& rState);
 
     void swappedIn(const ImpGraphic* pImpGraphic, sal_Int64 nSizeBytes);
     void swappedOut(const ImpGraphic* pImpGraphic, sal_Int64 nSizeBytes);

@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <unosection.hxx>
+#include <unotext.hxx>
 
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
@@ -225,18 +226,6 @@ SwXTextSection::~SwXTextSection()
 {
 }
 
-const uno::Sequence< sal_Int8 > & SwXTextSection::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXTextSectionUnoTunnelId;
-    return theSwXTextSectionUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXTextSection::getSomething(const uno::Sequence< sal_Int8 >& rId)
-{
-    return comphelper::getSomethingImpl<SwXTextSection>(rId, this);
-}
-
 uno::Reference< text::XTextSection > SAL_CALL
 SwXTextSection::getParentSection()
 {
@@ -279,9 +268,8 @@ SwXTextSection::attach(const uno::Reference< text::XTextRange > & xTextRange)
         throw uno::RuntimeException();
     }
 
-    uno::Reference<lang::XUnoTunnel> xRangeTunnel( xTextRange, uno::UNO_QUERY);
-    SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-    OTextCursorHelper* pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+    SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+    OTextCursorHelper* pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
 
     SwDoc *const pDoc =
         pRange ? &pRange->GetDoc() : (pCursor ? pCursor->GetDoc() : nullptr);
@@ -401,10 +389,10 @@ SwXTextSection::attach(const uno::Reference< text::XTextRange > & xTextRange)
         pDoc->GetIDocumentUndoRedo().EndUndo( SwUndoId::INSSECTION, nullptr );
         throw lang::IllegalArgumentException(
                 "SwXTextSection::attach(): invalid TextRange",
-                static_cast< ::cppu::OWeakObject*>(this), 0);
+                getXWeak(), 0);
     }
     m_pImpl->Attach(pRet->GetFormat());
-    pRet->GetFormat()->SetXObject(static_cast< ::cppu::OWeakObject*>(this));
+    pRet->GetFormat()->SetXObject(getXWeak());
 
     // XML import must hide sections depending on their old
     //         condition status
@@ -464,8 +452,8 @@ SwXTextSection::getAnchor()
             }
             if (isMoveIntoTable)
             {
-                uno::Reference<text::XText> const xParentText(
-                    ::sw::CreateParentXText(*pSectFormat->GetDoc(), SwPosition(*pIdx)));
+                css::uno::Reference<SwXText> const xParentText =
+                    ::sw::CreateParentXText(*pSectFormat->GetDoc(), SwPosition(*pIdx));
                 xRet = new SwXTextRange(*pSectFormat);
             }
             else // for compatibility, keep the old way in this case
@@ -595,13 +583,13 @@ void SwXTextSection::Impl::SetPropertyValues_Impl(
         {
             throw beans::UnknownPropertyException(
                 "Unknown property: " + pPropertyNames[nProperty],
-                static_cast<cppu::OWeakObject *>(& m_rThis));
+                m_rThis.getXWeak());
         }
         if (pEntry->nFlags & beans::PropertyAttribute::READONLY)
         {
             throw beans::PropertyVetoException(
                 "Property is read-only: " + pPropertyNames[nProperty],
-                static_cast<cppu::OWeakObject *>(& m_rThis));
+                m_rThis.getXWeak());
         }
         switch (pEntry->nWID)
         {
@@ -975,7 +963,7 @@ SwXTextSection::Impl::GetPropertyValues_Impl(
         {
             throw beans::UnknownPropertyException(
                 "Unknown property: " + pPropertyNames[nProperty],
-                static_cast<cppu::OWeakObject *>(& m_rThis));
+                m_rThis.getXWeak());
         }
         switch(pEntry->nWID)
         {
@@ -1272,13 +1260,13 @@ SwXTextSection::getPropertyValues(
     {
         css::uno::Any anyEx = cppu::getCaughtException();
         throw lang::WrappedTargetRuntimeException("Unknown property exception caught",
-                static_cast < cppu::OWeakObject * > ( this ), anyEx );
+                getXWeak(), anyEx );
     }
     catch (lang::WrappedTargetException &)
     {
         css::uno::Any anyEx = cppu::getCaughtException();
         throw lang::WrappedTargetRuntimeException("WrappedTargetException caught",
-                static_cast < cppu::OWeakObject * > ( this ), anyEx );
+                getXWeak(), anyEx );
     }
 
     return aValues;
@@ -1378,7 +1366,7 @@ SwXTextSection::getPropertyStates(
         {
             throw beans::UnknownPropertyException(
                 "Unknown property: " + pNames[i],
-                static_cast< cppu::OWeakObject* >(this));
+                getXWeak());
         }
         switch (pEntry->nWID)
         {
@@ -1453,13 +1441,13 @@ SwXTextSection::setPropertyToDefault(const OUString& rPropertyName)
     {
         throw beans::UnknownPropertyException(
             "Unknown property: " + rPropertyName,
-            static_cast< cppu::OWeakObject* >(this));
+            getXWeak());
     }
     if (pEntry->nFlags & beans::PropertyAttribute::READONLY)
     {
         throw uno::RuntimeException(
             "Property is read-only: " + rPropertyName,
-            static_cast<cppu::OWeakObject *>(this));
+            getXWeak());
     }
 
     std::unique_ptr<SwSectionData> const pSectionData(
@@ -1591,7 +1579,7 @@ SwXTextSection::getPropertyDefault(const OUString& rPropertyName)
     {
         throw beans::UnknownPropertyException(
             "Unknown property: " + rPropertyName,
-            static_cast<cppu::OWeakObject *>(this));
+            getXWeak());
     }
 
     switch(pEntry->nWID)

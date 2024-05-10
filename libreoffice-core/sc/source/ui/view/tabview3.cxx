@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <officecfg/Office/Calc.hxx>
 #include <rangelst.hxx>
 #include <scitems.hxx>
 
@@ -256,7 +257,7 @@ void ScTabView::InvalidateAttribs()
 
     rBindings.Invalidate( SID_STYLE_APPLY );
     rBindings.Invalidate( SID_STYLE_FAMILY2 );
-    // StarCalc knows only paragraph- or cell format templates
+    rBindings.Invalidate( SID_STYLE_FAMILY3 );
 
     rBindings.Invalidate( SID_ATTR_CHAR_FONT );
     rBindings.Invalidate( SID_ATTR_CHAR_FONTHEIGHT );
@@ -375,7 +376,10 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
         nPosY = std::min(nPosY, MAXTILEDROW);
 
     if ( !(nPosX != nOldX || nPosY != nOldY || bNew) )
+    {
+        HighlightOverlay();
         return;
+    }
 
     ScTabViewShell* pViewShell = aViewData.GetViewShell();
     bool bRefMode = pViewShell && pViewShell->IsRefInputMode();
@@ -391,6 +395,8 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
 
     ShowAllCursors();
 
+    HighlightOverlay();
+
     CursorPosChanged();
 
     OUString aCurrAddress = ScAddress(nPosX,nPosY,0).GetColRowString();
@@ -404,7 +410,7 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
 
     ScDocument& rDoc = aViewData.GetDocument();
     ScDocShell* pDocSh = aViewData.GetDocShell();
-    ScModelObj* pModelObj = pDocSh ? comphelper::getFromUnoTunnel<ScModelObj>( pDocSh->GetModel() ) : nullptr;
+    ScModelObj* pModelObj = pDocSh ? pDocSh->GetModel() : nullptr;
     Size aOldSize(0, 0);
     if (pModelObj)
         aOldSize = pModelObj->getDocumentSize();
@@ -419,9 +425,6 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
     if (pModelObj)
         aNewSize = pModelObj->getDocumentSize();
 
-    if (aOldSize == aNewSize)
-        return;
-
     if (!pDocSh)
         return;
 
@@ -431,9 +434,13 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
         if (pGridWindow)
         {
             Size aNewSizePx(aNewSize.Width() * aViewData.GetPPTX(), aNewSize.Height() * aViewData.GetPPTY());
-            pGridWindow->SetOutputSizePixel(aNewSizePx);
+            if (aNewSizePx != pGridWindow->GetOutputSizePixel())
+                pGridWindow->SetOutputSizePixel(aNewSizePx);
         }
     }
+
+    if (aOldSize == aNewSize)
+        return;
 
     // New area extended to the right of the sheet after last column
     // including overlapping area with aNewRowArea
@@ -458,22 +465,22 @@ void ScTabView::SetCursor( SCCOL nPosX, SCROW nPosY, bool bNew )
     // call lok::Document::getDocumentSize().
     std::stringstream ss;
     ss << aNewSize.Width() << ", " << aNewSize.Height();
-    OString sSize = ss.str().c_str();
+    OString sSize( ss.str() );
     ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>(aViewData.GetViewShell()->GetCurrentDocument());
     SfxLokHelper::notifyDocumentSizeChanged(aViewData.GetViewShell(), sSize, pModel, false);
 }
 
-static bool lcl_IsRefDlgActive(SfxViewFrame* pViewFrm)
+static bool lcl_IsRefDlgActive(SfxViewFrame& rViewFrm)
 {
     ScModule* pScMod = SC_MOD();
     if (!pScMod->IsRefDialogOpen())
        return false;
 
     auto nDlgId = pScMod->GetCurRefDlgId();
-    if (!pViewFrm->HasChildWindow(nDlgId))
+    if (!rViewFrm.HasChildWindow(nDlgId))
         return false;
 
-    SfxChildWindow* pChild = pViewFrm->GetChildWindow(nDlgId);
+    SfxChildWindow* pChild = rViewFrm.GetChildWindow(nDlgId);
     if (!pChild)
         return false;
 
@@ -545,16 +552,13 @@ void ScTabView::SetTabProtectionSymbol( SCTAB nTab, const bool bProtect )
 
 void ScTabView::SelectionChanged(bool bFromPaste)
 {
-    SfxViewFrame* pViewFrame = aViewData.GetViewShell()->GetViewFrame();
-    if (pViewFrame)
+    SfxViewFrame& rViewFrame = aViewData.GetViewShell()->GetViewFrame();
+    uno::Reference<frame::XController> xController = rViewFrame.GetFrame().GetController();
+    if (xController.is())
     {
-        uno::Reference<frame::XController> xController = pViewFrame->GetFrame().GetController();
-        if (xController.is())
-        {
-            ScTabViewObj* pImp = comphelper::getFromUnoTunnel<ScTabViewObj>( xController );
-            if (pImp)
-                pImp->SelectionChanged();
-        }
+        ScTabViewObj* pImp = dynamic_cast<ScTabViewObj*>( xController.get() );
+        if (pImp)
+            pImp->SelectionChanged();
     }
 
     UpdateAutoFillMark(bFromPaste);   // also calls CheckSelectionTransfer
@@ -898,14 +902,14 @@ void ScTabView::RemoveHintWindow()
 }
 
 // find window that should not be over the cursor
-static weld::Window* lcl_GetCareWin(SfxViewFrame* pViewFrm)
+static weld::Window* lcl_GetCareWin(SfxViewFrame& rViewFrm)
 {
     //! also spelling ??? (then set the member variables when calling)
 
     // search & replace
-    if (pViewFrm->HasChildWindow(SID_SEARCH_DLG))
+    if (rViewFrm.HasChildWindow(SID_SEARCH_DLG))
     {
-        SfxChildWindow* pChild = pViewFrm->GetChildWindow(SID_SEARCH_DLG);
+        SfxChildWindow* pChild = rViewFrm.GetChildWindow(SID_SEARCH_DLG);
         if (pChild)
         {
             auto xDlgController = pChild->GetController();
@@ -915,9 +919,9 @@ static weld::Window* lcl_GetCareWin(SfxViewFrame* pViewFrm)
     }
 
     // apply changes
-    if ( pViewFrm->HasChildWindow(FID_CHG_ACCEPT) )
+    if ( rViewFrm.HasChildWindow(FID_CHG_ACCEPT) )
     {
-        SfxChildWindow* pChild = pViewFrm->GetChildWindow(FID_CHG_ACCEPT);
+        SfxChildWindow* pChild = rViewFrm.GetChildWindow(FID_CHG_ACCEPT);
         if (pChild)
         {
             auto xDlgController = pChild->GetController();
@@ -976,8 +980,17 @@ void ScTabView::AlignToCursor( SCCOL nCurX, SCROW nCurY, ScFollowMode eMode,
         else
             nCellSizeX = nCellSizeY = 0;
         Size aScrSize = aViewData.GetScrSize();
-        tools::Long nSpaceX = ( aScrSize.Width()  - nCellSizeX ) / 2;
-        tools::Long nSpaceY = ( aScrSize.Height() - nCellSizeY ) / 2;
+
+        tools::Long nDenom;
+        if ( eMode == SC_FOLLOW_JUMP_END && nCurX > aViewData.GetRefStartX()
+            && nCurY > aViewData.GetRefStartY() )
+            nDenom = 1; // tdf#154271 Selected cell will be at the bottom corner
+                        // to maximize the visible/usable area
+        else
+            nDenom = 2; // Selected cell will be at the center of the screen, so that
+                        // it will be visible. This is useful for search results, etc.
+        tools::Long nSpaceX = ( aScrSize.Width()  - nCellSizeX ) / nDenom;
+        tools::Long nSpaceY = ( aScrSize.Height() - nCellSizeY ) / nDenom;
         //  nSpaceY: desired start position of cell for FOLLOW_JUMP, modified if dialog interferes
 
         bool bForceNew = false;     // force new calculation of JUMP position (vertical only)
@@ -988,7 +1001,7 @@ void ScTabView::AlignToCursor( SCCOL nCurX, SCROW nCurY, ScFollowMode eMode,
         // if possible, put the row with the cursor above or below the dialog
         //! not if already completely visible
 
-        if ( eMode == SC_FOLLOW_JUMP )
+        if ( eMode == SC_FOLLOW_JUMP || eMode == SC_FOLLOW_JUMP_END )
         {
             weld::Window* pCare = lcl_GetCareWin( aViewData.GetViewShell()->GetViewFrame() );
             if (pCare)
@@ -1059,6 +1072,7 @@ void ScTabView::AlignToCursor( SCCOL nCurX, SCROW nCurY, ScFollowMode eMode,
         switch (eMode)
         {
             case SC_FOLLOW_JUMP:
+            case SC_FOLLOW_JUMP_END:
                 if ( nCurX < nDeltaX || nCurX >= nDeltaX+nSizeX )
                 {
                     nNewDeltaX = nCurX - aViewData.CellsAtX( nCurX, -1, eAlignX, static_cast<sal_uInt16>(nSpaceX) );
@@ -1538,7 +1552,7 @@ bool ScTabView::MoveCursorKeyInput( const KeyEvent& rKeyEvent )
     if( (nCode == KEY_HOME) || (nCode == KEY_END) )
     {
         nDX = (nCode == KEY_HOME) ? -1 : 1;
-        ScFollowMode eMode = (nCode == KEY_HOME) ? SC_FOLLOW_LINE : SC_FOLLOW_JUMP;
+        ScFollowMode eMode = (nCode == KEY_HOME) ? SC_FOLLOW_LINE : SC_FOLLOW_JUMP_END;
         switch( eModifier )
         {
             case MOD_NONE:  MoveCursorEnd( nDX, 0, eMode, bSel );   break;
@@ -1691,6 +1705,27 @@ void ScTabView::MarkRows(SCROW nRow, sal_Int16 nModifier)
     }
 }
 
+void ScTabView::HighlightOverlay()
+{
+    if (!officecfg::Office::Calc::Content::Display::ColumnRowHighlighting::get())
+    {
+        aViewData.GetHighlightData().ResetMark();
+        UpdateHighlightOverlay();
+        return;
+    }
+
+    ScAddress aCell = GetViewData().GetCurPos();
+    SCROW nRow = aCell.Row();
+    SCCOL nCol = aCell.Col();
+
+    bool nModifier = false;         // modifier key pressed?
+    DoneBlockModeHighlight( nModifier );
+    InitBlockModeHighlight( nCol, 0, aCell.Tab(), true, false);
+    nModifier = true;
+    DoneBlockModeHighlight( nModifier );
+    InitBlockModeHighlight( 0, nRow, aCell.Tab(), false, true );
+}
+
 void ScTabView::MarkDataArea( bool bIncludeCursor )
 {
     ScDocument& rDoc = aViewData.GetDocument();
@@ -1796,33 +1831,34 @@ void ScTabView::SelectNextTab( short nDir, bool bExtendSelection )
 
     ScDocument& rDoc = aViewData.GetDocument();
     SCTAB nTab = aViewData.GetTabNo();
-    if (nDir<0)
+    SCTAB nNextTab = nTab;
+    if (nDir < 0)
     {
-        if (!nTab)
-            return;
-        --nTab;
-        while (!rDoc.IsVisible(nTab))
+        do
         {
-            if (!nTab)
-                return;
-            --nTab;
-        }
+            --nNextTab;
+            if (nNextTab < 0)
+                nNextTab = rDoc.GetTableCount();
+            if (rDoc.IsVisible(nNextTab))
+                break;
+        } while (nNextTab != nTab);
     }
-    else
+    if (nDir > 0)
     {
         SCTAB nCount = rDoc.GetTableCount();
-        ++nTab;
-        if (nTab >= nCount)
-            return;
-        while (!rDoc.IsVisible(nTab))
+        do
         {
-            ++nTab;
-            if (nTab >= nCount)
-                return;
-        }
+            ++nNextTab;
+            if (nNextTab >= nCount)
+                nNextTab = 0;
+            if (rDoc.IsVisible(nNextTab))
+                break;
+        } while (nNextTab != nTab);
     }
+    if (nNextTab == nTab)
+        return;
 
-    SetTabNo( nTab, false, bExtendSelection );
+    SetTabNo(nNextTab, false, bExtendSelection);
     PaintExtras();
 }
 
@@ -2065,8 +2101,8 @@ void ScTabView::SetTabNo( SCTAB nTab, bool bNew, bool bExtendSelection, bool bSa
     if (pScMod->IsRefDialogOpen())
     {
         sal_uInt16 nCurRefDlgId=pScMod->GetCurRefDlgId();
-        SfxViewFrame* pViewFrm = aViewData.GetViewShell()->GetViewFrame();
-        SfxChildWindow* pChildWnd = pViewFrm->GetChildWindow( nCurRefDlgId );
+        SfxViewFrame& rViewFrm = aViewData.GetViewShell()->GetViewFrame();
+        SfxChildWindow* pChildWnd = rViewFrm.GetChildWindow( nCurRefDlgId );
         if (pChildWnd)
         {
             if (pChildWnd->GetController())
@@ -2126,7 +2162,7 @@ void ScTabView::OnLibreOfficeKitTabChanged()
 
     SfxLokHelper::forEachOtherView(pThisViewShell, lTabSwitch);
 
-    pThisViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_HEADER, "all");
+    pThisViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_INVALIDATE_HEADER, "all"_ostr);
 
     if (pThisViewShell->GetInputHandler())
         pThisViewShell->GetInputHandler()->UpdateLokReferenceMarks();
@@ -2193,6 +2229,9 @@ void ScTabView::MakeEditView( ScEditEngineDefaulter* pEngine, SCCOL nCol, SCROW 
 
 void ScTabView::UpdateEditView()
 {
+    if (aViewData.GetTabNo() != aViewData.GetRefTabNo() && SC_MOD()->IsFormulaMode())
+        return;
+
     ScSplitPos eActive = aViewData.GetActivePart();
     for (sal_uInt16 i = 0; i < 4; i++)
     {
@@ -2303,7 +2342,7 @@ void ScTabView::KillEditView( bool bNoPaint )
     if (bGrabFocus)
     {
 //      should be done like this, so that Sfx notice it, but it does not work:
-//!     aViewData.GetViewShell()->GetViewFrame()->GetWindow().GrabFocus();
+//!     aViewData.GetViewShell()->GetViewFrame().GetWindow().GrabFocus();
 //      therefore first like this:
         GetActiveWin()->GrabFocus();
     }
@@ -2341,7 +2380,12 @@ void ScTabView::UpdateFormulas(SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, 
     if ( aViewData.IsPagebreakMode() )
         UpdatePageBreakData();              //! asynchronous
 
-    UpdateHeaderWidth();
+    bool bIsTiledRendering = comphelper::LibreOfficeKit::isActive();
+    // UpdateHeaderWidth can fit the GridWindow widths to the frame, something
+    // we don't want in kit-mode where we try and match the GridWindow width
+    // to the tiled area separately
+    if (!bIsTiledRendering)
+        UpdateHeaderWidth();
 
     //  if in edit mode, adjust edit view area because widths/heights may have changed
     if ( aViewData.HasEditView( aViewData.GetActivePart() ) )
@@ -2431,7 +2475,7 @@ void ScTabView::PaintArea( SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCRO
         {
             if (nMaxWidthAffectedHintTwip != -1)
             {
-                tools::Long nMaxWidthAffectedHint = aViewData.ToPixel(nMaxWidthAffectedHintTwip, aViewData.GetPPTX());
+                tools::Long nMaxWidthAffectedHint = ScViewData::ToPixel(nMaxWidthAffectedHintTwip, aViewData.GetPPTX());
 
                 // If we know the max text width affected then just invalidate
                 // the max of the cell width and hint of affected cell width
@@ -2469,7 +2513,7 @@ void ScTabView::PaintArea( SCCOL nStartCol, SCROW nStartRow, SCCOL nEndCol, SCRO
         aStart.AdjustX( -nLayoutSign );      // include change marks
         aStart.AdjustY( -1 );
 
-        bool bMarkClipped = aViewData.GetOptions().GetOption( VOPT_CLIPMARKS );
+        bool bMarkClipped = SC_MOD()->GetColorConfig().GetColorValue(svtools::CALCTEXTOVERFLOW).bIsVisible;
         if (bMarkClipped)
         {
             // ScColumn::IsEmptyData has to be optimized for this

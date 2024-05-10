@@ -29,6 +29,7 @@
 #include <comphelper/propertyvalue.hxx>
 
 #include <vcl/filter/PDFiumLibrary.hxx>
+#include <vcl/scheduler.hxx>
 
 #if USE_TLS_NSS
 #include <nss.h>
@@ -57,21 +58,25 @@ private:
 
     // unit tests
 public:
+    void testMediaShapeScreen_Tdf159094();
     void testExportRange_Tdf120161();
     void testExportFitToPage_Tdf103516();
     void testUnoCommands_Tdf120161();
     void testTdf64703_hiddenPageBreak();
     void testTdf143978();
+    void testTdf120190();
     void testTdf84012();
     void testTdf78897();
     void testForcepoint97();
 
     CPPUNIT_TEST_SUITE(ScPDFExportTest);
+    CPPUNIT_TEST(testMediaShapeScreen_Tdf159094);
     CPPUNIT_TEST(testExportRange_Tdf120161);
     CPPUNIT_TEST(testExportFitToPage_Tdf103516);
     CPPUNIT_TEST(testUnoCommands_Tdf120161);
     CPPUNIT_TEST(testTdf64703_hiddenPageBreak);
     CPPUNIT_TEST(testTdf143978);
+    CPPUNIT_TEST(testTdf120190);
     CPPUNIT_TEST(testTdf84012);
     CPPUNIT_TEST(testTdf78897);
     CPPUNIT_TEST(testForcepoint97);
@@ -194,6 +199,18 @@ void ScPDFExportTest::setFont(ScFieldEditEngine& rEE, sal_Int32 nStart, sal_Int3
                       EE_CHAR_FONTINFO);
     aItemSet.Put(aItem);
     rEE.QuickSetAttribs(aItemSet, aSel);
+}
+
+void ScPDFExportTest::testMediaShapeScreen_Tdf159094()
+{
+    loadFromFile(u"tdf159094.ods");
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+
+    // A1:B8
+    ScRange aRange(0, 0, 0, 1, 7, 0);
+
+    // Without the fix, this test would crash on export media file to pdf
+    exportToPDF(xModel, aRange);
 }
 
 // Selection was not taken into account during export into PDF
@@ -342,7 +359,7 @@ void ScPDFExportTest::testExportFitToPage_Tdf103516()
 
 void ScPDFExportTest::testUnoCommands_Tdf120161()
 {
-    loadFromURL(u"tdf120161.ods");
+    loadFromFile(u"tdf120161.ods");
 
     // A1:G1
     {
@@ -371,7 +388,7 @@ void ScPDFExportTest::testUnoCommands_Tdf120161()
 
 void ScPDFExportTest::testTdf64703_hiddenPageBreak()
 {
-    loadFromURL(u"tdf64703_hiddenPageBreak.ods");
+    loadFromFile(u"tdf64703_hiddenPageBreak.ods");
 
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
 
@@ -393,7 +410,7 @@ void ScPDFExportTest::testTdf143978()
         return;
     }
 
-    loadFromURL(u"tdf143978.ods");
+    loadFromFile(u"tdf143978.ods");
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
 
     // A1:A2
@@ -426,6 +443,73 @@ void ScPDFExportTest::testTdf143978()
     CPPUNIT_ASSERT_EQUAL(OUString("2021-11-17"), sText2);
 }
 
+void ScPDFExportTest::testTdf120190()
+{
+    std::shared_ptr<vcl::pdf::PDFium> pPDFium = vcl::pdf::PDFiumLibrary::get();
+    if (!pPDFium)
+    {
+        return;
+    }
+
+    mxComponent = loadFromDesktop("private:factory/scalc");
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+
+    uno::Reference<sheet::XSpreadsheetDocument> xDoc(mxComponent, uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_MESSAGE("no calc document", xDoc.is());
+
+    uno::Reference<sheet::XSpreadsheets> xSheets(xDoc->getSheets(), uno::UNO_SET_THROW);
+    uno::Reference<container::XIndexAccess> xIA(xSheets, uno::UNO_QUERY_THROW);
+    uno::Reference<sheet::XSpreadsheet> xSheet0(xIA->getByIndex(0), uno::UNO_QUERY_THROW);
+
+    xSheet0->getCellByPosition(0, 0)->setFormula("=5&CHAR(10)&6");
+
+    uno::Sequence<beans::PropertyValue> aArgs
+        = comphelper::InitPropertySequence({ { "ToPoint", uno::Any(OUString("A1")) } });
+    dispatchCommand(mxComponent, ".uno:GoToCell", aArgs);
+
+    dispatchCommand(mxComponent, ".uno:ConvertFormulaToValue", {});
+
+    // A1
+    ScRange range1(0, 0, 0, 0, 0, 0);
+    exportToPDF(xModel, range1);
+
+    // Parse the export result with pdfium.
+    std::unique_ptr<vcl::pdf::PDFiumDocument> pPdfDocument = parsePDFExport();
+    CPPUNIT_ASSERT_EQUAL(1, pPdfDocument->getPageCount());
+
+    // Get the first page
+    std::unique_ptr<vcl::pdf::PDFiumPage> pPdfPage = pPdfDocument->openPage(/*nIndex=*/0);
+    CPPUNIT_ASSERT(pPdfPage);
+    std::unique_ptr<vcl::pdf::PDFiumTextPage> pTextPage = pPdfPage->getTextPage();
+
+    int nPageObjectCount = pPdfPage->getObjectCount();
+    CPPUNIT_ASSERT_EQUAL(5, nPageObjectCount);
+
+    std::unique_ptr<vcl::pdf::PDFiumPageObject> pPageObject1 = pPdfPage->getObject(0);
+    OUString sText1 = pPageObject1->getText(pTextPage);
+    CPPUNIT_ASSERT_EQUAL(OUString("Sheet1"), sText1);
+
+    std::unique_ptr<vcl::pdf::PDFiumPageObject> pPageObject2 = pPdfPage->getObject(1);
+    OUString sText2 = pPageObject2->getText(pTextPage);
+    CPPUNIT_ASSERT_EQUAL(OUString("Page "), sText2);
+
+    std::unique_ptr<vcl::pdf::PDFiumPageObject> pPageObject3 = pPdfPage->getObject(2);
+    OUString sText3 = pPageObject3->getText(pTextPage);
+    CPPUNIT_ASSERT_EQUAL(OUString("1"), sText3);
+
+    std::unique_ptr<vcl::pdf::PDFiumPageObject> pPageObject4 = pPdfPage->getObject(3);
+    OUString sText4 = pPageObject4->getText(pTextPage);
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: 5
+    // - Actual  : 56
+    CPPUNIT_ASSERT_EQUAL(OUString("5"), sText4);
+
+    std::unique_ptr<vcl::pdf::PDFiumPageObject> pPageObject5 = pPdfPage->getObject(4);
+    OUString sText5 = pPageObject5->getText(pTextPage);
+    CPPUNIT_ASSERT_EQUAL(OUString("6"), sText5);
+}
+
 void ScPDFExportTest::testTdf84012()
 {
     std::shared_ptr<vcl::pdf::PDFium> pPDFium = vcl::pdf::PDFiumLibrary::get();
@@ -434,7 +518,7 @@ void ScPDFExportTest::testTdf84012()
         return;
     }
 
-    loadFromURL(u"tdf84012.ods");
+    loadFromFile(u"tdf84012.ods");
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
 
     // A1
@@ -469,7 +553,7 @@ void ScPDFExportTest::testTdf78897()
         return;
     }
 
-    loadFromURL(u"tdf78897.xls");
+    loadFromFile(u"tdf78897.xls");
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
 
     // C3:D3
@@ -499,7 +583,7 @@ void ScPDFExportTest::testTdf78897()
 // just needs to not crash on export to pdf
 void ScPDFExportTest::testForcepoint97()
 {
-    loadFromURL(u"forcepoint97.xlsx");
+    loadFromFile(u"forcepoint97.xlsx");
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
 
     // A1:H81

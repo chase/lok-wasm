@@ -74,6 +74,7 @@
 #include <sfx2/fcontnr.hxx>
 #include <svx/xbtmpit.hxx>
 #include <svx/xsflclit.hxx>
+#include <svx/xfilluseslidebackgrounditem.hxx>
 #include <svx/xflgrit.hxx>
 #include <svx/xflftrit.hxx>
 #include <svx/sdgcpitm.hxx>
@@ -170,7 +171,7 @@ using namespace container           ;
 
 // static counter for OLE-Objects
 static sal_uInt32 nMSOleObjCntr = 0;
-constexpr OUStringLiteral MSO_OLE_Obj = u"MSO_OLE_Obj";
+constexpr OUString MSO_OLE_Obj = u"MSO_OLE_Obj"_ustr;
 
 namespace {
 /* Office File Formats - 2.2.23  */
@@ -188,8 +189,8 @@ enum class OfficeArtBlipRecInstance : sal_uInt32
 
 struct SvxMSDffBLIPInfo
 {
-    sal_uLong  nFilePos;    ///< offset of the BLIP in data stream
-    explicit SvxMSDffBLIPInfo(sal_uLong nFPos)
+    sal_uInt32  nFilePos;    ///< offset of the BLIP in data stream
+    explicit SvxMSDffBLIPInfo(sal_uInt32 nFPos)
         : nFilePos(nFPos)
     {
     }
@@ -614,7 +615,7 @@ void SvxMSDffManager::SolveSolver( const SvxMSDffSolverContainer& rSolver )
                             {
                                 const SfxPoolItem& aCustomShape =  static_cast<SdrObjCustomShape*>(pO)->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY );
                                 SdrCustomShapeGeometryItem aGeometryItem( static_cast<const SdrCustomShapeGeometryItem&>(aCustomShape) );
-                                static const OUStringLiteral sPath( u"Path" );
+                                static constexpr OUString sPath( u"Path"_ustr );
                                 sal_Int16 nGluePointType = EnhancedCustomShapeGluePointType::SEGMENTS;
                                 css::uno::Any* pAny = aGeometryItem.GetPropertyValueByName( sPath, "GluePointType" );
                                 if ( pAny )
@@ -736,7 +737,7 @@ void SvxMSDffManager::SolveSolver( const SvxMSDffSolverContainer& rSolver )
                                             sal_Int32 nX = 0, nY = 0;
                                             if ( ( rPara.First.Value >>= nX ) && ( rPara.Second.Value >>= nY ) )
                                             {
-                                                static const OUStringLiteral sGluePoints( u"GluePoints" );
+                                                static constexpr OUString sGluePoints( u"GluePoints"_ustr );
                                                 css::uno::Sequence< css::drawing::EnhancedCustomShapeParameterPair > aGluePoints;
                                                 pAny = aGeometryItem.GetPropertyValueByName( sPath, sGluePoints );
                                                 if ( pAny )
@@ -1338,6 +1339,7 @@ void DffPropertyReader::ApplyFillAttributes( SvStream& rIn, SfxItemSet& rSet, co
     if ( nFillFlags & 0x10 )
     {
         auto eMSO_FillType = GetPropertyValue(DFF_Prop_fillType, mso_fillSolid);
+        bool bUseSlideBackground = false;
         drawing::FillStyle eXFill = drawing::FillStyle_NONE;
         switch( eMSO_FillType )
         {
@@ -1366,7 +1368,10 @@ void DffPropertyReader::ApplyFillAttributes( SvStream& rIn, SfxItemSet& rSet, co
             case mso_fillShadeTitle :       // special type - shade to title ---  for PP
                 eXFill = drawing::FillStyle_GRADIENT;
             break;
-//          case mso_fillBackground :       // Use the background fill color/pattern
+            case mso_fillBackground :       // Use the background fill color/pattern
+                eXFill = drawing::FillStyle_NONE;
+                bUseSlideBackground = true;
+            break;
             default: break;
         }
         rSet.Put( XFillStyleItem( eXFill ) );
@@ -1412,7 +1417,7 @@ void DffPropertyReader::ApplyFillAttributes( SvStream& rIn, SfxItemSet& rSet, co
                         Bitmap aBmp( aGraf.GetBitmapEx().GetBitmap() );
                         if (aBmp.GetSizePixel().Width() == 8 &&
                             aBmp.GetSizePixel().Height() == 8 &&
-                            aBmp.getPixelFormat() == vcl::PixelFormat::N1_BPP)
+                            aBmp.getPixelFormat() == vcl::PixelFormat::N8_BPP)
                         {
                             Color aCol1( COL_WHITE ), aCol2( COL_WHITE );
 
@@ -1425,7 +1430,7 @@ void DffPropertyReader::ApplyFillAttributes( SvStream& rIn, SfxItemSet& rSet, co
                             // Create a bitmap for the pattern with expected colors
                             vcl::bitmap::RawBitmap aResult(Size(8, 8), 24);
                             {
-                                Bitmap::ScopedReadAccess pRead(aBmp);
+                                BitmapScopedReadAccess pRead(aBmp);
 
                                 for (tools::Long y = 0; y < aResult.Height(); ++y)
                                 {
@@ -1465,6 +1470,12 @@ void DffPropertyReader::ApplyFillAttributes( SvStream& rIn, SfxItemSet& rSet, co
                     }
                 }
             }
+        }
+        else if (eXFill == drawing::FillStyle_NONE && bUseSlideBackground)
+        {
+            rSet.Put( XFillStyleItem( drawing::FillStyle_NONE ) );
+            XFillUseSlideBackgroundItem aFillBgItem(true);
+            rSet.Put(aFillBgItem);
         }
     }
     else
@@ -2822,7 +2833,7 @@ void DffPropertyReader::CheckAndCorrectExcelTextRotation( SvStream& rIn, SfxItem
 
     const css::uno::Any* pAny;
     SdrCustomShapeGeometryItem aGeometryItem(rSet.Get( SDRATTR_CUSTOMSHAPE_GEOMETRY ));
-    static const OUStringLiteral sTextRotateAngle( u"TextRotateAngle" );
+    static constexpr OUString sTextRotateAngle( u"TextRotateAngle"_ustr );
     pAny = aGeometryItem.GetPropertyValueByName( sTextRotateAngle );
     double fExtraTextRotateAngle = 0.0;
     if ( pAny )
@@ -3893,9 +3904,9 @@ rtl::Reference<SdrObject> SvxMSDffManager::ImportGraphic( SvStream& rSt, SfxItem
                 }
                 if (bOk && DFF_msofbtBSE == aHd.nRecType)
                 {
-                    const sal_uLong nSkipBLIPLen = 20;
-                    const sal_uLong nSkipShapePos = 4;
-                    const sal_uLong nSkipBLIP = 4;
+                    const sal_uInt8 nSkipBLIPLen = 20;
+                    const sal_uInt8 nSkipShapePos = 4;
+                    const sal_uInt8 nSkipBLIP = 4;
                     const sal_uLong nSkip =
                         nSkipBLIPLen + 4 + nSkipShapePos + 4 + nSkipBLIP;
 
@@ -4565,7 +4576,7 @@ rtl::Reference<SdrObject> SvxMSDffManager::ImportShape( const DffRecordHeader& r
                             rOutliner.SetStyleSheetPool(static_cast< SfxStyleSheetPool* >(xRet->getSdrModelFromSdrObject().GetStyleSheetPool()));
                             bool bOldUpdateMode = rOutliner.SetUpdateLayout( false );
                             rOutliner.SetText( *pParaObj );
-                            ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::DEFAULT);
+                            ScopedVclPtrInstance< VirtualDevice > pVirDev(DeviceFormat::WITHOUT_ALPHA);
                             pVirDev->SetMapMode(MapMode(MapUnit::Map100thMM));
                             sal_Int32 i, nParagraphs = rOutliner.GetParagraphCount();
                             if ( nParagraphs )
@@ -4601,9 +4612,9 @@ rtl::Reference<SdrObject> SvxMSDffManager::ImportShape( const DffRecordHeader& r
                     // applies only if importing arcs from MS Office.
                     if ( aObjData.eShapeType == mso_sptArc )
                     {
-                        static const OUStringLiteral sAdjustmentValues( u"AdjustmentValues" );
-                        static const OUStringLiteral sViewBox( u"ViewBox" );
-                        static const OUStringLiteral sPath( u"Path" );
+                        static constexpr OUString sAdjustmentValues( u"AdjustmentValues"_ustr );
+                        static constexpr OUString sViewBox( u"ViewBox"_ustr );
+                        static constexpr OUString sPath( u"Path"_ustr );
                         SdrCustomShapeGeometryItem aGeometryItem( static_cast<SdrObjCustomShape*>(xRet.get())->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY ) );
                         PropertyValue aPropVal;
 
@@ -5170,9 +5181,8 @@ void SvxMSDffManager::NotifyFreeObj(SvxMSDffClientData& rData, SdrObject* pObj)
     if (SdrObjGroup* pGroup = dynamic_cast<SdrObjGroup*>(pObj))
     {
         SdrObjList* pSubList = pGroup->GetSubList();
-        size_t nObjCount = pSubList->GetObjCount();
-        for (size_t i = 0; i < nObjCount; ++i)
-            NotifyFreeObj(rData, pSubList->GetObj(i));
+        for (const rtl::Reference<SdrObject>& pChildObj : *pSubList)
+            NotifyFreeObj(rData, pChildObj.get());
     }
 
     rData.NotifyFreeObj(pObj);
@@ -6124,7 +6134,7 @@ void SvxMSDffManager::GetDrawingGroupContainerData( SvStream& rSt, sal_uInt32 nL
 void SvxMSDffManager::GetDrawingContainerData( SvStream& rSt, sal_uInt32 nLenDg,
                                                sal_uInt16 nDrawingContainerId )
 {
-    sal_uInt8 nVer;sal_uInt16 nInst;sal_uInt16 nFbt;sal_uInt32 nLength;
+    sal_uInt8 nVer;sal_uInt16 nInst;sal_uInt16 nFbt(0);sal_uInt32 nLength(0);
 
     sal_uLong nReadDg = 0;
 
@@ -6325,7 +6335,6 @@ bool SvxMSDffManager::GetShapeContainerData( SvStream& rSt,
                             // complex Prop found:
                             // Length is always 6. The length of the appended extra data
                             // after the actual prop table is of different size.
-                            nPropVal = 6;
                         }
                     }
                     break;

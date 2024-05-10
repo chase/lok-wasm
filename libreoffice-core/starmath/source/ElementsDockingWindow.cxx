@@ -44,7 +44,7 @@
 namespace
 {
 // element, element help, element visual, element visual's translatable
-typedef std::tuple<std::string_view, TranslateId, std::u16string_view, TranslateId> SmElementDescr;
+typedef std::tuple<std::u16string_view, TranslateId, std::u16string_view, TranslateId> SmElementDescr;
 
 // SmParser 5 elements
 
@@ -158,6 +158,7 @@ const SmElementDescr s_a5FunctionsList[] =
     {RID_LNX, RID_LNX_HELP, {}, {}},
     {RID_EXPX, RID_EXPX_HELP, {}, {}},
     {RID_LOGX, RID_LOGX_HELP, {}, {}},
+    {RID_ARALOGX, RID_SINX_HELP, {}, {}},
     {},
     {RID_SINX, RID_SINX_HELP, {}, {}},
     {RID_COSX, RID_COSX_HELP, {}, {}},
@@ -167,6 +168,32 @@ const SmElementDescr s_a5FunctionsList[] =
     {RID_COSHX, RID_COSHX_HELP, {}, {}},
     {RID_TANHX, RID_TANHX_HELP, {}, {}},
     {RID_COTHX, RID_COTHX_HELP, {}, {}},
+    {},
+    {RID_ARASINX, RID_SINX_HELP, {}, {}},
+    {RID_ARACOSX, RID_COSX_HELP, {}, {}},
+    {RID_ARATANX, RID_TANX_HELP, {}, {}},
+    {RID_ARACOTX, RID_COTX_HELP, {}, {}},
+    {RID_ARASECX, RID_COTX_HELP, {}, {}},
+    {RID_ARACSCX, RID_COTX_HELP, {}, {}},
+    {RID_ARASINHX, RID_SINHX_HELP, {}, {}},
+    {RID_ARACOSHX, RID_COSHX_HELP, {}, {}},
+    {RID_ARATANHX, RID_TANHX_HELP, {}, {}},
+    {RID_ARACOTHX, RID_COTHX_HELP, {}, {}},
+    {RID_ARASECHX, RID_COTX_HELP, {}, {}},
+    {RID_ARACSCHX, RID_COTX_HELP, {}, {}},
+    {},
+    {RID_ARASIN2X, RID_SINX_HELP, {}, {}},
+    {RID_ARACOS2X, RID_COSX_HELP, {}, {}},
+    {RID_ARATAN2X, RID_TANX_HELP, {}, {}},
+    {RID_ARACOT2X, RID_COTX_HELP, {}, {}},
+    {RID_ARASEC2X, RID_COTX_HELP, {}, {}},
+    {RID_ARACSC2X, RID_COTX_HELP, {}, {}},
+    {RID_ARASINH2X, RID_SINHX_HELP, {}, {}},
+    {RID_ARACOSH2X, RID_COSHX_HELP, {}, {}},
+    {RID_ARATANH2X, RID_TANHX_HELP, {}, {}},
+    {RID_ARACOTH2X, RID_COTHX_HELP, {}, {}},
+    {RID_ARASECH2X, RID_COTX_HELP, {}, {}},
+    {RID_ARACSCH2X, RID_COTX_HELP, {}, {}},
     {},
     {RID_ARCSINX, RID_ARCSINX_HELP, {}, {}},
     {RID_ARCCOSX, RID_ARCCOSX_HELP, {}, {}},
@@ -197,10 +224,20 @@ const SmElementDescr s_a5OperatorsList[] =
     {RID_LIMSUP_TOX, RID_LIMSUP_TOX_HELP, {}, {}},
     {RID_LIMSUP_FROMTOX, RID_LIMSUP_FROMTOX_HELP, {}, {}},
     {},
+    {RID_HADDX, RID_HADDX_HELP, {}, {}},
+    {RID_HADD_FROMX, RID_HADD_FROMX_HELP, {}, {}},
+    {RID_HADD_TOX, RID_HADD_TOX_HELP, {}, {}},
+    {RID_HADD_FROMTOX, RID_HADD_FROMTOX_HELP, {}, {}},
+    {},
     {RID_SUMX, RID_SUMX_HELP, {}, {}},
     {RID_SUM_FROMX, RID_SUM_FROMX_HELP, {}, {}},
     {RID_SUM_TOX, RID_SUM_TOX_HELP, {}, {}},
     {RID_SUM_FROMTOX, RID_SUM_FROMTOX_HELP, {}, {}},
+    {},
+    {RID_MAJX, RID_MAJX_HELP, {}, {}},
+    {RID_MAJ_FROMX, RID_MAJ_FROMX_HELP, {}, {}},
+    {RID_MAJ_TOX, RID_MAJ_TOX_HELP, {}, {}},
+    {RID_MAJ_FROMTOX, RID_MAJ_FROMTOX_HELP, {}, {}},
     {},
     {RID_PRODX, RID_PRODX_HELP, {}, {}},
     {RID_PROD_FROMX, RID_PROD_FROMX_HELP, {}, {}},
@@ -398,18 +435,18 @@ const SmElementDescr s_a5OthersList[] =
 
 const SmElementDescr s_a5ExamplesList[] =
 {
-    {"{func e}^{i %pi} + 1 = 0", RID_EXAMPLE_EULER_IDENTITY_HELP, {}, {}},
-    {"C = %pi cdot d = 2 cdot %pi cdot r", RID_EXAMPLE_CIRCUMFERENCE_HELP, {}, {}},
-    {"c = sqrt{ a^2 + b^2 }", RID_EXAMPLE_PYTHAGOREAN_THEO_HELP, {}, {}},
-    {"vec F = m times vec a", RID_EXAMPLE_2NEWTON, {}, {}},
-    {"E = m c^2", RID_EXAMPLE_MASS_ENERGY_EQUIV_HELP, {}, {}},
-    {"G_{%mu %nu} + %LAMBDA g_{%mu %nu}= frac{8 %pi G}{c^4} T_{%mu %nu}", RID_EXAMPLE_GENERAL_RELATIVITY_HELP, {}, {}},
-    {"%DELTA t' = { %DELTA t } over sqrt{ 1 - v^2 over c^2 }", RID_EXAMPLE_SPECIAL_RELATIVITY_HELP, {}, {}},
-    {"d over dt left( {partial L}over{partial dot q} right) = {partial L}over{partial q}", RID_EXAMPLE_EULER_LAGRANGE_HELP, {}, {}},
-    {"int from a to b f'(x) dx = f(b) - f(a)", RID_EXAMPLE_FTC_HELP, {}, {}},
-    {"ldline %delta bold{r}(t) rdline approx e^{%lambda t} ldline %delta { bold{r} }_0 rdline", RID_EXAMPLE_CHAOS_HELP, {}, {}},
-    {"f(x) = sum from { n=0 } to { infinity } { {f^{(n)}(x_0) } over { fact{n} } (x-x_0)^n }", RID_EXAMPLE_A_TAYLOR_SERIES_HELP, {}, {}},
-    {"f(x) = {1} over { %sigma sqrt{2 %pi} } func e^-{ {(x-%mu)^2} over {2 %sigma^2} }", RID_EXAMPLE_GAUSS_DISTRIBUTION_HELP, {}, {}},
+    {u"{func e}^{i %pi} + 1 = 0", RID_EXAMPLE_EULER_IDENTITY_HELP, {}, {}},
+    {u"C = %pi cdot d = 2 cdot %pi cdot r", RID_EXAMPLE_CIRCUMFERENCE_HELP, {}, {}},
+    {u"c = sqrt{ a^2 + b^2 }", RID_EXAMPLE_PYTHAGOREAN_THEO_HELP, {}, {}},
+    {u"vec F = m times vec a", RID_EXAMPLE_2NEWTON, {}, {}},
+    {u"E = m c^2", RID_EXAMPLE_MASS_ENERGY_EQUIV_HELP, {}, {}},
+    {u"G_{%mu %nu} + %LAMBDA g_{%mu %nu}= frac{8 %pi G}{c^4} T_{%mu %nu}", RID_EXAMPLE_GENERAL_RELATIVITY_HELP, {}, {}},
+    {u"%DELTA t' = { %DELTA t } over sqrt{ 1 - v^2 over c^2 }", RID_EXAMPLE_SPECIAL_RELATIVITY_HELP, {}, {}},
+    {u"d over dt left( {partial L}over{partial dot q} right) = {partial L}over{partial q}", RID_EXAMPLE_EULER_LAGRANGE_HELP, {}, {}},
+    {u"int from a to b f'(x) dx = f(b) - f(a)", RID_EXAMPLE_FTC_HELP, {}, {}},
+    {u"ldline %delta bold{r}(t) rdline approx e^{%lambda t} ldline %delta { bold{r} }_0 rdline", RID_EXAMPLE_CHAOS_HELP, {}, {}},
+    {u"f(x) = sum from { n=0 } to { infinity } { {f^{(n)}(x_0) } over { fact{n} } (x-x_0)^n }", RID_EXAMPLE_A_TAYLOR_SERIES_HELP, {}, {}},
+    {u"f(x) = {1} over { %sigma sqrt{2 %pi} } func e^-{ {(x-%mu)^2} over {2 %sigma^2} }", RID_EXAMPLE_GAUSS_DISTRIBUTION_HELP, {}, {}},
 };
 
 const std::vector<TranslateId> s_a5Categories{
@@ -532,6 +569,7 @@ void SmElementsControl::addElement(const OUString& aElementVisual, const OUStrin
     pDevice->SetDrawMode(DrawModeFlags::Default);
     pDevice->SetLayoutMode(vcl::text::ComplexTextLayoutFlags::Default);
     pDevice->SetDigitLanguage(LANGUAGE_ENGLISH);
+    pDevice->EnableRTL(false);
 
     pDevice->SetBackground(GetControlBackground());
     pDevice->SetTextColor(GetTextColor());
@@ -545,7 +583,7 @@ void SmElementsControl::addElement(const OUString& aElementVisual, const OUStrin
     Size aSize = pDevice->LogicToPixel(Size(pNode->GetWidth(), pNode->GetHeight()));
     aSize.extendBy(10, 0); // Add 5 pixels from both sides to accommodate extending parts of italics
     pDevice->SetOutputSizePixel(aSize);
-    SmDrawingVisitor(*pDevice, pDevice->PixelToLogic(Point(5, 0)), pNode.get());
+    SmDrawingVisitor(*pDevice, pDevice->PixelToLogic(Point(5, 0)), pNode.get(), maFormat);
 
     maItemDatas.push_back(std::make_unique<ElementData>(aElementSource, aHelpText));
     const OUString aId(weld::toId(maItemDatas.back().get()));
@@ -574,8 +612,8 @@ void SmElementsControl::setElementSetIndex(int nSetIndex)
 
 void SmElementsControl::addElements(int nCategory)
 {
-    mpIconView->clear(); // tdf#152411 clear before freeze to let gtk a11y drop reference
     mpIconView->freeze();
+    mpIconView->clear();
     mpIconView->set_item_width(0);
     maItemDatas.clear();
 
@@ -592,7 +630,7 @@ void SmElementsControl::addElements(int nCategory)
         }
         else
         {
-            OUString aElement(OUString::createFromAscii(element));
+            OUString aElement(element);
             OUString aVisual(elementVisual.empty() ? aElement : OUString(elementVisual));
             if (visualTranslatable)
                 aVisual = aVisual.replaceFirst("$1", SmResId(visualTranslatable));
@@ -618,7 +656,7 @@ void SmElementsControl::build()
     }
 }
 
-void SmElementsControl::setSmSyntaxVersion(sal_uInt16 nSmSyntaxVersion)
+void SmElementsControl::setSmSyntaxVersion(sal_Int16 nSmSyntaxVersion)
 {
     if( m_nSmSyntaxVersion != nSmSyntaxVersion )
     {

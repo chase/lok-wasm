@@ -467,16 +467,8 @@ void SwHTMLImageWatcher::init( sal_Int32 Width, sal_Int32 Height )
         return;
 
     awt::Size aNewSz;
-    aNewSz.Width = Width;
-    aNewSz.Height = Height;
-    if( Application::GetDefaultDevice() )
-    {
-        Size aTmp(aNewSz.Width, aNewSz.Height);
-        aTmp = Application::GetDefaultDevice()
-                    ->PixelToLogic( aTmp, MapMode( MapUnit::Map100thMM ) );
-        aNewSz.Width = aTmp.Width();
-        aNewSz.Height = aTmp.Height();
-    }
+    aNewSz.Width = o3tl::convert(Width, o3tl::Length::px, o3tl::Length::mm100);
+    aNewSz.Height = o3tl::convert(Height, o3tl::Length::px, o3tl::Length::mm100);
 
     if( !m_bSetWidth || !m_bSetHeight )
     {
@@ -643,7 +635,7 @@ void SwHTMLParser::SetControlSize( const uno::Reference< drawing::XShape >& rSha
             if ( pDocSh->GetMedium() )
             {
                 // if there is no hidden property in the MediaDescriptor it should be removed after loading
-                const SfxBoolItem* pHiddenItem = SfxItemSet::GetItem<SfxBoolItem>(pDocSh->GetMedium()->GetItemSet(), SID_HIDDEN, false);
+                const SfxBoolItem* pHiddenItem = pDocSh->GetMedium()->GetItemSet().GetItem(SID_HIDDEN, false);
                 m_bRemoveHidden = ( pHiddenItem == nullptr || !pHiddenItem->GetValue() );
             }
 
@@ -711,14 +703,8 @@ void SwHTMLParser::SetControlSize( const uno::Reference< drawing::XShape >& rSha
         }
     }
 
-    if( Application::GetDefaultDevice() )
-    {
-        Size aTmpSz( aNewSz.Width, aNewSz.Height );
-        aTmpSz = Application::GetDefaultDevice()
-                        ->PixelToLogic( aTmpSz, MapMode( MapUnit::Map100thMM ) );
-        aNewSz.Width  = aTmpSz.Width();
-        aNewSz.Height = aTmpSz.Height();
-    }
+    aNewSz.Width = o3tl::convert(aNewSz.Width, o3tl::Length::px, o3tl::Length::mm100);
+    aNewSz.Height = o3tl::convert(aNewSz.Height, o3tl::Length::px, o3tl::Length::mm100);
     if( aNewSz.Width )
     {
         if( aNewSz.Width < MINLAY )
@@ -886,22 +872,25 @@ uno::Reference< drawing::XShape > SwHTMLParser::InsertControl(
         uno::Reference< beans::XPropertySet > xShapePropSet( xCreate, UNO_QUERY );
 
         // set left/right border
-        if( const SvxLRSpaceItem* pLRItem = rCSS1ItemSet.GetItemIfSet( RES_LR_SPACE ) )
+        // note: parser never creates SvxLeftMarginItem! must be converted
+        if (const SvxTextLeftMarginItem *const pLeft = rCSS1ItemSet.GetItemIfSet(RES_MARGIN_TEXTLEFT))
         {
-            // Flatten first line indent
-            SvxLRSpaceItem aLRItem( *pLRItem );
-            aLRItem.SetTextFirstLineOffset( 0 );
             if( rCSS1PropInfo.m_bLeftMargin )
             {
-                nLeftSpace = convertTwipToMm100( aLRItem.GetLeft() );
+                // should be SvxLeftMarginItem... "cast" it
+                nLeftSpace = convertTwipToMm100(pLeft->GetTextLeft());
                 rCSS1PropInfo.m_bLeftMargin = false;
             }
+            rCSS1ItemSet.ClearItem(RES_MARGIN_TEXTLEFT);
+        }
+        if (const SvxRightMarginItem *const pRight = rCSS1ItemSet.GetItemIfSet(RES_MARGIN_RIGHT))
+        {
             if( rCSS1PropInfo.m_bRightMargin )
             {
-                nRightSpace = convertTwipToMm100( aLRItem.GetRight() );
+                nRightSpace = convertTwipToMm100(pRight->GetRight());
                 rCSS1PropInfo.m_bRightMargin = false;
             }
-            rCSS1ItemSet.ClearItem( RES_LR_SPACE );
+            rCSS1ItemSet.ClearItem(RES_MARGIN_RIGHT);
         }
         if( nLeftSpace || nRightSpace )
         {
@@ -1663,14 +1652,8 @@ void SwHTMLParser::InsertInput()
     case HTMLInputType::Image:
         {
             // SIZE = WIDTH
-            aSz.setWidth( nSize ? nSize : nWidth );
-            aSz.setWidth( nWidth );
-            aSz.setHeight( nHeight );
-            if( (aSz.Width() || aSz.Height()) && Application::GetDefaultDevice() )
-            {
-                aSz = Application::GetDefaultDevice()
-                    ->PixelToLogic( aSz, MapMode( MapUnit::Map100thMM ) );
-            }
+            aSz.setWidth(o3tl::convert(nWidth, o3tl::Length::px, o3tl::Length::mm100));
+            aSz.setHeight(o3tl::convert(nHeight, o3tl::Length::px, o3tl::Length::mm100));
             aTmp <<= FormButtonType_SUBMIT;
             xPropSet->setPropertyValue("ButtonType", aTmp );
 
@@ -1753,15 +1736,9 @@ void SwHTMLParser::InsertInput()
 
     if( bUseSize && nSize>0 )
     {
-        if( Application::GetDefaultDevice() )
-        {
-            Size aNewSz( nSize, 0 );
-            aNewSz = Application::GetDefaultDevice()
-                        ->PixelToLogic( aNewSz, MapMode( MapUnit::Map100thMM ) );
-            aSz.setWidth( aNewSz.Width() );
-            OSL_ENSURE( !aTextSz.Width(), "text width is present" );
-            bMinWidth = false;
-        }
+        aSz.setWidth(o3tl::convert(nSize, o3tl::Length::px, o3tl::Length::mm100));
+        OSL_ENSURE( !aTextSz.Width(), "text width is present" );
+        bMinWidth = false;
     }
 
     SfxItemSet aCSS1ItemSet( m_xDoc->GetAttrPool(), m_pCSS1Parser->GetWhichMap() );

@@ -23,20 +23,27 @@
 #include <com/sun/star/text/PositionLayoutDir.hpp>
 #include <cppuhelper/weakref.hxx>
 #include <tools/gen.hxx>
+namespace sw
+{
+    template<class T> class FrameFormats;
+    class SpzFrameFormat;
+}
 #include "format.hxx"
 #include "hintids.hxx"
 #include "swdllapi.h"
 #include <list>
 #include "textboxhelper.hxx"
 
-class SwFlyFrame;
-class SwFlyDrawContact;
-class SwAnchoredObject;
 class Graphic;
-class ImageMap;
 class IMapObject;
-class SwRect;
+class ImageMap;
 class SdrObject;
+class SwAnchoredObject;
+class SwDrawFrameFormat;
+class SwFlyDrawContact;
+class SwFlyFrame;
+class SwFlyFrameFormat;
+class SwRect;
 class SwRootFrame;
 class SwTableBox;
 
@@ -53,8 +60,11 @@ namespace sw
             : SfxHint(SfxHintId::SwFindSdrObject), m_rpObject(rpObject) {};
         virtual ~FindSdrObjectHint() override;
     };
+    template<class T> class FrameFormats;
+    class SpzFrameFormat;
 }
-class SwFrameFormats;
+class SwFormatsBase;
+class SwTableFormat;
 
 /// Style of a layout element.
 class SW_DLLPUBLIC SwFrameFormat
@@ -63,7 +73,9 @@ class SW_DLLPUBLIC SwFrameFormat
     friend class SwDoc;
     friend class SwPageDesc;    ///< Is allowed to call protected CTor.
     friend class ::sw::DocumentLayoutManager; ///< Is allowed to call protected CTor.
-    friend class SwFrameFormats;     ///< Is allowed to update the list backref.
+    friend class sw::FrameFormats<SwTableFormat*>;     ///< Is allowed to update the list backref.
+    friend class sw::FrameFormats<sw::SpzFrameFormat*>;     ///< Is allowed to update the list backref.
+    friend class sw::FrameFormats<SwFrameFormat*>;     ///< Is allowed to update the list backref.
     friend class SwTextBoxHelper;
     friend class SwUndoFlyBase; ///< calls SetOtherTextBoxFormat
 
@@ -73,7 +85,7 @@ class SW_DLLPUBLIC SwFrameFormat
     drawinglayer::attribute::SdrAllFillAttributesHelperPtr  maFillAttributes;
 
     // The assigned SwFrmFmt list.
-    SwFrameFormats *m_ffList;
+    SwFormatsBase* m_ffList;
 
     std::shared_ptr< SwTextBoxNode > m_pOtherTextBoxFormats;
 
@@ -183,11 +195,28 @@ public:
 
     virtual void SetFormatName( const OUString& rNewName, bool bBroadcast=false ) override;
     void MoveTableBox(SwTableBox& rTableBox, const SwFrameFormat* pOldFormat);
+    virtual bool IsVisible() const;
 };
 
+namespace sw
+{
+    class SW_DLLPUBLIC SpzFrameFormat: public SwFrameFormat {
+        friend ::SwDrawFrameFormat;
+        friend ::SwFlyFrameFormat;
+        SpzFrameFormat(
+            SwAttrPool& rPool,
+            const OUString& rFormatName,
+            SwFrameFormat* pDerivedFrame,
+            sal_uInt16 nFormatWhich)
+            : SwFrameFormat(rPool, rFormatName, pDerivedFrame, nFormatWhich)
+        {
+            assert(nFormatWhich == RES_DRAWFRMFMT || nFormatWhich == RES_FLYFRMFMT);
+        };
+    };
+}
 // The FlyFrame-Format
 
-class SW_DLLPUBLIC SwFlyFrameFormat final : public SwFrameFormat
+class SW_DLLPUBLIC SwFlyFrameFormat final : public sw::SpzFrameFormat
 {
     friend class SwDoc;
     OUString msTitle;
@@ -219,8 +248,6 @@ public:
 
     virtual Graphic MakeGraphic( ImageMap* pMap = nullptr, const sal_uInt32 nMaximumQuadraticPixels = 500000, const std::optional<Size>& rTargetDPI = std::nullopt ) override;
 
-    virtual bool GetInfo( SfxPoolItem& rInfo ) const override;
-
     OUString GetObjTitle() const;
     void SetObjTitle( const OUString& rTitle, bool bBroadcast = false );
 
@@ -229,6 +256,9 @@ public:
 
     OUString GetObjDescription() const;
     void SetObjDescription( const OUString& rDescription, bool bBroadcast = false );
+
+    bool IsDecorative() const;
+    void SetObjDecorative(bool isDecorative);
 
     /** SwFlyFrameFormat::IsBackgroundTransparent
 
@@ -377,7 +407,7 @@ namespace sw
     };
 }
 
-class SW_DLLPUBLIC SwDrawFrameFormat final : public SwFrameFormat
+class SW_DLLPUBLIC SwDrawFrameFormat final : public sw::SpzFrameFormat
 {
     friend class SwDoc;
 
@@ -393,15 +423,12 @@ class SW_DLLPUBLIC SwDrawFrameFormat final : public SwFrameFormat
 
     bool mbPosAttrSet;
 
-    SwDrawFrameFormat( SwAttrPool& rPool, const OUString &rFormatNm,
-                    SwFrameFormat *pDrvdFrame )
-        : SwFrameFormat( rPool, rFormatNm, pDrvdFrame, RES_DRAWFRMFMT ),
+    SwDrawFrameFormat(SwAttrPool& rPool, const OUString& rFormatName, SwFrameFormat* pDerivedFrame)
+        : sw::SpzFrameFormat(rPool, rFormatName, pDerivedFrame, RES_DRAWFRMFMT),
           m_pSdrObjectCached(nullptr),
-          meLayoutDir( SwFrameFormat::HORI_L2R ),
-
-          mnPositionLayoutDir( css::text::PositionLayoutDir::PositionInLayoutDirOfAnchor ),
-
-          mbPosAttrSet( false )
+          meLayoutDir(SwFrameFormat::HORI_L2R),
+          mnPositionLayoutDir(css::text::PositionLayoutDir::PositionInLayoutDirOfAnchor),
+          mbPosAttrSet(false)
     {}
 
 public:

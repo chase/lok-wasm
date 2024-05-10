@@ -171,8 +171,6 @@ void ColorScaleRule::importCfvo( const AttributeList& rAttribs )
     ++mnCfvo;
 }
 
-namespace {
-
 // https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.spreadsheet.indexedcolors?view=openxml-2.8.1
 static ::Color IndexedColors[] = {
     0x00000000,
@@ -242,6 +240,8 @@ static ::Color IndexedColors[] = {
     0x00000000, // System Foreground ?
     0x00000000, // System Background ?
 };
+
+namespace {
 
 ::Color importOOXColor(const AttributeList& rAttribs, const ThemeBuffer& rThemeBuffer, const GraphicHelper& rGraphicHelper)
 {
@@ -1243,7 +1243,7 @@ bool CondFormatBuffer::insertRule(CondFormatRef const & xCondFmt, CondFormatRule
         xFoundFmt->insertRule(xRule);
     }
 
-    return (bool)xFoundFmt;
+    return static_cast<bool>(xFoundFmt);
 }
 
 void CondFormatBuffer::finalizeImport()

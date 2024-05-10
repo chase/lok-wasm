@@ -71,7 +71,7 @@ private:
                                     SvIdlDataBase & rBase,
                                     SvStream & rOutStm );
 
-    void                    InsertSlots( SvSlotElementList& rList, std::vector<sal_uLong>& rSuperList,
+    void                    InsertSlots( SvSlotElementList& rList, std::vector<sal_uInt32>& rSuperList,
                                     SvMetaClassList & rClassList,
                                     const OString& rPrefix, SvIdlDataBase& rBase );
 
@@ -80,7 +80,7 @@ public:
     virtual void            ReadContextSvIdl( SvIdlDataBase &,
                                      SvTokenStream & rInStm ) override;
 
-    void                    FillClasses( SvMetaClassList & rList );
+    void                    FillClasses( SvMetaClassList & rClassList );
 
     virtual void            WriteSfx( SvIdlDataBase & rBase, SvStream & rOutStm ) override;
 };

@@ -23,6 +23,7 @@
 
 #include <cppuhelper/basemutex.hxx>
 #include <cppuhelper/compbase.hxx>
+#include <cppuhelper/supportsservice.hxx>
 
 #include <comphelper/diagnose_ex.hxx>
 #include <utility>
@@ -35,6 +36,7 @@
 
 #include <com/sun/star/frame/XSessionManagerClient.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/frame/XSessionManagerListener2.hpp>
 
 #include <vector>
@@ -51,7 +53,7 @@ namespace {
 
 class VCLSession:
     private cppu::BaseMutex,
-    public cppu::WeakComponentImplHelper < XSessionManagerClient >
+    public cppu::WeakComponentImplHelper < XSessionManagerClient, css::lang::XServiceInfo >
 {
     struct Listener
     {
@@ -86,6 +88,18 @@ class VCLSession:
     virtual void SAL_CALL saveDone( const css::uno::Reference< XSessionManagerListener >& xListener ) override;
     virtual sal_Bool SAL_CALL cancelShutdown() override;
 
+    OUString SAL_CALL getImplementationName() override {
+        return "com.sun.star.frame.VCLSessionManagerClient";
+    }
+
+    sal_Bool SAL_CALL supportsService(OUString const & ServiceName) override {
+        return cppu::supportsService(this, ServiceName);
+    }
+
+    css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override {
+        return {"com.sun.star.frame.SessionManagerClient"};
+    }
+
     void SAL_CALL disposing() override;
 
     void callSaveRequested( bool bShutdown );
@@ -100,7 +114,7 @@ public:
 }
 
 VCLSession::VCLSession()
-        : cppu::WeakComponentImplHelper< XSessionManagerClient >( m_aMutex ),
+        : WeakComponentImplHelper( m_aMutex ),
           m_xSession( ImplGetSVData()->mpDefInst->CreateSalSession() ),
           m_bInteractionRequested( false ),
           m_bInteractionGranted( false ),
@@ -274,7 +288,7 @@ void SAL_CALL VCLSession::removeSessionManagerListener( const css::uno::Referenc
 
     SAL_INFO("vcl.se.debug", "  m_aListeners.size() = " << m_aListeners.size() );
 
-    m_aListeners.erase(std::remove_if(m_aListeners.begin(), m_aListeners.end(), [&](Listener& listener) {return xListener == listener.m_xListener;}), m_aListeners.end());
+    std::erase_if(m_aListeners, [&](Listener& listener) {return xListener == listener.m_xListener;});
 }
 
 void SAL_CALL VCLSession::queryInteraction( const css::uno::Reference<XSessionManagerListener>& xListener )
@@ -295,7 +309,9 @@ void SAL_CALL VCLSession::queryInteraction( const css::uno::Reference<XSessionMa
     osl::MutexGuard aGuard( m_aMutex );
     if( ! m_bInteractionRequested )
     {
-        m_xSession->queryInteraction();
+        if (m_xSession)
+            m_xSession->queryInteraction();
+
         m_bInteractionRequested = true;
     }
     for (auto & listener: m_aListeners)
@@ -377,7 +393,7 @@ void VCLSession::disposing() {
         osl::MutexGuard g(m_aMutex);
         vector.swap(m_aListeners);
     }
-    css::lang::EventObject src(static_cast<OWeakObject *>(this));
+    css::lang::EventObject src(getXWeak());
     for (auto const & listener: vector) {
         try {
             listener.m_xListener->disposing(src);

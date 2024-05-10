@@ -17,12 +17,13 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_CUPSMGR_HXX
-#define INCLUDED_VCL_INC_UNX_CUPSMGR_HXX
+#pragma once
 
 #include <printerinfomanager.hxx>
 #include <osl/thread.h>
 #include <osl/mutex.hxx>
+
+class cups_dest_s;
 
 namespace psp
 {
@@ -39,7 +40,7 @@ class CUPSManager final : public PrinterInfoManager
 {
     std::unordered_map< FILE*, OString, FPtrHash >         m_aSpoolFiles;
     int                                                    m_nDests;
-    void*                                                  m_pDests;
+    cups_dest_s*                                           m_pDests;
     bool                                                   m_bNewDests;
     std::unordered_map< OUString, int >      m_aCUPSDestMap;
 
@@ -84,7 +85,5 @@ public:
 };
 
 } // namespace psp
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

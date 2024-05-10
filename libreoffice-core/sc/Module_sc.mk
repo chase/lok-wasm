@@ -48,19 +48,21 @@ $(eval $(call gb_Module_add_check_targets,sc,\
 	CppunitTest_sc_ucalc_datatransformation \
 	CppunitTest_sc_ucalc_document_themes \
 	CppunitTest_sc_ucalc_formula \
+	CppunitTest_sc_ucalc_formula2 \
 	CppunitTest_sc_ucalc_parallelism \
 	CppunitTest_sc_ucalc_pivottable \
 	CppunitTest_sc_ucalc_rangelst \
 	CppunitTest_sc_ucalc_range \
 	CppunitTest_sc_ucalc_sharedformula \
 	CppunitTest_sc_ucalc_sparkline \
+	CppunitTest_sc_ucalc_solver \
 	CppunitTest_sc_ucalc_sort \
-	CppunitTest_sc_bugfix_test \
 	CppunitTest_sc_filters_test \
 	CppunitTest_sc_mark_test \
 	CppunitTest_sc_core \
 	CppunitTest_sc_dataprovider \
 	CppunitTest_sc_cache_test \
+	CppunitTest_sc_parallelism \
     CppunitTest_sc_shapetest \
 ))
 endif
@@ -69,6 +71,7 @@ ifneq ($(DISABLE_GUI),TRUE)
 ifeq ($(OS),LINUX)
 $(eval $(call gb_Module_add_check_targets,sc,\
 	CppunitTest_sc_tiledrendering \
+	CppunitTest_sc_tiledrendering2 \
 ))
 endif
 endif
@@ -85,9 +88,14 @@ $(eval $(call gb_Module_add_slowcheck_targets,sc, \
 	CppunitTest_sc_sparkline_test \
 	CppunitTest_sc_subsequent_filters_test \
 	CppunitTest_sc_subsequent_filters_test2 \
+	CppunitTest_sc_subsequent_filters_test3 \
+	CppunitTest_sc_subsequent_filters_test4 \
 	CppunitTest_sc_subsequent_export_test \
 	CppunitTest_sc_subsequent_export_test2 \
+	CppunitTest_sc_subsequent_export_test3 \
+	CppunitTest_sc_subsequent_export_test4 \
 	CppunitTest_sc_uicalc \
+	CppunitTest_sc_uicalc2 \
 	CppunitTest_sc_vba_macro_test \
 	CppunitTest_sc_a11y \
 	CppunitTest_sc_filter_html \
@@ -254,7 +262,6 @@ $(eval $(call gb_Module_add_screenshot_targets,sc,\
 $(eval $(call gb_Module_add_uicheck_targets,sc,\
 	UITest_conditional_format \
 	UITest_range_name \
-	UITest_hide_cols \
 	UITest_autofilter \
 	UITest_autofilter2 \
 	UITest_search_replace \

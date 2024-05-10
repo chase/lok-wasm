@@ -148,6 +148,7 @@ const Sequence< beans::Pair< OUString, sal_Int32 > >& NamespaceIds()
              NMSP_c15},
             {"http://schemas.microsoft.com/office/spreadsheetml/2015/revision2",
              NMSP_xr2},
+            {"http://schemas.microsoft.com/office/drawing/2017/decorative", NMSP_adec},
             {"http://schemas.microsoft.com/office/drawing/2016/SVG/main", NMSP_asvg},
         };
     return SINGLETON;
@@ -183,7 +184,7 @@ struct XmlFilterBaseImpl
     explicit            XmlFilterBaseImpl();
 };
 
-constexpr OUStringLiteral gaBinSuffix( u".bin" );
+constexpr OUString gaBinSuffix( u".bin"_ustr );
 
 XmlFilterBaseImpl::XmlFilterBaseImpl() :
     mrNamespaceMap(StaticNamespaceMap())
@@ -258,7 +259,7 @@ void XmlFilterBase::putPropertiesToDocumentGrabBag(const css::uno::Reference<css
         {
             uno::Reference<beans::XPropertySetInfo> xPropsInfo = xDocProps->getPropertySetInfo();
 
-            static constexpr OUStringLiteral aGrabBagPropName = u"InteropGrabBag";
+            static constexpr OUString aGrabBagPropName = u"InteropGrabBag"_ustr;
             if (xPropsInfo.is() && xPropsInfo->hasPropertyByName(aGrabBagPropName))
             {
                 // get existing grab bag
@@ -286,8 +287,10 @@ void XmlFilterBase::importDocumentProperties()
     rtl::Reference< ::oox::core::FilterDetect > xDetector( new ::oox::core::FilterDetect( xContext ) );
     xInputStream = xDetector->extractUnencryptedPackage( aMediaDesc );
     Reference< XComponent > xModel = getModel();
+    const bool repairPackage = aMediaDesc.getUnpackedValueOrDefault("RepairPackage", false);
     Reference< XStorage > xDocumentStorage (
-            ::comphelper::OStorageHelper::GetStorageOfFormatFromInputStream( OFOPXML_STORAGE_FORMAT_STRING, xInputStream ) );
+        ::comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
+            OFOPXML_STORAGE_FORMAT_STRING, xInputStream, {}, repairPackage));
     Reference< XInterface > xTemp = xContext->getServiceManager()->createInstanceWithContext(
             "com.sun.star.document.OOXMLDocumentPropertiesImporter",
             xContext);
@@ -1013,7 +1016,9 @@ bool XmlFilterBase::implFinalizeExport( MediaDescriptor& rMediaDescriptor )
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XInputStream >& rxInStream ) const
 {
-    return std::make_shared<ZipStorage>( getComponentContext(), rxInStream );
+    return std::make_shared<ZipStorage>(
+        getComponentContext(), rxInStream,
+        getMediaDescriptor().getUnpackedValueOrDefault("RepairPackage", false));
 }
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XStream >& rxOutStream ) const

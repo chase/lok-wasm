@@ -1441,8 +1441,8 @@ struct TypeKey {
         // those matches, too:
         OUStringBuffer b(static_cast<int>(theTypes.size() * 64));
         for (const css::uno::Type& rType : theTypes) {
-            b.append(rType.getTypeName());
-            b.append('*'); // arbitrary delimiter not used by type grammar
+            b.append(rType.getTypeName()
+                + "*"); // arbitrary delimiter not used by type grammar
         }
         types = b.makeStringAndClear();
     }
@@ -1562,7 +1562,7 @@ css::uno::Reference<css::beans::XIntrospectionAccess> Implementation::inspect(
         osl::MutexGuard g(m_aMutex);
         if (rBHelper.bDisposed || rBHelper.bInDispose) {
             throw css::lang::DisposedException(
-                getImplementationName(), static_cast<OWeakObject *>(this));
+                getImplementationName(), getXWeak());
         }
         reflection = reflection_;
     }
@@ -1628,7 +1628,7 @@ css::uno::Reference<css::beans::XIntrospectionAccess> Implementation::inspect(
         osl::MutexGuard g(m_aMutex);
         if (rBHelper.bDisposed || rBHelper.bInDispose) {
             throw css::lang::DisposedException(
-                getImplementationName(), static_cast<OWeakObject *>(this));
+                getImplementationName(), getXWeak());
         }
         TypeKey key(xPropSetInfo, SupportedTypesSeq);
         pAccess = typeCache_.find(key);
@@ -1774,8 +1774,7 @@ css::uno::Reference<css::beans::XIntrospectionAccess> Implementation::inspect(
 
                         // Enter in own property array
                         Property& rProp = rAllPropArray[ rPropCount ];
-                        OUString aFieldName = xField->getName();
-                        rProp.Name = aFieldName;
+                        rProp.Name = xField->getName();
                         rProp.Handle = rPropCount;
                         Type aFieldType( xPropType->getTypeClass(), xPropType->getName() );
                         rProp.Type = aFieldType;

@@ -102,7 +102,7 @@ static void InsertTableImpl(const DrawViewShell* pShell,
     }
     else
     {
-        Size aSize( 14100, 2000 );
+        Size aSize(14100, 200);
 
         Point aPos;
         ::tools::Rectangle aWinRect(aPos, pShell->GetActiveWindow()->GetOutputSizePixel());
@@ -227,7 +227,7 @@ void DrawViewShell::FuTable(SfxRequest& rReq)
         rReq.Ignore();
         SfxViewShell* pViewShell = GetViewShell();
         OSL_ASSERT (pViewShell!=nullptr);
-        SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+        SfxBindings& rBindings = pViewShell->GetViewFrame().GetBindings();
         rBindings.Invalidate( SID_INSERT_TABLE, true );
         break;
     }

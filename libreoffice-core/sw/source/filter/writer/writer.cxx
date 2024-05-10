@@ -38,27 +38,6 @@
 
 using namespace css;
 
-namespace
-{
-    SvStream& lcl_OutLongExt( SvStream& rStrm, sal_uLong nVal, bool bNeg )
-    {
-        char aBuf[28];
-
-        int i = SAL_N_ELEMENTS(aBuf);
-        aBuf[--i] = 0;
-        do
-        {
-            aBuf[--i] = '0' + static_cast<char>(nVal % 10);
-            nVal /= 10;
-        } while (nVal);
-
-        if (bNeg)
-            aBuf[--i] = '-';
-
-        return rStrm.WriteCharPtr( &aBuf[i] );
-    }
-}
-
 typedef std::multimap<SwNodeOffset, const ::sw::mark::IMark*> SwBookmarkNodeTable;
 
 struct Writer_Impl
@@ -84,7 +63,7 @@ void Writer_Impl::RemoveFontList( SwDoc& rDoc )
 {
     for( const auto& rpFontItem : aFontRemoveLst )
     {
-        rDoc.GetAttrPool().Remove( *rpFontItem );
+        rDoc.GetAttrPool().DirectRemoveItemFromPool( *rpFontItem );
     }
 }
 
@@ -181,9 +160,9 @@ bool Writer::CopyNextPam( SwPaM ** ppPam )
 sal_Int32 Writer::FindPos_Bkmk(const SwPosition& rPos) const
 {
     const IDocumentMarkAccess* const pMarkAccess = m_pDoc->getIDocumentMarkAccess();
-    const IDocumentMarkAccess::const_iterator_t ppBkmk = pMarkAccess->findFirstBookmarkStartsAfter(rPos);
-    if(ppBkmk != pMarkAccess->getBookmarksEnd())
-        return ppBkmk - pMarkAccess->getBookmarksBegin();
+    const IDocumentMarkAccess::const_iterator_t ppBkmk = pMarkAccess->findFirstMarkNotStartsBefore(rPos);
+    if(ppBkmk != pMarkAccess->getAllMarksEnd())
+        return ppBkmk - pMarkAccess->getAllMarksBegin();
     return -1;
 }
 
@@ -222,25 +201,11 @@ void Writer::SetStream(SvStream *const pStream)
     m_pImpl->m_pStream = pStream;
 }
 
-SvStream& Writer::OutLong( SvStream& rStrm, tools::Long nVal )
-{
-    const bool bNeg = nVal < 0;
-    if (bNeg)
-        nVal = -nVal;
-
-    return lcl_OutLongExt(rStrm, static_cast<sal_uLong>(nVal), bNeg);
-}
-
-SvStream& Writer::OutULong( SvStream& rStrm, sal_uLong nVal )
-{
-    return lcl_OutLongExt(rStrm, nVal, false);
-}
-
-ErrCode Writer::Write( SwPaM& rPaM, SvStream& rStrm, const OUString* pFName )
+ErrCodeMsg Writer::Write( SwPaM& rPaM, SvStream& rStrm, const OUString* pFName )
 {
     if ( IsStgWriter() )
     {
-        ErrCode nResult = ERRCODE_ABORT;
+        ErrCodeMsg nResult = ERRCODE_ABORT;
         try
         {
             tools::SvRef<SotStorage> aRef = new SotStorage( rStrm );
@@ -276,7 +241,7 @@ ErrCode Writer::Write( SwPaM& rPaM, SvStream& rStrm, const OUString* pFName )
 void Writer::SetupFilterOptions(SfxMedium& /*rMedium*/)
 {}
 
-ErrCode Writer::Write( SwPaM& rPam, SfxMedium& rMedium, const OUString* pFileName )
+ErrCodeMsg Writer::Write( SwPaM& rPam, SfxMedium& rMedium, const OUString* pFileName )
 {
     SetupFilterOptions(rMedium);
     // This method must be overridden in SwXMLWriter a storage from medium will be used there.
@@ -284,13 +249,13 @@ ErrCode Writer::Write( SwPaM& rPam, SfxMedium& rMedium, const OUString* pFileNam
     return Write( rPam, *rMedium.GetOutStream(), pFileName );
 }
 
-ErrCode Writer::Write( SwPaM& /*rPam*/, SotStorage&, const OUString* )
+ErrCodeMsg Writer::Write( SwPaM& /*rPam*/, SotStorage&, const OUString* )
 {
     OSL_ENSURE( false, "Write in Storages on a stream?" );
     return ERR_SWG_WRITE_ERROR;
 }
 
-ErrCode Writer::Write( SwPaM&, const uno::Reference < embed::XStorage >&, const OUString*, SfxMedium* )
+ErrCodeMsg Writer::Write( SwPaM&, const uno::Reference < embed::XStorage >&, const OUString*, SfxMedium* )
 {
     OSL_ENSURE( false, "Write in Storages on a stream?" );
     return ERR_SWG_WRITE_ERROR;
@@ -304,12 +269,16 @@ bool Writer::CopyLocalFileToINet( OUString& rFileNm )
     bool bRet = false;
     INetURLObject aFileUrl( rFileNm ), aTargetUrl( *m_pOrigFileName );
 
-// this is our old without the Mail-Export
-    if( ! ( INetProtocol::File == aFileUrl.GetProtocol() &&
-            INetProtocol::File != aTargetUrl.GetProtocol() &&
-            INetProtocol::Ftp <= aTargetUrl.GetProtocol() &&
-            INetProtocol::VndSunStarWebdav >= aTargetUrl.GetProtocol() ) )
+    if (!(INetProtocol::File == aFileUrl.GetProtocol()
+            && (INetProtocol::Http == aTargetUrl.GetProtocol()
+                || INetProtocol::Https == aTargetUrl.GetProtocol()
+                || INetProtocol::VndSunStarWebdav == aTargetUrl.GetProtocol()
+                || INetProtocol::Smb == aTargetUrl.GetProtocol()
+                || INetProtocol::Sftp == aTargetUrl.GetProtocol()
+                || INetProtocol::Cmis == aTargetUrl.GetProtocol())))
+    {
         return bRet;
+    }
 
     // has the file been moved?
     std::map<OUString, OUString>::iterator it = m_pImpl->maFileNameMap.find( rFileNm );
@@ -330,7 +299,7 @@ bool Writer::CopyLocalFileToINet( OUString& rFileNm )
     aSrcFile.Close();
     aDstFile.Commit();
 
-    bRet = ERRCODE_NONE == aDstFile.GetError();
+    bRet = ERRCODE_NONE == aDstFile.GetErrorIgnoreWarning();
 
     if( bRet )
     {
@@ -414,13 +383,13 @@ void Writer::AddFontItem( SfxItemPool& rPool, const SvxFontItem& rFont )
     {
         SvxFontItem aFont( rFont );
         aFont.SetWhich( RES_CHRATR_FONT );
-        pItem = &rPool.Put( aFont );
+        pItem = &rPool.DirectPutItemInPool( aFont );
     }
     else
-        pItem = &rPool.Put( rFont );
+        pItem = &rPool.DirectPutItemInPool( rFont );
 
     if( 1 < pItem->GetRefCount() )
-        rPool.Remove( *pItem );
+        rPool.DirectRemoveItemFromPool( *pItem );
     else
     {
         m_pImpl->aFontRemoveLst.push_back( pItem );
@@ -488,7 +457,7 @@ ErrCode StgWriter::WriteStream()
     return ERR_SWG_WRITE_ERROR;
 }
 
-ErrCode StgWriter::Write( SwPaM& rPaM, SotStorage& rStg, const OUString* pFName )
+ErrCodeMsg StgWriter::Write( SwPaM& rPaM, SotStorage& rStg, const OUString* pFName )
 {
     SetStream(nullptr);
     m_pStg = &rStg;
@@ -502,7 +471,7 @@ ErrCode StgWriter::Write( SwPaM& rPaM, SotStorage& rStg, const OUString* pFName 
     // for comparison secure to the current Pam
     m_pOrigPam = &rPaM;
 
-    ErrCode nRet = WriteStorage();
+    ErrCodeMsg nRet = WriteStorage();
 
     m_pStg = nullptr;
     ResetWriter();
@@ -510,7 +479,7 @@ ErrCode StgWriter::Write( SwPaM& rPaM, SotStorage& rStg, const OUString* pFName 
     return nRet;
 }
 
-ErrCode StgWriter::Write( SwPaM& rPaM, const uno::Reference < embed::XStorage >& rStg, const OUString* pFName, SfxMedium* pMedium )
+ErrCodeMsg StgWriter::Write( SwPaM& rPaM, const uno::Reference < embed::XStorage >& rStg, const OUString* pFName, SfxMedium* pMedium )
 {
     SetStream(nullptr);
     m_pStg = nullptr;
@@ -525,7 +494,7 @@ ErrCode StgWriter::Write( SwPaM& rPaM, const uno::Reference < embed::XStorage >&
     // for comparison secure to the current Pam
     m_pOrigPam = &rPaM;
 
-    ErrCode nRet = pMedium ? WriteMedium( *pMedium ) : WriteStorage();
+    ErrCodeMsg nRet = pMedium ? WriteMedium( *pMedium ) : WriteStorage();
 
     m_pStg = nullptr;
     ResetWriter();

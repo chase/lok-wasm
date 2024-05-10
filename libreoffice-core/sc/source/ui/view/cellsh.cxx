@@ -445,7 +445,7 @@ static bool lcl_TestFormat( SvxClipboardFormatItem& rFormats, const Transferable
         if ( nFormatId == SotClipboardFormatId::EMBED_SOURCE )
         {
             TransferableObjectDescriptor aDesc;
-            if ( const_cast<TransferableDataHelper&>(rDataHelper).GetTransferableObjectDescriptor(
+            if ( rDataHelper.GetTransferableObjectDescriptor(
                                         SotClipboardFormatId::OBJECTDESCRIPTOR, aDesc ) )
                 aStrVal = aDesc.maTypeName;
         }
@@ -733,15 +733,15 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                 break;
 
             case SID_RANGE_ROW:
-                rSet.Put( SfxInt32Item( nWhich, nPosY+1 ) );
+                rSet.Put( SfxInt32Item( SID_RANGE_ROW, nPosY+1 ) );
                 break;
 
             case SID_RANGE_COL:
-                rSet.Put( SfxInt16Item( nWhich, nPosX+1 ) );
+                rSet.Put( SfxInt16Item( SID_RANGE_COL, nPosX+1 ) );
                 break;
 
             case SID_RANGE_TABLE:
-                rSet.Put( SfxInt16Item( nWhich, nTab+1 ) );
+                rSet.Put( SfxInt16Item( SID_RANGE_TABLE, nTab+1 ) );
                 break;
 
             case SID_RANGE_FORMULA:
@@ -848,13 +848,13 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                                 = Application::GetSettings().GetUILocaleDataWrapper();
                             OUString aRowArg
                                 = ScResId(STR_SELCOUNT_ROWARG, nRowsSum)
-                                      .replaceAll("$1", rLocaleData.getNum(nRowsSum, 0));
+                                      .replaceAll("%d", rLocaleData.getNum(nRowsSum, 0));
                             OUString aColArg
                                 = ScResId(STR_SELCOUNT_COLARG, nColsSum)
-                                      .replaceAll("$1", rLocaleData.getNum(nColsSum, 0));
+                                      .replaceAll("%d", rLocaleData.getNum(nColsSum, 0));
                             OUString aStr = ScResId(STR_SELCOUNT);
-                            aStr = aStr.replaceAll("$1", aRowArg);
-                            aStr = aStr.replaceAll("$2", aColArg);
+                            aStr = aStr.replaceAll("%1", aRowArg);
+                            aStr = aStr.replaceAll("%2", aColArg);
                             rSet.Put(SfxStringItem(nWhich, aStr));
                         }
                     }
@@ -865,8 +865,8 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                         if( nTotal && nSelected != SCSIZE_MAX )
                         {
                             OUString aStr = ScResId( STR_FILTER_SELCOUNT );
-                            aStr = aStr.replaceAll( "$1", OUString::number( nSelected ) );
-                            aStr = aStr.replaceAll( "$2", OUString::number( nTotal ) );
+                            aStr = aStr.replaceAll( "%1", OUString::number( nSelected ) );
+                            aStr = aStr.replaceAll( "%2", OUString::number( nTotal ) );
                             rSet.Put( SfxStringItem( nWhich, aStr ) );
                         }
                     }
@@ -1284,7 +1284,7 @@ void ScCellShell::GetState(SfxItemSet &rSet)
                     if (rDoc.IsTabProtected(rData.GetTabNo()))
                     {
                         bool bVisible = false;
-                        SfxViewFrame* pViewFrame = ( pTabViewShell ? pTabViewShell->GetViewFrame() : nullptr );
+                        SfxViewFrame* pViewFrame = ( pTabViewShell ? &pTabViewShell->GetViewFrame() : nullptr );
                         if ( pViewFrame && pViewFrame->HasChildWindow( nWhich ) )
                         {
                             SfxChildWindow* pChild = pViewFrame->GetChildWindow( nWhich );

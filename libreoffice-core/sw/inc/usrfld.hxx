@@ -52,8 +52,10 @@ public:
 
     OUString                Expand(sal_uInt32 nFormat, sal_uInt16 nSubType, LanguageType nLng);
 
-    OUString                GetContent( sal_uInt32 nFormat = 0 );
+    OUString                GetContent( sal_uInt32 nFormat = 0 ) const;
            void             SetContent( const OUString& rStr, sal_uInt32 nFormat = 0 );
+
+    OUString                GetInputOrDateTime( sal_uInt32 nFormat ) const;
 
     inline bool             IsValid() const;
 
@@ -69,6 +71,7 @@ public:
 
     virtual void        QueryValue( css::uno::Any& rVal, sal_uInt16 nMId ) const override;
     virtual void        PutValue( const css::uno::Any& rVal, sal_uInt16 nMId ) override;
+    void EnsureValid();
     void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 
 private:
@@ -99,7 +102,7 @@ inline void SwUserFieldType::SetType(sal_uInt16 nSub)
  * Tracks the number format and the language, conversion between the float and
  * string representation is independent from the system locale.
  */
-class SwUserField final : public SwValueField
+class SW_DLLPUBLIC SwUserField final : public SwValueField
 {
     sal_uInt16  m_nSubType;
 

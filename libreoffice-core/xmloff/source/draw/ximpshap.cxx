@@ -61,6 +61,7 @@
 #include <sax/tools/converter.hxx>
 #include <comphelper/sequence.hxx>
 #include <comphelper/diagnose_ex.hxx>
+#include <comphelper/mediamimetype.hxx>
 
 #include <xmloff/families.hxx>
 #include<xmloff/xmlnamespace.hxx>
@@ -78,7 +79,6 @@
 #include <xmloff/xmlerror.hxx>
 #include <xmloff/table/XMLTableImport.hxx>
 #include <xmloff/ProgressBarHelper.hxx>
-#include <xmloff/attrlist.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
 #include <com/sun/star/drawing/XEnhancedCustomShapeDefaulter.hpp>
 #include <com/sun/star/container/XChild.hpp>
@@ -505,6 +505,9 @@ void SdXMLShapeContext::AddShape(OUString const & serviceName)
                  || serviceName == "com.sun.star.drawing.PluginShape"
                  || serviceName == "com.sun.star.presentation.MediaShape")
         {
+            // On adding another entry to this list of service names to pass an argument via the WithArguments variant
+            // you may need to adjust the more obscure OReportDefinition::createInstanceWithArguments as well as the
+            // more obvious SvxUnoDrawMSFactory::createInstanceWithArguments
             xShape.set( xServiceFact->createInstanceWithArguments(serviceName, { css::uno::Any(GetImport().GetDocumentBase()) }),
                         css::uno::UNO_QUERY);
         }
@@ -517,6 +520,7 @@ void SdXMLShapeContext::AddShape(OUString const & serviceName)
     }
     catch(const uno::Exception& e)
     {
+        TOOLS_WARN_EXCEPTION("xmloff", "AddShape " << serviceName);
         uno::Sequence<OUString> aSeq { serviceName };
         GetImport().SetError( XMLERROR_FLAG_ERROR | XMLERROR_API,
                               aSeq, e.Message, nullptr );
@@ -594,9 +598,9 @@ void SdXMLShapeContext::SetTransformation()
     aUnoMatrix.Line2.Column2 = aB2DHomMatrix.get(1, 1);
     aUnoMatrix.Line2.Column3 = aB2DHomMatrix.get(1, 2);
 
-    aUnoMatrix.Line3.Column1 = aB2DHomMatrix.get(2, 0);
-    aUnoMatrix.Line3.Column2 = aB2DHomMatrix.get(2, 1);
-    aUnoMatrix.Line3.Column3 = aB2DHomMatrix.get(2, 2);
+    aUnoMatrix.Line3.Column1 = 0;
+    aUnoMatrix.Line3.Column2 = 0;
+    aUnoMatrix.Line3.Column3 = 1;
 
     xPropSet->setPropertyValue("Transformation", Any(aUnoMatrix));
 }
@@ -676,7 +680,11 @@ void SdXMLShapeContext::SetStyle( bool bSupportsStyle /* = true */)
                             else
                             {
                                 // get graphics family
-                                xFamilies->getByName("graphics") >>= xFamily;
+                                if (xFamilies->hasByName("graphics"))
+                                    xFamilies->getByName("graphics") >>= xFamily;
+                                else
+                                    xFamilies->getByName("GraphicStyles") >>= xFamily;
+
                                 aStyleName = GetImport().GetStyleDisplayName(
                                     XmlStyleFamily::SD_GRAPHICS_ID,
                                     aStyleName );
@@ -712,7 +720,7 @@ void SdXMLShapeContext::SetStyle( bool bSupportsStyle /* = true */)
             // SwTextBoxHelper::syncProperty, which indirectly calls SwTextBoxHelper::isTextBox)
             uno::Reference<beans::XPropertySetInfo> xPropertySetInfo
                 = xPropSet->getPropertySetInfo();
-            static constexpr OUStringLiteral sTextBox = u"TextBox";
+            static constexpr OUString sTextBox = u"TextBox"_ustr;
             if (xPropertySetInfo->hasPropertyByName(sTextBox))
                 xPropSet->setPropertyValue(sTextBox, uno::Any(mbTextBox));
 
@@ -1532,46 +1540,46 @@ void SdXMLTextBoxShapeContext::startFastElement (sal_Int32 nElement,
         {
             if( IsXMLToken( maPresentationClass, XML_SUBTITLE ))
             {
-                // XmlShapeTypePresSubtitleShape
+                // XmlShapeType::PresSubtitleShape
                 service = "com.sun.star.presentation.SubtitleShape";
             }
             else if( IsXMLToken( maPresentationClass, XML_PRESENTATION_OUTLINE ) )
             {
-                // XmlShapeTypePresOutlinerShape
+                // XmlShapeType::PresOutlinerShape
                 service = "com.sun.star.presentation.OutlinerShape";
             }
             else if( IsXMLToken( maPresentationClass, XML_NOTES ) )
             {
-                // XmlShapeTypePresNotesShape
+                // XmlShapeType::PresNotesShape
                 service = "com.sun.star.presentation.NotesShape";
             }
             else if( IsXMLToken( maPresentationClass, XML_HEADER ) )
             {
-                // XmlShapeTypePresHeaderShape
+                // XmlShapeType::PresHeaderShape
                 service = "com.sun.star.presentation.HeaderShape";
                 bClearText = true;
             }
             else if( IsXMLToken( maPresentationClass, XML_FOOTER ) )
             {
-                // XmlShapeTypePresFooterShape
+                // XmlShapeType::PresFooterShape
                 service = "com.sun.star.presentation.FooterShape";
                 bClearText = true;
             }
             else if( IsXMLToken( maPresentationClass, XML_PAGE_NUMBER ) )
             {
-                // XmlShapeTypePresSlideNumberShape
+                // XmlShapeType::PresSlideNumberShape
                 service = "com.sun.star.presentation.SlideNumberShape";
                 bClearText = true;
             }
             else if( IsXMLToken( maPresentationClass, XML_DATE_TIME ) )
             {
-                // XmlShapeTypePresDateTimeShape
+                // XmlShapeType::PresDateTimeShape
                 service = "com.sun.star.presentation.DateTimeShape";
                 bClearText = true;
             }
             else //  IsXMLToken( maPresentationClass, XML_TITLE ) )
             {
-                // XmlShapeTypePresTitleTextShape
+                // XmlShapeType::PresTitleTextShape
                 service = "com.sun.star.presentation.TitleTextShape";
             }
             bIsPresShape = true;
@@ -1622,7 +1630,7 @@ void SdXMLTextBoxShapeContext::startFastElement (sal_Int32 nElement,
 //A     if(!bIsPresShape || mbIsUserTransformed)
 //A     {
 //A         // set pos and size on shape, this should remove binding
-//A         // to pres object on masterpage
+//A         // to presentation object on masterpage
 //A         SetSizeAndPosition();
 //A     }
 
@@ -1741,7 +1749,8 @@ SdXMLConnectorShapeContext::SdXMLConnectorShapeContext(
     mnEndGlueId(-1),
     mnDelta1(0),
     mnDelta2(0),
-    mnDelta3(0)
+    mnDelta3(0),
+    mbLikelyOOXMLCurve(true)
 {
 }
 
@@ -1766,6 +1775,50 @@ bool SvXMLImport::needFixPositionAfterZ() const
     return bWrongPositionAfterZ;
 }
 
+namespace
+{
+bool lcl_IsLikelyOOXMLCurve(const basegfx::B2DPolygon& rPolygon)
+{
+    sal_uInt32 nCount = rPolygon.count();
+    if (!rPolygon.areControlPointsUsed() or nCount < 2)
+        return false; // no curve at all
+
+    basegfx::B2DVector aStartVec(rPolygon.getNextControlPoint(0) - rPolygon.getB2DPoint(0));
+    basegfx::B2DVector aEndVec(rPolygon.getPrevControlPoint(nCount-1) - rPolygon.getB2DPoint(nCount - 1));
+    // LibreOffice uses one point less than OOXML for the same underlying bentConnector or
+    // STANDARD connector, respectively. A deeper inspection is only needed in case of 2 resulting
+    // points. Those connector paths look like a quarter ellipse.
+    switch (nCount)
+    {
+        case 2:
+        {
+            // In case start and end direction are parallel, it cannot be OOXML because that case
+            // introduces a handle on the path and the curve has three points then.
+            if (basegfx::areParallel(aStartVec, aEndVec))
+                return false;
+            // OOXML sets the control point at 1/2, LibreOffice at 2/3 of width or height.
+            // A tolerance is used because +-1 deviations due to integer arithmetic in many places.
+            basegfx::B2DRange aRect(rPolygon.getB2DPoint(0), rPolygon.getB2DPoint(1));
+            if ((basegfx::fTools::equalZero(aStartVec.getX())
+                     && basegfx::fTools::equal(aStartVec.getLength() * 2.0, aRect.getHeight(), 2.0))
+                || (basegfx::fTools::equalZero(aStartVec.getY())
+                     && basegfx::fTools::equal(aStartVec.getLength() * 2.0, aRect.getWidth(), 2.0)))
+                return true;
+        }
+        break;
+        case 3:
+        case 5:
+            return basegfx::areParallel(aStartVec, aEndVec);
+        break;
+        case 4: // start and end direction are orthogonal
+            return basegfx::fTools::equalZero(aStartVec.scalar( aEndVec));
+        break;
+        default:
+            return false;
+    }
+    return false;
+}
+} // end namespace
 
 // this is called from the parent group for each unparsed attribute in the attribute list
 bool SdXMLConnectorShapeContext::processAttribute( const sax_fastparser::FastAttributeList::FastAttributeIter & aIter )
@@ -1851,6 +1904,8 @@ bool SdXMLConnectorShapeContext::processAttribute( const sax_fastparser::FastAtt
                         aPolyPolygon,
                         aSourcePolyPolygon);
                     maPath <<= aSourcePolyPolygon;
+
+                    mbLikelyOOXMLCurve = lcl_IsLikelyOOXMLCurve(aPolyPolygon.getB2DPolygon(0));
                 }
             }
             break;
@@ -1913,13 +1968,16 @@ void SdXMLConnectorShapeContext::startFastElement (sal_Int32 nElement,
         }
     }
 
+    uno::Reference< beans::XPropertySet > xProps( mxShape, uno::UNO_QUERY );
+    if (xProps.is())
+        xProps->setPropertyValue("EdgeOOXMLCurve", Any(mbLikelyOOXMLCurve));
+
     // add connection ids
     if( !maStartShapeId.isEmpty() )
         GetImport().GetShapeImport()->addShapeConnection( mxShape, true, maStartShapeId, mnStartGlueId );
     if( !maEndShapeId.isEmpty() )
         GetImport().GetShapeImport()->addShapeConnection( mxShape, false, maEndShapeId, mnEndGlueId );
 
-    uno::Reference< beans::XPropertySet > xProps( mxShape, uno::UNO_QUERY );
     if( xProps.is() )
     {
         xProps->setPropertyValue("StartPosition", Any(maStart));
@@ -1959,7 +2017,7 @@ void SdXMLConnectorShapeContext::startFastElement (sal_Int32 nElement,
         if ( bApplySVGD )
         {
             // tdf#83360 use path data only when redundant data of start and end point coordinates of
-            // path start/end and connector start/end is equal. This is to avoid using erraneous
+            // path start/end and connector start/end is equal. This is to avoid using erroneous
             // or inconsistent path data at import of foreign formats. Office itself always
             // writes out a consistent data set. Not using it when there is inconsistency
             // is okay since the path data is redundant, buffered data just to avoid recalculation
@@ -2154,7 +2212,7 @@ void SdXMLPageShapeContext::startFastElement (sal_Int32 nElement,
     // add, set style and properties from base shape
 
     // #86163# take into account which type of PageShape needs to
-    // be constructed. It's a pres shape if presentation:XML_CLASS == XML_PAGE.
+    // be constructed. It's a presentation shape if presentation:XML_CLASS == XML_PAGE.
     bool bIsPresentation = !maPresentationClass.isEmpty() &&
            GetImport().GetShapeImport()->IsPresentationShapesSupported();
 
@@ -2195,7 +2253,7 @@ void SdXMLPageShapeContext::startFastElement (sal_Int32 nElement,
     if(xPropSet.is())
     {
         uno::Reference< beans::XPropertySetInfo > xPropSetInfo( xPropSet->getPropertySetInfo() );
-        static const OUStringLiteral aPageNumberStr(u"PageNumber");
+        static constexpr OUString aPageNumberStr(u"PageNumber"_ustr);
         if( xPropSetInfo.is() && xPropSetInfo->hasPropertyByName(aPageNumberStr))
             xPropSet->setPropertyValue(aPageNumberStr, uno::Any( mnPageNumber ));
     }
@@ -2635,7 +2693,7 @@ void SdXMLObjectShapeContext::startFastElement (sal_Int32 /*nElement*/,
 
             if ( GetImport().IsPackageURL( maHref ) )
             {
-                static const OUStringLiteral  sURL( u"vnd.sun.star.EmbeddedObject:" );
+                static constexpr OUString  sURL( u"vnd.sun.star.EmbeddedObject:"_ustr );
 
                 if ( aPersistName.startsWith( sURL ) )
                     aPersistName = aPersistName.copy( sURL.getLength() );
@@ -2683,7 +2741,7 @@ void SdXMLObjectShapeContext::endFastElement(sal_Int32 nElement)
     if( mxBase64Stream.is() )
     {
         OUString aPersistName( GetImport().ResolveEmbeddedObjectURLFromBase64() );
-        static const OUStringLiteral  sURL( u"vnd.sun.star.EmbeddedObject:" );
+        static constexpr OUStringLiteral  sURL( u"vnd.sun.star.EmbeddedObject:" );
 
         aPersistName = aPersistName.copy( sURL.getLength() );
 
@@ -2899,7 +2957,7 @@ void SdXMLPluginShapeContext::startFastElement (sal_Int32 /*nElement*/,
     {
         if( aIter.getToken() == XML_ELEMENT(DRAW, XML_MIME_TYPE) )
         {
-            if( aIter.toView() == "application/vnd.sun.star.media" )
+            if (::comphelper::IsMediaMimeType(aIter.toView()))
                 mbMedia = true;
             // leave this loop
             break;
@@ -2999,7 +3057,7 @@ void SdXMLPluginShapeContext::endFastElement(sal_Int32 nElement)
     {
         if ( maSize.Width && maSize.Height )
         {
-            static const OUStringLiteral sVisibleArea(  u"VisibleArea"  );
+            static constexpr OUString sVisibleArea(  u"VisibleArea"_ustr  );
             uno::Reference< beans::XPropertySetInfo > aXPropSetInfo( xProps->getPropertySetInfo() );
             if ( !aXPropSetInfo.is() || aXPropSetInfo->hasPropertyByName( sVisibleArea ) )
             {
@@ -3379,7 +3437,7 @@ css::uno::Reference< css::xml::sax::XFastContextHandler > SdXMLFrameShapeContext
                 mxImplContext = nullptr;
                 return new SvXMLImportContext(GetImport());
             }
-            else if (pPluginContext && pPluginContext->getMimeType() == "application/vnd.sun.star.media")
+            else if (pPluginContext && ::comphelper::IsMediaMimeType(pPluginContext->getMimeType()))
             {
                 // The media may have a preview, import it.
                 bMedia = true;
@@ -3689,7 +3747,7 @@ void SdXMLCustomShapeContext::endFastElement(sal_Int32 nElement)
 
         if (aScale.getX() < 0.0)
         {
-            static const OUStringLiteral sName(u"MirroredX");
+            static constexpr OUString sName(u"MirroredX"_ustr);
             //fdo#84043 Merge, if property exists, otherwise append it
             auto aI = std::find_if(maCustomShapeGeometry.begin(), maCustomShapeGeometry.end(),
                 [](beans::PropertyValue& rValue) { return rValue.Name == sName; });
@@ -3715,7 +3773,7 @@ void SdXMLCustomShapeContext::endFastElement(sal_Int32 nElement)
 
         if (aScale.getY() < 0.0)
         {
-            static const OUStringLiteral sName(u"MirroredY");
+            static constexpr OUString sName(u"MirroredY"_ustr);
             //fdo#84043 Merge, if property exists, otherwise append it
             auto aI = std::find_if(maCustomShapeGeometry.begin(), maCustomShapeGeometry.end(),
                 [](beans::PropertyValue& rValue) { return rValue.Name == sName; });

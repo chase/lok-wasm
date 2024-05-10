@@ -36,23 +36,6 @@ using namespace ::com::sun::star::xml::sax;
 
 namespace oox::drawingml {
 
-namespace
-{
-class ConnectorShapePropertiesContext : public ::oox::core::ContextHandler2
-{
-    std::vector<ConnectorShapeProperties>& mrConnectorShapePropertiesList;
-    ShapePtr mpConnectorShapePtr;
-
-public:
-    ConnectorShapePropertiesContext(
-        ::oox::core::ContextHandler2Helper const& rParent, ShapePtr& pShapePtr,
-        std::vector<ConnectorShapeProperties>& rConnectorShapePropertiesList);
-
-    virtual ::oox::core::ContextHandlerRef onCreateContext(sal_Int32 aElementToken,
-                                                           const AttributeList& rAttribs) override;
-};
-}
-
 ConnectorShapePropertiesContext::ConnectorShapePropertiesContext(
     ContextHandler2Helper const& rParent, ShapePtr& pShapePtr,
     std::vector<ConnectorShapeProperties>& rConnectorShapePropertiesList)
@@ -69,6 +52,14 @@ ConnectorShapePropertiesContext::onCreateContext(sal_Int32 aElementToken,
 {
     switch (getBaseToken(aElementToken))
     {
+        case XML_extLst:
+        case XML_ext:
+            break;
+        case XML_decorative:
+        {
+            mpConnectorShapePtr->setDecorative(rAttribs.getBool(XML_val, false));
+            break;
+        }
         case XML_cNvPr:
             mpConnectorShapePtr->setId(rAttribs.getStringDefaulted(XML_id));
             mpConnectorShapePtr->setName(rAttribs.getStringDefaulted(XML_name));

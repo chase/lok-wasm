@@ -201,6 +201,45 @@ void SvxJSearchOptionsPage::Reset( const SfxItemSet* )
     m_xIgnoreMiddleDot         ->save_state();
 }
 
+OUString SvxJSearchOptionsPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "label2" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "matchcase",
+                               "matchfullhalfwidth",
+                               "matchhiraganakatakana",
+                               "matchcontractions",
+                               "matchminusdashchoon",
+                               "matchrepeatcharmarks",
+                               "matchvariantformkanji",
+                               "matcholdkanaforms",
+                               "ignorepunctuation",
+                               "ignorewhitespace",
+                               "matchdiziduzu",
+                               "matchbavahafa",
+                               "matchtsithichidhizi",
+                               "matchhyuiyubyuvyu",
+                               "matchseshezeje",
+                               "matchiaiya",
+                               "matchkiku",
+                               "matchprolongedsoundmark",
+                               "ignoremiddledot" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
+}
 
 bool SvxJSearchOptionsPage::FillItemSet( SfxItemSet* )
 {

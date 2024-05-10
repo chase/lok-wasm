@@ -15,8 +15,6 @@
 
 HtmlWriter::HtmlWriter(SvStream& rStream, std::string_view rNamespace) :
     mrStream(rStream),
-    mbElementOpen(false),
-    mbCharactersWritten(false),
     mbPrettyPrint(true)
 {
     if (!rNamespace.empty())
@@ -27,7 +25,9 @@ HtmlWriter::HtmlWriter(SvStream& rStream, std::string_view rNamespace) :
 }
 
 HtmlWriter::~HtmlWriter()
-{}
+{
+    assert(maElementStack.empty());
+}
 
 void HtmlWriter::prettyPrint(bool b)
 {
@@ -36,7 +36,7 @@ void HtmlWriter::prettyPrint(bool b)
 
 void HtmlWriter::start(const OString& aElement)
 {
-    if (mbElementOpen)
+    if (mbOpeningTagOpen)
     {
         mrStream.WriteChar('>');
         if (mbPrettyPrint)
@@ -48,30 +48,19 @@ void HtmlWriter::start(const OString& aElement)
     {
         for(size_t i = 0; i < maElementStack.size() - 1; i++)
         {
-            mrStream.WriteCharPtr("  ");
+            mrStream.WriteOString("  ");
         }
     }
 
     mrStream.WriteChar('<');
     mrStream.WriteOString(Concat2View(maNamespace + aElement));
-    mbElementOpen = true;
+    mbOpeningTagOpen = true;
 }
 
 void HtmlWriter::single(const OString &aContent)
 {
     start(aContent);
     end();
-}
-
-void HtmlWriter::endAttribute()
-{
-    if (mbElementOpen)
-    {
-        mrStream.WriteCharPtr("/>");
-        if (mbPrettyPrint)
-            mrStream.WriteCharPtr("\n");
-        mbElementOpen = false;
-    }
 }
 
 void HtmlWriter::flushStack()
@@ -92,11 +81,12 @@ bool HtmlWriter::end(const OString& aElement)
 
 void HtmlWriter::end()
 {
-    if (mbElementOpen && !mbCharactersWritten)
+    if (mbOpeningTagOpen)
     {
-        mrStream.WriteCharPtr("/>");
+        mrStream.WriteOString("/>");
         if (mbPrettyPrint)
-            mrStream.WriteCharPtr("\n");
+            mrStream.WriteOString("\n");
+        mbOpeningTagOpen = false;
     }
     else
     {
@@ -104,41 +94,21 @@ void HtmlWriter::end()
         {
             for(size_t i = 0; i < maElementStack.size() - 1; i++)
             {
-                mrStream.WriteCharPtr("  ");
+                mrStream.WriteOString("  ");
             }
         }
-        mrStream.WriteCharPtr("</");
+        mrStream.WriteOString("</");
         mrStream.WriteOString(Concat2View(maNamespace + maElementStack.back()));
-        mrStream.WriteCharPtr(">");
+        mrStream.WriteOString(">");
         if (mbPrettyPrint)
-            mrStream.WriteCharPtr("\n");
+            mrStream.WriteOString("\n");
     }
     maElementStack.pop_back();
-    mbElementOpen = false;
-    mbCharactersWritten = false;
-}
-
-void HtmlWriter::writeAttribute(SvStream& rStream, std::string_view aAttribute, sal_Int32 aValue)
-{
-    writeAttribute(rStream, aAttribute, OString::number(aValue));
-}
-
-void HtmlWriter::writeAttribute(SvStream& rStream, std::string_view aAttribute, std::string_view aValue)
-{
-    rStream.WriteOString(aAttribute);
-    rStream.WriteChar('=');
-    rStream.WriteChar('"');
-    HTMLOutFuncs::Out_String(rStream, OStringToOUString(aValue, RTL_TEXTENCODING_UTF8));
-    rStream.WriteChar('"');
 }
 
 void HtmlWriter::attribute(std::string_view aAttribute, std::string_view aValue)
 {
-    if (mbElementOpen && !aAttribute.empty() && !aValue.empty())
-    {
-        mrStream.WriteChar(' ');
-        writeAttribute(mrStream, aAttribute, aValue);
-    }
+    attribute(aAttribute, OStringToOUString(aValue, RTL_TEXTENCODING_UTF8));
 }
 
 void HtmlWriter::attribute(std::string_view aAttribute, const sal_Int32 aValue)
@@ -146,19 +116,23 @@ void HtmlWriter::attribute(std::string_view aAttribute, const sal_Int32 aValue)
     attribute(aAttribute, OString::number(aValue));
 }
 
-void HtmlWriter::attribute(std::string_view aAttribute, const char* pValue)
+void HtmlWriter::attribute(std::string_view aAttribute, const OUString& aValue)
 {
-    attribute(aAttribute, std::string_view(pValue));
-}
-
-void HtmlWriter::attribute(std::string_view aAttribute, std::u16string_view aValue)
-{
-    attribute(aAttribute, OUStringToOString(aValue, RTL_TEXTENCODING_UTF8));
+    assert(mbOpeningTagOpen);
+    if (mbOpeningTagOpen && !aAttribute.empty() && !aValue.isEmpty())
+    {
+        mrStream.WriteChar(' ');
+        mrStream.WriteOString(aAttribute);
+        mrStream.WriteOString("=\"");
+        HTMLOutFuncs::Out_String(mrStream, aValue);
+        mrStream.WriteChar('"');
+    }
 }
 
 void HtmlWriter::attribute(std::string_view aAttribute)
 {
-    if (mbElementOpen && !aAttribute.empty())
+    assert(mbOpeningTagOpen);
+    if (mbOpeningTagOpen && !aAttribute.empty())
     {
         mrStream.WriteChar(' ');
         mrStream.WriteOString(aAttribute);
@@ -167,10 +141,12 @@ void HtmlWriter::attribute(std::string_view aAttribute)
 
 void HtmlWriter::characters(std::string_view rChars)
 {
-    if (!mbCharactersWritten)
-        mrStream.WriteCharPtr(">");
+    if (mbOpeningTagOpen)
+    {
+        mrStream.WriteOString(">");
+        mbOpeningTagOpen = false;
+    }
     mrStream.WriteOString(rChars);
-    mbCharactersWritten = true;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

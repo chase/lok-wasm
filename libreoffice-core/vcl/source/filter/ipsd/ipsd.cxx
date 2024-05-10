@@ -267,7 +267,7 @@ bool PSDReader::ImplReadHeader()
     m_rPSD.ReadUInt32(nResourceLength);
     if (nResourceLength > m_rPSD.remainingSize())
         return false;
-    sal_uInt32 nLayerPos = m_rPSD.Tell() + nResourceLength;
+    sal_uInt64 nLayerPos = m_rPSD.Tell() + nResourceLength;
 
     // this is a loop over the resource entries to get the resolution info
     while( m_rPSD.Tell() < nLayerPos )
@@ -286,7 +286,7 @@ bool PSDReader::ImplReadHeader()
         m_rPSD.ReadUInt32( nResEntryLen );
         if ( nResEntryLen & 1 )
             nResEntryLen++;             // the resource entries are padded
-        sal_uInt32 nCurrentPos = m_rPSD.Tell();
+        sal_uInt64 nCurrentPos = m_rPSD.Tell();
         if (nCurrentPos > nLayerPos || nResEntryLen > (nLayerPos - nCurrentPos))   // check if size
             break;                                                                 // is possible
         switch( nUniqueID )
@@ -691,9 +691,9 @@ bool PSDReader::ImplReadBody()
                         sal_Int32 nDAT = aBlack[ nX + nY * mpFileHeader->nColumns ] * ( nBlackMax - 256 ) / 0x1ff;
 
                         aBitmapColor = mpBitmap->GetPixel( nY, nX );
-                        sal_uInt8 cR = static_cast<sal_uInt8>(MinMax( aBitmapColor.GetRed() - nDAT, 0, 255L ));
-                        sal_uInt8 cG = static_cast<sal_uInt8>(MinMax( aBitmapColor.GetGreen() - nDAT, 0, 255L ));
-                        sal_uInt8 cB = static_cast<sal_uInt8>(MinMax( aBitmapColor.GetBlue() - nDAT, 0, 255L ));
+                        sal_uInt8 cR = static_cast<sal_uInt8>(std::clamp( aBitmapColor.GetRed() - nDAT, sal_Int32(0), sal_Int32(255) ));
+                        sal_uInt8 cG = static_cast<sal_uInt8>(std::clamp( aBitmapColor.GetGreen() - nDAT, sal_Int32(0), sal_Int32(255) ));
+                        sal_uInt8 cB = static_cast<sal_uInt8>(std::clamp( aBitmapColor.GetBlue() - nDAT, sal_Int32(0), sal_Int32(255) ));
                         mpBitmap->SetPixel( nY, nX, Color( cR, cG, cB ) );
                     }
                 }
@@ -727,7 +727,7 @@ bool PSDReader::ImplReadBody()
                     m_rPSD.ReadUChar( nDummy );
                 for ( sal_uInt16 i = 0; i < ( -nRunCount + 1 ); i++ )
                 {
-                    mpBitmap->SetAlpha(nY, nX, nDat ? 0 : 255);
+                    mpBitmap->SetAlpha(nY, nX, nDat ? 255 : 0);
                     if ( ++nX == mpFileHeader->nColumns )
                     {
                         nX = 0;
@@ -748,7 +748,7 @@ bool PSDReader::ImplReadBody()
                         nDat = 1;
                     if ( mpFileHeader->nDepth == 16 )   // 16 bit depth is to be skipped
                         m_rPSD.ReadUChar( nDummy );
-                    mpBitmap->SetAlpha(nY, nX, nDat ? 0 : 255);
+                    mpBitmap->SetAlpha(nY, nX, nDat ? 255 : 0);
                     if ( ++nX == mpFileHeader->nColumns )
                     {
                         nX = 0;

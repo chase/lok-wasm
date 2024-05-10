@@ -30,6 +30,7 @@
   xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"
   xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
   xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+  xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
   xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
   xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
   xmlns:wvml="urn:schemas-microsoft-com:office:word"
@@ -3492,7 +3493,7 @@
     <resource name="CT_OfficeArtExtension" resource="Stream">
       <element name="adec:decorative" tokenid="ooxml:CT_OfficeArtExtension_Decorative"/>
     </resource>
-    <!-- this is not ideal, but unlike more obivous variants it appears to work -->
+    <!-- this is not ideal, but unlike more obvious variants it appears to work -->
     <resource name="adec_decorative" resource="Stream"/>
     <resource name="adec_decorative_val" resource="Properties">
       <attribute name="val" tokenid="ooxml:OfficeArtExtension_Decorative_val"/>
@@ -4036,6 +4037,7 @@
         <ref name="chart"/>
         <ref name="wsp"/>
         <ref name="wgp"/>
+        <ref name="wpc"/>
         <element>
           <ref name="BUILT_IN_ANY_TYPE"/>
         </element>
@@ -4061,6 +4063,7 @@
       <element name="chart" tokenid="ooxml:CT_GraphicalObjectData_chart"/>
       <element name="wsp" tokenid="ooxml:CT_GraphicalObjectData_wsp"/>
       <element name="wgp" tokenid="ooxml:CT_GraphicalObjectData_wgp"/>
+      <element name="wpc" tokenid="ooxml:CT_GraphicalObjectData_wpc"/>
       <attribute name="uri" tokenid="ooxml:CT_GraphicalObjectData_uri"/>
     </resource>
     <resource name="CT_GraphicalObject" resource="Properties">
@@ -8484,6 +8487,37 @@
           <ref name="CT_WordprocessingGroup"/>
         </element>
       </define>
+      <define name="CT_BackgroundFormatting">
+        <ref name="EG_FillProperties"/>
+        <ref name="EG_EffectProperties"/>
+      </define>
+      <define name="CT_WholeE2oFormatting">
+        <element name="ln">
+          <ref name="CT_LineProperties"/>
+        </element>
+        <ref name="EG_EffectProperties"/>
+      </define>
+      <define name="CT_WordprocessingCanvas">
+        <element name="wpc:bg">
+          <ref name="CT_BackgroundFormatting"/>
+        </element>
+        <element name="wpc:whole">
+          <ref name="CT_WholeE2oFormatting"/>
+        </element>
+        <choice>
+            <ref name="wsp"/>
+            <ref name="pic"/>
+          <!-- ToDo w14:contentPart missing -->
+            <ref name="wgp"/>
+          <!-- ToDo graphicFrame missing -->
+        </choice>
+        <!-- ToDo extLst missing -->
+      </define>
+      <define name="wpc">
+        <element name="wpc:wpc">
+          <ref name="CT_WordprocessingCanvas"/>
+        </element>
+      </define>
     </grammar>
     <resource name="CT_PictureNonVisual" resource="Properties">
       <element name="cNvPr" tokenid="ooxml:CT_PictureNonVisual_cNvPr"/>
@@ -8532,6 +8566,19 @@
     </resource>
     <resource name="wgp" resource="Shape">
       <element name="wpg:wgp" tokenid="ooxml:wpg_wgp"/>
+    </resource>
+    <resource name="CT_WholeE2oFormatting" resource="Properties">
+      <element name="a:ln" tokenid="ooxml:CT_WholeE2oFormatting_ln"/>
+    </resource>
+    <resource name="CT_WordprocessingCanvas" resource="Shape">
+      <element name="wpc:bg" tokenid="ooxml:CT_WordprocessingCanvas_bg"/>
+      <element name="wpc:whole" tokenid="ooxml:CT_WordprocessingCanvas_whole"/>
+      <element name="wps:wsp" tokenid="ooxml:CT_WordprocessingCanvas_wsp"/>
+      <element name="pic" tokenid="ooxml:CT_WordprocessingCanvas_pic"/>
+      <element name="wpg:wgp" tokenid="ooxml:CT_WordprocessingCanvas_wgp"/>
+    </resource>
+    <resource name="wpc" resource="Shape">
+      <element name="wpc:wpc" tokenid="ooxml:wpc_wpc"/>
     </resource>
 
   </namespace>
@@ -13405,6 +13452,24 @@
           <ref name="ST_ShortHexNumber"/>
         </attribute>
       </define>
+      <define name="CT_instrText">
+        <ref name="ST_String"/>
+        <attribute name="xml:space">
+          <data type="string"/>
+        </attribute>
+      </define>
+      <define name="CT_delText">
+        <ref name="ST_String"/>
+        <attribute name="xml:space">
+          <data type="string"/>
+        </attribute>
+      </define>
+      <define name="CT_delInstrText">
+        <ref name="ST_String"/>
+        <attribute name="xml:space">
+          <data type="string"/>
+        </attribute>
+      </define>
       <define name="CT_ProofErr">
         <attribute name="type">
           <data type="string"/>
@@ -13437,13 +13502,13 @@
             <ref name="CT_Text"/>
           </element>
           <element name="delText">
-            <ref name="CT_Text"/>
+            <ref name="CT_delText"/>
           </element>
           <element name="instrText">
-            <ref name="CT_Text"/>
+            <ref name="CT_instrText"/>
           </element>
           <element name="delInstrText">
-            <ref name="CT_Text"/>
+            <ref name="CT_delInstrText"/>
           </element>
           <element name="noBreakHyphen">
             <ref name="CT_Empty"/>
@@ -17679,12 +17744,13 @@
       <element name="sectPr" tokenid="ooxml:CT_PPr_sectPr"/>
       <element name="pPrChange" tokenid="ooxml:CT_PPr_pPrChange"/>
     </resource>
-    <resource name="CT_Background" resource="Properties">
+    <resource name="CT_Background" resource="Shape">
       <attribute name="color" tokenid="ooxml:CT_Background_color"/>
       <attribute name="themeColor" tokenid="ooxml:CT_Background_themeColor"/>
       <attribute name="themeTint" tokenid="ooxml:CT_Background_themeTint"/>
       <attribute name="themeShade" tokenid="ooxml:CT_Background_themeShade"/>
       <element name="v:background" tokenid="ooxml:CT_Background_v_background"/>
+      <action name="end" action="sendPropertiesWithId" sendtokenid="ooxml:background_background"/>
     </resource>
     <resource name="CT_Rel" resource="Properties">
       <attribute name="r:id" tokenid="ooxml:CT_Rel_id"/>
@@ -17899,6 +17965,10 @@
       <attribute name="footer" tokenid="ooxml:CT_PageMar_footer"/>
       <attribute name="gutter" tokenid="ooxml:CT_PageMar_gutter"/>
     </resource>
+    <resource name="CT_PaperSource" resource="Properties">
+      <attribute name="first" tokenid="ooxml:CT_PaperSource_first"/>
+      <attribute name="other" tokenid="ooxml:CT_PaperSource_other"/>
+    </resource>
     <resource name="ST_PageBorderZOrder" resource="List">
       <value tokenid="ooxml:Value_doc_ST_PageBorderZOrder_front">front</value>
       <value tokenid="ooxml:Value_doc_ST_PageBorderZOrder_back">back</value>
@@ -18080,6 +18150,21 @@
     </resource>
     <resource name="CT_Text" resource="Stream">
       <attribute name="xml:space" tokenid="ooxml:CT_Text_space"/>
+      <action name="characters" action="text"/>
+    </resource>
+    <resource name="CT_instrText" resource="Stream">
+      <attribute name="xml:space" tokenid="ooxml:CT_Text_space"/>
+      <action name="start" action="sendPropertiesWithId" tokenid="ooxml:EG_RunInnerContent_instrText" sendtokenid="ooxml:EG_RunInnerContent_instrText"/>
+      <action name="characters" action="text"/>
+    </resource>
+    <resource name="CT_delText" resource="Stream">
+      <attribute name="xml:space" tokenid="ooxml:CT_Text_space"/>
+      <action name="start" action="sendPropertiesWithId" tokenid="ooxml:EG_RunInnerContent_delText" sendtokenid="ooxml:EG_RunInnerContent_delText"/>
+      <action name="characters" action="text"/>
+    </resource>
+    <resource name="CT_delInstrText" resource="Stream">
+      <attribute name="xml:space" tokenid="ooxml:CT_Text_space"/>
+      <action name="start" action="sendPropertiesWithId" tokenid="ooxml:EG_RunInnerContent_delInstrText" sendtokenid="ooxml:EG_RunInnerContent_delInstrText"/>
       <action name="characters" action="text"/>
     </resource>
     <resource name="CT_FtnEdnRefChar" resource="Stream">

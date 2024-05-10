@@ -42,6 +42,7 @@
 #include <strings.hrc>
 #include <helpids.h>
 #include <cfgitem.hxx>
+#include <officecfg/Office/Math.hxx>
 #include <smmod.hxx>
 #include <symbol.hxx>
 #include <view.hxx>
@@ -84,6 +85,24 @@ public:
     const OUString& GetStyleName(const vcl::Font& rFont) const;
     const OUString& GetStyleName(sal_uInt16 nIdx) const;
 };
+
+vcl::Font lclGetSymbolFont(const SmViewShell& rViewShell, const SmSym &rSymbol)
+{
+    const SmDocShell* pDoc = rViewShell.GetDoc();
+    if (pDoc)
+    {
+        // If we have a document, we want to render the symbol using the font and style used in
+        // the document, so we do that by creating a node and preparing it, then get the resolved
+        // font and style from it.
+        SmToken token(TSPECIAL, '\0', "%" + rSymbol.GetUiName());
+        SmSpecialNode aNode(token);
+        aNode.Prepare(pDoc->GetFormat(), *pDoc, 1);
+        aNode.PrepareAttributes();
+        return aNode.GetFont();
+    }
+
+    return rSymbol.GetFace();
+}
 
 } // end anonymous namespace
 
@@ -161,16 +180,26 @@ IMPL_LINK_NOARG(SmPrintOptionsTabPage, SizeButtonClickHdl, weld::Toggleable&, vo
 SmPrintOptionsTabPage::SmPrintOptionsTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rOptions)
     : SfxTabPage(pPage, pController, "modules/smath/ui/smathsettings.ui", "SmathSettings", &rOptions)
     , m_xTitle(m_xBuilder->weld_check_button("title"))
+    , m_xTitleImg(m_xBuilder->weld_widget("locktitle"))
     , m_xText(m_xBuilder->weld_check_button("text"))
+    , m_xTextImg(m_xBuilder->weld_widget("locktext"))
     , m_xFrame(m_xBuilder->weld_check_button("frame"))
+    , m_xFrameImg(m_xBuilder->weld_widget("lockframe"))
     , m_xSizeNormal(m_xBuilder->weld_radio_button("sizenormal"))
     , m_xSizeScaled(m_xBuilder->weld_radio_button("sizescaled"))
     , m_xSizeZoomed(m_xBuilder->weld_radio_button("sizezoomed"))
+    , m_xLockPrintImg(m_xBuilder->weld_widget("lockprintformat"))
     , m_xZoom(m_xBuilder->weld_metric_spin_button("zoom", FieldUnit::PERCENT))
+    , m_xEnableInlineEdit(m_xBuilder->weld_check_button("enableinlineedit"))
+    , m_xEnableInlineEditImg(m_xBuilder->weld_widget("lockenableinlineedit"))
     , m_xNoRightSpaces(m_xBuilder->weld_check_button("norightspaces"))
+    , m_xNoRightSpacesImg(m_xBuilder->weld_widget("locknorightspaces"))
     , m_xSaveOnlyUsedSymbols(m_xBuilder->weld_check_button("saveonlyusedsymbols"))
+    , m_xSaveOnlyUsedSymbolsImg(m_xBuilder->weld_widget("locksaveonlyusedsymbols"))
     , m_xAutoCloseBrackets(m_xBuilder->weld_check_button("autoclosebrackets"))
+    , m_xAutoCloseBracketsImg(m_xBuilder->weld_widget("lockautoclosebrackets"))
     , m_xSmZoom(m_xBuilder->weld_metric_spin_button("smzoom", FieldUnit::PERCENT))
+    , m_xSmZoomImg(m_xBuilder->weld_widget("locksmzoom"))
 {
     m_xSizeNormal->connect_toggled(LINK(this, SmPrintOptionsTabPage, SizeButtonClickHdl));
     m_xSizeScaled->connect_toggled(LINK(this, SmPrintOptionsTabPage, SizeButtonClickHdl));
@@ -184,6 +213,37 @@ SmPrintOptionsTabPage::~SmPrintOptionsTabPage()
     if (SmViewShell *pViewSh = SmGetActiveView())
         if (SmEditWindow* pEdit = pViewSh->GetEditWindow())
             pEdit->UpdateStatus();
+}
+
+OUString SmPrintOptionsTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label4", "label5", "label1", "label6" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[]
+        = { "title", "text", "frame", "norightspaces", "saveonlyusedsymbols", "autoclosebrackets" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "sizenormal", "sizescaled", "sizezoomed" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SmPrintOptionsTabPage::FillItemSet(SfxItemSet* rSet)
@@ -201,6 +261,7 @@ bool SmPrintOptionsTabPage::FillItemSet(SfxItemSet* rSet)
     rSet->Put(SfxBoolItem(SID_PRINTTITLE, m_xTitle->get_active()));
     rSet->Put(SfxBoolItem(SID_PRINTTEXT, m_xText->get_active()));
     rSet->Put(SfxBoolItem(SID_PRINTFRAME, m_xFrame->get_active()));
+    rSet->Put(SfxBoolItem(SID_INLINE_EDIT_ENABLE, m_xEnableInlineEdit->get_active()));
     rSet->Put(SfxBoolItem(SID_NO_RIGHT_SPACES, m_xNoRightSpaces->get_active()));
     rSet->Put(SfxBoolItem(SID_SAVE_ONLY_USED_SYMBOLS, m_xSaveOnlyUsedSymbols->get_active()));
     rSet->Put(SfxBoolItem(SID_AUTO_CLOSE_BRACKETS, m_xAutoCloseBrackets->get_active()));
@@ -220,20 +281,58 @@ void SmPrintOptionsTabPage::Reset(const SfxItemSet* rSet)
     m_xSizeNormal->set_active(ePrintSize == PRINT_SIZE_NORMAL);
     m_xSizeScaled->set_active(ePrintSize == PRINT_SIZE_SCALED);
     m_xSizeZoomed->set_active(ePrintSize == PRINT_SIZE_ZOOMED);
+    bool bReadOnly = officecfg::Office::Math::Print::Size::isReadOnly();
+    if (bReadOnly)
+    {
+        m_xSizeNormal->set_sensitive(false);
+        m_xSizeScaled->set_sensitive(false);
+        m_xSizeZoomed->set_sensitive(false);
+        m_xLockPrintImg->set_visible(true);
+    }
 
-    m_xZoom->set_sensitive(m_xSizeZoomed->get_active());
-
+    bReadOnly = officecfg::Office::Math::Print::ZoomFactor::isReadOnly();
     m_xZoom->set_value(rSet->Get(SID_PRINTZOOM).GetValue(), FieldUnit::PERCENT);
+    m_xZoom->set_sensitive(m_xSizeZoomed->get_active() && !bReadOnly);
 
-    m_xSmZoom->set_sensitive(true);
+    bReadOnly = officecfg::Office::Math::Misc::SmEditWindowZoomFactor::isReadOnly();
     m_xSmZoom->set_value(rSet->Get(SID_SMEDITWINDOWZOOM).GetValue(), FieldUnit::PERCENT);
+    m_xSmZoom->set_sensitive(!bReadOnly);
+    m_xSmZoomImg->set_visible(bReadOnly);
 
+    bReadOnly = officecfg::Office::Math::Print::Title::isReadOnly();
     m_xTitle->set_active(rSet->Get(SID_PRINTTITLE).GetValue());
+    m_xTitle->set_sensitive(!bReadOnly);
+    m_xTitleImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Math::Print::FormulaText::isReadOnly();
     m_xText->set_active(rSet->Get(GetWhich(SID_PRINTTEXT)).GetValue());
+    m_xText->set_sensitive(!bReadOnly);
+    m_xTextImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Math::Print::Frame::isReadOnly();
     m_xFrame->set_active(rSet->Get(GetWhich(SID_PRINTFRAME)).GetValue());
+    m_xFrame->set_sensitive(!bReadOnly);
+    m_xFrameImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Math::Misc::InlineEditEnable::isReadOnly();
+    m_xEnableInlineEdit->set_active(rSet->Get(SID_INLINE_EDIT_ENABLE).GetValue());
+    m_xEnableInlineEdit->set_sensitive(!bReadOnly);
+    m_xEnableInlineEditImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Math::Misc::IgnoreSpacesRight::isReadOnly();
     m_xNoRightSpaces->set_active(rSet->Get(SID_NO_RIGHT_SPACES).GetValue());
+    m_xNoRightSpaces->set_sensitive(!bReadOnly);
+    m_xNoRightSpacesImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Math::LoadSave::IsSaveOnlyUsedSymbols::isReadOnly();
     m_xSaveOnlyUsedSymbols->set_active(rSet->Get(SID_SAVE_ONLY_USED_SYMBOLS).GetValue());
+    m_xSaveOnlyUsedSymbols->set_sensitive(!bReadOnly);
+    m_xSaveOnlyUsedSymbolsImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Math::Misc::AutoCloseBrackets::isReadOnly();
     m_xAutoCloseBrackets->set_active(rSet->Get(SID_AUTO_CLOSE_BRACKETS).GetValue());
+    m_xAutoCloseBrackets->set_sensitive(!bReadOnly);
+    m_xAutoCloseBracketsImg->set_visible(bReadOnly);
 }
 
 std::unique_ptr<SfxTabPage> SmPrintOptionsTabPage::Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rSet)
@@ -427,12 +526,14 @@ void SmFontSizeDialog::WriteTo(SmFormat &rFormat) const
     rFormat.RequestApplyChanges();
 }
 
-IMPL_LINK(SmFontTypeDialog, MenuSelectHdl, const OString&, rIdent, void)
+IMPL_LINK(SmFontTypeDialog, MenuSelectHdl, const OUString&, rIdent, void)
 {
     SmFontPickListBox *pActiveListBox;
 
     bool bHideCheckboxes = false;
-    if (rIdent == "variables")
+    if (rIdent == "math")
+        pActiveListBox = m_xMathFont.get();
+    else if (rIdent == "variables")
         pActiveListBox = m_xVariableFont.get();
     else if (rIdent == "functions")
         pActiveListBox = m_xFunctionFont.get();
@@ -483,6 +584,7 @@ IMPL_LINK_NOARG(SmFontTypeDialog, DefaultButtonClickHdl, weld::Button&, void)
 SmFontTypeDialog::SmFontTypeDialog(weld::Window* pParent, OutputDevice *pFntListDevice)
     : GenericDialogController(pParent, "modules/smath/ui/fonttypedialog.ui", "FontsDialog")
     , pFontListDev(pFntListDevice)
+    , m_xMathFont(new SmFontPickListBox(m_xBuilder->weld_combo_box("mathCB")))
     , m_xVariableFont(new SmFontPickListBox(m_xBuilder->weld_combo_box("variableCB")))
     , m_xFunctionFont(new SmFontPickListBox(m_xBuilder->weld_combo_box("functionCB")))
     , m_xNumberFont(new SmFontPickListBox(m_xBuilder->weld_combo_box("numberCB")))
@@ -505,6 +607,7 @@ void SmFontTypeDialog::ReadFrom(const SmFormat &rFormat)
 {
     SmModule *pp = SM_MOD();
 
+    *m_xMathFont     = pp->GetConfig()->GetFontPickList(FNT_MATH);
     *m_xVariableFont = pp->GetConfig()->GetFontPickList(FNT_VARIABLE);
     *m_xFunctionFont = pp->GetConfig()->GetFontPickList(FNT_FUNCTION);
     *m_xNumberFont   = pp->GetConfig()->GetFontPickList(FNT_NUMBER);
@@ -513,6 +616,7 @@ void SmFontTypeDialog::ReadFrom(const SmFormat &rFormat)
     *m_xSansFont     = pp->GetConfig()->GetFontPickList(FNT_SANS);
     *m_xFixedFont    = pp->GetConfig()->GetFontPickList(FNT_FIXED);
 
+    m_xMathFont->Insert( rFormat.GetFont(FNT_MATH) );
     m_xVariableFont->Insert( rFormat.GetFont(FNT_VARIABLE) );
     m_xFunctionFont->Insert( rFormat.GetFont(FNT_FUNCTION) );
     m_xNumberFont->Insert( rFormat.GetFont(FNT_NUMBER) );
@@ -527,6 +631,7 @@ void SmFontTypeDialog::WriteTo(SmFormat &rFormat) const
 {
     SmModule *pp = SM_MOD();
 
+    pp->GetConfig()->GetFontPickList(FNT_MATH)     = *m_xMathFont;
     pp->GetConfig()->GetFontPickList(FNT_VARIABLE) = *m_xVariableFont;
     pp->GetConfig()->GetFontPickList(FNT_FUNCTION) = *m_xFunctionFont;
     pp->GetConfig()->GetFontPickList(FNT_NUMBER)   = *m_xNumberFont;
@@ -535,6 +640,7 @@ void SmFontTypeDialog::WriteTo(SmFormat &rFormat) const
     pp->GetConfig()->GetFontPickList(FNT_SANS)     = *m_xSansFont;
     pp->GetConfig()->GetFontPickList(FNT_FIXED)    = *m_xFixedFont;
 
+    rFormat.SetFont( FNT_MATH,     m_xMathFont->Get() );
     rFormat.SetFont( FNT_VARIABLE, m_xVariableFont->Get() );
     rFormat.SetFont( FNT_FUNCTION, m_xFunctionFont->Get() );
     rFormat.SetFont( FNT_NUMBER,   m_xNumberFont->Get() );
@@ -586,19 +692,19 @@ const FieldMinMax pMinMaxData[10][4] =
 SmCategoryDesc::SmCategoryDesc(weld::Builder& rBuilder, sal_uInt16 nCategoryIdx)
 {
     ++nCategoryIdx;
-    std::unique_ptr<weld::Label> xTitle(rBuilder.weld_label(OString::number(nCategoryIdx)+"title"));
+    std::unique_ptr<weld::Label> xTitle(rBuilder.weld_label(OUString::number(nCategoryIdx)+"title"));
     if (xTitle)
     {
         Name = xTitle->get_label();
     }
     for (int i = 0; i < 4; ++i)
     {
-        std::unique_ptr<weld::Label> xLabel(rBuilder.weld_label(OString::number(nCategoryIdx)+"label"+OString::number(i+1)));
+        std::unique_ptr<weld::Label> xLabel(rBuilder.weld_label(OUString::number(nCategoryIdx)+"label"+OUString::number(i+1)));
 
         if (xLabel)
         {
             Strings[i] = xLabel->get_label();
-            Graphics[i] = rBuilder.weld_widget(OString::number(nCategoryIdx)+"image"+OString::number(i+1));
+            Graphics[i] = rBuilder.weld_widget(OUString::number(nCategoryIdx)+"image"+OUString::number(i+1));
         }
         else
         {
@@ -641,7 +747,7 @@ IMPL_LINK( SmDistanceDialog, GetFocusHdl, weld::Widget&, rControl, void )
     m_pCurrentImage->show();
 }
 
-IMPL_LINK(SmDistanceDialog, MenuSelectHdl, const OString&, rId, void)
+IMPL_LINK(SmDistanceDialog, MenuSelectHdl, const OUString&, rId, void)
 {
     assert(rId.startsWith("menuitem"));
     SetCategory(rId.replaceFirst("menuitem", "").toInt32() - 1);
@@ -676,17 +782,18 @@ void SmDistanceDialog::SetCategory(sal_uInt16 nCategory)
     // array to convert category- and metricfield-number in help ids.
     // 0 is used in case of unused combinations.
     assert(NOCATEGORIES == 10 && "Sm : array doesn't fit into the number of categories");
-    static const char * aCatMf2Hid[10][4] =
+    static constexpr OUString EMPTY(u""_ustr);
+    static constexpr OUString aCatMf2Hid[10][4] =
     {
-        { HID_SMA_DEFAULT_DIST,         HID_SMA_LINE_DIST,          HID_SMA_ROOT_DIST, nullptr },
-        { HID_SMA_SUP_DIST,             HID_SMA_SUB_DIST ,          nullptr, nullptr },
-        { HID_SMA_NUMERATOR_DIST,       HID_SMA_DENOMINATOR_DIST,   nullptr, nullptr },
-        { HID_SMA_FRACLINE_EXCWIDTH,    HID_SMA_FRACLINE_LINEWIDTH, nullptr, nullptr },
-        { HID_SMA_UPPERLIMIT_DIST,      HID_SMA_LOWERLIMIT_DIST,    nullptr, nullptr },
-        { HID_SMA_BRACKET_EXCHEIGHT,    HID_SMA_BRACKET_DIST,       nullptr, HID_SMA_BRACKET_EXCHEIGHT2 },
-        { HID_SMA_MATRIXROW_DIST,       HID_SMA_MATRIXCOL_DIST,     nullptr, nullptr },
-        { HID_SMA_ATTRIBUT_DIST,        HID_SMA_INTERATTRIBUT_DIST, nullptr, nullptr },
-        { HID_SMA_OPERATOR_EXCHEIGHT,   HID_SMA_OPERATOR_DIST,      nullptr, nullptr },
+        { HID_SMA_DEFAULT_DIST,         HID_SMA_LINE_DIST,          HID_SMA_ROOT_DIST, EMPTY },
+        { HID_SMA_SUP_DIST,             HID_SMA_SUB_DIST ,          EMPTY, EMPTY },
+        { HID_SMA_NUMERATOR_DIST,       HID_SMA_DENOMINATOR_DIST,   EMPTY, EMPTY },
+        { HID_SMA_FRACLINE_EXCWIDTH,    HID_SMA_FRACLINE_LINEWIDTH, EMPTY, EMPTY },
+        { HID_SMA_UPPERLIMIT_DIST,      HID_SMA_LOWERLIMIT_DIST,    EMPTY, EMPTY },
+        { HID_SMA_BRACKET_EXCHEIGHT,    HID_SMA_BRACKET_DIST,       EMPTY, HID_SMA_BRACKET_EXCHEIGHT2 },
+        { HID_SMA_MATRIXROW_DIST,       HID_SMA_MATRIXCOL_DIST,     EMPTY, EMPTY },
+        { HID_SMA_ATTRIBUT_DIST,        HID_SMA_INTERATTRIBUT_DIST, EMPTY, EMPTY },
+        { HID_SMA_OPERATOR_EXCHEIGHT,   HID_SMA_OPERATOR_DIST,      EMPTY, EMPTY },
         { HID_SMA_LEFTBORDER_DIST,      HID_SMA_RIGHTBORDER_DIST,   HID_SMA_UPPERBORDER_DIST, HID_SMA_LOWERBORDER_DIST }
     };
 
@@ -714,7 +821,7 @@ void SmDistanceDialog::SetCategory(sal_uInt16 nCategory)
         if (nActiveCategory == 5)
             bScaleAllBrackets = m_xCheckBox1->get_active();
 
-        m_xMenuButton->set_item_active("menuitem" + OString::number(nActiveCategory + 1), false);
+        m_xMenuButton->set_item_active("menuitem" + OUString::number(nActiveCategory + 1), false);
     }
 
     // activation/deactivation of the associated controls depending on the chosen category
@@ -726,7 +833,7 @@ void SmDistanceDialog::SetCategory(sal_uInt16 nCategory)
 
         // To determine which Controls should be active, the existence
         // of an associated HelpID is checked
-        bActive = aCatMf2Hid[nCategory][i] != nullptr;
+        bActive = !aCatMf2Hid[nCategory][i].isEmpty();
 
         pFT->set_visible(bActive);
         pFT->set_sensitive(bActive);
@@ -773,7 +880,7 @@ void SmDistanceDialog::SetCategory(sal_uInt16 nCategory)
         m_xMetricField4->set_sensitive( bChecked );
     }
 
-    m_xMenuButton->set_item_active("menuitem" + OString::number(nCategory + 1), true);
+    m_xMenuButton->set_item_active("menuitem" + OUString::number(nCategory + 1), true);
     m_xFrame->set_label(m_xCategories[nCategory]->GetName());
 
     nActiveCategory = nCategory;
@@ -945,8 +1052,9 @@ void SmAlignDialog::WriteTo(SmFormat &rFormat) const
     rFormat.RequestApplyChanges();
 }
 
-SmShowSymbolSet::SmShowSymbolSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow)
-    : nLen(0)
+SmShowSymbolSet::SmShowSymbolSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow, SmViewShell &rViewShell)
+    : m_rViewShell(rViewShell)
+    , nLen(0)
     , nRows(0)
     , nColumns(0)
     , nXOffset(0)
@@ -994,7 +1102,7 @@ void SmShowSymbolSet::Paint(vcl::RenderContext& rRenderContext, const tools::Rec
     for (size_t i = v; i < nSymbols ; i++)
     {
         SmSym aSymbol(*aSymbolSet[i]);
-        vcl::Font aFont(aSymbol.GetFace());
+        vcl::Font aFont(lclGetSymbolFont(m_rViewShell, aSymbol));
         aFont.SetAlignment(ALIGN_TOP);
 
         // taking a FontSize which is a bit smaller (compared to nLen) in order to have a buffer
@@ -1158,7 +1266,8 @@ IMPL_LINK_NOARG(SmShowSymbolSet, ScrollHdl, weld::ScrolledWindow&, void)
     Invalidate();
 }
 
-SmShowSymbol::SmShowSymbol()
+SmShowSymbol::SmShowSymbol(SmViewShell& rViewShell)
+    : m_rViewShell(rViewShell)
 {
 }
 
@@ -1199,7 +1308,7 @@ void SmShowSymbol::SetSymbol(const SmSym *pSymbol)
 {
     if (pSymbol)
     {
-        vcl::Font aFont(pSymbol->GetFace());
+        vcl::Font aFont(lclGetSymbolFont(m_rViewShell, *pSymbol));
         aFont.SetAlignment(ALIGN_BASELINE);
         SetFont(aFont);
 
@@ -1294,9 +1403,9 @@ IMPL_LINK_NOARG(SmSymbolDialog, GetClickHdl, weld::Button&, void)
     const SmSym *pSym = GetSymbol();
     if (pSym)
     {
-        OUString aText = "%" + pSym->GetName() + " ";
+        OUString aText = "%" + pSym->GetUiName() + " ";
 
-        rViewSh.GetViewFrame()->GetDispatcher()->ExecuteList(
+        rViewSh.GetViewFrame().GetDispatcher()->ExecuteList(
                 SID_INSERTSPECIAL, SfxCallMode::RECORD,
                 { new SfxStringItem(SID_INSERTSPECIAL, aText) });
     }
@@ -1308,8 +1417,9 @@ SmSymbolDialog::SmSymbolDialog(weld::Window *pParent, OutputDevice *pFntListDevi
     , rViewSh(rViewShell)
     , rSymbolMgr(rMgr)
     , pFontListDev(pFntListDevice)
+    , m_aSymbolDisplay(rViewShell)
     , m_xSymbolSets(m_xBuilder->weld_combo_box("symbolset"))
-    , m_xSymbolSetDisplay(new SmShowSymbolSet(m_xBuilder->weld_scrolled_window("scrolledwindow", true)))
+    , m_xSymbolSetDisplay(new SmShowSymbolSet(m_xBuilder->weld_scrolled_window("scrolledwindow", true), rViewShell))
     , m_xSymbolSetDisplayArea(new weld::CustomWeld(*m_xBuilder, "symbolsetdisplay", *m_xSymbolSetDisplay))
     , m_xSymbolName(m_xBuilder->weld_label("symbolname"))
     , m_xSymbolDisplay(new weld::CustomWeld(*m_xBuilder, "preview", m_aSymbolDisplay))
@@ -1378,7 +1488,7 @@ void SmSymbolDialog::SelectSymbol(sal_uInt16 nSymbolNo)
 
     m_xSymbolSetDisplay->SelectSymbol(nSymbolNo);
     m_aSymbolDisplay.SetSymbol(pSym);
-    m_xSymbolName->set_label(pSym ? pSym->GetName() : OUString());
+    m_xSymbolName->set_label(pSym ? pSym->GetUiName() : OUString());
 }
 
 const SmSym* SmSymbolDialog::GetSymbol() const
@@ -1460,7 +1570,7 @@ void SmSymDefineDialog::FillSymbols(weld::ComboBox& rComboBox, bool bDeleteText)
     weld::ComboBox& rBox = &rComboBox == m_xOldSymbols.get() ? *m_xOldSymbolSets : *m_xSymbolSets;
     SymbolPtrVec_t aSymSet(m_aSymbolMgrCopy.GetSymbolSet(rBox.get_active_text()));
     for (const SmSym* i : aSymSet)
-        rComboBox.append_text(i->GetName());
+        rComboBox.append_text(i->GetUiName());
 }
 
 void SmSymDefineDialog::FillSymbolSets(weld::ComboBox& rComboBox, bool bDeleteText)
@@ -1513,7 +1623,7 @@ void SmSymDefineDialog::FillStyles()
 SmSym* SmSymDefineDialog::GetSymbol(const weld::ComboBox& rComboBox)
 {
     assert((&rComboBox == m_xOldSymbols.get() || &rComboBox == m_xSymbols.get()) && "Sm : wrong combobox");
-    return m_aSymbolMgrCopy.GetSymbolByName(rComboBox.get_active_text());
+    return m_aSymbolMgrCopy.GetSymbolByUiName(rComboBox.get_active_text());
 }
 
 IMPL_LINK(SmSymDefineDialog, OldSymbolChangeHdl, weld::ComboBox&, rComboBox, void)
@@ -1621,12 +1731,12 @@ IMPL_LINK( SmSymDefineDialog, AddClickHdl, weld::Button&, rButton, void )
     // add symbol
     const SmSym aNewSymbol(m_xSymbols->get_active_text(), m_xCharsetDisplay->GetFont(),
             m_xCharsetDisplay->GetSelectCharacter(), m_xSymbolSets->get_active_text());
-    //OSL_ENSURE( m_aSymbolMgrCopy.GetSymbolByName(aTmpSymbolName) == NULL, "symbol already exists" );
+    //OSL_ENSURE( m_aSymbolMgrCopy.GetSymbolByUiName(aTmpSymbolName) == NULL, "symbol already exists" );
     m_aSymbolMgrCopy.AddOrReplaceSymbol( aNewSymbol );
 
     // update display of new symbol
     m_aSymbolDisplay.SetSymbol( &aNewSymbol );
-    m_xSymbolName->set_label(aNewSymbol.GetName());
+    m_xSymbolName->set_label(aNewSymbol.GetUiName());
     m_xSymbolSetName->set_label(aNewSymbol.GetSymbolSetName());
 
     // update list box entries
@@ -1662,7 +1772,7 @@ IMPL_LINK( SmSymDefineDialog, ChangeClickHdl, weld::Button&, rButton, void )
 
     // update display of new symbol
     m_aSymbolDisplay.SetSymbol(&aNewSymbol);
-    m_xSymbolName->set_label(aNewSymbol.GetName());
+    m_xSymbolName->set_label(aNewSymbol.GetUiName());
     m_xSymbolSetName->set_label(aNewSymbol.GetSymbolSetName());
 
     // update list box entries
@@ -1682,7 +1792,7 @@ IMPL_LINK(SmSymDefineDialog, DeleteClickHdl, weld::Button&, rButton, void)
 
     if (m_xOrigSymbol)
     {
-        m_aSymbolMgrCopy.RemoveSymbol(m_xOrigSymbol->GetName());
+        m_aSymbolMgrCopy.RemoveSymbol(m_xOrigSymbol->GetUiName());
 
         // clear display for original symbol
         SetOrigSymbol(nullptr, OUString());
@@ -1711,7 +1821,7 @@ void SmSymDefineDialog::UpdateButtons()
         //! (Font-, Style- and SymbolSet name comparison is not case sensitive)
         bool bEqual = m_xOrigSymbol
                     && aTmpSymbolSetName.equalsIgnoreAsciiCase(m_xOldSymbolSetName->get_label())
-                    && aTmpSymbolName == m_xOrigSymbol->GetName()
+                    && aTmpSymbolName == m_xOrigSymbol->GetUiName()
                     && m_xFonts->get_active_text().equalsIgnoreAsciiCase(
                             m_xOrigSymbol->GetFace().GetFamilyName())
                     && m_xStyles->get_active_text().equalsIgnoreAsciiCase(
@@ -1719,7 +1829,7 @@ void SmSymDefineDialog::UpdateButtons()
                     && m_xCharsetDisplay->GetSelectCharacter() == m_xOrigSymbol->GetCharacter();
 
         // only add it if there isn't already a symbol with the same name
-        bAdd    = m_aSymbolMgrCopy.GetSymbolByName(aTmpSymbolName) == nullptr;
+        bAdd    = m_aSymbolMgrCopy.GetSymbolByUiName(aTmpSymbolName) == nullptr;
 
         // only delete it if all settings are equal
         bDelete = bool(m_xOrigSymbol);
@@ -1881,7 +1991,7 @@ void SmSymDefineDialog::SetOrigSymbol(const SmSym *pSymbol,
         // set new symbol
         m_xOrigSymbol.reset(new SmSym(*pSymbol));
 
-        aSymName    = pSymbol->GetName();
+        aSymName    = pSymbol->GetUiName();
         aSymSetName = rSymbolSetName;
         m_aOldSymbolDisplay.SetSymbol( pSymbol );
     }
@@ -1935,7 +2045,7 @@ bool SmSymDefineDialog::SelectSymbol(weld::ComboBox& rComboBox,
 
                 // since SelectChar will also set the unicode point as text in the
                 // symbols box, we have to set the symbol name again to get that one displayed
-                m_xSymbols->set_entry_text(pSymbol->GetName());
+                m_xSymbols->set_entry_text(pSymbol->GetUiName());
             }
         }
 
@@ -1951,7 +2061,7 @@ bool SmSymDefineDialog::SelectSymbol(weld::ComboBox& rComboBox,
         OUString     aTmpOldSymbolSetName;
         if (nPos != -1)
         {
-            pOldSymbol        = m_aSymbolMgrCopy.GetSymbolByName(aNormName);
+            pOldSymbol        = m_aSymbolMgrCopy.GetSymbolByUiName(aNormName);
             aTmpOldSymbolSetName = m_xOldSymbolSets->get_active_text();
         }
         SetOrigSymbol(pOldSymbol, aTmpOldSymbolSetName);

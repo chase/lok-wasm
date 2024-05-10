@@ -253,7 +253,8 @@ bool MsLangId::isRightToLeft( LanguageType nLang )
                 primary(LANGUAGE_SINDHI),
                 primary(LANGUAGE_UIGHUR_CHINA),
                 primary(LANGUAGE_USER_KYRGYZ_CHINA),
-                primary(LANGUAGE_USER_NKO)))
+                primary(LANGUAGE_USER_NKO),
+                primary(LANGUAGE_USER_SARAIKI)))
     {
         return true;
     }
@@ -266,6 +267,7 @@ bool MsLangId::isRightToLeft( LanguageType nLang )
         LANGUAGE_USER_KURDISH_SOUTHERN_IRAQ,
         LANGUAGE_USER_HUNGARIAN_ROVAS,
         LANGUAGE_USER_MALAY_ARABIC_MALAYSIA,
+        LANGUAGE_USER_ROHINGYA_HANIFI,
         LANGUAGE_USER_MALAY_ARABIC_BRUNEI))
     {
             return true;
@@ -388,6 +390,7 @@ sal_Int16 MsLangId::getScriptType( LanguageType nLang )
          LANGUAGE_USER_XIBE,
          LANGUAGE_USER_MALAY_ARABIC_MALAYSIA,
          LANGUAGE_USER_MALAY_ARABIC_BRUNEI,
+         LANGUAGE_USER_ROHINGYA_HANIFI,
          LANGUAGE_USER_PALI_THAI))
     {
             nScript = css::i18n::ScriptType::COMPLEX;
@@ -450,6 +453,7 @@ sal_Int16 MsLangId::getScriptType( LanguageType nLang )
         primary(LANGUAGE_USER_LIMBU          ),
         primary(LANGUAGE_USER_MAITHILI_INDIA ),
         primary(LANGUAGE_USER_NKO            ),
+        primary(LANGUAGE_USER_SARAIKI        ),
         primary(LANGUAGE_YIDDISH             )))
     {
             nScript = css::i18n::ScriptType::COMPLEX;

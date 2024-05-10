@@ -1009,21 +1009,6 @@ void SvTreeList::InvalidateEntry( SvTreeListEntry* pEntry )
     Broadcast( SvListAction::INVALIDATE_ENTRY, pEntry );
 }
 
-SvTreeListEntry* SvTreeList::GetRootLevelParent( SvTreeListEntry* pEntry ) const
-{
-    DBG_ASSERT(pEntry,"GetRootLevelParent:No Entry");
-    SvTreeListEntry* pCurParent = nullptr;
-    if ( pEntry )
-    {
-        pCurParent = pEntry->pParent;
-        if ( pCurParent == pRootItem.get() )
-            return pEntry; // is its own parent
-        while( pCurParent && pCurParent->pParent != pRootItem.get() )
-            pCurParent = pCurParent->pParent;
-    }
-    return pCurParent;
-}
-
 SvListView::SvListView()
     : m_pImpl(new Impl(*this))
 {
@@ -1139,7 +1124,9 @@ void SvListView::Impl::ActionMoving( SvTreeListEntry* pEntry )
     DBG_ASSERT(pParent,"Model not consistent");
     if (pParent != m_rThis.pModel->pRootItem.get() && pParent->m_Children.size() == 1)
     {
-        SvViewDataEntry* pViewData = m_DataTable.find( pParent )->second.get();
+        const auto iter = m_DataTable.find(pParent);
+        assert(iter != m_DataTable.end());
+        SvViewDataEntry* pViewData = iter->second.get();
         pViewData->SetExpanded(false);
     }
     // preliminary
@@ -1204,9 +1191,10 @@ void SvListView::Impl::RemoveViewData( SvTreeListEntry* pParent )
 
 void SvListView::Impl::ActionRemoving( SvTreeListEntry* pEntry )
 {
-    DBG_ASSERT(pEntry,"Remove:No Entry");
-
-    SvViewDataEntry* pViewData = m_DataTable.find( pEntry )->second.get();
+    assert(pEntry && "Remove:No Entry");
+    const auto iter = m_DataTable.find(pEntry);
+    assert(iter != m_DataTable.end());
+    SvViewDataEntry* pViewData = iter->second.get();
     sal_uInt32 nSelRemoved = 0;
     if ( pViewData->IsSelected() )
         nSelRemoved = 1 + m_rThis.pModel->GetChildSelectionCount(&m_rThis, pEntry);
@@ -1232,7 +1220,9 @@ void SvListView::Impl::ActionRemoving( SvTreeListEntry* pEntry )
     SvTreeListEntry* pCurEntry = pEntry->pParent;
     if (pCurEntry && pCurEntry != m_rThis.pModel->pRootItem.get() && pCurEntry->m_Children.size() == 1)
     {
-        pViewData = m_DataTable.find(pCurEntry)->second.get();
+        SvDataTable::iterator itr = m_DataTable.find(pCurEntry);
+        assert(itr != m_DataTable.end() && "Entry not in Table");
+        pViewData = itr->second.get();
         pViewData->SetExpanded(false);
     }
 }
@@ -1335,7 +1325,7 @@ void SvListView::SetEntryFocus( SvTreeListEntry* pEntry, bool bFocus )
 {
     DBG_ASSERT(pEntry,"SetEntryFocus:No Entry");
     SvDataTable::iterator itr = m_pImpl->m_DataTable.find(pEntry);
-    DBG_ASSERT(itr != m_pImpl->m_DataTable.end(),"Entry not in Table");
+    assert(itr != m_pImpl->m_DataTable.end() && "Entry not in Table");
     itr->second->SetFocus(bFocus);
 }
 

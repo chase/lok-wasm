@@ -31,7 +31,6 @@
 #include <sfx2/infobar.hxx>
 #include <sfx2/request.hxx>
 #include <svl/whiter.hxx>
-#include <svl/visitem.hxx>
 #include <svx/srchdlg.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <sfx2/bindings.hxx>
@@ -63,13 +62,13 @@
 #include <swslots.hxx>
 #include <PostItMgr.hxx>
 
-using namespace ::com::sun::star;
-
 #include <unotools/moduleoptions.hxx>
 #include <sfx2/viewfac.hxx>
 
 #include <memory>
 #include <swabstdlg.hxx>
+
+using namespace ::com::sun::star;
 
 SFX_IMPL_NAMED_VIEWFACTORY(SwView, "Default")
 {
@@ -116,12 +115,11 @@ view::XSelectionSupplier* SwView::GetUNOObject()
     return m_pViewImpl->GetUNOObject();
 }
 
-void SwView::ApplyAccessibilityOptions(SvtAccessibilityOptions const & rAccessibilityOptions)
+void SwView::ApplyAccessibilityOptions()
 {
 #if ENABLE_WASM_STRIP_ACCESSIBILITY
-    (void)rAccessibilityOptions;
 #else
-    m_pWrtShell->ApplyAccessibilityOptions(rAccessibilityOptions);
+    m_pWrtShell->ApplyAccessibilityOptions();
     //to enable the right state of the selection cursor in readonly documents
     if(GetDocShell()->IsReadOnly())
         m_pWrtShell->ShowCursor();
@@ -204,7 +202,7 @@ void SwView::RecheckBrowseMode()
             0
         };
     // the view must not exist!
-    GetViewFrame()->GetBindings().Invalidate(aInva);
+    GetViewFrame().GetBindings().Invalidate(aInva);
     CheckVisArea();
 
     SvxZoomType eType;
@@ -226,7 +224,7 @@ void SwView::StateViewOptions(SfxItemSet &rSet)
     while(nWhich)
     {
         bool bReadonly = GetDocShell()->IsReadOnly();
-        if ( bReadonly && nWhich != FN_VIEW_GRAPHIC )
+        if (bReadonly && nWhich != FN_VIEW_GRAPHIC && nWhich != FN_HIGHLIGHT_CHAR_DF)
         {
             rSet.DisableItem(nWhich);
             nWhich = 0;
@@ -335,17 +333,8 @@ void SwView::StateViewOptions(SfxItemSet &rSet)
             break;
             case SID_ACCESSIBILITY_CHECK_ONLINE:
             {
-                // visible only when experimental mode is enabled
-                if (!officecfg::Office::Common::Misc::ExperimentalMode::get())
-                {
-                    rSet.Put(SfxVisibilityItem(nWhich, false));
-                    nWhich = 0;
-                }
-                else
-                {
-                    bool bOnlineAccessibilityCheck = officecfg::Office::Common::Accessibility::OnlineAccessibilityCheck::get();
-                    aBool.SetValue(bOnlineAccessibilityCheck);
-                }
+                bool bOnlineAccessibilityCheck = officecfg::Office::Common::Accessibility::OnlineAccessibilityCheck::get();
+                aBool.SetValue(bOnlineAccessibilityCheck);
             }
             break;
             case FN_SHADOWCURSOR:
@@ -368,6 +357,15 @@ void SwView::StateViewOptions(SfxItemSet &rSet)
             break;
             case FN_SHOW_CHANGES_IN_MARGIN:
               aBool.SetValue( pOpt->IsShowChangesInMargin() );
+            break;
+            case FN_HIGHLIGHT_CHAR_DF:
+              aBool.SetValue(m_bIsHighlightCharDF);
+            break;
+            case SID_SPOTLIGHT_PARASTYLES:
+                aBool.SetValue(m_bIsSpotlightParaStyles);
+            break;
+            case SID_SPOTLIGHT_CHARSTYLES:
+                aBool.SetValue(m_bIsSpotlightCharStyles);
             break;
         }
 
@@ -557,6 +555,34 @@ void SwView::ExecViewOptions(SfxRequest &rReq)
             bFlag = !lcl_IsViewMarks(*pOpt) ;
 
         lcl_SetViewMarks( *pOpt, bFlag );
+        break;
+
+    case FN_HIGHLIGHT_CHAR_DF:
+        if (STATE_TOGGLE == eState)
+            bFlag = !m_bIsHighlightCharDF;
+        m_bIsHighlightCharDF = bFlag;
+        break;
+
+    case SID_SPOTLIGHT_PARASTYLES:
+        if (!pArgs || (pArgs && !pArgs->HasItem(FN_PARAM_1)))
+        {
+            const SfxStringItem sDeckName(SID_SIDEBAR_DECK, "StyleListDeck");
+            GetDispatcher().ExecuteList(SID_SIDEBAR_DECK, SfxCallMode::SYNCHRON, { &sDeckName });
+        }
+        if (STATE_TOGGLE == eState)
+            bFlag = !m_bIsSpotlightParaStyles;
+        m_bIsSpotlightParaStyles = bFlag;
+        break;
+
+    case SID_SPOTLIGHT_CHARSTYLES:
+        if (!pArgs || (pArgs && !pArgs->HasItem(FN_PARAM_1)))
+        {
+            const SfxStringItem sDeckName(SID_SIDEBAR_DECK, "StyleListDeck");
+            GetDispatcher().ExecuteList(SID_SIDEBAR_DECK, SfxCallMode::SYNCHRON, { &sDeckName });
+        }
+        if (STATE_TOGGLE == eState)
+            bFlag = !m_bIsSpotlightCharStyles;
+        m_bIsSpotlightCharStyles = bFlag;
         break;
 
     case FN_VIEW_META_CHARS:

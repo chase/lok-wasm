@@ -16,9 +16,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-
-#ifndef INCLUDED_VCL_BITMAPREADACCESS_HXX
-#define INCLUDED_VCL_BITMAPREADACCESS_HXX
+#pragma once
 
 #include <vcl/dllapi.h>
 #include <vcl/bitmap.hxx>
@@ -33,7 +31,9 @@ class SAL_DLLPUBLIC_RTTI BitmapReadAccess : public BitmapInfoAccess
     friend class BitmapWriteAccess;
 
 public:
-    VCL_DLLPUBLIC BitmapReadAccess(Bitmap& rBitmap,
+    VCL_DLLPUBLIC BitmapReadAccess(const Bitmap& rBitmap,
+                                   BitmapAccessMode nMode = BitmapAccessMode::Read);
+    VCL_DLLPUBLIC BitmapReadAccess(const AlphaMask& rBitmap,
                                    BitmapAccessMode nMode = BitmapAccessMode::Read);
     VCL_DLLPUBLIC virtual ~BitmapReadAccess() override;
 
@@ -79,22 +79,25 @@ public:
     {
         assert(mpBuffer && "Access is not valid!");
         assert(nX < mpBuffer->mnWidth && "x-coordinate out of range!");
-        assert(nY < mpBuffer->mnHeight && "y-coordinate out of range!");
 
-        return mFncGetPixel(GetScanline(nY), nX, maColorMask);
+        return GetPixelFromData(GetScanline(nY), nX);
     }
 
     BitmapColor GetPixel(const Point& point) const { return GetPixel(point.Y(), point.X()); }
 
-    BitmapColor GetColor(tools::Long nY, tools::Long nX) const
+    BitmapColor GetColorFromData(sal_uInt8* pData, tools::Long nX) const
     {
         if (HasPalette())
-        {
-            const BitmapBuffer* pBuffer = mpBuffer;
-            return pBuffer->maPalette[GetPixelIndex(nY, nX)];
-        }
+            return GetPaletteColor(GetIndexFromData(pData, nX));
         else
-            return GetPixel(nY, nX);
+            return GetPixelFromData(pData, nX);
+    }
+
+    BitmapColor GetColor(tools::Long nY, tools::Long nX) const
+    {
+        assert(mpBuffer && "Access is not valid!");
+        assert(nX < mpBuffer->mnWidth && "x-coordinate out of range!");
+        return GetColorFromData(GetScanline(nY), nX);
     }
 
     BitmapColor GetColor(const Point& point) const { return GetColor(point.Y(), point.X()); }
@@ -130,8 +133,6 @@ public:
 
     static BitmapColor GetPixelForN1BitMsbPal(ConstScanline pScanline, tools::Long nX,
                                               const ColorMask& rMask);
-    static BitmapColor GetPixelForN1BitLsbPal(ConstScanline pScanline, tools::Long nX,
-                                              const ColorMask& rMask);
     static BitmapColor GetPixelForN8BitPal(ConstScanline pScanline, tools::Long nX,
                                            const ColorMask& rMask);
     static BitmapColor GetPixelForN24BitTcBgr(ConstScanline pScanline, tools::Long nX,
@@ -158,8 +159,6 @@ public:
                                                const ColorMask& rMask);
 
     static void SetPixelForN1BitMsbPal(Scanline pScanline, tools::Long nX,
-                                       const BitmapColor& rBitmapColor, const ColorMask& rMask);
-    static void SetPixelForN1BitLsbPal(Scanline pScanline, tools::Long nX,
                                        const BitmapColor& rBitmapColor, const ColorMask& rMask);
     static void SetPixelForN8BitPal(Scanline pScanline, tools::Long nX,
                                     const BitmapColor& rBitmapColor, const ColorMask& rMask);
@@ -190,6 +189,47 @@ public:
     static FncSetPixel SetPixelFunction(ScanlineFormat nFormat);
 };
 
-#endif // INCLUDED_VCL_BITMAPREADACCESS_HXX
+class BitmapScopedReadAccess
+{
+public:
+    BitmapScopedReadAccess(const Bitmap& rBitmap)
+        : moAccess(rBitmap)
+    {
+    }
+    BitmapScopedReadAccess(const AlphaMask& rBitmap)
+        : moAccess(rBitmap)
+    {
+    }
+    BitmapScopedReadAccess() {}
+
+    BitmapScopedReadAccess& operator=(const Bitmap& rBitmap)
+    {
+        moAccess.emplace(rBitmap);
+        return *this;
+    }
+
+    BitmapScopedReadAccess& operator=(const AlphaMask& rBitmap)
+    {
+        moAccess.emplace(rBitmap);
+        return *this;
+    }
+
+    bool operator!() const { return !moAccess.has_value() || !*moAccess; }
+    explicit operator bool() const { return moAccess && bool(*moAccess); }
+
+    void reset() { moAccess.reset(); }
+
+    BitmapReadAccess* get() { return moAccess ? &*moAccess : nullptr; }
+    const BitmapReadAccess* get() const { return moAccess ? &*moAccess : nullptr; }
+
+    BitmapReadAccess* operator->() { return &*moAccess; }
+    const BitmapReadAccess* operator->() const { return &*moAccess; }
+
+    BitmapReadAccess& operator*() { return *moAccess; }
+    const BitmapReadAccess& operator*() const { return *moAccess; }
+
+private:
+    std::optional<BitmapReadAccess> moAccess;
+};
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

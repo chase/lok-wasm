@@ -43,7 +43,6 @@
 
 //  namespaces
 
-using namespace ::std;
 using namespace ::utl;
 using namespace ::osl;
 using namespace ::com::sun::star::uno;
@@ -53,7 +52,7 @@ using namespace ::com::sun::star;
 
 constexpr OUStringLiteral ROOTNODE_ADDONMENU = u"Office.Addons";
 constexpr OUStringLiteral PATHDELIMITER = u"/";
-constexpr OUStringLiteral SEPARATOR_URL = u"private:separator";
+constexpr OUString SEPARATOR_URL = u"private:separator"_ustr;
 
 #define PROPERTYNAME_URL                                ADDONSMENUITEM_STRING_URL
 #define PROPERTYNAME_TITLE                              ADDONSMENUITEM_STRING_TITLE
@@ -924,17 +923,12 @@ void AddonsOptions_Impl::ReadImages( ImageManager& aImageManager )
 OUString AddonsOptions_Impl::GeneratePrefixURL()
 {
     // Create a unique prefixed Add-On popup menu URL so it can be identified later as a runtime popup menu.
-    OUString aPopupMenuURL;
-    OUStringBuffer aBuf( m_aRootAddonPopupMenuURLPrexfix.getLength() + 3 );
-    aBuf.append( m_aRootAddonPopupMenuURLPrexfix );
-    aBuf.append( ++m_nRootAddonPopupMenuId );
-    aPopupMenuURL = aBuf.makeStringAndClear();
-    return aPopupMenuURL;
+    return m_aRootAddonPopupMenuURLPrexfix + OUString::number( ++m_nRootAddonPopupMenuId );
 }
 
 void AddonsOptions_Impl::ReadMenuMergeInstructions( MergeMenuInstructionContainer& aContainer )
 {
-    static const OUStringLiteral aMenuMergeRootName( u"AddonUI/OfficeMenuBarMerging/" );
+    static constexpr OUString aMenuMergeRootName( u"AddonUI/OfficeMenuBarMerging/"_ustr );
 
     Sequence< OUString > aAddonMergeNodesSeq = GetNodeNames( aMenuMergeRootName );
 
@@ -1006,7 +1000,7 @@ void AddonsOptions_Impl::ReadMergeMenuData( std::u16string_view aMergeAddonInstr
 
 void AddonsOptions_Impl::ReadToolbarMergeInstructions( ToolbarMergingInstructions& rCachedToolbarMergingInstructions )
 {
-    static const OUStringLiteral aToolbarMergeRootName( u"AddonUI/OfficeToolbarMerging/" );
+    static constexpr OUString aToolbarMergeRootName( u"AddonUI/OfficeToolbarMerging/"_ustr );
 
     Sequence< OUString > aAddonMergeNodesSeq = GetNodeNames( aToolbarMergeRootName );
     sal_uInt32           nCount = aAddonMergeNodesSeq.getLength();
@@ -1078,7 +1072,7 @@ void AddonsOptions_Impl::ReadMergeToolbarData( std::u16string_view aMergeAddonIn
 void AddonsOptions_Impl::ReadNotebookBarMergeInstructions(
     NotebookBarMergingInstructions& rCachedNotebookBarMergingInstructions)
 {
-    static const OUStringLiteral aNotebookBarMergeRootName(u"AddonUI/OfficeNotebookBarMerging/");
+    static constexpr OUString aNotebookBarMergeRootName(u"AddonUI/OfficeNotebookBarMerging/"_ustr);
 
     Sequence<OUString> aAddonMergeNodesSeq = GetNodeNames(aNotebookBarMergeRootName);
     sal_uInt32 nCount = aAddonMergeNodesSeq.getLength();
@@ -1153,7 +1147,7 @@ void AddonsOptions_Impl::ReadMergeNotebookBarData(
 
 void AddonsOptions_Impl::ReadStatusbarMergeInstructions( MergeStatusbarInstructionContainer& aContainer )
 {
-    static const OUStringLiteral aStatusbarMergeRootName( u"AddonUI/OfficeStatusbarMerging/" );
+    static constexpr OUString aStatusbarMergeRootName( u"AddonUI/OfficeStatusbarMerging/"_ustr );
 
     Sequence< OUString > aAddonMergeNodesSeq = GetNodeNames( aStatusbarMergeRootName );
     sal_uInt32  nCount = aAddonMergeNodesSeq.getLength();
@@ -1600,7 +1594,7 @@ void AddonsOptions_Impl::ReadAndAssociateImages( const OUString& aURL, const OUS
 
     // Loop to create the two possible image names and try to read the bitmap files
     static const char* aExtArray[] = { "_16", "_26" };
-    for ( size_t i = 0; i < SAL_N_ELEMENTS(aExtArray); i++ )
+    for ( size_t i = 0; i < std::size(aExtArray); i++ )
     {
         OUStringBuffer aFileURL( aImageURL );
         aFileURL.appendAscii( aExtArray[i] );

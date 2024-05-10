@@ -25,7 +25,8 @@
 
 #include <tools/sk_app/mac/WindowContextFactory_mac.h>
 
-#include <quartz/ctfonts.hxx>
+#include <quartz/CoreTextFont.hxx>
+#include <quartz/SystemFontList.hxx>
 #include <skia/quartz/cgutils.h>
 
 #include <SkBitmap.h>
@@ -134,7 +135,10 @@ void AquaSkiaSalGraphicsImpl::flushSurfaceToScreenCG()
         // by creating a subset SkImage (which as is said above copies data), or set the x coordinate
         // to 0, which will then make rowBytes() match the actual data.
         mDirtyRect.fLeft = 0;
-        assert(mDirtyRect.width() == pixmap.bounds().width());
+        // Related tdf#156630 pixmaps can be wider than the dirty rectangle
+        // This seems to most commonly occur when SAL_FORCE_HIDPI_SCALING=1
+        // and the native window scale is 2.
+        assert(mDirtyRect.width() <= pixmap.bounds().width());
     }
 
     // tdf#145843 Do not use CGBitmapContextCreate() to create a bitmap context
@@ -233,25 +237,32 @@ bool AquaSkiaSalGraphicsImpl::drawNativeControl(ControlType nType, ControlPart n
     const tools::Long width = boundingRegion.GetWidth() * mScaling;
     const tools::Long height = boundingRegion.GetHeight() * mScaling;
     const size_t bytes = width * height * 4;
-    std::unique_ptr<sal_uInt8[]> data(new sal_uInt8[bytes]);
-    memset(data.get(), 0, bytes);
+    sal_uInt8* data = new sal_uInt8[bytes];
+    memset(data, 0, bytes);
     CGContextRef context = CGBitmapContextCreate(
-        data.get(), width, height, 8, width * 4, GetSalData()->mxRGBSpace,
+        data, width, height, 8, width * 4, GetSalData()->mxRGBSpace,
         SkiaToCGBitmapType(mSurface->imageInfo().colorType(), kPremul_SkAlphaType));
     if (!context)
     {
         SAL_WARN("vcl.skia", "drawNativeControl(): Failed to allocate bitmap context");
+        delete[] data;
         return false;
     }
     // Setup context state for drawing (performDrawNativeControl() e.g. fills background in some cases).
     CGContextSetFillColorSpace(context, GetSalData()->mxRGBSpace);
     CGContextSetStrokeColorSpace(context, GetSalData()->mxRGBSpace);
-    RGBAColor lineColor(mLineColor);
-    CGContextSetRGBStrokeColor(context, lineColor.GetRed(), lineColor.GetGreen(),
-                               lineColor.GetBlue(), lineColor.GetAlpha());
-    RGBAColor fillColor(mFillColor);
-    CGContextSetRGBFillColor(context, fillColor.GetRed(), fillColor.GetGreen(), fillColor.GetBlue(),
-                             fillColor.GetAlpha());
+    if (moLineColor)
+    {
+        RGBAColor lineColor(*moLineColor);
+        CGContextSetRGBStrokeColor(context, lineColor.GetRed(), lineColor.GetGreen(),
+                                   lineColor.GetBlue(), lineColor.GetAlpha());
+    }
+    if (moFillColor)
+    {
+        RGBAColor fillColor(*moFillColor);
+        CGContextSetRGBFillColor(context, fillColor.GetRed(), fillColor.GetGreen(),
+                                 fillColor.GetBlue(), fillColor.GetAlpha());
+    }
     // Adjust for our drawn-to coordinates in the bitmap.
     tools::Rectangle movedRegion(Point(rControlRegion.getX() - boundingRegion.getX(),
                                        rControlRegion.getY() - boundingRegion.getY()),
@@ -266,11 +277,12 @@ bool AquaSkiaSalGraphicsImpl::drawNativeControl(ControlType nType, ControlPart n
     CGContextRelease(context);
     if (bOK)
     {
+        // Let SkBitmap determine when it is safe to delete the pixel buffer
         SkBitmap bitmap;
         if (!bitmap.installPixels(SkImageInfo::Make(width, height,
                                                     mSurface->imageInfo().colorType(),
                                                     kPremul_SkAlphaType),
-                                  data.get(), width * 4))
+                                  data, width * 4, nullptr, nullptr))
             abort();
 
         preDraw();
@@ -287,15 +299,26 @@ bool AquaSkiaSalGraphicsImpl::drawNativeControl(ControlType nType, ControlPart n
                                            boundingRegion.GetWidth(), boundingRegion.GetHeight());
         assert(drawRect.width() * mScaling == bitmap.width()); // no scaling should be needed
         getDrawCanvas()->drawImageRect(bitmap.asImage(), drawRect, SkSamplingOptions());
+        // Related: tdf#156881 flush the canvas after drawing the pixel buffer
+        getDrawCanvas()->flush();
         ++pendingOperationsToFlush; // tdf#136369
         postDraw();
     }
+    // Related: tdf#159529 eliminate possible memory leak
+    // Despite confirming that the release function passed to
+    // SkBitmap.bitmap.installPixels() does get called for every
+    // data array that has been allocated, Apple's Instruments
+    //  indicates that the data is leaking. While it is likely a
+    // false positive, it makes leak analysis difficult so leave
+    // the bitmap mutable. That causes SkBitmap.asImage() to make
+    // a copy of the data and the data can be safely deleted here.
+    delete[] data;
     return bOK;
 }
 
-void AquaSkiaSalGraphicsImpl::drawTextLayout(const GenericSalLayout& rLayout,
-                                             bool bSubpixelPositioning)
+void AquaSkiaSalGraphicsImpl::drawTextLayout(const GenericSalLayout& rLayout)
 {
+    const bool bSubpixelPositioning = rLayout.GetSubpixelPositioning();
     const CoreTextFont& rFont = *static_cast<const CoreTextFont*>(&rLayout.GetFont());
     const vcl::font::FontSelectPattern& rFontSelect = rFont.GetFontSelectPattern();
     int nHeight = rFontSelect.mnHeight;

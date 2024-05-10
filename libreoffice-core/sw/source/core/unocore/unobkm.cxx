@@ -182,26 +182,14 @@ rtl::Reference<SwXBookmark> SwXBookmark::CreateXBookmark(
 }
 
 ::sw::mark::IMark const* SwXBookmark::GetBookmarkInDoc(SwDoc const*const pDoc,
-        const uno::Reference< lang::XUnoTunnel> & xUT)
+        const uno::Reference<uno::XInterface> & xUT)
 {
-    SwXBookmark *const pXBkm(
-            comphelper::getFromUnoTunnel<SwXBookmark>(xUT));
+    SwXBookmark *const pXBkm = dynamic_cast<SwXBookmark*>(xUT.get());
     if (pXBkm && (pDoc == pXBkm->m_pImpl->m_pDoc))
     {
         return pXBkm->m_pImpl->m_pRegisteredBookmark;
     }
     return nullptr;
-}
-
-const uno::Sequence< sal_Int8 > & SwXBookmark::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXBookmarkUnoTunnelId;
-    return theSwXBookmarkUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwXBookmark::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl<SwXBookmark>(rId, this);
 }
 
 void SwXBookmark::attachToRangeEx(
@@ -214,11 +202,8 @@ void SwXBookmark::attachToRangeEx(
         throw uno::RuntimeException();
     }
 
-    const uno::Reference<lang::XUnoTunnel> xRangeTunnel(
-            xTextRange, uno::UNO_QUERY);
-    SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-    OTextCursorHelper* pCursor =
-            comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+    SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xTextRange.get());
+    OTextCursorHelper* pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get());
 
     SwDoc *const pDoc =
         pRange ? &pRange->GetDoc() : (pCursor ? pCursor->GetDoc() : nullptr);
@@ -341,7 +326,7 @@ void SAL_CALL SwXBookmark::setName(const OUString& rName)
     if(pMarkAccess->findMark(rName) != pMarkAccess->getAllMarksEnd())
     {
         throw uno::RuntimeException("setName(): name already in use",
-                static_cast<::cppu::OWeakObject*>(this));
+                getXWeak());
     }
 
     SwPaM aPam(m_pImpl->m_pRegisteredBookmark->GetMarkPos());
@@ -445,7 +430,7 @@ SwXBookmark::setPropertyValue(const OUString& PropertyName,
 
     // nothing to set here
     throw lang::IllegalArgumentException("Property is read-only: "
-            + PropertyName, static_cast< cppu::OWeakObject * >(this), 0 );
+            + PropertyName, getXWeak(), 0 );
 }
 
 uno::Any SAL_CALL SwXBookmark::getPropertyValue(const OUString& rPropertyName)

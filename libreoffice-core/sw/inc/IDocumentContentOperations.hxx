@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SW_INC_IDOCUMENTCONTENTOPERATIONS_HXX
-#define INCLUDED_SW_INC_IDOCUMENTCONTENTOPERATIONS_HXX
+#pragma once
 
 #include <sal/types.h>
 #include <rtl/ustring.hxx>
@@ -186,11 +185,6 @@ public:
         const SfxItemSet* pFlyAttrSet, const SfxItemSet* pGrfAttrSet,
         SwFrameFormat*) = 0;
 
-    virtual SwFlyFrameFormat* InsertGraphicObject(
-        const SwPaM& rRg, const GraphicObject& rGrfObj,
-        const SfxItemSet* pFlyAttrSet,
-        const SfxItemSet* pGrfAttrSet) = 0;
-
     /** Transpose graphic (with undo)
      */
     virtual void ReRead(SwPaM&, const OUString& rGrfName, const OUString& rFltName, const Graphic* pGraphic) = 0;
@@ -255,7 +249,5 @@ public:
 protected:
     virtual ~IDocumentContentOperations() {};
 };
-
-#endif // INCLUDED_SW_INC_IDOCUMENTCONTENTOPERATIONS_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

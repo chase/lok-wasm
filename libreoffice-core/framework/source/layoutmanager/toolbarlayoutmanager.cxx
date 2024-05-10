@@ -543,7 +543,7 @@ bool ToolbarLayoutManager::createToolbar( const OUString& rResourceURL )
             {
                 ToolBox* pToolbar = static_cast<ToolBox *>(pWindow.get());
                 ToolBoxMenuType nMenuType = pToolbar->GetMenuType();
-                if ( aCmdOptions.Lookup( SvtCommandOptions::CMDOPTION_DISABLED, "ConfigureDialog" ))
+                if ( aCmdOptions.LookupDisabled( "ConfigureDialog" ))
                     pToolbar->SetMenuType( nMenuType & ~ToolBoxMenuType::Customize );
                 else
                     pToolbar->SetMenuType( nMenuType | ToolBoxMenuType::Customize );
@@ -1002,7 +1002,7 @@ void ToolbarLayoutManager::resetDockingArea()
 }
 
 void ToolbarLayoutManager::setParentWindow(
-    const uno::Reference< awt::XWindowPeer >& xParentWindow )
+    const uno::Reference< awt::XVclWindowPeer >& xParentWindow )
 {
     static const char DOCKINGAREASTRING[] = "dockingarea";
 
@@ -3903,6 +3903,20 @@ void SAL_CALL ToolbarLayoutManager::elementReplaced( const ui::ConfigurationEven
     if ( bNotify && pParentLayouter )
         pParentLayouter->requestLayout();
 }
+
+void ToolbarLayoutManager::updateToolbarsTips()
+{
+    SolarMutexGuard g;
+
+    for (auto& elem : m_aUIElements)
+    {
+        uno::Reference< ui::XUIElementSettings > xElementSettings(elem.m_xUIElement, uno::UNO_QUERY);
+        if (!xElementSettings.is())
+            continue;
+        xElementSettings->updateSettings();
+    }
+}
+
 
 uno::Reference< ui::XUIElement > ToolbarLayoutManager::getToolbar( std::u16string_view aName )
 {

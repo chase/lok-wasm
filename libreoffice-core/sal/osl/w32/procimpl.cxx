@@ -344,11 +344,10 @@ namespace /* private */
                 ext.equalsIgnoreAsciiCase("btm"));
     }
 
-    const OUString ENV_COMSPEC ("COMSPEC");
     OUString get_batch_processor()
     {
         OUString comspec;
-        osl_getEnvironment(ENV_COMSPEC.pData, &comspec.pData);
+        osl_getEnvironment(u"COMSPEC"_ustr.pData, &comspec.pData);
 
         OSL_ASSERT(comspec.getLength());
 
@@ -422,8 +421,7 @@ oslProcessError SAL_CALL osl_executeProcess_WithRedirectedIO(
             if (!(Options & osl_Process_WAIT) || (Options & osl_Process_DETACHED))
                 flags |= CREATE_NEW_CONSOLE;
 
-            command_line.append(batch_processor);
-            command_line.append(" /c ");
+            command_line.append(batch_processor + " /c ");
         }
         else
             // should we return here in case of error?

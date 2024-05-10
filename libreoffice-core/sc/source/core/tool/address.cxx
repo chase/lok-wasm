@@ -25,6 +25,7 @@
 #include <global.hxx>
 #include <compiler.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <externalrefmgr.hxx>
 
 #include <osl/diagnose.h>
@@ -2194,9 +2195,7 @@ OUString ScRange::Format( const ScDocument& rDoc, ScRefFlags nFlags,
                 pDoc = nullptr;
             else
                 nFlags |= ScRefFlags::TAB_3D;
-            OUString aName(aEnd.Format(nFlags, pDoc, rDetails));
-            r.append(":");
-            r.append(aName);
+            r.append(":" + aEnd.Format(nFlags, pDoc, rDetails));
         }
         break;
     }
@@ -2373,30 +2372,17 @@ bool ScRange::MoveSticky( const ScDocument& rDoc, SCCOL dx, SCROW dy, SCTAB dz, 
 
 void ScRange::IncColIfNotLessThan(const ScDocument& rDoc, SCCOL nStartCol, SCCOL nOffset)
 {
-    SCCOL offset;
-    if (aStart.Col() > nStartCol)
+    if (aStart.Col() >= nStartCol)
     {
-        offset = nOffset;
-        if (nStartCol + nOffset > aStart.Col())
-            offset = aStart.Col() - nStartCol;
-        else if (nStartCol - nOffset > aStart.Col())
-            offset = -1 * (aStart.Col() - nStartCol);
-
-        aStart.IncCol(offset);
+        aStart.IncCol(nOffset);
         if (aStart.Col() < 0)
             aStart.SetCol(0);
         else if(aStart.Col() > rDoc.MaxCol())
             aStart.SetCol(rDoc.MaxCol());
     }
-    if (aEnd.Col() > nStartCol)
+    if (aEnd.Col() >= nStartCol)
     {
-        offset = nOffset;
-        if (nStartCol + nOffset > aEnd.Col())
-            offset = aEnd.Col() - nStartCol;
-        else if (nStartCol - nOffset > aEnd.Col())
-            offset = -1 * (aEnd.Col() - nStartCol);
-
-        aEnd.IncCol(offset);
+        aEnd.IncCol(nOffset);
         if (aEnd.Col() < 0)
             aEnd.SetCol(0);
         else if(aEnd.Col() > rDoc.MaxCol())
@@ -2406,30 +2392,17 @@ void ScRange::IncColIfNotLessThan(const ScDocument& rDoc, SCCOL nStartCol, SCCOL
 
 void ScRange::IncRowIfNotLessThan(const ScDocument& rDoc, SCROW nStartRow, SCROW nOffset)
 {
-    SCROW offset;
-    if (aStart.Row() > nStartRow)
+    if (aStart.Row() >= nStartRow)
     {
-        offset = nOffset;
-        if (nStartRow + nOffset > aStart.Row())
-            offset = aStart.Row() - nStartRow;
-        else if (nStartRow - nOffset > aStart.Row())
-            offset = -1 * (aStart.Row() - nStartRow);
-
-        aStart.IncRow(offset);
+        aStart.IncRow(nOffset);
         if (aStart.Row() < 0)
             aStart.SetRow(0);
         else if(aStart.Row() > rDoc.MaxRow())
             aStart.SetRow(rDoc.MaxRow());
     }
-    if (aEnd.Row() > nStartRow)
+    if (aEnd.Row() >= nStartRow)
     {
-        offset = nOffset;
-        if (nStartRow + nOffset > aEnd.Row())
-            offset = aEnd.Row() - nStartRow;
-        else if (nStartRow - nOffset > aEnd.Row())
-            offset = -1 * (aEnd.Row() - nStartRow);
-
-        aEnd.IncRow(offset);
+        aEnd.IncRow(nOffset);
         if (aEnd.Row() < 0)
             aEnd.SetRow(0);
         else if(aEnd.Row() > rDoc.MaxRow())

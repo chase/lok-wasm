@@ -29,13 +29,14 @@
 #include <iostream>
 #include <osl/file.hxx>
 #include <osl/process.h>
+#include <o3tl/string_view.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/strbuf.hxx>
 #include <unicode/regex.h>
 
 using namespace osl;
 
-constexpr OStringLiteral XML_LANG = "xml-lang";
+constexpr OString XML_LANG = "xml-lang"_ostr;
 
 
 
@@ -305,22 +306,22 @@ XMLFile::XMLFile( OString _sFileName ) // the file name, empty if created from m
     : XMLParentNode( nullptr )
     , m_sFileName(std::move( _sFileName ))
 {
-    m_aNodes_localize.emplace( OString("bookmark") , true );
-    m_aNodes_localize.emplace( OString("variable") , true );
-    m_aNodes_localize.emplace( OString("paragraph") , true );
-    m_aNodes_localize.emplace( OString("h1") , true );
-    m_aNodes_localize.emplace( OString("h2") , true );
-    m_aNodes_localize.emplace( OString("h3") , true );
-    m_aNodes_localize.emplace( OString("h4") , true );
-    m_aNodes_localize.emplace( OString("h5") , true );
-    m_aNodes_localize.emplace( OString("h6") , true );
-    m_aNodes_localize.emplace( OString("note") , true );
-    m_aNodes_localize.emplace( OString("tip") , true );
-    m_aNodes_localize.emplace( OString("warning") , true );
-    m_aNodes_localize.emplace( OString("alt") , true );
-    m_aNodes_localize.emplace( OString("caption") , true );
-    m_aNodes_localize.emplace( OString("title") , true );
-    m_aNodes_localize.emplace( OString("link") , true );
+    m_aNodes_localize.emplace( "bookmark"_ostr , true );
+    m_aNodes_localize.emplace( "variable"_ostr , true );
+    m_aNodes_localize.emplace( "paragraph"_ostr , true );
+    m_aNodes_localize.emplace( "h1"_ostr , true );
+    m_aNodes_localize.emplace( "h2"_ostr , true );
+    m_aNodes_localize.emplace( "h3"_ostr , true );
+    m_aNodes_localize.emplace( "h4"_ostr , true );
+    m_aNodes_localize.emplace( "h5"_ostr , true );
+    m_aNodes_localize.emplace( "h6"_ostr , true );
+    m_aNodes_localize.emplace( "note"_ostr , true );
+    m_aNodes_localize.emplace( "tip"_ostr , true );
+    m_aNodes_localize.emplace( "warning"_ostr , true );
+    m_aNodes_localize.emplace( "alt"_ostr , true );
+    m_aNodes_localize.emplace( "caption"_ostr , true );
+    m_aNodes_localize.emplace( "title"_ostr , true );
+    m_aNodes_localize.emplace( "link"_ostr , true );
 }
 
 void XMLFile::Extract()
@@ -331,7 +332,7 @@ void XMLFile::Extract()
 
 void XMLFile::InsertL10NElement( XMLElement* pElement )
 {
-    OString sId, sLanguage("en-US");
+    OString sId, sLanguage("en-US"_ostr);
     LangHashMap* pElem;
 
     if( pElement->GetAttributeList() != nullptr )
@@ -856,7 +857,7 @@ bool SimpleXMLParser::Execute( const OString &rFileName, XMLFile* pXMLFile )
     m_aErrorInformation.m_eCode = XML_ERROR_NONE;
     m_aErrorInformation.m_nLine = 0;
     m_aErrorInformation.m_nColumn = 0;
-    m_aErrorInformation.m_sMessage = "ERROR: Unable to open file ";
+    m_aErrorInformation.m_sMessage = "ERROR: Unable to open file "_ostr;
     m_aErrorInformation.m_sMessage += rFileName;
 
     OUString aFileURL(lcl_pathnameToAbsoluteUrl(rFileName));
@@ -894,7 +895,7 @@ bool SimpleXMLParser::Execute( const OString &rFileName, XMLFile* pXMLFile )
         m_aErrorInformation.m_sMessage = "File " + pXMLFile->GetName() + " parsed successfully";
     }
     else
-        m_aErrorInformation.m_sMessage = "XML-File parsed successfully";
+        m_aErrorInformation.m_sMessage = "XML-File parsed successfully"_ostr;
 
     bool result = XML_Parse(m_aParser, static_cast< char * >(p), s, true);
     if (!result)
@@ -903,7 +904,7 @@ bool SimpleXMLParser::Execute( const OString &rFileName, XMLFile* pXMLFile )
         m_aErrorInformation.m_nLine = XML_GetErrorLineNumber( m_aParser );
         m_aErrorInformation.m_nColumn = XML_GetErrorColumnNumber( m_aParser );
 
-        m_aErrorInformation.m_sMessage = "ERROR: ";
+        m_aErrorInformation.m_sMessage = "ERROR: "_ostr;
         if ( !pXMLFile->GetName().isEmpty())
             m_aErrorInformation.m_sMessage += pXMLFile->GetName();
         else
@@ -1060,7 +1061,7 @@ bool lcl_isTag( const icu::UnicodeString& rString )
 
 OString XMLUtil::QuotHTML( const OString &rString )
 {
-    if( rString.trim().isEmpty() )
+    if( o3tl::trim(rString).empty() )
         return rString;
     UErrorCode nIcuErr = U_ZERO_ERROR;
     static const sal_uInt32 nSearchFlags =

@@ -29,7 +29,6 @@
 #include "postithelper.hxx"
 #include "swrect.hxx"
 #include "SidebarWindowsTypes.hxx"
-#include <optional>
 #include <annotationmark.hxx>
 
 class EditView;
@@ -83,7 +82,7 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
 
         void       InitAnswer(OutlinerParaObject const & rText);
 
-        bool IsProtected() const;
+        bool IsReadOnlyOrProtected() const;
 
         void SetSize( const Size& rNewSize );
         void SetPosSizePixelRect( tools::Long nX,
@@ -171,8 +170,6 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
 
         bool IsMouseOverSidebarWin() const { return mbMouseOver; }
 
-        void SetLanguage(const SvxLanguageItem& rNewItem);
-
         void ChangeSidebarItem( SwSidebarItem const & rSidebarItem );
         virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessible() override;
 
@@ -194,7 +191,6 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
 
         // Get annotation paraId or generate one if it doesn't exist
         sal_uInt32 GetParaId();
-        sal_uInt32 GetPostItId();
         // Used to generate a unique paraId
         static sal_uInt32 CreateUniqueParaId();
 
@@ -214,22 +210,18 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
 
         virtual void    LoseFocus() override;
         virtual void    GetFocus() override;
-        virtual void    DataChanged( const DataChangedEvent& rDCEvt ) override;
 
         void        SetSizePixel( const Size& rNewSize ) override;
-        SfxItemSet  DefaultItem();
 
         DECL_DLLPRIVATE_LINK(ModifyHdl, LinkParamNone*, void);
         DECL_DLLPRIVATE_LINK(ScrollHdl, weld::ScrolledWindow&, void);
         DECL_DLLPRIVATE_LINK(DeleteHdl, void*, void);
         DECL_DLLPRIVATE_LINK(ToggleHdl, weld::Toggleable&, void);
-        DECL_DLLPRIVATE_LINK(SelectHdl, const OString&, void);
+        DECL_DLLPRIVATE_LINK(SelectHdl, const OUString&, void);
         DECL_DLLPRIVATE_LINK(KeyInputHdl, const KeyEvent&, bool);
         DECL_DLLPRIVATE_LINK(MouseMoveHdl, const MouseEvent&, bool);
 
         sal_uInt32 CountFollowing();
-
-        SvxLanguageItem GetLanguage() const;
 
         void SetMenuButtonColors();
 
@@ -283,7 +275,6 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
         SwPostItField*       mpField;
 
         rtl::Reference<sw::sidebarwindows::SidebarWinAccessible> mxSidebarWinAccessible;
-        mutable std::optional<sal_Int32> moMetaHeight;
 };
 
 } // end of namespace sw::annotation

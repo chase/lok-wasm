@@ -89,7 +89,7 @@ bool AccessibleContextBase::SetState (sal_Int64 aState)
             CommitChange(
                 AccessibleEventId::STATE_CHANGED,
                 aNewValue,
-                uno::Any());
+                uno::Any(), -1);
         }
         return true;
     }
@@ -112,7 +112,7 @@ bool AccessibleContextBase::ResetState (sal_Int64 aState)
         CommitChange(
             AccessibleEventId::STATE_CHANGED,
             uno::Any(),
-            aOldValue);
+            aOldValue, -1);
         return true;
     }
     else
@@ -128,7 +128,7 @@ bool AccessibleContextBase::GetState (sal_Int64 aState)
 
 
 void AccessibleContextBase::SetRelationSet (
-    const uno::Reference<XAccessibleRelationSet>& rxNewRelationSet)
+    const rtl::Reference<utl::AccessibleRelationSetHelper>& rxNewRelationSet)
 {
     // Try to emit some meaningful events indicating differing relations in
     // both sets.
@@ -144,7 +144,7 @@ void AccessibleContextBase::SetRelationSet (
     for (int i=0; aRelationDescriptors[i].first!=AccessibleRelationType::INVALID; i++)
         if (mxRelationSet->containsRelation(aRelationDescriptors[i].first)
         != rxNewRelationSet->containsRelation(aRelationDescriptors[i].first))
-        CommitChange (aRelationDescriptors[i].second, uno::Any(), uno::Any());
+        CommitChange (aRelationDescriptors[i].second, uno::Any(), uno::Any(), -1);
 
     mxRelationSet = rxNewRelationSet;
 }
@@ -268,12 +268,9 @@ uno::Reference<XAccessibleRelationSet> SAL_CALL
     ThrowIfDisposed ();
 
     // Create a copy of the relation set and return it.
-    ::utl::AccessibleRelationSetHelper* pRelationSet =
-        static_cast< ::utl::AccessibleRelationSetHelper*>(mxRelationSet.get());
-    if (pRelationSet != nullptr)
+    if (mxRelationSet)
     {
-        return uno::Reference<XAccessibleRelationSet> (
-            new ::utl::AccessibleRelationSetHelper (*pRelationSet));
+        return new ::utl::AccessibleRelationSetHelper(*mxRelationSet);
     }
     else
         return uno::Reference<XAccessibleRelationSet>(nullptr);
@@ -404,6 +401,8 @@ void SAL_CALL AccessibleContextBase::disposing()
         comphelper::AccessibleEventNotifier::revokeClientNotifyDisposing( mnClientId, *this );
         mnClientId =  0;
     }
+    mxParent.clear();
+    mxRelationSet.clear();
 }
 
 
@@ -425,7 +424,7 @@ void AccessibleContextBase::SetAccessibleDescription (
     CommitChange(
         AccessibleEventId::DESCRIPTION_CHANGED,
         aNewValue,
-        aOldValue);
+        aOldValue, -1);
 }
 
 
@@ -447,7 +446,7 @@ void AccessibleContextBase::SetAccessibleName (
     CommitChange(
         AccessibleEventId::NAME_CHANGED,
         aNewValue,
-        aOldValue);
+        aOldValue, -1);
 }
 
 
@@ -460,7 +459,8 @@ OUString AccessibleContextBase::CreateAccessibleName()
 void AccessibleContextBase::CommitChange (
     sal_Int16 nEventId,
     const uno::Any& rNewValue,
-    const uno::Any& rOldValue)
+    const uno::Any& rOldValue,
+    sal_Int32 nValueIndex)
 {
     // Do not call FireEvent and do not even create the event object when no
     // listener has been registered yet.  Creating the event object can
@@ -471,7 +471,8 @@ void AccessibleContextBase::CommitChange (
             static_cast<XAccessibleContext*>(this),
             nEventId,
             rNewValue,
-            rOldValue);
+            rOldValue,
+            nValueIndex);
 
         FireEvent (aEvent);
     }
@@ -490,7 +491,7 @@ void AccessibleContextBase::ThrowIfDisposed()
     if (rBHelper.bDisposed || rBHelper.bInDispose)
     {
         throw lang::DisposedException ("object has been already disposed",
-            static_cast<uno::XWeak*>(this));
+            getXWeak());
     }
 }
 

@@ -121,7 +121,7 @@ void dispatchExecute(SfxViewShell const * pViewShell, sal_uInt16 nSlot)
 {
     SfxViewFrame* pViewFrame = nullptr;
     if ( pViewShell )
-        pViewFrame = pViewShell->GetViewFrame();
+        pViewFrame = &pViewShell->GetViewFrame();
     if ( pViewFrame )
     {
         SfxDispatcher* pDispatcher = pViewFrame->GetDispatcher();
@@ -365,7 +365,7 @@ void PrintOutHelper( SfxViewShell const * pViewShell, const uno::Any& From, cons
     PrToFileName >>= sFileName;
     SfxViewFrame* pViewFrame = nullptr;
     if ( pViewShell )
-        pViewFrame = pViewShell->GetViewFrame();
+        pViewFrame = &pViewShell->GetViewFrame();
     if ( !pViewFrame )
         return;
 
@@ -424,7 +424,7 @@ void PrintPreviewHelper( const css::uno::Any& /*EnableChanges*/, SfxViewShell co
 {
     SfxViewFrame* pViewFrame = nullptr;
     if ( pViewShell )
-        pViewFrame = pViewShell->GetViewFrame();
+        pViewFrame = &pViewShell->GetViewFrame();
     if ( pViewFrame )
     {
         if ( !pViewFrame->GetFrame().IsInPlace() )
@@ -625,8 +625,8 @@ double PixelsToPoints( const css::uno::Reference< css::awt::XDevice >& xDevice, 
 }
 
 ConcreteXShapeGeometryAttributes::ConcreteXShapeGeometryAttributes( const css::uno::Reference< css::drawing::XShape >& xShape )
+  : m_aShapeHelper( xShape )
 {
-    m_pShapeHelper.reset( new ShapeHelper( xShape ) );
 }
 ConcreteXShapeGeometryAttributes::~ConcreteXShapeGeometryAttributes()
 {
@@ -854,14 +854,14 @@ double UserFormGeometryHelper::getOffsetY() const
     return mfOffsetY;
 }
 
-constexpr OUStringLiteral saPosXName = u"PositionX";
-constexpr OUStringLiteral saPosYName = u"PositionY";
-constexpr OUStringLiteral saWidthName = u"Width";
-constexpr OUStringLiteral saHeightName = u"Height";
+constexpr OUString saPosXName = u"PositionX"_ustr;
+constexpr OUString saPosYName = u"PositionY"_ustr;
+constexpr OUString saWidthName = u"Width"_ustr;
+constexpr OUString saHeightName = u"Height"_ustr;
 
 double UserFormGeometryHelper::implGetPos( bool bPosY ) const
 {
-    sal_Int32 nPosAppFont = mxModelProps->getPropertyValue( bPosY ? OUString(saPosYName) : OUString(saPosXName) ).get< sal_Int32 >();
+    sal_Int32 nPosAppFont = mxModelProps->getPropertyValue( bPosY ? saPosYName : saPosXName ).get< sal_Int32 >();
     // appfont to pixel
     awt::Point aPosPixel = mxUnitConv->convertPointToPixel( awt::Point( nPosAppFont, nPosAppFont ), util::MeasureUnit::APPFONT );
     // pixel to VBA points
@@ -876,12 +876,12 @@ void UserFormGeometryHelper::implSetPos( double fPos, bool bPosY )
     awt::Point aPosPixel = mxUnitConv->convertPointToPixel( awt::Point( nPosPixel, nPosPixel ), util::MeasureUnit::POINT );
     // pixel to appfont
     awt::Point aPosAppFont = mxUnitConv->convertPointToLogic( aPosPixel, util::MeasureUnit::APPFONT );
-    mxModelProps->setPropertyValue( bPosY ? OUString(saPosYName) : OUString(saPosXName), uno::Any( bPosY ? aPosAppFont.Y : aPosAppFont.X ) );
+    mxModelProps->setPropertyValue( bPosY ? saPosYName : saPosXName, uno::Any( bPosY ? aPosAppFont.Y : aPosAppFont.X ) );
 }
 
 double UserFormGeometryHelper::implGetSize( bool bHeight, bool bOuter ) const
 {
-    sal_Int32 nSizeAppFont = mxModelProps->getPropertyValue( bHeight ? OUString(saHeightName) : OUString(saWidthName) ).get< sal_Int32 >();
+    sal_Int32 nSizeAppFont = mxModelProps->getPropertyValue( bHeight ? saHeightName : saWidthName ).get< sal_Int32 >();
     // appfont to pixel
     awt::Size aSizePixel = mxUnitConv->convertSizeToPixel( awt::Size( nSizeAppFont, nSizeAppFont ), util::MeasureUnit::APPFONT );
 
@@ -892,7 +892,7 @@ double UserFormGeometryHelper::implGetSize( bool bHeight, bool bOuter ) const
     {
         if( const vcl::Window* pWindow = VCLUnoHelper::GetWindow( mxWindow ) )
         {
-            tools::Rectangle aOuterRect = pWindow->GetWindowExtentsRelative( nullptr );
+            AbsoluteScreenPixelRectangle aOuterRect = pWindow->GetWindowExtentsAbsolute();
             aSizePixel = awt::Size( aOuterRect.getOpenWidth(), aOuterRect.getOpenHeight() );
         }
     }
@@ -916,7 +916,7 @@ void UserFormGeometryHelper::implSetSize( double fSize, bool bHeight, bool bOute
     {
         if( const vcl::Window* pWindow = VCLUnoHelper::GetWindow( mxWindow ) )
         {
-            tools::Rectangle aOuterRect = pWindow->GetWindowExtentsRelative( nullptr );
+            AbsoluteScreenPixelRectangle aOuterRect = pWindow->GetWindowExtentsAbsolute();
             if( !aOuterRect.IsEmpty() )
             {
                 awt::Rectangle aInnerRect = mxWindow->getPosSize();
@@ -929,42 +929,42 @@ void UserFormGeometryHelper::implSetSize( double fSize, bool bHeight, bool bOute
     }
 
     awt::Size aSizeAppFont = mxUnitConv->convertSizeToLogic( aSizePixel, util::MeasureUnit::APPFONT );
-    mxModelProps->setPropertyValue( bHeight ? OUString(saHeightName) : OUString(saWidthName), uno::Any( bHeight ? aSizeAppFont.Height : aSizeAppFont.Width ) );
+    mxModelProps->setPropertyValue( bHeight ? saHeightName : saWidthName, uno::Any( bHeight ? aSizeAppFont.Height : aSizeAppFont.Width ) );
 }
 
 
 double ConcreteXShapeGeometryAttributes::getLeft() const
 {
-    return m_pShapeHelper->getLeft();
+    return m_aShapeHelper.getLeft();
 }
 void ConcreteXShapeGeometryAttributes::setLeft( double nLeft )
 {
-    m_pShapeHelper->setLeft( nLeft );
+    m_aShapeHelper.setLeft( nLeft );
 }
 double ConcreteXShapeGeometryAttributes::getTop() const
 {
-    return m_pShapeHelper->getTop();
+    return m_aShapeHelper.getTop();
 }
 void ConcreteXShapeGeometryAttributes::setTop( double nTop )
 {
-    m_pShapeHelper->setTop( nTop );
+    m_aShapeHelper.setTop( nTop );
 }
 
 double ConcreteXShapeGeometryAttributes::getHeight() const
 {
-    return m_pShapeHelper->getHeight();
+    return m_aShapeHelper.getHeight();
 }
 void ConcreteXShapeGeometryAttributes::setHeight( double nHeight )
 {
-    m_pShapeHelper->setHeight( nHeight );
+    m_aShapeHelper.setHeight( nHeight );
 }
 double ConcreteXShapeGeometryAttributes::getWidth() const
 {
-    return m_pShapeHelper->getWidth();
+    return m_aShapeHelper.getWidth();
 }
 void ConcreteXShapeGeometryAttributes::setWidth( double nWidth)
 {
-    m_pShapeHelper->setWidth( nWidth );
+    m_aShapeHelper.setWidth( nWidth );
 }
 
 

@@ -89,7 +89,6 @@
 #include <vcl/TypeSerializer.hxx>
 
 #include "FilterConfigCache.hxx"
-#include "graphicfilter_internal.hxx"
 
 #include <graphic/GraphicFormatDetector.hxx>
 #include <graphic/GraphicReader.hxx>
@@ -101,13 +100,9 @@
 // and somewhen later enable the support unconditionally.
 static bool supportNativeWebp()
 {
+    // Enable support only for unittests
     const char* const testname = getenv("LO_TESTNAME");
-    if(testname == nullptr)
-        return false;
-    // Enable support only for those unittests that test it.
-    if( std::string_view("_anonymous_namespace___GraphicTest__testUnloadedGraphicLoading_") == testname
-        || std::string_view("VclFiltersTest__testExportImport_") == testname
-        || o3tl::starts_with(std::string_view(testname), "WebpFilterTest__"))
+    if(testname)
         return true;
     return false;
 }
@@ -140,23 +135,6 @@ public:
 }
 
 // Helper functions
-
-sal_uInt8* ImplSearchEntry( sal_uInt8* pSource, sal_uInt8 const * pDest, sal_uLong nComp, sal_uLong nSize )
-{
-    while ( nComp-- >= nSize )
-    {
-        sal_uLong i;
-        for ( i = 0; i < nSize; i++ )
-        {
-            if ( ( pSource[i]&~0x20 ) != ( pDest[i]&~0x20 ) )
-                break;
-        }
-        if ( i == nSize )
-            return pSource;
-        pSource++;
-    }
-    return nullptr;
-}
 
 static OUString ImpGetExtension( std::u16string_view rPath )
 {
@@ -512,7 +490,7 @@ struct GraphicImportContext
     std::shared_ptr<Graphic> m_pGraphic;
     /// Write pixel data using this access.
     std::unique_ptr<BitmapScopedWriteAccess> m_pAccess;
-    std::unique_ptr<AlphaScopedWriteAccess> m_pAlphaAccess;
+    std::unique_ptr<BitmapScopedWriteAccess> m_pAlphaAccess;
     // Need to have an AlphaMask instance to keep its lifetime.
     AlphaMask mAlphaMask;
     /// Signals if import finished correctly.
@@ -634,8 +612,8 @@ void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGra
                             // may be also a mask, not alpha). So BitmapEx::GetAlpha() returns
                             // a temporary, and direct access to the Bitmap wouldn't work
                             // with AlphaScopedBitmapAccess. *sigh*
-                            rContext.mAlphaMask = rBitmapEx.GetAlpha();
-                            rContext.m_pAlphaAccess = std::make_unique<AlphaScopedWriteAccess>(rContext.mAlphaMask);
+                            rContext.mAlphaMask = rBitmapEx.GetAlphaMask();
+                            rContext.m_pAlphaAccess = std::make_unique<BitmapScopedWriteAccess>(rContext.mAlphaMask);
                         }
                         rContext.m_pStream->Seek(rContext.m_nStreamBegin);
                         if (bThreads)
@@ -657,10 +635,10 @@ void GraphicFilter::ImportGraphics(std::vector< std::shared_ptr<Graphic> >& rGra
     // Process data after import.
     for (auto& rContext : aContexts)
     {
-        if(rContext.m_pAlphaAccess) // Need to move the AlphaMask back to the BitmapEx.
-            *rContext.m_pGraphic = BitmapEx( rContext.m_pGraphic->GetBitmapExRef().GetBitmap(), rContext.mAlphaMask );
         rContext.m_pAccess.reset();
         rContext.m_pAlphaAccess.reset();
+        if (!rContext.mAlphaMask.IsEmpty()) // Need to move the AlphaMask back to the BitmapEx.
+            *rContext.m_pGraphic = BitmapEx( rContext.m_pGraphic->GetBitmapExRef().GetBitmap(), rContext.mAlphaMask );
 
         if (rContext.m_nStatus == ERRCODE_NONE && (rContext.m_eLinkType != GfxLinkType::NONE) && !rContext.m_pGraphic->GetReaderContext())
         {
@@ -709,7 +687,7 @@ void GraphicFilter::MakeGraphicsAvailableThreaded(std::vector<Graphic*>& graphic
         {
             // Graphic objects share internal ImpGraphic, do not process any of those twice.
             const auto predicate = [graphic](Graphic* item) { return item->ImplGetImpGraphic() == graphic->ImplGetImpGraphic(); };
-            if( std::find_if(toLoad.begin(), toLoad.end(), predicate ) == toLoad.end())
+            if( std::none_of(toLoad.begin(), toLoad.end(), predicate ))
                 toLoad.push_back( graphic );
         }
     }
@@ -914,7 +892,7 @@ Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream, sal_uInt64 size
         {
             bool bAnimated = false;
             Size aLogicSize;
-            if (eLinkType == GfxLinkType::NativeGif)
+            if (eLinkType == GfxLinkType::NativeGif && !aGraphicContent.isEmpty())
             {
                 std::shared_ptr<SvStream> pMemoryStream = aGraphicContent.getAsStream();
                 bAnimated = IsGIFAnimated(*pMemoryStream, aLogicSize);
@@ -964,11 +942,12 @@ ErrCode GraphicFilter::readPNG(SvStream & rStream, Graphic & rGraphic, GfxLinkTy
     }
 
     // PNG has no GIF chunk
+    Graphic aGraphic;
     vcl::PngImageReader aPNGReader(rStream);
-    BitmapEx aBitmapEx(aPNGReader.read());
-    if (!aBitmapEx.IsEmpty())
+    aPNGReader.read(aGraphic);
+    if (!aGraphic.GetBitmapEx().IsEmpty())
     {
-        rGraphic = aBitmapEx;
+        rGraphic = aGraphic;
         rLinkType = GfxLinkType::NativePng;
     }
     else
@@ -1722,6 +1701,16 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, std::u16string_vi
                 if( rOStm.GetError() )
                     nStatus = ERRCODE_GRFILTER_IOERROR;
             }
+            else if ( aFilterName.equalsIgnoreAsciiCase( EXP_APNG ) )
+            {
+                vcl::PngImageWriter aPNGWriter( rOStm );
+                if ( pFilterData )
+                    aPNGWriter.setParameters( *pFilterData );
+                aPNGWriter.write( aGraphic );
+
+                if( rOStm.GetError() )
+                    nStatus = ERRCODE_GRFILTER_IOERROR;
+            }
             else if( aFilterName.equalsIgnoreAsciiCase( EXP_SVG ) || aFilterName.equalsIgnoreAsciiCase( EXP_SVGZ ) )
             {
                 bool bDone(false);
@@ -1774,7 +1763,7 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, std::u16string_vi
                             if( xActiveDataSource.is() )
                             {
                                 const css::uno::Reference< css::uno::XInterface > xStmIf(
-                                    static_cast< ::cppu::OWeakObject* >( new ImpFilterOutputStream( *rTempStm ) ) );
+                                    getXWeak( new ImpFilterOutputStream( *rTempStm ) ) );
 
                                 SvMemoryStream aMemStm( 65535, 65535 );
 
@@ -1819,7 +1808,7 @@ ErrCode GraphicFilter::ExportGraphic( const Graphic& rGraphic, std::u16string_vi
         aCodec.BeginCompression( ZCODEC_DEFAULT_COMPRESSION, /*gzLib*/true );
         // the inner modify time/filename doesn't really matter in this context because
         // compressed graphic formats are meant to be opened as is - not to be extracted
-        aCodec.SetCompressionMetadata( "inner", 0, nUncompressedCRC32 );
+        aCodec.SetCompressionMetadata( "inner"_ostr, 0, nUncompressedCRC32 );
         aCodec.Compress( rCompressableStm, rOStm );
         tools::Long nCompressedLength = aCodec.EndCompression();
         if ( rOStm.GetError() || nCompressedLength <= 0 )

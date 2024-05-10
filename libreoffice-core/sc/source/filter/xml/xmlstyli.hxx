@@ -24,6 +24,7 @@
 #include <xmloff/xmlictxt.hxx>
 #include <xmloff/prstylei.hxx>
 #include <xmloff/xmlimppr.hxx>
+#include <xmloff/XMLShapeStyleContext.hxx>
 #include <xmloff/XMLTextMasterPageContext.hxx>
 #include <xmloff/txtstyli.hxx>
 #include "xmlimprt.hxx"
@@ -62,11 +63,13 @@ public:
             ::std::vector< XMLPropertyState >& rProperties, sal_Int32 nStartIndex, sal_Int32 nEndIndex ) const override;
 };
 
+class XMLTableStylesContext;
+
 class XMLTableStyleContext : public XMLPropStyleContext
 {
     OUString             sDataStyleName;
     OUString               sPageStyle;
-    SvXMLStylesContext*         pStyles;
+    XMLTableStylesContext*      pStyles;
     sal_Int32                   nNumberFormat;
     SCTAB                       nLastSheet;
     bool                        bParentSet;
@@ -84,7 +87,7 @@ protected:
 public:
 
     XMLTableStyleContext( ScXMLImport& rImport,
-            SvXMLStylesContext& rStyles, XmlStyleFamily nFamily, bool bDefaultStyle = false );
+            XMLTableStylesContext& rStyles, XmlStyleFamily nFamily, bool bDefaultStyle = false );
     virtual ~XMLTableStyleContext() override;
 
     virtual css::uno::Reference< css::xml::sax::XFastContextHandler > SAL_CALL createFastChildContext(
@@ -115,6 +118,7 @@ class XMLTableStylesContext : public SvXMLStylesContext
     css::uno::Reference< css::container::XNameContainer > xColumnStyles;
     css::uno::Reference< css::container::XNameContainer > xRowStyles;
     css::uno::Reference< css::container::XNameContainer > xTableStyles;
+    css::uno::Reference< css::container::XNameContainer > xGraphicStyles;
     sal_Int32 nNumberFormatIndex;
     sal_Int32 nConditionalFormatIndex;
     sal_Int32 nCellStyleIndex;
@@ -220,6 +224,12 @@ public:
     // override FillPropertySet to store style information
     virtual void FillPropertySet(
             const css::uno::Reference< css::beans::XPropertySet > & rPropSet ) override;
+};
+
+class ScShapeStyleContext : public XMLShapeStyleContext
+{
+    using XMLShapeStyleContext::XMLShapeStyleContext;
+    void Finish(bool bOverwrite) override;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -20,6 +20,7 @@
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XDocumentProperties.hpp>
 #include <com/sun/star/frame/XModel.hpp>
+#include <o3tl/string_view.hxx>
 #include <osl/diagnose.h>
 #include <docsh.hxx>
 #include <IDocumentFieldsAccess.hxx>
@@ -43,7 +44,7 @@ namespace {
 
 struct HTMLNumFormatTableEntry
 {
-    const char *pName;
+    std::string_view pName;
     NfIndexTableOffset eFormat;
 };
 
@@ -82,7 +83,7 @@ HTMLNumFormatTableEntry const aHTMLDateFieldFormatTable[] =
     { "MD",             NF_DATE_DIN_MMDD        },
     { "YMD",        NF_DATE_DIN_YYMMDD      },
     { "YYMD",       NF_DATE_DIN_YYYYMMDD    },
-    { nullptr,                    NF_NUMERIC_START }
+    { {},                    NF_NUMERIC_START }
 };
 
 HTMLNumFormatTableEntry const aHTMLTimeFieldFormatTable[] =
@@ -90,7 +91,7 @@ HTMLNumFormatTableEntry const aHTMLTimeFieldFormatTable[] =
     { "SYS",     NF_TIME_HHMMSS },
     { "SSMM24",      NF_TIME_HHMM },
     { "SSMM12",      NF_TIME_HHMMAMPM },
-    { nullptr,                 NF_NUMERIC_START }
+    { {},            NF_NUMERIC_START }
 };
 
 HTMLOptionEnum<SvxNumType> const aHTMLPageNumFieldFormatTable[] =
@@ -196,12 +197,12 @@ HTMLOptionEnum<SwFileNameFormat> const aHTMLFileNameFieldFormatTable[] =
     { nullptr,                          SwFileNameFormat(0) }
 };
 
-SvxNumType SwHTMLParser::GetNumType( const OUString& rStr, SvxNumType nDfltType )
+SvxNumType SwHTMLParser::GetNumType( std::u16string_view rStr, SvxNumType nDfltType )
 {
     const HTMLOptionEnum<SvxNumType> *pOptEnums = aHTMLPageNumFieldFormatTable;
     while( pOptEnums->pName )
     {
-        if( rStr.equalsIgnoreAsciiCaseAscii( pOptEnums->pName ) )
+        if( o3tl::equalsIgnoreAsciiCase( rStr, pOptEnums->pName ) )
             return pOptEnums->nValue;
         pOptEnums++;
     }
@@ -354,7 +355,7 @@ void SwHTMLParser::NewField()
             if( pFormatOption )
             {
                 const OUString& rFormat = pFormatOption->GetString();
-                for( int k = 0; pFormatTable[k].pName; ++k )
+                for( int k = 0; !pFormatTable[k].pName.empty(); ++k )
                 {
                     if( rFormat.equalsIgnoreAsciiCaseAscii( pFormatTable[k].pName ) )
                     {
@@ -584,23 +585,23 @@ void SwHTMLParser::InsertFieldText()
     }
 }
 
-void SwHTMLParser::InsertCommentText( const char *pTag )
+void SwHTMLParser::InsertCommentText( std::string_view pTag )
 {
     bool bEmpty = m_aContents.isEmpty();
     if( !bEmpty )
         m_aContents += "\n";
 
     m_aContents += aToken;
-    if( bEmpty && pTag )
+    if( bEmpty && !pTag.empty() )
     {
         m_aContents = OUString::Concat("HTML: <") + OUString::createFromAscii(pTag) + ">" + m_aContents;
     }
 }
 
-void SwHTMLParser::InsertComment( const OUString& rComment, const char *pTag )
+void SwHTMLParser::InsertComment( const OUString& rComment, std::string_view pTag )
 {
     OUString aComment( rComment );
-    if( pTag )
+    if( !pTag.empty() )
     {
         aComment += "</" +
             OUString::createFromAscii(pTag) +

@@ -32,7 +32,7 @@ public:
 CPPUNIT_TEST_FIXTURE(Test, testSdtRunRichText)
 {
     // Given a document with a rich text inline/run SDT:
-    loadFromURL(u"sdt-run-rich-text.docx");
+    loadFromFile(u"sdt-run-rich-text.docx");
 
     // Then make sure that formatting of the text inside the SDT is not lost:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -88,7 +88,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSdtRunRichText)
 CPPUNIT_TEST_FIXTURE(Test, testSdtRunPlainText)
 {
     // Given a document with a plain text inline/run SDT:
-    loadFromURL(u"sdt-run-plain-text.docx");
+    loadFromFile(u"sdt-run-plain-text.docx");
 
     // Then make sure that the text inside the SDT is not rich:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -115,7 +115,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSdtRunPlainText)
 CPPUNIT_TEST_FIXTURE(Test, testSdtRunCheckbox)
 {
     // Given a document with a checkbox inline/run SDT:
-    loadFromURL(u"sdt-run-checkbox.docx");
+    loadFromFile(u"sdt-run-checkbox.docx");
 
     // Then make sure that the doc model has a clickable checkbox content control:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -143,22 +143,22 @@ CPPUNIT_TEST_FIXTURE(Test, testSdtRunCheckbox)
     CPPUNIT_ASSERT(bChecked);
     OUString aCheckedState;
     xContentControlProps->getPropertyValue("CheckedState") >>= aCheckedState;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☒"), aCheckedState);
+    CPPUNIT_ASSERT_EQUAL(u"☒"_ustr, aCheckedState);
     OUString aUncheckedState;
     xContentControlProps->getPropertyValue("UncheckedState") >>= aUncheckedState;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☐"), aUncheckedState);
+    CPPUNIT_ASSERT_EQUAL(u"☐"_ustr, aUncheckedState);
     uno::Reference<text::XTextRange> xContentControlRange(xContentControl, uno::UNO_QUERY);
     uno::Reference<text::XText> xText = xContentControlRange->getText();
     uno::Reference<container::XEnumerationAccess> xContentEnumAccess(xText, uno::UNO_QUERY);
     uno::Reference<container::XEnumeration> xContentEnum = xContentEnumAccess->createEnumeration();
     uno::Reference<text::XTextRange> xContent(xContentEnum->nextElement(), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☒"), xContent->getString());
+    CPPUNIT_ASSERT_EQUAL(u"☒"_ustr, xContent->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testSdtRunDropdown)
 {
     // Given a document with a dropdown inline/run SDT:
-    loadFromURL(u"sdt-run-dropdown.docx");
+    loadFromFile(u"sdt-run-dropdown.docx");
 
     // Then make sure that the doc model has a clickable dropdown content control:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -203,7 +203,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSdtRunDropdown)
 CPPUNIT_TEST_FIXTURE(Test, testSdtRunComboBox)
 {
     // Given a document with a combo box inline/run SDT:
-    loadFromURL(u"sdt-run-combobox.docx");
+    loadFromFile(u"sdt-run-combobox.docx");
 
     // Then make sure that the doc model has a clickable combo box content control:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -230,7 +230,7 @@ CPPUNIT_TEST_FIXTURE(Test, testSdtRunComboBox)
 CPPUNIT_TEST_FIXTURE(Test, testSdtRunPicture)
 {
     // Given a document with a dropdown inline/run SDT:
-    loadFromURL(u"sdt-run-picture.docx");
+    loadFromFile(u"sdt-run-picture.docx");
 
     // Then make sure that the doc model has a clickable picture content control:
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);

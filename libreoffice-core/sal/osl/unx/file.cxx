@@ -19,15 +19,12 @@
 
 #include <config_features.h>
 #include <o3tl/safeint.hxx>
-#include <o3tl/string_view.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <sal/log.hxx>
-#include <osl/diagnose.h>
-#include <osl/file.hxx>
 #include <osl/detail/file.h>
-#include <rtl/alloc.h>
-#include <rtl/byteseq.hxx>
+#include <rtl/byteseq.h>
 #include <rtl/string.hxx>
+#include <o3tl/string_view.hxx>
 
 #include "system.hxx"
 #include "createfilehandlefromfd.hxx"
@@ -41,11 +38,15 @@
 #include <atomic>
 #include <vector>
 #include <cassert>
+#include <fcntl.h>
 #include <limits>
+#include <limits.h>
 
 #include <string.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #if defined(MACOSX)
 
@@ -61,6 +62,15 @@
 #include <osl/detail/android-bootstrap.h>
 #include <android/log.h>
 #include <android/asset_manager.h>
+#include <o3tl/string_view.hxx>
+#endif
+
+#ifdef LINUX
+#include <sys/vfs.h>
+// As documented by the kernel
+#define SMB_SUPER_MAGIC  static_cast<__fsword_t>(0x517B)
+#define CIFS_SUPER_MAGIC static_cast<__fsword_t>(0xFF534D42)
+#define SMB2_SUPER_MAGIC static_cast<__fsword_t>(0xFE534D42)
 #endif
 
 namespace {
@@ -109,7 +119,7 @@ struct FileHandle_Impl
     rtl_String*  m_memstreambuf; /*< used for in-memory streams */
 #endif
 
-    explicit FileHandle_Impl(int fd, Kind kind = KIND_FD, OString path = "<anon>");
+    explicit FileHandle_Impl(int fd, Kind kind = KIND_FD, OString path = "<anon>"_ostr);
     ~FileHandle_Impl();
 
     static size_t getpagesize();
@@ -735,9 +745,11 @@ oslFileHandle osl::detail::createFileHandleFromFD(int fd)
     return static_cast<oslFileHandle>(pImpl);
 }
 
-static int osl_file_adjustLockFlags(const OString& path, int flags)
+static void osl_file_adjustLockFlags(const OString& path, int *flags, sal_uInt32 *uFlags)
 {
 #ifdef MACOSX
+    (void) uFlags;
+
     /*
      * The AFP implementation of MacOS X 10.4 treats O_EXLOCK in a way
      * that makes it impossible for OOo to create a backup copy of the
@@ -750,20 +762,50 @@ static int osl_file_adjustLockFlags(const OString& path, int flags)
     {
         if(strncmp("afpfs", s.f_fstypename, 5) == 0)
         {
-            flags &= ~O_EXLOCK;
-            flags |=  O_SHLOCK;
+            *flags &= ~O_EXLOCK;
+            *flags |=  O_SHLOCK;
         }
         else
         {
             /* Needed flags to allow opening a webdav file */
-            flags &= ~(O_EXLOCK | O_SHLOCK | O_NONBLOCK);
+            *flags &= ~(O_EXLOCK | O_SHLOCK | O_NONBLOCK);
+        }
+    }
+#elif defined(LINUX)
+    (void) flags;
+
+    /* get filesystem info */
+    struct statfs aFileStatFs;
+    if (statfs(path.getStr(), &aFileStatFs) < 0)
+    {
+        int e = errno;
+        SAL_INFO("sal.file", "statfs(" << path << "): " << UnixErrnoString(e));
+    }
+    else
+    {
+        SAL_INFO("sal.file", "statfs(" << path << "): OK");
+
+        // We avoid locking if on a Linux CIFS mount otherwise this
+        // fill fail later on when opening the file for reading
+        // during backup creation at save time (even though this is a
+        // write lock and not a read lock).
+        // Fixes the following bug:
+        // https://bugs.documentfoundation.org/show_bug.cgi?id=55004
+        switch (aFileStatFs.f_type) {
+        case SMB_SUPER_MAGIC:
+        case CIFS_SUPER_MAGIC:
+        case SMB2_SUPER_MAGIC:
+            *uFlags |= osl_File_OpenFlag_NoLock;
+            break;
+        default:
+            break;
         }
     }
 #else
     (void) path;
+    (void) flags;
+    (void) uFlags;
 #endif
-
-    return flags;
 }
 
 static bool osl_file_queryLocking(sal_uInt32 uFlags)
@@ -788,14 +830,14 @@ static std::vector<OString> allowedPathsRead;
 static std::vector<OString> allowedPathsReadWrite;
 static std::vector<OString> allowedPathsExecute;
 
-static OString getParentFolder(const OString &rFilePath)
+static OString getParentFolder(std::string_view rFilePath)
 {
-    sal_Int32 n = rFilePath.lastIndexOf('/');
+    sal_Int32 n = rFilePath.rfind('/');
     OString folderPath;
     if (n < 1)
-        folderPath = ".";
+        folderPath = "."_ostr;
     else
-        folderPath = rFilePath.copy(0, n);
+        folderPath = OString(rFilePath.substr(0, n));
 
     return folderPath;
 }
@@ -817,7 +859,7 @@ SAL_DLLPUBLIC void osl_setAllowedPaths(
     do
     {
         OString aPath = rtl::OUStringToOString(
-            aPaths.getToken(0, ':', nIndex),
+            o3tl::getToken(aPaths, 0, ':', nIndex),
             RTL_TEXTENCODING_UTF8);
 
         if (aPath.getLength() == 0)
@@ -1127,7 +1169,7 @@ oslFileError openFilePath(const OString& filePath, oslFileHandle* pHandle,
     }
     else
     {
-        flags = osl_file_adjustLockFlags (filePath, flags);
+        osl_file_adjustLockFlags (filePath, &flags, &uFlags);
     }
 
     // O_EXCL can be set only when O_CREAT is set
@@ -1137,6 +1179,9 @@ oslFileError openFilePath(const OString& filePath, oslFileHandle* pHandle,
     // Sandboxing hook
     if (isForbidden( filePath, uFlags ))
         return osl_File_E_ACCES;
+
+    // set close-on-exec by default
+    flags |= O_CLOEXEC;
 
     /* open the file */
     int fd = open_c( filePath, flags, mode );

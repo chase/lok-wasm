@@ -62,6 +62,7 @@
 #include <svx/algitem.hxx>
 #include <svx/rotmodit.hxx>
 #include <legacyitem.hxx>
+#include <unostyle.hxx>
 
 #include <memory>
 #include <utility>
@@ -100,7 +101,7 @@ const sal_uInt16 AUTOFORMAT_FILE_VERSION= SOFFICE_FILEFORMAT_50;
 
 SwBoxAutoFormat* SwTableAutoFormat::s_pDefaultBoxAutoFormat = nullptr;
 
-constexpr OUStringLiteral AUTOTABLE_FORMAT_NAME = u"autotbl.fmt";
+constexpr OUString AUTOTABLE_FORMAT_NAME = u"autotbl.fmt"_ustr;
 
 namespace
 {
@@ -359,6 +360,11 @@ bool SwBoxAutoFormat::Save( SvStream& rStream, sal_uInt16 fileVersion ) const
     rStream.WriteUInt16( static_cast<sal_uInt16>(m_eSysLanguage) ).WriteUInt16( static_cast<sal_uInt16>(m_eNumFormatLanguage) );
 
     return ERRCODE_NONE == rStream.GetError();
+}
+
+void SwBoxAutoFormat::SetXObject(rtl::Reference<SwXTextCellStyle> const& xObject)
+{
+    m_xAutoFormatUnoObject = xObject.get();
 }
 
 SwTableAutoFormat::SwTableAutoFormat( OUString aName )
@@ -914,6 +920,11 @@ sal_uInt8 SwTableAutoFormat::CountPos(sal_uInt32 nCol, sal_uInt32 nCols, sal_uIn
     nRet = nRet
            + static_cast<sal_uInt8>(!nCol ? 0 : (nCol + 1 == nCols ? 3 : (1 + ((nCol - 1) & 1))));
     return nRet;
+}
+
+void SwTableAutoFormat::SetXObject(rtl::Reference<SwXTextTableStyle> const& xObject)
+{
+    m_xUnoTextTableStyle = xObject.get();
 }
 
 struct SwTableAutoFormatTable::Impl

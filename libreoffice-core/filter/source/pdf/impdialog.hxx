@@ -21,7 +21,6 @@
 
 #include <sfx2/tabdlg.hxx>
 #include <sfx2/passwd.hxx>
-#include <svx/AccessibilityCheckDialog.hxx>
 
 #include <vcl/pdfwriter.hxx>
 #include <vcl/FilterConfigItem.hxx>
@@ -129,8 +128,6 @@ class ImpPDFTabDialog final : public SfxTabDialogController
     bool                        mbCanExtractForAccessibility;
     css::uno::Reference< css::beans::XMaterialHolder > mxPreparedPasswords;
 
-    std::shared_ptr< svx::AccessibilityCheckDialog > mpAccessibilityCheckDialog;
-
     bool                        mbIsPageRangeChecked;
     OUString                    msPageRange;
     bool                        mbIsSheetRangeChecked;
@@ -173,7 +170,7 @@ public:
     ImpPDFTabGeneralPage*       getGeneralPage() const;
 
 private:
-    virtual void                PageCreated(const OString& rId, SfxTabPage& rPage) override;
+    virtual void                PageCreated(const OUString& rId, SfxTabPage& rPage) override;
 };
 
 
@@ -244,6 +241,11 @@ class ImpPDFTabGeneralPage : public SfxTabPage
     DECL_LINK(TogglePDFVersionOrUniversalAccessibilityHandle, weld::Toggleable&, void);
 
     std::shared_ptr<weld::MessageDialog> mxPasswordUnusedWarnDialog;
+
+    bool IsReadOnlyProperty(const OUString& rPropertyName) const
+    {
+        return mpParent && mpParent->maConfigItem.IsReadOnly(rPropertyName);
+    }
 
 public:
 
@@ -359,6 +361,7 @@ class ImpPDFTabSecurityPage : public SfxTabPage
     std::unique_ptr<weld::CheckButton> mxCbEnableCopy;
     std::unique_ptr<weld::CheckButton> mxCbEnableAccessibility;
     std::unique_ptr<weld::Label> mxPasswordTitle;
+    std::unique_ptr<weld::Label> mxPermissionTitle;
 
     std::shared_ptr< SfxPasswordDialog > mpPasswordDialog;
     std::shared_ptr< weld::MessageDialog > mpUnsupportedMsgDialog;
@@ -375,7 +378,7 @@ public:
 
     void                        GetFilterConfigItem( ImpPDFTabDialog* paParent);
     void                        SetFilterConfigItem( const ImpPDFTabDialog* paParent );
-    void                        ImplPDFASecurityControl( bool bEnableSecurity );
+    void                        ImplPDFASecurityControl();
     bool                        hasPassword() const { return mbHaveOwnerPassword || mbHaveUserPassword; }
 };
 

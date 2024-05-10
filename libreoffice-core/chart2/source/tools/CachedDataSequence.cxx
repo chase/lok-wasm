@@ -35,13 +35,11 @@ using ::osl::MutexGuard;
 
 // necessary for MS compiler
 using ::comphelper::OPropertyContainer;
-using ::comphelper::OMutexAndBroadcastHelper;
-using ::comphelper::OPropertyArrayUsageHelper;
 using ::chart::impl::CachedDataSequence_Base;
 
 namespace
 {
-constexpr OUStringLiteral lcl_aServiceName = u"com.sun.star.comp.chart.CachedDataSequence";
+constexpr OUString lcl_aServiceName = u"com.sun.star.comp.chart.CachedDataSequence"_ustr;
 
 enum
 {

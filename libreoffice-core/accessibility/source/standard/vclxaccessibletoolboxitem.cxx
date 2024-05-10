@@ -29,6 +29,7 @@
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/datatransfer/clipboard/XFlushableClipboard.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/toolbox.hxx>
@@ -257,7 +258,6 @@ void VCLXAccessibleToolBoxItem::implGetSelection( sal_Int32& nStartIndex, sal_In
 
 // XInterface
 
-IMPLEMENT_FORWARD_REFCOUNT( VCLXAccessibleToolBoxItem, AccessibleTextHelper_BASE )
 Any SAL_CALL VCLXAccessibleToolBoxItem::queryInterface( const Type& _rType )
 {
     // #i33611# - toolbox buttons without text don't support XAccessibleText
@@ -265,15 +265,8 @@ Any SAL_CALL VCLXAccessibleToolBoxItem::queryInterface( const Type& _rType )
         && ( !m_pToolBox || m_pToolBox->GetButtonType() == ButtonType::SYMBOLONLY ) )
         return Any();
 
-    css::uno::Any aReturn = AccessibleTextHelper_BASE::queryInterface( _rType );
-    if ( !aReturn.hasValue() )
-        aReturn = VCLXAccessibleToolBoxItem_BASE::queryInterface( _rType );
-    return aReturn;
+    return ImplInheritanceHelper::queryInterface( _rType );
 }
-
-// XTypeProvider
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleToolBoxItem, AccessibleTextHelper_BASE, VCLXAccessibleToolBoxItem_BASE )
 
 // XComponent
 
@@ -392,6 +385,8 @@ sal_Int64 SAL_CALL VCLXAccessibleToolBoxItem::getAccessibleStateSet(  )
     if ( m_pToolBox && !rBHelper.bDisposed && !rBHelper.bInDispose )
     {
         nStateSet |= AccessibleStateType::FOCUSABLE;
+        if (m_pToolBox->GetItemBits(m_nItemId) & ToolBoxItemBits::CHECKABLE)
+            nStateSet |= AccessibleStateType::CHECKABLE;
         if ( m_bIsChecked && m_nRole != AccessibleRole::PANEL )
             nStateSet |= AccessibleStateType::CHECKED;
         if ( m_bIndeterminate )

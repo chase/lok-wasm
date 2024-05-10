@@ -32,8 +32,6 @@
 
 #include <vector>
 
-using namespace ::std;
-
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::beans;
 using ::xmloff::token::GetXMLToken;
@@ -352,15 +350,9 @@ void XMLPropertySetMapper::RemoveEntry( sal_Int32 nIndex )
     const sal_Int32 nEntries = GetEntryCount();
     if( nIndex>=nEntries || nIndex<0 )
         return;
-    vector < XMLPropertySetMapperEntry_Impl >::iterator aEIter = mpImpl->maMapEntries.begin();
+    std::vector < XMLPropertySetMapperEntry_Impl >::iterator aEIter = mpImpl->maMapEntries.begin();
     std::advance(aEIter, nIndex);
     mpImpl->maMapEntries.erase( aEIter );
-}
-
-void XMLPropertySetMapper::GetEntryAPINames( o3tl::sorted_vector<OUString>& rNames) const
-{
-     for (const XMLPropertySetMapperEntry_Impl& rMapEntry : mpImpl->maMapEntries)
-         rNames.insert(rMapEntry.sAPIPropertyName);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

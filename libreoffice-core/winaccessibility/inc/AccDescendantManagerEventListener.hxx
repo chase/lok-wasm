@@ -39,7 +39,7 @@ private:
     std::vector<com::sun::star::accessibility::XAccessible*> m_aUnselectedChildrenForDeletion;
 
 public:
-    AccDescendantManagerEventListener(css::accessibility::XAccessible* pAcc, AccObjectManagerAgent* Agent);
+    AccDescendantManagerEventListener(css::accessibility::XAccessible* pAcc, AccObjectWinManager* pManager);
     virtual ~AccDescendantManagerEventListener() override;
 
     // XAccessibleEventListener
@@ -47,10 +47,6 @@ public:
 
     //for selection changed event
     virtual void HandleSelectionChangedEvent(
-            css::uno::Any oldValue, css::uno::Any newValue);
-
-    //for child changed event
-    virtual void HandleChildChangedEvent(
             css::uno::Any oldValue, css::uno::Any newValue);
 
     virtual void HandleChildChangedNoFocusEvent(

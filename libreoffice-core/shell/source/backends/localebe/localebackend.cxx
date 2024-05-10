@@ -123,8 +123,7 @@ namespace /* private */
         CFStringRef sref = ImplGetAppPreference(pref);
         CFStringGuard srefGuard(sref);
 
-        OUStringBuffer aLocaleBuffer;
-        aLocaleBuffer.append("en-US"); // initialize with fallback value
+        OUStringBuffer aLocaleBuffer("en-US"); // initialize with fallback value
 
         if (sref != nullptr)
         {
@@ -287,7 +286,7 @@ void LocaleBackend::setPropertyValue(
 {
     throw css::lang::IllegalArgumentException(
         "setPropertyValue not supported",
-        static_cast< cppu::OWeakObject * >(this), -1);
+        getXWeak(), -1);
 }
 
 css::uno::Any LocaleBackend::getPropertyValue(
@@ -303,7 +302,7 @@ css::uno::Any LocaleBackend::getPropertyValue(
         return css::uno::Any(getUILocale());
     } else {
         throw css::beans::UnknownPropertyException(
-            PropertyName, static_cast< cppu::OWeakObject * >(this));
+            PropertyName, getXWeak());
     }
 }
 

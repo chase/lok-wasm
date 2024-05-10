@@ -39,6 +39,7 @@
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/visitem.hxx>
+#include <svl/voiditem.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/toolbox.hxx>
 
@@ -233,7 +234,7 @@ SfxItemState SfxToolBoxControl::GetItemState(
                 ? SfxItemState::DISABLED
                 : IsInvalidItem(pState)
                     ? SfxItemState::DONTCARE
-                    : pState->IsVoidItem() && !pState->Which()
+                    : pState->isVoidItem() && !pState->Which()
                         ? SfxItemState::UNKNOWN
                         : SfxItemState::DEFAULT;
 }
@@ -293,8 +294,7 @@ void SAL_CALL SfxToolBoxControl::statusChanged( const FeatureStateEvent& rEvent 
         Reference < XDispatch > xDisp = xProvider->queryDispatch( rEvent.FeatureURL, OUString(), 0 );
         if ( xDisp.is() )
         {
-            Reference< XUnoTunnel > xTunnel( xDisp, UNO_QUERY );
-            if (auto pDisp = comphelper::getFromUnoTunnel<SfxOfficeDispatch>(xTunnel))
+            if (auto pDisp = dynamic_cast<SfxOfficeDispatch*>(xDisp.get()))
                 pViewFrame = pDisp->GetDispatcher_Impl()->GetFrame();
         }
     }

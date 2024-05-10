@@ -44,7 +44,7 @@ namespace accessibility {
 AccessibleGridControlTable::AccessibleGridControlTable(
         const Reference< XAccessible >& rxParent,
         IAccessibleTable& rTable) :
-    AccessibleGridControlTableBase( rxParent, rTable, TCTYPE_TABLE )
+    AccessibleGridControlTableBase(rxParent, rTable, AccessibleTableControlObjType::TABLE)
 {
 }
 
@@ -253,10 +253,16 @@ AccessibleGridControlTable::getSelectedAccessibleChild( sal_Int64 nSelectedChild
     SolarMutexGuard aSolarGuard;
 
     ensureIsAlive();
-    if(isAccessibleChildSelected(nSelectedChildIndex))
-        return getAccessibleChild(nSelectedChildIndex);
-    else
-        return nullptr;
+    if (nSelectedChildIndex < 0 || nSelectedChildIndex >= getSelectedAccessibleChildCount())
+        throw lang::IndexOutOfBoundsException("Invalid index into selection", *this);
+
+    const sal_Int32 nColCount = getAccessibleColumnCount();
+    assert(nColCount > 0 && "Column count non-positive, but child count > 0");
+    const sal_Int32 nIndexInSelectedRowsSequence = nSelectedChildIndex / nColCount;
+    const Sequence<sal_Int32> aSelectedRows = getSelectedAccessibleRows();
+    const sal_Int32 nRowIndex = aSelectedRows[nIndexInSelectedRowsSequence];
+    const sal_Int32 nColIndex = nSelectedChildIndex % nColCount;
+    return getAccessibleCellAt(nRowIndex, nColIndex);
 }
 //not implemented yet, because only row selection possible
 void SAL_CALL AccessibleGridControlTable::deselectAccessibleChild(
@@ -340,7 +346,7 @@ tools::Rectangle AccessibleGridControlTable::implGetBoundingBox()
 {
     vcl::Window* pParent = m_aTable.GetAccessibleParentWindow();
     DBG_ASSERT( pParent, "implGetBoundingBox - missing parent window" );
-    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsRelative( pParent ));
+    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsRelative( *pParent ));
     tools::Rectangle aTableRect( m_aTable.calcTableRect() );
     tools::Long nX = aGridRect.Left() + aTableRect.Left();
     tools::Long nY = aGridRect.Top() + aTableRect.Top();
@@ -350,15 +356,15 @@ tools::Rectangle AccessibleGridControlTable::implGetBoundingBox()
     return aTable;
 }
 
-tools::Rectangle AccessibleGridControlTable::implGetBoundingBoxOnScreen()
+AbsoluteScreenPixelRectangle AccessibleGridControlTable::implGetBoundingBoxOnScreen()
 {
-    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsRelative( nullptr ));
+    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsAbsolute());
     tools::Rectangle aTableRect( m_aTable.calcTableRect() );
     tools::Long nX = aGridRect.Left() + aTableRect.Left();
     tools::Long nY = aGridRect.Top() + aTableRect.Top();
     tools::Long nWidth = aGridRect.GetSize().Width()-aTableRect.Left();
     tools::Long nHeight = aGridRect.GetSize().Height()-aTableRect.Top();
-    tools::Rectangle aTable( Point( nX, nY ), Size( nWidth, nHeight ));
+    AbsoluteScreenPixelRectangle aTable( AbsoluteScreenPixelPoint( nX, nY ), AbsoluteScreenPixelSize( nWidth, nHeight ));
     return aTable;
 }
 // internal helper methods ----------------------------------------------------
@@ -366,7 +372,11 @@ Reference< XAccessibleTable > AccessibleGridControlTable::implGetHeaderBar(
         sal_Int32 nChildIndex )
 {
     Reference< XAccessible > xRet;
-    Reference< XAccessibleContext > xContext( m_xParent, uno::UNO_QUERY );
+
+    if (!m_xParent.is())
+        return nullptr;
+
+    Reference<XAccessibleContext> xContext = m_xParent->getAccessibleContext();
     if( xContext.is() )
     {
         try

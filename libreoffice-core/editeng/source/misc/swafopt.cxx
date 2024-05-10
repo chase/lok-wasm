@@ -27,7 +27,6 @@ SvxSwAutoFormatFlags::SvxSwAutoFormatFlags()
     bAutoCorrect =
     bCapitalStartSentence =
     bCapitalStartWord =
-    bChgUserColl =
     bChgEnumNum =
     bAddNonBrkSpace =
     bChgOrdinalNumber =
@@ -36,15 +35,18 @@ SvxSwAutoFormatFlags::SvxSwAutoFormatFlags()
     bChgToEnEmDash =
     bChgWeightUnderl =
     bSetINetAttr =
+    bSetDOIAttr =
     bAFormatDelSpacesAtSttEnd =
     bAFormatDelSpacesBetweenLines =
     bAFormatByInpDelSpacesAtSttEnd =
     bAFormatByInpDelSpacesBetweenLines = true;
 
+    bChgUserColl =
     bReplaceStyles =
     bDelEmptyNode =
     bWithRedlining =
     bAutoCmpltEndless =
+    bSetNumRuleAfterSpace =
     bAutoCmpltAppendBlank = false;
 
     bAutoCmpltShowAsTip =

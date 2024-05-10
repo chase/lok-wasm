@@ -34,6 +34,9 @@ public:
     virtual sdr::properties::BaseProperties& GetProperties() const override;
 
 protected:
+    virtual std::unique_ptr<sdr::properties::BaseProperties>
+    CreateObjectSpecificProperties() override;
+
     virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact() override;
 
     rtl::Reference<SdrObject> mxRefObj; // Referenced drawing object
@@ -68,6 +71,8 @@ public:
     virtual OUString GetTitle() const override;
     virtual void SetDescription(const OUString& rStr) override;
     virtual OUString GetDescription() const override;
+    virtual void SetDecorative(bool isDecorative) override;
+    virtual bool IsDecorative() const override;
 
     virtual const tools::Rectangle& GetCurrentBoundRect() const override;
     virtual const tools::Rectangle& GetLastBoundRect() const override;

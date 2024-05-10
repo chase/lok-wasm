@@ -285,8 +285,10 @@ void ScTabView::ImplTabChanged(bool bSameTabButMoved)
     SfxLokCallbackInterface* pCallback = pViewShell->getLibreOfficeKitViewCallback();
     pViewShell->setLibreOfficeKitViewCallback(nullptr);
     comphelper::ScopeGuard aOutputGuard(
-        [pViewShell, pCallback] {
+        [this, pViewShell, pCallback] {
             pViewShell->setLibreOfficeKitViewCallback(pCallback);
+            // But possibly update any out of date formulas on the tab we switched to
+            UpdateFormulas();
         });
 
     if (pDrawView)
@@ -295,7 +297,7 @@ void ScTabView::ImplTabChanged(bool bSameTabButMoved)
 
         SCTAB nTab = aViewData.GetTabNo();
         pDrawView->HideSdrPage();
-        pDrawView->ShowSdrPage(pDrawView->GetModel()->GetPage(nTab));
+        pDrawView->ShowSdrPage(pDrawView->GetModel().GetPage(nTab));
 
         UpdateLayerLocks();
 
@@ -316,16 +318,13 @@ void ScTabView::ImplTabChanged(bool bSameTabButMoved)
     }
 
     // notification for XActivationBroadcaster
-    SfxViewFrame* pViewFrame = aViewData.GetViewShell()->GetViewFrame();
-    if (pViewFrame)
+    SfxViewFrame& rViewFrame = aViewData.GetViewShell()->GetViewFrame();
+    uno::Reference<frame::XController> xController = rViewFrame.GetFrame().GetController();
+    if (xController.is())
     {
-        uno::Reference<frame::XController> xController = pViewFrame->GetFrame().GetController();
-        if (xController.is())
-        {
-            ScTabViewObj* pImp = comphelper::getFromUnoTunnel<ScTabViewObj>( xController );
-            if (pImp)
-                pImp->SheetChanged( bSameTabButMoved );
-        }
+        ScTabViewObj* pImp = dynamic_cast<ScTabViewObj*>( xController.get() );
+        if (pImp)
+            pImp->SheetChanged( bSameTabButMoved );
     }
 
     for (int i = 0; i < 4; i++)
@@ -347,7 +346,7 @@ void ScTabView::TabChanged( bool bSameTabButMoved )
         return;
 
     ScDocShell* pDocSh = GetViewData().GetDocShell();
-    ScModelObj* pModelObj = pDocSh ? comphelper::getFromUnoTunnel<ScModelObj>( pDocSh->GetModel()) : nullptr;
+    ScModelObj* pModelObj = pDocSh ? pDocSh->GetModel() : nullptr;
 
     if (!pModelObj)
         return;
@@ -355,7 +354,7 @@ void ScTabView::TabChanged( bool bSameTabButMoved )
     Size aDocSize = pModelObj->getDocumentSize();
     std::stringstream ss;
     ss << aDocSize.Width() << ", " << aDocSize.Height();
-    OString sRect = ss.str().c_str();
+    OString sRect(ss.str());
     ScTabViewShell* pViewShell = aViewData.GetViewShell();
     ScModelObj* pModel = comphelper::getFromUnoTunnel<ScModelObj>(pViewShell->GetCurrentDocument());
     SfxLokHelper::notifyDocumentSizeChanged(pViewShell, sRect, pModel, false);
@@ -373,7 +372,7 @@ void ScTabView::UpdateLayerLocks()
     bool bShared = aViewData.GetDocShell()->IsDocShared();
 
     SdrLayer* pLayer;
-    SdrLayerAdmin& rAdmin = pDrawView->GetModel()->GetLayerAdmin();
+    SdrLayerAdmin& rAdmin = pDrawView->GetModel().GetLayerAdmin();
     pLayer = rAdmin.GetLayerPerID(SC_LAYER_BACK);
     if (pLayer)
         pDrawView->SetLayerLocked( pLayer->GetName(), bProt || !bEx || bShared );
@@ -550,7 +549,7 @@ void ScTabView::UpdateDrawTextOutliner()
 
 void ScTabView::DigitLanguageChanged()
 {
-    LanguageType eNewLang = SC_MOD()->GetOptDigitLanguage();
+    LanguageType eNewLang = ScModule::GetOptDigitLanguage();
     for (VclPtr<ScGridWindow> & pWin : pGridWin)
         if ( pWin )
             pWin->GetOutDev()->SetDigitLanguage( eNewLang );

@@ -26,15 +26,11 @@ extern bool rtl_string_unittest_invalid_concat;
 
 using namespace rtl;
 
-namespace CppUnit
+template<> inline std::string CppUnit::assertion_traits<std::type_info>::toString(
+    std::type_info const & x)
 {
-template<> struct assertion_traits<std::type_info>
-{
-    static bool equal(std::type_info const & x, std::type_info const & y) { return x == y; }
-
-    static std::string toString(std::type_info const & x) { return x.name(); }
-};
-} // namespace
+    return x.name();
+}
 
 namespace test::oustring {
 
@@ -69,14 +65,7 @@ void test::oustring::StringConcat::checkConcat()
     CPPUNIT_ASSERT_EQUAL( OUString( "foobar" ), OUString( OUStringBuffer( "foo" ) + "bar" ));
     CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUStringBuffer, const char[ 4 ] > )), typeid( OUStringBuffer( "foo" ) + "bar" ));
     CPPUNIT_ASSERT_EQUAL( OUString( "foobar" ), OUString( OUStringLiteral( u"foo" ) + "bar" ));
-#if defined __GNUC__ && __GNUC__ <= 11 && !defined __clang__
-    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUStringLiteral<4>, const char[ 4 ] > )), typeid( OUStringLiteral<4>( u"foo" ) + "bar" ));
-        // the explicit OUStringLiteral<4> template argument in the unevaluated typeid context
-        // is needed by some GCC versions, see <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=96878>
-        // "Failed class template argument deduction in unevaluated, parenthesized context"
-#else
     CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUStringLiteral<4>, const char[ 4 ] > )), typeid( OUStringLiteral( u"foo" ) + "bar" ));
-#endif
     const char d1[] = "xyz";
     CPPUNIT_ASSERT_EQUAL( OUString( "fooxyz" ), OUString( OUString( "foo" ) + d1 ));
     CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, const char[ 4 ] > )), typeid( OUString( "foo" ) + d1 ));
@@ -96,15 +85,15 @@ void test::oustring::StringConcat::checkConcat()
     CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUStringConcat< rtl::OUStringConcatMarker, const sal_Unicode[ 4 ] >, const char[ 4 ] > )), typeid( OUString::Concat( d3 ) + "bar" ));
 
     CPPUNIT_ASSERT_EQUAL( OUString( "num10" ), OUString( OUString( "num" ) + OUString::number( 10 )));
-    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUStringNumber< int > > )), typeid( OUString( "num" ) + OUString::number( 10 )));
+    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, StringNumber< sal_Unicode, RTL_USTR_MAX_VALUEOFINT32 > > )), typeid( OUString( "num" ) + OUString::number( 10 )));
     CPPUNIT_ASSERT_EQUAL( OUString( "num10" ), OUString( OUString( "num" ) + OUString::number( 10L )));
-    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUStringNumber< long long > > )), typeid( OUString( "num" ) + OUString::number( 10L )));
+    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, StringNumber< sal_Unicode, RTL_USTR_MAX_VALUEOFINT64 > > )), typeid( OUString( "num" ) + OUString::number( 10L )));
     CPPUNIT_ASSERT_EQUAL( OUString( "num10" ), OUString( OUString( "num" ) + OUString::number( 10ULL )));
-    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUStringNumber< unsigned long long > > )), typeid( OUString( "num" ) + OUString::number( 10ULL )));
+    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, StringNumber< sal_Unicode, RTL_USTR_MAX_VALUEOFUINT64 > > )), typeid( OUString( "num" ) + OUString::number( 10ULL )));
     CPPUNIT_ASSERT_EQUAL( OUString( "num10.5" ), OUString( OUString( "num" ) + OUString::number( 10.5f )));
-    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUStringNumber< float > > )), typeid( OUString( "num" ) + OUString::number( 10.5f )));
+    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUString > )), typeid( OUString( "num" ) + OUString::number( 10.5f )));
     CPPUNIT_ASSERT_EQUAL( OUString( "num10.5" ), OUString( OUString( "num" ) + OUString::number( 10.5 )));
-    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUStringNumber< double > > )), typeid( OUString( "num" ) + OUString::number( 10.5 )));
+    CPPUNIT_ASSERT_EQUAL(( typeid( OUStringConcat< OUString, OUString > )), typeid( OUString( "num" ) + OUString::number( 10.5 )));
 }
 
 void test::oustring::StringConcat::checkConcatAsciiL()
@@ -182,7 +171,7 @@ void test::oustring::StringConcat::checkAppend()
 void test::oustring::StringConcat::checkInvalid()
 {
     CPPUNIT_ASSERT( !INVALID_CONCAT( OUString() + OUString()));
-    CPPUNIT_ASSERT( INVALID_CONCAT( OUString( "a" ) + OString( "b" )));
+    CPPUNIT_ASSERT( INVALID_CONCAT( OUString( "a" ) + "b"_ostr));
     CPPUNIT_ASSERT( INVALID_CONCAT( OUString( "a" ) + OStringBuffer( "b" )));
     CPPUNIT_ASSERT( INVALID_CONCAT( OUString( "a" ) + static_cast<const char*>("b") ));
     char d[] = "b";

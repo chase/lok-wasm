@@ -178,7 +178,7 @@ static void SetFontWorkShapeTypeState( SdrView const * pSdrView, SfxItemSet& rSe
 // we enter something which never occurs here (hopefully).)
 static SfxSlot aFontworkBarSlots_Impl[] =
 {
-    { 0, SfxGroupId::NONE, SfxSlotMode::NONE, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, 0, SfxDisableFlags::NONE, nullptr }
+    { 0, SfxGroupId::NONE, SfxSlotMode::NONE, 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, 0, SfxDisableFlags::NONE, "" }
 };
 
 SFX_IMPL_INTERFACE(FontworkBar, SfxShell)
@@ -207,7 +207,7 @@ FontworkBar::~FontworkBar()
 namespace svx {
 bool checkForFontWork( const SdrObject* pObj )
 {
-    static constexpr OUStringLiteral sTextPath = u"TextPath";
+    static constexpr OUString sTextPath = u"TextPath"_ustr;
     bool bFound = false;
 
     if( dynamic_cast<const SdrObjCustomShape*>( pObj) !=  nullptr )
@@ -242,16 +242,15 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
         case SID_FONTWORK_SAME_LETTER_HEIGHTS:
         {
             css::uno::Any* pAny = rGeometryItem.GetPropertyValueByName( "TextPath", "SameLetterHeights" );
+
+            bool bOn = false;
             if( pAny )
-            {
-                bool bOn = false;
                 (*pAny) >>= bOn;
-                bOn = !bOn;
-                css::beans::PropertyValue aPropValue;
-                aPropValue.Name = "SameLetterHeights";
-                aPropValue.Value <<= bOn;
-                rGeometryItem.SetPropertyValue("TextPath", aPropValue);
-            }
+            bOn = !bOn;
+            css::beans::PropertyValue aPropValue;
+            aPropValue.Name = "SameLetterHeights";
+            aPropValue.Value <<= bOn;
+            rGeometryItem.SetPropertyValue("TextPath", aPropValue);
         }
         break;
 
@@ -306,19 +305,19 @@ static void impl_execute( SfxRequest const & rReq, SdrCustomShapeGeometryItem& r
 
 static void GetGeometryForCustomShape( SdrCustomShapeGeometryItem& rGeometryItem, const OUString& rCustomShape )
 {
-    static const OUStringLiteral sType( u"Type" );
+    static constexpr OUString sType( u"Type"_ustr );
 
     css::beans::PropertyValue aPropVal;
     aPropVal.Name = sType;
     aPropVal.Value <<= rCustomShape;
     rGeometryItem.SetPropertyValue( aPropVal );
 
-    static const OUStringLiteral sAdjustmentValues( u"AdjustmentValues" );
-    static const OUStringLiteral sCoordinateOrigin( u"CoordinateOrigin" );
-    static const OUStringLiteral sCoordinateSize( u"CoordinateSize" );
-    static const OUStringLiteral sEquations( u"Equations" );
-    static const OUStringLiteral sHandles( u"Handles" );
-    static const OUStringLiteral sPath( u"Path" );
+    static constexpr OUString sAdjustmentValues( u"AdjustmentValues"_ustr );
+    static constexpr OUString sCoordinateOrigin( u"CoordinateOrigin"_ustr );
+    static constexpr OUString sCoordinateSize( u"CoordinateSize"_ustr );
+    static constexpr OUString sEquations( u"Equations"_ustr );
+    static constexpr OUString sHandles( u"Handles"_ustr );
+    static constexpr OUString sPath( u"Path"_ustr );
     rGeometryItem.ClearPropertyValue( sAdjustmentValues );
     rGeometryItem.ClearPropertyValue( sCoordinateOrigin );
     rGeometryItem.ClearPropertyValue( sCoordinateSize );
@@ -448,7 +447,7 @@ void FontworkBar::execute( SdrView& rSdrView, SfxRequest const & rReq, SfxBindin
                         {
                             OUString aStr( SvxResId( RID_SVXSTR_UNDO_APPLY_FONTWORK_SHAPE ) );
                             rSdrView.BegUndo(aStr);
-                            rSdrView.AddUndo(rSdrView.GetModel()->GetSdrUndoFactory().CreateUndoAttrObject(*pObj));
+                            rSdrView.AddUndo(rSdrView.GetModel().GetSdrUndoFactory().CreateUndoAttrObject(*pObj));
                         }
                         SdrCustomShapeGeometryItem aGeometryItem( pObj->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY ) );
                         GetGeometryForCustomShape( aGeometryItem, aCustomShape );
@@ -526,7 +525,7 @@ void FontworkBar::execute( SdrView& rSdrView, SfxRequest const & rReq, SfxBindin
                     {
                         OUString aStr( SvxResId( pStrResId ) );
                         rSdrView.BegUndo(aStr);
-                        rSdrView.AddUndo(rSdrView.GetModel()->GetSdrUndoFactory().CreateUndoAttrObject(*pObj));
+                        rSdrView.AddUndo(rSdrView.GetModel().GetSdrUndoFactory().CreateUndoAttrObject(*pObj));
                     }
                     SdrCustomShapeGeometryItem aGeometryItem( pObj->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY ) );
                     impl_execute( rReq, aGeometryItem, pObj );

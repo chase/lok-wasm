@@ -42,12 +42,11 @@ using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
 
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::uno::Sequence;
 
 namespace
 {
 
-constexpr OUStringLiteral lcl_aLabelRole( u"label" );
+constexpr OUString lcl_aLabelRole( u"label"_ustr );
 
 void lcl_UpdateCurrentRange(weld::TreeView& rOutListBox, const OUString & rRole,
                             const OUString& rRange)
@@ -72,8 +71,7 @@ bool lcl_UpdateCurrentSeriesName(weld::TreeView& rOutListBox)
     ::chart::SeriesEntry * pEntry = weld::fromId<::chart::SeriesEntry*>(rOutListBox.get_id(nEntry));
     if (pEntry->m_xDataSeries.is() && pEntry->m_xChartType.is())
     {
-        OUString aLabel(::chart::DataSeriesHelper::getDataSeriesLabel(
-                        pEntry->m_xDataSeries,
+        OUString aLabel(pEntry->m_xDataSeries->getLabelForRole(
                         pEntry->m_xChartType->getRoleOfSequenceForSeriesLabel()));
         if (!aLabel.isEmpty())
         {
@@ -352,7 +350,7 @@ void DataSourceTabPage::fillSeriesListBox()
                 OUString aResString(::chart::SchResId( STR_DATA_UNNAMED_SERIES_WITH_INDEX ));
 
                 // replace index of unnamed series
-                static const OUStringLiteral aReplacementStr( u"%NUMBER" );
+                static constexpr OUString aReplacementStr( u"%NUMBER"_ustr );
                 sal_Int32 nIndex = aResString.indexOf( aReplacementStr );
                 if( nIndex != -1 )
                     aLabel = aResString.replaceAt(
@@ -482,7 +480,7 @@ IMPL_LINK_NOARG(DataSourceTabPage, RoleSelectionChangedHdl, weld::TreeView&, voi
     OUString aSelectedRange = lcl_GetSelectedRolesRange( *m_xLB_ROLE );
 
     // replace role in fixed text label
-    static const OUStringLiteral aReplacementStr( u"%VALUETYPE" );
+    static constexpr OUString aReplacementStr( u"%VALUETYPE"_ustr );
     sal_Int32 nIndex = m_aFixedTextRange.indexOf( aReplacementStr );
     if( nIndex != -1 )
     {
@@ -770,7 +768,7 @@ bool DataSourceTabPage::updateModelFromControl(const weld::Entry* pField)
             else if( xLabeledSeq.is())
             {
                 // clear existing categories
-                xLabeledSeq.set(nullptr);
+                xLabeledSeq.clear();
                 m_rDialogModel.setCategories( xLabeledSeq );
             }
         }
@@ -836,7 +834,7 @@ bool DataSourceTabPage::updateModelFromControl(const weld::Entry* pField)
                                     // "$Sheet1.$A$1"
                                     aRange = xNewSeq->getSourceRangeRepresentation();
                                     Reference< beans::XPropertySet > xProp( xNewSeq, uno::UNO_QUERY_THROW );
-                                    xProp->setPropertyValue( "Role" , uno::Any( OUString(lcl_aLabelRole) ));
+                                    xProp->setPropertyValue( "Role" , uno::Any( lcl_aLabelRole ));
 
                                     //Labels should always include hidden cells, regardless of the setting chosen
                                     xProp->setPropertyValue( "IncludeHiddenCells", uno::Any(true));

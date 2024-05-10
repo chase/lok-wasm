@@ -53,7 +53,7 @@ public:
 CPPUNIT_TEST_FIXTURE(UnodrawTest, testWriterGraphicExport)
 {
     // Load a document with a Writer picture in it.
-    loadFromURL(u"unodraw-writer-image.odt");
+    loadFromFile(u"unodraw-writer-image.odt");
     uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage = xDrawPageSupplier->getDrawPage();
     uno::Reference<lang::XComponent> xShape(xDrawPage->getByIndex(0), uno::UNO_QUERY);
@@ -73,7 +73,7 @@ CPPUNIT_TEST_FIXTURE(UnodrawTest, testWriterGraphicExport)
 
 CPPUNIT_TEST_FIXTURE(UnodrawTest, testTdf93998)
 {
-    loadFromURL(u"tdf93998.odp");
+    loadFromFile(u"tdf93998.odp");
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     CPPUNIT_ASSERT(xDrawPagesSupplier.is());
 
@@ -147,14 +147,14 @@ CPPUNIT_TEST_FIXTURE(UnodrawTest, testTableShadowDirect)
     // Check the primitives.
     drawinglayer::Primitive2dXmlDump aDumper;
     xmlDocUniquePtr pDocument = aDumper.dumpAndParse(xPrimitiveSequence);
-    assertXPath(pDocument, "//shadow", /*nNumberOfNodes=*/1);
+    assertXPath(pDocument, "//shadow"_ostr, /*nNumberOfNodes=*/1);
 
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 0
     // - Actual  : 1
     // i.e. there was shadow for the cell text, while here PowerPoint-compatible output is expected,
     // which has no shadow for cell text (only for cell borders and cell background).
-    assertXPath(pDocument, "//shadow//sdrblocktext", /*nNumberOfNodes=*/0);
+    assertXPath(pDocument, "//shadow//sdrblocktext"_ostr, /*nNumberOfNodes=*/0);
 }
 
 CPPUNIT_TEST_FIXTURE(UnodrawTest, testTitleShapeBullets)

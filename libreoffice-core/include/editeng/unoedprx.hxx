@@ -23,6 +23,7 @@
 #include <config_options.h>
 #include <memory>
 #include <svl/SfxBroadcaster.hxx>
+#include <tools/fontenum.hxx>
 #include <editeng/unoedsrc.hxx>
 
 #include <editeng/editdata.hxx>
@@ -45,6 +46,9 @@ public:
 
     sal_Int32               CalcEditEngineIndex( sal_Int32 nPara, sal_Int32 nLogicalIndex );
 
+    virtual OUString        GetStyleSheet(sal_Int32 nPara) const override;
+    virtual void            SetStyleSheet(sal_Int32 nPara, const OUString& rStyleName) override;
+
     virtual SfxItemState    GetItemState( const ESelection& rSel, sal_uInt16 nWhich ) const override;
     virtual SfxItemState    GetItemState( sal_Int32 nPara, sal_uInt16 nWhich ) const override;
 
@@ -55,7 +59,7 @@ public:
 
     virtual SfxItemPool*    GetPool() const override;
 
-    virtual OUString        CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor ) override;
+    virtual OUString        CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rpTxtColor, std::optional<Color>& rpFldColor, std::optional<FontLineStyle>& rpFldLineStyle ) override;
     virtual void            FieldClicked( const SvxFieldItem& rField ) override;
 
     virtual bool            IsValid() const override;

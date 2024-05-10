@@ -157,7 +157,6 @@ protected:
         page frame
     */
     virtual void RegisterAtCorrectPage() override;
-    virtual void RegisterAtPage(SwPageFrame &) override;
 
     virtual bool SetObjTop_( const SwTwips _nTop ) override;
     virtual bool SetObjLeft_( const SwTwips _nLeft ) override;
@@ -171,9 +170,6 @@ protected:
 
 public:
     // #i26791#
-
-    // get client information
-    virtual bool GetInfo( SfxPoolItem& ) const override;
     virtual void PaintSwFrame( vcl::RenderContext& rRenderContext, SwRect const&,
                         SwPrintData const*const pPrintData = nullptr ) const override;
     virtual Size ChgSize( const Size& aNewSize ) override;
@@ -268,9 +264,10 @@ public:
     // #i26791# - pure virtual methods of base class <SwAnchoredObject>
     virtual void MakeObjPos() override;
     virtual void InvalidateObjPos() override;
+    virtual void RegisterAtPage(SwPageFrame&) override;
 
-    virtual SwFrameFormat& GetFrameFormat() override;
-    virtual const SwFrameFormat& GetFrameFormat() const override;
+    virtual SwFrameFormat* GetFrameFormat() override;
+    virtual const SwFrameFormat* GetFrameFormat() const override;
 
     virtual SwRect GetObjRect() const override;
 
@@ -290,7 +287,7 @@ public:
     virtual const SwFlyFrameFormat *GetFormat() const override;
     virtual       SwFlyFrameFormat *GetFormat() override;
 
-    virtual void dumpAsXml( xmlTextWriterPtr writer ) const override { SwLayoutFrame::dumpAsXml( writer ); };
+    virtual void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
 
     virtual void Calc(vcl::RenderContext* pRenderContext) const override;
 

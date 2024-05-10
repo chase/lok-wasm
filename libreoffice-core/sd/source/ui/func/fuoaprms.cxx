@@ -466,8 +466,8 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ANIMATION_EFFECT) == SfxItemState::SET)
     {
-        eEffect = static_cast<presentation::AnimationEffect>(static_cast<const SfxUInt16Item&>( pArgs->
-                    Get(ATTR_ANIMATION_EFFECT)).GetValue());
+        eEffect = static_cast<presentation::AnimationEffect>( pArgs->
+                    Get(ATTR_ANIMATION_EFFECT).GetValue());
         nEffectSet = ATTR_SET;
     }
     else
@@ -484,8 +484,8 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ANIMATION_SPEED) == SfxItemState::SET)
     {
-        eSpeed  = static_cast<presentation::AnimationSpeed>(static_cast<const SfxUInt16Item&>( pArgs->
-                    Get(ATTR_ANIMATION_SPEED)).GetValue());
+        eSpeed  = static_cast<presentation::AnimationSpeed>( pArgs->
+                    Get(ATTR_ANIMATION_SPEED).GetValue());
         nSpeedSet = ATTR_SET;
     }
     else
@@ -517,7 +517,7 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ANIMATION_SOUNDFILE) == SfxItemState::SET)
     {
-        aSound = static_cast<const SfxStringItem&>(pArgs->Get(ATTR_ANIMATION_SOUNDFILE)).GetValue();
+        aSound = pArgs->Get(ATTR_ANIMATION_SOUNDFILE).GetValue();
         nSoundFileSet = ATTR_SET;
     }
     else
@@ -541,8 +541,8 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ACTION) == SfxItemState::SET)
     {
-        eClickAction = static_cast<presentation::ClickAction>(static_cast<const SfxUInt16Item&>(pArgs->
-                    Get(ATTR_ACTION)).GetValue());
+        eClickAction = static_cast<presentation::ClickAction>(pArgs->
+                    Get(ATTR_ACTION).GetValue());
         nClickActionSet = ATTR_SET;
     }
     else
@@ -550,8 +550,7 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ACTION_FILENAME) == SfxItemState::SET)
     {
-        aBookmark = static_cast<const SfxStringItem&>(pArgs->
-                        Get(ATTR_ACTION_FILENAME)).GetValue();
+        aBookmark = pArgs->Get(ATTR_ACTION_FILENAME).GetValue();
         nBookmarkSet = ATTR_SET;
     }
     else
@@ -559,8 +558,8 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ACTION_EFFECT) == SfxItemState::SET)
     {
-        eSecondEffect = static_cast<presentation::AnimationEffect>(static_cast<const SfxUInt16Item&>( pArgs->
-                    Get(ATTR_ACTION_EFFECT)).GetValue());
+        eSecondEffect = static_cast<presentation::AnimationEffect>( pArgs->
+                    Get(ATTR_ACTION_EFFECT).GetValue());
         nSecondEffectSet = ATTR_SET;
     }
     else
@@ -568,8 +567,8 @@ void FuObjectAnimationParameters::DoExecute( SfxRequest& rReq )
 
     if (pArgs->GetItemState(ATTR_ACTION_EFFECTSPEED) == SfxItemState::SET)
     {
-        eSecondSpeed  = static_cast<presentation::AnimationSpeed>(static_cast<const SfxUInt16Item&>( pArgs->
-                    Get(ATTR_ACTION_EFFECTSPEED)).GetValue());
+        eSecondSpeed  = static_cast<presentation::AnimationSpeed>( pArgs->
+                    Get(ATTR_ACTION_EFFECTSPEED).GetValue());
         nSecondSpeedSet = ATTR_SET;
     }
     else

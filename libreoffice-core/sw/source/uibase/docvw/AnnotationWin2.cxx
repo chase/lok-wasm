@@ -45,6 +45,7 @@
 #include <editeng/editeng.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/outlobj.hxx>
+#include <editeng/editund2.hxx>
 
 #include <svl/undo.hxx>
 #include <svl/stritem.hxx>
@@ -56,6 +57,7 @@
 #include <vcl/decoview.hxx>
 #include <vcl/event.hxx>
 #include <vcl/gradient.hxx>
+#include <vcl/pdfextoutdevdata.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/ptrstyle.hxx>
@@ -67,6 +69,7 @@
 #include <docsh.hxx>
 #include <wrtsh.hxx>
 #include <doc.hxx>
+#include <docstyle.hxx>
 #include <docufld.hxx>
 #include <swmodule.hxx>
 
@@ -145,7 +148,7 @@ void SwAnnotationWin::PaintTile(vcl::RenderContext& rRenderContext, const tools:
 
 bool SwAnnotationWin::IsHitWindow(const Point& rPointLogic)
 {
-    tools::Rectangle aRectangleLogic(EditWin().PixelToLogic(GetPosPixel()), EditWin().PixelToLogic(GetSizePixel()));
+    tools::Rectangle aRectangleLogic(EditWin().PixelToLogic(tools::Rectangle(GetPosPixel(),GetSizePixel())));
     return aRectangleLogic.Contains(rPointLogic);
 }
 
@@ -159,6 +162,13 @@ void SwAnnotationWin::DrawForPage(OutputDevice* pDev, const Point& rPt)
     // tdf#143511 unclip SysObj so get_extents_relative_to of children
     // of the SysObj can provide meaningful results
     UnclipVisibleSysObj();
+
+    vcl::PDFExtOutDevData *const pPDFExtOutDevData(
+        dynamic_cast<vcl::PDFExtOutDevData*>(pDev->GetExtOutDevData()));
+    if (pPDFExtOutDevData && pPDFExtOutDevData->GetIsExportTaggedPDF())
+    {
+        pPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::NonStructElement, OUString());
+    }
 
     pDev->Push();
 
@@ -237,6 +247,11 @@ void SwAnnotationWin::DrawForPage(OutputDevice* pDev, const Point& rPt)
     }
 
     pDev->Pop();
+
+    if (pPDFExtOutDevData && pPDFExtOutDevData->GetIsExportTaggedPDF())
+    {
+        pPDFExtOutDevData->EndStructureElement();
+    }
 }
 
 void SwAnnotationWin::SetPosSizePixelRect(tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight,
@@ -283,13 +298,6 @@ void SwAnnotationWin::ShowAnchorOnly(const Point &aPoint)
         mpShadow->setVisible(false);
 }
 
-SfxItemSet SwAnnotationWin::DefaultItem()
-{
-    SfxItemSet aItem( mrView.GetDocShell()->GetPool() );
-    aItem.Put(SvxFontHeightItem(200,100,EE_CHAR_FONTHEIGHT));
-    return aItem;
-}
-
 void SwAnnotationWin::InitControls()
 {
     // window controls for author and date
@@ -325,6 +333,7 @@ void SwAnnotationWin::InitControls()
 
     SwDocShell* aShell = mrView.GetDocShell();
     mpOutliner.reset(new Outliner(&aShell->GetPool(),OutlinerMode::TextObject));
+    mpOutliner->SetStyleSheetPool(static_cast<SwDocStyleSheetPool*>(aShell->GetStyleSheetPool())->GetEEStyleSheetPool());
     aShell->GetDoc()->SetCalcFieldValueHdl( mpOutliner.get() );
     mpOutliner->SetUpdateLayout( true );
 
@@ -347,8 +356,6 @@ void SwAnnotationWin::InitControls()
     mpOutlinerView->SetBackgroundColor(COL_TRANSPARENT);
     mpOutlinerView->SetOutputArea( PixelToLogic( tools::Rectangle(0,0,1,1) ) );
 
-    mpOutlinerView->SetAttribs(DefaultItem());
-
     mxVScrollbar->set_direction(false);
     mxVScrollbar->connect_vadjustment_changed(LINK(this, SwAnnotationWin, ScrollHdl));
     mxVScrollbar->connect_mouse_move(LINK(this, SwAnnotationWin, MouseMoveHdl));
@@ -356,6 +363,9 @@ void SwAnnotationWin::InitControls()
     EEControlBits nCntrl = mpOutliner->GetControlWord();
     // TODO: crash when AUTOCOMPLETE enabled
     nCntrl |= EEControlBits::MARKFIELDS | EEControlBits::PASTESPECIAL | EEControlBits::AUTOCORRECT | EEControlBits::USECHARATTRIBS; // | EEControlBits::AUTOCOMPLETE;
+    // Our stylesheet pool follows closely the core paragraph styles.
+    // We don't want the rtf import (during paste) to mess with that.
+    nCntrl &= ~EEControlBits::RTFSTYLESHEETS;
 
     if (SwWrtShell* pWrtShell = mrView.GetWrtShellPtr())
     {
@@ -394,7 +404,6 @@ void SwAnnotationWin::InitControls()
     mxMenuButton->connect_key_press(LINK(this, SwAnnotationWin, KeyInputHdl));
     mxMenuButton->connect_mouse_move(LINK(this, SwAnnotationWin, MouseMoveHdl));
 
-    SetLanguage(GetLanguage());
     GetOutlinerView()->StartSpeller(mxSidebarTextControl->GetDrawingArea());
     SetPostItText();
     mpOutliner->CompleteOnlineSpelling();
@@ -495,7 +504,7 @@ void SwAnnotationWin::SetMenuButtonColors()
     const tools::Long nBorderDistanceBottom = ((aSymbolRect.GetHeight() * 150) + 500) / 1000;
     aSymbolRect.AdjustBottom( -nBorderDistanceBottom );
     DecorationView aDecoView(xVirDev.get());
-    aDecoView.DrawSymbol(aSymbolRect, SymbolType::SPIN_DOWN, GetTextColor(),
+    aDecoView.DrawSymbol(aSymbolRect, SymbolType::SPIN_DOWN, COL_BLACK,
                          DrawSymbolFlags::NONE);
     mxMenuButton->set_image(xVirDev);
     mxMenuButton->set_size_request(aSize.Width() + 4, aSize.Height() + 4);
@@ -910,67 +919,6 @@ void SwAnnotationWin::SetReadonly(bool bSet)
     GetOutlinerView()->SetReadOnly(bSet);
 }
 
-void SwAnnotationWin::SetLanguage(const SvxLanguageItem& rNewItem)
-{
-    IDocumentUndoRedo& rUndoRedo(
-        mrView.GetDocShell()->GetDoc()->GetIDocumentUndoRedo());
-    const bool bDocUndoEnabled = rUndoRedo.DoesUndo();
-    const bool bOutlinerUndoEnabled = mpOutliner->IsUndoEnabled();
-    const bool bOutlinerModified = mpOutliner->IsModified();
-    const bool bDisableAndRestoreUndoMode = !bDocUndoEnabled && bOutlinerUndoEnabled;
-
-    if (bDisableAndRestoreUndoMode)
-    {
-        // doc undo is disabled, but outliner was enabled, turn outliner undo off
-        // for the duration of this function
-        mpOutliner->EnableUndo(false);
-    }
-
-    Link<LinkParamNone*,void> aLink = mpOutliner->GetModifyHdl();
-    mpOutliner->SetModifyHdl( Link<LinkParamNone*,void>() );
-    ESelection aOld = GetOutlinerView()->GetSelection();
-
-    ESelection aNewSelection( 0, 0, mpOutliner->GetParagraphCount()-1, EE_TEXTPOS_ALL );
-    GetOutlinerView()->SetSelection( aNewSelection );
-    SfxItemSet aEditAttr(GetOutlinerView()->GetAttribs());
-    aEditAttr.Put(rNewItem);
-    GetOutlinerView()->SetAttribs( aEditAttr );
-
-    if (!mpOutliner->IsUndoEnabled() && !bOutlinerModified)
-    {
-        // if undo was disabled (e.g. this is a redo action) and we were
-        // originally 'unmodified' keep it that way
-        mpOutliner->ClearModifyFlag();
-    }
-
-    GetOutlinerView()->SetSelection(aOld);
-    mpOutliner->SetModifyHdl( aLink );
-
-    EEControlBits nCntrl = mpOutliner->GetControlWord();
-    // turn off
-    nCntrl &= ~EEControlBits::ONLINESPELLING;
-    mpOutliner->SetControlWord(nCntrl);
-
-    if (SwWrtShell* pWrtShell = mrView.GetWrtShellPtr())
-    {
-        const SwViewOption* pVOpt = pWrtShell->GetViewOptions();
-        //turn back on
-        if (pVOpt->IsOnlineSpell())
-            nCntrl |= EEControlBits::ONLINESPELLING;
-        else
-            nCntrl &= ~EEControlBits::ONLINESPELLING;
-    }
-    mpOutliner->SetControlWord(nCntrl);
-
-    mpOutliner->CompleteOnlineSpelling();
-
-    // restore original mode
-    if (bDisableAndRestoreUndoMode)
-        mpOutliner->EnableUndo(true);
-
-    Invalidate();
-}
-
 void SwAnnotationWin::GetFocus()
 {
     if (mxSidebarTextControl)
@@ -1071,7 +1019,7 @@ void SwAnnotationWin::DeactivatePostIt()
     if ( !Application::GetSettings().GetStyleSettings().GetHighContrastMode() )
         GetOutlinerView()->SetBackgroundColor(COL_TRANSPARENT);
 
-    if (!mnDeleteEventId && !IsProtected() && mpOutliner->GetEditEngine().GetText().isEmpty())
+    if (!mnDeleteEventId && !IsReadOnlyOrProtected() && mpOutliner->GetEditEngine().GetText().isEmpty())
     {
         mnDeleteEventId = Application::PostUserEvent( LINK( this, SwAnnotationWin, DeleteHdl), nullptr, true );
     }
@@ -1086,7 +1034,7 @@ void SwAnnotationWin::ToggleInsMode()
         //change document
         mrView.GetWrtShell().ToggleInsMode();
         //update statusbar
-        SfxBindings &rBnd = mrView.GetViewFrame()->GetBindings();
+        SfxBindings &rBnd = mrView.GetViewFrame().GetBindings();
         rBnd.Invalidate(SID_ATTR_INSERT);
         rBnd.Update(SID_ATTR_INSERT);
     }
@@ -1111,7 +1059,7 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
             if (mrMgr.HasActiveSidebarWin())
                 mrMgr.SetActiveSidebarWin(nullptr);
             SwitchToFieldPos();
-            mrView.GetViewFrame()->GetDispatcher()->Execute(FN_POSTIT);
+            mrView.GetViewFrame().GetDispatcher()->Execute(FN_POSTIT);
 
             if (nSlot == FN_REPLY)
             {
@@ -1147,7 +1095,7 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
         case FN_DELETE_ALL_NOTES:
         case FN_HIDE_ALL_NOTES:
             // not possible as slot as this would require that "this" is the active postit
-            mrView.GetViewFrame()->GetBindings().Execute( nSlot, nullptr, SfxCallMode::ASYNCHRON );
+            mrView.GetViewFrame().GetBindings().Execute( nSlot, nullptr, SfxCallMode::ASYNCHRON );
             break;
         case FN_DELETE_NOTE_AUTHOR:
         case FN_HIDE_NOTE_AUTHOR:
@@ -1157,11 +1105,11 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
             const SfxPoolItem* aItems[2];
             aItems[0] = &aItem;
             aItems[1] = nullptr;
-            mrView.GetViewFrame()->GetBindings().Execute( nSlot, aItems, SfxCallMode::ASYNCHRON );
+            mrView.GetViewFrame().GetBindings().Execute( nSlot, aItems, SfxCallMode::ASYNCHRON );
         }
             break;
         default:
-            mrView.GetViewFrame()->GetBindings().Execute( nSlot );
+            mrView.GetViewFrame().GetBindings().Execute( nSlot );
             break;
     }
 }
@@ -1252,7 +1200,6 @@ void SwAnnotationWin::ResetAttributes()
 {
     mpOutlinerView->RemoveAttribsKeepLanguages(true);
     mpOutliner->RemoveFields();
-    mpOutlinerView->SetAttribs(DefaultItem());
 }
 
 int SwAnnotationWin::GetPrefScrollbarWidth() const
@@ -1268,25 +1215,14 @@ int SwAnnotationWin::GetPrefScrollbarWidth() const
 
 sal_Int32 SwAnnotationWin::GetMetaHeight() const
 {
-    if (!moMetaHeight)
-    {
-        const int fields = GetNumFields();
+    const int fields = GetNumFields();
 
-        sal_Int32 nRequiredHeight = 0;
-        weld::Label* aLabels[3] = { mxMetadataAuthor.get(), mxMetadataDate.get(), mxMetadataResolved.get() };
-        for (int i = 0; i < fields; ++i)
-            nRequiredHeight += aLabels[i]->get_preferred_size().Height();
-        moMetaHeight = nRequiredHeight;
-    }
-    return *moMetaHeight;
-}
+    sal_Int32 nRequiredHeight = 0;
+    weld::Label* aLabels[3] = { mxMetadataAuthor.get(), mxMetadataDate.get(), mxMetadataResolved.get() };
+    for (int i = 0; i < fields; ++i)
+        nRequiredHeight += aLabels[i]->get_preferred_size().Height();
 
-void SwAnnotationWin::DataChanged(const DataChangedEvent& rDCEvt)
-{
-    if ((rDCEvt.GetType() == DataChangedEventType::SETTINGS) && (rDCEvt.GetFlags() & AllSettingsFlags::STYLE))
-    {
-        moMetaHeight.reset();
-    }
+    return nRequiredHeight;
 }
 
 sal_Int32 SwAnnotationWin::GetNumFields() const
@@ -1316,11 +1252,9 @@ void SwAnnotationWin::SetSpellChecking()
     {
         const SwViewOption* pVOpt = pWrtShell->GetViewOptions();
         EEControlBits nCntrl = mpOutliner->GetControlWord();
+        mpOutliner->SetControlWord(nCntrl & ~EEControlBits::ONLINESPELLING);
         if (pVOpt->IsOnlineSpell())
-            nCntrl |= EEControlBits::ONLINESPELLING;
-        else
-            nCntrl &= ~EEControlBits::ONLINESPELLING;
-        mpOutliner->SetControlWord(nCntrl);
+            mpOutliner->SetControlWord(nCntrl | EEControlBits::ONLINESPELLING);
 
         mpOutliner->CompleteOnlineSpelling();
         Invalidate();
@@ -1412,14 +1346,15 @@ void SwAnnotationWin::SetViewState(ViewState bViewState)
 
 SwAnnotationWin* SwAnnotationWin::GetTopReplyNote()
 {
-    SwAnnotationWin* pTopNote = this;
-    SwAnnotationWin* pSidebarWin = IsFollow() ? mrMgr.GetNextPostIt(KEY_PAGEUP, this) : nullptr;
-    while (pSidebarWin)
+    for (SwAnnotationWin* pTopNote = this;;)
     {
-        pTopNote = pSidebarWin;
-        pSidebarWin = pSidebarWin->IsFollow() ? mrMgr.GetNextPostIt(KEY_PAGEUP, pSidebarWin) : nullptr;
+        if (!pTopNote->IsFollow())
+            return pTopNote;
+        SwAnnotationWin* pPrev = mrMgr.GetNextPostIt(KEY_PAGEUP, pTopNote);
+        if (!pPrev)
+            return pTopNote;
+        pTopNote = pPrev;
     }
-    return pTopNote;
 }
 
 void SwAnnotationWin::SwitchToFieldPos()

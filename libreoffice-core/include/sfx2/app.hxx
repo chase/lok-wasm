@@ -129,7 +129,7 @@ public:
     /**
     * @param pArgs Takes ownership
     */
-    ErrCode                     LoadTemplate( SfxObjectShellLock& xDoc, const OUString& rFileName, std::unique_ptr<SfxItemSet> pArgs );
+    ErrCodeMsg                  LoadTemplate( SfxObjectShellLock& xDoc, const OUString& rFileName, std::unique_ptr<SfxItemSet> pArgs );
     weld::Window*               GetTopWindow() const;
 
     // members
@@ -155,7 +155,7 @@ public:
 
     // misc.
     static void                 GetOptions(SfxItemSet &);
-    void                        SetOptions(const SfxItemSet &);
+    static void                 SetOptions(const SfxItemSet &);
     virtual void                Invalidate(sal_uInt16 nId = 0) override;
     void                        NotifyEvent(const SfxEventHint& rEvent, bool bSynchron = true );
     bool                        IsDowning() const;
@@ -164,7 +164,6 @@ public:
     SAL_DLLPRIVATE SfxDispatcher* GetAppDispatcher_Impl();
     SAL_DLLPRIVATE SfxDispatcher* GetDispatcher_Impl();
 
-    SAL_DLLPRIVATE void         SetOptions_Impl(const SfxItemSet &);
     SAL_DLLPRIVATE void         Initialize_Impl();
 
     SAL_DLLPRIVATE SfxAppData_Impl* Get_Impl() const { return pImpl.get(); }

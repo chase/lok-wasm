@@ -42,6 +42,7 @@
 #include <com/sun/star/rdf/XMetadatable.hpp>
 
 #include <com/sun/star/text/XFormField.hpp>
+#include <comphelper/diagnose_ex.hxx>
 
 #include <RDFaImportHelper.hxx>
 
@@ -263,7 +264,7 @@ static auto PopFieldmark(XMLTextImportHelper & rHelper) -> void
 
 void XMLTextMarkImportContext::endFastElement(sal_Int32 nElement)
 {
-    static constexpr OUStringLiteral sAPI_bookmark = u"com.sun.star.text.Bookmark";
+    static constexpr OUString sAPI_bookmark = u"com.sun.star.text.Bookmark"_ustr;
 
     lcl_MarkType nTmp{};
     if (!SvXMLUnitConverter::convertEnum(nTmp, SvXMLImport::getNameFromToken(nElement), lcl_aMarkTypeMap))
@@ -305,7 +306,7 @@ void XMLTextMarkImportContext::endFastElement(sal_Int32 nElement)
                 // export point bookmark
                 const Reference<XInterface> xContent(
                     CreateAndInsertMark(GetImport(),
-                                (bImportAsField ? OUString("com.sun.star.text.FormFieldmark") : OUString(sAPI_bookmark)),
+                                (bImportAsField ? OUString("com.sun.star.text.FormFieldmark") : sAPI_bookmark),
                         m_sBookmarkName,
                         m_rHelper.GetCursorAsRange()->getStart(),
                         m_sXmlId) );
@@ -384,7 +385,7 @@ void XMLTextMarkImportContext::endFastElement(sal_Int32 nElement)
                     try {
                         xInsertionCursor->gotoRange(xStartRange, true);
                     } catch (uno::Exception&) {
-                        OSL_ENSURE(false,
+                        TOOLS_WARN_EXCEPTION("xmloff.text",
                             "cannot go to end position of bookmark");
                     }
 

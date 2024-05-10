@@ -29,9 +29,14 @@ class LOKClipboard final
     css::uno::Reference<css::datatransfer::XTransferable> m_xTransferable;
     css::uno::Reference<css::datatransfer::clipboard::XClipboardOwner> m_aOwner;
     std::vector<css::uno::Reference<css::datatransfer::clipboard::XClipboardListener>> m_aListeners;
+    // MACRO-1919: LOK clipboard listener may not exist, so explicitly bind the view id which is implicitly associated {
+    int m_nViewId;
+    // MACRO-1919 }
 
 public:
-    LOKClipboard();
+    // MACRO-1919: LOK clipboard listener may not exist, so explicitly bind the view id which is implicitly associated {
+    LOKClipboard(int view_id);
+    // MACRO-1919 }
 
     /// get an XInterface easily.
     css::uno::Reference<css::uno::XInterface> getXI()

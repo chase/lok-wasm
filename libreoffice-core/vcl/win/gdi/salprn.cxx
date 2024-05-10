@@ -207,8 +207,8 @@ void WinSalInstance::GetPrinterQueueState( SalPrinterQueueInfo* pInfo )
                     pInfo->maComment = o3tl::toU(pWinInfo2->pComment);
                 pInfo->mnStatus      = ImplWinQueueStatusToSal( pWinInfo2->Status );
                 pInfo->mnJobs        = pWinInfo2->cJobs;
-                if( ! pInfo->mpPortName )
-                    pInfo->mpPortName.reset(new OUString(aPortName));
+                if( ! pInfo->moPortName )
+                    pInfo->moPortName = aPortName;
             }
             std::free(pWinInfo2);
         }
@@ -317,9 +317,7 @@ static bool ImplTestSalJobSetup( WinSalInfoPrinter const * pPrinter,
         }
         if ( bDelete )
         {
-            std::free( const_cast<sal_uInt8*>(pSetupData->GetDriverData()) );
-            pSetupData->SetDriverData( nullptr );
-            pSetupData->SetDriverDataLen( 0 );
+            pSetupData->SetDriverData( nullptr, 0 );
         }
     }
 
@@ -340,6 +338,7 @@ static bool ImplUpdateSalJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSe
     LONG            nRet;
     HWND            hWnd = nullptr;
     DWORD           nMode = DM_OUT_BUFFER;
+    std::unique_ptr<sal_uInt8[]> pDriverData;
     SalDriverData*  pOutBuffer = nullptr;
     BYTE const *    pInBuffer = nullptr;
 
@@ -354,7 +353,9 @@ static bool ImplUpdateSalJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSe
 
     // make Outputbuffer
     const std::size_t nDriverDataLen = sizeof(SalDriverData) + nSysJobSize-1;
-    pOutBuffer                  = static_cast<SalDriverData*>(rtl_allocateZeroMemory( nDriverDataLen ));
+    pDriverData = std::make_unique<sal_uInt8[]>( nDriverDataLen );
+    memset(pDriverData.get(), 0, nDriverDataLen);
+    pOutBuffer = reinterpret_cast<SalDriverData*>(pDriverData.get());
     pOutBuffer->mnSysSignature  = SAL_DRIVERDATA_SYSSIGN;
     // calculate driver data offset including structure padding
     pOutBuffer->mnDriverOffset  = sal::static_int_cast<sal_uInt16>(
@@ -390,10 +391,7 @@ static bool ImplUpdateSalJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSe
     ClosePrinter( hPrn );
 
     if( (nRet < 0) || (pVisibleDlgParent && (nRet == IDCANCEL)) )
-    {
-        std::free( pOutBuffer );
         return false;
-    }
 
     // fill up string buffers with 0 so they do not influence a JobSetup's memcmp
     if( reinterpret_cast<LPDEVMODEW>(pOutDevMode)->dmSize >= 64 )
@@ -410,10 +408,7 @@ static bool ImplUpdateSalJobSetup( WinSalInfoPrinter const * pPrinter, ImplJobSe
     }
 
     // update data
-    if ( pSetupData->GetDriverData() )
-        std::free( const_cast<sal_uInt8*>(pSetupData->GetDriverData()) );
-    pSetupData->SetDriverDataLen( nDriverDataLen );
-    pSetupData->SetDriverData(reinterpret_cast<BYTE*>(pOutBuffer));
+    pSetupData->SetDriverData(std::move(pDriverData), nDriverDataLen);
     pSetupData->SetSystem( JOBSETUP_SYSTEM_WINDOWS );
 
     return true;
@@ -1029,11 +1024,11 @@ SalInfoPrinter* WinSalInstance::CreateInfoPrinter( SalPrinterQueueInfo* pQueueIn
                                                    ImplJobSetup* pSetupData )
 {
     WinSalInfoPrinter* pPrinter = new WinSalInfoPrinter;
-    if( ! pQueueInfo->mpPortName )
+    if( ! pQueueInfo->moPortName )
         GetPrinterQueueState( pQueueInfo );
     pPrinter->maDriverName  = pQueueInfo->maDriver;
     pPrinter->maDeviceName  = pQueueInfo->maPrinterName;
-    pPrinter->maPortName    = pQueueInfo->mpPortName ? *pQueueInfo->mpPortName : OUString();
+    pPrinter->maPortName    = pQueueInfo->moPortName ? *pQueueInfo->moPortName : OUString();
 
     // check if the provided setup data match the actual printer
     ImplTestSalJobSetup( pPrinter, pSetupData, true );
@@ -1080,8 +1075,6 @@ void WinSalInfoPrinter::setHDC(HDC hNewDC)
     if (m_hDC)
     {
         assert(!m_pGraphics || m_hDC == m_pGraphics->getHDC());
-        // we get intermittent crashes on the Windows jenkins box around here, let us see if there is something weird about the DC
-        SAL_WARN_IF(!hNewDC, "vcl", "Graphics DC " << m_hDC);
         delete m_pGraphics;
         m_pGraphics = nullptr;
         DeleteDC(m_hDC);
@@ -1202,6 +1195,41 @@ OUString WinSalInfoPrinter::GetPaperBinName( const ImplJobSetup* pSetupData, sal
 
     return aPaperBinName;
 }
+
+sal_uInt16 WinSalInfoPrinter::GetPaperBinBySourceIndex( const ImplJobSetup* pSetupData, sal_uInt16 nPaperSource )
+{
+    DWORD nBins = ImplDeviceCaps( this, DC_BINNAMES, nullptr, pSetupData );
+    if (nBins != GDI_ERROR)
+    {
+        auto pBuffer = std::make_unique<sal_uInt16[]>(nBins);
+        DWORD nBins = ImplDeviceCaps( this, DC_BINS, reinterpret_cast<BYTE*>(pBuffer.get()), pSetupData );
+        if (nBins != GDI_ERROR)
+        {
+            for (DWORD nBin = 0; nBin < nBins; ++nBin)
+            {
+                if (nPaperSource == *(pBuffer.get() + nBin))
+                    return nBin;
+            }
+        }
+    }
+    return 0xffff;
+}
+
+sal_uInt16  WinSalInfoPrinter::GetSourceIndexByPaperBin(const ImplJobSetup* pSetupData, sal_uInt16 nPaperBin)
+{
+    DWORD nBins = ImplDeviceCaps( this, DC_BINNAMES, nullptr, pSetupData );
+    if (nBins != GDI_ERROR)
+    {
+        auto pBuffer = std::make_unique<sal_uInt16[]>(nBins);
+        DWORD nBins = ImplDeviceCaps( this, DC_BINS, reinterpret_cast<BYTE*>(pBuffer.get()), pSetupData );
+        if (nBins != GDI_ERROR && nBins > nPaperBin)
+        {
+            return *(pBuffer.get() + nPaperBin);
+        }
+    }
+    return 0;
+}
+
 
 sal_uInt32 WinSalInfoPrinter::GetCapabilities( const ImplJobSetup* pSetupData, PrinterCapType nType )
 {
@@ -1382,13 +1410,23 @@ void WinSalPrinter::markInvalid()
 
 // need wrappers for StarTocW/A to use structured exception handling
 // since SEH does not mix with standard exception handling's cleanup
-static int lcl_StartDocW( HDC hDC, DOCINFOW const * pInfo, WinSalPrinter* pPrt )
+static int lcl_StartDocW1( HDC hDC, DOCINFOW const * pInfo, WinSalPrinter* pPrt )
 {
     int nRet = 0;
     CATCH_DRIVER_EX_BEGIN;
     nRet = ::StartDocW( hDC, pInfo );
     CATCH_DRIVER_EX_END( "exception in StartDocW", pPrt );
     return nRet;
+}
+
+static int lcl_StartDocW( HDC hDC, DOCINFOW const * pInfo, WinSalPrinter* pPrt )
+{
+    //tdf#127547 - Freeze/crash in Microsoft Print to PDF dialog, if we try to paste while
+    // executing the StartDocW method, Windows will call back into us on a separate thread,
+    // where we will attempt to take the SolarMutex.
+    SolarMutexReleaser aReleaser;
+
+    return lcl_StartDocW1(hDC, pInfo, pPrt);
 }
 
 bool WinSalPrinter::StartJob( const OUString* pFileName,

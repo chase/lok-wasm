@@ -177,12 +177,7 @@ ODatabaseContext::ODatabaseContext( const Reference< XComponentContext >& _rxCon
 #endif
 
     osl_atomic_increment( &m_refCount );
-    {
-        m_xDBRegistrationAggregate.set( createDataSourceRegistrations( m_aContext ), UNO_SET_THROW );
-        m_xDatabaseRegistrations.set( m_xDBRegistrationAggregate, UNO_QUERY_THROW );
-
-        m_xDBRegistrationAggregate->setDelegator( *this );
-    }
+    m_xDatabaseRegistrations =  createDataSourceRegistrations( m_aContext );
     osl_atomic_decrement( &m_refCount );
 }
 
@@ -193,8 +188,6 @@ ODatabaseContext::~ODatabaseContext()
 #endif
 
     m_xDatabaseDocumentLoader.clear();
-    m_xDBRegistrationAggregate->setDelegator( nullptr );
-    m_xDBRegistrationAggregate.clear();
     m_xDatabaseRegistrations.clear();
 }
 
@@ -314,8 +307,9 @@ Reference< XInterface > ODatabaseContext::loadObjectFromURL(const OUString& _rNa
             OUString sErrorMessage( DBA_RES( RID_STR_FILE_DOES_NOT_EXIST ) );
             ::svt::OFileNotation aTransformer( _sURL );
 
-            SQLException aError;
-            aError.Message = sErrorMessage.replaceAll( "$file$", aTransformer.get( ::svt::OFileNotation::N_SYSTEM ) );
+            SQLException aError(sErrorMessage.replaceAll(
+                                    "$file$", aTransformer.get(::svt::OFileNotation::N_SYSTEM)),
+                                {}, {}, 0, {});
 
             throw WrappedTargetException( _sURL, *this, Any( aError ) );
         }
@@ -705,17 +699,6 @@ void ODatabaseContext::databaseDocumentURLChange( const OUString& _rOldURL, cons
 
     m_aDatabaseObjects[ _rNewURL ] = oldPos->second;
     m_aDatabaseObjects.erase( oldPos );
-}
-
-sal_Int64 SAL_CALL ODatabaseContext::getSomething( const Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
-const Sequence< sal_Int8 > & ODatabaseContext::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit implId;
-    return implId.getSeq();
 }
 
 void ODatabaseContext::onBasicManagerCreated( const Reference< XModel >& _rxForDocument, BasicManager& _rBasicManager )

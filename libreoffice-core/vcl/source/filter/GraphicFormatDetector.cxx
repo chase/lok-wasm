@@ -21,6 +21,7 @@
 
 #include <algorithm>
 
+#include <vcl/filter/PngImageReader.hxx>
 #include <graphic/GraphicFormatDetector.hxx>
 #include <graphic/DetectorTools.hxx>
 #include <tools/solar.h>
@@ -127,6 +128,16 @@ bool peekGraphicFormat(SvStream& rStream, OUString& rFormatExtension, bool bTest
     {
         bSomethingTested = true;
         if (aDetector.checkGIF())
+        {
+            rFormatExtension = getImportFormatShortName(aDetector.getMetadata().mnFormat);
+            return true;
+        }
+    }
+
+    if (!bTest || rFormatExtension.startsWith("APNG"))
+    {
+        bSomethingTested = true;
+        if (aDetector.checkAPNG())
         {
             rFormatExtension = getImportFormatShortName(aDetector.getMetadata().mnFormat);
             return true;
@@ -832,13 +843,14 @@ bool GraphicFormatDetector::checkGIF()
 bool GraphicFormatDetector::checkPNG()
 {
     SeekGuard aGuard(mrStream, mnStreamPosition);
-    if (mnFirstLong == 0x89504e47 && mnSecondLong == 0x0d0a1a0a)
+    uint64_t nSignature = (static_cast<uint64_t>(mnFirstLong) << 32) | mnSecondLong;
+    if (nSignature == PNG_SIGNATURE)
     {
         maMetadata.mnFormat = GraphicFileFormat::PNG;
         if (mbExtendedInfo)
         {
             sal_uInt32 nTemp32;
-            mrStream.Seek(mnStreamPosition + 8);
+            mrStream.Seek(mnStreamPosition + PNG_SIGNATURE_SIZE);
             do
             {
                 sal_uInt8 cByte = 0;
@@ -884,9 +896,9 @@ bool GraphicFormatDetector::checkPNG()
                 // read up to the start of the image
                 mrStream.ReadUInt32(nLen32);
                 mrStream.ReadUInt32(nTemp32);
-                while (mrStream.good() && nTemp32 != 0x49444154)
+                while (mrStream.good() && nTemp32 != PNG_IDAT_SIGNATURE)
                 {
-                    if (nTemp32 == 0x70485973) // physical pixel dimensions
+                    if (nTemp32 == PNG_PHYS_SIGNATURE) // physical pixel dimensions
                     {
                         sal_uLong nXRes;
                         sal_uLong nYRes;
@@ -918,7 +930,7 @@ bool GraphicFormatDetector::checkPNG()
 
                         nLen32 -= 9;
                     }
-                    else if (nTemp32 == 0x74524e53) // transparency
+                    else if (nTemp32 == PNG_TRNS_SIGNATURE) // transparency
                     {
                         maMetadata.mbIsTransparent = true;
                         maMetadata.mbIsAlpha = (cColType != 0 && cColType != 2);
@@ -931,6 +943,17 @@ bool GraphicFormatDetector::checkPNG()
                 }
             } while (false);
         }
+        return true;
+    }
+    return false;
+}
+
+bool GraphicFormatDetector::checkAPNG()
+{
+    mrStream.Seek(mnStreamPosition);
+    if (PngImageReader::isAPng(mrStream))
+    {
+        maMetadata.mnFormat = GraphicFileFormat::APNG;
         return true;
     }
     return false;
@@ -1096,7 +1119,8 @@ bool GraphicFormatDetector::checkEPS()
         maMetadata.mnFormat = GraphicFileFormat::EPS;
         return true;
     }
-    else if (checkArrayForMatchingStrings(pFirstBytesAsCharArray, 30, { "%!PS-Adobe", " EPS" }))
+    else if (checkArrayForMatchingStrings(pFirstBytesAsCharArray, 30,
+                                          { "%!PS-Adobe"_ostr, " EPS"_ostr }))
     {
         maMetadata.mnFormat = GraphicFileFormat::EPS;
         return true;
@@ -1205,7 +1229,7 @@ bool GraphicFormatDetector::checkRAS()
 bool GraphicFormatDetector::checkXPM()
 {
     const char* pFirstBytesAsCharArray = reinterpret_cast<char*>(maFirstBytes.data());
-    if (matchArrayWithString(pFirstBytesAsCharArray, 256, "/* XPM */"))
+    if (matchArrayWithString(pFirstBytesAsCharArray, 256, "/* XPM */"_ostr))
     {
         maMetadata.mnFormat = GraphicFileFormat::XPM;
         return true;
@@ -1224,7 +1248,7 @@ bool GraphicFormatDetector::checkXBM()
 
     const char* pBufferAsCharArray = reinterpret_cast<char*>(pBuffer.get());
 
-    if (checkArrayForMatchingStrings(pBufferAsCharArray, nSize, { "#define", "_width" }))
+    if (checkArrayForMatchingStrings(pBufferAsCharArray, nSize, { "#define"_ostr, "_width"_ostr }))
     {
         maMetadata.mnFormat = GraphicFileFormat::XBM;
         return true;
@@ -1249,14 +1273,15 @@ bool GraphicFormatDetector::checkSVG()
     // #119176# SVG files which have no xml header at all have shown up this is optional
     // check for "xml" then "version" then "DOCTYPE" and "svg" tags
     if (checkArrayForMatchingStrings(pCheckArrayAsCharArray, nCheckSize,
-                                     { "<?xml", "version", "DOCTYPE", "svg" }))
+                                     { "<?xml"_ostr, "version"_ostr, "DOCTYPE"_ostr, "svg"_ostr }))
     {
         bIsSvg = true;
     }
 
     // check for svg element in 1st 256 bytes
     // search for '<svg'
-    if (!bIsSvg && checkArrayForMatchingStrings(pCheckArrayAsCharArray, nCheckSize, { "<svg" }))
+    if (!bIsSvg
+        && checkArrayForMatchingStrings(pCheckArrayAsCharArray, nCheckSize, { "<svg"_ostr }))
     {
         bIsSvg = true;
     }
@@ -1283,7 +1308,7 @@ bool GraphicFormatDetector::checkSVG()
         }
 
         // search for '<svg'
-        if (checkArrayForMatchingStrings(pCheckArrayAsCharArray, nCheckSize, { "<svg" }))
+        if (checkArrayForMatchingStrings(pCheckArrayAsCharArray, nCheckSize, { "<svg"_ostr }))
         {
             bIsSvg = true;
         }

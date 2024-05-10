@@ -75,8 +75,8 @@ static bool makeCanonicalFileURL( OUString & rURL )
 
 namespace comphelper {
 
-constexpr OUStringLiteral g_aOfficeBrandDirMacro(u"$(brandbaseurl)");
-constexpr OUStringLiteral g_aUserDirMacro(u"$(userdataurl)");
+constexpr OUString g_aOfficeBrandDirMacro(u"$(brandbaseurl)"_ustr);
+constexpr OUString g_aUserDirMacro(u"$(userdataurl)"_ustr);
 
 OfficeInstallationDirectories::OfficeInstallationDirectories(
         uno::Reference< uno::XComponentContext > xCtx )
@@ -211,7 +211,7 @@ void OfficeInstallationDirectories::initDirs()
     if ( m_xOfficeBrandDir)
         return;
 
-    osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     if ( m_xOfficeBrandDir )
         return;
 

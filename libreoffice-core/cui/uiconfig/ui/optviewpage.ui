@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.40.0 -->
+<!-- Generated with glade 3.38.2 -->
 <interface domain="cui">
   <requires lib="gtk+" version="3.20"/>
   <object class="GtkAdjustment" id="adjustment2">
@@ -8,6 +8,11 @@
     <property name="value">8</property>
     <property name="step-increment">1</property>
     <property name="page-increment">10</property>
+  </object>
+  <object class="GtkImage" id="image1">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">cmd/sc_additionsdialog.png</property>
   </object>
   <!-- n-columns=2 n-rows=1 -->
   <object class="GtkGrid" id="OptViewPage">
@@ -18,7 +23,7 @@
     <property name="border-width">6</property>
     <property name="column-spacing">24</property>
     <child>
-      <!-- n-columns=1 n-rows=5 -->
+      <!-- n-columns=1 n-rows=4 -->
       <object class="GtkGrid" id="grid2">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
@@ -32,7 +37,7 @@
             <property name="label-xalign">0</property>
             <property name="shadow-type">none</property>
             <child>
-              <!-- n-columns=2 n-rows=2 -->
+              <!-- n-columns=3 n-rows=1 -->
               <object class="GtkGrid" id="grid7">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -42,20 +47,6 @@
                 <property name="row-spacing">3</property>
                 <property name="column-spacing">6</property>
                 <child>
-                  <object class="GtkLabel" id="label11">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="label" translatable="yes" context="optviewpage|label11">_Positioning:</property>
-                    <property name="use-underline">True</property>
-                    <property name="mnemonic-widget">mousepos</property>
-                    <property name="xalign">0</property>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">0</property>
-                  </packing>
-                </child>
-                <child>
                   <object class="GtkLabel" id="label12">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
@@ -63,27 +54,6 @@
                     <property name="use-underline">True</property>
                     <property name="mnemonic-widget">mousemiddle</property>
                     <property name="xalign">0</property>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">1</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkComboBoxText" id="mousepos">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="hexpand">True</property>
-                    <items>
-                      <item translatable="yes" context="optviewpage|mousepos">Default button</item>
-                      <item translatable="yes" context="optviewpage|mousepos">Dialog center</item>
-                      <item translatable="yes" context="optviewpage|mousepos">No automatic positioning</item>
-                    </items>
-                    <child internal-child="accessible">
-                      <object class="AtkObject" id="mousepos-atkobject">
-                        <property name="AtkObject::accessible-description" translatable="yes" context="extended_tip | mousepos">Specifies if and how the mouse pointer will be positioned in newly opened dialogs.</property>
-                      </object>
-                    </child>
                   </object>
                   <packing>
                     <property name="left-attach">1</property>
@@ -107,8 +77,21 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">1</property>
-                    <property name="top-attach">1</property>
+                    <property name="left-attach">2</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockmousemiddle">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">0</property>
                   </packing>
                 </child>
               </object>
@@ -118,129 +101,6 @@
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="label" translatable="yes" context="optviewpage|label4">Mouse</property>
-                <attributes>
-                  <attribute name="weight" value="bold"/>
-                </attributes>
-              </object>
-            </child>
-          </object>
-          <packing>
-            <property name="left-attach">0</property>
-            <property name="top-attach">4</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkFrame" id="frame3">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <property name="label-xalign">0</property>
-            <property name="shadow-type">none</property>
-            <child>
-              <!-- n-columns=1 n-rows=2 -->
-              <object class="GtkGrid" id="grid8">
-                <property name="visible">True</property>
-                <property name="can-focus">False</property>
-                <property name="margin-start">12</property>
-                <property name="margin-top">6</property>
-                <property name="row-spacing">3</property>
-                <child>
-                  <!-- n-columns=2 n-rows=1 -->
-                  <object class="GtkGrid" id="menuiconsbox">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="hexpand">True</property>
-                    <property name="column-spacing">6</property>
-                    <child>
-                      <object class="GtkLabel" id="label13">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="label" translatable="yes" context="optviewpage|label13">Menu icons:</property>
-                        <property name="use-underline">True</property>
-                        <property name="mnemonic-widget">menuicons</property>
-                        <property name="xalign">0</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">0</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkComboBoxText" id="menuicons">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="hexpand">True</property>
-                        <items>
-                          <item translatable="yes" context="optviewpage|menuicons">Automatic</item>
-                          <item translatable="yes" context="optviewpage|menuicons">Hide</item>
-                          <item translatable="yes" context="optviewpage|menuicons">Show</item>
-                        </items>
-                        <child internal-child="accessible">
-                          <object class="AtkObject" id="menuicons-atkobject">
-                            <property name="AtkObject::accessible-description" translatable="yes" context="extended_tip | menuicons">Displays icons next to the corresponding menu items. Select from "Automatic", "Hide" and "Show". "Automatic" displays icons according to system settings and themes.</property>
-                          </object>
-                        </child>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">0</property>
-                  </packing>
-                </child>
-                <child>
-                  <!-- n-columns=2 n-rows=1 -->
-                  <object class="GtkGrid" id="menushortcutsbpx">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="hexpand">True</property>
-                    <property name="column-spacing">6</property>
-                    <child>
-                      <object class="GtkComboBoxText" id="contextmenushortcuts">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="hexpand">True</property>
-                        <items>
-                          <item translatable="yes" context="optviewpage|contextmenushortcuts">Automatic</item>
-                          <item translatable="yes" context="optviewpage|contextmenushortcuts">Hide</item>
-                          <item translatable="yes" context="optviewpage|contextmenushortcuts">Show</item>
-                        </items>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="label10">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="label" translatable="yes" context="optviewpage|label10">Shortcuts:</property>
-                        <property name="use-underline">True</property>
-                        <property name="mnemonic-widget">contextmenushortcuts</property>
-                        <property name="xalign">0</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">0</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">1</property>
-                  </packing>
-                </child>
-              </object>
-            </child>
-            <child type="label">
-              <object class="GtkLabel" id="label3">
-                <property name="visible">True</property>
-                <property name="can-focus">False</property>
-                <property name="label" translatable="yes" context="optviewpage|label3">Visibility</property>
                 <attributes>
                   <attribute name="weight" value="bold"/>
                 </attributes>
@@ -260,7 +120,7 @@
             <property name="label-xalign">0</property>
             <property name="shadow-type">none</property>
             <child>
-              <!-- n-columns=2 n-rows=3 -->
+              <!-- n-columns=3 n-rows=3 -->
               <object class="GtkGrid" id="refgrid1">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -286,7 +146,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">1</property>
+                    <property name="left-attach">2</property>
                     <property name="top-attach">1</property>
                   </packing>
                 </child>
@@ -300,7 +160,7 @@
                     <property name="xalign">0</property>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">1</property>
                   </packing>
                 </child>
@@ -321,7 +181,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">1</property>
+                    <property name="left-attach">2</property>
                     <property name="top-attach">2</property>
                   </packing>
                 </child>
@@ -335,7 +195,7 @@
                     <property name="xalign">0</property>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">2</property>
                   </packing>
                 </child>
@@ -357,7 +217,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">1</property>
+                    <property name="left-attach">2</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -371,8 +231,47 @@
                     <property name="xalign">0</property>
                   </object>
                   <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockiconsize">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
                     <property name="left-attach">0</property>
                     <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="locknotebookbariconsize">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="locksidebariconsize">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">2</property>
                   </packing>
                 </child>
               </object>
@@ -401,7 +300,7 @@
             <property name="label-xalign">0</property>
             <property name="shadow-type">none</property>
             <child>
-              <!-- n-columns=3 n-rows=1 -->
+              <!-- n-columns=4 n-rows=1 -->
               <object class="GtkGrid" id="refgrid">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -426,7 +325,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">1</property>
+                    <property name="left-attach">2</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -440,7 +339,7 @@
                     <property name="xalign">0</property>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -450,12 +349,24 @@
                     <property name="can-focus">True</property>
                     <property name="receives-default">True</property>
                     <property name="tooltip-text" translatable="yes" context="optviewpage|btnMoreIcons">Add more icon themes via extension</property>
-                    <child>
-                      <placeholder/>
-                    </child>
+                    <property name="image">image1</property>
+                    <property name="always-show-image">True</property>
                   </object>
                   <packing>
-                    <property name="left-attach">2</property>
+                    <property name="left-attach">3</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockiconstyle">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -485,7 +396,7 @@
             <property name="label-xalign">0</property>
             <property name="shadow-type">none</property>
             <child>
-              <!-- n-columns=2 n-rows=1 -->
+              <!-- n-columns=3 n-rows=1 -->
               <object class="GtkGrid" id="refgrid2">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -511,7 +422,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">1</property>
+                    <property name="left-attach">2</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -523,6 +434,19 @@
                     <property name="use-underline">True</property>
                     <property name="mnemonic-widget">appearance</property>
                     <property name="xalign">0</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockappearance">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
                   </object>
                   <packing>
                     <property name="left-attach">0</property>
@@ -566,11 +490,10 @@
             <property name="label-xalign">0</property>
             <property name="shadow-type">none</property>
             <child>
-              <!-- n-columns=1 n-rows=6 -->
+              <!-- n-columns=2 n-rows=7 -->
               <object class="GtkGrid" id="grid3">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="tooltip-text" translatable="yes" context="optviewpage|grid3|tooltip_text">Requires restart</property>
                 <property name="margin-start">12</property>
                 <property name="margin-top">6</property>
                 <property name="row-spacing">3</property>
@@ -580,6 +503,7 @@
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="receives-default">False</property>
+                    <property name="tooltip-text" translatable="yes" context="optviewpage|useaccel|tooltip_text">Requires restart</property>
                     <property name="halign">start</property>
                     <property name="use-underline">True</property>
                     <property name="draw-indicator">True</property>
@@ -590,7 +514,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -600,6 +524,7 @@
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="receives-default">False</property>
+                    <property name="tooltip-text" translatable="yes" context="optviewpage|useaa|tooltip_text">Requires restart</property>
                     <property name="halign">start</property>
                     <property name="use-underline">True</property>
                     <property name="draw-indicator">True</property>
@@ -610,7 +535,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">1</property>
                   </packing>
                 </child>
@@ -620,11 +545,12 @@
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="receives-default">False</property>
+                    <property name="tooltip-text" translatable="yes" context="optviewpage|useskia|tooltip_text">Requires restart</property>
                     <property name="use-underline">True</property>
                     <property name="draw-indicator">True</property>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">2</property>
                   </packing>
                 </child>
@@ -635,9 +561,103 @@
                     <property name="can-focus">True</property>
                     <property name="receives-default">False</property>
                     <property name="tooltip-text" translatable="yes" context="optviewpage|forceskia|tooltip_text">Requires restart. Enabling this will prevent the use of graphics drivers.</property>
-                    <property name="margin-start">12</property>
+                    <property name="margin-start">18</property>
                     <property name="use-underline">True</property>
                     <property name="draw-indicator">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="skiaenabled">
+                    <property name="can-focus">False</property>
+                    <property name="margin-start">18</property>
+                    <property name="label" translatable="yes" context="optviewpage|skiaenabled">Skia is currently enabled.</property>
+                    <property name="xalign">0</property>
+                    <attributes>
+                      <attribute name="scale" value="0.90000000000000002"/>
+                    </attributes>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">4</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="skiadisabled">
+                    <property name="can-focus">False</property>
+                    <property name="margin-start">18</property>
+                    <property name="label" translatable="yes" context="optviewpage|skiadisabled">Skia is currently disabled.</property>
+                    <property name="xalign">0</property>
+                    <attributes>
+                      <attribute name="scale" value="0.90000000000000002"/>
+                    </attributes>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">5</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="btnSkialog">
+                    <property name="label" translatable="yes" context="optviewpage|btnSkialog">Copy skia.log</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">6</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockuseaccel">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockuseaa">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockuseskia">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockforceskiaraster">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
                   </object>
                   <packing>
                     <property name="left-attach">0</property>
@@ -645,34 +665,13 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkLabel" id="skiaenabled">
-                    <property name="can-focus">False</property>
-                    <property name="margin-start">12</property>
-                    <property name="label" translatable="yes" context="optviewpage|skiaenabled">Skia is currently enabled.</property>
-                    <property name="xalign">0</property>
-                    <attributes>
-                      <attribute name="scale" value="0.9"/>
-                    </attributes>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">4</property>
-                  </packing>
+                  <placeholder/>
                 </child>
                 <child>
-                  <object class="GtkLabel" id="skiadisabled">
-                    <property name="can-focus">False</property>
-                    <property name="margin-start">12</property>
-                    <property name="label" translatable="yes" context="optviewpage|skiadisabled">Skia is currently disabled.</property>
-                    <property name="xalign">0</property>
-                    <attributes>
-                      <attribute name="scale" value="0.9"/>
-                    </attributes>
-                  </object>
-                  <packing>
-                    <property name="left-attach">0</property>
-                    <property name="top-attach">5</property>
-                  </packing>
+                  <placeholder/>
+                </child>
+                <child>
+                  <placeholder/>
                 </child>
               </object>
             </child>
@@ -699,7 +698,7 @@
             <property name="label-xalign">0</property>
             <property name="shadow-type">none</property>
             <child>
-              <!-- n-columns=1 n-rows=3 -->
+              <!-- n-columns=2 n-rows=3 -->
               <object class="GtkGrid" id="grid9">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
@@ -722,7 +721,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">0</property>
                   </packing>
                 </child>
@@ -742,7 +741,7 @@
                     </child>
                   </object>
                   <packing>
-                    <property name="left-attach">0</property>
+                    <property name="left-attach">1</property>
                     <property name="top-attach">1</property>
                   </packing>
                 </child>
@@ -785,6 +784,45 @@
                         <property name="top-attach">0</property>
                       </packing>
                     </child>
+                  </object>
+                  <packing>
+                    <property name="left-attach">1</property>
+                    <property name="top-attach">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockshowfontpreview">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockaafont">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
+                  </object>
+                  <packing>
+                    <property name="left-attach">0</property>
+                    <property name="top-attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkImage" id="lockaafrom">
+                    <property name="can-focus">False</property>
+                    <property name="no-show-all">True</property>
+                    <property name="halign">center</property>
+                    <property name="valign">center</property>
+                    <property name="icon-name">res/lock.png</property>
                   </object>
                   <packing>
                     <property name="left-attach">0</property>
@@ -833,10 +871,7 @@
   </object>
   <object class="GtkSizeGroup" id="sizegroupLabel">
     <widgets>
-      <widget name="label11"/>
       <widget name="label12"/>
-      <widget name="label13"/>
-      <widget name="label10"/>
       <widget name="label8"/>
       <widget name="label9"/>
       <widget name="label14"/>
@@ -846,10 +881,7 @@
   </object>
   <object class="GtkSizeGroup" id="sizegroupWidget">
     <widgets>
-      <widget name="mousepos"/>
       <widget name="mousemiddle"/>
-      <widget name="menuicons"/>
-      <widget name="contextmenushortcuts"/>
       <widget name="notebookbariconsize"/>
       <widget name="sidebariconsize"/>
       <widget name="iconsize"/>

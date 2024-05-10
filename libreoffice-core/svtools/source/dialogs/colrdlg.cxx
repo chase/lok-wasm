@@ -25,6 +25,7 @@
 #include <com/sun/star/cui/AsynchronousColorPicker.hpp>
 #include <com/sun/star/cui/ColorPicker.hpp>
 
+#include <comphelper/diagnose_ex.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertyvalue.hxx>
 
@@ -38,7 +39,7 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::ui::dialogs;
 
-const OUStringLiteral sColor = u"Color";
+constexpr OUString sColor = u"Color"_ustr;
 
 SvColorDialog::SvColorDialog()
     : meMode(svtools::ColorPickerMode::Select)
@@ -73,7 +74,7 @@ short SvColorDialog::Execute(weld::Window* pParent)
         Reference< XPropertyAccess > xPropertyAccess( xDialog, UNO_QUERY_THROW );
 
         Sequence< PropertyValue > props{
-            comphelper::makePropertyValue(OUString( sColor ), maColor),
+            comphelper::makePropertyValue(sColor, maColor),
             comphelper::makePropertyValue("Mode", static_cast<sal_Int16>(meMode))
         };
 
@@ -117,7 +118,7 @@ void SvColorDialog::ExecuteAsync(weld::Window* pParent, const std::function<void
         Reference< XPropertyAccess > xPropertyAccess( mxDialog, UNO_QUERY_THROW );
 
         Sequence< PropertyValue > props{
-            comphelper::makePropertyValue(OUString( sColor ), maColor),
+            comphelper::makePropertyValue(sColor, maColor),
             comphelper::makePropertyValue("Mode", static_cast<sal_Int16>(meMode))
         };
 
@@ -130,7 +131,7 @@ void SvColorDialog::ExecuteAsync(weld::Window* pParent, const std::function<void
     }
     catch(Exception&)
     {
-        OSL_ASSERT(false);
+        TOOLS_WARN_EXCEPTION("svtools.dialogs", "SvColorDialog::ExecuteAsync");
     }
 }
 

@@ -78,24 +78,21 @@ bool fillPlaceholders(OUString const & rInput,
                     && p[0] == 'a' && p[1] == 'm' && p[2] == 'p'
                     && p[3] == ';')
                 {
-                    aBuffer.append(pCopy, p - 1 - pCopy);
-                    aBuffer.append('&');
+                    aBuffer.append(OUString::Concat(std::u16string_view(pCopy, p - 1 - pCopy)) + "&");
                     p += 4;
                     pCopy = p;
                 }
                 else if (pEnd - p >= 3
                          && p[0] == 'l' && p[1] == 't' && p[2] == ';')
                 {
-                    aBuffer.append(pCopy, p - 1 - pCopy);
-                    aBuffer.append('<');
+                    aBuffer.append(OUString::Concat(std::u16string_view(pCopy, p - 1 - pCopy)) + "<");
                     p += 3;
                     pCopy = p;
                 }
                 else if (pEnd - p >= 3
                          && p[0] == 'g' && p[1] == 't' && p[2] == ';')
                 {
-                    aBuffer.append(pCopy, p - 1 - pCopy);
-                    aBuffer.append('>');
+                    aBuffer.append(OUString::Concat(std::u16string_view(pCopy, p - 1 - pCopy)) + ">");
                     p += 3;
                     pCopy = p;
                 }
@@ -124,8 +121,7 @@ bool fillPlaceholders(OUString const & rInput,
                 }
                 if (!bFound)
                     return false;
-                aBuffer.append(pCopy, p - 1 - pCopy);
-                aBuffer.append(aValue);
+                aBuffer.append(std::u16string_view(pCopy, p - 1 - pCopy) + aValue);
                 p = q + 1;
                 pCopy = p;
                 break;
@@ -323,7 +319,7 @@ void SAL_CALL UniversalContentBroker::initialize( const css::uno::Sequence< Any 
             {
                 throw IllegalArgumentException(
                     "UCB reinitialized with different arguments",
-                    static_cast< cppu::OWeakObject * >(this), 0);
+                    getXWeak(), 0);
             }
             return;
         }
@@ -585,7 +581,7 @@ Any SAL_CALL UniversalContentBroker::execute(
                 ucbhelper::cancelCommandExecution(
                     Any( IllegalArgumentException(
                                     "Wrong argument type!",
-                                    static_cast< cppu::OWeakObject * >( this ),
+                                    getXWeak(),
                                     -1 ) ),
                     Environment );
                 // Unreachable
@@ -609,7 +605,7 @@ Any SAL_CALL UniversalContentBroker::execute(
             ucbhelper::cancelCommandExecution(
                 Any( IllegalArgumentException(
                                 "Wrong argument type!",
-                                static_cast< cppu::OWeakObject * >( this ),
+                                getXWeak(),
                                 -1 ) ),
                 Environment );
             // Unreachable
@@ -625,7 +621,7 @@ Any SAL_CALL UniversalContentBroker::execute(
         ucbhelper::cancelCommandExecution(
             Any( UnsupportedCommandException(
                             OUString(),
-                            static_cast< cppu::OWeakObject * >( this ) ) ),
+                            getXWeak() ) ),
             Environment );
         // Unreachable
     }
@@ -827,8 +823,7 @@ bool UniversalContentBroker::getContentProviderData(
 
                     ContentProviderData aInfo;
 
-                    OUStringBuffer aElemBuffer;
-                    aElemBuffer.append( "['" );
+                    OUStringBuffer aElemBuffer( "['" );
                     makeAndAppendXMLName( aElemBuffer, rElem );
                     aElemBuffer.append( "']" );
 

@@ -212,7 +212,7 @@ CPPUNIT_TEST_FIXTURE(Test, testCopyText)
     // i.e. metadata was missing to avoid converting 01 to 1 (number).
     aStream.Seek(0);
     htmlDocUniquePtr pHtmlDoc = parseHtmlStream(&aStream);
-    assertXPath(pHtmlDoc, "//td", "data-sheets-value", "{ \"1\": 2, \"2\": \"01\"}");
+    assertXPath(pHtmlDoc, "//td"_ostr, "data-sheets-value"_ostr, "{ \"1\": 2, \"2\": \"01\"}");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testCopyBoolean)
@@ -236,8 +236,71 @@ CPPUNIT_TEST_FIXTURE(Test, testCopyBoolean)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//td' no attribute 'data-sheets-value' exist
     // i.e. metadata was missing to avoid converting TRUE to text.
-    assertXPath(pHtmlDoc, "(//td)[1]", "data-sheets-value", "{ \"1\": 4, \"4\": 1}");
-    assertXPath(pHtmlDoc, "(//td)[2]", "data-sheets-value", "{ \"1\": 4, \"4\": 0}");
+    assertXPath(pHtmlDoc, "(//td)[1]"_ostr, "data-sheets-value"_ostr, "{ \"1\": 4, \"4\": 1}");
+    assertXPath(pHtmlDoc, "(//td)[2]"_ostr, "data-sheets-value"_ostr, "{ \"1\": 4, \"4\": 0}");
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testCopyFormattedNumber)
+{
+    // Given a document with formatted numbers in A1-A2:
+    createScDoc();
+    ScDocument* pDoc = getScDoc();
+    sal_Int32 nCheckPos;
+    SvNumFormatType nType;
+    sal_uInt32 nFormat;
+    OUString aNumberFormat("#,##0.00");
+    SvNumberFormatter* pFormatter = pDoc->GetFormatTable();
+    pFormatter->PutEntry(aNumberFormat, nCheckPos, nType, nFormat);
+    ScAddress aCellPos1(/*nColP=*/0, /*nRowP=*/0, /*nTabP=*/0);
+    pDoc->SetNumberFormat(aCellPos1, nFormat);
+    pDoc->SetString(aCellPos1, "1000");
+    ScAddress aCellPos2(/*nColP=*/0, /*nRowP=*/1, /*nTabP=*/0);
+    pDoc->SetNumberFormat(aCellPos2, nFormat);
+    pDoc->SetString(aCellPos2, "2000");
+
+    // When copying those values:
+    ScImportExport aExporter(*pDoc, ScRange(aCellPos1, aCellPos2));
+    SvMemoryStream aStream;
+    CPPUNIT_ASSERT(aExporter.ExportStream(aStream, OUString(), SotClipboardFormatId::HTML));
+
+    // Then make sure the values are numbers:
+    aStream.Seek(0);
+    htmlDocUniquePtr pHtmlDoc = parseHtmlStream(&aStream);
+    // Without the accompanying fix in place, this test would have failed with:
+    // - XPath '(//td)[1]' no attribute 'data-sheets-value' exist
+    // i.e. only a formatted number string was written, without a float value.
+    assertXPath(pHtmlDoc, "(//td)[1]"_ostr, "data-sheets-value"_ostr, "{ \"1\": 3, \"3\": 1000}");
+    assertXPath(pHtmlDoc, "(//td)[1]"_ostr, "data-sheets-numberformat"_ostr,
+                "{ \"1\": 2, \"2\": \"#,##0.00\", \"3\": 1}");
+    assertXPath(pHtmlDoc, "(//td)[2]"_ostr, "data-sheets-value"_ostr, "{ \"1\": 3, \"3\": 2000}");
+    assertXPath(pHtmlDoc, "(//td)[2]"_ostr, "data-sheets-numberformat"_ostr,
+                "{ \"1\": 2, \"2\": \"#,##0.00\", \"3\": 1}");
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testCopyFormula)
+{
+    // Given a document with a formula in A3:
+    createScDoc();
+    ScDocument* pDoc = getScDoc();
+    ScAddress aCellPos1(/*nColP=*/0, /*nRowP=*/0, /*nTabP=*/0);
+    pDoc->SetString(aCellPos1, "1000");
+    ScAddress aCellPos2(/*nColP=*/0, /*nRowP=*/1, /*nTabP=*/0);
+    pDoc->SetString(aCellPos2, "2000");
+    ScAddress aCellPos3(/*nColP=*/0, /*nRowP=*/2, /*nTabP=*/0);
+    pDoc->SetFormula(aCellPos3, "=SUM(A1:A2)", pDoc->GetGrammar());
+
+    // When copying those cells:
+    ScImportExport aExporter(*pDoc, ScRange(aCellPos1, aCellPos3));
+    SvMemoryStream aStream;
+    CPPUNIT_ASSERT(aExporter.ExportStream(aStream, OUString(), SotClipboardFormatId::HTML));
+
+    // Then make sure the formula is exported in A3:
+    aStream.Seek(0);
+    htmlDocUniquePtr pHtmlDoc = parseHtmlStream(&aStream);
+    // Without the accompanying fix in place, this test would have failed with:
+    // - XPath '(//td)[3]' no attribute 'data-sheets-formula' exist
+    // i.e. only the formula result was exported, not the formula.
+    assertXPath(pHtmlDoc, "(//td)[3]"_ostr, "data-sheets-formula"_ostr, "=SUM(R[-2]C:R[-1]C)");
 }
 }
 

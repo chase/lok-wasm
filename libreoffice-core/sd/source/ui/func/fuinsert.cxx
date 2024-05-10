@@ -43,6 +43,8 @@
 #include <sfx2/request.hxx>
 #include <svl/globalnameitem.hxx>
 #include <svtools/embedhlp.hxx>
+#include <svtools/strings.hrc>
+#include <svtools/svtresid.hxx>
 #include <svx/linkwarn.hxx>
 #include <avmedia/mediawindow.hxx>
 #include <comphelper/classids.hxx>
@@ -436,8 +438,7 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
         }
         else
         {
-            ErrorHandler::HandleError(* new StringErrorInfo(ERRCODE_SFX_OLEGENERAL,
-                                        "" ) );
+            ErrorHandler::HandleError(ErrCodeMsg(ERRCODE_SFX_OLEGENERAL));
         }
     }
     else
@@ -466,6 +467,15 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
             {
                 case SID_INSERT_OBJECT :
                 {
+                    if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                    {
+                        std::unique_ptr<weld::MessageDialog> xError(
+                            Application::CreateMessageDialog(
+                                nullptr, VclMessageType::Warning, VclButtonsType::Ok,
+                                SvtResId(STR_WARNING_ACTIVE_CONTENT_DISABLED)));
+                        xError->run();
+                        break;
+                    }
                     aServerLst.FillInsertObjects();
                     if (mpDoc->GetDocumentType() == DocumentType::Draw)
                     {
@@ -482,7 +492,7 @@ void FuInsertOLE::DoExecute( SfxRequest& rReq )
                 {
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                     ScopedVclPtr<SfxAbstractInsertObjectDialog> pDlg(
-                            pFact->CreateInsertObjectDialog( mpViewShell->GetFrameWeld(), SD_MOD()->GetSlotPool()->GetSlot(nSlotId)->GetCommandString(),
+                            pFact->CreateInsertObjectDialog( mpViewShell->GetFrameWeld(), SD_MOD()->GetSlotPool()->GetSlot(nSlotId)->GetCommand(),
                             xStorage, &aServerLst ));
                     pDlg->Execute();
                     bCreateNew = pDlg->IsCreateNew();

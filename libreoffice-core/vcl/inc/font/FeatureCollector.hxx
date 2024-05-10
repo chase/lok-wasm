@@ -8,12 +8,11 @@
  *
  */
 
-#ifndef INCLUDED_VCL_INC_FONT_FEATURECOLLECTOR_HXX
-#define INCLUDED_VCL_INC_FONT_FEATURECOLLECTOR_HXX
+#pragma once
 
 #include <vcl/font/Feature.hxx>
 #include <hb.h>
-#include <i18nlangtag/lang.h>
+#include <i18nlangtag/languagetag.hxx>
 
 #include <font/PhysicalFontFace.hxx>
 
@@ -46,7 +45,5 @@ public:
 };
 
 } // namespace vcl::font
-
-#endif // INCLUDED_VCL_INC_FONT_FEATURECOLLECTOR_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -24,7 +24,6 @@
 
 #include <tools/json_writer.hxx>
 
-#include <vcl/dllapi.h>
 #include <vcl/toolkit/ivctrl.hxx>
 #include <vcl/layout.hxx>
 
@@ -36,7 +35,7 @@ class VerticalTabControl final : public VclHBox
     VclPtr<VclVBox> m_xBox;
 
     std::vector<std::unique_ptr<VerticalTabPageData>> maPageList;
-    OString m_sCurrentPageId;
+    OUString m_sCurrentPageId;
 
     Link<VerticalTabControl*, void> m_aActivateHdl;
     Link<VerticalTabControl*, bool> m_aDeactivateHdl;
@@ -46,7 +45,7 @@ class VerticalTabControl final : public VclHBox
     void ActivatePage();
     bool DeactivatePage();
 
-    VerticalTabPageData* GetPageData(std::string_view rId) const;
+    VerticalTabPageData* GetPageData(std::u16string_view rId) const;
     VerticalTabPageData* GetPageData(const SvxIconChoiceCtrlEntry* pEntry) const;
 
 public:
@@ -56,15 +55,15 @@ public:
 
     sal_uInt16 GetPageCount() const { return m_xChooser->GetEntryCount(); }
 
-    const OString& GetCurPageId() const { return m_sCurrentPageId; }
-    void SetCurPageId(const OString& rId);
+    const OUString& GetCurPageId() const { return m_sCurrentPageId; }
+    void SetCurPageId(const OUString& rId);
 
-    sal_uInt16 GetPagePos(std::string_view rPageId) const;
-    const OString& GetPageId(sal_uInt16 nIndex) const;
-    VclPtr<vcl::Window> GetPage(std::string_view rPageId) const;
+    sal_uInt16 GetPagePos(std::u16string_view rPageId) const;
+    const OUString& GetPageId(sal_uInt16 nIndex) const;
+    VclPtr<vcl::Window> GetPage(std::u16string_view rPageId) const;
 
-    void RemovePage(std::string_view rPageId);
-    void InsertPage(const OString& rPageId, const OUString& rLabel, const Image& rImage,
+    void RemovePage(std::u16string_view rPageId);
+    void InsertPage(const OUString& rPageId, const OUString& rLabel, const Image& rImage,
                     const OUString& rTooltip, VclPtr<vcl::Window> xPage, int nPos = -1);
 
     void SetActivatePageHdl(const Link<VerticalTabControl*, void>& rLink)
@@ -76,8 +75,8 @@ public:
         m_aDeactivateHdl = rLink;
     }
 
-    OUString GetPageText(std::string_view rPageId) const;
-    void SetPageText(std::string_view rPageId, const OUString& rText);
+    OUString GetPageText(std::u16string_view rPageId) const;
+    void SetPageText(std::u16string_view rPageId, const OUString& rText);
 
     vcl::Window* GetPageParent() { return m_xBox.get(); }
 

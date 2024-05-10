@@ -337,6 +337,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                 static bool bHaveSavedPreferences = false;
                 static LanguageType eSavedLanguage;
                 static bool bSavedDateConversion;
+                static bool bSavedScientificConversion;
 
                 if (nFormatId == SotClipboardFormatId::HTML &&
                     !comphelper::LibreOfficeKit::isActive())
@@ -346,6 +347,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                         ScAsciiOptions aOptions;
                         aOptions.SetLanguage(eSavedLanguage);
                         aOptions.SetDetectSpecialNumber(bSavedDateConversion);
+                        aOptions.SetDetectScientificNumber(bSavedScientificConversion);
                         pObj->SetExtOptions(aOptions);
                     }
                     else
@@ -363,11 +365,13 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                             ScAsciiOptions aOptions;
                             aOptions.SetLanguage(pDlg->GetLanguageType());
                             aOptions.SetDetectSpecialNumber(pDlg->IsDateConversionSet());
+                            aOptions.SetDetectScientificNumber(pDlg->IsScientificConversionSet());
                             if (!pDlg->IsKeepAskingSet())
                             {
                                 bHaveSavedPreferences = true;
                                 eSavedLanguage = pDlg->GetLanguageType();
                                 bSavedDateConversion = pDlg->IsDateConversionSet();
+                                bSavedScientificConversion = pDlg->IsScientificConversionSet();
                             }
                             pObj->SetExtOptions(aOptions);
                         }
@@ -565,18 +569,15 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
             MakeDrawLayer();    // before loading model, so 3D factory has been created
 
             ScDocShellRef aDragShellRef( new ScDocShell );
+            aDragShellRef->MakeDrawLayer();
             aDragShellRef->DoInitNew();
 
-            std::unique_ptr<FmFormModel> pModel(
-                new FmFormModel(
-                    nullptr,
-                    aDragShellRef.get()));
+            ScDrawLayer* pModel = aDragShellRef->GetDocument().GetDrawLayer();
 
-            pModel->GetItemPool().FreezeIdRanges();
             xStm->Seek(0);
 
             css::uno::Reference< css::io::XInputStream > xInputStream( new utl::OInputStreamWrapper( *xStm ) );
-            SvxDrawingLayerImport( pModel.get(), xInputStream );
+            SvxDrawingLayerImport( pModel, xInputStream );
 
             // set everything to right layer:
             size_t nObjCount = 0;
@@ -598,8 +599,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
                 nObjCount += pPage->GetObjCount();          // count group object only once
             }
 
-            PasteDraw(aPos, pModel.get(), (nObjCount > 1), u"A", u"B");     // grouped if more than 1 object
-            pModel.reset();
+            PasteDraw(aPos, pModel, (nObjCount > 1), u"A", u"B");     // grouped if more than 1 object
             aDragShellRef->DoClose();
             bRet = true;
         }
@@ -616,7 +616,7 @@ bool ScViewFunc::PasteDataFormat( SotClipboardFormatId nFormatId,
             aInsDoc.ResetClip( &rDoc, nSrcTab );
 
             SfxMedium aMed;
-            aMed.GetItemSet()->Put( SfxUnoAnyItem( SID_INPUTSTREAM, uno::Any( xStm ) ) );
+            aMed.GetItemSet().Put( SfxUnoAnyItem( SID_INPUTSTREAM, uno::Any( xStm ) ) );
             ErrCode eErr = ScFormatFilter::Get().ScImportExcel( aMed, &aInsDoc, EIF_AUTO );
             if ( eErr == ERRCODE_NONE )
             {

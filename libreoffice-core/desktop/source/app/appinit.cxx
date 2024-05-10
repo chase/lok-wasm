@@ -41,9 +41,10 @@
 #include <unotools/tempfile.hxx>
 #include <vcl/svapp.hxx>
 #include <unotools/pathoptions.hxx>
+
+#include <iostream>
 #include <map>
 
-using namespace desktop;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::beans;
@@ -93,9 +94,7 @@ void Desktop::RegisterServices()
     CommandLineArgs& rCmdLine = GetCommandLineArgs();
 
     // Headless mode for FAT Office, auto cancels any dialogs that popup
-    if (rCmdLine.IsEventTesting())
-        Application::EnableEventTestingMode();
-    else if (rCmdLine.IsHeadless())
+    if (rCmdLine.IsHeadless())
         Application::EnableHeadlessMode(false);
 
     // read accept string from configuration
@@ -141,7 +140,11 @@ void Desktop::createAcceptor(const OUString& aAcceptString)
     AcceptorMap &rMap = acceptorMap();
     AcceptorMap::const_iterator pIter = rMap.find(aAcceptString);
     if (pIter != rMap.end() )
+    {
+        // there is already an acceptor with this description
+        SAL_WARN( "desktop.app", "Acceptor already exists.");
         return;
+    }
 
     Sequence< Any > aSeq{ Any(aAcceptString), Any(bAccept) };
     Reference< XComponentContext > xContext = ::comphelper::getProcessComponentContext();
@@ -164,8 +167,7 @@ void Desktop::createAcceptor(const OUString& aAcceptString)
     }
     else
     {
-        // there is already an acceptor with this description
-        SAL_WARN( "desktop.app", "Acceptor already exists.");
+        ::std::cerr << "UNO Remote Protocol acceptor could not be created, presumably because it has been disabled in configuration." << ::std::endl;
     }
 }
 

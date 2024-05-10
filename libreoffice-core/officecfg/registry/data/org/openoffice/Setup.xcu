@@ -404,7 +404,7 @@
           <value>swxform</value>
         </prop>
         <prop oor:name="ooSetupFactoryUIName">
-          <value>XML Form Document</value>
+          <value xml:lang="en-US">XML Form Document</value>
         </prop>
         <prop oor:name="ooSetupFactoryWindowStateConfigRef">
           <value>XFormsWindowState</value>
@@ -875,7 +875,6 @@
                 <it>/org.openoffice.Office.Common/Help</it>
                 <it>/org.openoffice.Office.Common/History</it>
                 <it>/org.openoffice.Office.Common/I18N</it>
-                <it>/org.openoffice.Office.Common/InternalMSExport</it>
                 <it>/org.openoffice.Office.Common/Load</it>
                 <it>/org.openoffice.Office.Common/Misc/DisableUICustomization</it>
                 <it>/org.openoffice.Office.Common/Misc/ExperimentalMode</it>

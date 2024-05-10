@@ -492,7 +492,7 @@ ScExternalRefCache::~ScExternalRefCache() {}
 
 const OUString* ScExternalRefCache::getRealTableName(sal_uInt16 nFileId, const OUString& rTabName) const
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
     DocDataType::const_iterator itrDoc = maDocs.find(nFileId);
     if (itrDoc == maDocs.end())
@@ -514,7 +514,7 @@ const OUString* ScExternalRefCache::getRealTableName(sal_uInt16 nFileId, const O
 
 const OUString* ScExternalRefCache::getRealRangeName(sal_uInt16 nFileId, const OUString& rRangeName) const
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
     DocDataType::const_iterator itrDoc = maDocs.find(nFileId);
     if (itrDoc == maDocs.end())
@@ -536,7 +536,7 @@ const OUString* ScExternalRefCache::getRealRangeName(sal_uInt16 nFileId, const O
 ScExternalRefCache::TokenRef ScExternalRefCache::getCellData(
     sal_uInt16 nFileId, const OUString& rTabName, SCCOL nCol, SCROW nRow, sal_uInt32* pnFmtIndex)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
     DocDataType::const_iterator itrDoc = maDocs.find(nFileId);
     if (itrDoc == maDocs.end())
@@ -566,7 +566,7 @@ ScExternalRefCache::TokenRef ScExternalRefCache::getCellData(
 ScExternalRefCache::TokenArrayRef ScExternalRefCache::getCellRangeData(
     sal_uInt16 nFileId, const OUString& rTabName, const ScRange& rRange)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
     DocDataType::iterator itrDoc = maDocs.find(nFileId);
     if (itrDoc == maDocs.end())
@@ -736,9 +736,9 @@ ScExternalRefCache::TokenArrayRef ScExternalRefCache::getCellRangeData(
 
 ScExternalRefCache::TokenArrayRef ScExternalRefCache::getRangeNameTokens(sal_uInt16 nFileId, const OUString& rName)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
-    DocItem* pDoc = getDocItem(nFileId);
+    DocItem* pDoc = getDocItem(aGuard, nFileId);
     if (!pDoc)
         return TokenArrayRef();
 
@@ -753,9 +753,9 @@ ScExternalRefCache::TokenArrayRef ScExternalRefCache::getRangeNameTokens(sal_uIn
 
 void ScExternalRefCache::setRangeNameTokens(sal_uInt16 nFileId, const OUString& rName, TokenArrayRef pArray)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
-    DocItem* pDoc = getDocItem(nFileId);
+    DocItem* pDoc = getDocItem(aGuard, nFileId);
     if (!pDoc)
         return;
 
@@ -767,9 +767,9 @@ void ScExternalRefCache::setRangeNameTokens(sal_uInt16 nFileId, const OUString& 
 
 bool ScExternalRefCache::isValidRangeName(sal_uInt16 nFileId, const OUString& rName) const
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
-    DocItem* pDoc = getDocItem(nFileId);
+    DocItem* pDoc = getDocItem(aGuard, nFileId);
     if (!pDoc)
         return false;
 
@@ -780,9 +780,9 @@ bool ScExternalRefCache::isValidRangeName(sal_uInt16 nFileId, const OUString& rN
 
 void ScExternalRefCache::setRangeName(sal_uInt16 nFileId, const OUString& rName)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
-    DocItem* pDoc = getDocItem(nFileId);
+    DocItem* pDoc = getDocItem(aGuard, nFileId);
     if (!pDoc)
         return;
 
@@ -1104,7 +1104,7 @@ SCTAB ScExternalRefCache::getTabSpan( sal_uInt16 nFileId, const OUString& rStart
 
 void ScExternalRefCache::getAllNumberFormats(vector<sal_uInt32>& rNumFmts) const
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
     using ::std::sort;
     using ::std::unique;
@@ -1171,7 +1171,7 @@ bool ScExternalRefCache::setCacheTableReferenced( sal_uInt16 nFileId, const OUSt
 
 void ScExternalRefCache::setAllCacheTableReferencedStati( bool bReferenced )
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
 
     if (bReferenced)
     {
@@ -1390,14 +1390,14 @@ ScExternalRefCache::TableTypeRef ScExternalRefCache::getCacheTable(sal_uInt16 nF
 
 void ScExternalRefCache::clearCache(sal_uInt16 nFileId)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
     maDocs.erase(nFileId);
 }
 
 void ScExternalRefCache::clearCacheTables(sal_uInt16 nFileId)
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
-    DocItem* pDocItem = getDocItem(nFileId);
+    std::unique_lock aGuard(maMtxDocs);
+    DocItem* pDocItem = getDocItem(aGuard, nFileId);
     if (!pDocItem)
         // This document is not cached at all.
         return;
@@ -1420,7 +1420,12 @@ void ScExternalRefCache::clearCacheTables(sal_uInt16 nFileId)
 
 ScExternalRefCache::DocItem* ScExternalRefCache::getDocItem(sal_uInt16 nFileId) const
 {
-    osl::MutexGuard aGuard(&maMtxDocs);
+    std::unique_lock aGuard(maMtxDocs);
+    return getDocItem(aGuard, nFileId);
+}
+
+ScExternalRefCache::DocItem* ScExternalRefCache::getDocItem(std::unique_lock<std::mutex>& /*rGuard*/, sal_uInt16 nFileId) const
+{
 
     using ::std::pair;
     DocDataType::iterator itrDoc = maDocs.find(nFileId);
@@ -1659,7 +1664,7 @@ static std::unique_ptr<ScTokenArray> lcl_fillEmptyMatrix(const ScDocument& rDoc,
 namespace {
 bool isLinkUpdateAllowedInDoc(const ScDocument& rDoc)
 {
-    SfxObjectShell* pDocShell = rDoc.GetDocumentShell();
+    ScDocShell* pDocShell = rDoc.GetDocumentShell();
     if (!pDocShell)
         return rDoc.IsFunctionAccess();
 
@@ -1930,7 +1935,7 @@ void initDocInCache(ScExternalRefCache& rRefCache, const ScDocument* pSrcDoc, sa
     OUString aBaseName;
     if (nTabCount == 1)
     {
-        const SfxObjectShell* pShell = pSrcDoc->GetDocumentShell();
+        const ScDocShell* pShell = pSrcDoc->GetDocumentShell();
         if (pShell && pShell->GetMedium())
         {
             OUString aName = pShell->GetMedium()->GetName();
@@ -2579,13 +2584,13 @@ SfxObjectShellRef ScExternalRefManager::loadSrcDocument(sal_uInt16 nFileId, OUSt
     // to update as well. When loading the document ScDocShell::Load() will
     // check through ScDocShell::GetLinkUpdateModeState() if its location is
     // trusted.
-    SfxObjectShell* pShell = mrDoc.GetDocumentShell();
+    ScDocShell* pShell = mrDoc.GetDocumentShell();
     if (pShell)
     {
         SfxMedium* pMedium = pShell->GetMedium();
         if (pMedium)
         {
-            const SfxUInt16Item* pItem = pMedium->GetItemSet()->GetItemIfSet( SID_MACROEXECMODE, false );
+            const SfxUInt16Item* pItem = pMedium->GetItemSet().GetItemIfSet( SID_MACROEXECMODE, false );
             if (pItem &&
                     pItem->GetValue() != css::document::MacroExecMode::NEVER_EXECUTE)
                 pSet->Put( SfxUInt16Item( SID_MACROEXECMODE, css::document::MacroExecMode::USE_CONFIG));
@@ -2595,7 +2600,7 @@ SfxObjectShellRef ScExternalRefManager::loadSrcDocument(sal_uInt16 nFileId, OUSt
     }
 
     unique_ptr<SfxMedium> pMedium(new SfxMedium(aFile, StreamMode::STD_READ, pFilter, std::move(pSet)));
-    if (pMedium->GetError() != ERRCODE_NONE)
+    if (pMedium->GetErrorIgnoreWarning() != ERRCODE_NONE)
         return nullptr;
 
     // To load encrypted documents with password, user interaction needs to be enabled.
@@ -2762,7 +2767,7 @@ OUString ScExternalRefManager::getOwnDocumentName() const
     if (utl::ConfigManager::IsFuzzing())
         return "file:///tmp/document";
 
-    SfxObjectShell* pShell = mrDoc.GetDocumentShell();
+    ScDocShell* pShell = mrDoc.GetDocumentShell();
     if (!pShell)
         // This should not happen!
         return OUString();
@@ -2791,7 +2796,7 @@ void ScExternalRefManager::convertToAbsName(OUString& rFile) const
         pShell = static_cast<ScDocShell*>(SfxObjectShell::GetNext(*pShell, checkSfxObjectShell<ScDocShell>, false));
     }
 
-    SfxObjectShell* pDocShell = mrDoc.GetDocumentShell();
+    ScDocShell* pDocShell = mrDoc.GetDocumentShell();
     rFile = ScGlobal::GetAbsDocName(rFile, pDocShell);
 }
 

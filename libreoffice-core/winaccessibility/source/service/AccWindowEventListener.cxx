@@ -26,14 +26,14 @@
 #include <vcl/svapp.hxx>
 
 #include <AccWindowEventListener.hxx>
-#include <AccObjectManagerAgent.hxx>
+#include <AccObjectWinManager.hxx>
 #include <unomsaaevent.hxx>
 
 using namespace com::sun::star::uno;
 using namespace com::sun::star::accessibility;
 
-AccWindowEventListener::AccWindowEventListener(css::accessibility::XAccessible* pAcc, AccObjectManagerAgent* Agent)
-        :AccEventListener(pAcc, Agent)
+AccWindowEventListener::AccWindowEventListener(css::accessibility::XAccessible* pAcc, AccObjectWinManager* pManager)
+        :AccEventListener(pAcc, pManager)
 {}
 AccWindowEventListener::~AccWindowEventListener()
 {
@@ -49,9 +49,6 @@ void  AccWindowEventListener::notifyEvent( const css::accessibility::AccessibleE
 
     switch (aEvent.EventId)
     {
-    case AccessibleEventId::CHILD:
-        HandleChildChangedEvent(aEvent.OldValue, aEvent.NewValue);
-        break;
     case AccessibleEventId::VISIBLE_DATA_CHANGED:
         HandleVisibleDataChangedEvent();
         break;
@@ -61,41 +58,6 @@ void  AccWindowEventListener::notifyEvent( const css::accessibility::AccessibleE
     default:
         AccEventListener::notifyEvent(aEvent);
         break;
-    }
-}
-
-/**
- *  handle the CHILD event
- *  @param  oldValue    the child to be deleted
- *  @param  newValue    the child to be added
- */
-void AccWindowEventListener::HandleChildChangedEvent(Any oldValue, Any newValue)
-{
-    Reference< XAccessible > xChild;
-    if( newValue >>= xChild)
-    {
-        //create a new child
-        if(xChild.is())
-        {
-            XAccessible* pAcc = xChild.get();
-            //add this child
-            pAgent->InsertAccObj(pAcc, m_xAccessible.get());
-            //add all oldValue's existing children
-            pAgent->InsertChildrenAccObj(pAcc);
-            pAgent->NotifyAccEvent(UnoMSAAEvent::CHILD_ADDED, pAcc);
-        }
-    }
-    else if (oldValue >>= xChild)
-    {
-        //delete an existing child
-        if(xChild.is())
-        {
-            XAccessible* pAcc = xChild.get();
-            pAgent->NotifyAccEvent(UnoMSAAEvent::CHILD_REMOVED, pAcc);
-            pAgent->DeleteChildrenAccObj( pAcc );
-            //delete this child
-            pAgent->DeleteAccObj( pAcc );
-        }
     }
 }
 
@@ -115,18 +77,18 @@ void AccWindowEventListener::SetComponentState(sal_Int64 state, bool enable )
     case AccessibleStateType::VISIBLE:
         // UNO !VISIBLE == MSAA INVISIBLE
         if( enable )
-            pAgent->IncreaseState(m_xAccessible.get(), AccessibleStateType::VISIBLE);
+            m_pObjManager->IncreaseState(m_xAccessible.get(), AccessibleStateType::VISIBLE);
         else
-            pAgent->DecreaseState(m_xAccessible.get(), AccessibleStateType::VISIBLE);
+            m_pObjManager->DecreaseState(m_xAccessible.get(), AccessibleStateType::VISIBLE);
         break;
     case AccessibleStateType::SHOWING:
         // UNO !SHOWING == MSAA OFFSCREEN
         if( enable )
         {
-            pAgent->IncreaseState(m_xAccessible.get(), AccessibleStateType::SHOWING);
+            m_pObjManager->IncreaseState(m_xAccessible.get(), AccessibleStateType::SHOWING);
         }
         else
-            pAgent->DecreaseState(m_xAccessible.get(), AccessibleStateType::SHOWING);
+            m_pObjManager->DecreaseState(m_xAccessible.get(), AccessibleStateType::SHOWING);
         break;
     default:
         break;

@@ -34,13 +34,14 @@
 #include <com/sun/star/uno/Sequence.h>
 #include <svl/poolitem.hxx>
 #include <mutex>
+#include <vcl/window.hxx>
 
 #include "itemholder2.hxx"
 
 #include <vcl/svapp.hxx>
 #include <vcl/event.hxx>
 #include <vcl/settings.hxx>
-
+#include <officecfg/Office/UI.hxx>
 
 using namespace utl;
 using namespace com::sun::star;
@@ -138,6 +139,8 @@ uno::Sequence< OUString> GetPropertyNames(std::u16string_view rScheme)
         { std::u16string_view(u"/CalcPageBreakManual"), false },
         { std::u16string_view(u"/CalcPageBreakAutomatic"), false },
         { std::u16string_view(u"/CalcHiddenColRow"), true },
+        { std::u16string_view(u"/CalcTextOverflow"), true },
+        { std::u16string_view(u"/CalcComments"), false },
         { std::u16string_view(u"/CalcDetective")   ,false },
         { std::u16string_view(u"/CalcDetectiveError")   ,false },
         { std::u16string_view(u"/CalcReference")   ,false },
@@ -147,6 +150,7 @@ uno::Sequence< OUString> GetPropertyNames(std::u16string_view rScheme)
         { std::u16string_view(u"/CalcText") ,false },
         { std::u16string_view(u"/CalcProtectedBackground") ,false },
         { std::u16string_view(u"/DrawGrid")        ,true },
+        { std::u16string_view(u"/BASICEditor"),  false },
         { std::u16string_view(u"/BASICIdentifier"),  false },
         { std::u16string_view(u"/BASICComment")   ,  false },
         { std::u16string_view(u"/BASICNumber")    ,  false },
@@ -381,10 +385,11 @@ ColorConfig::~ColorConfig()
 Color ColorConfig::GetDefaultColor(ColorConfigEntry eEntry)
 {
     enum ColorType { clLight = 0,
-                    clDark,
-                    nColorTypes };
+                     clDark,
+                     nColorTypes };
 
-    static const Color cAutoColors[][nColorTypes] = {
+    static const Color cAutoColors[][nColorTypes] =
+    {
         { COL_WHITE,        Color(0x1C1C1C) }, // DOCCOLOR
         { COL_LIGHTGRAY,    Color(0x808080) }, // DOCBOUNDARIES
         { Color(0xDFDFDE),  Color(0x333333) }, // APPBACKGROUND
@@ -414,6 +419,8 @@ Color ColorConfig::GetDefaultColor(ColorConfigEntry eEntry)
         { Color(0x2300dc),  Color(0x2300DC) }, // CALCPAGEBREAKMANUAL
         { COL_GRAY7,        COL_GRAY7       }, // CALCPAGEBREAKAUTOMATIC
         { Color(0x2300dc),  Color(0x2300DC) }, // CALCHIDDENCOLROW
+        { COL_LIGHTRED,     COL_LIGHTRED    }, // CALCTEXTOVERFLOW
+        { COL_LIGHTMAGENTA, COL_LIGHTMAGENTA}, // CALCCOMMENT
         { COL_LIGHTBLUE,    Color(0x355269) }, // CALCDETECTIVE
         { COL_LIGHTRED,     Color(0xC9211E) }, // CALCDETECTIVEERROR
         { Color(0xef0fff),  Color(0x0D23D5) }, // CALCREFERENCE
@@ -423,6 +430,7 @@ Color ColorConfig::GetDefaultColor(ColorConfigEntry eEntry)
         { COL_BLACK,        Color(0xEEEEEE) }, // CALCTEXT
         { COL_LIGHTGRAY,    Color(0x1C1C1C) }, // CALCPROTECTEDBACKGROUND
         { COL_GRAY7,        COL_GRAY7       }, // DRAWGRID
+        { COL_WHITE,        Color(0x1C1C1C) }, // BASICEDITOR
         { COL_GREEN,        Color(0xDDE8CB) }, // BASICIDENTIFIER
         { COL_GRAY,         Color(0xEEEEEE) }, // BASICCOMMENT
         { COL_LIGHTRED,     Color(0xFFA6A6) }, // BASICNUMBER
@@ -456,10 +464,14 @@ Color ColorConfig::GetDefaultColor(ColorConfigEntry eEntry)
         default:
             int nAppMod;
             switch (MiscSettings::GetAppColorMode()) {
-                case 0: nAppMod = clLight; break; // UseDarkMode() ? clDark : clLight; break;
+                default:
+                    if (MiscSettings::GetUseDarkMode())
+                        nAppMod = clDark;
+                    else
+                        nAppMod = clLight;
+                    break;
                 case 1: nAppMod = clLight; break;
                 case 2: nAppMod = clDark; break;
-                default: nAppMod = clLight;
             }
             aRet = cAutoColors[eEntry][nAppMod];
     }
@@ -494,8 +506,9 @@ ColorConfigValue ColorConfig::GetColorValue(ColorConfigEntry eEntry, bool bSmart
     return aRet;
 }
 
-const OUString& ColorConfig::GetCurrentSchemeName() const
+const OUString& ColorConfig::GetCurrentSchemeName()
 {
+    officecfg::Office::UI::ColorScheme::CurrentColorScheme::get();
     return m_pImpl->GetLoadedScheme();
 }
 

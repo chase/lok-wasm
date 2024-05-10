@@ -112,9 +112,6 @@ SvxRectCtlAccessibleContext::~SvxRectCtlAccessibleContext()
     ensureDisposed();
 }
 
-IMPLEMENT_FORWARD_XINTERFACE2( SvxRectCtlAccessibleContext, OAccessibleSelectionHelper, OAccessibleHelper_Base )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( SvxRectCtlAccessibleContext, OAccessibleSelectionHelper, OAccessibleHelper_Base )
-
 Reference< XAccessible > SAL_CALL SvxRectCtlAccessibleContext::getAccessibleAtPoint( const awt::Point& rPoint )
 {
     ::osl::MutexGuard           aGuard( m_aMutex );
@@ -132,8 +129,6 @@ Reference< XAccessible > SAL_CALL SvxRectCtlAccessibleContext::getAccessibleAtPo
 // XAccessibleContext
 sal_Int64 SAL_CALL SvxRectCtlAccessibleContext::getAccessibleChildCount()
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
-
     return SvxRectCtl::NO_CHILDREN;
 }
 
@@ -153,13 +148,11 @@ Reference< XAccessible > SAL_CALL SvxRectCtlAccessibleContext::getAccessibleChil
         if (!xChild.is() && mpRepr)
         {
             const ChildIndexToPointData*    p = IndexToPoint( nIndex );
-            OUString aName(SvxResId(p->pResIdName));
-            OUString aDescr(SvxResId(p->pResIdDescr));
 
             tools::Rectangle       aFocusRect( mpRepr->CalculateFocusRectangle( p->ePoint ) );
 
-            rtl::Reference<SvxRectCtlChildAccessibleContext> pChild = new SvxRectCtlChildAccessibleContext(this, aName,
-                    aDescr, aFocusRect, nIndex );
+            rtl::Reference<SvxRectCtlChildAccessibleContext> pChild = new SvxRectCtlChildAccessibleContext(this,
+                    SvxResId(p->pResIdName), SvxResId(p->pResIdDescr), aFocusRect, nIndex );
             mvChildren[ nIndex ] = pChild;
             xChild = pChild;
 
@@ -471,13 +464,11 @@ sal_Int16 SAL_CALL SvxRectCtlChildAccessibleContext::getAccessibleRole()
 
 OUString SAL_CALL SvxRectCtlChildAccessibleContext::getAccessibleDescription()
 {
-    ::osl::MutexGuard   aGuard( m_aMutex );
     return msDescription;
 }
 
 OUString SAL_CALL SvxRectCtlChildAccessibleContext::getAccessibleName()
 {
-    ::osl::MutexGuard   aGuard( m_aMutex );
     return msName;
 }
 
@@ -640,8 +631,5 @@ void SvxRectCtlChildAccessibleContext::FireFocusEvent()
     aNew <<= AccessibleStateType::FOCUSED;
     NotifyAccessibleEvent(AccessibleEventId::STATE_CHANGED, aOld, aNew);
 }
-
-IMPLEMENT_FORWARD_XINTERFACE2( SvxRectCtlChildAccessibleContext, OAccessibleComponentHelper, OAccessibleHelper_Base_3 )
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( SvxRectCtlChildAccessibleContext, OAccessibleComponentHelper, OAccessibleHelper_Base_3 )
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

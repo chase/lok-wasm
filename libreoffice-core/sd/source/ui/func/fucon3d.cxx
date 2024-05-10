@@ -324,7 +324,7 @@ bool FuConstruct3dObject::MouseButtonDown(const MouseEvent& rMEvt)
         Point aPnt( mpWindow->PixelToLogic( rMEvt.GetPosPixel() ) );
 
         mpWindow->CaptureMouse();
-        sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
+        sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
 
         weld::WaitObject aWait(mpViewShell->GetFrameWeld());
 
@@ -353,6 +353,9 @@ bool FuConstruct3dObject::MouseButtonDown(const MouseEvent& rMEvt)
 
 bool FuConstruct3dObject::MouseButtonUp(const MouseEvent& rMEvt)
 {
+    if (rMEvt.IsLeft() && IsIgnoreUnexpectedMouseButtonUp())
+        return false;
+
     bool bReturn = false;
 
     if ( mpView->IsCreateObj() && rMEvt.IsLeft() )

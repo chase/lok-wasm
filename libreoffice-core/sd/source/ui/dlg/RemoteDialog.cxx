@@ -11,7 +11,6 @@
 #include <RemoteServer.hxx>
 
 using namespace ::sd;
-using namespace ::std;
 
 RemoteDialog::RemoteDialog(weld::Window* pWindow)
     : GenericDialogController(pWindow, "modules/simpress/ui/remotedialog.ui", "RemoteDialog")
@@ -32,7 +31,7 @@ IMPL_LINK_NOARG(RemoteDialog, HandleConnectButton, weld::Button&, void)
     if (!xEntry)
         return;
     OUString aPin = xEntry->m_xPinBox->get_text();
-    if (RemoteServer::connectClient(xEntry->m_xClientInfo, aPin))
+    if (IPRemoteServer::connectClient(xEntry->m_xClientInfo, aPin))
         m_xDialog->response(RET_OK);
 #endif
 }

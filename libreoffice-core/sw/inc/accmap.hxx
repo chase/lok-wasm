@@ -27,7 +27,7 @@
 
 #include <svx/AccessibleControlShape.hxx>
 #include <o3tl/typed_flags_set.hxx>
-
+#include <unotools/weakref.hxx>
 #include <vector>
 #include <memory>
 #include <o3tl/sorted_vector.hxx>
@@ -89,7 +89,6 @@ class SwAccessibleMap final : public ::accessibility::IAccessibleViewForwarder,
                         public ::accessibility::IAccessibleParent
                 , public std::enable_shared_from_this<SwAccessibleMap>
 {
-    mutable ::osl::Mutex maMutex;
     ::osl::Mutex maEventMutex;
     std::unique_ptr<SwAccessibleContextMap_Impl> mpFrameMap;
     std::unique_ptr<SwAccessibleShapeMap_Impl> mpShapeMap;
@@ -109,7 +108,7 @@ class SwAccessibleMap final : public ::accessibility::IAccessibleViewForwarder,
     /// preview-to-display coordinates
     std::unique_ptr<SwAccPreviewData> mpPreview;
 
-    css::uno::WeakReference < css::accessibility::XAccessible > mxCursorContext;
+    unotools::WeakReference< SwAccessibleContext > mxCursorContext;
 
     bool mbShapeSelected;
 
@@ -177,7 +176,7 @@ public:
     }
     static bool IsInSameLevel(const SdrObject* pObj, const SwFEShell* pFESh);
     void AddShapeContext(const SdrObject *pObj,
-                             css::uno::Reference < css::accessibility::XAccessible > const & xAccShape);
+                             rtl::Reference < ::accessibility::AccessibleShape > const & xAccShape);
 
     void AddGroupContext(const SdrObject *pParentObj,
                     css::uno::Reference < css::accessibility::XAccessible > const & xAccParent);

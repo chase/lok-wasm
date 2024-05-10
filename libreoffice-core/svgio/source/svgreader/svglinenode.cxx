@@ -41,13 +41,13 @@ namespace svgio::svgreader
 
         const SvgStyleAttributes* SvgLineNode::getSvgStyleAttributes() const
         {
-            return checkForCssStyle("line", maSvgStyleAttributes);
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgLineNode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgLineNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);

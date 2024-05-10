@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_WIN_SALPRN_H
-#define INCLUDED_VCL_INC_WIN_SALPRN_H
+#pragma once
 
 #include <salprn.hxx>
 
@@ -70,6 +69,11 @@ public:
     virtual sal_uInt32              GetCapabilities( const ImplJobSetup* pSetupData, PrinterCapType nType ) override;
     virtual sal_uInt16              GetPaperBinCount( const ImplJobSetup* pSetupData ) override;
     virtual OUString                GetPaperBinName( const ImplJobSetup* pSetupData, sal_uInt16 nPaperBin ) override;
+    virtual sal_uInt16              GetPaperBinBySourceIndex(const ImplJobSetup* pSetupData,
+                                                             sal_uInt16 nPaperSource) override;
+    virtual sal_uInt16              GetSourceIndexByPaperBin(const ImplJobSetup* pSetupData,
+                                                             sal_uInt16 nPaperBin) override;
+
     virtual void                    InitPaperFormats( const ImplJobSetup* pSetupData ) override;
     virtual int                     GetLandscapeAngle( const ImplJobSetup* pSetupData ) override;
 };
@@ -112,7 +116,5 @@ public:
     void markInvalid();
     bool isValid() const { return mbValid && mhDC; }
 };
-
-#endif // INCLUDED_VCL_INC_WIN_SALPRN_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

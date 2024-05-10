@@ -177,6 +177,14 @@ bool SwSectionData::operator==(SwSectionData const& rOther) const
     // FIXME: old code ignored m_bCondHiddenFlag m_bHiddenFlag m_bConnectFlag
 }
 
+void SwSectionData::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwSectionData"));
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("section-name"), BAD_CAST(m_sSectionName.toUtf8().getStr()));
+    (void)xmlTextWriterEndElement(pWriter);
+}
+
 SwSection::SwSection(
         SectionType const eType, OUString const& rName, SwSectionFormat & rFormat)
     : SwClient(& rFormat)
@@ -291,14 +299,11 @@ void SwSection::ImplSetHiddenFlag(bool const bTmpHidden, bool const bCondition)
             // Tell all Children that they are hidden
             const sw::SectionHidden aHint;
             pFormat->CallSwClientNotify(aHint);
-
-            // Delete all Frames
-            pFormat->DelFrames();
         }
     }
     else if (m_Data.IsHiddenFlag()) // show Nodes again
     {
-        // Show all Frames (Child Sections are accounted for by MakeFrames)
+        // Show all Frames
         // Only if the Parent Section is not restricting us!
         SwSection* pParentSect = pFormat->GetParentSection();
         if( !pParentSect || !pParentSect->IsHiddenFlag() )
@@ -306,8 +311,6 @@ void SwSection::ImplSetHiddenFlag(bool const bTmpHidden, bool const bCondition)
             // Tell all Children that the Parent is not hidden anymore
             const sw::SectionHidden aHint(false);
             pFormat->CallSwClientNotify(aHint);
-
-            pFormat->MakeFrames();
         }
     }
 }
@@ -802,39 +805,31 @@ void SwSectionFormat::SetXTextSection(rtl::Reference<SwXTextSection> const& xTex
     m_wXTextSection = xTextSection.get();
 }
 
-// Get info from the Format
-bool SwSectionFormat::GetInfo( SfxPoolItem& rInfo ) const
+bool SwSectionFormat::IsVisible() const
 {
-    switch( rInfo.Which() )
+    if(SwFrameFormat::IsVisible())
+        return true;
+    SwIterator<SwSectionFormat,SwSectionFormat> aFormatIter(*this);
+    for(SwSectionFormat* pChild = aFormatIter.First(); pChild; pChild = aFormatIter.Next())
+        if(pChild->IsVisible())
+            return true;
+    return false;
+}
+
+// Get info from the Format
+bool SwSectionFormat::GetInfo(SfxPoolItem& rInfo) const
+{
+    if(rInfo.Which() == RES_FINDNEARESTNODE)
     {
-    case RES_FINDNEARESTNODE:
-        if( GetFormatAttr( RES_PAGEDESC ).GetPageDesc() )
+        if(GetFormatAttr( RES_PAGEDESC ).GetPageDesc())
         {
             const SwSectionNode* pNd = GetSectionNode();
-            if( pNd )
-                static_cast<SwFindNearestNode&>(rInfo).CheckNode( *pNd );
+            if(pNd)
+                static_cast<SwFindNearestNode&>(rInfo).CheckNode(*pNd);
         }
         return true;
-
-    case RES_CONTENT_VISIBLE:
-        {
-            SwFrame* pFrame = SwIterator<SwFrame,SwFormat>(*this).First();
-            // if the current section has no own frame search for the children
-            if(!pFrame)
-            {
-                SwIterator<SwSectionFormat,SwSectionFormat> aFormatIter(*this);
-                SwSectionFormat* pChild = aFormatIter.First();
-                while(pChild && !pFrame)
-                {
-                    pFrame = SwIterator<SwFrame,SwFormat>(*pChild).First();
-                    pChild = aFormatIter.Next();
-                }
-            }
-            static_cast<SwPtrMsgPoolItem&>(rInfo).pObject = pFrame;
-        }
-        return false;
     }
-    return sw::BroadcastingModify::GetInfo( rInfo );
+    return sw::BroadcastingModify::GetInfo(rInfo);
 }
 
 static bool lcl_SectionCmpPos( const SwSection *pFirst, const SwSection *pSecond)
@@ -1199,7 +1194,7 @@ static void lcl_UpdateLinksInSect( const SwBaseLink& rUpdLnk, SwSectionNode& rSe
                 if( xDocSh->GetMedium() &&
                     rSection.GetLinkFilePassword().isEmpty() )
                 {
-                    if( const SfxStringItem* pItem = xDocSh->GetMedium()->GetItemSet()->
+                    if( const SfxStringItem* pItem = xDocSh->GetMedium()->GetItemSet().
                         GetItemIfSet( SID_PASSWORD, false ) )
                         rSection.SetLinkFilePassword( pItem->GetValue() );
                 }
@@ -1494,6 +1489,7 @@ void SwSection::dumpAsXml(xmlTextWriterPtr pWriter) const
     (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
     (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("registered-in"), "%p",
                                             GetRegisteredIn());
+    m_Data.dumpAsXml(pWriter);
     (void)xmlTextWriterEndElement(pWriter);
 }
 

@@ -33,7 +33,6 @@
 #include <frmmgr.hxx>
 #include <formatflysplit.hxx>
 #include <fmtwrapinfluenceonobjpos.hxx>
-#include <frameformats.hxx>
 
 using namespace css;
 
@@ -189,14 +188,15 @@ DECLARE_RTFEXPORT_TEST(testTdf115180, "tdf115180.docx")
     // On export to RTF, column separator positions were written without taking base width
     // into account and then arrived huge, ~64000, which resulted in wrong table and cell widths
 
-    sal_Int32 rowWidth = parseDump("/root/page/body/tab/row/infos/bounds", "width").toInt32();
+    sal_Int32 rowWidth
+        = parseDump("/root/page/body/tab/row/infos/bounds"_ostr, "width"_ostr).toInt32();
     CPPUNIT_ASSERT_EQUAL_MESSAGE("Row width", sal_Int32(9360), rowWidth);
     sal_Int32 cell1Width
-        = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds", "width").toInt32();
+        = parseDump("/root/page/body/tab/row/cell[1]/infos/bounds"_ostr, "width"_ostr).toInt32();
     CPPUNIT_ASSERT_MESSAGE("First cell width", cell1Width >= 9140);
     CPPUNIT_ASSERT_MESSAGE("First cell width", cell1Width <= 9142);
     sal_Int32 cell2Width
-        = parseDump("/root/page/body/tab/row/cell[2]/infos/bounds", "width").toInt32();
+        = parseDump("/root/page/body/tab/row/cell[2]/infos/bounds"_ostr, "width"_ostr).toInt32();
     CPPUNIT_ASSERT_MESSAGE("Second cell width", cell2Width >= 218);
     CPPUNIT_ASSERT_MESSAGE("Second cell width", cell2Width <= 220);
 }
@@ -336,7 +336,7 @@ CPPUNIT_TEST_FIXTURE(Test, testNestedHyperlink)
     // assertion failed
     // - Expression: xComponent.is()
     // i.e. the RTF output was not well-formed, loading failed.
-    reload(mpFilter, "nested-hyperlink.rtf");
+    saveAndReload("Rich Text Format");
 
     // Then make sure both hyperlinks are have the correct URLs.
     uno::Reference<text::XTextRange> xParagraph = getParagraph(1);
@@ -462,7 +462,7 @@ CPPUNIT_TEST_FIXTURE(Test, testDontBreakWrappedTables)
     }
 
     // When saving to rtf:
-    reload(mpFilter, "dont-break-wrapped-tables.rtf");
+    saveAndReload("Rich Text Format");
 
     // Then make sure \nobrkwrptbl is not written:
     SwDoc* pDoc = getSwDoc();
@@ -486,7 +486,7 @@ CPPUNIT_TEST_FIXTURE(Test, testRtlGutter)
     // Then make sure the section's gutter is still RTL:
     // Without the accompanying fix in place, this test would have failed as \rtlgutter was missing.
     verify();
-    reload(mpFilter, "rtl-gutter.rtf");
+    saveAndReload("Rich Text Format");
     verify();
 }
 
@@ -518,7 +518,7 @@ CPPUNIT_TEST_FIXTURE(Test, testNegativePageBorder)
     }
 
     // When saving that document to RTF:
-    reload(mpFilter, "negative-page-border.rtf");
+    saveAndReload("Rich Text Format");
 
     // Then make sure that the border distance is negative, so the first line of body text appears
     // on top of the page border:
@@ -553,7 +553,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf127806)
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(600), aSize.Height);
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(635), aSize.Width);
 
-    reload(mpFilter, "tdf127806.rtf");
+    saveAndReload("Rich Text Format");
     CPPUNIT_ASSERT_EQUAL(1, getShapes()); // FIXME: We lost one shape on export, that's sucks
 
     xImage = getShape(1);
@@ -566,7 +566,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf127806)
 
 DECLARE_RTFEXPORT_TEST(testTdf148578, "tdf148578.rtf")
 {
-    // \trgaph567 should affect only table cell margings (~1cm),
+    // \trgaph567 should affect only table cell margins (~1cm),
     // but do not shift table, since \trleft is not provided
     uno::Reference<text::XTextTable> xTable(getParagraphOrTable(1), uno::UNO_QUERY);
 
@@ -597,7 +597,7 @@ DECLARE_RTFEXPORT_TEST(testInvalidParagraphStyle, "invalidParagraphStyle.rtf")
 DECLARE_RTFEXPORT_TEST(testTdf152784_1, "tdf152784_1.rtf")
 {
     // Ensure that paragraph having style with numbering does not have numbering
-    // since it is not explitly defined in paragraph properties
+    // since it is not explicitly defined in paragraph properties
     uno::Reference<beans::XPropertySet> xPara(getParagraph(1, "Here should be no numbering!"),
                                               uno::UNO_QUERY);
     CPPUNIT_ASSERT(getProperty<OUString>(xPara, "NumberingStyleName").isEmpty());
@@ -631,7 +631,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFloatingTableExport)
     xFrame->setPropertyValue("RightMargin", uno::Any(static_cast<sal_Int32>(71)));
 
     // When saving to RTF:
-    reload(mpFilter, "floating-table.rtf");
+    saveAndReload("Rich Text Format");
 
     // Then make sure the floating table is there & has the expected properties:
     uno::Reference<drawing::XDrawPageSupplier> xDrawPageSupplier(mxComponent, uno::UNO_QUERY);
@@ -683,8 +683,8 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableOverlapNeverRTFExport)
         pWrtShell->EndAllAction();
         // Allow the text frame to split:
         pWrtShell->StartAllAction();
-        SwFrameFormats* pFlys = pDoc->GetSpzFrameFormats();
-        SwFrameFormat* pFly = (*pFlys)[0];
+        sw::FrameFormats<sw::SpzFrameFormat*>* pFlys = pDoc->GetSpzFrameFormats();
+        sw::SpzFrameFormat* pFly = (*pFlys)[0];
         SwAttrSet aSet(pFly->GetAttrSet());
         aSet.Put(SwFormatFlySplit(true));
         // Don't allow overlap:
@@ -700,11 +700,46 @@ CPPUNIT_TEST_FIXTURE(Test, testFloattableOverlapNeverRTFExport)
 
     // Then make sure that the overlap=never markup is written:
     SwDoc* pDoc = getSwDoc();
-    SwFrameFormats* pFlys = pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFly = (*pFlys)[0];
+    sw::FrameFormats<sw::SpzFrameFormat*>* pFlys = pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFly = (*pFlys)[0];
     // Without the accompanying fix in place, this test would have failed, i.e. \tabsnoovrlp was not
     // written.
     CPPUNIT_ASSERT(!pFly->GetAttrSet().GetWrapInfluenceOnObjPos().GetAllowOverlap());
+}
+
+DECLARE_RTFEXPORT_TEST(testTdf158409, "tdf158409.rtf")
+{
+    uno::Reference<text::XTextRange> xRun = getRun(getParagraph(1), 1, "DocTitle");
+    CPPUNIT_ASSERT_EQUAL(8.0, getProperty<double>(xRun, "CharHeight"));
+
+    xRun = getRun(getParagraph(2), 1, "DocTitle");
+    CPPUNIT_ASSERT_EQUAL(8.0, getProperty<double>(xRun, "CharHeight"));
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testLegalNumbering)
+{
+    auto verify = [this]() {
+        // Second level's numbering should use Arabic numbers for first level reference
+        auto xPara = getParagraph(1);
+        CPPUNIT_ASSERT_EQUAL(OUString("CH I"), getProperty<OUString>(xPara, "ListLabelString"));
+        xPara = getParagraph(2);
+        // Without the accompanying fix in place, this test would have failed with:
+        // - Expected: Sect 1.01
+        // - Actual  : Sect I.01
+        // i.e. \levellegal was ignored on import/export.
+        CPPUNIT_ASSERT_EQUAL(OUString("Sect 1.01"),
+                             getProperty<OUString>(xPara, "ListLabelString"));
+        xPara = getParagraph(3);
+        CPPUNIT_ASSERT_EQUAL(OUString("CH II"), getProperty<OUString>(xPara, "ListLabelString"));
+        xPara = getParagraph(4);
+        CPPUNIT_ASSERT_EQUAL(OUString("Sect 2.01"),
+                             getProperty<OUString>(xPara, "ListLabelString"));
+    };
+
+    createSwDoc("listWithLgl.rtf");
+    verify();
+    saveAndReload(mpFilter);
+    verify();
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

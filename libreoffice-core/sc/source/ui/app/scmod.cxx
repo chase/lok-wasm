@@ -116,7 +116,7 @@ void ScModule::InitInterface_Impl()
 }
 
 ScModule::ScModule( SfxObjectFactory* pFact ) :
-    SfxModule("sc", {pFact}),
+    SfxModule("sc"_ostr, {pFact}),
     m_aIdleTimer("sc ScModule IdleTimer"),
     m_pDragData(new ScDragData),
     m_pSelTransfer( nullptr ),
@@ -221,7 +221,7 @@ void ScModule::ConfigurationChanged(utl::ConfigurationBroadcaster* p, Configurat
                 ScViewRenderingOptions aViewRenderingOptions(pViewShell->GetViewRenderingData());
                 Color aFillColor(m_pColorConfig->GetColorValue(svtools::DOCCOLOR).nColor);
                 aViewRenderingOptions.SetDocColor(aFillColor);
-                aViewRenderingOptions.SetColorSchemeName(m_pColorConfig->GetCurrentSchemeName());
+                aViewRenderingOptions.SetColorSchemeName(svtools::ColorConfig::GetCurrentSchemeName());
                 const bool bUnchanged(aViewRenderingOptions == pViewShell->GetViewRenderingData());
                 if (!bUnchanged)
                     pViewShell->SetViewRenderingData(aViewRenderingOptions);
@@ -230,7 +230,7 @@ void ScModule::ConfigurationChanged(utl::ConfigurationBroadcaster* p, Configurat
                 // In Online, the document color is the one used for the background, contrary to
                 // Writer and Draw that use the application background color.
                 pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_APPLICATION_BACKGROUND_COLOR,
-                        aFillColor.AsRGBHexString().toUtf8().getStr());
+                        aFillColor.AsRGBHexString().toUtf8());
 
                 // if nothing changed, and the hint was OnlyCurrentDocumentColorScheme we can skip invalidate
                 bSkipInvalidate = bUnchanged && eHints == ConfigurationHints::OnlyCurrentDocumentColorScheme;
@@ -381,11 +381,11 @@ void ScModule::Execute( SfxRequest& rReq )
                     bSet = static_cast<const SfxBoolItem*>(pItem)->GetValue();
                 else
                 {   // Toggle
-                    ScDocShell* pDocSh = dynamic_cast<ScDocShell*>( SfxObjectShell::Current() );
-                    if ( pDocSh )
-                        bSet = !pDocSh->GetDocument().GetDocOptions().IsAutoSpell();
+                    ScTabViewShell* pViewSh = dynamic_cast<ScTabViewShell*>(SfxViewShell::Current());
+                    if (pViewSh)
+                        bSet = !pViewSh->IsAutoSpell();
                     else
-                        bSet = !GetDocOptions().IsAutoSpell();
+                        bSet = !ScModule::GetAutoSpellProperty();
                 }
 
                 SfxItemSetFixed<SID_AUTOSPELL_CHECK, SID_AUTOSPELL_CHECK> aSet( GetPool() );
@@ -457,9 +457,7 @@ void ScModule::Execute( SfxRequest& rReq )
         case SID_PSZ_FUNCTION:
             if (pReqArgs)
             {
-                auto const & p = pReqArgs->Get(SID_PSZ_FUNCTION);
-                assert(dynamic_cast<const SfxUInt32Item*>(&p) && "wrong Parameter");
-                const SfxUInt32Item& rItem = static_cast<const SfxUInt32Item&>(p);
+                const SfxUInt32Item & rItem = pReqArgs->Get(SID_PSZ_FUNCTION);
 
                 ScAppOptions aNewOpts( GetAppOptions() );
                 aNewOpts.SetStatusFunc( rItem.GetValue() );
@@ -554,12 +552,12 @@ void ScModule::Execute( SfxRequest& rReq )
 void ScModule::GetState( SfxItemSet& rSet )
 {
     ScDocShell* pDocSh = dynamic_cast<ScDocShell*>( SfxObjectShell::Current() );
-    bool bTabView = pDocSh && (pDocSh->GetBestViewShell() != nullptr);
+    ScTabViewShell* pTabViewShell = pDocSh ? pDocSh->GetBestViewShell() : nullptr;
 
     SfxWhichIter aIter(rSet);
     for (sal_uInt16 nWhich = aIter.FirstWhich(); nWhich; nWhich = aIter.NextWhich())
     {
-        if (!bTabView)
+        if (!pTabViewShell)
         {
             // Not in the normal calc view shell (most likely in preview shell). Disable all actions.
             rSet.DisableItem(nWhich);
@@ -581,7 +579,7 @@ void ScModule::GetState( SfxItemSet& rSet )
                 rSet.Put( SfxUInt16Item( nWhich, sal::static_int_cast<sal_uInt16>(GetAppOptions().GetAppMetric()) ) );
                 break;
             case SID_AUTOSPELL_CHECK:
-                rSet.Put( SfxBoolItem( nWhich, pDocSh->GetDocument().GetDocOptions().IsAutoSpell()) );
+                rSet.Put( SfxBoolItem( nWhich, pTabViewShell->IsAutoSpell()) );
                 break;
             case SID_ATTR_LANGUAGE:
             case ATTR_CJK_FONT_LANGUAGE:        // WID for SID_ATTR_CHAR_CJK_LANGUAGE
@@ -909,28 +907,6 @@ svtools::ColorConfig& ScModule::GetColorConfig()
     return *m_pColorConfig;
 }
 
-SvtAccessibilityOptions& ScModule::GetAccessOptions()
-{
-    if ( !m_pAccessOptions )
-    {
-        m_pAccessOptions.reset( new SvtAccessibilityOptions );
-        m_pAccessOptions->AddListener(this);
-    }
-
-    return *m_pAccessOptions;
-}
-
-SvtCTLOptions& ScModule::GetCTLOptions()
-{
-    if ( !m_pCTLOptions )
-    {
-        m_pCTLOptions.reset( new SvtCTLOptions );
-        m_pCTLOptions->AddListener(this);
-    }
-
-    return *m_pCTLOptions;
-}
-
 SvtUserOptions&  ScModule::GetUserOptions()
 {
     if( !m_pUserOptions )
@@ -942,7 +918,7 @@ SvtUserOptions&  ScModule::GetUserOptions()
 
 LanguageType ScModule::GetOptDigitLanguage()
 {
-    SvtCTLOptions::TextNumerals eNumerals = GetCTLOptions().GetCTLTextNumerals();
+    SvtCTLOptions::TextNumerals eNumerals = SvtCTLOptions::GetCTLTextNumerals();
     return ( eNumerals == SvtCTLOptions::NUMERALS_ARABIC ) ? LANGUAGE_ENGLISH_US :
            ( eNumerals == SvtCTLOptions::NUMERALS_HINDI)   ? LANGUAGE_ARABIC_SAUDI_ARABIA :
                                                              LANGUAGE_SYSTEM;
@@ -955,9 +931,9 @@ LanguageType ScModule::GetOptDigitLanguage()
  */
 void ScModule::ModifyOptions( const SfxItemSet& rOptSet )
 {
+    bool bOldAutoSpell = GetAutoSpellProperty();
     LanguageType nOldSpellLang, nOldCjkLang, nOldCtlLang;
-    bool bOldAutoSpell;
-    GetSpellSettings( nOldSpellLang, nOldCjkLang, nOldCtlLang, bOldAutoSpell );
+    GetSpellSettings( nOldSpellLang, nOldCjkLang, nOldCtlLang );
 
     if (!m_pAppCfg)
         GetAppOptions();
@@ -1190,16 +1166,11 @@ void ScModule::ModifyOptions( const SfxItemSet& rOptSet )
     {
         bool bDoAutoSpell = pItem->GetValue();
 
-        if (pDoc)
+        if (pViewSh)
         {
-            ScDocOptions aNewOpt = pDoc->GetDocOptions();
-            if ( aNewOpt.IsAutoSpell() != bDoAutoSpell )
+            if (pViewSh->IsAutoSpell() != bDoAutoSpell)
             {
-                aNewOpt.SetAutoSpell( bDoAutoSpell );
-                pDoc->SetDocOptions( aNewOpt );
-
-                if (pViewSh)
-                    pViewSh->EnableAutoSpell(bDoAutoSpell);
+                pViewSh->EnableAutoSpell(bDoAutoSpell);
 
                 bRepaint = true;            // Because HideAutoSpell might be invalid
                                             //TODO: Paint all Views?
@@ -2239,11 +2210,11 @@ void ScModule::RegisterRefController(sal_uInt16 nSlotId, std::shared_ptr<SfxDial
 {
     std::vector<std::pair<std::shared_ptr<SfxDialogController>, weld::Window*>> & rlRefWindow = m_mapRefController[nSlotId];
 
-    if (std::find_if(rlRefWindow.begin(), rlRefWindow.end(),
+    if (std::none_of(rlRefWindow.begin(), rlRefWindow.end(),
                          [rWnd](const std::pair<std::shared_ptr<SfxDialogController>, weld::Window*>& rCandidate)
                          {
                              return rCandidate.first.get() == rWnd.get();
-                         }) == rlRefWindow.end())
+                         }))
     {
         rlRefWindow.emplace_back(rWnd, pWndAncestor);
     }
@@ -2296,8 +2267,7 @@ using namespace com::sun::star;
 
 constexpr OUStringLiteral LINGUPROP_AUTOSPELL = u"IsSpellAuto";
 
-void ScModule::GetSpellSettings( LanguageType& rDefLang, LanguageType& rCjkLang, LanguageType& rCtlLang,
-        bool& rAutoSpell )
+void ScModule::GetSpellSettings( LanguageType& rDefLang, LanguageType& rCjkLang, LanguageType& rCtlLang )
 {
     // use SvtLinguConfig instead of service LinguProperties to avoid
     // loading the linguistic component
@@ -2309,7 +2279,6 @@ void ScModule::GetSpellSettings( LanguageType& rDefLang, LanguageType& rCjkLang,
     rDefLang = MsLangId::resolveSystemLanguageByScriptType(aOptions.nDefaultLanguage, css::i18n::ScriptType::LATIN);
     rCjkLang = MsLangId::resolveSystemLanguageByScriptType(aOptions.nDefaultLanguage_CJK, css::i18n::ScriptType::ASIAN);
     rCtlLang = MsLangId::resolveSystemLanguageByScriptType(aOptions.nDefaultLanguage_CTL, css::i18n::ScriptType::COMPLEX);
-    rAutoSpell = aOptions.bIsSpellAuto;
 }
 
 void ScModule::SetAutoSpellProperty( bool bSet )
@@ -2319,6 +2288,18 @@ void ScModule::SetAutoSpellProperty( bool bSet )
     SvtLinguConfig aConfig;
 
     aConfig.SetProperty( LINGUPROP_AUTOSPELL, uno::Any(bSet) );
+}
+
+bool ScModule::GetAutoSpellProperty()
+{
+    // use SvtLinguConfig instead of service LinguProperties to avoid
+    // loading the linguistic component
+    SvtLinguConfig aConfig;
+
+    SvtLinguOptions aOptions;
+    aConfig.GetOptions( aOptions );
+
+    return aOptions.bIsSpellAuto;
 }
 
 bool ScModule::HasThesaurusLanguage( LanguageType nLang )
@@ -2354,6 +2335,11 @@ std::optional<SfxStyleFamilies> ScModule::CreateStyleFamilies()
                                                     ScResId(STR_STYLE_FAMILY_PAGE),
                                                     BMP_STYLES_FAMILY_PAGE,
                                                     RID_PAGESTYLEFAMILY, SC_MOD()->GetResLocale()));
+
+    aStyleFamilies.emplace_back(SfxStyleFamilyItem(SfxStyleFamily::Frame,
+                                                    ScResId(STR_STYLE_FAMILY_GRAPHICS),
+                                                    BMP_STYLES_FAMILY_GRAPHICS,
+                                                    RID_GRAPHICSTYLEFAMILY, SC_MOD()->GetResLocale()));
 
     return aStyleFamilies;
 }

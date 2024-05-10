@@ -36,6 +36,7 @@
 #include <ChartModel.hxx>
 #include <ChartModelHelper.hxx>
 #include <DataSeries.hxx>
+#include <Diagram.hxx>
 #include <ResId.hxx>
 #include <strings.hrc>
 #include <DiagramHelper.hxx>
@@ -134,10 +135,10 @@ rtl::Reference< RegressionCurveModel > RegressionCurveHelper::createRegressionCu
     return xResult;
 }
 
-Reference< XRegressionCurveCalculator > RegressionCurveHelper::createRegressionCurveCalculatorByServiceName(
+rtl::Reference< RegressionCurveCalculator > RegressionCurveHelper::createRegressionCurveCalculatorByServiceName(
     std::u16string_view aServiceName )
 {
-    Reference< XRegressionCurveCalculator > xResult;
+    rtl::Reference< RegressionCurveCalculator > xResult;
 
     // todo: use factory methods with service name
     if( aServiceName == u"com.sun.star.chart2.MeanValueRegressionCurve" )
@@ -235,14 +236,14 @@ void RegressionCurveHelper::initializeCurveCalculator(
 
 void RegressionCurveHelper::initializeCurveCalculator(
     const Reference< XRegressionCurveCalculator > & xOutCurveCalculator,
-    const Reference< XDataSeries > & xSeries,
+    const rtl::Reference< ::chart::DataSeries > & xSeries,
     const rtl::Reference<::chart::ChartModel> & xModel )
 {
     sal_Int32 nAxisType = ChartTypeHelper::getAxisType(
         ChartModelHelper::getChartTypeOfSeries( xModel, xSeries ), 0 ); // x-axis
 
     initializeCurveCalculator( xOutCurveCalculator,
-                               uno::Reference< data::XDataSource >( xSeries, uno::UNO_QUERY ),
+                               xSeries,
                                (nAxisType == AxisType::REALNUMBER) );
 }
 
@@ -842,24 +843,6 @@ OUString RegressionCurveHelper::getRegressionCurveName( const Reference< XRegres
     return aResult;
 }
 
-std::vector< rtl::Reference< RegressionCurveModel > >
-    RegressionCurveHelper::getAllRegressionCurvesNotMeanValueLine(
-        const rtl::Reference< Diagram > & xDiagram )
-{
-    std::vector< rtl::Reference< RegressionCurveModel > > aResult;
-    std::vector< rtl::Reference< DataSeries > > aSeries( DiagramHelper::getDataSeriesFromDiagram( xDiagram ));
-    for (auto const& elem : aSeries)
-    {
-        for( rtl::Reference< RegressionCurveModel > const & curve : elem->getRegressionCurves2() )
-        {
-            if( ! isMeanValueLine( curve ))
-                aResult.push_back( curve );
-        }
-    }
-
-    return aResult;
-}
-
 void RegressionCurveHelper::resetEquationPosition(
     const Reference< chart2::XRegressionCurve > & xCurve )
 {
@@ -868,7 +851,7 @@ void RegressionCurveHelper::resetEquationPosition(
 
     try
     {
-        static const OUStringLiteral aPosPropertyName( u"RelativePosition" );
+        static constexpr OUString aPosPropertyName( u"RelativePosition"_ustr );
         Reference< beans::XPropertySet > xEqProp( xCurve->getEquationProperties()); // since m233: , uno::UNO_SET_THROW );
         if( xEqProp->getPropertyValue( aPosPropertyName ).hasValue())
             xEqProp->setPropertyValue( aPosPropertyName, uno::Any());

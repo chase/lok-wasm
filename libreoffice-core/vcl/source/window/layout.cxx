@@ -382,7 +382,7 @@ void VclBox::setAllocation(const Size &rAllocation)
     }
 }
 
-bool VclBox::set_property(const OString &rKey, const OUString &rValue)
+bool VclBox::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "spacing")
         set_spacing(rValue.toInt32());
@@ -401,12 +401,17 @@ void VclBox::DumpAsPropertyTree(tools::JsonWriter& rJsonWriter)
 
 sal_uInt16 VclBox::getDefaultAccessibleRole() const
 {
+    // fdo#74284 call Boxes Panels, keep them as "Filler" under
+    // at least Linux seeing as that's what Gtk3 did for GtkBoxes.
+    // Though now with Gtk4 that uses GTK_ACCESSIBLE_ROLE_GROUP
+    // which maps to ATSPI_ROLE_PANEL
 #if defined(_WIN32)
-    //fdo#74284 call Boxes Panels, keep then as "Filler" under
-    //at least Linux seeing as that's what Gtk does for GtkBoxes
     return css::accessibility::AccessibleRole::PANEL;
 #else
-    return css::accessibility::AccessibleRole::FILLER;
+    static sal_uInt16 eRole = Application::GetToolkitName() == "gtk4" ?
+                              css::accessibility::AccessibleRole::PANEL :
+                              css::accessibility::AccessibleRole::FILLER;
+    return eRole;
 #endif
 }
 
@@ -606,7 +611,7 @@ Size VclButtonBox::calculateRequisition() const
     return addSpacing(addReqGroups(aReq), nVisibleChildren);
 }
 
-bool VclButtonBox::set_property(const OString &rKey, const OUString &rValue)
+bool VclButtonBox::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "layout-style")
     {
@@ -1412,7 +1417,7 @@ bool toBool(std::u16string_view rValue)
     return (!rValue.empty() && (rValue[0] == 't' || rValue[0] == 'T' || rValue[0] == '1'));
 }
 
-bool VclGrid::set_property(const OString &rKey, const OUString &rValue)
+bool VclGrid::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "row-spacing")
         set_row_spacing(rValue.toInt32());
@@ -1622,13 +1627,13 @@ class DisclosureButton final : public CheckBox
             return;
 
         ImplSVCtrlData& rCtrlData(ImplGetSVData()->maCtrlData);
-        if (!rCtrlData.mpDisclosurePlus)
-            rCtrlData.mpDisclosurePlus.reset(new Image(StockImage::Yes, SV_DISCLOSURE_PLUS));
-        if (!rCtrlData.mpDisclosureMinus)
-            rCtrlData.mpDisclosureMinus.reset(new Image(StockImage::Yes, SV_DISCLOSURE_MINUS));
+        if (!rCtrlData.moDisclosurePlus)
+            rCtrlData.moDisclosurePlus.emplace(StockImage::Yes, SV_DISCLOSURE_PLUS);
+        if (!rCtrlData.moDisclosureMinus)
+            rCtrlData.moDisclosureMinus.emplace(StockImage::Yes, SV_DISCLOSURE_MINUS);
 
         Image* pImg
-            = IsChecked() ? rCtrlData.mpDisclosureMinus.get() : rCtrlData.mpDisclosurePlus.get();
+            = IsChecked() ? &*rCtrlData.moDisclosureMinus : &*rCtrlData.moDisclosurePlus;
 
         DrawImageFlags nStyle = DrawImageFlags::NONE;
         if (!IsEnabled())
@@ -1798,7 +1803,7 @@ void VclExpander::setAllocation(const Size &rAllocation)
     }
 }
 
-bool VclExpander::set_property(const OString &rKey, const OUString &rValue)
+bool VclExpander::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "expanded")
         set_expanded(toBool(rValue));
@@ -2091,7 +2096,7 @@ Size VclScrolledWindow::getVisibleChildSize() const
     return aRet;
 }
 
-bool VclScrolledWindow::set_property(const OString &rKey, const OUString &rValue)
+bool VclScrolledWindow::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "shadow-type" || rKey == "name")
     {
@@ -2320,7 +2325,7 @@ void VclSizeGroup::set_mode(VclSizeGroupMode eMode)
 
 }
 
-void VclSizeGroup::set_property(const OString &rKey, const OUString &rValue)
+void VclSizeGroup::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "ignore-hidden")
         set_ignore_hidden(toBool(rValue));
@@ -2592,7 +2597,7 @@ OUString const & MessageDialog::get_secondary_text() const
     return m_sSecondaryString;
 }
 
-bool MessageDialog::set_property(const OString &rKey, const OUString &rValue)
+bool MessageDialog::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "text")
         set_primary_text(rValue);

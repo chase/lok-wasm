@@ -81,8 +81,7 @@ static short generateNamespace(std::ostream & o,
     OStringBuffer buf;
     if (index == -1) {
         if (serviceobject) {
-            buf.append("comp_");
-            buf.append(implname);
+            buf.append("comp_" + implname);
             nm = buf.makeStringAndClear();
             o << "namespace comp_" << implname << " {\n\n";
             count=1;
@@ -94,13 +93,11 @@ static short generateNamespace(std::ostream & o,
         do {
             OString token(implname.getToken(0, '.', nPos));
             if (nPos < 0 && serviceobject) {
-                buf.append("::comp_");
-                buf.append(token);
+                buf.append("::comp_" + token);
                 o << "namespace comp_" << token << " { ";
                 count++;
             } else {
-                buf.append("::");
-                buf.append(token);
+                buf.append("::" + token);
                 o << "namespace " << token << " { ";
                 count++;
             }
@@ -612,14 +609,14 @@ static OString generateClassDefinition(std::ostream& o,
 
     if (!interfaces.empty()) {
         if (supportxcomponent) {
-            parentname.append("::cppu::WeakComponentImplHelper");
-            parentname.append(static_cast<sal_Int32>(interfaces.size()));
+            parentname.append("::cppu::WeakComponentImplHelper" +
+                OString::number(static_cast<sal_Int32>(interfaces.size())));
             o << "    private ::cppu::BaseMutex,\n"
                  "    public ::cppu::WeakComponentImplHelper"
               << interfaces.size() << "<";
         } else {
-            parentname.append("::cppu::WeakImplHelper");
-            parentname.append(static_cast<sal_Int32>(interfaces.size()));
+            parentname.append("::cppu::WeakImplHelper" +
+                OString::number(static_cast<sal_Int32>(interfaces.size())));
             o << "    public ::cppu::WeakImplHelper" << interfaces.size() << "<";
         }
 
@@ -661,8 +658,7 @@ static OString generateClassDefinition(std::ostream& o,
             "css::uno::RuntimeException);\n";
 
         OStringBuffer buffer(256);
-        buffer.append(parentname);
-        buffer.append("< ");
+        buffer.append(parentname + "< ");
         std::set< OUString >::const_iterator iter = interfaces.begin();
         while (iter != interfaces.end())
         {
@@ -683,7 +679,7 @@ static OString generateClassDefinition(std::ostream& o,
     codemaker::GeneratedTypeSet generated;
     for (const auto& rIface : interfaces)
     {
-        printMethods(o, options, manager, rIface, generated, "", "", "    ",
+        printMethods(o, options, manager, rIface, generated, ""_ostr, ""_ostr, "    "_ostr,
                      true, propertyhelper);
     }
 
@@ -868,8 +864,8 @@ static void generateMethodBodies(std::ostream& o,
             generateXServiceInfoBodies(o, name, comphelpernamespace);
             generated.add(u2b(rIface));
         } else {
-            printMethods(o, options, manager, rIface, generated, "_",
-                         name, "", true, propertyhelper);
+            printMethods(o, options, manager, rIface, generated, "_"_ostr,
+                         name, ""_ostr, true, propertyhelper);
         }
     }
 }
@@ -975,7 +971,7 @@ void generateSkeleton(ProgramOptions const & options,
     OString compFileName;
     OString tmpFileName;
     std::ostream* pofs = nullptr;
-    bool standardout = getOutputStream(options, ".cxx",
+    bool standardout = getOutputStream(options, ".cxx"_ostr,
                                        &pofs, compFileName, tmpFileName);
 
     try {
@@ -1133,7 +1129,7 @@ void generateCalcAddin(ProgramOptions const & options,
     OString compFileName;
     OString tmpFileName;
     std::ostream* pofs = nullptr;
-    bool standardout = getOutputStream(options, ".cxx",
+    bool standardout = getOutputStream(options, ".cxx"_ostr,
                                        &pofs, compFileName, tmpFileName);
 
     try {

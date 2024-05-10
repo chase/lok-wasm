@@ -97,11 +97,7 @@ Reference< XAccessible > BrowseBox::CreateAccessible()
         }
     }
 
-    Reference< XAccessible > xAccessible;
-    if ( m_pImpl->m_pAccessible )
-        xAccessible = m_pImpl->m_pAccessible->getMyself();
-
-    return xAccessible;
+    return m_pImpl->m_pAccessible;
 }
 
 
@@ -427,7 +423,7 @@ void BrowseBox::commitBrowseBoxEvent( sal_Int16 _nEventId, const Any& _rNewValue
 
 bool BrowseBox::isAccessibleAlive( ) const
 {
-    return ( nullptr != m_pImpl->m_pAccessible ) && m_pImpl->m_pAccessible->isAlive();
+    return m_pImpl->m_pAccessible && m_pImpl->m_pAccessible->isAlive();
 }
 
 // IAccessibleTableProvider
@@ -531,9 +527,14 @@ bool BrowseBox::GetGlyphBoundRects( const Point& rOrigin, const OUString& rStr, 
     return GetOutDev()->GetGlyphBoundRects( rOrigin, rStr, nIndex, nLen, rVector );
 }
 
-tools::Rectangle BrowseBox::GetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const
+AbsoluteScreenPixelRectangle BrowseBox::GetWindowExtentsAbsolute() const
 {
-    return Control::GetWindowExtentsRelative( pRelativeWindow );
+    return Control::GetWindowExtentsAbsolute();
+}
+
+tools::Rectangle BrowseBox::GetWindowExtentsRelative(const vcl::Window& rRelativeWindow) const
+{
+    return Control::GetWindowExtentsRelative( rRelativeWindow );
 }
 
 void BrowseBox::GrabFocus()

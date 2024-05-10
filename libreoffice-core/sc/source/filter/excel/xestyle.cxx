@@ -837,7 +837,7 @@ sal_Int16 XclExpFontHelper::GetFirstUsedScript( const XclExpRoot& rRoot, const S
 
     /*  #i17050# #i107170# We need to determine which font items are set in the
         item set, and which script type we should prefer according to the
-        current language settings. */
+        current languages and locales. */
 
     static const WhichAndScript WAS_LATIN( ATTR_FONT, css::i18n::ScriptType::LATIN );
     static const WhichAndScript WAS_ASIAN( ATTR_CJK_FONT, css::i18n::ScriptType::ASIAN );
@@ -1233,9 +1233,8 @@ sal_uInt16 XclExpFontBuffer::Insert(const SfxItemSet& rItemSet, sal_Int16 nScrip
 {
     // #i17050# script type now provided by caller
     vcl::Font aFont = XclExpFontHelper::GetFontFromItemSet(GetRoot(), rItemSet, nScript);
-
     model::ComplexColor aComplexColor;
-    ScPatternAttr::fillColor(aComplexColor, rItemSet, SC_AUTOCOL_RAW);
+    ScPatternAttr::fillColor(aComplexColor, rItemSet, ScAutoFontColorMode::Raw);
     return Insert(XclFontData(aFont, aComplexColor), eColorType, bAppFont );
 }
 
@@ -2816,7 +2815,7 @@ sal_uInt32 XclExpXFBuffer::InsertCellXF( const ScPatternAttr* pPattern, sal_Int1
         pPattern = pDefPattern;
 
     // special handling for default cell formatting
-    if( (pPattern == pDefPattern) && !bForceLineBreak &&
+    if( SfxPoolItem::areSame(pPattern, pDefPattern) && !bForceLineBreak &&
         (nForceScNumFmt == NUMBERFORMAT_ENTRY_NOT_FOUND) &&
         (nForceXclFont == EXC_FONT_NOTFOUND) )
     {

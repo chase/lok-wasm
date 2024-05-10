@@ -58,249 +58,161 @@
 #include <editeng/colritem.hxx>
 #include <editeng/udlnitem.hxx>
 #include <editeng/crossedoutitem.hxx>
+#include <officecfg/Office/Writer.hxx>
 
 static bool lcl_IsInBody( SwFrame const *pFrame )
 {
     if ( pFrame->IsInDocBody() )
         return true;
-    else
-    {
-        const SwFrame *pTmp = pFrame;
-        const SwFlyFrame *pFly;
-        while ( nullptr != (pFly = pTmp->FindFlyFrame()) )
-            pTmp = pFly->GetAnchorFrame();
-        return pTmp->IsInDocBody();
-    }
+
+    while (const SwFlyFrame* pFly = pFrame->FindFlyFrame())
+        pFrame = pFly->GetAnchorFrame();
+    return pFrame->IsInDocBody();
 }
+
+static OUString ExpandField(const SwField& rField, const SwTextFormatter& rFormatter,
+                            const SwTextFormatInfo& rInf)
+{
+    if (rInf.GetOpt().IsFieldName())
+        return rField.GetFieldName();
+
+    const SwViewShell* pSh = rInf.GetVsh();
+    const SwDoc* pDoc(pSh ? pSh->GetDoc() : nullptr);
+    const bool bInClipboard(!pDoc || pDoc->IsClipBoard());
+    return rField.ExpandField(bInClipboard, rFormatter.GetTextFrame()->getRootFrame());
+}
+
+// MACRO: {
+static OUString redlineNumberBuilder(OUString aHiddenText)
+{
+    OUStringLiteral REDLINE_NUMBER_BUILDER_STRIKETHROUGH = u"\u0336";
+    sal_Int32 length = aHiddenText.getLength();
+    OUString result = "";
+
+    // Iterate through each character
+    for (int i = 0; i < length; i++)
+    {
+        result = result + OUString(aHiddenText[i])
+                 + REDLINE_NUMBER_BUILDER_STRIKETHROUGH;
+    }
+
+    return result;
+}
+// MACRO: }
 
 SwExpandPortion *SwTextFormatter::NewFieldPortion( SwTextFormatInfo &rInf,
                                                 const SwTextAttr *pHint ) const
 {
-    SwExpandPortion *pRet = nullptr;
-    SwFrame *pFrame = m_pFrame;
     SwField *pField = const_cast<SwField*>(pHint->GetFormatField().GetField());
     const bool bName = rInf.GetOpt().IsFieldName();
-
-    SwCharFormat* pChFormat = nullptr;
-    bool bNewFlyPor = false;
-    sal_uInt16 subType = 0;
 
     // set language
     const_cast<SwTextFormatter*>(this)->SeekAndChg( rInf );
     if (pField->GetLanguage() != GetFnt()->GetLanguage())
-    {
         pField->SetLanguage( GetFnt()->GetLanguage() );
-        // let the visual note know about its new language
-        if (pField->GetTyp()->Which()==SwFieldIds::Postit)
-            const_cast<SwFormatField*> (&pHint->GetFormatField())->Broadcast( SwFormatFieldHint( &pHint->GetFormatField(), SwFormatFieldHintWhich::LANGUAGE ) );
-    }
 
     SwViewShell *pSh = rInf.GetVsh();
-    SwDoc *const pDoc( pSh ? pSh->GetDoc() : nullptr );
-    bool const bInClipboard( pDoc == nullptr || pDoc->IsClipBoard() );
-    bool bPlaceHolder = false;
 
-    switch( pField->GetTyp()->Which() )
+    switch (pField->GetTyp()->Which())
     {
         case SwFieldIds::Script:
         case SwFieldIds::Postit:
-            pRet = new SwPostItsPortion( SwFieldIds::Script == pField->GetTyp()->Which() );
-            break;
-
+            return new SwPostItsPortion(SwFieldIds::Script == pField->GetTyp()->Which());
         case SwFieldIds::CombinedChars:
-            {
-                if( bName )
-                    pRet = new SwFieldPortion( pField->GetFieldName() );
-                else
-                    pRet = new SwCombinedPortion( pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-            }
+            if (!bName)
+                return new SwCombinedPortion(ExpandField(*pField, *this, rInf));
             break;
-
         case SwFieldIds::HiddenText:
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwHiddenPortion(aStr);
-            }
-            break;
-
+            return new SwHiddenPortion(ExpandField(*pField, *this, rInf));
         case SwFieldIds::Chapter:
-            if( !bName && pSh && !pSh->Imp()->IsUpdateExpFields() )
+            if (!bName && pSh && !pSh->Imp()->IsUpdateExpFields())
             {
-                static_cast<SwChapterField*>(pField)->ChangeExpansion(*pFrame,
-                    &static_txtattr_cast<SwTextField const*>(pHint)->GetTextNode());
-            }
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion( aStr );
+                static_cast<SwChapterField*>(pField)->ChangeExpansion(
+                    *m_pFrame, &static_txtattr_cast<SwTextField const*>(pHint)->GetTextNode());
             }
             break;
-
         case SwFieldIds::DocStat:
-            if( !bName && pSh && !pSh->Imp()->IsUpdateExpFields() )
+            if (!bName && pSh && !pSh->Imp()->IsUpdateExpFields())
             {
-                static_cast<SwDocStatField*>(pField)->ChangeExpansion( pFrame );
+                static_cast<SwDocStatField*>(pField)->ChangeExpansion(m_pFrame);
             }
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion( aStr );
-            }
-            static_cast<SwFieldPortion*>(pRet)->m_nAttrFieldType= ATTR_PAGECOUNTFLD;
             break;
-
         case SwFieldIds::PageNumber:
-        {
-            if( !bName && pSh && pSh->GetLayout() && !pSh->Imp()->IsUpdateExpFields() )
+            if (!bName && pSh && pSh->GetLayout() && !pSh->Imp()->IsUpdateExpFields())
             {
-                SwPageNumberFieldType *pPageNr = static_cast<SwPageNumberFieldType *>(pField->GetTyp());
+                auto pPageNr = static_cast<SwPageNumberFieldType*>(pField->GetTyp());
 
                 const SwRootFrame* pTmpRootFrame = pSh->GetLayout();
                 const bool bVirt = pTmpRootFrame->IsVirtPageNum();
 
-                sal_uInt16 nVirtNum = pFrame->GetVirtPageNum();
+                sal_uInt16 nVirtNum = m_pFrame->GetVirtPageNum();
                 sal_uInt16 nNumPages = pTmpRootFrame->GetPageNum();
                 SvxNumType nNumFormat = SvxNumType(-1);
-                if(SVX_NUM_PAGEDESC == pField->GetFormat())
-                    nNumFormat = pFrame->FindPageFrame()->GetPageDesc()->GetNumType().GetNumberingType();
-                static_cast<SwPageNumberField*>(pField)
-                    ->ChangeExpansion(nVirtNum, nNumPages);
-                pPageNr->ChangeExpansion(pDoc,
-                                            bVirt, nNumFormat != SvxNumType(-1) ? &nNumFormat : nullptr);
+                if (SVX_NUM_PAGEDESC == pField->GetFormat())
+                    nNumFormat
+                        = m_pFrame->FindPageFrame()->GetPageDesc()->GetNumType().GetNumberingType();
+                static_cast<SwPageNumberField*>(pField)->ChangeExpansion(nVirtNum, nNumPages);
+                pPageNr->ChangeExpansion(pSh->GetDoc(), bVirt,
+                                         nNumFormat != SvxNumType(-1) ? &nNumFormat : nullptr);
             }
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion( aStr );
-            }
-            static_cast<SwFieldPortion*>(pRet)->m_nAttrFieldType= ATTR_PAGENUMBERFLD;
             break;
-        }
         case SwFieldIds::GetExp:
-        {
-            if( !bName && pSh && !pSh->Imp()->IsUpdateExpFields() )
+            if (!bName && pSh && !pSh->Imp()->IsUpdateExpFields())
             {
-                SwGetExpField* pExpField = static_cast<SwGetExpField*>(pField);
-                if( !::lcl_IsInBody( pFrame ) )
+                auto pExpField = static_cast<SwGetExpField*>(pField);
+                if (!::lcl_IsInBody(m_pFrame))
                 {
-                    pExpField->ChgBodyTextFlag( false );
-                    pExpField->ChangeExpansion(*pFrame,
-                            *static_txtattr_cast<SwTextField const*>(pHint));
+                    pExpField->ChgBodyTextFlag(false);
+                    pExpField->ChangeExpansion(*m_pFrame,
+                                               *static_txtattr_cast<SwTextField const*>(pHint));
                 }
-                else if( !pExpField->IsInBodyText() )
+                else if (!pExpField->IsInBodyText())
                 {
                     // Was something else previously, thus: expand first, then convert it!
-                    pExpField->ChangeExpansion(*pFrame,
-                            *static_txtattr_cast<SwTextField const*>(pHint));
-                    pExpField->ChgBodyTextFlag( true );
+                    pExpField->ChangeExpansion(*m_pFrame,
+                                               *static_txtattr_cast<SwTextField const*>(pHint));
+                    pExpField->ChgBodyTextFlag(true);
                 }
             }
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion( aStr );
-            }
             break;
-        }
         case SwFieldIds::Database:
-        {
-            if( !bName )
+            if (!bName)
             {
-                SwDBField* pDBField = static_cast<SwDBField*>(pField);
-                pDBField->ChgBodyTextFlag( ::lcl_IsInBody( pFrame ) );
-            }
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion(aStr);
+                static_cast<SwDBField*>(pField)->ChgBodyTextFlag(::lcl_IsInBody(m_pFrame));
             }
             break;
-        }
         case SwFieldIds::RefPageGet:
-            if( !bName && pSh && !pSh->Imp()->IsUpdateExpFields() )
+            if (!bName && pSh && !pSh->Imp()->IsUpdateExpFields())
             {
-                static_cast<SwRefPageGetField*>(pField)->ChangeExpansion(*pFrame,
-                        static_txtattr_cast<SwTextField const*>(pHint));
-            }
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion(aStr);
+                static_cast<SwRefPageGetField*>(pField)->ChangeExpansion(
+                    *m_pFrame, static_txtattr_cast<SwTextField const*>(pHint));
             }
             break;
-
         case SwFieldIds::JumpEdit:
-            if( !bName )
-                pChFormat = static_cast<SwJumpEditField*>(pField)->GetCharFormat();
-            bNewFlyPor = true;
-            bPlaceHolder = true;
-            break;
-        case SwFieldIds::GetRef:
         {
-            subType = static_cast<SwGetRefField*>(pField)->GetSubType();
-            if (!bName && subType == REF_STYLE)
+            std::unique_ptr<SwFont> pFont;
+            if (!bName)
             {
-                static_cast<SwGetRefField*>(pField)->UpdateField(
-                    static_txtattr_cast<SwTextField const*>(pHint), pFrame);
+                pFont = std::make_unique<SwFont>(*m_pFont);
+                pFont->SetDiffFnt(
+                    &static_cast<SwJumpEditField*>(pField)->GetCharFormat()->GetAttrSet(),
+                    &m_pFrame->GetDoc().getIDocumentSettingAccess());
             }
-
-            {
-                OUString const str( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion(str);
-            }
-            if( subType == REF_BOOKMARK  )
-                static_cast<SwFieldPortion*>(pRet)->m_nAttrFieldType = ATTR_BOOKMARKFLD;
-            else if( subType == REF_SETREFATTR )
-                static_cast<SwFieldPortion*>(pRet)->m_nAttrFieldType = ATTR_SETREFATTRFLD;
+            return new SwJumpFieldPortion(ExpandField(*pField, *this, rInf), pField->GetPar2(),
+                                          std::move(pFont), pField->GetFormat());
         }
-        break;
-        case SwFieldIds::DateTime:
-            subType = static_cast<SwDateTimeField*>(pField)->GetSubType();
+        case SwFieldIds::GetRef:
+            if (!bName)
             {
-                OUString const str( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion(str);
+                auto pGetRef = static_cast<SwGetRefField*>(pField);
+                if (pGetRef->GetSubType() == REF_STYLE)
+                    pGetRef->UpdateField(static_txtattr_cast<SwTextField const*>(pHint), m_pFrame);
             }
-            if( subType & DATEFLD  )
-                static_cast<SwFieldPortion*>(pRet)->m_nAttrFieldType= ATTR_DATEFLD;
-            else if( subType & TIMEFLD )
-                static_cast<SwFieldPortion*>(pRet)->m_nAttrFieldType = ATTR_TIMEFLD;
             break;
         default:
-            {
-                OUString const aStr( bName
-                    ? pField->GetFieldName()
-                    : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-                pRet = new SwFieldPortion(aStr);
-            }
+            break;
     }
-
-    if( bNewFlyPor )
-    {
-        std::unique_ptr<SwFont> pTmpFnt;
-        if( !bName )
-        {
-            pTmpFnt.reset(new SwFont( *m_pFont ));
-            pTmpFnt->SetDiffFnt(&pChFormat->GetAttrSet(), &m_pFrame->GetDoc().getIDocumentSettingAccess());
-        }
-        OUString const aStr( bName
-            ? pField->GetFieldName()
-            : pField->ExpandField(bInClipboard, pFrame->getRootFrame()) );
-        pRet = new SwFieldPortion(aStr, std::move(pTmpFnt), bPlaceHolder);
-    }
-
-    return pRet;
+    return new SwFieldPortion(ExpandField(*pField, *this, rInf));
 }
 
 static SwFieldPortion * lcl_NewMetaPortion(SwTextAttr & rHint, const bool bPrefix)
@@ -440,46 +352,6 @@ static void checkApplyParagraphMarkFormatToNumbering(SwFont* pNumFnt, SwTextForm
     SwFormatAutoFormat const& rListAutoFormat(rInf.GetTextFrame()->GetTextNodeForParaProps()->GetAttr(RES_PARATR_LIST_AUTOFMT));
     std::shared_ptr<SfxItemSet> pSet(rListAutoFormat.GetStyleHandle());
 
-    // TODO remove this fallback for RTF
-    bool isDOC = pIDSA->get(DocumentSettingId::ADD_FLY_OFFSETS);
-    bool isDOCX = pIDSA->get(DocumentSettingId::ADD_VERTICAL_FLY_OFFSETS);
-    // tdf#146168 this hack should now only apply to RTF. Any other format (i.e. ODT) should only
-    // follow this fallback hack if it was created from RTF after its current implementation in 7.2.
-    // This can be approximated by 128197's new 6.4.7 compat for RTF MsWordCompMinLineHeightByFly
-    // Anything older than this which has APPLY_PARAGRAPH_MARK_FORMAT_TO_NUMBERING
-    // did not experience this hack, so it shouldn't apply to ODTs created from older RTFs either.
-    // In short: we don't want this hack to apply unless absolutely necessary for RTF.
-    const bool isOnlyRTF
-        = !isDOC && !isDOCX && pIDSA->get(DocumentSettingId::MS_WORD_COMP_MIN_LINE_HEIGHT_BY_FLY);
-
-    if (isOnlyRTF && !pSet)
-    {
-        TextFrameIndex const nTextLen(rInf.GetTextFrame()->GetText().getLength());
-        SwTextNode const* pNode(nullptr);
-        sw::MergedAttrIterReverse iter(*rInf.GetTextFrame());
-        for (SwTextAttr const* pHint = iter.PrevAttr(&pNode); pHint;
-             pHint = iter.PrevAttr(&pNode))
-        {
-            TextFrameIndex const nHintEnd(
-                rInf.GetTextFrame()->MapModelToView(pNode, pHint->GetAnyEnd()));
-            if (nHintEnd < nTextLen)
-            {
-                break; // only those at para end are interesting
-            }
-            // Formatting for the paragraph mark is usually set to apply only to the
-            // (non-existent) extra character at end of the text node, but there can be
-            // other hints too (ending at nTextLen), so look for all matching hints.
-            // Still the (non-existent) extra character at the end is preferred if it exists.
-            if (pHint->Which() == RES_TXTATR_AUTOFMT)
-            {
-                pSet = pHint->GetAutoFormat().GetStyleHandle();
-                // When we find an empty hint (start == end) we got what we are looking for.
-                if (pHint->GetStart() == *pHint->End())
-                    break;
-            }
-        }
-    }
-
     // Check each item and in case it should be ignored, then clear it.
     if (!pSet)
         return;
@@ -497,7 +369,8 @@ static void checkApplyParagraphMarkFormatToNumbering(SwFont* pNumFnt, SwTextForm
         {
             if (!SwTextNode::IsIgnoredCharFormatForNumbering(nWhich, /*bIsCharStyle=*/true)
                 && !pCleanedSet->HasItem(nWhich)
-                && !(pFormat && pFormat->HasItem(nWhich)) )
+                && !(pFormat && pFormat->HasItem(nWhich))
+                && rStyleAttrs.GetItemState(nWhich) > SfxItemState::DEFAULT)
             {
                 // Copy from parent sets only allowed items which will not overwrite
                 // values explicitly defined in current set (pCleanedSet) or in pFormat
@@ -615,14 +488,12 @@ static bool lcl_setRedlineAttr( SwTextFormatInfo &rInf, const SwTextNode& rTextN
     SwAttrPool& rPool = rInf.GetVsh()->GetDoc()->GetAttrPool();
     SfxItemSetFixed<RES_CHRATR_BEGIN, RES_CHRATR_END-1> aSet(rPool);
 
-    std::size_t aAuthor = (1 < pRedlineNum->GetStackCount())
-            ? pRedlineNum->GetAuthor( 1 )
-            : pRedlineNum->GetAuthor();
-
     if ( RedlineType::Delete == pRedlineNum->GetType() )
-        SW_MOD()->GetDeletedAuthorAttr(aAuthor, aSet);
+        // MACRO:
+        SW_MOD()->GetDeletedAuthorAttr(aSet);
     else
-        SW_MOD()->GetInsertAuthorAttr(aAuthor, aSet);
+        // MACRO:
+        SW_MOD()->GetInsertAuthorAttr(aSet);
 
     if (const SvxColorItem* pItem = aSet.GetItemIfSet(RES_CHRATR_COLOR))
         pNumFnt->SetColor(pItem->GetValue());
@@ -765,23 +636,54 @@ SwNumberPortion *SwTextFormatter::NewNumberPortion( SwTextFormatInfo &rInf ) con
                 // (SwListRedlineType::SHOW, which counts removed and inserted numbered paragraphs
                 // in a single list)
                 bool bHasHiddenNum = false;
-                OUString aText( pTextNd->GetNumString(true, MAXLEVEL, m_pFrame->getRootFrame(), SwListRedlineType::HIDDEN) );
                 const SwDoc& rDoc = pTextNd->GetDoc();
+                // MACRO: {
+                bool bColorBlack = false;
+                OUString aText(pTextNd->GetNumString(true, MAXLEVEL, m_pFrame->getRootFrame(),
+                                                     SwListRedlineType::HIDDEN));
+                // MACRO: }
                 const SwRedlineTable& rTable = rDoc.getIDocumentRedlineAccess().GetRedlineTable();
                 if ( rTable.size() && !rInf.GetVsh()->GetLayout()->IsHideRedlines() )
                 {
                     OUString aHiddenText( pTextNd->GetNumString(true, MAXLEVEL, m_pFrame->getRootFrame(), SwListRedlineType::ORIGTEXT) );
 
-                    if ( !aText.isEmpty() || !aHiddenText.isEmpty() )
+
+
+                    // MACRO: {
+                    // Case 1: aText is empty and aHiddenText is not empty
+                    // We want to have a standard number
+                    if (aText.isEmpty() && !aHiddenText.isEmpty())
                     {
-                        if (aText != aHiddenText && !aHiddenText.isEmpty())
+                        aText = aHiddenText + pTextNd->GetLabelFollowedBy().replaceAll("\t", " ");
+                    }
+                    // Case 2: aText is not empty and aHiddenText is empty
+                    else if (!aText.isEmpty() && aHiddenText.isEmpty())
+                    {
+                        aText = aText + pTextNd->GetLabelFollowedBy().replaceAll("\t", " ");
+                    }
+                    // Case 3-4: aText && aHiddenText
+                    else if (!aText.isEmpty() && !aHiddenText.isEmpty())
+                    // MACRO : }
+                    {
+                        bool bDisplayChangedParagraphNumbering = officecfg::Office::Writer::Comparison::DisplayChangedParagraphNumbering::get();
+                        if (bDisplayChangedParagraphNumbering && aText != aHiddenText && !aHiddenText.isEmpty())
                         {
                             bHasHiddenNum = true;
-                            // show also original number after the actual one enclosed in [ and ],
-                            // and replace tabulator with space to avoid messy indentation
-                            // resulted by the longer numbering, e.g. "1.[2.]" instead of "1.".
-                            aText = aText +  "[" + aHiddenText + "]"
-                                     + pTextNd->GetLabelFollowedBy().replaceAll("\t", " ");
+                            // MACRO: {
+                            // Case 3: aText != aHiddenText
+                            if (aText != aHiddenText)
+                            {
+                                OUString aPreviousValue = redlineNumberBuilder(aHiddenText);
+                                aText = aPreviousValue + " " + aText
+                                    + pTextNd->GetLabelFollowedBy().replaceAll("\t", " ");
+                            }
+                            // Case 4: aText != aHiddenText
+                            else
+                            {
+                                bColorBlack = true;
+                                aText = aText + pTextNd->GetLabelFollowedBy().replaceAll("\t", " ");
+                            }
+                            // MACRO: }
                         }
                         else if (!aText.isEmpty())
                             aText += pTextNd->GetLabelFollowedBy();
@@ -840,8 +742,9 @@ SwNumberPortion *SwTextFormatter::NewNumberPortion( SwTextFormatInfo &rInf ) con
 
                     checkApplyParagraphMarkFormatToNumbering(pNumFnt.get(), rInf, pIDSA, pFormat);
 
-                    if ( !lcl_setRedlineAttr( rInf, *pTextNd, pNumFnt ) && bHasHiddenNum )
-                        pNumFnt->SetColor(NON_PRINTING_CHARACTER_COLOR);
+                    // MACRO
+                    if ( !lcl_setRedlineAttr( rInf, *pTextNd, pNumFnt ) && bHasHiddenNum && !bColorBlack)
+                        pNumFnt->SetColor(COL_GREEN);
 
                     // we do not allow a vertical font
                     pNumFnt->SetVertical( pNumFnt->GetOrientation(), m_pFrame->IsVertical() );

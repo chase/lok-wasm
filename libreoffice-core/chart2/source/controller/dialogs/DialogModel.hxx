@@ -104,7 +104,7 @@ public:
         Down, Up
     };
 
-    void moveSeries( const css::uno::Reference< css::chart2::XDataSeries > & xSeries,
+    void moveSeries( const rtl::Reference< DataSeries > & xSeries,
                      MoveDirection eDirection );
 
     /// @return the newly inserted series
@@ -115,7 +115,7 @@ public:
                 bool bCreateDataCachedSequences = false );
 
     void deleteSeries(
-        const css::uno::Reference< css::chart2::XDataSeries > & xSeries,
+        const rtl::Reference< ::chart::DataSeries > & xSeries,
         const rtl::Reference< ::chart::ChartType > & xChartType );
 
     css::uno::Reference< css::chart2::data::XLabeledDataSequence >

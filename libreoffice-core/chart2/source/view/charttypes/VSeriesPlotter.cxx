@@ -27,9 +27,11 @@
 #include <Diagram.hxx>
 #include <BaseCoordinateSystem.hxx>
 #include <DataSeries.hxx>
+#include <DataSeriesProperties.hxx>
 
 #include <CommonConverters.hxx>
 #include <ExplicitCategoriesProvider.hxx>
+#include <FormattedString.hxx>
 #include <ObjectIdentifier.hxx>
 #include <StatisticsHelper.hxx>
 #include <PlottingPositionHelper.hxx>
@@ -94,6 +96,7 @@ namespace chart {
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart;
 using namespace ::com::sun::star::chart2;
+using namespace ::chart::DataSeriesProperties;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
 
@@ -517,7 +520,7 @@ rtl::Reference<SvxShapeText> VSeriesPlotter::createDataLabel( const rtl::Referen
                         if ( m_xChartTypeModel )
                             aRole = m_xChartTypeModel->getRoleOfSequenceForSeriesLabel();
                         const rtl::Reference< DataSeries >& xSeries( rDataSeries.getModel() );
-                        pTextList[i] = DataSeriesHelper::getDataSeriesLabel( xSeries, aRole );
+                        pTextList[i] = xSeries->getLabelForRole( aRole );
                         break;
                     }
                     case DataPointCustomLabelFieldType_PERCENTAGE:
@@ -575,7 +578,7 @@ rtl::Reference<SvxShapeText> VSeriesPlotter::createDataLabel( const rtl::Referen
                 if ( m_xChartTypeModel )
                     aRole = m_xChartTypeModel->getRoleOfSequenceForSeriesLabel();
                 const rtl::Reference< DataSeries >& xSeries( rDataSeries.getModel() );
-                pTextList[1] = DataSeriesHelper::getDataSeriesLabel( xSeries, aRole );
+                pTextList[1] = xSeries->getLabelForRole( aRole );
             }
 
             if( pLabel->ShowNumber )
@@ -701,7 +704,8 @@ rtl::Reference<SvxShapeText> VSeriesPlotter::createDataLabel( const rtl::Referen
             {
                 xTextShape->setPosition(aRelPos);
                 if( !m_xChartTypeModel->getChartType().equalsIgnoreAsciiCase(CHART2_SERVICE_NAME_CHARTTYPE_PIE) &&
-                    rDataSeries.getPropertiesOfSeries()->getPropertyValue( "ShowCustomLeaderLines" ).get<sal_Bool>())
+                    // "ShowCustomLeaderLines"
+                    rDataSeries.getModel()->getFastPropertyValue( PROP_DATASERIES_SHOW_CUSTOM_LEADERLINES ).get<sal_Bool>())
                 {
                     sal_Int32 nX1 = rScreenPosition2D.X;
                     sal_Int32 nY1 = rScreenPosition2D.Y;
@@ -2351,7 +2355,7 @@ uno::Sequence<OUString> VSeriesPlotter::getSeriesNames() const
                 rtl::Reference< DataSeries > xSeries( pSeries ? pSeries->getModel() : nullptr );
                 if( xSeries.is() )
                 {
-                    OUString aSeriesName( DataSeriesHelper::getDataSeriesLabel( xSeries, aRole ) );
+                    OUString aSeriesName( xSeries->getLabelForRole( aRole ) );
                     aRetVector.push_back( aSeriesName );
                 }
             }
@@ -2372,7 +2376,7 @@ uno::Sequence<OUString> VSeriesPlotter::getAllSeriesNames() const
     {
         if (pSeries)
         {
-            OUString aSeriesName(DataSeriesHelper::getDataSeriesLabel(pSeries->getModel(), aRole));
+            OUString aSeriesName(pSeries->getModel()->getLabelForRole(aRole));
             aRetVector.push_back(aSeriesName);
         }
     }
@@ -2450,7 +2454,8 @@ std::vector< ViewLegendEntry > VSeriesPlotter::createLegendEntries(
                     if (!pSeries)
                         continue;
 
-                    if (!pSeries->getPropertiesOfSeries()->getPropertyValue("ShowLegendEntry").get<sal_Bool>())
+                    // "ShowLegendEntry"
+                    if (!pSeries->getModel()->getFastPropertyValue(PROP_DATASERIES_SHOW_LEGEND_ENTRY).get<sal_Bool>())
                     {
                         continue;
                     }
@@ -2730,7 +2735,8 @@ std::vector< ViewLegendEntry > VSeriesPlotter::createLegendEntriesForSeries(
             if (bIsPie)
             {
                 bool bDonut = false;
-                if ((m_xChartTypeModel->getPropertyValue("UseRings") >>= bDonut) && bDonut)
+                // "UseRings"
+                if ((m_xChartTypeModel->getFastPropertyValue(PROP_PIECHARTTYPE_USE_RINGS) >>= bDonut) && bDonut)
                     bIsPie = false;
             }
         }
@@ -2746,7 +2752,8 @@ std::vector< ViewLegendEntry > VSeriesPlotter::createLegendEntriesForSeries(
             Sequence<sal_Int32> deletedLegendEntries;
             try
             {
-                rSeries.getPropertiesOfSeries()->getPropertyValue("DeletedLegendEntries") >>= deletedLegendEntries;
+                // "DeletedLegendEntries"
+                rSeries.getModel()->getFastPropertyValue(PROP_DATASERIES_DELETED_LEGEND_ENTRIES) >>= deletedLegendEntries;
             }
             catch (const uno::Exception&)
             {
@@ -2787,7 +2794,7 @@ std::vector< ViewLegendEntry > VSeriesPlotter::createLegendEntriesForSeries(
                 aLabelText = aCategoryNames[nIdx];
                 if( xShape.is() || !aLabelText.isEmpty() )
                 {
-                    aEntry.aLabel = FormattedStringHelper::createFormattedStringSequence( xContext, aLabelText, xTextProperties );
+                    aEntry.xLabel = FormattedStringHelper::createFormattedString( aLabelText, xTextProperties );
                     aResult.push_back(aEntry);
                 }
             }
@@ -2812,8 +2819,8 @@ std::vector< ViewLegendEntry > VSeriesPlotter::createLegendEntriesForSeries(
             }
 
             // label
-            aLabelText = DataSeriesHelper::getDataSeriesLabel( rSeries.getModel(), m_xChartTypeModel.is() ? m_xChartTypeModel->getRoleOfSequenceForSeriesLabel() : "values-y");
-            aEntry.aLabel = FormattedStringHelper::createFormattedStringSequence( xContext, aLabelText, xTextProperties );
+            aLabelText = rSeries.getModel()->getLabelForRole( m_xChartTypeModel.is() ? m_xChartTypeModel->getRoleOfSequenceForSeriesLabel() : "values-y");
+            aEntry.xLabel = FormattedStringHelper::createFormattedString( aLabelText, xTextProperties );
 
             aResult.push_back(aEntry);
         }
@@ -2833,7 +2840,7 @@ std::vector< ViewLegendEntry > VSeriesPlotter::createLegendEntriesForSeries(
                 //label
                 OUString aResStr( RegressionCurveHelper::getUINameForRegressionCurve( aCurves[i] ) );
                 replaceParamterInString( aResStr, u"%SERIESNAME", aLabelText );
-                aEntry.aLabel = FormattedStringHelper::createFormattedStringSequence( xContext, aResStr, xTextProperties );
+                aEntry.xLabel = FormattedStringHelper::createFormattedString( aResStr, xTextProperties );
 
                 // symbol
                 rtl::Reference<SvxShapeGroup> xSymbolGroup(ShapeFactory::createGroup2D( xTarget ));

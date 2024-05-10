@@ -19,12 +19,12 @@
 
 #pragma once
 
+#include <basegfx/point/b2dpoint.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <i18nlangtag/languagetag.hxx>
 #include <tools/gen.hxx>
 #include <tools/degree.hxx>
 
-#include <vcl/devicecoordinate.hxx>
 #include <vcl/glyphitem.hxx>
 #include <vcl/dllapi.h>
 
@@ -69,11 +69,11 @@ class VCL_DLLPUBLIC SalLayout
 public:
     virtual         ~SalLayout();
     // used by upper layers
-    DevicePoint&    DrawBase()                              { return maDrawBase; }
-    const DevicePoint& DrawBase() const                     { return maDrawBase; }
+    basegfx::B2DPoint& DrawBase()                           { return maDrawBase; }
+    const basegfx::B2DPoint& DrawBase() const               { return maDrawBase; }
     Point&          DrawOffset()                            { return maDrawOffset; }
     const Point&    DrawOffset() const                      { return maDrawOffset; }
-    DevicePoint     GetDrawPosition( const DevicePoint& rRelative = DevicePoint(0,0) ) const;
+    basegfx::B2DPoint GetDrawPosition( const basegfx::B2DPoint& rRelative = basegfx::B2DPoint(0,0) ) const;
 
     virtual bool    LayoutText( vcl::text::ImplLayoutArgs&, const SalLayoutGlyphsImpl* ) = 0;  // first step of layouting
     virtual void    AdjustLayout( vcl::text::ImplLayoutArgs& );    // adjusting after fallback etc.
@@ -82,25 +82,25 @@ public:
 
     Degree10        GetOrientation() const                  { return mnOrientation; }
 
-    void            SetTextRenderModeForResolutionIndependentLayout(bool bTextRenderModeForResolutionIndependentLayout)
+    void            SetSubpixelPositioning(bool bSubpixelPositioning)
     {
-        mbTextRenderModeForResolutionIndependentLayout = bTextRenderModeForResolutionIndependentLayout;
+        mbSubpixelPositioning = bSubpixelPositioning;
     }
 
-    bool            GetTextRenderModeForResolutionIndependentLayout() const
+    bool            GetSubpixelPositioning() const
     {
-        return mbTextRenderModeForResolutionIndependentLayout;
+        return mbSubpixelPositioning;
     }
 
     // methods using string indexing
-    virtual sal_Int32 GetTextBreak(DeviceCoordinate nMaxWidth, DeviceCoordinate nCharExtra, int nFactor) const = 0;
-    virtual DeviceCoordinate FillDXArray( std::vector<DeviceCoordinate>* pDXArray, const OUString& rStr ) const = 0;
-    virtual DeviceCoordinate GetTextWidth() const { return FillDXArray( nullptr, {} ); }
-    virtual void    GetCaretPositions( int nArraySize, sal_Int32* pCaretXArray ) const = 0;
+    virtual sal_Int32 GetTextBreak(double nMaxWidth, double nCharExtra, int nFactor) const = 0;
+    virtual double  FillDXArray( std::vector<double>* pDXArray, const OUString& rStr ) const = 0;
+    virtual double  GetTextWidth() const { return FillDXArray( nullptr, {} ); }
+    virtual void    GetCaretPositions( std::vector<double>& rCaretPositions, const OUString& rStr ) const = 0;
     virtual bool    IsKashidaPosValid ( int /*nCharPos*/, int /*nNextCharPos*/ ) const = 0; // i60594
 
     // methods using glyph indexing
-    virtual bool    GetNextGlyph(const GlyphItem** pGlyph, DevicePoint& rPos, int& nStart,
+    virtual bool    GetNextGlyph(const GlyphItem** pGlyph, basegfx::B2DPoint& rPos, int& nStart,
                                  const LogicalFontInstance** ppGlyphFont = nullptr) const = 0;
     virtual bool GetOutline(basegfx::B2DPolyPolygonVector&) const;
     bool GetBoundRect(tools::Rectangle&) const;
@@ -123,9 +123,9 @@ protected:
     Degree10        mnOrientation;
 
     mutable Point   maDrawOffset;
-    DevicePoint     maDrawBase;
+    basegfx::B2DPoint maDrawBase;
 
-    bool            mbTextRenderModeForResolutionIndependentLayout;
+    bool            mbSubpixelPositioning;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

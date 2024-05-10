@@ -26,6 +26,7 @@
 #include <vcl/graphicfilter.hxx>
 #include <vcl/help.hxx>
 #include <vcl/window.hxx>
+#include <vcl/ImageTree.hxx>
 
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
@@ -42,13 +43,14 @@
 #include <unotools/resmgr.hxx>
 #include <unotools/configmgr.hxx>
 #include <com/sun/star/beans/PropertyValue.hpp>
+#include <bitmaps.hlst>
 
 //size of preview
 const Size ThumbSize(150, 150);
 
 TipOfTheDayDialog::TipOfTheDayDialog(weld::Window* pParent)
     : GenericDialogController(pParent, "cui/ui/tipofthedaydialog.ui", "TipOfTheDayDialog")
-    , m_pParent(pParent)
+    , m_xParent(pParent ? pParent->GetXWindow() : nullptr)
     , m_pText(m_xBuilder->weld_label("lbText"))
     , m_pShowTip(m_xBuilder->weld_check_button("cbShowTip"))
     , m_pNext(m_xBuilder->weld_button("btnNext"))
@@ -60,15 +62,11 @@ TipOfTheDayDialog::TipOfTheDayDialog(weld::Window* pParent)
     m_nCurrentTip = officecfg::Office::Common::Misc::LastTipOfTheDayID::get();
     m_pPreview->set_size_request(ThumbSize.Width(), ThumbSize.Height());
 
-    if (pParent != nullptr)
+    if (m_xParent.is())
     {
-        css::uno::Reference<css::awt::XWindow> xWindow = pParent->GetXWindow();
-        if (xWindow.is())
-        {
-            VclPtr<vcl::Window> xVclWin(VCLUnoHelper::GetWindow(xWindow));
-            if (xVclWin != nullptr)
-                xVclWin->AddEventListener(LINK(this, TipOfTheDayDialog, Terminated));
-        }
+        VclPtr<vcl::Window> xVclWin(VCLUnoHelper::GetWindow(m_xParent));
+        if (xVclWin != nullptr)
+            xVclWin->AddEventListener(LINK(this, TipOfTheDayDialog, Terminated));
     }
 
     const auto t0 = std::chrono::system_clock::now().time_since_epoch();
@@ -92,7 +90,7 @@ IMPL_LINK(TipOfTheDayDialog, Terminated, VclWindowEvent&, rEvent, void)
 {
     if (rEvent.GetId() == VclEventId::ObjectDying)
     {
-        m_pParent = nullptr;
+        m_xParent.clear();
         TipOfTheDayDialog::response(RET_OK);
     }
 }
@@ -105,15 +103,11 @@ TipOfTheDayDialog::~TipOfTheDayDialog()
     officecfg::Office::Common::Misc::ShowTipOfTheDay::set(m_pShowTip->get_active(), xChanges);
     xChanges->commit();
 
-    if (m_pParent != nullptr)
+    if (m_xParent.is())
     {
-        css::uno::Reference<css::awt::XWindow> xWindow = m_pParent->GetXWindow();
-        if (xWindow.is())
-        {
-            VclPtr<vcl::Window> xVclWin(VCLUnoHelper::GetWindow(xWindow));
-            if (xVclWin != nullptr)
-                xVclWin->RemoveEventListener(LINK(this, TipOfTheDayDialog, Terminated));
-        }
+        VclPtr<vcl::Window> xVclWin(VCLUnoHelper::GetWindow(m_xParent));
+        if (xVclWin != nullptr)
+            xVclWin->RemoveEventListener(LINK(this, TipOfTheDayDialog, Terminated));
     }
 }
 
@@ -135,7 +129,7 @@ void TipOfTheDayDialog::UpdateTip()
                              .replaceFirst("%CURRENT", OUString::number(m_nCurrentTip + 1))
                              .replaceFirst("%TOTAL", OUString::number(nNumberOfTips)));
 
-    auto[sTip, sLink, sImage] = TIPOFTHEDAY_STRINGARRAY[m_nCurrentTip];
+    auto[sTip, sLink, sImage, nType] = TIPOFTHEDAY_STRINGARRAY[m_nCurrentTip];
 
     // text
 //replace MOD1 & MOD2 shortcuts depending on platform
@@ -157,8 +151,7 @@ void TipOfTheDayDialog::UpdateTip()
     {
         m_pLink->set_visible(false);
         //show the link only if the UNO command is available in the current module
-        SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-        if (pViewFrame)
+        if (SfxViewFrame* pViewFrame = SfxViewFrame::Current())
         {
             const auto xFrame = pViewFrame->GetFrame().GetFrameInterface();
             const css::uno::Reference<css::frame::XDispatchProvider> xDispatchProvider(
@@ -215,11 +208,22 @@ void TipOfTheDayDialog::UpdateTip()
     OUString aURL("$BRAND_BASE_DIR/$BRAND_SHARE_SUBDIR/tipoftheday/");
     rtl::Bootstrap::expandMacros(aURL);
     OUString aImageName = sImage;
-    // use default image if none is available with the number
-    if (aImageName.isEmpty() || !file_exists(aURL + aImageName))
-        aImageName = "tipoftheday.png";
     Graphic aGraphic;
-    GraphicFilter::LoadGraphic(aURL + aImageName, OUString(), aGraphic);
+
+    if (!aImageName.isEmpty() && file_exists(aURL + aImageName))
+        GraphicFilter::LoadGraphic(aURL + aImageName, OUString(), aGraphic);
+    else
+    {
+        const OUString sModuleImage[5]
+            = { RID_SVXBMP_TOTD_WRITER, RID_SVXBMP_TOTD_CALC, RID_SVXBMP_TOTD_DRAW,
+                RID_SVXBMP_TOTD_IMPRESS, RID_SVXBMP_TOTD_SOFFICE };
+        const OUString aIconTheme
+            = Application::GetSettings().GetStyleSettings().DetermineIconTheme();
+        BitmapEx aBmpEx;
+        ImageTree::get().loadImage(sModuleImage[nType], aIconTheme, aBmpEx, true,
+                                   ImageLoadFlags::IgnoreDarkTheme);
+        aGraphic = aBmpEx;
+    }
 
     if (!aGraphic.IsAnimated())
     {

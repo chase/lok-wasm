@@ -45,7 +45,6 @@
 #include <unordered_map>
 #include <vector>
 
-using namespace ::std;
 using namespace ::osl;
 using namespace ::com::sun::star;
 using namespace css::uno;
@@ -181,7 +180,7 @@ inline void AdapterImpl::release()
     {
         t_ptr_map::iterator iFind(
             m_pFactory->m_receiver2adapters.find( m_key ) );
-        OSL_ASSERT( m_pFactory->m_receiver2adapters.end() != iFind );
+        assert( m_pFactory->m_receiver2adapters.end() != iFind );
         t_ptr_set & adapter_set = iFind->second;
         if (adapter_set.erase( this ) != 1) {
             OSL_ASSERT( false );
@@ -811,7 +810,7 @@ Reference< XInterface > FactoryImpl::createAdapter(
                 &adapter_set, m_receiver2adapters, xKey.get(), rTypes );
             if (nullptr == that) // again no entry
             {
-                pair< t_ptr_set::const_iterator, bool > i(adapter_set->insert(pNew));
+                std::pair< t_ptr_set::const_iterator, bool > i(adapter_set->insert(pNew));
                 SAL_WARN_IF(
                     !i.second, "stoc",
                     "set already contains " << *(i.first) << " != " << pNew);

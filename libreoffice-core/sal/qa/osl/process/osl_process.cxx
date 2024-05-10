@@ -24,16 +24,12 @@
 #include <sal/types.h>
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <cppunit/plugin/TestPlugIn.h>
 
 #include <osl/process.h>
 #include <osl/file.hxx>
 #include <osl/thread.h>
 #include <rtl/ustring.hxx>
-#include <signal.h>
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <osl/module.hxx>
 #include <sal/macros.h>
 
@@ -43,15 +39,9 @@
 #define RUNNING_ON_VALGRIND false
 #endif
 
-#if !defined(_WIN32)                     // Windows
-#include <unistd.h>
-#endif
-
 #include <iostream>
-#include <fstream>
 #include <vector>
 #include <algorithm>
-#include <iterator>
 #include <string>
 
 #ifdef UNX
@@ -126,13 +116,11 @@ private:
         std::sort(env_container.begin(), env_container.end());
         if (RUNNING_ON_VALGRIND)
         {
-            env_container.erase(
-                std::remove_if(
-                    env_container.begin(), env_container.end(),
+            std::erase_if(
+                    env_container,
                     [](OString const & s) {
                         return s.startsWith("LD_PRELOAD=")
-                            || s.startsWith("VALGRIND_LIB="); }),
-                env_container.end());
+                            || s.startsWith("VALGRIND_LIB="); });
         }
     }
 }
@@ -255,9 +243,7 @@ public:
 
         //remove the environment variables that we have changed
         //in the child environment from the read parent environment
-        parent_env.erase(
-            std::remove_if(parent_env.begin(), parent_env.end(), exclude(different_env_vars)),
-            parent_env.end());
+        std::erase_if(parent_env, exclude(different_env_vars));
 
         for (auto& env : parent_env)
             std::cout << "stripped parent env: " << env << "\n";
@@ -384,9 +370,9 @@ public:
 
         std::vector<OString> different_child_env_vars
         {
-            ENV1,
-            ENV2,
-            ENV4
+            ENV1 ""_ostr,
+            ENV2 ""_ostr,
+            ENV4 ""_ostr
         };
 
         CPPUNIT_ASSERT_MESSAGE

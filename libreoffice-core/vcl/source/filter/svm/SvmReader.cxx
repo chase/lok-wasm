@@ -818,6 +818,11 @@ rtl::Reference<MetaAction> SvmReader::TextLineHandler()
     mrStream.ReadInt32(nTempWidth);
 
     pAction->SetStartPoint(aPos);
+    if (nTempWidth < 0)
+    {
+        SAL_WARN("vcl.gdi", "negative width");
+        nTempWidth = 0;
+    }
     pAction->SetWidth(nTempWidth);
 
     sal_uInt32 nTempStrikeout(0);
@@ -855,24 +860,6 @@ rtl::Reference<MetaAction> SvmReader::BmpHandler()
     return pAction;
 }
 
-namespace
-{
-void sanitizeNegativeSizeDimensions(Size& rSize)
-{
-    if (rSize.Width() < 0)
-    {
-        SAL_WARN("vcl.gdi", "sanitizeNegativeSizeDimensions: negative width");
-        rSize.setWidth(0);
-    }
-
-    if (rSize.Height() < 0)
-    {
-        SAL_WARN("vcl.gdi", "sanitizeNegativeSizeDimensions: negative height");
-        rSize.setHeight(0);
-    }
-}
-}
-
 rtl::Reference<MetaAction> SvmReader::BmpScaleHandler()
 {
     rtl::Reference<MetaBmpScaleAction> pAction(new MetaBmpScaleAction);
@@ -886,7 +873,6 @@ rtl::Reference<MetaAction> SvmReader::BmpScaleHandler()
 
     Size aSz;
     aSerializer.readSize(aSz);
-    sanitizeNegativeSizeDimensions(aSz);
 
     pAction->SetBitmap(aBmp);
     pAction->SetPoint(aPoint);
@@ -951,7 +937,6 @@ rtl::Reference<MetaAction> SvmReader::BmpExScaleHandler()
 
     Size aSize;
     aSerializer.readSize(aSize);
-    sanitizeNegativeSizeDimensions(aSize);
 
     pAction->SetBitmapEx(aBmpEx);
     pAction->SetPoint(aPoint);
@@ -1342,7 +1327,6 @@ rtl::Reference<MetaAction> SvmReader::FloatTransparentHandler(ImplMetaReadData* 
 
     Size aSize;
     aSerializer.readSize(aSize);
-    sanitizeNegativeSizeDimensions(aSize);
 
     Gradient aGradient;
     aSerializer.readGradient(aGradient);
@@ -1356,9 +1340,18 @@ rtl::Reference<MetaAction> SvmReader::FloatTransparentHandler(ImplMetaReadData* 
     if (aCompat.GetVersion() > 1)
     {
         basegfx::BColorStops aColorStops;
-        sal_uInt16 nTmp;
+        sal_uInt16 nTmp(0);
         double fOff, fR, fG, fB;
         mrStream.ReadUInt16(nTmp);
+
+        const size_t nMaxPossibleEntries = mrStream.remainingSize() / 4 * sizeof(double);
+        if (nTmp > nMaxPossibleEntries)
+        {
+            SAL_WARN("vcl.gdi", "gradient record claims to have: " << nTmp << " entries, but only "
+                                                                   << nMaxPossibleEntries
+                                                                   << " possible, clamping");
+            nTmp = nMaxPossibleEntries;
+        }
 
         for (sal_uInt16 a(0); a < nTmp; a++)
         {

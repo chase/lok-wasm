@@ -73,7 +73,7 @@ BitmapEx VCLUnoHelper::GetBitmap( const css::uno::Reference< css::awt::XBitmap>&
     }
     else if ( rxBitmap.is() )
     {
-        VCLXBitmap* pVCLBitmap = comphelper::getFromUnoTunnel<VCLXBitmap>( rxBitmap );
+        VCLXBitmap* pVCLBitmap = dynamic_cast<VCLXBitmap*>( rxBitmap.get() );
         if ( pVCLBitmap )
             aBmp = pVCLBitmap->GetBitmap();
         else
@@ -89,6 +89,7 @@ BitmapEx VCLUnoHelper::GetBitmap( const css::uno::Reference< css::awt::XBitmap>&
                 SvMemoryStream aMem( aBytes.getArray(), aBytes.getLength(), StreamMode::READ );
                 ReadDIB(aMask, aMem, true);
             }
+            aMask.Invert(); // Convert from transparency to alpha
             aBmp = BitmapEx( aDIB, aMask );
         }
     }
@@ -104,26 +105,26 @@ css::uno::Reference< css::awt::XBitmap> VCLUnoHelper::CreateBitmap( const Bitmap
 
 vcl::Window* VCLUnoHelper::GetWindow( const css::uno::Reference< css::awt::XWindow>& rxWindow )
 {
-    VCLXWindow* pVCLXWindow = comphelper::getFromUnoTunnel<VCLXWindow>( rxWindow );
+    VCLXWindow* pVCLXWindow = dynamic_cast<VCLXWindow*>( rxWindow.get() );
     return pVCLXWindow ? pVCLXWindow->GetWindow() : nullptr;
 }
 
 vcl::Window* VCLUnoHelper::GetWindow( const css::uno::Reference< css::awt::XWindow2>& rxWindow )
 {
-    VCLXWindow* pVCLXWindow = comphelper::getFromUnoTunnel<VCLXWindow>( rxWindow );
+    VCLXWindow* pVCLXWindow = dynamic_cast<VCLXWindow*>( rxWindow.get() );
     return pVCLXWindow ? pVCLXWindow->GetWindow() : nullptr;
 }
 
 vcl::Window* VCLUnoHelper::GetWindow( const css::uno::Reference< css::awt::XWindowPeer>& rxWindow )
 {
-    VCLXWindow* pVCLXWindow = comphelper::getFromUnoTunnel<VCLXWindow>( rxWindow );
+    VCLXWindow* pVCLXWindow = dynamic_cast<VCLXWindow*>( rxWindow.get() );
     return pVCLXWindow ? pVCLXWindow->GetWindow() : nullptr;
 }
 
 vcl::Region VCLUnoHelper::GetRegion( const css::uno::Reference< css::awt::XRegion >& rxRegion )
 {
     vcl::Region aRegion;
-    VCLXRegion* pVCLRegion = comphelper::getFromUnoTunnel<VCLXRegion>( rxRegion );
+    VCLXRegion* pVCLRegion = dynamic_cast<VCLXRegion*>( rxRegion.get() );
     if ( pVCLRegion )
         aRegion = pVCLRegion->GetRegion();
     else
@@ -149,7 +150,7 @@ css::uno::Reference< css::awt::XWindow> VCLUnoHelper::GetInterface( vcl::Window*
 OutputDevice* VCLUnoHelper::GetOutputDevice( const css::uno::Reference< css::awt::XDevice>& rxDevice )
 {
     VclPtr<OutputDevice> pOutDev;
-    VCLXDevice* pDev = comphelper::getFromUnoTunnel<VCLXDevice>( rxDevice );
+    VCLXDevice* pDev = dynamic_cast<VCLXDevice*>( rxDevice.get() );
     if ( pDev )
         pOutDev = pDev->GetOutputDevice();
     return pOutDev;
@@ -158,7 +159,7 @@ OutputDevice* VCLUnoHelper::GetOutputDevice( const css::uno::Reference< css::awt
 OutputDevice* VCLUnoHelper::GetOutputDevice( const css::uno::Reference< css::awt::XGraphics>& rxGraphics )
 {
     OutputDevice* pOutDev = nullptr;
-    VCLXGraphics* pGrf = comphelper::getFromUnoTunnel<VCLXGraphics>( rxGraphics );
+    VCLXGraphics* pGrf = dynamic_cast<VCLXGraphics*>( rxGraphics.get() );
     if ( pGrf )
         pOutDev = pGrf->GetOutputDevice();
     return pOutDev;
@@ -250,7 +251,7 @@ vcl::Font VCLUnoHelper::CreateFont( const css::awt::FontDescriptor& rDescr, cons
 vcl::Font VCLUnoHelper::CreateFont( const css::uno::Reference< css::awt::XFont >& rxFont )
 {
     vcl::Font aFont;
-    VCLXFont* pVCLXFont = comphelper::getFromUnoTunnel<VCLXFont>( rxFont );
+    VCLXFont* pVCLXFont = dynamic_cast<VCLXFont*>( rxFont.get() );
     if ( pVCLXFont )
         aFont = pVCLXFont->GetFont();
     return aFont;

@@ -7,8 +7,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#include <cppuhelper/compbase.hxx>
-#include <cppuhelper/basemutex.hxx>
+#include <comphelper/compbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
@@ -24,16 +23,12 @@
 
 namespace
 {
-    typedef ::cppu::WeakComponentImplHelper <
+    typedef ::comphelper::WeakComponentImplHelper <
         css::ui::test::XUITest, css::lang::XServiceInfo
         > UITestBase;
 
-class UITestUnoObj : public cppu::BaseMutex,
-    public UITestBase
+class UITestUnoObj : public UITestBase
 {
-private:
-    std::unique_ptr<UITest> mpUITest;
-
 public:
 
     UITestUnoObj();
@@ -58,9 +53,7 @@ public:
 
 }
 
-UITestUnoObj::UITestUnoObj():
-    UITestBase(m_aMutex),
-    mpUITest(new UITest)
+UITestUnoObj::UITestUnoObj()
 {
 }
 

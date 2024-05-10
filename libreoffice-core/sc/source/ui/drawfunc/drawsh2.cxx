@@ -67,7 +67,7 @@ ScDrawShell::ScDrawShell( ScViewData& rData ) :
             GetFrame()->GetFrame().GetController(),
             vcl::EnumContext::Context::Cell))
 {
-    SetPool( &rViewData.GetScDrawView()->GetModel()->GetItemPool() );
+    SetPool( &rViewData.GetScDrawView()->GetModel().GetItemPool() );
     SfxUndoManager* pMgr = rViewData.GetSfxDocShell()->GetUndoManager();
     SetUndoManager( pMgr );
     if ( !rViewData.GetDocument().IsUndoEnabled() )
@@ -94,8 +94,8 @@ void ScDrawShell::GetState( SfxItemSet& rSet )          // Conditions / Toggles
     rSet.Put( SfxBoolItem( SID_BEZIER_EDIT, !pView->IsFrameDragSingles() ) );
 
     sal_uInt16 nFWId = ScGetFontWorkId();
-    SfxViewFrame* pViewFrm = rViewData.GetViewShell()->GetViewFrame();
-    rSet.Put(SfxBoolItem(SID_FONTWORK, pViewFrm->HasChildWindow(nFWId)));
+    SfxViewFrame& rViewFrm = rViewData.GetViewShell()->GetViewFrame();
+    rSet.Put(SfxBoolItem(SID_FONTWORK, rViewFrm.HasChildWindow(nFWId)));
 
         // Notes always default to Page anchor.
     bool bDisableAnchor = false;
@@ -305,7 +305,7 @@ void ScDrawShell::GetDrawFuncState( SfxItemSet& rSet )      // disable functions
 
     if ( rSet.GetItemState( SID_ENABLE_HYPHENATION ) != SfxItemState::UNKNOWN )
     {
-        SfxItemSet aAttrs( pView->GetModel()->GetItemPool() );
+        SfxItemSet aAttrs( pView->GetModel().GetItemPool() );
         pView->GetAttributes( aAttrs );
         if( aAttrs.GetItemState( EE_PARA_HYPHENATE ) >= SfxItemState::DEFAULT )
         {
@@ -353,7 +353,7 @@ static void setupFillColorForChart(const SfxViewShell* pShell, SfxItemSet& rSet)
 
         if (comphelper::LibreOfficeKit::isActive())
             pShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                    (".uno:FillColor=" + std::to_string(nFillColor)).c_str());
+                    (".uno:FillColor=" + OString::number(nFillColor)));
     }
 
     if (!(comphelper::LibreOfficeKit::isActive() && xInfo->hasPropertyByName("FillGradientName")))
@@ -415,7 +415,7 @@ void ScDrawShell::GetDrawAttrState( SfxItemSet& rSet )
     }
     else
     {
-        rSet.Put( pDrView->GetDefaultAttr() );
+        pDrView->GetAttributes(rSet);
     }
 
     SdrPageView* pPV = pDrView->GetSdrPageView();

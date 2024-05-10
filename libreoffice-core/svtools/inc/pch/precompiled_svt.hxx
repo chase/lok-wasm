@@ -45,6 +45,7 @@
 #include <numeric>
 #include <optional>
 #include <ostream>
+#include <span>
 #include <stddef.h>
 #include <string.h>
 #include <string>
@@ -124,7 +125,6 @@
 #include <vcl/ptrstyle.hxx>
 #include <vcl/region.hxx>
 #include <vcl/rendercontext/RasterOp.hxx>
-#include <vcl/scopedbitmapaccess.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/syswin.hxx>
@@ -275,7 +275,6 @@
 #include <o3tl/cow_wrapper.hxx>
 #include <o3tl/deleter.hxx>
 #include <o3tl/safeint.hxx>
-#include <o3tl/span.hxx>
 #include <o3tl/string_view.hxx>
 #include <o3tl/strong_int.hxx>
 #include <o3tl/typed_flags_set.hxx>

@@ -33,6 +33,7 @@
 #include <svx/svdoole2.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/module.hxx>
+#include <sfx2/notebookbar/SfxNotebookBar.hxx>
 #include <svx/svdopage.hxx>
 #include <svx/fmshell.hxx>
 #include <tools/debug.hxx>
@@ -70,6 +71,9 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <vcl/uitest/logger.hxx>
 #include <vcl/uitest/eventdescription.hxx>
+#include <titledockwin.hxx>
+#include <strings.hrc>
+#include <sdresid.hxx>
 
 using namespace com::sun::star;
 
@@ -256,7 +260,7 @@ void DrawViewShell::SelectionHasChanged()
 
     mpDrawView->UpdateSelectionClipboard();
 
-    GetViewShellBase().GetDrawController().FireSelectionChangeListener();
+    GetViewShellBase().GetDrawController()->FireSelectionChangeListener();
 }
 
 namespace {
@@ -344,8 +348,8 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
         eEMode = EditMode::MasterPage;
     }
 
-    GetViewShellBase().GetDrawController().FireChangeEditMode (eEMode == EditMode::MasterPage);
-    GetViewShellBase().GetDrawController().FireChangeLayerMode (bIsLayerModeActive);
+    GetViewShellBase().GetDrawController()->FireChangeEditMode (eEMode == EditMode::MasterPage);
+    GetViewShellBase().GetDrawController()->FireChangeLayerMode (bIsLayerModeActive);
 
     if ( mpDrawView->IsTextEdit() )
     {
@@ -359,7 +363,7 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
         pLayerBar->EndEditMode();
     maTabControl->EndEditMode();
 
-    GetViewShellBase().GetDrawController().BroadcastContextChange();
+    GetViewShellBase().GetDrawController()->BroadcastContextChange();
 
     meEditMode = eEMode;
 
@@ -392,6 +396,16 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
 
     ConfigureAppBackgroundColor();
 
+    // tdf#87638 - change slide pane title according to the edit mode
+    auto setLeftPaneTitleIfPaneExists
+        = [pViewShell = GetViewFrame()](sal_uInt16 nId, TranslateId aId)
+    {
+        if (auto* pChildWindow = pViewShell->GetChildWindow(nId))
+            if (auto* pTitledDockingWindow
+                = static_cast<TitledDockingWindow*>(pChildWindow->GetWindow()))
+                pTitledDockingWindow->SetTitle(SdResId(aId));
+    };
+
     if (meEditMode == EditMode::Page)
     {
         /******************************************************************
@@ -399,6 +413,10 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
         ******************************************************************/
 
         maTabControl->Clear();
+
+        // tdf#87638 - change slide pane title according to the edit mode
+        setLeftPaneTitleIfPaneExists(SID_LEFT_PANE_DRAW, STR_LEFT_PANE_DRAW_TITLE);
+        setLeftPaneTitleIfPaneExists(SID_LEFT_PANE_IMPRESS, STR_LEFT_PANE_IMPRESS_TITLE);
 
         SdPage* pPage;
         sal_uInt16 nPageCnt = GetDoc()->GetSdPageCount(mePageKind);
@@ -420,7 +438,7 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
         SwitchPage(maTabControl->GetPagePos(nActualPageId));
 
         //tdf#102343 re-enable common undo on switch back from master mode
-        mpDrawView->GetModel()->SetDisableTextEditUsesCommonUndoManager(false);
+        mpDrawView->GetModel().SetDisableTextEditUsesCommonUndoManager(false);
     }
     else
     {
@@ -430,9 +448,13 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
         GetViewFrame()->SetChildWindow(
             AnimationChildWindow::GetChildWindowId(), false );
 
+        // tdf#87638 - change slide pane title according to the edit mode
+        setLeftPaneTitleIfPaneExists(SID_LEFT_PANE_DRAW, STR_LEFT_PANE_DRAW_TITLE_MASTER);
+        setLeftPaneTitleIfPaneExists(SID_LEFT_PANE_IMPRESS, STR_LEFT_PANE_IMPRESS_TITLE_MASTER);
+
         if (comphelper::LibreOfficeKit::isActive())
             GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                       ".uno:SlideMasterPage=true");
+                                                       ".uno:SlideMasterPage=true"_ostr);
         if (!mpActualPage)
         {
             // as long as there is no mpActualPage, take first
@@ -466,12 +488,12 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
         //changes the stylesheet they are linked to, so if the common
         //undo manager is in use, those stylesheet changes are thrown
         //away at present
-        mpDrawView->GetModel()->SetDisableTextEditUsesCommonUndoManager(true);
+        mpDrawView->GetModel().SetDisableTextEditUsesCommonUndoManager(true);
     }
 
     // If the master view toolbar is to be shown we turn it on after the
     // edit mode has been changed.
-    if (::sd::ViewShell::mpImpl->mbIsInitialized
+    if (::sd::ViewShell::mpImpl->mbIsInitialized && !sfx2::SfxNotebookBar::IsActive()
         && IsMainViewShell())
     {
         if (bShowMasterViewToolbar)
@@ -505,6 +527,9 @@ void DrawViewShell::ChangeEditMode(EditMode eEMode, bool bIsLayerModeActive)
     Invalidate( SID_HANDOUT_MASTER_MODE );
     InvalidateWindows();
 
+    if (sfx2::SfxNotebookBar::IsActive())
+        UIFeatureChanged();
+
     SetContextName(GetSidebarContextName());
 
 }
@@ -531,7 +556,7 @@ VclPtr<SvxRuler> DrawViewShell::CreateHRuler (::sd::Window* pWin)
     sal_uInt16 nMetric = static_cast<sal_uInt16>(GetDoc()->GetUIUnit());
 
     if( nMetric == 0xffff )
-        nMetric = static_cast<sal_uInt16>(GetViewShellBase().GetViewFrame()->GetDispatcher()->GetModule()->GetFieldUnit());
+        nMetric = static_cast<sal_uInt16>(GetViewShellBase().GetViewFrame().GetDispatcher()->GetModule()->GetFieldUnit());
 
     pRuler->SetUnit( FieldUnit( nMetric ) );
 
@@ -562,7 +587,7 @@ VclPtr<SvxRuler> DrawViewShell::CreateVRuler(::sd::Window* pWin)
     sal_uInt16 nMetric = static_cast<sal_uInt16>(GetDoc()->GetUIUnit());
 
     if( nMetric == 0xffff )
-        nMetric = static_cast<sal_uInt16>(GetViewShellBase().GetViewFrame()->GetDispatcher()->GetModule()->GetFieldUnit());
+        nMetric = static_cast<sal_uInt16>(GetViewShellBase().GetViewFrame().GetDispatcher()->GetModule()->GetFieldUnit());
 
     pRuler->SetUnit( FieldUnit( nMetric ) );
 
@@ -660,7 +685,7 @@ void DrawViewShell::ResetActualPage()
         return;
 
     sal_uInt16 nCurrentPageId = maTabControl->GetCurPageId();
-    sal_uInt16 nNewPageId = nCurrentPageId;
+    sal_uInt16 nNewPageId;
     sal_uInt16 nCurrentPageNum = maTabControl->GetPagePos(nCurrentPageId);
     sal_uInt16 nPageCount   = (meEditMode == EditMode::Page)?GetDoc()->GetSdPageCount(mePageKind):GetDoc()->GetMasterSdPageCount(mePageKind);
 
@@ -813,16 +838,6 @@ bool DrawViewShell::IsSelected(sal_uInt16 nPage)
         = slidesorter::SlideSorterViewShell::GetSlideSorter(GetViewShellBase());
     if (pVShell != nullptr)
         return pVShell->GetSlideSorter().GetController().GetPageSelector().IsPageSelected(nPage);
-
-    return false;
-}
-
-bool DrawViewShell::IsVisible(sal_uInt16 nPage)
-{
-    slidesorter::SlideSorterViewShell* pVShell
-        = slidesorter::SlideSorterViewShell::GetSlideSorter(GetViewShellBase());
-    if (pVShell != nullptr)
-        return pVShell->GetSlideSorter().GetController().GetPageSelector().IsPageVisible(nPage);
 
     return false;
 }
@@ -999,7 +1014,7 @@ bool DrawViewShell::SwitchPage(sal_uInt16 nSelectedPage, bool bAllowChangeFocus)
             // notify LibreOfficeKit about changed page
             OString aPayload = OString::number(nSelectedPage);
             if (SfxViewShell* pViewShell = GetViewShell())
-                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload.getStr());
+                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload);
         }
 
         rtl::Reference< sd::SlideShow > xSlideshow( SlideShow::GetSlideShow( GetDoc() ) );
@@ -1051,7 +1066,7 @@ bool DrawViewShell::SwitchPage(sal_uInt16 nSelectedPage, bool bAllowChangeFocus)
             mpDrawView->HideSdrPage();
             maTabControl->SetCurPageId(maTabControl->GetPageId(nSelectedPage));
             mpDrawView->ShowSdrPage(mpActualPage);
-            GetViewShellBase().GetDrawController().FireSwitchCurrentPage(mpActualPage);
+            GetViewShellBase().GetDrawController()->FireSwitchCurrentPage(mpActualPage);
 
             SdrPageView* pNewPageView = mpDrawView->GetSdrPageView();
 
@@ -1118,9 +1133,9 @@ bool DrawViewShell::SwitchPage(sal_uInt16 nSelectedPage, bool bAllowChangeFocus)
                 pMaster = GetDoc()->GetMasterSdPage(0, mePageKind);
 
             sal_uInt16 nNum = pMaster->GetPageNum();
-            mpDrawView->ShowSdrPage(mpDrawView->GetModel()->GetMasterPage(nNum));
+            mpDrawView->ShowSdrPage(mpDrawView->GetModel().GetMasterPage(nNum));
 
-            GetViewShellBase().GetDrawController().FireSwitchCurrentPage(pMaster);
+            GetViewShellBase().GetDrawController()->FireSwitchCurrentPage(pMaster);
 
             SdrPageView* pNewPageView = mpDrawView->GetSdrPageView();
 
@@ -1316,6 +1331,7 @@ void DrawViewShell::ResetActualLayer()
     }
 
     pLayerBar->SetCurPageId(nActiveLayerPos + 1);
+    GetViewFrame()->GetBindings().Invalidate( SID_TOGGLELAYERVISIBILITY );
     GetViewFrame()->GetBindings().Invalidate( SID_MODIFYLAYER );
     GetViewFrame()->GetBindings().Invalidate( SID_DELETE_LAYER );
 }

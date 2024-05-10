@@ -188,6 +188,7 @@ bool FileDefinitionWidgetDraw::isNativeControlSupported(ControlType eType, Contr
         case ControlType::MenuPopup:
             return true;
         case ControlType::Progress:
+        case ControlType::LevelBar:
             return true;
         case ControlType::IntroProgress:
             return false;
@@ -497,7 +498,7 @@ void munchDrawCommands(std::vector<std::shared_ptr<WidgetDrawAction>> const& rDr
                     if (aBitmap.IsAlpha())
                     {
                         const std::shared_ptr<SalBitmap> pSalBitmapAlpha
-                            = aBitmap.GetAlpha().ImplGetSalBitmap();
+                            = aBitmap.GetAlphaMask().GetBitmap().ImplGetSalBitmap();
                         FileDefinitionWidgetDraw::drawBitmap(rGraphics, aTR, *pSalBitmap,
                                                              *pSalBitmapAlpha);
                     }
@@ -750,6 +751,7 @@ bool FileDefinitionWidgetDraw::drawNativeControl(ControlType eType, ControlPart 
         }
         break;
         case ControlType::Progress:
+        case ControlType::LevelBar:
         {
             bOK = resolveDefinition(eType, ePart, eState, rValue, nX, nY, nWidth, nHeight);
         }

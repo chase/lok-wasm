@@ -100,9 +100,9 @@ using namespace cppu;
 
 
 // Identifiers for creating the strings for dbg_Properties
-constexpr OUStringLiteral ID_DBG_SUPPORTEDINTERFACES = u"Dbg_SupportedInterfaces";
-constexpr OUStringLiteral ID_DBG_PROPERTIES = u"Dbg_Properties";
-constexpr OUStringLiteral ID_DBG_METHODS = u"Dbg_Methods";
+constexpr OUString ID_DBG_SUPPORTEDINTERFACES = u"Dbg_SupportedInterfaces"_ustr;
+constexpr OUString ID_DBG_PROPERTIES = u"Dbg_Properties"_ustr;
+constexpr OUString ID_DBG_METHODS = u"Dbg_Methods"_ustr;
 
 char const aSeqLevelStr[] = "[]";
 
@@ -1605,9 +1605,7 @@ static OUString getDbgObjectName(SbUnoObject& rUnoObj)
     {
         aRet.append( "\n" );
     }
-    aRet.append( "\"" );
-    aRet.append( aName );
-    aRet.append( "\":" );
+    aRet.append( "\"" + aName + "\":" );
     return aRet.makeStringAndClear();
 }
 
@@ -1739,16 +1737,16 @@ static OUString Impl_GetSupportedInterfaces(SbUnoObject& rUnoObj)
     auto x = o3tl::tryAccess<Reference<XInterface>>(aToInspectObj);
     if( !x )
     {
-        aRet.append( ID_DBG_SUPPORTEDINTERFACES );
-        aRet.append( " not available.\n(TypeClass is not TypeClass_INTERFACE)\n" );
+        aRet.append( ID_DBG_SUPPORTEDINTERFACES
+            + " not available.\n(TypeClass is not TypeClass_INTERFACE)\n" );
     }
     else
     {
         Reference< XTypeProvider > xTypeProvider( *x, UNO_QUERY );
 
-        aRet.append( "Supported interfaces by object " );
-        aRet.append(getDbgObjectName(rUnoObj));
-        aRet.append( "\n" );
+        aRet.append( "Supported interfaces by object "
+            + getDbgObjectName(rUnoObj)
+            + "\n" );
         if( xTypeProvider.is() )
         {
             // get the interfaces of the implementation
@@ -1769,9 +1767,9 @@ static OUString Impl_GetSupportedInterfaces(SbUnoObject& rUnoObj)
                     typelib_TypeDescription * pTD = nullptr;
                     rType.getDescription( &pTD );
 
-                    aRet.append( "*** ERROR: No IdlClass for type \"" );
-                    aRet.append( pTD->pTypeName );
-                    aRet.append( "\"\n*** Please check type library\n" );
+                    aRet.append( OUString::Concat("*** ERROR: No IdlClass for type \"")
+                        + OUString::unacquired(&pTD->pTypeName)
+                        + "\"\n*** Please check type library\n" );
                 }
             }
         }
@@ -1827,9 +1825,7 @@ static OUString Dbg_SbxDataType2String( SbxDataType eType )
 // Debugging help method to display the properties of a SbUnoObjects
 static OUString Impl_DumpProperties(SbUnoObject& rUnoObj)
 {
-    OUStringBuffer aRet;
-    aRet.append("Properties of object ");
-    aRet.append(getDbgObjectName(rUnoObj));
+    OUStringBuffer aRet("Properties of object " + getDbgObjectName(rUnoObj));
 
     // analyse the Uno-Infos to recognise the arrays
     Reference< XIntrospectionAccess > xAccess = rUnoObj.getIntrospectionAccess();
@@ -1887,8 +1883,7 @@ static OUString Impl_DumpProperties(SbUnoObject& rUnoObj)
             aPropStr.append( Dbg_SbxDataType2String( eType ) );
             if( bMaybeVoid )
                 aPropStr.append( "/void" );
-            aPropStr.append( " " );
-            aPropStr.append( pVar->GetName() );
+            aPropStr.append( " " + pVar->GetName() );
 
             if( i == nPropCount - 1 )
                 aPropStr.append( "\n" );
@@ -1904,9 +1899,7 @@ static OUString Impl_DumpProperties(SbUnoObject& rUnoObj)
 // Debugging help method to display the methods of an SbUnoObjects
 static OUString Impl_DumpMethods(SbUnoObject& rUnoObj)
 {
-    OUStringBuffer aRet;
-    aRet.append("Methods of object ");
-    aRet.append(getDbgObjectName(rUnoObj));
+    OUStringBuffer aRet("Methods of object " + getDbgObjectName(rUnoObj));
 
     // XIntrospectionAccess, so that the types of the parameter could be outputted
     Reference< XIntrospectionAccess > xAccess = rUnoObj.getIntrospectionAccess();
@@ -1953,10 +1946,8 @@ static OUString Impl_DumpMethods(SbUnoObject& rUnoObj)
                     eType = SbxDataType( SbxOBJECT | SbxARRAY );
             }
             // output the name and the type
-            aRet.append( Dbg_SbxDataType2String( eType ) );
-            aRet.append( " " );
-            aRet.append ( pVar->GetName() );
-            aRet.append( " ( " );
+            aRet.append( Dbg_SbxDataType2String( eType )
+                + " " + pVar->GetName() + " ( " );
 
             // the get-method mustn't have a parameter
             Sequence< Reference< XIdlClass > > aParamsSeq = rxMethod->getParameterTypes();
@@ -2752,15 +2743,15 @@ void SbUnoObject::implCreateDbgProperties()
     Property aProp;
 
     // Id == -1: display the implemented interfaces corresponding the ClassProvider
-    auto xVarRef = tools::make_ref<SbUnoProperty>( OUString(ID_DBG_SUPPORTEDINTERFACES), SbxSTRING, SbxSTRING, aProp, -1, false, false );
+    auto xVarRef = tools::make_ref<SbUnoProperty>( ID_DBG_SUPPORTEDINTERFACES, SbxSTRING, SbxSTRING, aProp, -1, false, false );
     QuickInsert( xVarRef.get() );
 
     // Id == -2: output the properties
-    xVarRef = tools::make_ref<SbUnoProperty>( OUString(ID_DBG_PROPERTIES), SbxSTRING, SbxSTRING, aProp, -2, false, false );
+    xVarRef = tools::make_ref<SbUnoProperty>( ID_DBG_PROPERTIES, SbxSTRING, SbxSTRING, aProp, -2, false, false );
     QuickInsert( xVarRef.get() );
 
     // Id == -3: output the Methods
-    xVarRef = tools::make_ref<SbUnoProperty>( OUString(ID_DBG_METHODS), SbxSTRING, SbxSTRING, aProp, -3, false, false );
+    xVarRef = tools::make_ref<SbUnoProperty>( ID_DBG_METHODS, SbxSTRING, SbxSTRING, aProp, -3, false, false );
     QuickInsert( xVarRef.get() );
 }
 
@@ -3969,7 +3960,7 @@ Any SAL_CALL InvocationToAllListenerMapper::invoke(const OUString& FunctionName,
     }
 
     AllEventObject aAllEvent;
-    aAllEvent.Source = static_cast<OWeakObject*>(this);
+    aAllEvent.Source = getXWeak();
     aAllEvent.Helper = m_Helper;
     aAllEvent.ListenerType = Type(m_xListenerType->getTypeClass(), m_xListenerType->getName() );
     aAllEvent.MethodName = FunctionName;
@@ -4295,17 +4286,13 @@ Any SAL_CALL ModuleInvocationProxy::invoke( const OUString& rFunction,
     OUString aFunctionName = m_aPrefix
                            + rFunction;
 
-    bool bSetRescheduleBack = false;
-    bool bOldReschedule = true;
+    bool bOldReschedule = false;
     SbiInstance* pInst = GetSbData()->pInst;
     if( pInst && pInst->IsCompatibility() )
     {
         bOldReschedule = pInst->IsReschedule();
         if ( bOldReschedule )
-        {
             pInst->EnableReschedule( false );
-            bSetRescheduleBack = true;
-        }
     }
 
     SbxVariable* p = xScopeObj->Find( aFunctionName, SbxClassType::Method );
@@ -4340,7 +4327,7 @@ Any SAL_CALL ModuleInvocationProxy::invoke( const OUString& rFunction,
     aRet = sbxToUnoValue( xValue.get() );
     pMeth->SetParameters( nullptr );
 
-    if( bSetRescheduleBack )
+    if (bOldReschedule)
         pInst->EnableReschedule( bOldReschedule );
 
     // TODO: OutParameter?
@@ -4755,9 +4742,7 @@ Any SbUnoStructRefObject::getUnoAny()
 
 OUString SbUnoStructRefObject::Impl_DumpProperties()
 {
-    OUStringBuffer aRet;
-    aRet.append("Properties of object ");
-    aRet.append( getDbgObjectName() );
+    OUStringBuffer aRet("Properties of object " + getDbgObjectName() );
 
     sal_uInt32 nPropCount = pProps->Count();
     sal_uInt32 nPropsPerLine = 1 + nPropCount / 30;
@@ -4790,10 +4775,8 @@ OUString SbUnoStructRefObject::Impl_DumpProperties()
                     }
                 }
             }
-            aPropStr.append( Dbg_SbxDataType2String( eType ) );
-
-            aPropStr.append( " " );
-            aPropStr.append( pVar->GetName() );
+            aPropStr.append( Dbg_SbxDataType2String( eType )
+                + " " + pVar->GetName() );
 
             if( i == nPropCount - 1 )
             {
@@ -4914,9 +4897,7 @@ OUString SbUnoStructRefObject::getDbgObjectName() const
     {
         aRet.append( "\n" );
     }
-    aRet.append( "\"" );
-    aRet.append( aName );
-    aRet.append( "\":" );
+    aRet.append( "\"" + aName + "\":" );
     return aRet.makeStringAndClear();
 }
 

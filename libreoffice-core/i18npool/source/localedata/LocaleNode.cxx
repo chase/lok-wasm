@@ -141,7 +141,7 @@ void LocaleNode::generateCode (const OFileWriter &of) const
 }
 
 
-OUString LocaleNode::writeParameterCheckLen( const OFileWriter &of,
+OUString LocaleNode::writeOUStringLiteralParameterCheckLen( const OFileWriter &of,
         const char* pParameterName, const LocaleNode* pNode,
         sal_Int32 nMinLen, sal_Int32 nMaxLen ) const
 {
@@ -155,7 +155,7 @@ OUString LocaleNode::writeParameterCheckLen( const OFileWriter &of,
                 pParameterName);
     }
     // write empty data if error
-    of.writeParameter( pParameterName, aVal);
+    of.writeOUStringLiteralParameter( pParameterName, aVal);
     sal_Int32 nLen = aVal.getLength();
     if (nLen < nMinLen)
     {
@@ -179,21 +179,20 @@ OUString LocaleNode::writeParameterCheckLen( const OFileWriter &of,
     return aVal;
 }
 
-
-OUString LocaleNode::writeParameterCheckLen( const OFileWriter &of,
+OUString LocaleNode::writeOUStringLiteralParameterCheckLen( const OFileWriter &of,
         const char* pNodeName, const char* pParameterName,
         sal_Int32 nMinLen, sal_Int32 nMaxLen ) const
 {
     OUString aVal;
     const LocaleNode * pNode = findNode( pNodeName);
     if (pNode || nMinLen < 0)
-        aVal = writeParameterCheckLen( of, pParameterName, pNode, nMinLen, nMaxLen);
+        aVal = writeOUStringLiteralParameterCheckLen( of, pParameterName, pNode, nMinLen, nMaxLen);
     else
     {
         ++nError;
         fprintf( stderr, "Error: node %s not found.\n", pNodeName);
         // write empty data if error
-        of.writeParameter( pParameterName, aVal);
+        of.writeOUStringLiteralParameter( pParameterName, aVal);
     }
     return aVal;
 }
@@ -241,8 +240,8 @@ void LCInfoNode::generateCode (const OFileWriter &of) const
         aLanguage = languageNode->getChildAt(0)->getValue();
         if (aLanguage.getLength() != 2 && aLanguage.getLength() != 3)
             incErrorStr( "Error: langID '%s' not 2-3 characters\n", aLanguage);
-        of.writeParameter("langID", aLanguage);
-        of.writeParameter("langDefaultName", languageNode->getChildAt(1)->getValue());
+        of.writeOUStringLiteralParameter("langID", aLanguage);
+        of.writeOUStringLiteralParameter("langDefaultName", languageNode->getChildAt(1)->getValue());
     }
     else
         incError( "No Language node.");
@@ -251,8 +250,8 @@ void LCInfoNode::generateCode (const OFileWriter &of) const
         OUString aCountry( countryNode->getChildAt(0)->getValue());
         if (!(aCountry.isEmpty() || aCountry.getLength() == 2))
             incErrorStr( "Error: countryID '%s' not empty or more than 2 characters\n", aCountry);
-        of.writeParameter("countryID", aCountry);
-        of.writeParameter("countryDefaultName", countryNode->getChildAt(1)->getValue());
+        of.writeOUStringLiteralParameter("countryID", aCountry);
+        of.writeOUStringLiteralParameter("countryDefaultName", countryNode->getChildAt(1)->getValue());
     }
     else
         incError( "No Country node.");
@@ -264,18 +263,18 @@ void LCInfoNode::generateCode (const OFileWriter &of) const
             incErrorStr( "Error: invalid Variant '%s'\n", aVariant);
         if (!(aVariant.isEmpty() || aLanguage == "qlt"))
             incErrorStrStr( "Error: Variant '%s' given but Language '%s' is not 'qlt'\n", aVariant, aLanguage);
-        of.writeParameter("Variant", aVariant);
+        of.writeOUStringLiteralParameter("Variant", aVariant);
     }
     else
-        of.writeParameter("Variant", std::u16string_view());
-    of.writeAsciiString("\nstatic const sal_Unicode* LCInfoArray[] = {\n");
+        of.writeOUStringLiteralParameter("Variant", std::u16string_view());
+    of.writeAsciiString("\nstatic constexpr OUString LCInfoArray[] = {\n");
     of.writeAsciiString("\tlangID,\n");
     of.writeAsciiString("\tlangDefaultName,\n");
     of.writeAsciiString("\tcountryID,\n");
     of.writeAsciiString("\tcountryDefaultName,\n");
     of.writeAsciiString("\tVariant\n");
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getLCInfo_", "SAL_N_ELEMENTS(LCInfoArray)", "LCInfoArray");
+    of.writeOUStringFunction("getLCInfo_", "SAL_N_ELEMENTS(LCInfoArray)", "LCInfoArray");
 }
 
 
@@ -288,54 +287,54 @@ void LCCTYPENode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getLocaleItem_", useLocale);
+        of.writeOUStringRefFunction("getLocaleItem_", useLocale);
         return;
     }
     OUString str =   getAttr().getValueByName("unoid");
     of.writeAsciiString("\n\n");
-    of.writeParameter("LC_CTYPE_Unoid", str);
+    of.writeOUStringLiteralParameter("LC_CTYPE_Unoid", str);
 
     aDateSep =
-        writeParameterCheckLen( of, "DateSeparator", "dateSeparator", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "DateSeparator", "dateSeparator", 1, 1);
     OUString aThoSep =
-        writeParameterCheckLen( of, "ThousandSeparator", "thousandSeparator", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "ThousandSeparator", "thousandSeparator", 1, 1);
     aDecSep =
-        writeParameterCheckLen( of, "DecimalSeparator", "decimalSeparator", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "DecimalSeparator", "decimalSeparator", 1, 1);
     OUString aDecSepAlt =
-        writeParameterCheckLen( of, "DecimalSeparatorAlternative", "decimalSeparatorAlternative", -1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "DecimalSeparatorAlternative", "decimalSeparatorAlternative", -1, 1);
     OUString aTimeSep =
-        writeParameterCheckLen( of, "TimeSeparator", "timeSeparator", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "TimeSeparator", "timeSeparator", 1, 1);
     OUString aTime100Sep =
-        writeParameterCheckLen( of, "Time100SecSeparator", "time100SecSeparator", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "Time100SecSeparator", "time100SecSeparator", 1, 1);
     OUString aListSep =
-        writeParameterCheckLen( of, "ListSeparator", "listSeparator", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "ListSeparator", "listSeparator", 1, 1);
 
     OUString aLDS;
 
     sepNode = findNode("LongDateDayOfWeekSeparator");
     aLDS = sepNode->getValue();
-    of.writeParameter("LongDateDayOfWeekSeparator", aLDS);
+    of.writeOUStringLiteralParameter("LongDateDayOfWeekSeparator", aLDS);
     if (aLDS == ",")
         fprintf( stderr, "Warning: %s\n",
                 "LongDateDayOfWeekSeparator is only a comma not followed by a space. Usually this is not the case and may lead to concatenated display names like \"Wednesday,May 9, 2007\".");
 
     sepNode = findNode("LongDateDaySeparator");
     aLDS = sepNode->getValue();
-    of.writeParameter("LongDateDaySeparator", aLDS);
+    of.writeOUStringLiteralParameter("LongDateDaySeparator", aLDS);
     if (aLDS == "," || aLDS == ".")
         fprintf( stderr, "Warning: %s\n",
                 "LongDateDaySeparator is only a comma or dot not followed by a space. Usually this is not the case and may lead to concatenated display names like \"Wednesday, May 9,2007\".");
 
     sepNode = findNode("LongDateMonthSeparator");
     aLDS = sepNode->getValue();
-    of.writeParameter("LongDateMonthSeparator", aLDS);
+    of.writeOUStringLiteralParameter("LongDateMonthSeparator", aLDS);
     if (aLDS.isEmpty())
         fprintf( stderr, "Warning: %s\n",
                 "LongDateMonthSeparator is empty. Usually this is not the case and may lead to concatenated display names like \"Wednesday, May9, 2007\".");
 
     sepNode = findNode("LongDateYearSeparator");
     aLDS = sepNode->getValue();
-    of.writeParameter("LongDateYearSeparator", aLDS);
+    of.writeOUStringLiteralParameter("LongDateYearSeparator", aLDS);
     if (aLDS.isEmpty())
         fprintf( stderr, "Warning: %s\n",
                 "LongDateYearSeparator is empty. Usually this is not the case and may lead to concatenated display names like \"Wednesday, 2007May 9\".");
@@ -380,13 +379,13 @@ void LCCTYPENode::generateCode (const OFileWriter &of) const
                 "Don't forget to adapt corresponding FormatCode elements when changing separators.");
 
     OUString aQuoteStart =
-        writeParameterCheckLen( of, "QuotationStart", "quotationStart", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "QuotationStart", "quotationStart", 1, 1);
     OUString aQuoteEnd =
-        writeParameterCheckLen( of, "QuotationEnd", "quotationEnd", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "QuotationEnd", "quotationEnd", 1, 1);
     OUString aDoubleQuoteStart =
-        writeParameterCheckLen( of, "DoubleQuotationStart", "doubleQuotationStart", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "DoubleQuotationStart", "doubleQuotationStart", 1, 1);
     OUString aDoubleQuoteEnd =
-        writeParameterCheckLen( of, "DoubleQuotationEnd", "doubleQuotationEnd", 1, 1);
+        writeOUStringLiteralParameterCheckLen( of, "DoubleQuotationEnd", "doubleQuotationEnd", 1, 1);
 
     if (aQuoteStart.toChar() <= 127 && aQuoteEnd.toChar() > 127)
         fprintf( stderr, "Warning: %s\n",
@@ -478,12 +477,12 @@ void LCCTYPENode::generateCode (const OFileWriter &of) const
                     "DoubleQuotationEnd may be wrong:", ic, OSTR( aDoubleQuoteEnd));
     }
 
-    writeParameterCheckLen( of, "TimeAM", "timeAM", 1, -1);
-    writeParameterCheckLen( of, "TimePM", "timePM", 1, -1);
+    writeOUStringLiteralParameterCheckLen( of, "TimeAM", "timeAM", 1, -1);
+    writeOUStringLiteralParameterCheckLen( of, "TimePM", "timePM", 1, -1);
     sepNode = findNode("MeasurementSystem");
-    of.writeParameter("measurementSystem", sepNode->getValue());
+    of.writeOUStringLiteralParameter("measurementSystem", sepNode->getValue());
 
-    of.writeAsciiString("\nstatic const sal_Unicode* LCType[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString LCType[] = {\n");
     of.writeAsciiString("\tLC_CTYPE_Unoid,\n");
     of.writeAsciiString("\tdateSeparator,\n");
     of.writeAsciiString("\tthousandSeparator,\n");
@@ -504,7 +503,7 @@ void LCCTYPENode::generateCode (const OFileWriter &of) const
     of.writeAsciiString("\tLongDateYearSeparator,\n");
     of.writeAsciiString("\tdecimalSeparatorAlternative\n");
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getLocaleItem_", "SAL_N_ELEMENTS(LCType)", "LCType");
+    of.writeOUStringFunction("getLocaleItem_", "SAL_N_ELEMENTS(LCType)", "LCType");
 }
 
 
@@ -562,11 +561,11 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
         switch (mnSection)
         {
             case 0:
-                of.writeRefFunction("getAllFormats0_", useLocale, "replaceTo0");
-                of.writeRefFunction("getDateAcceptancePatterns_", useLocale);
+                of.writeOUStringRefFunction("getAllFormats0_", useLocale, "replaceTo0");
+                of.writeOUStringRefFunction("getDateAcceptancePatterns_", useLocale);
                 break;
             case 1:
-                of.writeRefFunction("getAllFormats1_", useLocale, "replaceTo1");
+                of.writeOUStringRefFunction("getAllFormats1_", useLocale, "replaceTo1");
                 break;
         }
         ++mnSection;
@@ -610,17 +609,17 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
         str = currNodeAttr.getValueByName("msgid");
         if (!aMsgIdSet.insert( str).second)
             incErrorStr( "Error: Duplicated msgid=\"%s\" in FormatElement.\n", str);
-        of.writeParameter("FormatKey", str, formatCount);
+        of.writeOUStringLiteralParameter("FormatKey", str, formatCount);
 
         str = currNodeAttr.getValueByName("default");
         bool bDefault = str == "true";
-        of.writeDefaultParameter("FormatElement", str, formatCount);
+        of.writeOUStringLiteralDefaultParameter("FormatElement", str, formatCount);
 
         aType = currNodeAttr.getValueByName("type");
-        of.writeParameter("FormatType", aType, formatCount);
+        of.writeOUStringLiteralParameter("FormatType", aType, formatCount);
 
         aUsage = currNodeAttr.getValueByName("usage");
-        of.writeParameter("FormatUsage", aUsage, formatCount);
+        of.writeOUStringLiteralParameter("FormatUsage", aUsage, formatCount);
 
         aFormatIndex = currNodeAttr.getValueByName("formatindex");
         sal_Int16 formatindex = static_cast<sal_Int16>(aFormatIndex.toInt32());
@@ -636,7 +635,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
             incErrorInt( "Error: Duplicated formatindex=\"%d\" in FormatElement.\n", formatindex);
             bShowNextFreeFormatIndex = true;
         }
-        of.writeIntParameter("Formatindex", formatCount, formatindex);
+        of.writeOUStringLiteralIntParameter("Formatindex", formatCount, formatindex);
 
         // Ensure only one default per usage and type.
         if (bDefault)
@@ -652,7 +651,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
         const LocaleNode * n = currNode -> findNode("FormatCode");
         if (n)
         {
-            of.writeParameter("FormatCode", n->getValue(), formatCount);
+            of.writeOUStringLiteralParameter("FormatCode", n->getValue(), formatCount);
             // Check separator usage for some FormatCode elements.
             const LocaleNode* pCtype = nullptr;
             switch (formatindex)
@@ -821,9 +820,9 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
             incError( "No FormatCode in FormatElement.");
         n = currNode -> findNode("DefaultName");
         if (n)
-            of.writeParameter("FormatDefaultName", n->getValue(), formatCount);
+            of.writeOUStringLiteralParameter("FormatDefaultName", n->getValue(), formatCount);
         else
-            of.writeParameter("FormatDefaultName", std::u16string_view(), formatCount);
+            of.writeOUStringLiteralParameter("FormatDefaultName", std::u16string_view(), formatCount);
 
     }
 
@@ -918,7 +917,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
     of.writeAsciiString(" = ");
     of.writeInt( formatCount - mnFormats);
     of.writeAsciiString(";\n");
-    of.writeAsciiString("static const sal_Unicode* ");
+    of.writeAsciiString("static constexpr OUString ");
     of.writeAsciiString("FormatElementsArray");
     of.writeInt(mnSection);
     of.writeAsciiString("[] = {\n");
@@ -964,10 +963,10 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
     switch (mnSection)
     {
         case 0:
-            of.writeFunction("getAllFormats0_", "FormatElementsCount0", "FormatElementsArray0", "replaceFrom0", "replaceTo0");
+            of.writeOUStringFunction("getAllFormats0_", "FormatElementsCount0", "FormatElementsArray0", "replaceFrom0", "replaceTo0");
             break;
         case 1:
-            of.writeFunction("getAllFormats1_", "FormatElementsCount1", "FormatElementsArray1", "replaceFrom1", "replaceTo1");
+            of.writeOUStringFunction("getAllFormats1_", "FormatElementsCount1", "FormatElementsArray1", "replaceFrom1", "replaceTo1");
             break;
     }
 
@@ -1233,14 +1232,14 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
 
         for (sal_Int16 i = 0; i < nbOfDateAcceptancePatterns; ++i)
         {
-            of.writeParameter("DateAcceptancePattern", theDateAcceptancePatterns[i], i);
+            of.writeOUStringLiteralParameter("DateAcceptancePattern", theDateAcceptancePatterns[i], i);
         }
 
         of.writeAsciiString("static const sal_Int16 DateAcceptancePatternsCount = ");
         of.writeInt( nbOfDateAcceptancePatterns);
         of.writeAsciiString(";\n");
 
-        of.writeAsciiString("static const sal_Unicode* DateAcceptancePatternsArray[] = {\n");
+        of.writeAsciiString("static constexpr OUString DateAcceptancePatternsArray[] = {\n");
         for (sal_Int16 i = 0; i < nbOfDateAcceptancePatterns; ++i)
         {
             of.writeAsciiString("\t");
@@ -1250,7 +1249,7 @@ void LCFormatNode::generateCode (const OFileWriter &of) const
         }
         of.writeAsciiString("};\n\n");
 
-        of.writeFunction("getDateAcceptancePatterns_", "DateAcceptancePatternsCount", "DateAcceptancePatternsArray");
+        of.writeOUStringFunction("getDateAcceptancePatterns_", "DateAcceptancePatternsCount", "DateAcceptancePatternsArray");
     }
 
     ++mnSection;
@@ -1261,8 +1260,8 @@ void LCCollationNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getCollatorImplementation_", useLocale);
-        of.writeRefFunction("getCollationOptions_", useLocale);
+        of.writeOUStringRefFunction("getCollatorImplementation_", useLocale);
+        of.writeOUStringRefFunction("getCollationOptions_", useLocale);
         return;
     }
     sal_Int16 nbOfCollations = 0;
@@ -1274,11 +1273,11 @@ void LCCollationNode::generateCode (const OFileWriter &of) const
         {
             OUString str;
             str = currNode->getAttr().getValueByName("unoid");
-            of.writeParameter("CollatorID", str, j);
+            of.writeOUStringLiteralParameter("CollatorID", str, j);
             str = currNode->getValue();
-            of.writeParameter("CollatorRule", str, j);
+            of.writeOUStringLiteralParameter("CollatorRule", str, j);
             str = currNode -> getAttr().getValueByName("default");
-            of.writeDefaultParameter("Collator", str, j);
+            of.writeOUStringLiteralDefaultParameter("Collator", str, j);
             of.writeAsciiString("\n");
 
             nbOfCollations++;
@@ -1289,7 +1288,7 @@ void LCCollationNode::generateCode (const OFileWriter &of) const
             nbOfCollationOptions = sal::static_int_cast<sal_Int16>( pCollationOptions->getNumberOfChildren() );
             for( sal_Int16 i=0; i<nbOfCollationOptions; i++ )
             {
-                of.writeParameter("collationOption", pCollationOptions->getChildAt( i )->getValue(), i );
+                of.writeOUStringLiteralParameter("collationOption", pCollationOptions->getChildAt( i )->getValue(), i );
             }
 
             of.writeAsciiString("static const sal_Int16 nbOfCollationOptions = ");
@@ -1301,7 +1300,7 @@ void LCCollationNode::generateCode (const OFileWriter &of) const
     of.writeInt(nbOfCollations);
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("\nstatic const sal_Unicode* LCCollatorArray[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString LCCollatorArray[] = {\n");
     for(sal_Int16 j = 0; j < nbOfCollations; j++) {
         of.writeAsciiString("\tCollatorID");
         of.writeInt(j);
@@ -1317,16 +1316,17 @@ void LCCollationNode::generateCode (const OFileWriter &of) const
     }
     of.writeAsciiString("};\n\n");
 
-    of.writeAsciiString("static const sal_Unicode* collationOptions[] = {");
+    of.writeAsciiString("static constexpr OUString collationOptions[] = {");
     for( sal_Int16 j=0; j<nbOfCollationOptions; j++ )
     {
+        if (j)
+            of.writeAsciiString( ", " );
         of.writeAsciiString( "collationOption" );
         of.writeInt( j );
-        of.writeAsciiString( ", " );
     }
-    of.writeAsciiString("NULL };\n");
-    of.writeFunction("getCollatorImplementation_", "nbOfCollations", "LCCollatorArray");
-    of.writeFunction("getCollationOptions_", "nbOfCollationOptions", "collationOptions");
+    of.writeAsciiString("};\n");
+    of.writeOUStringFunction("getCollatorImplementation_", "nbOfCollations", "LCCollatorArray");
+    of.writeOUStringFunction("getCollationOptions_", "nbOfCollationOptions", "collationOptions");
 }
 
 void LCSearchNode::generateCode (const OFileWriter &of) const
@@ -1334,7 +1334,7 @@ void LCSearchNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getSearchOptions_", useLocale);
+        of.writeOUStringRefFunction("getSearchOptions_", useLocale);
         return;
     }
 
@@ -1350,22 +1350,23 @@ void LCSearchNode::generateCode (const OFileWriter &of) const
     sal_Int32   nSearchOptions = pSearchOptions->getNumberOfChildren();
     for( i=0; i<nSearchOptions; i++ )
     {
-        of.writeParameter("searchOption", pSearchOptions->getChildAt( i )->getValue(), sal::static_int_cast<sal_Int16>(i) );
+        of.writeOUStringLiteralParameter("searchOption", pSearchOptions->getChildAt( i )->getValue(), sal::static_int_cast<sal_Int16>(i) );
     }
 
     of.writeAsciiString("static const sal_Int16 nbOfSearchOptions = ");
     of.writeInt( sal::static_int_cast<sal_Int16>( nSearchOptions ) );
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("static const sal_Unicode* searchOptions[] = {");
+    of.writeAsciiString("static constexpr OUString searchOptions[] = {");
     for( i=0; i<nSearchOptions; i++ )
     {
+        if (i)
+            of.writeAsciiString( ", " );
         of.writeAsciiString( "searchOption" );
         of.writeInt( sal::static_int_cast<sal_Int16>(i) );
-        of.writeAsciiString( ", " );
     }
-    of.writeAsciiString("NULL };\n");
-    of.writeFunction("getSearchOptions_", "nbOfSearchOptions", "searchOptions");
+    of.writeAsciiString(" };\n");
+    of.writeOUStringFunction("getSearchOptions_", "nbOfSearchOptions", "searchOptions");
 }
 
 void LCIndexNode::generateCode (const OFileWriter &of) const
@@ -1373,9 +1374,9 @@ void LCIndexNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getIndexAlgorithm_", useLocale);
-        of.writeRefFunction("getUnicodeScripts_", useLocale);
-        of.writeRefFunction("getFollowPageWords_", useLocale);
+        of.writeOUStringRefFunction("getIndexAlgorithm_", useLocale);
+        of.writeOUStringRefFunction("getUnicodeScripts_", useLocale);
+        of.writeOUStringRefFunction("getFollowPageWords_", useLocale);
         return;
     }
     sal_Int16 nbOfIndexs = 0;
@@ -1387,28 +1388,28 @@ void LCIndexNode::generateCode (const OFileWriter &of) const
         {
             OUString str;
             str = currNode->getAttr().getValueByName("unoid");
-            of.writeParameter("IndexID", str, nbOfIndexs);
+            of.writeOUStringLiteralParameter("IndexID", str, nbOfIndexs);
             str = currNode->getAttr().getValueByName("module");
-            of.writeParameter("IndexModule", str, nbOfIndexs);
+            of.writeOUStringLiteralParameter("IndexModule", str, nbOfIndexs);
             str = currNode->getValue();
-            of.writeParameter("IndexKey", str, nbOfIndexs);
+            of.writeOUStringLiteralParameter("IndexKey", str, nbOfIndexs);
             str = currNode -> getAttr().getValueByName("default");
-            of.writeDefaultParameter("Index", str, nbOfIndexs);
+            of.writeOUStringLiteralDefaultParameter("Index", str, nbOfIndexs);
             str = currNode -> getAttr().getValueByName("phonetic");
-            of.writeDefaultParameter("Phonetic", str, nbOfIndexs);
+            of.writeOUStringLiteralDefaultParameter("Phonetic", str, nbOfIndexs);
             of.writeAsciiString("\n");
 
             nbOfIndexs++;
         }
         if( currNode->getName() == "UnicodeScript" )
         {
-            of.writeParameter("unicodeScript", currNode->getValue(), nbOfUnicodeScripts );
+            of.writeOUStringLiteralParameter("unicodeScript", currNode->getValue(), nbOfUnicodeScripts );
             nbOfUnicodeScripts++;
 
         }
         if( currNode->getName() == "FollowPageWord" )
         {
-            of.writeParameter("followPageWord", currNode->getValue(), nbOfPageWords);
+            of.writeOUStringLiteralParameter("followPageWord", currNode->getValue(), nbOfPageWords);
             nbOfPageWords++;
         }
     }
@@ -1416,7 +1417,7 @@ void LCIndexNode::generateCode (const OFileWriter &of) const
     of.writeInt(nbOfIndexs);
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("\nstatic const sal_Unicode* IndexArray[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString IndexArray[] = {\n");
     for(sal_Int16 i = 0; i < nbOfIndexs; i++) {
         of.writeAsciiString("\tIndexID");
         of.writeInt(i);
@@ -1444,30 +1445,41 @@ void LCIndexNode::generateCode (const OFileWriter &of) const
     of.writeInt( nbOfUnicodeScripts );
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("static const sal_Unicode* UnicodeScriptArray[] = {");
+    of.writeAsciiString("static constexpr OUString UnicodeScriptArray[] = {");
     for( sal_Int16 i=0; i<nbOfUnicodeScripts; i++ )
     {
+        if (i)
+            of.writeAsciiString( ", " );
         of.writeAsciiString( "unicodeScript" );
         of.writeInt( i );
-        of.writeAsciiString( ", " );
     }
-    of.writeAsciiString("NULL };\n\n");
+    of.writeAsciiString(" };\n\n");
 
     of.writeAsciiString("static const sal_Int16 nbOfPageWords = ");
     of.writeInt(nbOfPageWords);
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("static const sal_Unicode* FollowPageWordArray[] = {\n");
-    for(sal_Int16 i = 0; i < nbOfPageWords; i++) {
-        of.writeAsciiString("\tfollowPageWord");
-        of.writeInt(i);
-        of.writeAsciiString(",\n");
+    // MSVC doesn't like zero sized arrays
+    if (nbOfPageWords == 0)
+    {
+        // generate dummy array, reuse unicodeScript0 for dummy entry
+        of.writeAsciiString("//dummy array, we have zero entries\n");
+        of.writeAsciiString("static constexpr OUString FollowPageWordArray[] = { unicodeScript0 };\n\n");
     }
-    of.writeAsciiString("\tNULL\n};\n\n");
-
-    of.writeFunction("getIndexAlgorithm_", "nbOfIndexs", "IndexArray");
-    of.writeFunction("getUnicodeScripts_", "nbOfUnicodeScripts", "UnicodeScriptArray");
-    of.writeFunction("getFollowPageWords_", "nbOfPageWords", "FollowPageWordArray");
+    else
+    {
+        of.writeAsciiString("static constexpr OUString FollowPageWordArray[] = {\n");
+        for(sal_Int16 i = 0; i < nbOfPageWords; i++) {
+            if (i)
+                of.writeAsciiString(",\n");
+            of.writeAsciiString("\tfollowPageWord");
+            of.writeInt(i);
+        }
+        of.writeAsciiString("\t\n};\n\n");
+    }
+    of.writeOUStringFunction("getIndexAlgorithm_", "nbOfIndexs", "IndexArray");
+    of.writeOUStringFunction("getUnicodeScripts_", "nbOfUnicodeScripts", "UnicodeScriptArray");
+    of.writeOUStringFunction("getFollowPageWords_", "nbOfPageWords", "FollowPageWordArray");
 }
 
 
@@ -1485,9 +1497,9 @@ static void lcl_writeAbbrFullNarrNames( const OFileWriter & of, const LocaleNode
         sal_uInt32 nChar = aFullName.iterateCodePoints( &o3tl::temporary(sal_Int32(0)));
         aNarrName = OUString( &nChar, 1);
     }
-    of.writeParameter( elementTag, "DefaultAbbrvName",  aAbbrName, i, j);
-    of.writeParameter( elementTag, "DefaultFullName",   aFullName, i, j);
-    of.writeParameter( elementTag, "DefaultNarrowName", aNarrName, i, j);
+    of.writeOUStringLiteralParameter( elementTag, "DefaultAbbrvName",  aAbbrName, i, j);
+    of.writeOUStringLiteralParameter( elementTag, "DefaultFullName",   aFullName, i, j);
+    of.writeOUStringLiteralParameter( elementTag, "DefaultNarrowName", aNarrName, i, j);
 }
 
 static void lcl_writeTabTagString( const OFileWriter & of, const char* pTag, const char* pStr )
@@ -1550,7 +1562,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getAllCalendars_", useLocale);
+        of.writeOUStringRefFunction("getAllCalendars_", useLocale);
         return;
     }
     sal_Int16 nbOfCalendars = sal::static_int_cast<sal_Int16>( getNumberOfChildren() );
@@ -1585,7 +1597,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
     for ( i = 0; i < nbOfCalendars; i++) {
         LocaleNode * calNode = getChildAt (i);
         OUString calendarID = calNode -> getAttr().getValueByName("unoid");
-        of.writeParameter( "calendarID", calendarID, i);
+        of.writeOUStringLiteralParameter( "calendarID", calendarID, i);
         bool bGregorian = calendarID == "gregorian";
         if (!bHasGregorian)
             bHasGregorian = bGregorian;
@@ -1597,7 +1609,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
         else
             calIt->second = true;
         str = calNode -> getAttr().getValueByName("default");
-        of.writeDefaultParameter("Calendar", str, i);
+        of.writeOUStringLiteralDefaultParameter("Calendar", str, i);
 
         sal_Int16 nChild = 0;
 
@@ -1614,8 +1626,8 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             }
         }
         if (!ref_name.isEmpty() && daysNode == nullptr) {
-            of.writeParameter("dayRef", u"ref", i);
-            of.writeParameter("dayRefName", ref_name, i);
+            of.writeOUStringLiteralParameter("dayRef", u"ref", i);
+            of.writeOUStringLiteralParameter("dayRefName", ref_name, i);
             nbOfDays[i] = 0;
         } else {
             if (daysNode == nullptr)
@@ -1627,7 +1639,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             for (j = 0; j < nbOfDays[i]; j++) {
                 LocaleNode *currNode = daysNode -> getChildAt(j);
                 OUString dayID( currNode->getChildAt(0)->getValue());
-                of.writeParameter("dayID", dayID, i, j);
+                of.writeOUStringLiteralParameter("dayID", dayID, i, j);
                 if ( j == 0 && bGregorian && dayID != "sun" )
                     incError( "First day of a week of a Gregorian calendar must be <DayID>sun</DayID>");
                 lcl_writeAbbrFullNarrNames( of, currNode, elementTag, i, j);
@@ -1647,8 +1659,8 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             }
         }
         if (!ref_name.isEmpty() && monthsNode == nullptr) {
-            of.writeParameter("monthRef", u"ref", i);
-            of.writeParameter("monthRefName", ref_name, i);
+            of.writeOUStringLiteralParameter("monthRef", u"ref", i);
+            of.writeOUStringLiteralParameter("monthRefName", ref_name, i);
             nbOfMonths[i] = 0;
         } else {
             if (monthsNode == nullptr)
@@ -1660,7 +1672,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             for (j = 0; j < nbOfMonths[i]; j++) {
                 LocaleNode *currNode = monthsNode -> getChildAt(j);
                 OUString monthID( currNode->getChildAt(0)->getValue());
-                of.writeParameter("monthID", monthID, i, j);
+                of.writeOUStringLiteralParameter("monthID", monthID, i, j);
                 if ( j == 0 && bGregorian && monthID != "jan" )
                     incError( "First month of a year of a Gregorian calendar must be <MonthID>jan</MonthID>");
                 lcl_writeAbbrFullNarrNames( of, currNode, elementTag, i, j);
@@ -1683,8 +1695,8 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             }
         }
         if (!ref_name.isEmpty() && genitiveMonthsNode == nullptr) {
-            of.writeParameter("genitiveMonthRef", u"ref", i);
-            of.writeParameter("genitiveMonthRefName", ref_name, i);
+            of.writeOUStringLiteralParameter("genitiveMonthRef", u"ref", i);
+            of.writeOUStringLiteralParameter("genitiveMonthRefName", ref_name, i);
             nbOfGenitiveMonths[i] = 0;
         } else {
             if (genitiveMonthsNode == nullptr)
@@ -1696,7 +1708,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             for (j = 0; j < nbOfGenitiveMonths[i]; j++) {
                 LocaleNode *currNode = genitiveMonthsNode -> getChildAt(j);
                 OUString genitiveMonthID( currNode->getChildAt(0)->getValue());
-                of.writeParameter("genitiveMonthID", genitiveMonthID, i, j);
+                of.writeOUStringLiteralParameter("genitiveMonthID", genitiveMonthID, i, j);
                 if ( j == 0 && bGregorian && genitiveMonthID != "jan" )
                     incError( "First genitive month of a year of a Gregorian calendar must be <MonthID>jan</MonthID>");
                 lcl_writeAbbrFullNarrNames( of, currNode, elementTag, i, j);
@@ -1720,8 +1732,8 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             }
         }
         if (!ref_name.isEmpty() && partitiveMonthsNode == nullptr) {
-            of.writeParameter("partitiveMonthRef", u"ref", i);
-            of.writeParameter("partitiveMonthRefName", ref_name, i);
+            of.writeOUStringLiteralParameter("partitiveMonthRef", u"ref", i);
+            of.writeOUStringLiteralParameter("partitiveMonthRefName", ref_name, i);
             nbOfPartitiveMonths[i] = 0;
         } else {
             if (partitiveMonthsNode == nullptr)
@@ -1733,7 +1745,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             for (j = 0; j < nbOfPartitiveMonths[i]; j++) {
                 LocaleNode *currNode = partitiveMonthsNode -> getChildAt(j);
                 OUString partitiveMonthID( currNode->getChildAt(0)->getValue());
-                of.writeParameter("partitiveMonthID", partitiveMonthID, i, j);
+                of.writeOUStringLiteralParameter("partitiveMonthID", partitiveMonthID, i, j);
                 if ( j == 0 && bGregorian && partitiveMonthID != "jan" )
                     incError( "First partitive month of a year of a Gregorian calendar must be <MonthID>jan</MonthID>");
                 lcl_writeAbbrFullNarrNames( of, currNode, elementTag, i, j);
@@ -1753,8 +1765,8 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             }
         }
         if (!ref_name.isEmpty() && erasNode == nullptr) {
-            of.writeParameter("eraRef", u"ref", i);
-            of.writeParameter("eraRefName", ref_name, i);
+            of.writeOUStringLiteralParameter("eraRef", u"ref", i);
+            of.writeOUStringLiteralParameter("eraRefName", ref_name, i);
             nbOfEras[i] = 0;
         } else {
             if (erasNode == nullptr)
@@ -1776,14 +1788,14 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
                         continue;   // for
                     }
                     OUString eraID( currNode->getChildAt(0)->getValue());
-                    of.writeParameter("eraID", eraID, i, j);
+                    of.writeOUStringLiteralParameter("eraID", eraID, i, j);
                     if ( j == 0 && bGregorian && eraID != "bc" )
                         incError( "First era of a Gregorian calendar must be <EraID>bc</EraID>");
                     if ( j == 1 && bGregorian && eraID != "ad" )
                         incError( "Second era of a Gregorian calendar must be <EraID>ad</EraID>");
                     of.writeAsciiString("\n");
-                    of.writeParameter(elementTag, "DefaultAbbrvName",currNode->getChildAt(1)->getValue() ,i, j);
-                    of.writeParameter(elementTag, "DefaultFullName",currNode->getChildAt(2)->getValue() , i, j);
+                    of.writeOUStringLiteralParameter(elementTag, "DefaultAbbrvName",currNode->getChildAt(1)->getValue() ,i, j);
+                    of.writeOUStringLiteralParameter(elementTag, "DefaultFullName",currNode->getChildAt(2)->getValue() , i, j);
                 }
             }
         }
@@ -1804,7 +1816,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
                 if (j >= nbOfDays[i])
                     incErrorStr( "Error: <StartDayOfWeek> <DayID> must be one of the <DaysOfWeek>, but is: %s\n", str);
             }
-            of.writeParameter("startDayOfWeek", str, i);
+            of.writeOUStringLiteralParameter("startDayOfWeek", str, i);
             ++nChild;
         }
 
@@ -1815,7 +1827,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
             if (nDays < 1 || (0 < nbOfDays[i] && nbOfDays[i] < nDays))
                 incErrorInt( "Error: Bad value of MinimalDaysInFirstWeek: %d, must be 1 <= value <= days_in_week\n",
                         nDays);
-            of.writeIntParameter("minimalDaysInFirstWeek", i, nDays);
+            of.writeOUStringLiteralIntParameter("minimalDaysInFirstWeek", i, nDays);
         }
     }
     if (!bHasGregorian)
@@ -1825,48 +1837,43 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
     of.writeInt(nbOfCalendars);
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("static const sal_Unicode nbOfDays[] = {");
-    for(i = 0; i < nbOfCalendars - 1; i++) {
-        of.writeInt(nbOfDays[i]);
-        of.writeAsciiString(", ");
+    of.writeAsciiString("static constexpr OUStringLiteral nbOfDays = u\"");
+    for(i = 0; i < nbOfCalendars; i++) {
+        of.writeAsciiString("\\x");
+        of.writeHexInt(nbOfDays[i]);
     }
-    of.writeInt(nbOfDays[i]);
-    of.writeAsciiString("};\n");
+    of.writeAsciiString("\";\n");
 
-    of.writeAsciiString("static const sal_Unicode nbOfMonths[] = {");
-    for(i = 0; i < nbOfCalendars - 1; i++) {
-        of.writeInt(nbOfMonths[i]);
-        of.writeAsciiString(", ");
+    of.writeAsciiString("static constexpr OUStringLiteral nbOfMonths = u\"");
+    for(i = 0; i < nbOfCalendars; i++) {
+        of.writeAsciiString("\\x");
+        of.writeHexInt(nbOfMonths[i]);
     }
-    of.writeInt(nbOfMonths[i]);
-    of.writeAsciiString("};\n");
+    of.writeAsciiString("\";\n");
 
-    of.writeAsciiString("static const sal_Unicode nbOfGenitiveMonths[] = {");
-    for(i = 0; i < nbOfCalendars - 1; i++) {
-        of.writeInt(nbOfGenitiveMonths[i]);
-        of.writeAsciiString(", ");
+    of.writeAsciiString("static constexpr OUStringLiteral nbOfGenitiveMonths = u\"");
+    for(i = 0; i < nbOfCalendars; i++) {
+        of.writeAsciiString("\\x");
+        of.writeHexInt(nbOfGenitiveMonths[i]);
     }
-    of.writeInt(nbOfGenitiveMonths[i]);
-    of.writeAsciiString("};\n");
+    of.writeAsciiString("\";\n");
 
-    of.writeAsciiString("static const sal_Unicode nbOfPartitiveMonths[] = {");
-    for(i = 0; i < nbOfCalendars - 1; i++) {
-        of.writeInt(nbOfPartitiveMonths[i]);
-        of.writeAsciiString(", ");
+    of.writeAsciiString("static constexpr OUStringLiteral nbOfPartitiveMonths = u\"");
+    for(i = 0; i < nbOfCalendars; i++) {
+        of.writeAsciiString("\\x");
+        of.writeHexInt(nbOfPartitiveMonths[i]);
     }
-    of.writeInt(nbOfPartitiveMonths[i]);
-    of.writeAsciiString("};\n");
+    of.writeAsciiString("\";\n");
 
-    of.writeAsciiString("static const sal_Unicode nbOfEras[] = {");
-    for(i = 0; i < nbOfCalendars - 1; i++) {
-        of.writeInt(nbOfEras[i]);
-        of.writeAsciiString(", ");
+    of.writeAsciiString("static constexpr OUStringLiteral nbOfEras = u\"");
+    for(i = 0; i < nbOfCalendars; i++) {
+        of.writeAsciiString("\\x");
+        of.writeHexInt(nbOfEras[i]);
     }
-    of.writeInt(nbOfEras[i]);
-    of.writeAsciiString("};\n");
+    of.writeAsciiString("\";\n");
 
 
-    of.writeAsciiString("static const sal_Unicode* calendars[] = {\n");
+    of.writeAsciiString("static constexpr OUString calendars[] = {\n");
     of.writeAsciiString("\tnbOfDays,\n");
     of.writeAsciiString("\tnbOfMonths,\n");
     of.writeAsciiString("\tnbOfGenitiveMonths,\n");
@@ -1889,7 +1896,7 @@ void LCCalendarNode::generateCode (const OFileWriter &of) const
     }
 
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getAllCalendars_", "calendarsCount", "calendars");
+    of.writeOUStringFunction("getAllCalendars_", "calendarsCount", "calendars");
 }
 
 static bool isIso4217( const OUString& rStr )
@@ -1907,7 +1914,7 @@ void LCCurrencyNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getAllCurrencies_", useLocale);
+        of.writeOUStringRefFunction("getAllCurrencies_", useLocale);
         return;
     }
     sal_Int16 nbOfCurrencies = 0;
@@ -1918,11 +1925,11 @@ void LCCurrencyNode::generateCode (const OFileWriter &of) const
     for ( sal_Int32 i = 0; i < getNumberOfChildren(); i++,nbOfCurrencies++) {
         LocaleNode * currencyNode = getChildAt (i);
         str = currencyNode->getAttr().getValueByName("default");
-        bool bDefault = of.writeDefaultParameter("Currency", str, nbOfCurrencies);
+        bool bDefault = of.writeOUStringLiteralDefaultParameter("Currency", str, nbOfCurrencies);
         str = currencyNode->getAttr().getValueByName("usedInCompatibleFormatCodes");
-        bool bCompatible = of.writeDefaultParameter("CurrencyUsedInCompatibleFormatCodes", str, nbOfCurrencies);
+        bool bCompatible = of.writeOUStringLiteralDefaultParameter("CurrencyUsedInCompatibleFormatCodes", str, nbOfCurrencies);
         str = currencyNode->getAttr().getValueByName("legacyOnly");
-        bool bLegacy = of.writeDefaultParameter("CurrencyLegacyOnly", str, nbOfCurrencies);
+        bool bLegacy = of.writeOUStringLiteralDefaultParameter("CurrencyLegacyOnly", str, nbOfCurrencies);
         if (bLegacy && (bDefault || bCompatible))
             incError( "Currency: if legacyOnly==true, both 'default' and 'usedInCompatibleFormatCodes' must be false.");
         if (bDefault)
@@ -1938,12 +1945,12 @@ void LCCurrencyNode::generateCode (const OFileWriter &of) const
             bTheCompatible = true;
         }
         str = currencyNode -> findNode ("CurrencyID") -> getValue();
-        of.writeParameter("currencyID", str, nbOfCurrencies);
+        of.writeOUStringLiteralParameter("currencyID", str, nbOfCurrencies);
         // CurrencyID MUST be ISO 4217.
         if (!bLegacy && !isIso4217(str))
             incError( "CurrencyID is not ISO 4217");
         str = currencyNode -> findNode ("CurrencySymbol") -> getValue();
-        of.writeParameter("currencySymbol", str, nbOfCurrencies);
+        of.writeOUStringLiteralParameter("currencySymbol", str, nbOfCurrencies);
         // Check if this currency really is the one used in number format
         // codes. In case of ref=... mechanisms it may be that TheCurrency
         // couldn't had been determined from the current locale (i.e. is
@@ -1951,16 +1958,16 @@ void LCCurrencyNode::generateCode (const OFileWriter &of) const
         if (bCompatible && !sTheCompatibleCurrency.isEmpty() && sTheCompatibleCurrency != str)
             incErrorStrStr( "Error: CurrencySymbol \"%s\" flagged as usedInCompatibleFormatCodes doesn't match \"%s\" determined from format codes.\n", str, sTheCompatibleCurrency);
         str = currencyNode -> findNode ("BankSymbol") -> getValue();
-        of.writeParameter("bankSymbol", str, nbOfCurrencies);
+        of.writeOUStringLiteralParameter("bankSymbol", str, nbOfCurrencies);
         // BankSymbol currently must be ISO 4217. May change later if
         // application always uses CurrencyID instead of BankSymbol.
         if (!bLegacy && !isIso4217(str))
             incError( "BankSymbol is not ISO 4217");
         str = currencyNode -> findNode ("CurrencyName") -> getValue();
-        of.writeParameter("currencyName", str, nbOfCurrencies);
+        of.writeOUStringLiteralParameter("currencyName", str, nbOfCurrencies);
         str = currencyNode -> findNode ("DecimalPlaces") -> getValue();
         sal_Int16 nDecimalPlaces = static_cast<sal_Int16>(str.toInt32());
-        of.writeIntParameter("currencyDecimalPlaces", nbOfCurrencies, nDecimalPlaces);
+        of.writeOUStringLiteralIntParameter("currencyDecimalPlaces", nbOfCurrencies, nDecimalPlaces);
         of.writeAsciiString("\n");
     };
 
@@ -1972,7 +1979,7 @@ void LCCurrencyNode::generateCode (const OFileWriter &of) const
     of.writeAsciiString("static const sal_Int16 currencyCount = ");
     of.writeInt(nbOfCurrencies);
     of.writeAsciiString(";\n\n");
-    of.writeAsciiString("static const sal_Unicode* currencies[] = {\n");
+    of.writeAsciiString("static constexpr OUString currencies[] = {\n");
     for(sal_Int16 i = 0; i < nbOfCurrencies; i++) {
         of.writeAsciiString("\tcurrencyID");
         of.writeInt(i);
@@ -2000,7 +2007,7 @@ void LCCurrencyNode::generateCode (const OFileWriter &of) const
         of.writeAsciiString(",\n");
     }
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getAllCurrencies_", "currencyCount", "currencies");
+    of.writeOUStringFunction("getAllCurrencies_", "currencyCount", "currencies");
 }
 
 void LCTransliterationNode::generateCode (const OFileWriter &of) const
@@ -2008,7 +2015,7 @@ void LCTransliterationNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getTransliterations_", useLocale);
+        of.writeOUStringRefFunction("getTransliterations_", useLocale);
         return;
     }
     sal_Int16 nbOfModules = 0;
@@ -2017,20 +2024,20 @@ void LCTransliterationNode::generateCode (const OFileWriter &of) const
     for ( sal_Int32 i = 0; i < getNumberOfChildren(); i++,nbOfModules++) {
         LocaleNode * transNode = getChildAt (i);
         str = transNode->getAttr().getValueByIndex(0);
-        of.writeParameter("Transliteration", str, nbOfModules);
+        of.writeOUStringLiteralParameter("Transliteration", str, nbOfModules);
     }
     of.writeAsciiString("static const sal_Int16 nbOfTransliterations = ");
     of.writeInt(nbOfModules);
     of.writeAsciiString(";\n\n");
 
-    of.writeAsciiString("\nstatic const sal_Unicode* LCTransliterationsArray[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString LCTransliterationsArray[] = {\n");
     for( sal_Int16 i = 0; i < nbOfModules; i++) {
         of.writeAsciiString("\tTransliteration");
         of.writeInt(i);
         of.writeAsciiString(",\n");
     }
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getTransliterations_", "nbOfTransliterations", "LCTransliterationsArray");
+    of.writeOUStringFunction("getTransliterations_", "nbOfTransliterations", "LCTransliterationsArray");
 }
 
 namespace {
@@ -2062,9 +2069,9 @@ void LCMiscNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction("getForbiddenCharacters_", useLocale);
-        of.writeRefFunction("getBreakIteratorRules_", useLocale);
-        of.writeRefFunction("getReservedWords_", useLocale);
+        of.writeOUStringRefFunction("getForbiddenCharacters_", useLocale);
+        of.writeOUStringRefFunction("getBreakIteratorRules_", useLocale);
+        of.writeOUStringRefFunction("getReservedWords_", useLocale);
         return;
     }
     const LocaleNode * reserveNode = findNode("ReservedWords");
@@ -2092,7 +2099,7 @@ void LCMiscNode::generateCode (const OFileWriter &of) const
             ++nError;
             fprintf( stderr, "Error: No content for ReservedWords %s.\n", ReserveWord[i].name);
         }
-        of.writeParameter("ReservedWord", str, nbOfWords);
+        of.writeOUStringLiteralParameter("ReservedWord", str, nbOfWords);
         // "true", ..., "below" trigger untranslated warning.
         if (!bEnglishLocale && curNode && i <= 7 &&
                 str.equalsIgnoreAsciiCaseAscii( ReserveWord[i].value))
@@ -2105,52 +2112,52 @@ void LCMiscNode::generateCode (const OFileWriter &of) const
     of.writeAsciiString("static const sal_Int16 nbOfReservedWords = ");
     of.writeInt(nbOfWords);
     of.writeAsciiString(";\n\n");
-    of.writeAsciiString("\nstatic const sal_Unicode* LCReservedWordsArray[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString LCReservedWordsArray[] = {\n");
     for( i = 0; i < nbOfWords; i++) {
         of.writeAsciiString("\tReservedWord");
         of.writeInt(i);
         of.writeAsciiString(",\n");
     }
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getReservedWords_", "nbOfReservedWords", "LCReservedWordsArray");
+    of.writeOUStringFunction("getReservedWords_", "nbOfReservedWords", "LCReservedWordsArray");
 
     if (forbidNode)    {
-         of.writeParameter( "forbiddenBegin", forbidNode -> getChildAt(0)->getValue());
-         of.writeParameter( "forbiddenEnd", forbidNode -> getChildAt(1)->getValue());
-         of.writeParameter( "hangingChars", forbidNode -> getChildAt(2)->getValue());
+         of.writeOUStringLiteralParameter( "forbiddenBegin", forbidNode -> getChildAt(0)->getValue());
+         of.writeOUStringLiteralParameter( "forbiddenEnd", forbidNode -> getChildAt(1)->getValue());
+         of.writeOUStringLiteralParameter( "hangingChars", forbidNode -> getChildAt(2)->getValue());
     } else {
-         of.writeParameter( "forbiddenBegin", std::u16string_view());
-         of.writeParameter( "forbiddenEnd", std::u16string_view());
-         of.writeParameter( "hangingChars", std::u16string_view());
+         of.writeOUStringLiteralParameter( "forbiddenBegin", std::u16string_view());
+         of.writeOUStringLiteralParameter( "forbiddenEnd", std::u16string_view());
+         of.writeOUStringLiteralParameter( "hangingChars", std::u16string_view());
     }
-    of.writeAsciiString("\nstatic const sal_Unicode* LCForbiddenCharactersArray[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString LCForbiddenCharactersArray[] = {\n");
     of.writeAsciiString("\tforbiddenBegin,\n");
     of.writeAsciiString("\tforbiddenEnd,\n");
     of.writeAsciiString("\thangingChars\n");
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getForbiddenCharacters_", "3", "LCForbiddenCharactersArray");
+    of.writeOUStringFunction("getForbiddenCharacters_", "3", "LCForbiddenCharactersArray");
 
     if (breakNode) {
-         of.writeParameter( "EditMode", breakNode -> getChildAt(0)->getValue());
-         of.writeParameter( "DictionaryMode", breakNode -> getChildAt(1)->getValue());
-         of.writeParameter( "WordCountMode", breakNode -> getChildAt(2)->getValue());
-         of.writeParameter( "CharacterMode", breakNode -> getChildAt(3)->getValue());
-         of.writeParameter( "LineMode", breakNode -> getChildAt(4)->getValue());
+         of.writeOUStringLiteralParameter( "EditMode", breakNode -> getChildAt(0)->getValue());
+         of.writeOUStringLiteralParameter( "DictionaryMode", breakNode -> getChildAt(1)->getValue());
+         of.writeOUStringLiteralParameter( "WordCountMode", breakNode -> getChildAt(2)->getValue());
+         of.writeOUStringLiteralParameter( "CharacterMode", breakNode -> getChildAt(3)->getValue());
+         of.writeOUStringLiteralParameter( "LineMode", breakNode -> getChildAt(4)->getValue());
     } else {
-         of.writeParameter( "EditMode", std::u16string_view());
-         of.writeParameter( "DictionaryMode", std::u16string_view());
-         of.writeParameter( "WordCountMode", std::u16string_view());
-         of.writeParameter( "CharacterMode", std::u16string_view());
-         of.writeParameter( "LineMode", std::u16string_view());
+         of.writeOUStringLiteralParameter( "EditMode", std::u16string_view());
+         of.writeOUStringLiteralParameter( "DictionaryMode", std::u16string_view());
+         of.writeOUStringLiteralParameter( "WordCountMode", std::u16string_view());
+         of.writeOUStringLiteralParameter( "CharacterMode", std::u16string_view());
+         of.writeOUStringLiteralParameter( "LineMode", std::u16string_view());
     }
-    of.writeAsciiString("\nstatic const sal_Unicode* LCBreakIteratorRulesArray[] = {\n");
+    of.writeAsciiString("\nstatic constexpr OUString LCBreakIteratorRulesArray[] = {\n");
     of.writeAsciiString("\tEditMode,\n");
     of.writeAsciiString("\tDictionaryMode,\n");
     of.writeAsciiString("\tWordCountMode,\n");
     of.writeAsciiString("\tCharacterMode,\n");
     of.writeAsciiString("\tLineMode\n");
     of.writeAsciiString("};\n\n");
-    of.writeFunction("getBreakIteratorRules_", "5", "LCBreakIteratorRulesArray");
+    of.writeOUStringFunction("getBreakIteratorRules_", "5", "LCBreakIteratorRulesArray");
 
 }
 
@@ -2160,7 +2167,7 @@ void LCNumberingLevelNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction2("getContinuousNumberingLevels_", useLocale);
+        of.writeOUStringRefFunction2("getContinuousNumberingLevels_", useLocale);
         return;
     }
 
@@ -2180,7 +2187,7 @@ void LCNumberingLevelNode::generateCode (const OFileWriter &of) const
         {
             const char* name = attr[j];
             OUString   value = q.getValueByName( name );
-            of.writeParameter("continuous", name, value, sal::static_int_cast<sal_Int16>(i) );
+            of.writeOUStringLiteralParameter("continuous", name, value, sal::static_int_cast<sal_Int16>(i) );
         }
     }
 
@@ -2195,7 +2202,7 @@ void LCNumberingLevelNode::generateCode (const OFileWriter &of) const
     // generate code. (intermediate arrays)
     for( i=0; i<nStyles; i++ )
     {
-        of.writeAsciiString("\nstatic const sal_Unicode* continuousStyle" );
+        of.writeAsciiString("\nstatic constexpr OUString continuousStyle" );
         of.writeInt( sal::static_int_cast<sal_Int16>(i) );
         of.writeAsciiString("[] = {\n");
         for( sal_Int32 j=0; j<nAttributes; j++)
@@ -2206,12 +2213,12 @@ void LCNumberingLevelNode::generateCode (const OFileWriter &of) const
             of.writeInt(sal::static_int_cast<sal_Int16>(i));
             of.writeAsciiString(",\n");
         }
-        of.writeAsciiString("\t0\n};\n\n");
+        of.writeAsciiString("\t\n};\n\n");
     }
 
     // generate code. (top-level array)
     of.writeAsciiString("\n");
-    of.writeAsciiString("static const sal_Unicode** LCContinuousNumberingLevelsArray[] = {\n" );
+    of.writeAsciiString("static const OUString* LCContinuousNumberingLevelsArray[] = {\n" );
     for( i=0; i<nStyles; i++ )
     {
         of.writeAsciiString( "\t" );
@@ -2220,7 +2227,7 @@ void LCNumberingLevelNode::generateCode (const OFileWriter &of) const
         of.writeAsciiString( ",\n");
     }
     of.writeAsciiString("\t0\n};\n\n");
-    of.writeFunction2("getContinuousNumberingLevels_", "continuousNbOfStyles",
+    of.writeOUStringFunction2("getContinuousNumberingLevels_", "continuousNbOfStyles",
             "continuousNbOfAttributesPerStyle", "LCContinuousNumberingLevelsArray");
 }
 
@@ -2231,7 +2238,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
     OUString useLocale =   getAttr().getValueByName("ref");
     if (!useLocale.isEmpty()) {
         useLocale = useLocale.replace( '-', '_');
-        of.writeRefFunction3("getOutlineNumberingLevels_", useLocale);
+        of.writeOUStringRefFunction3("getOutlineNumberingLevels_", useLocale);
         return;
     }
 
@@ -2268,7 +2275,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
             {
                 const char* name = attr[k];
                 OUString   value = q.getValueByName( name );
-                of.writeParameter("outline", name, value,
+                of.writeOUStringLiteralParameter("outline", name, value,
                         sal::static_int_cast<sal_Int16>(i),
                         sal::static_int_cast<sal_Int16>(j) );
             }
@@ -2309,7 +2316,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
     {
         for( sal_Int32 j=0; j<nLevels.back(); j++ )
         {
-            of.writeAsciiString("static const sal_Unicode* outline");
+            of.writeAsciiString("static constexpr OUString outline");
             of.writeAsciiString("Style");
             of.writeInt( sal::static_int_cast<sal_Int16>(i) );
             of.writeAsciiString("Level");
@@ -2324,7 +2331,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
                 of.writeInt( sal::static_int_cast<sal_Int16>(j) );
                 of.writeAsciiString(", ");
             }
-            of.writeAsciiString("NULL };\n");
+            of.writeAsciiString(" };\n");
         }
     }
 
@@ -2333,8 +2340,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
 
     for( sal_Int32 i=0; i<nStyles; i++ )
     {
-        of.writeAsciiString("static const sal_Unicode** outline");
-        of.writeAsciiString( "Style" );
+        of.writeAsciiString("static constexpr OUString const * outlineStyle" );
         of.writeInt( sal::static_int_cast<sal_Int16>(i) );
         of.writeAsciiString("[] = { ");
 
@@ -2350,7 +2356,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
     }
     of.writeAsciiString("\n");
 
-    of.writeAsciiString("static const sal_Unicode*** LCOutlineNumberingLevelsArray[] = {\n" );
+    of.writeAsciiString("static constexpr OUString const * const * LCOutlineNumberingLevelsArray[] = {\n" );
     for( sal_Int32 i=0; i<nStyles; i++ )
     {
         of.writeAsciiString( "\t" );
@@ -2359,7 +2365,7 @@ void LCOutlineNumberingLevelNode::generateCode (const OFileWriter &of) const
         of.writeAsciiString(",\n");
     }
     of.writeAsciiString("\tNULL\n};\n\n");
-    of.writeFunction3("getOutlineNumberingLevels_", "outlineNbOfStyles", "outlineNbOfLevelsPerStyle",
+    of.writeOUStringFunction3("getOutlineNumberingLevels_", "outlineNbOfStyles", "outlineNbOfLevelsPerStyle",
             "outlineNbOfAttributesPerLevel", "LCOutlineNumberingLevelsArray");
 }
 

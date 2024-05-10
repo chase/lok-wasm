@@ -13,6 +13,7 @@
 
 #include <sfx2/AccessibilityIssue.hxx>
 #include <doc.hxx>
+#include <txtftn.hxx>
 
 namespace sw
 {
@@ -21,8 +22,16 @@ enum class IssueObject
     UNKNOWN,
     GRAPHIC,
     OLE,
+    SHAPE,
+    FORM,
     TABLE,
     TEXT,
+    DOCUMENT_TITLE,
+    DOCUMENT_BACKGROUND,
+    LANGUAGE_NOT_SET,
+    FOOTENDNOTE,
+    TEXTFRAME,
+    LINKED,
 };
 
 class SW_DLLPUBLIC AccessibilityIssue final : public sfx::AccessibilityIssue
@@ -33,17 +42,20 @@ private:
     OUString m_sObjectID;
     std::vector<OUString> m_aIssueAdditionalInfo;
     SwNode* m_pNode;
+    SwTextFootnote* m_pTextFootnote;
 
     sal_Int32 m_nStart;
     sal_Int32 m_nEnd;
 
 public:
     AccessibilityIssue(sfx::AccessibilityIssueID eIssueID = sfx::AccessibilityIssueID::UNSPECIFIED);
+    AccessibilityIssue(AccessibilityIssue const&) = default;
 
     void setIssueObject(IssueObject eIssueObject);
     void setDoc(SwDoc& rDoc);
     void setObjectID(OUString const& rID);
     void setNode(SwNode* pNode) { m_pNode = pNode; }
+    void setTextFootnote(SwTextFootnote* pTextFootnote) { m_pTextFootnote = pTextFootnote; }
 
     void setStart(sal_Int32 nStart) { m_nStart = nStart; }
 
@@ -59,9 +71,15 @@ public:
     bool canGotoIssue() const override;
     void gotoIssue() const override;
 
+    bool canQuickFixIssue() const override;
+    void quickFixIssue() const override;
+
     sal_Int32 getStart() { return m_nStart; }
     sal_Int32 getEnd() { return m_nEnd; }
     SwNode* getNode() { return m_pNode; }
+    SwTextFootnote* getTextFootnote() { return m_pTextFootnote; }
+
+    AccessibilityIssue& operator=(const AccessibilityIssue&) = default;
 };
 
 } // end sw namespace

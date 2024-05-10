@@ -22,16 +22,19 @@
 #include <ChartModelHelper.hxx>
 #include <ChartModel.hxx>
 #include <DataSeries.hxx>
+#include <DataSeriesProperties.hxx>
 #include <DiagramHelper.hxx>
 #include <Diagram.hxx>
 #include <Axis.hxx>
 #include <AxisHelper.hxx>
+#include <Legend.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
 #include <vector>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
+using namespace ::chart::DataSeriesProperties;
 
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
@@ -91,13 +94,13 @@ void ReferenceSizeProvider::setValuesAtTitle(
 
 void ReferenceSizeProvider::setValuesAtAllDataSeries()
 {
-    rtl::Reference< Diagram > xDiagram( ChartModelHelper::findDiagram( m_xChartDoc ));
+    rtl::Reference< Diagram > xDiagram( m_xChartDoc->getFirstChartDiagram());
     if (!xDiagram)
         return;
 
     // DataSeries/Points
     std::vector< rtl::Reference< DataSeries > > aSeries =
-        DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        xDiagram->getDataSeries();
 
     for (auto const& elem : aSeries)
     {
@@ -105,7 +108,8 @@ void ReferenceSizeProvider::setValuesAtAllDataSeries()
         Sequence< sal_Int32 > aPointIndexes;
         try
         {
-            if( elem->getPropertyValue( "AttributedDataPoints") >>= aPointIndexes )
+            // "AttributedDataPoints"
+            if( elem->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS) >>= aPointIndexes )
             {
                 for( sal_Int32 idx : std::as_const(aPointIndexes) )
                     setValuesAtPropertySet(
@@ -129,7 +133,7 @@ void ReferenceSizeProvider::setValuesAtPropertySet(
     if( ! xProp.is())
         return;
 
-    static constexpr OUStringLiteral aRefSizeName = u"ReferencePageSize";
+    static constexpr OUString aRefSizeName = u"ReferencePageSize"_ustr;
 
     try
     {
@@ -226,7 +230,7 @@ ReferenceSizeProvider::AutoResizeState ReferenceSizeProvider::getAutoResizeState
         return eResult;
 
     // diagram is needed by the rest of the objects
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartDoc );
+    rtl::Reference< Diagram > xDiagram = xChartDoc->getFirstChartDiagram();
     if( ! xDiagram.is())
         return eResult;
 
@@ -237,9 +241,9 @@ ReferenceSizeProvider::AutoResizeState ReferenceSizeProvider::getAutoResizeState
         return eResult;
 
     // Legend
-    Reference< beans::XPropertySet > xLegendProp( xDiagram->getLegend(), uno::UNO_QUERY );
-    if( xLegendProp.is())
-        getAutoResizeFromPropSet( xLegendProp, eResult );
+    rtl::Reference< Legend > xLegend( xDiagram->getLegend2() );
+    if( xLegend.is())
+        getAutoResizeFromPropSet( xLegend, eResult );
     if( eResult == AUTO_RESIZE_AMBIGUOUS )
         return eResult;
 
@@ -255,7 +259,7 @@ ReferenceSizeProvider::AutoResizeState ReferenceSizeProvider::getAutoResizeState
 
     // DataSeries/Points
     std::vector< rtl::Reference< DataSeries > > aSeries =
-        DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        xDiagram->getDataSeries();
 
     for (auto const& elem : aSeries)
     {
@@ -267,7 +271,8 @@ ReferenceSizeProvider::AutoResizeState ReferenceSizeProvider::getAutoResizeState
         Sequence< sal_Int32 > aPointIndexes;
         try
         {
-            if( elem->getPropertyValue( "AttributedDataPoints") >>= aPointIndexes )
+            // "AttributedDataPoints"
+            if( elem->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS) >>= aPointIndexes )
             {
                 for( sal_Int32 idx : std::as_const(aPointIndexes) )
                 {
@@ -303,7 +308,7 @@ void ReferenceSizeProvider::setAutoResizeState( ReferenceSizeProvider::AutoResiz
     impl_setValuesAtTitled( m_xChartDoc );
 
     // diagram is needed by the rest of the objects
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( m_xChartDoc );
+    rtl::Reference< Diagram > xDiagram = m_xChartDoc->getFirstChartDiagram();
     if( ! xDiagram.is())
         return;
 
@@ -311,9 +316,9 @@ void ReferenceSizeProvider::setAutoResizeState( ReferenceSizeProvider::AutoResiz
     impl_setValuesAtTitled( xDiagram );
 
     // Legend
-    Reference< beans::XPropertySet > xLegendProp( xDiagram->getLegend(), uno::UNO_QUERY );
-    if( xLegendProp.is())
-        setValuesAtPropertySet( xLegendProp );
+    rtl::Reference< Legend > xLegend( xDiagram->getLegend2() );
+    if( xLegend.is())
+        setValuesAtPropertySet( xLegend );
 
     // Axes (incl. Axis Titles)
     const std::vector< rtl::Reference< Axis > > aAxes = AxisHelper::getAllAxesOfDiagram( xDiagram );

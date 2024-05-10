@@ -77,13 +77,11 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/container/namecontainer \
     comphelper/source/eventattachermgr/eventattachermgr \
     comphelper/source/misc/accessiblecomponenthelper \
-    comphelper/source/misc/accessiblecontexthelper \
     comphelper/source/misc/accessibleeventnotifier \
     comphelper/source/misc/accessiblekeybindinghelper \
     comphelper/source/misc/accessibleselectionhelper \
     comphelper/source/misc/accessibletexthelper \
     comphelper/source/misc/accessiblewrapper \
-    comphelper/source/misc/accimplaccess \
     comphelper/source/misc/AccessibleImplementationHelper \
     comphelper/source/misc/anycompare \
     comphelper/source/misc/anytohash \
@@ -126,7 +124,6 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/misc/random \
     comphelper/source/misc/SelectionMultiplex \
     comphelper/source/misc/sequenceashashmap \
-    comphelper/source/misc/servicedecl \
     comphelper/source/misc/sharedmutex \
     comphelper/source/misc/simplefileaccessinteraction \
     comphelper/source/misc/solarmutex \
@@ -156,6 +153,8 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/property/propertysetinfo \
     comphelper/source/property/propertystatecontainer \
     comphelper/source/property/propmultiplex \
+    comphelper/source/property/propmultiplex2 \
+    comphelper/source/property/propshlp \
     comphelper/source/property/propstate \
     comphelper/source/streaming/basicio \
     comphelper/source/streaming/memorystream \
@@ -168,6 +167,7 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/xml/attributelist \
     comphelper/source/xml/ofopxmlhelper \
     comphelper/source/xml/xmltools \
+    comphelper/source/misc/inthash \
 ))
 
 # vim: set noet sw=4 ts=4:

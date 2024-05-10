@@ -65,8 +65,8 @@ CPPUNIT_TEST_FIXTURE(Test, testRelativeKeepAspect)
     // Then make sure that the aspect ratio of the image is kept:
     auto pTextDocument = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwDoc* pDoc = pTextDocument->GetDocShell()->GetDoc();
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
-    const SwFrameFormat* pFormat = rFormats[0];
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto pFormat = rFormats[0];
     const SwFormatFrameSize& rSize = pFormat->GetFrameSize();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 255
@@ -86,8 +86,8 @@ CPPUNIT_TEST_FIXTURE(Test, testRelativeKeepAspectImage)
     // Then make sure that the aspect ratio of the image is kept:
     auto pTextDocument = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwDoc* pDoc = pTextDocument->GetDocShell()->GetDoc();
-    const SwFrameFormats& rFormats = *pDoc->GetSpzFrameFormats();
-    const SwFrameFormat* pFormat = rFormats[0];
+    const auto& rFormats = *pDoc->GetSpzFrameFormats();
+    const auto pFormat = rFormats[0];
     const SwFormatFrameSize& rSize = pFormat->GetFrameSize();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 255
@@ -120,15 +120,13 @@ CPPUNIT_TEST_FIXTURE(Test, testSvmImageExport)
     save("HTML (StarWriter)");
 
     // Then make sure we only export PNG:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 1
     // - Actual  : 2
     // - XPath '//reqif-xhtml:object' number of nodes is incorrect
     // i.e. we wrote both GIF and PNG, not just PNG for SVM images.
-    assertXPath(pXmlDoc, "//reqif-xhtml:object", "type", "image/png");
+    assertXPath(pXmlDoc, "//reqif-xhtml:object"_ostr, "type"_ostr, "image/png");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTableCellFloatValueType)
@@ -154,14 +152,12 @@ CPPUNIT_TEST_FIXTURE(Test, testTableCellFloatValueType)
     save("HTML (StarWriter)");
 
     // Then make sure that the sdval attribute is omitted, which is not in the XHTML spec:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//reqif-xhtml:td' unexpected 'sdval' attribute
     // i.e. sdval was written in XHTML mode.
-    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:td", "sdval");
-    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:td", "sdnum");
+    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:td"_ostr, "sdval"_ostr);
+    assertXPathNoAttribute(pXmlDoc, "//reqif-xhtml:td"_ostr, "sdnum"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testTableRowSpanInAllCells)
@@ -193,8 +189,8 @@ CPPUNIT_TEST_FIXTURE(Test, testTableRowSpanInAllCells)
     // Without the accompanying fix in place, this test would have failed with:
     // - XPath '//tr[1]/td[1]' unexpected 'rowspan' attribute
     // i.e. a combination of rowspan + empty <tr> was emitted.
-    assertXPathNoAttribute(pHtmlDoc, "//tr[1]/td[1]", "rowspan");
-    assertXPath(pHtmlDoc, "//tr", 1);
+    assertXPathNoAttribute(pHtmlDoc, "//tr[1]/td[1]"_ostr, "rowspan"_ostr);
+    assertXPath(pHtmlDoc, "//tr"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testCenteredTableCSSExport)
@@ -216,15 +212,14 @@ CPPUNIT_TEST_FIXTURE(Test, testCenteredTableCSSExport)
     save("HTML (StarWriter)");
 
     // Then make sure that CSS is used to horizontally position the table:
-    SvMemoryStream aStream;
-    WrapReqifFromTempFile(aStream);
-    xmlDocUniquePtr pXmlDoc = parseXmlStream(&aStream);
+    xmlDocUniquePtr pXmlDoc = WrapReqifFromTempFile();
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 0
     // - Actual  : 1
     // i.e <center> was used to position the table, not CSS.
-    assertXPath(pXmlDoc, "//reqif-xhtml:center", 0);
-    assertXPath(pXmlDoc, "//reqif-xhtml:table", "style", "margin-left: auto; margin-right: auto");
+    assertXPath(pXmlDoc, "//reqif-xhtml:center"_ostr, 0);
+    assertXPath(pXmlDoc, "//reqif-xhtml:table"_ostr, "style"_ostr,
+                "margin-left: auto; margin-right: auto");
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testCenteredTableCSSImport)
@@ -236,7 +231,7 @@ CPPUNIT_TEST_FIXTURE(Test, testCenteredTableCSSImport)
 
     // Then make sure that the table is centered:
     SwDoc* pDoc = getSwDoc();
-    const SwFrameFormats& rTableFormats = *pDoc->GetTableFrameFormats();
+    const sw::TableFrameFormats& rTableFormats = *pDoc->GetTableFrameFormats();
     const SwFrameFormat* pTableFormat = rTableFormats[0];
     sal_Int16 eHoriOrient = pTableFormat->GetHoriOrient().GetHoriOrient();
     // Without the accompanying fix in place, this test would have failed with:

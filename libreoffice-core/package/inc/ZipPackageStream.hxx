@@ -29,6 +29,7 @@
 
 #include "EncryptionData.hxx"
 
+
 #define PACKAGE_STREAM_NOTSET           0
 #define PACKAGE_STREAM_PACKAGEMEMBER    1
 #define PACKAGE_STREAM_DETECT           2
@@ -55,7 +56,7 @@ private:
 
     sal_Int32 m_nImportedStartKeyAlgorithm;
     sal_Int32 m_nImportedEncryptionAlgorithm;
-    sal_Int32 m_nImportedChecksumAlgorithm;
+    ::std::optional<sal_Int32> m_oImportedChecksumAlgorithm;
     sal_Int32 m_nImportedDerivedKeySize;
 
     sal_uInt8   m_nStreamMode;
@@ -89,13 +90,13 @@ public:
     sal_Int32 GetStartKeyGenID() const;
 
     sal_Int32 GetEncryptionAlgorithm() const;
-    sal_Int32 GetBlockSize() const;
+    sal_Int32 GetIVSize() const;
 
     void SetToBeCompressed (bool bNewValue) { m_bToBeCompressed = bNewValue;}
     void SetIsEncrypted (bool bNewValue) { m_bIsEncrypted = bNewValue;}
     void SetImportedStartKeyAlgorithm( sal_Int32 nAlgorithm ) { m_nImportedStartKeyAlgorithm = nAlgorithm; }
     void SetImportedEncryptionAlgorithm( sal_Int32 nAlgorithm ) { m_nImportedEncryptionAlgorithm = nAlgorithm; }
-    void SetImportedChecksumAlgorithm( sal_Int32 nAlgorithm ) { m_nImportedChecksumAlgorithm = nAlgorithm; }
+    void SetImportedChecksumAlgorithm(::std::optional<sal_Int32> const& roAlgorithm) { m_oImportedChecksumAlgorithm = roAlgorithm; }
     void SetImportedDerivedKeySize( sal_Int32 nSize ) { m_nImportedDerivedKeySize = nSize; }
     void SetToBeEncrypted (bool bNewValue)
     {
@@ -113,8 +114,14 @@ public:
     { m_xBaseEncryptionData->m_aSalt = rNewSalt;}
     void setDigest (const css::uno::Sequence < sal_Int8 >& rNewDigest )
     { m_xBaseEncryptionData->m_aDigest = rNewDigest;}
-    void setIterationCount (const sal_Int32 nNewCount)
-    { m_xBaseEncryptionData->m_nIterationCount = nNewCount;}
+    void setIterationCount(::std::optional<sal_Int32> const oNewCount)
+    {
+        m_xBaseEncryptionData->m_oPBKDFIterationCount = oNewCount;
+    }
+    void setArgon2Args(::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> const oArgon2Args)
+    {
+        m_xBaseEncryptionData->m_oArgon2Args = oArgon2Args;
+    }
     void setSize (const sal_Int64 nNewSize);
 
     ZipPackageStream( ZipPackage & rNewPackage,
@@ -131,13 +138,12 @@ public:
                             std::vector < css::uno::Sequence < css::beans::PropertyValue > > &rManList,
                             ZipOutputStream & rZipOut,
                             const css::uno::Sequence < sal_Int8 >& rEncryptionKey,
-                            sal_Int32 nPBKDF2IterationCount,
+                            ::std::optional<sal_Int32> oPBKDF2IterationCount,
+                            ::std::optional<::std::tuple<sal_Int32, sal_Int32, sal_Int32>> oArgon2Args,
                             const rtlRandomPool &rRandomPool ) override;
 
     void setZipEntryOnLoading( const ZipEntry &rInEntry);
     void successfullyWritten( ZipEntry const *pEntry );
-
-    static const css::uno::Sequence < sal_Int8 > & getUnoTunnelId();
 
     // XActiveDataSink
     virtual void SAL_CALL setInputStream( const css::uno::Reference< css::io::XInputStream >& aStream ) override;
@@ -151,9 +157,6 @@ public:
     virtual void SAL_CALL setRawStream(
                     const css::uno::Reference< css::io::XInputStream >& aStream ) override;
     virtual css::uno::Reference< css::io::XInputStream > SAL_CALL getPlainRawStream() override;
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     // XPropertySet
     virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override;

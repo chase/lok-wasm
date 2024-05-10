@@ -21,16 +21,18 @@
 
 #include <svx/svxdllapi.h>
 #include <svx/galmisc.hxx>
-#include <svx/galleryobjectstorage.hxx>
 
 #include <vcl/bitmapex.hxx>
 #include <tools/urlobj.hxx>
 #include <memory>
+#include <optional>
 #include <vector>
 
-struct GalleryObject
+class GalleryObjectStorage;
+
+struct SVXCORE_DLLPUBLIC GalleryObject
 {
-    std::unique_ptr<GalleryObjectStorage> m_pGalleryObjectStorage;
+    std::optional<INetURLObject> m_oStorageUrl;
     sal_uInt32 nOffset;
     SgaObjKind eObjKind;
     bool mbDelete;
@@ -40,8 +42,6 @@ struct GalleryObject
     Size maPreparedSize;
     OUString maTitle;
     OUString maPath;
-
-    const INetURLObject& getURL() const { return m_pGalleryObjectStorage->getURL(); }
 };
 
 class SVXCORE_DLLPUBLIC GalleryObjectCollection

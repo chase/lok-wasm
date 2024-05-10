@@ -1333,7 +1333,7 @@ sal_Int32 ComboBox::GetTopEntry() const
 tools::Rectangle ComboBox::GetDropDownPosSizePixel() const
 {
     return m_pImpl->m_pFloatWin
-        ? m_pImpl->m_pFloatWin->GetWindowExtentsRelative(this)
+        ? m_pImpl->m_pFloatWin->GetWindowExtentsRelative(*this)
         : tools::Rectangle();
 }
 
@@ -1390,7 +1390,7 @@ void ComboBox::SetNoSelection()
 tools::Rectangle ComboBox::GetBoundingRectangle( sal_Int32 nItem ) const
 {
     tools::Rectangle aRect = GetMainWindow()->GetBoundingRectangle( nItem );
-    tools::Rectangle aOffset = GetMainWindow()->GetWindowExtentsRelative( static_cast<vcl::Window*>(const_cast<ComboBox *>(this)) );
+    tools::Rectangle aOffset = GetMainWindow()->GetWindowExtentsRelative( *static_cast<vcl::Window*>(const_cast<ComboBox *>(this)) );
     aRect.Move( aOffset.Left(), aOffset.Top() );
     return aRect;
 }
@@ -1459,8 +1459,8 @@ tools::Long ComboBox::GetIndexForPoint( const Point& rPoint, sal_Int32& rPos ) c
 
         // convert coordinates to ImplListBoxWindow pixel coordinate space
         Point aConvPoint = LogicToPixel( rPoint );
-        aConvPoint = OutputToAbsoluteScreenPixel( aConvPoint );
-        aConvPoint = rMain->AbsoluteScreenToOutputPixel( aConvPoint );
+        AbsoluteScreenPixelPoint aConvPointAbs = OutputToAbsoluteScreenPixel( aConvPoint );
+        aConvPoint = rMain->AbsoluteScreenToOutputPixel( aConvPointAbs );
         aConvPoint = rMain->PixelToLogic( aConvPoint );
 
         // try to find entry
@@ -1550,7 +1550,7 @@ void ComboBox::setMaxWidthChars(sal_Int32 nWidth)
     }
 }
 
-bool ComboBox::set_property(const OString &rKey, const OUString &rValue)
+bool ComboBox::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "width-chars")
         SetWidthInChars(rValue.toInt32());

@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <rtl/strbuf.hxx>
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
 #include <osl/process.h>
@@ -30,14 +29,15 @@
 
 namespace {
 
-struct StaticDebugBaseAddressFilter
-    : rtl::StaticWithInit<std::vector<OString>, StaticDebugBaseAddressFilter> {
-    std::vector<OString> operator()() const {
+const std::vector<OString>& StaticDebugBaseAddressFilter()
+{
+    static const std::vector<OString> theFilter = []()
+    {
         std::vector<OString> vec;
         rtl_uString * pStr = nullptr;
-        OUString const name(
-            "OSL_DEBUGBASE_STORE_ADDRESSES" );
-        if (osl_getEnvironment( name.pData, &pStr ) == osl_Process_E_None) {
+        if (osl_getEnvironment( u"OSL_DEBUGBASE_STORE_ADDRESSES"_ustr.pData, &pStr )
+            == osl_Process_E_None)
+        {
             OUString const str(pStr);
             rtl_uString_release(pStr);
             sal_Int32 nIndex = 0;
@@ -49,7 +49,8 @@ struct StaticDebugBaseAddressFilter
             while (nIndex >= 0);
         }
         return vec;
-    }
+    }();
+    return theFilter;
 };
 
 bool isSubStr( char const* pStr, OString const& subStr )
@@ -81,7 +82,7 @@ osl::Mutex & SAL_CALL osl_detail_ObjectRegistry_getMutex()
 bool SAL_CALL osl_detail_ObjectRegistry_storeAddresses( char const* pName )
     SAL_THROW_EXTERN_C()
 {
-    std::vector<OString> const& rVec = StaticDebugBaseAddressFilter::get();
+    std::vector<OString> const& rVec = StaticDebugBaseAddressFilter();
     if (rVec.empty())
         return false;
     // check for "all":

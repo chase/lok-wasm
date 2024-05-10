@@ -110,8 +110,6 @@ protected:
                                       m_pQueueInfo;
 
     Type                              m_eType;
-    bool                              m_bUseIncludeFeature;
-    bool                              m_bUseJobPatch;
     OUString                     m_aSystemDefaultPaper;
 
     PrinterInfoManager( Type eType = Type::Default );
@@ -157,11 +155,8 @@ public:
     // returns true on success
     virtual bool endSpool( const OUString& rPrinterName, const OUString& rJobTitle, FILE* pFile, const JobData& rDocumentJobData, bool bBanner, const OUString &rFaxNumber );
 
-    bool getUseIncludeFeature() const { return m_bUseIncludeFeature; }
-    bool getUseJobPatch() const { return m_bUseJobPatch; }
-
     // check whether a printer's feature string contains a subfeature
-    bool checkFeatureToken( const OUString& rPrinterName, const char* pToken ) const;
+    bool checkFeatureToken( const OUString& rPrinterName, std::string_view pToken ) const;
 
     virtual ~PrinterInfoManager();
 };

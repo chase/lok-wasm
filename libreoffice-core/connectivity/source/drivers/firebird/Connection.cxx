@@ -72,11 +72,11 @@ using namespace ::com::sun::star::uno;
  * Location within the .odb that an embedded .fdb will be stored.
  * Only relevant for embedded dbs.
  */
-constexpr OUStringLiteral our_sFDBLocation( u"firebird.fdb" );
+constexpr OUString our_sFDBLocation( u"firebird.fdb"_ustr );
 /**
  * Older version of LO may store the database in a .fdb file
  */
-constexpr OUStringLiteral our_sFBKLocation( u"firebird.fbk" );
+constexpr OUString our_sFBKLocation( u"firebird.fbk"_ustr );
 
 Connection::Connection()
     : Connection_BASE(m_aMutex)
@@ -196,7 +196,7 @@ void Connection::construct(const OUString& url, const Sequence< PropertyValue >&
         // External file AND/OR remote connection
         else if (url.startsWith("sdbc:firebird:"))
         {
-            m_sFirebirdURL = url.copy(OUString("sdbc:firebird:").getLength());
+            m_sFirebirdURL = url.copy(strlen("sdbc:firebird:"));
             if (m_sFirebirdURL.startsWith("file://"))
             {
                 m_bIsFile = true;
@@ -233,8 +233,8 @@ void Connection::construct(const OUString& url, const Sequence< PropertyValue >&
 
             if (m_bIsEmbedded || m_bIsFile)
             {
-                userName = "sysdba";
-                userPassword = "masterkey";
+                userName = "sysdba"_ostr;
+                userPassword = "masterkey"_ostr;
             }
             else
             {
@@ -440,7 +440,6 @@ Reference< XPreparedStatement > SAL_CALL Connection::prepareCall(
 
 OUString SAL_CALL Connection::nativeSQL( const OUString& _sSql )
 {
-    MutexGuard aGuard( m_aMutex );
     // We do not need to adapt the SQL for Firebird atm.
     return _sSql;
 }
@@ -629,22 +628,18 @@ void Connection::runBackupService(const short nAction)
     OString sFBKPath = OUStringToOString(m_sFBKPath, RTL_TEXTENCODING_UTF8);
 
 
-    OStringBuffer aRequest; // byte array
-
-
-    aRequest.append(static_cast<char>(nAction));
-
-    aRequest.append(char(isc_spb_dbname)); // .fdb
     sal_uInt16 nFDBLength = sFDBPath.getLength();
-    aRequest.append(static_cast<char>(nFDBLength & 0xFF)); // least significant byte first
-    aRequest.append(static_cast<char>((nFDBLength >> 8) & 0xFF));
-    aRequest.append(sFDBPath);
-
-    aRequest.append(char(isc_spb_bkp_file)); // .fbk
     sal_uInt16 nFBKLength = sFBKPath.getLength();
-    aRequest.append(static_cast<char>(nFBKLength & 0xFF));
-    aRequest.append(static_cast<char>((nFBKLength >> 8) & 0xFF));
-    aRequest.append(sFBKPath);
+    OStringBuffer aRequest( // byte array
+        OStringChar(static_cast<char>(nAction))
+        + OStringChar(char(isc_spb_dbname)) // .fdb
+        + OStringChar(static_cast<char>(nFDBLength & 0xFF)) // least significant byte first
+        + OStringChar(static_cast<char>((nFDBLength >> 8) & 0xFF))
+        + sFDBPath
+        + OStringChar(char(isc_spb_bkp_file)) // .fbk
+        + OStringChar(static_cast<char>(nFBKLength & 0xFF))
+        + OStringChar(static_cast<char>((nFBKLength >> 8) & 0xFF))
+        + sFBKPath);
 
     if (nAction == isc_action_svc_restore)
     {

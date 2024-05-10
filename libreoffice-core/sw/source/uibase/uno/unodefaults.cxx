@@ -25,7 +25,7 @@
 
 SwSvxUnoDrawPool::SwSvxUnoDrawPool(SwDoc& rDoc)
     : SvxUnoDrawPool(rDoc.getIDocumentDrawModelAccess().GetDrawModel(),
-                     SVXUNO_SERVICEID_COM_SUN_STAR_DRAWING_DEFAULTS_WRITER)
+                     SvxPropertySetInfoPool::getWriterDrawingDefaults())
     , m_rDoc(rDoc)
 {
 }

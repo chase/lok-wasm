@@ -626,11 +626,11 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
             const SvxTabStopItem& rDefTabs = rSh.GetDefault(RES_PARATR_TABSTOP);
 
             // Default tab at pos 0
-            SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aSet( GetPool() );
+            SfxItemSetFixed<RES_MARGIN_FIRSTLINE, RES_MARGIN_FIRSTLINE> aSet(GetPool());
             rSh.GetCurAttr( aSet );
-            const SvxLRSpaceItem& rLR = aSet.Get(RES_LR_SPACE);
+            const SvxFirstLineIndentItem & rFirstLine(aSet.Get(RES_MARGIN_FIRSTLINE));
 
-            if ( rLR.GetTextFirstLineOffset() < 0 )
+            if (rFirstLine.GetTextFirstLineOffset() < 0)
             {
                 SvxTabStop aSwTabStop( 0, SvxTabAdjust::Default );
                 aTabStops.Insert( aSwTabStop );
@@ -640,7 +640,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
             ::MakeDefTabs( ::GetTabDist( rDefTabs ), aTabStops );
 
             SwTextFormatColl* pColl = rSh.GetCurTextFormatColl();
-            if( pColl && pColl->IsAutoUpdateFormat() )
+            if( pColl && pColl->IsAutoUpdateOnDirectFormat() )
             {
                 SfxItemSetFixed<RES_PARATR_TABSTOP, RES_PARATR_TABSTOP> aTmp(GetPool());
                 aTmp.Put(aTabStops);
@@ -703,41 +703,45 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
     {
         if (pReqArgs)
         {
-            SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aLRSpaceSet( GetPool() );
+            SfxItemSetFixed<RES_MARGIN_FIRSTLINE, RES_MARGIN_RIGHT> aLRSpaceSet(GetPool());
             rSh.GetCurAttr( aLRSpaceSet );
-            SvxLRSpaceItem aParaMargin( aLRSpaceSet.Get( RES_LR_SPACE ) );
 
             if (const SfxStringItem *fLineIndent = pReqArgs->GetItemIfSet(SID_PARAGRAPH_FIRST_LINE_INDENT))
             {
+                SvxFirstLineIndentItem firstLine(aLRSpaceSet.Get(RES_MARGIN_FIRSTLINE));
                 const OUString ratio = fLineIndent->GetValue();
-                aParaMargin.SetTextFirstLineOffset(nPageWidth * ratio.toFloat());
+                firstLine.SetTextFirstLineOffset(nPageWidth * ratio.toFloat());
+                rSh.SetAttrItem(firstLine);
             }
             else if (const SfxStringItem *pLeftIndent = pReqArgs->GetItemIfSet(SID_PARAGRAPH_LEFT_INDENT))
             {
+                SvxTextLeftMarginItem leftMargin(aLRSpaceSet.Get(RES_MARGIN_TEXTLEFT));
                 const OUString ratio = pLeftIndent->GetValue();
-                aParaMargin.SetLeft(nPageWidth * ratio.toFloat());
+                // this used to call SetLeft() but was probably a bug
+                leftMargin.SetTextLeft(nPageWidth * ratio.toFloat());
+                rSh.SetAttrItem(leftMargin);
             }
             else if (const SfxStringItem *pRightIndent = pReqArgs->GetItemIfSet(SID_PARAGRAPH_RIGHT_INDENT))
             {
+                SvxRightMarginItem rightMargin(aLRSpaceSet.Get(RES_MARGIN_RIGHT));
                 const OUString ratio = pRightIndent->GetValue();
-                aParaMargin.SetRight(nPageWidth * ratio.toFloat());
+                rightMargin.SetRight(nPageWidth * ratio.toFloat());
+                rSh.SetAttrItem(rightMargin);
             }
-            rSh.SetAttrItem(aParaMargin);
         }
         break;
     }
     case SID_HANGING_INDENT:
     {
-        SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aLRSpaceSet( GetPool() );
+        SfxItemSetFixed<RES_MARGIN_FIRSTLINE, RES_MARGIN_RIGHT> aLRSpaceSet(GetPool());
         rSh.GetCurAttr( aLRSpaceSet );
-        SvxLRSpaceItem aParaMargin( aLRSpaceSet.Get( RES_LR_SPACE ) );
-
-        SvxLRSpaceItem aNewMargin( RES_LR_SPACE );
-        aNewMargin.SetTextLeft( aParaMargin.GetTextLeft() + aParaMargin.GetTextFirstLineOffset() );
-        aNewMargin.SetRight( aParaMargin.GetRight() );
-        aNewMargin.SetTextFirstLineOffset( (aParaMargin.GetTextFirstLineOffset()) * -1 );
-
-        rSh.SetAttrItem( aNewMargin );
+        SvxFirstLineIndentItem firstLine(aLRSpaceSet.Get(RES_MARGIN_FIRSTLINE));
+        SvxTextLeftMarginItem leftMargin(aLRSpaceSet.Get(RES_MARGIN_TEXTLEFT));
+        leftMargin.SetTextLeft(leftMargin.GetTextLeft() + firstLine.GetTextFirstLineOffset());
+        firstLine.SetTextFirstLineOffset((firstLine.GetTextFirstLineOffset()) * -1);
+        firstLine.SetAutoFirst(false); // old code would do this, is it wanted?
+        rSh.SetAttrItem(firstLine);
+        rSh.SetAttrItem(leftMargin);
         break;
     }
 
@@ -753,30 +757,42 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
             aParaMargin.SetWhich( RES_LR_SPACE );
             SwTextFormatColl* pColl = rSh.GetCurTextFormatColl();
 
+            SvxFirstLineIndentItem firstLine(RES_MARGIN_FIRSTLINE);
+            firstLine.SetTextFirstLineOffset(aParaMargin.GetTextFirstLineOffset(), aParaMargin.GetPropTextFirstLineOffset());
+            firstLine.SetAutoFirst(aParaMargin.IsAutoFirst());
+            SvxTextLeftMarginItem const leftMargin(aParaMargin.GetTextLeft(), RES_MARGIN_TEXTLEFT);
+            SvxRightMarginItem const rightMargin(aParaMargin.GetRight(), RES_MARGIN_RIGHT);
+
             // #i23726#
             if (m_pNumRuleNodeFromDoc)
             {
                 // --> #i42922# Mouse move of numbering label
                 // has to consider the left indent of the paragraph
-                SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aSet( GetPool() );
+                SfxItemSetFixed<RES_MARGIN_TEXTLEFT, RES_MARGIN_TEXTLEFT> aSet( GetPool() );
                 rSh.GetCurAttr( aSet );
-                const SvxLRSpaceItem& rLR = aSet.Get(RES_LR_SPACE);
+                const SvxTextLeftMarginItem & rLeftMargin(aSet.Get(RES_MARGIN_TEXTLEFT));
 
                 SwPosition aPos(*m_pNumRuleNodeFromDoc);
                 // #i90078#
-                rSh.SetIndent( static_cast< short >(aParaMargin.GetTextLeft() - rLR.GetTextLeft()), aPos);
+                rSh.SetIndent(static_cast<short>(aParaMargin.GetTextLeft() - rLeftMargin.GetTextLeft()), aPos);
                 // #i42921# invalidate state of indent in order to get a ruler update.
                 aParaMargin.SetWhich( nSlot );
-                GetViewFrame()->GetBindings().SetState( aParaMargin );
+                GetViewFrame().GetBindings().SetState( aParaMargin );
             }
-            else if( pColl && pColl->IsAutoUpdateFormat() )
+            else if( pColl && pColl->IsAutoUpdateOnDirectFormat() )
             {
-                SfxItemSetFixed<RES_LR_SPACE, RES_LR_SPACE> aSet(GetPool());
-                aSet.Put(aParaMargin);
+                SfxItemSetFixed<RES_MARGIN_FIRSTLINE, RES_MARGIN_RIGHT> aSet(GetPool());
+                aSet.Put(firstLine);
+                aSet.Put(leftMargin);
+                aSet.Put(rightMargin);
                 rSh.AutoUpdatePara( pColl, aSet);
             }
             else
-                rSh.SetAttrItem( aParaMargin );
+            {
+                rSh.SetAttrItem(firstLine);
+                rSh.SetAttrItem(leftMargin);
+                rSh.SetAttrItem(rightMargin);
+            }
 
             if ( aParaMargin.GetTextFirstLineOffset() < 0 )
             {
@@ -805,7 +821,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
                     const SvxTabStopItem& rDefTabs = rSh.GetDefault(RES_PARATR_TABSTOP);
                     ::MakeDefTabs( ::GetTabDist(rDefTabs), *aTabStops );
 
-                    if( pColl && pColl->IsAutoUpdateFormat())
+                    if( pColl && pColl->IsAutoUpdateOnDirectFormat())
                     {
                         SfxItemSetFixed<RES_PARATR_TABSTOP, RES_PARATR_TABSTOP> aSetTmp(GetPool());
                         aSetTmp.Put(std::move(aTabStops));
@@ -828,7 +844,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
 
             aParaMargin.SetWhich( RES_UL_SPACE );
             SwTextFormatColl* pColl = rSh.GetCurTextFormatColl();
-            if( pColl && pColl->IsAutoUpdateFormat() )
+            if( pColl && pColl->IsAutoUpdateOnDirectFormat() )
             {
                 SfxItemSetFixed<RES_UL_SPACE, RES_UL_SPACE> aSet(GetPool());
                 aSet.Put(aParaMargin);
@@ -862,7 +878,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
             aULSpace.SetLower( nLower );
 
             SwTextFormatColl* pColl = rSh.GetCurTextFormatColl();
-            if( pColl && pColl->IsAutoUpdateFormat() )
+            if( pColl && pColl->IsAutoUpdateOnDirectFormat() )
             {
                 aULSpaceSet.Put( aULSpace );
                 rSh.AutoUpdatePara( pColl, aULSpaceSet );
@@ -1206,7 +1222,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
     {
         if ( pReqArgs && rDesc.GetMaster().GetHeader().IsActive())
         {
-            const SfxInt16Item& aLayoutItem = static_cast<const SfxInt16Item&>(pReqArgs->Get(SID_ATTR_PAGE_HEADER_LAYOUT));
+            const SfxInt16Item& aLayoutItem = pReqArgs->Get(SID_ATTR_PAGE_HEADER_LAYOUT);
             sal_uInt16 nLayout = aLayoutItem.GetValue();
             SwPageDesc aDesc(rDesc);
             aDesc.ChgHeaderShare((nLayout>>1) == 0);
@@ -1259,7 +1275,7 @@ void SwView::ExecTabWin( SfxRequest const & rReq )
     {
         if ( pReqArgs && rDesc.GetMaster().GetFooter().IsActive())
         {
-            const SfxInt16Item& aLayoutItem = static_cast<const SfxInt16Item&>(pReqArgs->Get(SID_ATTR_PAGE_FOOTER_LAYOUT));
+            const SfxInt16Item& aLayoutItem = pReqArgs->Get(SID_ATTR_PAGE_FOOTER_LAYOUT);
             sal_uInt16 nLayout = aLayoutItem.GetValue();
             SwPageDesc aDesc(rDesc);
             aDesc.ChgFooterShare((nLayout>>1) == 0);
@@ -1385,8 +1401,9 @@ void SwView::StateTabWin(SfxItemSet& rSet)
     SwapPageMargin( rDesc, aPageLRSpace );
 
     SfxItemSetFixed<RES_PARATR_TABSTOP, RES_PARATR_TABSTOP,
-                    RES_LR_SPACE, RES_UL_SPACE>  aCoreSet( GetPool() );
-    // get also the list level indent values merged as LR-SPACE item, if needed.
+                    RES_MARGIN_FIRSTLINE, RES_MARGIN_RIGHT,
+                    RES_UL_SPACE, RES_UL_SPACE>  aCoreSet( GetPool() );
+    // get also the list level indent values, if needed.
     rSh.GetCurAttr( aCoreSet, true );
     const SelectionType nSelType = rSh.GetSelectionType();
 
@@ -1560,7 +1577,8 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                  ( nSelType & SelectionType::Graphic ) ||
                  ( nSelType & SelectionType::Frame ) ||
                  ( nSelType & SelectionType::Ole ) ||
-                 ( SfxItemState::DEFAULT > aCoreSet.GetItemState(RES_LR_SPACE) ) ||
+                 (aCoreSet.GetItemState(RES_MARGIN_FIRSTLINE) < SfxItemState::DEFAULT) ||
+                 (aCoreSet.GetItemState(RES_MARGIN_TEXTLEFT) < SfxItemState::DEFAULT) ||
                  (!bVerticalWriting && (SID_ATTR_TABSTOP_VERTICAL == nWhich) ) ||
                  ( bVerticalWriting && (RES_PARATR_TABSTOP == nWhich))
                )
@@ -1598,7 +1616,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
 
                     std::stringstream aStream;
                     boost::property_tree::write_json(aStream, aRootTree);
-                    rSh.GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_TAB_STOP_LIST, aStream.str().c_str());
+                    rSh.GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_TAB_STOP_LIST, OString(aStream.str()));
                 }
             }
             break;
@@ -1606,7 +1624,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
 
         case SID_HANGING_INDENT:
         {
-            SfxItemState e = aCoreSet.GetItemState(RES_LR_SPACE);
+            SfxItemState e = aCoreSet.GetItemState(RES_MARGIN_FIRSTLINE);
             if( e == SfxItemState::DISABLED )
                 rSet.DisableItem(nWhich);
             break;
@@ -1633,7 +1651,13 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                 std::shared_ptr<SvxLRSpaceItem> aLR(std::make_shared<SvxLRSpaceItem>(RES_LR_SPACE));
                 if ( !IsTabColFromDoc() )
                 {
-                    aLR.reset(aCoreSet.Get(RES_LR_SPACE).Clone());
+                    SvxFirstLineIndentItem const& rFirstLine(aCoreSet.Get(RES_MARGIN_FIRSTLINE));
+                    SvxTextLeftMarginItem const& rLeftMargin(aCoreSet.Get(RES_MARGIN_TEXTLEFT));
+                    SvxRightMarginItem const& rRightMargin(aCoreSet.Get(RES_MARGIN_RIGHT));
+                    aLR->SetTextFirstLineOffset(rFirstLine.GetTextFirstLineOffset(), rFirstLine.GetPropTextFirstLineOffset());
+                    aLR->SetAutoFirst(rFirstLine.IsAutoFirst());
+                    aLR->SetTextLeft(rLeftMargin.GetTextLeft(), rLeftMargin.GetPropLeft());
+                    aLR->SetRight(rRightMargin.GetRight(), rRightMargin.GetPropRight());
 
                     // #i23726#
                     if (m_pNumRuleNodeFromDoc)
@@ -2418,10 +2442,8 @@ void SwView::StateTabWin(SfxItemSet& rSet)
             rSet.Put( SfxBoolItem(SID_ATTR_PAGE_HEADER, bHeaderOn ) );
             if(bHeaderOn)
             {
-                const SvxLRSpaceItem* pLR = static_cast<const SvxLRSpaceItem*>(
-                                            rHeader.GetHeaderFormat()->GetAttrSet().GetItem(SID_ATTR_LRSPACE));
-                const SvxULSpaceItem* pUL = static_cast<const SvxULSpaceItem*>(
-                                            rHeader.GetHeaderFormat()->GetAttrSet().GetItem(SID_ATTR_ULSPACE));
+                const SvxLRSpaceItem* pLR = rHeader.GetHeaderFormat()->GetAttrSet().GetItem(SID_ATTR_LRSPACE);
+                const SvxULSpaceItem* pUL = rHeader.GetHeaderFormat()->GetAttrSet().GetItem(SID_ATTR_ULSPACE);
                 if (pLR && pUL)
                 {
                     SvxLongLRSpaceItem aLR(pLR->GetLeft(), pLR->GetRight(), SID_ATTR_PAGE_HEADER_LRMARGIN);
@@ -2446,15 +2468,18 @@ void SwView::StateTabWin(SfxItemSet& rSet)
             const SwFormatFooter& rFooter = rDesc.GetMaster().GetFooter();
             bool bFooterOn = rFooter.IsActive();
             rSet.Put( SfxBoolItem(SID_ATTR_PAGE_FOOTER, bFooterOn ) );
-            if(bFooterOn)
+            if (bFooterOn)
             {
-                const SvxLRSpaceItem* rLR = rFooter.GetFooterFormat()->GetAttrSet().GetItem<SvxLRSpaceItem>(SID_ATTR_LRSPACE);
-                const SvxULSpaceItem* rUL = rFooter.GetFooterFormat()->GetAttrSet().GetItem<SvxULSpaceItem>(SID_ATTR_ULSPACE);
-                SvxLongLRSpaceItem aLR(rLR->GetLeft(), rLR->GetRight(), SID_ATTR_PAGE_FOOTER_LRMARGIN);
-                rSet.Put(aLR);
-                SvxLongULSpaceItem aUL( rUL->GetUpper(), rUL->GetLower(), SID_ATTR_PAGE_FOOTER_SPACING);
-                rSet.Put(aUL);
-
+                if (const SvxLRSpaceItem* rLR = rFooter.GetFooterFormat()->GetAttrSet().GetItem<SvxLRSpaceItem>(SID_ATTR_LRSPACE))
+                {
+                    SvxLongLRSpaceItem aLR(rLR->GetLeft(), rLR->GetRight(), SID_ATTR_PAGE_FOOTER_LRMARGIN);
+                    rSet.Put(aLR);
+                }
+                if (const SvxULSpaceItem* rUL = rFooter.GetFooterFormat()->GetAttrSet().GetItem<SvxULSpaceItem>(SID_ATTR_ULSPACE))
+                {
+                    SvxLongULSpaceItem aUL( rUL->GetUpper(), rUL->GetLower(), SID_ATTR_PAGE_FOOTER_SPACING);
+                    rSet.Put(aUL);
+                }
                 bool bShared = !rDesc.IsFooterShared();
                 bool bFirst = !rDesc.IsFirstShared(); // FIXME control changes for both header footer - tdf#100287
                 sal_uInt16 nLayout = (static_cast<int>(bShared)<<1) + static_cast<int>(bFirst);
@@ -2470,8 +2495,8 @@ void SwView::StateTabWin(SfxItemSet& rSet)
         case SID_ATTR_PAGE_HATCH:
         case SID_ATTR_PAGE_BITMAP:
         {
-            SfxItemSet aSet = rDesc.GetMaster().GetAttrSet();
-            if (const auto pFillStyleItem = aSet.GetItem(XATTR_FILLSTYLE))
+            const SfxItemSet& rMasterSet = rDesc.GetMaster().GetAttrSet();
+            if (const auto pFillStyleItem = rMasterSet.GetItem(XATTR_FILLSTYLE))
             {
                 drawing::FillStyle eXFS = pFillStyleItem->GetValue();
                 XFillStyleItem aFillStyleItem( eXFS );
@@ -2482,7 +2507,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
                 {
                     case drawing::FillStyle_SOLID:
                     {
-                        if (const auto pItem = aSet.GetItem<XFillColorItem>(XATTR_FILLCOLOR, false))
+                        if (const auto pItem = rMasterSet.GetItem<XFillColorItem>(XATTR_FILLCOLOR, false))
                         {
                             Color aColor = pItem->GetColorValue();
                             XFillColorItem aFillColorItem( OUString(), aColor );
@@ -2494,7 +2519,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
 
                     case drawing::FillStyle_GRADIENT:
                     {
-                        const basegfx::BGradient& aBGradient = aSet.GetItem<XFillGradientItem>( XATTR_FILLGRADIENT )->GetGradientValue();
+                        const basegfx::BGradient& aBGradient = rMasterSet.GetItem<XFillGradientItem>( XATTR_FILLGRADIENT )->GetGradientValue();
                         XFillGradientItem aFillGradientItem( OUString(), aBGradient, SID_ATTR_PAGE_GRADIENT  );
                         rSet.Put( aFillGradientItem );
                     }
@@ -2502,7 +2527,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
 
                     case drawing::FillStyle_HATCH:
                     {
-                        const XFillHatchItem *pFillHatchItem( aSet.GetItem<XFillHatchItem>( XATTR_FILLHATCH ) );
+                        const XFillHatchItem *pFillHatchItem( rMasterSet.GetItem<XFillHatchItem>( XATTR_FILLHATCH ) );
                         XFillHatchItem aFillHatchItem( pFillHatchItem->GetName(), pFillHatchItem->GetHatchValue());
                         aFillHatchItem.SetWhich( SID_ATTR_PAGE_HATCH );
                         rSet.Put( aFillHatchItem );
@@ -2511,7 +2536,7 @@ void SwView::StateTabWin(SfxItemSet& rSet)
 
                     case drawing::FillStyle_BITMAP:
                     {
-                        const XFillBitmapItem *pFillBitmapItem = aSet.GetItem<XFillBitmapItem>( XATTR_FILLBITMAP );
+                        const XFillBitmapItem *pFillBitmapItem = rMasterSet.GetItem<XFillBitmapItem>( XATTR_FILLBITMAP );
                         XFillBitmapItem aFillBitmapItem( pFillBitmapItem->GetName(), pFillBitmapItem->GetGraphicObject() );
                         aFillBitmapItem.SetWhich( SID_ATTR_PAGE_BITMAP );
                         rSet.Put( aFillBitmapItem );

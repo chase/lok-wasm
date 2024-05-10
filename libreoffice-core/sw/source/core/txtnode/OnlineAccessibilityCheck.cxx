@@ -79,12 +79,15 @@ OnlineAccessibilityCheck::OnlineAccessibilityCheck(SwDoc& rDocument)
 {
 }
 
-void OnlineAccessibilityCheck::updateNodeStatus(SwNode* pNode)
+void OnlineAccessibilityCheck::updateNodeStatus(SwNode* pNode, bool bIssueObjectNameChanged)
 {
     if (!pNode->IsContentNode() && !pNode->IsTableNode())
         return;
 
     m_nAccessibilityIssues = 0;
+
+    if (bIssueObjectNameChanged)
+        return;
 
     auto it = m_aNodes.find(pNode);
     if (it == m_aNodes.end())
@@ -134,7 +137,7 @@ void OnlineAccessibilityCheck::runAccessibilityCheck(SwNode* pNode)
     {
         SdrObject* pObject = pFrameFormat->FindSdrObject();
         if (pObject)
-            m_aAccessibilityCheck.checkObject(pObject);
+            m_aAccessibilityCheck.checkObject(pNode, pObject);
     }
 
     auto aCollection = m_aAccessibilityCheck.getIssueCollection();
@@ -178,7 +181,8 @@ void OnlineAccessibilityCheck::initialCheck()
 void OnlineAccessibilityCheck::updateCheckerActivity()
 {
     bool bOnlineCheckStatus
-        = officecfg::Office::Common::Accessibility::OnlineAccessibilityCheck::get();
+        = !utl::ConfigManager::IsFuzzing()
+          && officecfg::Office::Common::Accessibility::OnlineAccessibilityCheck::get();
 
     if (bOnlineCheckStatus != m_bOnlineCheckStatus)
     {
@@ -247,6 +251,9 @@ void OnlineAccessibilityCheck::lookForPreviousNodeAndUpdate(const SwPosition& rN
         return;
     }
 
+    // Run the document level Accessibility Check
+    runDocumentLevelAccessibilityCheck();
+
     // Get the real previous node from index
     SwNode* pNode = pCurrentNode->GetNodes()[m_nPreviousNodeIndex];
 
@@ -254,7 +261,6 @@ void OnlineAccessibilityCheck::lookForPreviousNodeAndUpdate(const SwPosition& rN
     {
         runAccessibilityCheck(pNode);
         updateNodeStatus(pNode);
-        updateStatusbar();
 
         // Assign previous node and index
         m_pPreviousNode = std::move(pCurrentWeak);
@@ -262,9 +268,14 @@ void OnlineAccessibilityCheck::lookForPreviousNodeAndUpdate(const SwPosition& rN
     }
     else
     {
+        runAccessibilityCheck(pCurrentNode);
+        updateNodeStatus(pCurrentNode);
+
         m_pPreviousNode.reset();
         m_nPreviousNodeIndex = SwNodeOffset(-1);
     }
+
+    updateStatusbar();
 }
 
 void OnlineAccessibilityCheck::clearAccessibilityIssuesFromAllNodes()
@@ -283,7 +294,7 @@ void OnlineAccessibilityCheck::clearAccessibilityIssuesFromAllNodes()
     updateStatusbar();
 }
 
-void OnlineAccessibilityCheck::resetAndQueue(SwNode* pNode)
+void OnlineAccessibilityCheck::resetAndQueue(SwNode* pNode, bool bIssueObjectNameChanged)
 {
     if (utl::ConfigManager::IsFuzzing())
         return;
@@ -295,8 +306,25 @@ void OnlineAccessibilityCheck::resetAndQueue(SwNode* pNode)
 
     pNode->getAccessibilityCheckStatus().reset();
     m_aNodes.erase(pNode);
-    runAccessibilityCheck(pNode);
-    updateNodeStatus(pNode);
+    if (&pNode->GetNodes() == &m_rDocument.GetNodes()) // don't add undo array
+    {
+        runAccessibilityCheck(pNode);
+        updateNodeStatus(pNode, bIssueObjectNameChanged);
+    }
+    updateStatusbar();
+}
+
+void OnlineAccessibilityCheck::resetAndQueueDocumentLevel()
+{
+    if (utl::ConfigManager::IsFuzzing())
+        return;
+
+    bool bOnlineCheckStatus
+        = officecfg::Office::Common::Accessibility::OnlineAccessibilityCheck::get();
+    if (!bOnlineCheckStatus)
+        return;
+
+    runDocumentLevelAccessibilityCheck();
     updateStatusbar();
 }
 

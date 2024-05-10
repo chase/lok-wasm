@@ -21,6 +21,7 @@
 
 #include <texture/texture.hxx>
 #include <vcl/bitmapex.hxx>
+#include <vcl/BitmapReadAccess.hxx>
 
 namespace drawinglayer::primitive3d {
     class HatchTexturePrimitive3D;
@@ -53,9 +54,9 @@ namespace drawinglayer::texture
         protected:
             BitmapEx                                    maBitmapEx;
             Bitmap                                      maBitmap;   // Bitmap held within maBitmapEx, to exist during mpReadBitmap scope
-            Bitmap::ScopedReadAccess                    mpReadBitmap;
+            BitmapScopedReadAccess                      mpReadBitmap;
             Bitmap                                      maTransparence;
-            Bitmap::ScopedReadAccess                    mpReadTransparence;
+            BitmapScopedReadAccess                      mpReadTransparence;
             basegfx::B2DPoint                           maTopLeft;
             basegfx::B2DVector                          maSize;
             double                                      mfMulX;
@@ -65,7 +66,7 @@ namespace drawinglayer::texture
 
             // helpers
             bool impIsValid(const basegfx::B2DPoint& rUV, sal_Int32& rX, sal_Int32& rY) const;
-            sal_uInt8 impGetTransparence(sal_Int32 rX, sal_Int32 rY) const;
+            sal_uInt8 impGetAlpha(sal_Int32 rX, sal_Int32 rY) const;
 
         public:
             GeoTexSvxBitmapEx(

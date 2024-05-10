@@ -535,17 +535,15 @@ void ListDef::CreateNumberingRules( DomainMapper& rDMapper,
     try
     {
         // Create the numbering style
-        uno::Reference< beans::XPropertySet > xStyle (
-            xFactory->createInstance("com.sun.star.style.NumberingStyle"),
-            uno::UNO_QUERY_THROW );
-
         if (GetId() == nOutline)
             m_StyleName = "Outline"; //SwNumRule.GetOutlineRuleName()
         else
-            xStyles->insertByName(GetStyleName(GetId(), xStyles), css::uno::Any(xStyle));
+            xStyles->insertByName(
+                GetStyleName(GetId(), xStyles),
+                css::uno::Any(xFactory->createInstance("com.sun.star.style.NumberingStyle")));
 
         uno::Any oStyle = xStyles->getByName(GetStyleName());
-        xStyle.set( oStyle, uno::UNO_QUERY_THROW );
+        uno::Reference< beans::XPropertySet > xStyle( oStyle, uno::UNO_QUERY_THROW );
 
         // Get the default OOo Numbering style rules
         uno::Any aRules = xStyle->getPropertyValue( getPropertyName( PROP_NUMBERING_RULES ) );
@@ -700,7 +698,7 @@ void ListsManager::lcl_attribute( Id nName, Value& rVal )
                 //replace it with a hard-hyphen (0x2d)
                 //-> this fixes missing hyphen export in PDF etc.
                 // see tdf#101626
-                std::string sLevelText = rVal.getString().replace(0xad, 0x2d).toUtf8().getStr();
+                std::string sLevelText( rVal.getString().replace(0xad, 0x2d).toUtf8() );
 
                 // DOCX level-text contains levels definition in format "%1.%2.%3"
                 // we need to convert it to LO internal representation: "%1%.%2%.%3%"

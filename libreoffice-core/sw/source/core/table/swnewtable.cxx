@@ -18,6 +18,7 @@
  */
 
 #include <swtable.hxx>
+#include <swcrsr.hxx>
 #include <tblsel.hxx>
 #include <tblrwcl.hxx>
 #include <ndtxt.hxx>
@@ -34,6 +35,7 @@
 #include <IDocumentContentOperations.hxx>
 #include <IDocumentFieldsAccess.hxx>
 #include <IDocumentLayoutAccess.hxx>
+#include <IDocumentRedlineAccess.hxx>
 #include <cstdlib>
 #include <vector>
 #include <set>
@@ -651,7 +653,7 @@ insertion behind (true) or before (false) the selected boxes
 */
 
 bool SwTable::NewInsertCol( SwDoc& rDoc, const SwSelBoxes& rBoxes,
-    sal_uInt16 nCnt, bool bBehind )
+    sal_uInt16 nCnt, bool bBehind, bool bInsertDummy )
 {
     if( m_aLines.empty() || !nCnt )
         return false;
@@ -745,6 +747,24 @@ bool SwTable::NewInsertCol( SwDoc& rDoc, const SwSelBoxes& rBoxes,
         for( sal_uInt16 j = 0; j < nCnt; ++j )
         {
             SwTableBox *pCurrBox = pLine->GetTabBoxes()[nInsPos+j];
+
+            // set tracked insertion by inserting a dummy redline
+            // drag & drop: no need to insert dummy character
+            if ( rDoc.getIDocumentRedlineAccess().IsRedlineOn() )
+            {
+                SwPosition aPos(*pCurrBox->GetSttNd());
+                SwCursor aCursor( aPos, nullptr );
+                if ( bInsertDummy )
+                {
+                    SwNodeIndex aInsDummyPos(*pCurrBox->GetSttNd(), 1 );
+                    SwPaM aPaM(aInsDummyPos);
+                    rDoc.getIDocumentContentOperations().InsertString( aPaM,
+                        OUStringChar(CH_TXT_TRACKED_DUMMY_CHAR) );
+                }
+                SvxPrintItem aHasTextChangesOnly(RES_PRINT, false);
+                rDoc.SetBoxAttr( aCursor, aHasTextChangesOnly );
+            }
+
             if( bNewSpan )
             {
                 pCurrBox->setRowSpan( nLastRowSpan );
@@ -1185,7 +1205,7 @@ void SwTable::InsertSpannedRow( SwDoc& rDoc, sal_uInt16 nRowIdx, sal_uInt16 nCnt
         aFSz.SetHeight( nNewHeight );
         pFrameFormat->SetFormatAttr( aFSz );
     }
-    InsertRow_( &rDoc, aBoxes, nCnt, true );
+    InsertRow_( &rDoc, aBoxes, nCnt, true, true );
     const size_t nBoxCount = rLine.GetTabBoxes().size();
     for( sal_uInt16 n = 0; n < nCnt; ++n )
     {
@@ -1490,7 +1510,7 @@ bool SwTable::NewSplitRow( SwDoc& rDoc, const SwSelBoxes& rBoxes, sal_uInt16 nCn
 */
 
 bool SwTable::InsertRow( SwDoc* pDoc, const SwSelBoxes& rBoxes,
-                        sal_uInt16 nCnt, bool bBehind )
+                        sal_uInt16 nCnt, bool bBehind, bool bInsertDummy )
 {
     bool bRet = false;
     if( IsNewModel() )
@@ -1507,7 +1527,7 @@ bool SwTable::InsertRow( SwDoc* pDoc, const SwSelBoxes& rBoxes,
             SwTableLine *pLine = GetTabLines()[ nRowIdx ];
             SwSelBoxes aLineBoxes;
             lcl_FillSelBoxes( aLineBoxes, *pLine );
-            InsertRow_( pDoc, aLineBoxes, nCnt, bBehind );
+            InsertRow_( pDoc, aLineBoxes, nCnt, bBehind, bInsertDummy );
             const size_t nBoxCount = pLine->GetTabBoxes().size();
             sal_uInt16 nOfs = bBehind ? 0 : 1;
             for( sal_uInt16 n = 0; n < nCnt; ++n )
@@ -1557,7 +1577,7 @@ bool SwTable::InsertRow( SwDoc* pDoc, const SwSelBoxes& rBoxes,
         CHECK_TABLE( *this )
     }
     else
-        bRet = InsertRow_( pDoc, rBoxes, nCnt, bBehind );
+        bRet = InsertRow_( pDoc, rBoxes, nCnt, bBehind, bInsertDummy );
     return bRet;
 }
 
@@ -1719,7 +1739,11 @@ void SwTable::CreateSelection( const SwNode* pStartNd, const SwNode* pEndNd,
                     rBoxes.insert( pBox );
                 if( nFound )
                 {
-                    nBottom = nRow;
+                    //if box is hiding cells bottom needs to be moved
+                    if (pBox->getRowSpan() > 1)
+                        nBottom = std::max(nBottom, size_t(nRow + pBox->getRowSpan() - 1));
+                    else
+                        nBottom = std::max(nRow, nBottom);
                     lcl_CheckMinMax( nLowerMin, nLowerMax, *pLine, nCol, true );
                     ++nFound;
                     break;
@@ -1727,6 +1751,9 @@ void SwTable::CreateSelection( const SwNode* pStartNd, const SwNode* pEndNd,
                 else
                 {
                     nTop = nRow;
+                    //if box is hiding cells bottom needs to be moved
+                    if (pBox->getRowSpan() > 1)
+                        nBottom = nRow + pBox->getRowSpan() - 1;
                     lcl_CheckMinMax( nUpperMin, nUpperMax, *pLine, nCol, true );
                     ++nFound;
                      // If start and end node are identical, we're nearly done...
@@ -2363,7 +2390,7 @@ bool SwTable::CanConvertSubtables() const
     {
         return false; // no formulas in fields yet
     }
-    if (pDoc->GetAttrPool().GetItemCount2(RES_BOXATR_FORMULA) != 0)
+    if (pDoc->GetAttrPool().GetItemSurrogates(RES_BOXATR_FORMULA).size() != 0)
     {
         return false; // no table box formulas yet
     }

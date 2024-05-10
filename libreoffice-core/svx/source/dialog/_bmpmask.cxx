@@ -22,6 +22,7 @@
 #include <vcl/virdev.hxx>
 #include <svtools/valueset.hxx>
 #include <svl/eitem.hxx>
+#include <svl/itemset.hxx>
 #include <sfx2/dispatch.hxx>
 #include <svtools/colrdlg.hxx>
 
@@ -171,7 +172,7 @@ public:
     void        SetExecState( bool bState ) { bExecState = bState; }
     bool        IsExecReady() const { return bExecState; }
 
-                DECL_LINK( PipetteHdl, const OString&, void );
+                DECL_LINK( PipetteHdl, const OUString&, void );
                 DECL_LINK( CbxHdl, weld::Toggleable&, void);
                 DECL_LINK( CbxTransHdl, weld::Toggleable&, void );
                 DECL_LINK( FocusLbHdl, weld::Widget&, void );
@@ -189,7 +190,7 @@ MaskData::MaskData( SvxBmpMask* pBmpMask, SfxBindings& rBind ) :
 {
 }
 
-IMPL_LINK( MaskData, PipetteHdl, const OString&, rId, void )
+IMPL_LINK( MaskData, PipetteHdl, const OUString&, rId, void )
 {
     SfxBoolItem aBItem( SID_BMPMASK_PIPETTE,
                         pMask->m_xTbxPipette->get_item_active(rId) );
@@ -612,10 +613,10 @@ BitmapEx SvxBmpMask::ImpMaskTransparent( const BitmapEx& rBitmapEx, const Color&
     EnterWait();
 
     BitmapEx    aBmpEx;
-    Bitmap      aMask( rBitmapEx.GetBitmap().CreateMask( rColor, nTol ) );
+    AlphaMask   aMask( rBitmapEx.GetBitmap().CreateAlphaMask( rColor, nTol ) );
 
     if( rBitmapEx.IsAlpha() )
-        aMask.CombineOr( rBitmapEx.GetAlpha() );
+        aMask.AlphaCombineOr( rBitmapEx.GetAlphaMask() );
 
     aBmpEx = BitmapEx( rBitmapEx.GetBitmap(), aMask );
     LeaveWait();
@@ -994,10 +995,7 @@ Graphic SvxBmpMask::Mask( const Graphic& rGraphic )
                         if ( aBitmapEx.GetSizePixel().Width() && aBitmapEx.GetSizePixel().Height() )
                         {
                             ImpMask( aBitmapEx );
-                            if ( aGraphic.IsTransparent() )
-                                aGraphic = Graphic( BitmapEx( aBitmapEx.GetBitmap(), aBitmapEx.GetAlpha() ) );
-                            else
-                                aGraphic = aBitmapEx;
+                            aGraphic = Graphic( aBitmapEx );
                         }
                     }
                 }

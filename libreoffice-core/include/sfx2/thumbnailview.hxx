@@ -25,8 +25,7 @@ class DataChangedEvent;
 class ScrollBar;
 class ThumbnailViewItem;
 typedef ::std::vector< ThumbnailViewItem* > ThumbnailValueItemList;
-
-
+class ThumbnailViewAcc;
 struct ThumbnailItemAttributes;
 
 /*************************************************************************
@@ -169,6 +168,9 @@ public:
 
     virtual ~ThumbnailView() override;
 
+    ThumbnailView& operator=( ThumbnailView const & ) = delete; // MSVC workaround
+    ThumbnailView( ThumbnailView const & ) = delete; // MSVC workaround
+
     virtual bool MouseMove(const MouseEvent& rMEvt) override;
 
     /// Updates information in the view; used only in RecentDocsView ATM.
@@ -252,7 +254,7 @@ protected:
 
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessible() override;
 
-    const css::uno::Reference<css::accessibility::XAccessible> & getAccessible() const;
+    const rtl::Reference<ThumbnailViewAcc> & getAccessible() const;
 
 protected:
 
@@ -287,7 +289,7 @@ protected:
 protected:
 
     std::vector< std::unique_ptr<ThumbnailViewItem> > mItemList;
-    css::uno::Reference<css::accessibility::XAccessible> mxAccessible;
+    rtl::Reference<ThumbnailViewAcc> mxAccessible;
     ThumbnailValueItemList mFilteredItemList; ///< Cache to store the filtered items
     ThumbnailValueItemList::iterator mpStartSelRange;
     tools::Long mnItemWidth;
@@ -307,12 +309,11 @@ protected:
     bool mbShowTooltips : 1;
     bool mbDrawMnemonics : 1;
     bool mbSelectOnFocus : 1;
+    bool mbAllowMultiSelection : 1;
     Color maFillColor;              ///< Background color of the thumbnail view widget.
     Color maTextColor;              ///< Text color.
     Color maHighlightColor;         ///< Color of the highlight (background) of the hovered item.
     Color maHighlightTextColor;     ///< Color of the text for the highlighted item.
-    Color maSelectHighlightColor;   ///< Color of the highlight (background) of the selected and hovered item.
-    Color maSelectHighlightTextColor;   ///< Color of the text of the selected and hovered item.
     double mfHighlightTransparence; ///< Transparence of the highlight.
 
     Link<const ThumbnailViewItem*, void> maItemStateHdl;

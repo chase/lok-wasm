@@ -284,11 +284,11 @@ void SwXPrintSettings::_preSetValues ()
 
 namespace
 {
-    bool tryBoolAccess(const uno::Any &rValue)
+    bool tryBoolAccess(std::u16string_view rName, const uno::Any &rValue)
     {
-        const auto xPrSet = o3tl::tryAccess<bool>(rValue);
-        if (!xPrSet)
-            throw lang::IllegalArgumentException();
+        const std::optional<const bool> xPrSet = o3tl::tryAccess<bool>(rValue);
+        if (!xPrSet.has_value())
+            throw lang::IllegalArgumentException(OUString(OUString::Concat(rName) + " no value"), nullptr, 0);
         return *xPrSet;
     }
 }
@@ -299,62 +299,62 @@ void SwXPrintSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, 
     {
         case HANDLE_PRINTSET_LEFT_PAGES:
         {
-            mpPrtOpt->SetPrintLeftPage(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintLeftPage(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_RIGHT_PAGES:
         {
-            mpPrtOpt->SetPrintRightPage(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintRightPage(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_REVERSED:
         {
-            mpPrtOpt->SetPrintReverse(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintReverse(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_PROSPECT:
         {
-            mpPrtOpt->SetPrintProspect(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintProspect(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_GRAPHICS:
         {
-            mpPrtOpt->SetPrintGraphic(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintGraphic(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_TABLES:
         {
-            mpPrtOpt->SetPrintTable(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintTable(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_DRAWINGS:
         {
-            mpPrtOpt->SetPrintDraw(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintDraw(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_CONTROLS:
         {
-            mpPrtOpt->SetPrintControl(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintControl(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_PAGE_BACKGROUND:
         {
-            mpPrtOpt->SetPrintPageBackground(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintPageBackground(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_BLACK_FONTS:
         {
-            mpPrtOpt->SetPrintBlackFont(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintBlackFont(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_SINGLE_JOBS:
         {
-            mpPrtOpt->SetPrintSingleJobs(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintSingleJobs(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_PAPER_FROM_SETUP:
         {
-            mpPrtOpt->SetPaperFromSetup(tryBoolAccess(rValue));
+            mpPrtOpt->SetPaperFromSetup(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_ANNOTATION_MODE:
@@ -363,14 +363,14 @@ void SwXPrintSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, 
             rValue >>= nTmp;
             SwPostItMode nVal = static_cast<SwPostItMode>(nTmp);
             if(nVal > SwPostItMode::EndPage)
-                throw lang::IllegalArgumentException();
+                throw lang::IllegalArgumentException(OUString::number(nTmp) + " > SwPostItMode::EndPage", nullptr, 0);
 
             mpPrtOpt->SetPrintPostIts(nVal);
         }
         break;
         case HANDLE_PRINTSET_EMPTY_PAGES:
         {
-            mpPrtOpt->SetPrintEmptyPages(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintEmptyPages(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_FAX_NAME:
@@ -384,17 +384,17 @@ void SwXPrintSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, 
         break;
         case HANDLE_PRINTSET_PROSPECT_RTL:
         {
-            mpPrtOpt->SetPrintProspect_RTL(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintProspect_RTL(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_PLACEHOLDER:
         {
-            mpPrtOpt->SetPrintTextPlaceholder(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintTextPlaceholder(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         case HANDLE_PRINTSET_HIDDEN_TEXT:
         {
-            mpPrtOpt->SetPrintHiddenText(tryBoolAccess(rValue));
+            mpPrtOpt->SetPrintHiddenText(tryBoolAccess(rInfo.maName, rValue));
         }
         break;
         default:
@@ -728,7 +728,7 @@ void SwXViewSettings::_setSingleValue( const comphelper::PropertyInfo & rInfo, c
             if ( aHID.GetProtocol() != INetProtocol::Hid )
                 throw IllegalArgumentException ();
 
-            m_pView->GetEditWin().SetHelpId( OUStringToOString( aHID.GetURLPath(), RTL_TEXTENCODING_UTF8 ) );
+            m_pView->GetEditWin().SetHelpId( aHID.GetURLPath() );
         }
         break;
         case HANDLE_VIEWSET_HORI_RULER_METRIC:
@@ -903,7 +903,7 @@ void SwXViewSettings::_getSingleValue( const comphelper::PropertyInfo & rInfo, u
 
             bBool = false;
             SwEditWin &rEditWin = m_pView->GetEditWin();
-            OUString sHelpURL = INET_HID_SCHEME + OUString::fromUtf8( rEditWin.GetHelpId() );
+            OUString sHelpURL = INET_HID_SCHEME + rEditWin.GetHelpId();
             rValue <<= sHelpURL;
         }
         break;

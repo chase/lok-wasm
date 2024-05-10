@@ -53,7 +53,7 @@ using ::com::sun::star::uno::RuntimeException;
 using ::std::vector;
 
 //  used for sheet- and area link:
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetSheetLinkMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetSheetLinkMap()
 {
     static const SfxItemPropertyMapEntry aSheetLinkMap_Impl[] =
     {
@@ -181,7 +181,7 @@ void SAL_CALL ScSheetLinkObj::removeRefreshListener(
 void ScSheetLinkObj::Refreshed_Impl()
 {
     lang::EventObject aEvent;
-    aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+    aEvent.Source.set(getXWeak());
     for (uno::Reference<util::XRefreshListener> & xRefreshListener : aRefreshListeners)
         xRefreshListener->refreshed( aEvent );
 }
@@ -703,7 +703,7 @@ void SAL_CALL ScAreaLinkObj::removeRefreshListener(
 void ScAreaLinkObj::Refreshed_Impl()
 {
     lang::EventObject aEvent;
-    aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+    aEvent.Source.set(getXWeak());
     for (uno::Reference<util::XRefreshListener> & xRefreshListener : aRefreshListeners)
         xRefreshListener->refreshed( aEvent );
 }
@@ -1050,7 +1050,6 @@ void SAL_CALL ScDDELinkObj::setName( const OUString& /* aName */ )
 
 OUString SAL_CALL ScDDELinkObj::getApplication()
 {
-    SolarMutexGuard aGuard;
     //! Test if the link is still in the document?
 
     return aAppl;
@@ -1058,7 +1057,6 @@ OUString SAL_CALL ScDDELinkObj::getApplication()
 
 OUString SAL_CALL ScDDELinkObj::getTopic()
 {
-    SolarMutexGuard aGuard;
     //! Test if the link is still in the document?
 
     return aTopic;
@@ -1066,7 +1064,6 @@ OUString SAL_CALL ScDDELinkObj::getTopic()
 
 OUString SAL_CALL ScDDELinkObj::getItem()
 {
-    SolarMutexGuard aGuard;
     //! Test if the link is still in the document?
 
     return aItem;
@@ -1175,7 +1172,7 @@ void ScDDELinkObj::setResults( const uno::Sequence< uno::Sequence< uno::Any > >&
 void ScDDELinkObj::Refreshed_Impl()
 {
     lang::EventObject aEvent;
-    aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+    aEvent.Source.set(getXWeak());
     for (uno::Reference<util::XRefreshListener> & xRefreshListener : aRefreshListeners)
         xRefreshListener->refreshed( aEvent );
 }

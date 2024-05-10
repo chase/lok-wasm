@@ -23,6 +23,7 @@
 #include <helper/accresmgr.hxx>
 #include <strings.hrc>
 
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessiblekeybindinghelper.hxx>
 #include <com/sun/star/awt/KeyModifier.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -45,7 +46,7 @@ using namespace ::comphelper;
 
 
 VCLXAccessibleCheckBox::VCLXAccessibleCheckBox( VCLXWindow* pVCLWindow )
-    :VCLXAccessibleTextComponent( pVCLWindow )
+    :ImplInheritanceHelper( pVCLWindow )
 {
     m_bChecked = IsChecked();
     m_bIndeterminate = IsIndeterminate();
@@ -126,6 +127,7 @@ void VCLXAccessibleCheckBox::FillAccessibleStateSet( sal_Int64& rStateSet )
 {
     VCLXAccessibleTextComponent::FillAccessibleStateSet( rStateSet );
 
+    rStateSet |= AccessibleStateType::CHECKABLE;
     rStateSet |= AccessibleStateType::FOCUSABLE;
 
     if ( IsChecked() )
@@ -134,18 +136,6 @@ void VCLXAccessibleCheckBox::FillAccessibleStateSet( sal_Int64& rStateSet )
     if ( IsIndeterminate() )
         rStateSet |= AccessibleStateType::INDETERMINATE;
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleCheckBox, VCLXAccessibleTextComponent, VCLXAccessibleCheckBox_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleCheckBox, VCLXAccessibleTextComponent, VCLXAccessibleCheckBox_BASE )
 
 
 // XServiceInfo

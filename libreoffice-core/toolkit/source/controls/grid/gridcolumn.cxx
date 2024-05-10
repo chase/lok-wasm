@@ -75,7 +75,7 @@ namespace toolkit
     void GridColumn::broadcast_changed( char const * const i_asciiAttributeName, const Any& i_oldValue, const Any& i_newValue,
         std::unique_lock<std::mutex>& i_Guard )
     {
-        Reference< XInterface > const xSource( static_cast< ::cppu::OWeakObject* >( this ) );
+        Reference< XInterface > const xSource( getXWeak() );
         GridColumnEvent const aEvent(
             xSource, OUString::createFromAscii( i_asciiAttributeName ),
             i_oldValue, i_newValue, m_nIndex
@@ -273,19 +273,6 @@ namespace toolkit
     Reference< XCloneable > SAL_CALL GridColumn::createClone(  )
     {
         return new GridColumn( *this );
-    }
-
-
-    sal_Int64 SAL_CALL GridColumn::getSomething( const Sequence< sal_Int8 >& i_identifier )
-    {
-        return comphelper::getSomethingImpl(i_identifier, this);
-    }
-
-
-    const Sequence< sal_Int8 > & GridColumn::getUnoTunnelId() noexcept
-    {
-        static const comphelper::UnoIdInit aId;
-        return aId.getSeq();
     }
 }
 

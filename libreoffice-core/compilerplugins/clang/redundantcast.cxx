@@ -373,6 +373,15 @@ bool RedundantCast::VisitVarDecl(VarDecl const * varDecl) {
     if (!varDecl->getInit())
         return true;
     visitAssign(varDecl->getType(), varDecl->getInit());
+    if (varDecl->getInitStyle() != VarDecl::CInit
+        && isa<CXXTemporaryObjectExpr>(varDecl->getInit())
+        && !compiler.getSourceManager().isMacroBodyExpansion(varDecl->getInit()->getBeginLoc()))
+    {
+        report(
+            DiagnosticsEngine::Warning, "redundant functional cast",
+            varDecl->getBeginLoc())
+            << varDecl->getSourceRange();
+    }
     return true;
 }
 
@@ -600,7 +609,7 @@ bool RedundantCast::VisitCXXReinterpretCastExpr(
         {
             if (loplugin::TypeCheck(sub->getType()).Pointer().Const().Char()) {
                 if (auto const lit = dyn_cast<clang::StringLiteral>(expr->getSubExprAsWritten())) {
-                    if (lit->getKind() == clang::StringLiteral::UTF8) {
+                    if (lit->getKind() == compat::StringLiteralKind::UTF8) {
                         // Don't warn about
                         //
                         //   redundant_cast<char const *>(u8"...")

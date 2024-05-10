@@ -72,7 +72,7 @@ uno::Reference< io::XInputStream > InsertObjectDialog_Impl::GetIconIfIconified( 
 }
 
 InsertObjectDialog_Impl::InsertObjectDialog_Impl(weld::Window* pParent,
-    const OUString& rUIXMLDescription, const OString& rID,
+    const OUString& rUIXMLDescription, const OUString& rID,
     css::uno::Reference < css::embed::XStorage > xStorage)
     : GenericDialogController(pParent, rUIXMLDescription, rID)
     , m_xStorage(std::move( xStorage ))
@@ -196,8 +196,7 @@ short SvInsertOleDlg::run()
 
                             uno::Reference<task::XStatusIndicator> xProgress;
                             OUString aProgressText;
-                            SfxViewFrame* pFrame = SfxViewFrame::Current();
-                            if (pFrame)
+                            if (SfxViewFrame* pFrame = SfxViewFrame::Current())
                             {
                                 // Have a current frame, create a matching progressbar, but don't start it yet.
                                 uno::Reference<frame::XFrame> xFrame
@@ -302,8 +301,7 @@ short SvInsertOleDlg::run()
                 // create object from media descriptor
 
                 uno::Reference<task::XStatusIndicator> xProgress;
-                SfxViewFrame* pFrame = SfxViewFrame::Current();
-                if (pFrame)
+                if (SfxViewFrame* pFrame = SfxViewFrame::Current())
                 {
                     // Have a current frame, create visual indication that insert is in progress.
                     uno::Reference<frame::XFrame> xFrame = pFrame->GetFrame().GetFrameInterface();

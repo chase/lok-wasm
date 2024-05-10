@@ -739,6 +739,10 @@ SvxBitmapPickTabPage::SvxBitmapPickTabPage(weld::Container* pPage, weld::DialogC
     m_xExamplesVS->SetDoubleClickHdl(LINK(this, SvxBitmapPickTabPage, DoubleClickHdl_Impl));
     m_xBtBrowseFile->connect_clicked(LINK(this, SvxBitmapPickTabPage, ClickAddBrowseHdl_Impl));
 
+    if(comphelper::LibreOfficeKit::isActive())
+    {
+        m_xBtBrowseFile->hide();
+    }
     eCoreUnit = rSet.GetPool()->GetMetric(rSet.GetPool()->GetWhich(SID_ATTR_NUMBERING_RULE));
 
     // determine graphic name
@@ -1497,7 +1501,7 @@ void SvxNumOptionsTabPage::InitControls()
     {
         if (!sFirstCharFmt.isEmpty())
             m_xCharFmtLB->set_active_text(sFirstCharFmt);
-        else
+        else if (m_xCharFmtLB->get_count())
             m_xCharFmtLB->set_active(0);
     }
     else
@@ -1827,14 +1831,14 @@ IMPL_LINK(SvxNumOptionsTabPage, BulRelSizeHdl_Impl, weld::MetricSpinButton&, rFi
     SetModified();
 }
 
-IMPL_LINK(SvxNumOptionsTabPage, GraphicHdl_Impl, const OString&, rIdent, void)
+IMPL_LINK(SvxNumOptionsTabPage, GraphicHdl_Impl, const OUString&, rIdent, void)
 {
     OUString                aGrfName;
     Size                    aSize;
     bool                bSucc(false);
     SvxOpenGraphicDialog aGrfDlg(CuiResId(RID_CUISTR_EDIT_GRAPHIC), GetFrameWeld());
 
-    OString sNumber;
+    OUString sNumber;
     if (rIdent.startsWith("gallery", &sNumber))
     {
         auto idx = sNumber.toUInt32();

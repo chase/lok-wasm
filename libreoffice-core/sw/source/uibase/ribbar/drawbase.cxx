@@ -261,7 +261,7 @@ bool SwDrawBase::MouseButtonUp(const MouseEvent& rMEvt)
         }
         else
         {
-            if (SdrObjKind::NONE == nDrawMode)
+            if (SdrObjKind::NewFrame == nDrawMode)
             {
                 SwRewriter aRewriter;
 
@@ -275,13 +275,13 @@ bool SwDrawBase::MouseButtonUp(const MouseEvent& rMEvt)
                 CreateDefaultObjectAtPosWithSize(aPnt, Size(1000, 1000));
             }
 
-            if (SdrObjKind::NONE == nDrawMode)   // Text border inserted
+            if (SdrObjKind::NewFrame == nDrawMode)   // Text border inserted
             {
                 uno::Reference< frame::XDispatchRecorder > xRecorder =
-                    m_pSh->GetView().GetViewFrame()->GetBindings().GetRecorder();
+                    m_pSh->GetView().GetViewFrame().GetBindings().GetRecorder();
                 if ( xRecorder.is() )
                 {
-                    SfxRequest aReq(m_pSh->GetView().GetViewFrame(),FN_INSERT_FRAME);
+                    SfxRequest aReq(m_pSh->GetView().GetViewFrame(), FN_INSERT_FRAME);
                     aReq .AppendItem(SfxUInt16Item( FN_INSERT_FRAME,
                                 static_cast<sal_uInt16>(RndStdIds::FLY_AT_PARA) ));
                     aReq.AppendItem(SfxPointItem( FN_PARAM_1, m_pSh->GetAnchorObjDiff()));
@@ -297,13 +297,13 @@ bool SwDrawBase::MouseButtonUp(const MouseEvent& rMEvt)
                     aSet.Put(aCol);
                     // Template AutoUpdate
                     SwFrameFormat* pFormat = m_pSh->GetSelectedFrameFormat();
-                    if(pFormat && pFormat->IsAutoUpdateFormat())
+                    if(pFormat && pFormat->IsAutoUpdateOnDirectFormat())
                         m_pSh->AutoUpdateFrame(pFormat, aSet);
                     else
                         m_pSh->SetFlyFrameAttr( aSet );
                 }
             }
-            if (m_pWin->GetSdrDrawMode() == SdrObjKind::NONE)
+            if (m_pWin->GetSdrDrawMode() == SdrObjKind::NewFrame)
             {
                 m_pSh->EndUndo();
             }
@@ -336,7 +336,7 @@ bool SwDrawBase::MouseButtonUp(const MouseEvent& rMEvt)
                     {
                         m_pView->LeaveDrawCreate();    // Switch to selection mode
 
-                        m_pSh->GetView().GetViewFrame()->GetBindings().Invalidate(SID_INSERT_DRAW);
+                        m_pSh->GetView().GetViewFrame().GetBindings().Invalidate(SID_INSERT_DRAW);
 
                         if (m_pSh->IsSelFrameMode())
                             m_pSh->LeaveSelFrameMode();
@@ -394,7 +394,7 @@ bool SwDrawBase::MouseButtonUp(const MouseEvent& rMEvt)
                     {
                         m_pView->LeaveDrawCreate();    // Switch to selection mode
 
-                        m_pSh->GetView().GetViewFrame()->GetBindings().Invalidate(SID_INSERT_DRAW);
+                        m_pSh->GetView().GetViewFrame().GetBindings().Invalidate(SID_INSERT_DRAW);
 
                         if (m_pSh->IsSelFrameMode())
                             m_pSh->LeaveSelFrameMode();
@@ -458,7 +458,7 @@ void SwDrawBase::Deactivate()
 
     if (m_pWin->GetApplyTemplate())
         m_pWin->SetApplyTemplate(SwApplyTemplate());
-    m_pSh->GetView().GetViewFrame()->GetBindings().Invalidate(SID_INSERT_DRAW);
+    m_pSh->GetView().GetViewFrame().GetBindings().Invalidate(SID_INSERT_DRAW);
 }
 
 // Process keyboard events
@@ -502,7 +502,7 @@ void SwDrawBase::EnterSelectMode(const MouseEvent& rMEvt)
         {
             m_pView->LeaveDrawCreate();    // Switch to selection mode
 
-            m_pSh->GetView().GetViewFrame()->GetBindings().Invalidate(SID_INSERT_DRAW);
+            m_pSh->GetView().GetViewFrame().GetBindings().Invalidate(SID_INSERT_DRAW);
         }
     }
     else

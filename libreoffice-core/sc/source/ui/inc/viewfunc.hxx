@@ -90,8 +90,8 @@ public:
     bool            AutoSum( const ScRange& rRange, bool bSubTotal, bool bSetCursor, bool bContinue, const OpCode eCode );
     OUString        GetAutoSumFormula( const ScRangeList& rRangeList, bool bSubTotal, const ScAddress& rAddr, const OpCode eCode );
 
-    void            EnterData( SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& rString,
-                               const EditTextObject* pData = nullptr, bool bMatrixExpand = false );
+    SC_DLLPUBLIC void EnterData(SCCOL nCol, SCROW nRow, SCTAB nTab, const OUString& rString,
+                                const EditTextObject* pData = nullptr, bool bMatrixExpand = false);
     void            EnterData( SCCOL nCol, SCROW nRow, SCTAB nTab,
                                const EditTextObject& rData, bool bTestSimple = false );
     void            EnterValue( SCCOL nCol, SCROW nRow, SCTAB nTab, const double& rValue );
@@ -172,7 +172,7 @@ public:
     bool            InsertName( const OUString& rName, const OUString& rSymbol,
                                 const OUString& rType );
 
-    void            ApplyAttributes( const SfxItemSet* pDialogSet, const SfxItemSet* pOldSet, bool bAdjustBlockHeight = true );
+    void            ApplyAttributes( const SfxItemSet& rDialogSet, const SfxItemSet& rOldSet, bool bAdjustBlockHeight = true );
     void            ApplyAttr( const SfxPoolItem& rAttrItem, bool bAdjustBlockHeight = true );
 
     void            ApplySelectionPattern( const ScPatternAttr& rAttr,
@@ -208,7 +208,7 @@ public:
 
     void            DeleteContents( InsertDeleteFlags nFlags );
 
-    SC_DLLPUBLIC void SetWidthOrHeight(
+    void SetWidthOrHeight(
         bool bWidth, const std::vector<sc::ColRowSpan>& rRanges, ScSizeMode eMode,
         sal_uInt16 nSizeTwips, bool bRecord = true, const ScMarkData* pMarkData = nullptr );
 

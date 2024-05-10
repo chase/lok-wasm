@@ -75,7 +75,6 @@ namespace cairocanvas
                             sal_Int64                     /*nRandomSeed*/,
                             CanvasFont::Reference         rFont,
                             SurfaceProviderRef            rRefDevice ) :
-        TextLayout_Base( m_aMutex ),
         maText(std::move( aText )),
         mpFont(std::move( rFont )),
         mpRefDevice(std::move( rRefDevice )),
@@ -87,10 +86,8 @@ namespace cairocanvas
     {
     }
 
-    void SAL_CALL TextLayout::disposing()
+    void TextLayout::disposing(std::unique_lock<std::mutex>& /*rGuard*/)
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         mpFont.clear();
         mpRefDevice.clear();
     }
@@ -116,27 +113,47 @@ namespace cairocanvas
 
     uno::Sequence< double > SAL_CALL TextLayout::queryLogicalAdvancements(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
         return maLogicalAdvancements;
     }
 
     void SAL_CALL TextLayout::applyLogicalAdvancements( const uno::Sequence< double >& aAdvancements )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
         if( aAdvancements.getLength() != maText.Length )
         {
             SAL_WARN("canvas.cairo", "TextLayout::applyLogicalAdvancements(): mismatching number of advancements" );
-            throw lang::IllegalArgumentException("mismatching number of advancements", static_cast<cppu::OWeakObject*>(this), 1);
+            throw lang::IllegalArgumentException("mismatching number of advancements", getXWeak(), 1);
         }
 
         maLogicalAdvancements = aAdvancements;
     }
 
+    uno::Sequence< sal_Bool > SAL_CALL TextLayout::queryKashidaPositions(  )
+    {
+        std::unique_lock aGuard( m_aMutex );
+
+        return maKashidaPositions;
+    }
+
+    void SAL_CALL TextLayout::applyKashidaPositions( const uno::Sequence< sal_Bool >& aPositions )
+    {
+        std::unique_lock aGuard( m_aMutex );
+
+        if( aPositions.hasElements() && aPositions.getLength() != maText.Length )
+        {
+            SAL_WARN("canvas.cairo", "TextLayout::applyKashidaPositions(): mismatching number of positions" );
+            throw lang::IllegalArgumentException("mismatching number of positions", getXWeak(), 1);
+        }
+
+        maKashidaPositions = aPositions;
+    }
+
     geometry::RealRectangle2D SAL_CALL TextLayout::queryTextBounds(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
         OutputDevice* pOutDev = mpRefDevice->getOutputDevice();
         if( !pOutDev )
@@ -227,22 +244,18 @@ namespace cairocanvas
 
     sal_Int8 SAL_CALL TextLayout::getMainTextDirection(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         return mnTextDirection;
     }
 
     uno::Reference< rendering::XCanvasFont > SAL_CALL TextLayout::getFont(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
         return mpFont;
     }
 
     rendering::StringContext SAL_CALL TextLayout::getText(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         return maText;
     }
 
@@ -260,14 +273,15 @@ namespace cairocanvas
                            const rendering::ViewState&   viewState,
                            const rendering::RenderState& renderState ) const
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
         setupLayoutMode( rOutDev, mnTextDirection );
 
         if (maLogicalAdvancements.hasElements())
         {
             KernArray aOffsets(setupTextOffsets(maLogicalAdvancements, viewState, renderState));
+            std::span<const sal_Bool> aKashidaArray(maKashidaPositions.getConstArray(), maKashidaPositions.getLength());
 
-            rOutDev.DrawTextArray( rOutpos, maText.Text, aOffsets, {},
+            rOutDev.DrawTextArray( rOutpos, maText.Text, aOffsets, aKashidaArray,
                                    ::canvas::tools::numeric_cast<sal_uInt16>(maText.StartPosition),
                                    ::canvas::tools::numeric_cast<sal_uInt16>(maText.Length) );
         }

@@ -108,9 +108,9 @@ using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::beans;
 using namespace ::cppu;
 
-constexpr OUStringLiteral IODLG_CONFIGNAME = u"FilePicker_Save";
-constexpr OUStringLiteral IMPGRF_CONFIGNAME = u"FilePicker_Graph";
-constexpr OUStringLiteral USERITEM_NAME = u"UserItem";
+constexpr OUString IODLG_CONFIGNAME = u"FilePicker_Save"_ustr;
+constexpr OUString IMPGRF_CONFIGNAME = u"FilePicker_Graph"_ustr;
+constexpr OUString USERITEM_NAME = u"UserItem"_ustr;
 
 namespace sfx2
 {
@@ -211,7 +211,7 @@ OUString FileDialogHelper_Impl::handleHelpRequested( const FilePickerEvent& aEve
 {
     //!!! todo: cache the help strings (here or TRA)
 
-    OString sHelpId;
+    OUString sHelpId;
     // mapping from element id -> help id
     switch ( aEvent.ElementId )
     {
@@ -274,7 +274,7 @@ OUString FileDialogHelper_Impl::handleHelpRequested( const FilePickerEvent& aEve
     OUString aHelpText;
     Help* pHelp = Application::GetHelp();
     if ( pHelp )
-        aHelpText = pHelp->GetHelpText(OStringToOUString(sHelpId, RTL_TEXTENCODING_UTF8), static_cast<weld::Widget*>(nullptr));
+        aHelpText = pHelp->GetHelpText(sHelpId, static_cast<weld::Widget*>(nullptr));
     return aHelpText;
 }
 
@@ -357,7 +357,7 @@ void FileDialogHelper_Impl::SaveLastUsedFilter()
                             Any( getFilterWithExtension( getFilter() ) ) );
 }
 
-std::shared_ptr<const SfxFilter> FileDialogHelper_Impl::getCurentSfxFilter()
+std::shared_ptr<const SfxFilter> FileDialogHelper_Impl::getCurrentSfxFilter()
 {
     OUString aFilterName = getCurrentFilterUIName();
 
@@ -445,7 +445,7 @@ void FileDialogHelper_Impl::updateFilterOptionsBox()
 
     updateExtendedControl(
         ExtendedFilePickerElementIds::CHECKBOX_FILTEROPTIONS,
-        CheckFilterOptionsCapability( getCurentSfxFilter() )
+        CheckFilterOptionsCapability( getCurrentSfxFilter() )
     );
 }
 
@@ -469,7 +469,7 @@ void FileDialogHelper_Impl::updateExportButton()
 
     OUString sLabel = maButtonLabel;
     // filter with options -> append ellipses on export button label
-    if ( CheckFilterOptionsCapability( getCurentSfxFilter() ) )
+    if ( CheckFilterOptionsCapability( getCurrentSfxFilter() ) )
         sLabel += "...";
 
     if ( sOldLabel != sLabel )
@@ -501,7 +501,7 @@ void FileDialogHelper_Impl::updateSelectionBox()
 
     if ( bSelectionBoxFound )
     {
-        std::shared_ptr<const SfxFilter> pFilter = getCurentSfxFilter();
+        std::shared_ptr<const SfxFilter> pFilter = getCurrentSfxFilter();
         mbSelectionFltrEnabled = updateExtendedControl(
             ExtendedFilePickerElementIds::CHECKBOX_SELECTION,
             ( mbSelectionEnabled && pFilter && ( pFilter->GetFilterFlags() & SfxFilterFlags::SUPPORTSSELECTION ) ) );
@@ -517,7 +517,7 @@ void FileDialogHelper_Impl::enablePasswordBox( bool bInit )
 
     bool bWasEnabled = mbIsPwdEnabled;
 
-    std::shared_ptr<const SfxFilter> pCurrentFilter = getCurentSfxFilter();
+    std::shared_ptr<const SfxFilter> pCurrentFilter = getCurrentSfxFilter();
     mbIsPwdEnabled = updateExtendedControl(
         ExtendedFilePickerElementIds::CHECKBOX_PASSWORD,
         pCurrentFilter && ( pCurrentFilter->GetFilterFlags() & SfxFilterFlags::ENCRYPTION )
@@ -1517,7 +1517,7 @@ ErrCode FileDialogHelper_Impl::execute( std::vector<OUString>& rpURLList,
         // set the filter
         getRealFilter( rFilter );
 
-        std::shared_ptr<const SfxFilter> pCurrentFilter = getCurentSfxFilter();
+        std::shared_ptr<const SfxFilter> pCurrentFilter = getCurrentSfxFilter();
 
         // fill the rpURLList
         implGetAndCacheFiles( mxFileDlg, rpURLList );
@@ -1947,7 +1947,7 @@ void FileDialogHelper_Impl::addGraphicFilter()
 }
 
 constexpr OUStringLiteral GRF_CONFIG_STR = u"   ";
-constexpr OUStringLiteral STD_CONFIG_STR = u"1 ";
+constexpr OUString STD_CONFIG_STR = u"1 "_ustr;
 
 static void SetToken( OUString& rOrigStr, sal_Int32 nToken, sal_Unicode cTok, std::u16string_view rStr)
 {
@@ -2536,8 +2536,6 @@ OUString FileDialogHelper::contextToString(Context context)
             return "WriterExport";
         case WriterImportAutotext:
             return "WriterImportAutotext";
-        case WriterInsertDoc:
-            return "WriterInsertDoc";
         case WriterInsertHyperlink:
             return "WriterInsertHyperlink";
         case WriterInsertImage:

@@ -20,7 +20,7 @@
 #pragma once
 
 #include <sal/types.h>
-#include <osl/mutex.hxx>
+#include <mutex>
 
 #include <objidl.h>
 
@@ -75,15 +75,15 @@ private:
     LRESULT onClipboardUpdate();
 
     static LRESULT CALLBACK mtaOleReqWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
-    static DWORD WINAPI oleThreadProc( _In_ LPVOID pParam );
+    static unsigned __stdcall oleThreadProc(void* pParam);
 
-    static DWORD WINAPI clipboardChangedNotifierThreadProc( _In_ LPVOID pParam );
+    static unsigned __stdcall clipboardChangedNotifierThreadProc(void* pParam);
 
     bool WaitForThreadReady( ) const;
 
 private:
     HANDLE                      m_hOleThread;
-    DWORD                       m_uOleThreadId;
+    unsigned                    m_uOleThreadId;
     HANDLE                      m_hEvtThrdReady;
     HWND                        m_hwndMtaOleReqWnd;
     HANDLE                      m_hEvtWndDisposed;
@@ -96,10 +96,10 @@ private:
     HANDLE                      m_hClipboardChangedNotifierEvents[2];
     HANDLE&                     m_hClipboardChangedEvent;
     HANDLE&                     m_hTerminateClipboardChangedNotifierEvent;
-    osl::Mutex                  m_ClipboardChangedEventCountMutex;
+    std::mutex                  m_ClipboardChangedEventCountMutex;
     sal_Int32                   m_ClipboardChangedEventCount;
 
-    osl::Mutex                  m_pfncClipViewerCallbackMutex;
+    std::mutex                  m_pfncClipViewerCallbackMutex;
 
     static CMtaOleClipboard*    s_theMtaOleClipboardInst;
 

@@ -26,6 +26,10 @@
 #include <editeng/frmdiritem.hxx>
 #include <editeng/lrspitem.hxx>
 #include <svx/pageitem.hxx>
+#include <svx/svddef.hxx>
+#include <svx/svdpool.hxx>
+#include <svx/xdef.hxx>
+#include <editeng/eeitem.hxx>
 #include <editeng/paperinf.hxx>
 #include <editeng/shaditem.hxx>
 #include <editeng/sizeitem.hxx>
@@ -77,6 +81,7 @@ bool ScStyleSheet::HasParentSupport () const
     switch ( GetFamily() )
     {
     case SfxStyleFamily::Para: bHasParentSupport = true;   break;
+    case SfxStyleFamily::Frame: bHasParentSupport = true;   break;
     case SfxStyleFamily::Page: bHasParentSupport = false;  break;
     default:
         {
@@ -171,7 +176,6 @@ SfxItemSet& ScStyleSheet::GetItemSet()
 
                         SvxLRSpaceItem  aLRSpaceItem( TWO_CM,   // nLeft
                                                       TWO_CM,   // nRight
-                                                      TWO_CM,   // nTLeft
                                                       0,        // nFirstLineOffset
                                                       ATTR_LRSPACE );
                         SvxULSpaceItem  aULSpaceItem( TWO_CM,   // nUp
@@ -188,7 +192,7 @@ SfxItemSet& ScStyleSheet::GetItemSet()
                         rHFSet.Put( aBoxInfoItem );
                         rHFSet.Put( aHFSizeItem );
                         rHFSet.Put( aHFDistItem );
-                        rHFSet.Put( SvxLRSpaceItem( 0,0,0,0, ATTR_LRSPACE ) ); // Set border to Null
+                        rHFSet.Put( SvxLRSpaceItem(0, 0, 0, ATTR_LRSPACE) ); // Set border to Null
 
                         aHFSetItem.SetWhich(ATTR_PAGE_HEADERSET);
                         pSet->Put( aHFSetItem );
@@ -217,6 +221,24 @@ SfxItemSet& ScStyleSheet::GetItemSet()
                     }
                 }
                 break;
+
+            case SfxStyleFamily::Frame:
+            {
+                SfxItemPool* pItemPool = &GetPool()->GetPool();
+                if (dynamic_cast<SdrItemPool*>(pItemPool) == nullptr)
+                    pItemPool = pItemPool->GetSecondaryPool();
+                assert(pItemPool);
+
+                pSet = new SfxItemSetFixed<
+                        XATTR_LINE_FIRST, XATTR_LINE_LAST,
+                        XATTR_FILL_FIRST, XATTR_FILL_LAST,
+                        SDRATTR_SHADOW_FIRST, SDRATTR_SHADOW_LAST,
+                        SDRATTR_TEXT_MINFRAMEHEIGHT, SDRATTR_TEXT_WORDWRAP,
+                        SDRATTR_EDGE_FIRST, SDRATTR_MEASURE_LAST,
+                        SDRATTR_3D_FIRST, SDRATTR_3D_LAST,
+                        EE_PARA_START, EE_CHAR_END>(*pItemPool);
+            }
+            break;
 
             case SfxStyleFamily::Para:
             default:
@@ -273,15 +295,33 @@ bool ScStyleSheet::IsUsed() const
                 eUsage = Usage::NOTUSED;
             return eUsage == Usage::USED;
         }
+        case SfxStyleFamily::Frame:
+        {
+            ForAllListeners([this] (SfxListener* pListener)
+                {
+                    auto pUser(dynamic_cast<svl::StyleSheetUser*>(pListener));
+                    if (pUser && pUser->isUsedByModel())
+                    {
+                        eUsage = Usage::USED;
+                        return true; // break loop
+                    }
+                    else
+                        eUsage = Usage::NOTUSED;
+                    return false;
+                });
+            return eUsage == Usage::USED;
+        }
         default:
             return true;
     }
 }
 
-void ScStyleSheet::Notify( SfxBroadcaster&, const SfxHint& rHint )
+void ScStyleSheet::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
 {
     if ( rHint.GetId() == SfxHintId::Dying )
         GetItemSet().SetParent( nullptr );
+    if (GetFamily() == SfxStyleFamily::Frame)
+        SfxStyleSheet::Notify(rBC, rHint);
 }
 
 // Avoid creating a Style "Standard" if this is not the Standard-Name;

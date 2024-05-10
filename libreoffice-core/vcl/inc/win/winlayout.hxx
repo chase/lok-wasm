@@ -43,7 +43,6 @@ public:
     WinSalGraphics* GetGraphics() const { return m_pGraphics; }
 
     HFONT GetHFONT() const { return m_hFont; }
-    float GetScale() const { return m_fScale; }
     // Return true if the font is for vertical writing.
     // I.e. the font name of the LOGFONT is prefixed with '@'.
     bool  IsCJKVerticalFont() const { return m_bIsCJKVerticalFont; }
@@ -60,11 +59,9 @@ private:
     explicit WinFontInstance(const WinFontFace&, const vcl::font::FontSelectPattern&);
 
     virtual void ImplInitHbFont(hb_font_t*) override;
-    bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const override;
 
     WinSalGraphics *m_pGraphics;
     HFONT m_hFont;
-    float m_fScale;
     bool  m_bIsCJKVerticalFont;
     sal_Int32 m_nTmDescent;
     mutable sal::systools::COMReference<IDWriteFontFace> mxDWFontFace;

@@ -37,17 +37,15 @@ namespace svgio::svgreader
             std::optional<basegfx::B2DPolygon>    mpPolygon;
             std::optional<basegfx::B2DHomMatrix>  mpaTransform;
 
-            bool                        mbIsPolyline : 1; // true = polyline, false = polygon
-
         public:
             SvgPolyNode(
+                SVGToken aType,
                 SvgDocument& rDocument,
-                SvgNode* pParent,
-                bool bIsPolyline);
+                SvgNode* pParent);
             virtual ~SvgPolyNode() override;
 
             virtual const SvgStyleAttributes* getSvgStyleAttributes() const override;
-            virtual void parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent) override;
+            virtual void parseAttribute(SVGToken aSVGToken, const OUString& aContent) override;
             virtual void decomposeSvgNode(drawinglayer::primitive2d::Primitive2DContainer& rTarget, bool bReferenced) const override;
 
             /// Polygon content, set if found in current context

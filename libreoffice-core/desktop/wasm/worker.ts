@@ -53,7 +53,7 @@ const handler: AsyncMessage = {
     return ref;
   },
 
-  newView: async function(ref: DocumentRef): Promise<DocumentRef | null> {
+  newView: async function (ref: DocumentRef): Promise<DocumentRef | null> {
     const doc = byRef(ref);
     return doc?.newView();
   },
@@ -413,13 +413,17 @@ const handler: AsyncMessage = {
     ref: DocumentRef,
     viewId: ViewId,
     scale: number,
-    dpi: number,
+    dpi: number
   ): Promise<void> {
     tileRenderer[ref][viewId]?.postMessage({
       t: 'z',
       s: scale,
       d: dpi,
     } as ToTileRenderer);
+  },
+
+  setIsMacOSForConfig: async function (): Promise<void> {
+    (await lokPromise).setIsMacOSForConfig();
   },
 };
 

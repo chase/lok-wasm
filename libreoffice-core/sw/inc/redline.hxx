@@ -95,7 +95,7 @@ class SW_DLLPUBLIC SwRedlineData
     RedlineType m_eType;
     sal_uInt16 m_nSeqNo;
     bool m_bAutoFormat;
-    sal_uInt32 m_nMovedID;  // 0 == not moved, 1 == moved, but dont have its pair, 2+ == unique ID
+    sal_uInt32 m_nMovedID;  // 0 == not moved, 1 == moved, but don't have its pair, 2+ == unique ID
 
 public:
     SwRedlineData( RedlineType eT, std::size_t nAut, sal_uInt32 nMoveID = 0 );
@@ -126,6 +126,8 @@ public:
     RedlineType GetType() const { return m_eType; }
 
     std::size_t GetAuthor() const                { return m_nAuthor; }
+    // MACRO-1723
+    void SetAuthor( std::size_t n )              { m_nAuthor = n; }
     const OUString& GetComment() const        { return m_sComment; }
     const DateTime& GetTimeStamp() const    { return m_aStamp; }
     bool IsAnonymized() const
@@ -159,6 +161,8 @@ public:
     void SetSeqNo( sal_uInt16 nNo )                 { m_nSeqNo = nNo; }
 
     OUString GetDescr() const;
+
+    void dumpAsXml(xmlTextWriterPtr pWriter) const;
 };
 
 class SW_DLLPUBLIC SwRangeRedline final : public SwPaM
@@ -261,6 +265,8 @@ public:
     bool CanCombine( const SwRangeRedline& rRedl ) const;
 
     void PushData( const SwRangeRedline& rRedl, bool bOwnAsNext = true );
+    // MACRO-1723
+    void PushData( const SwRedlineData& rData, bool bOwnAsNext = true );
     bool PopData();
     bool PopAllDataAfter(int depth);
 

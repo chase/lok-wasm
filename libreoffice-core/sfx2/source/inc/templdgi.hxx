@@ -69,6 +69,7 @@ protected:
 
     StyleList m_aStyleList;
     std::unique_ptr<weld::CheckButton> mxPreviewCheckbox;
+    std::unique_ptr<weld::CheckButton> mxHighlightCheckbox;
     std::unique_ptr<weld::ComboBox> mxFilterLb;
 
     sal_uInt16 nActFamily; // Id in the ToolBox = Position - 1
@@ -97,6 +98,7 @@ protected:
 
     DECL_LINK(FilterSelectHdl, weld::ComboBox&, void );
     DECL_LINK(PreviewHdl, weld::Toggleable&, void);
+    DECL_LINK(HighlightHdl, weld::Toggleable&, void);
 
     virtual void InsertFamilyItem(sal_uInt16 nId, const SfxStyleFamilyItem& rItem) = 0;
     virtual void EnableFamilyItem(sal_uInt16 nId, bool bEnabled) = 0;
@@ -106,13 +108,13 @@ protected:
     void Initialize();
     void EnableHierarchical(bool, StyleList& rStyleList);
 
-    void FilterSelect( sal_uInt16 nFilterIdx, bool bForce );
+    void FilterSelect( sal_uInt16 nFilterIdx );
     void SetFamilyState( sal_uInt16 nSlotId, const SfxTemplateItem* );
     void SetWaterCanState( const SfxBoolItem* pItem );
     bool IsSafeForWaterCan() const;
 
     void SetFamily(SfxStyleFamily nFamily);
-    void ActionSelect(const OString& rId, StyleList& rStyleList);
+    void ActionSelect(const OUString& rId, StyleList& rStyleList);
 
     void SaveFactoryStyleFilter(SfxObjectShell const* i_pObjSh, sal_Int32 i_nFilter);
 
@@ -138,7 +140,7 @@ public:
 
     // Used in StyleList::UpdateStyles, StyleList::Update
     // Whenever a new family(Eg. Character, List etc.) is selected it comes into action
-    void FamilySelect(sal_uInt16 nId, StyleList& rStyleList, bool bPreviewRefresh = false);
+    void FamilySelect(sal_uInt16 nId, StyleList& rStyleList, bool bRefresh = false);
 
     // Constructor
     SfxCommonTemplateDialog_Impl(SfxBindings* pB, weld::Container*, weld::Builder* pBuilder);
@@ -160,11 +162,11 @@ public:
     void EnableExample_Impl(sal_uInt16 nId, bool bEnable);
 
     // This comes into action when a family is selected or a style is applied for use
-    virtual void CheckItem(const OString& /*rMesId*/, bool /*bCheck*/ = true) {}
+    virtual void CheckItem(const OUString& /*rMesId*/, bool /*bCheck*/ = true) {}
     // This is used for watercan or when newmenu or watercan is enabled or updated
-    virtual void EnableItem(const OString& /*rMesId*/, bool /*bCheck*/ = true) {}
+    virtual void EnableItem(const OUString& /*rMesId*/, bool /*bCheck*/ = true) {}
     // This is used for watercan
-    virtual bool IsCheckedItem(const OString& /*rMesId*/) { return true; }
+    virtual bool IsCheckedItem(const OUString& /*rMesId*/) { return true; }
 
     // This is used when a style is selected
     void SelectStyle(const OUString& rStyle, bool bIsCallback, StyleList& rStyleList);
@@ -210,14 +212,14 @@ private:
 
     void FillToolMenu();
 
-    DECL_LINK(ToolBoxLSelect, const OString&, void);
-    DECL_LINK(ToolBoxRSelect, const OString&, void);
-    DECL_LINK(ToolMenuSelectHdl, const OString&, void);
+    DECL_LINK(ToolBoxLSelect, const OUString&, void);
+    DECL_LINK(ToolBoxRSelect, const OUString&, void);
+    DECL_LINK(ToolMenuSelectHdl, const OUString&, void);
 
     virtual void EnableEdit( bool, StyleList* rStyleList) override;
-    virtual void EnableItem(const OString& rMesId, bool bCheck = true) override;
-    virtual void CheckItem(const OString& rMesId, bool bCheck = true) override;
-    virtual bool IsCheckedItem(const OString& rMesId) override;
+    virtual void EnableItem(const OUString& rMesId, bool bCheck = true) override;
+    virtual void CheckItem(const OUString& rMesId, bool bCheck = true) override;
+    virtual bool IsCheckedItem(const OUString& rMesId) override;
     virtual void InsertFamilyItem(sal_uInt16 nId, const SfxStyleFamilyItem& rItem) override;
     virtual void EnableFamilyItem(sal_uInt16 nId, bool bEnabled) override;
     virtual void ClearFamilyList() override;

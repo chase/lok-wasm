@@ -85,9 +85,8 @@ OUString Data::createSegment(
         return name;
     }
     OUStringBuffer buf(128);
-    buf.append(templateName);
-        //TODO: verify template name contains no bad chars?
-    buf.append("['");
+    //TODO: verify template name contains no bad chars?
+    buf.append(OUString::Concat(templateName) + "['");
     for (sal_Int32 i = 0; i < name.getLength(); ++i) {
         sal_Unicode c = name[i];
         switch (c) {
@@ -125,10 +124,14 @@ sal_Int32 Data::parseSegment(
         *setElement = false;
         return i;
     }
-    if (templateName != nullptr) {
-        if (i - index == 1 && path[index] == '*') {
+    if (i - index == 1 && path[index] == '*') {
+        *setElement = true;
+        if (templateName != nullptr) {
             templateName->clear();
-        } else {
+        }
+    } else {
+        *setElement = i != index;
+        if (templateName != nullptr) {
             *templateName = path.copy(index, i - index);
         }
     }
@@ -145,7 +148,6 @@ sal_Int32 Data::parseSegment(
     {
         return -1;
     }
-    *setElement = true;
     return j + 2;
 }
 
@@ -218,8 +220,7 @@ rtl::Reference< Node > Data::resolvePathRepresentation(
             return p;
         }
         if (canonicRepresentation != nullptr) {
-            canonic.append('/');
-            canonic.append(createSegment(templateName, seg));
+            canonic.append("/" + createSegment(templateName, seg));
         }
         if (path != nullptr) {
             path->push_back(seg);

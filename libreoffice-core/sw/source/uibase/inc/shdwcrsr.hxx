@@ -20,7 +20,6 @@
 #define INCLUDED_SW_SOURCE_UIBASE_INC_SHDWCRSR_HXX
 
 #include <tools/gen.hxx>
-#include <tools/color.hxx>
 #include <vcl/vclptr.hxx>
 #include <vcl/window.hxx>
 #include <limits.h>
@@ -28,24 +27,18 @@
 class SwShadowCursor
 {
     VclPtr<vcl::Window> m_pWin;
-    Color m_aCol;
     Point m_aOldPt;
     tools::Long m_nOldHeight;
     sal_uInt16 m_nOldMode;
 
-    void DrawTri( const Point& rPt, tools::Long nHeight, bool bLeft );
-    void DrawCursor( const Point& rPt, tools::Long nHeight, sal_uInt16 nMode );
+    void DrawCursor( sal_uInt16 nMode );
 
 public:
-    SwShadowCursor( vcl::Window& rWin, const Color& rCol )
-        : m_pWin( &rWin ), m_aCol( rCol ), m_nOldHeight(0), m_nOldMode( USHRT_MAX ) {}
+    SwShadowCursor( vcl::Window& rWin )
+        : m_pWin( &rWin ), m_nOldHeight(0), m_nOldMode( USHRT_MAX ) {}
     ~SwShadowCursor();
 
     void SetPos( const Point& rPt, tools::Long nHeight, sal_uInt16 nMode );
-
-    void Paint();
-
-    tools::Rectangle GetRect() const;
 };
 
 #endif

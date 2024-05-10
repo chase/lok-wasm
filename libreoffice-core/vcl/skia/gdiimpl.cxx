@@ -34,12 +34,15 @@
 #include <SkGradientShader.h>
 #include <SkPath.h>
 #include <SkRegion.h>
+#include <SkPathEffect.h>
 #include <SkDashPathEffect.h>
 #include <GrBackendSurface.h>
 #include <SkTextBlob.h>
 #include <SkRSXform.h>
 
 #include <numeric>
+#include <sstream>
+
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygoncutter.hxx>
@@ -215,6 +218,17 @@ bool checkInvalidSourceOrDestination(SalTwoRect const& rPosAry)
            || rPosAry.mnDestHeight <= 0;
 }
 
+std::string dumpOptionalColor(const std::optional<Color>& c)
+{
+    std::ostringstream oss;
+    if (c)
+        oss << *c;
+    else
+        oss << "no color";
+
+    return std::move(oss).str(); // optimized in C++20
+}
+
 } // end anonymous namespace
 
 // Class that triggers flushing the backing buffer when idle.
@@ -268,8 +282,8 @@ SkiaSalGraphicsImpl::SkiaSalGraphicsImpl(SalGraphics& rParent, SalGeometryProvid
     : mParent(rParent)
     , mProvider(pProvider)
     , mIsGPU(false)
-    , mLineColor(SALCOLOR_NONE)
-    , mFillColor(SALCOLOR_NONE)
+    , moLineColor(std::nullopt)
+    , moFillColor(std::nullopt)
     , mXorMode(XorMode::None)
     , mFlush(new SkiaFlushIdle(this))
     , mScaling(1)
@@ -379,13 +393,13 @@ void SkiaSalGraphicsImpl::performFlush()
 {
     SkiaZone zone;
     flushDrawing();
-    // Related: tdf#152703 Eliminate flickering during live resizing of a window
-    // When in live resize, the SkiaSalGraphicsImpl class does not detect that
-    // the window size has changed until after the flush has been called so
-    // call checkSurface() to recreate the SkSurface if needed before flushing.
-    checkSurface();
     if (mSurface)
     {
+        // Related: tdf#152703 Eliminate flickering during live resizing of a window
+        // When in live resize, the SkiaSalGraphicsImpl class does not detect that
+        // the window size has changed until after the flush has been called so
+        // call checkSurface() to recreate the SkSurface if needed before flushing.
+        checkSurface();
         if (mDirtyRect.intersect(SkIRect::MakeWH(GetWidth(), GetHeight())))
             flushSurfaceToWindowContext();
         mDirtyRect.setEmpty();
@@ -401,7 +415,10 @@ void SkiaSalGraphicsImpl::flushSurfaceToWindowContext()
         // for every swapBuffers(), for this reason mSurface is an offscreen surface
         // where we keep the contents (LO does not do full redraws).
         // So here blit the surface to the window context surface and then swap it.
-        assert(isGPU()); // Raster should always draw directly to backbuffer to save copying
+
+        // Raster should always draw directly to backbuffer to save copying
+        // except for small sizes - see renderMethodToUseForSize
+        assert(isGPU() || (mSurface->width() <= 32 && mSurface->height() <= 32));
         SkPaint paint;
         paint.setBlendMode(SkBlendMode::kSrc); // copy as is
         // We ignore mDirtyRect here, and mSurface already is in screenSurface coordinates,
@@ -578,10 +595,10 @@ void SkiaSalGraphicsImpl::resetCanvasScalingAndClipping()
     canvas->restore(); // undo scaling
 }
 
-bool SkiaSalGraphicsImpl::setClipRegion(const vcl::Region& region)
+void SkiaSalGraphicsImpl::setClipRegion(const vcl::Region& region)
 {
     if (mClipRegion == region)
-        return true;
+        return;
     SkiaZone zone;
     checkPendingDrawing();
     checkSurface();
@@ -592,7 +609,6 @@ bool SkiaSalGraphicsImpl::setClipRegion(const vcl::Region& region)
     canvas->restore(); // undo previous clip state, see setCanvasScalingAndClipping()
     canvas->save();
     setCanvasClipRegion(canvas, region);
-    return true;
 }
 
 void SkiaSalGraphicsImpl::setCanvasClipRegion(SkCanvas* canvas, const vcl::Region& region)
@@ -626,25 +642,25 @@ tools::Long SkiaSalGraphicsImpl::GetGraphicsWidth() const { return GetWidth(); }
 void SkiaSalGraphicsImpl::SetLineColor()
 {
     checkPendingDrawing();
-    mLineColor = SALCOLOR_NONE;
+    moLineColor = std::nullopt;
 }
 
 void SkiaSalGraphicsImpl::SetLineColor(Color nColor)
 {
     checkPendingDrawing();
-    mLineColor = nColor;
+    moLineColor = nColor;
 }
 
 void SkiaSalGraphicsImpl::SetFillColor()
 {
     checkPendingDrawing();
-    mFillColor = SALCOLOR_NONE;
+    moFillColor = std::nullopt;
 }
 
 void SkiaSalGraphicsImpl::SetFillColor(Color nColor)
 {
     checkPendingDrawing();
-    mFillColor = nColor;
+    moFillColor = nColor;
 }
 
 void SkiaSalGraphicsImpl::SetXORMode(bool set, bool invert)
@@ -663,13 +679,13 @@ void SkiaSalGraphicsImpl::SetROPLineColor(SalROPColor nROPColor)
     switch (nROPColor)
     {
         case SalROPColor::N0:
-            mLineColor = Color(0, 0, 0);
+            moLineColor = Color(0, 0, 0);
             break;
         case SalROPColor::N1:
-            mLineColor = Color(0xff, 0xff, 0xff);
+            moLineColor = Color(0xff, 0xff, 0xff);
             break;
         case SalROPColor::Invert:
-            mLineColor = Color(0xff, 0xff, 0xff);
+            moLineColor = Color(0xff, 0xff, 0xff);
             break;
     }
 }
@@ -680,26 +696,24 @@ void SkiaSalGraphicsImpl::SetROPFillColor(SalROPColor nROPColor)
     switch (nROPColor)
     {
         case SalROPColor::N0:
-            mFillColor = Color(0, 0, 0);
+            moFillColor = Color(0, 0, 0);
             break;
         case SalROPColor::N1:
-            mFillColor = Color(0xff, 0xff, 0xff);
+            moFillColor = Color(0xff, 0xff, 0xff);
             break;
         case SalROPColor::Invert:
-            mFillColor = Color(0xff, 0xff, 0xff);
+            moFillColor = Color(0xff, 0xff, 0xff);
             break;
     }
 }
 
 void SkiaSalGraphicsImpl::drawPixel(tools::Long nX, tools::Long nY)
 {
-    drawPixel(nX, nY, mLineColor);
+    drawPixel(nX, nY, *moLineColor);
 }
 
 void SkiaSalGraphicsImpl::drawPixel(tools::Long nX, tools::Long nY, Color nColor)
 {
-    if (nColor == SALCOLOR_NONE)
-        return;
     preDraw();
     SAL_INFO("vcl.skia.trace", "drawpixel(" << this << "): " << Point(nX, nY) << ":" << nColor);
     addUpdateRegion(SkRect::MakeXYWH(nX, nY, 1, 1));
@@ -720,11 +734,11 @@ void SkiaSalGraphicsImpl::drawPixel(tools::Long nX, tools::Long nY, Color nColor
 void SkiaSalGraphicsImpl::drawLine(tools::Long nX1, tools::Long nY1, tools::Long nX2,
                                    tools::Long nY2)
 {
-    if (mLineColor == SALCOLOR_NONE)
+    if (!moLineColor)
         return;
     preDraw();
     SAL_INFO("vcl.skia.trace", "drawline(" << this << "): " << Point(nX1, nY1) << "->"
-                                           << Point(nX2, nY2) << ":" << mLineColor);
+                                           << Point(nX2, nY2) << ":" << *moLineColor);
     addUpdateRegion(SkRect::MakeLTRB(nX1, nY1, nX2, nY2).makeSorted());
     SkPaint paint = makeLinePaint();
     paint.setAntiAlias(mParent.getAntiAlias());
@@ -744,22 +758,23 @@ void SkiaSalGraphicsImpl::privateDrawAlphaRect(tools::Long nX, tools::Long nY, t
                                                bool blockAA)
 {
     preDraw();
-    SAL_INFO("vcl.skia.trace",
-             "privatedrawrect(" << this << "): " << SkIRect::MakeXYWH(nX, nY, nWidth, nHeight)
-                                << ":" << mLineColor << ":" << mFillColor << ":" << fTransparency);
+    SAL_INFO("vcl.skia.trace", "privatedrawrect("
+                                   << this << "): " << SkIRect::MakeXYWH(nX, nY, nWidth, nHeight)
+                                   << ":" << dumpOptionalColor(moLineColor) << ":"
+                                   << dumpOptionalColor(moFillColor) << ":" << fTransparency);
     addUpdateRegion(SkRect::MakeXYWH(nX, nY, nWidth, nHeight));
     SkCanvas* canvas = getDrawCanvas();
-    if (mFillColor != SALCOLOR_NONE)
+    if (moFillColor)
     {
         SkPaint paint = makeFillPaint(fTransparency);
         paint.setAntiAlias(!blockAA && mParent.getAntiAlias());
         // HACK: If the polygon is just a line, it still should be drawn. But when filling
         // Skia doesn't draw empty polygons, so in that case ensure the line is drawn.
-        if (mLineColor == SALCOLOR_NONE && SkSize::Make(nWidth, nHeight).isEmpty())
+        if (!moLineColor && SkSize::Make(nWidth, nHeight).isEmpty())
             paint.setStyle(SkPaint::kStroke_Style);
         canvas->drawIRect(SkIRect::MakeXYWH(nX, nY, nWidth, nHeight), paint);
     }
-    if (mLineColor != SALCOLOR_NONE && mLineColor != mFillColor) // otherwise handled by fill
+    if (moLineColor && moLineColor != moFillColor) // otherwise handled by fill
     {
         SkPaint paint = makeLinePaint(fTransparency);
         paint.setAntiAlias(!blockAA && mParent.getAntiAlias());
@@ -832,31 +847,31 @@ void SkiaSalGraphicsImpl::drawPolyPolygon(sal_uInt32 nPoly, const sal_uInt32* pP
     drawPolyPolygon(basegfx::B2DHomMatrix(), aPolyPolygon, 0.0);
 }
 
-bool SkiaSalGraphicsImpl::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+void SkiaSalGraphicsImpl::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
                                           const basegfx::B2DPolyPolygon& rPolyPolygon,
                                           double fTransparency)
 {
-    const bool bHasFill(mFillColor != SALCOLOR_NONE);
-    const bool bHasLine(mLineColor != SALCOLOR_NONE);
+    const bool bHasFill(moFillColor.has_value());
+    const bool bHasLine(moLineColor.has_value());
 
     if (rPolyPolygon.count() == 0 || !(bHasFill || bHasLine) || fTransparency < 0.0
         || fTransparency >= 1.0)
-        return true;
+        return;
 
     basegfx::B2DPolyPolygon aPolyPolygon(rPolyPolygon);
     aPolyPolygon.transform(rObjectToDevice);
 
     SAL_INFO("vcl.skia.trace", "drawpolypolygon(" << this << "): " << aPolyPolygon << ":"
-                                                  << mLineColor << ":" << mFillColor);
+                                                  << dumpOptionalColor(moLineColor) << ":"
+                                                  << dumpOptionalColor(moFillColor));
 
     if (delayDrawPolyPolygon(aPolyPolygon, fTransparency))
     {
         scheduleFlush();
-        return true;
+        return;
     }
 
     performDrawPolyPolygon(aPolyPolygon, fTransparency, mParent.getAntiAlias());
-    return true;
 }
 
 void SkiaSalGraphicsImpl::performDrawPolyPolygon(const basegfx::B2DPolyPolygon& aPolyPolygon,
@@ -888,17 +903,17 @@ void SkiaSalGraphicsImpl::performDrawPolyPolygon(const basegfx::B2DPolyPolygon& 
         const SkScalar posFix = useAA ? toSkXYFix : 0;
         polygonPath.offset(toSkX(0) + posFix, toSkY(0) + posFix, nullptr);
     }
-    if (mFillColor != SALCOLOR_NONE)
+    if (moFillColor)
     {
         SkPaint aPaint = makeFillPaint(fTransparency);
         aPaint.setAntiAlias(useAA);
         // HACK: If the polygon is just a line, it still should be drawn. But when filling
         // Skia doesn't draw empty polygons, so in that case ensure the line is drawn.
-        if (mLineColor == SALCOLOR_NONE && polygonPath.getBounds().isEmpty())
+        if (!moLineColor && polygonPath.getBounds().isEmpty())
             aPaint.setStyle(SkPaint::kStroke_Style);
         getDrawCanvas()->drawPath(polygonPath, aPaint);
     }
-    if (mLineColor != SALCOLOR_NONE && mLineColor != mFillColor) // otherwise handled by fill
+    if (moLineColor && moLineColor != moFillColor) // otherwise handled by fill
     {
         SkPaint aPaint = makeLinePaint(fTransparency);
         aPaint.setAntiAlias(useAA);
@@ -942,7 +957,7 @@ bool SkiaSalGraphicsImpl::delayDrawPolyPolygon(const basegfx::B2DPolyPolygon& aP
     if (!mParent.getAntiAlias())
         return false;
     // Only filled polygons without an outline are problematic.
-    if (mFillColor == SALCOLOR_NONE || mLineColor != SALCOLOR_NONE)
+    if (!moFillColor || moLineColor)
         return false;
     // Merge only simple polygons, real polypolygons most likely aren't needlessly split,
     // so they do not need joining.
@@ -1034,14 +1049,14 @@ bool SkiaSalGraphicsImpl::drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDev
                                        css::drawing::LineCap eLineCap, double fMiterMinimumAngle,
                                        bool bPixelSnapHairline)
 {
-    if (!rPolyLine.count() || fTransparency < 0.0 || fTransparency > 1.0
-        || mLineColor == SALCOLOR_NONE)
+    if (!rPolyLine.count() || fTransparency < 0.0 || fTransparency > 1.0 || !moLineColor)
     {
         return true;
     }
 
     preDraw();
-    SAL_INFO("vcl.skia.trace", "drawpolyline(" << this << "): " << rPolyLine << ":" << mLineColor);
+    SAL_INFO("vcl.skia.trace",
+             "drawpolyline(" << this << "): " << rPolyLine << ":" << *moLineColor);
 
     // Adjust line width for object-to-device scale.
     fLineWidth = (rObjectToDevice * basegfx::B2DVector(fLineWidth, 0)).getLength();
@@ -1265,23 +1280,19 @@ bool SkiaSalGraphicsImpl::blendBitmap(const SalTwoRect& rPosAry, const SalBitmap
 
     assert(dynamic_cast<const SkiaSalBitmap*>(&rBitmap));
     const SkiaSalBitmap& rSkiaBitmap = static_cast<const SkiaSalBitmap&>(rBitmap);
-    // This is used by VirtualDevice in the alpha mode for the "alpha" layer which
-    // is actually one-minus-alpha (opacity). Therefore white=0xff=transparent,
-    // black=0x00=opaque. So the result is transparent only if both the inputs
-    // are transparent. Since for blending operations white=1.0 and black=0.0,
-    // kMultiply should handle exactly that (transparent*transparent=transparent,
-    // opaque*transparent=opaque). And guessing from the "floor" in TYPE_BLEND in opengl's
-    // combinedTextureFragmentShader.glsl, the layer is not even alpha values but
-    // simply yes-or-no mask.
+    // This is used by VirtualDevice in the alpha mode for the "alpha" layer
+    // So the result is transparent only if both the inputs
+    // are transparent. Which seems to be what SkBlendMode::kModulate does,
+    // so use that.
     // See also blendAlphaBitmap().
     if (rSkiaBitmap.IsFullyOpaqueAsAlpha())
     {
-        // Optimization. If the bitmap means fully opaque, it's all zero's. In CPU
+        // Optimization. If the bitmap means fully opaque, it's all one's. In CPU
         // mode it should be faster to just copy instead of SkBlendMode::kMultiply.
         drawBitmap(rPosAry, rSkiaBitmap);
     }
     else
-        drawBitmap(rPosAry, rSkiaBitmap, SkBlendMode::kMultiply);
+        drawBitmap(rPosAry, rSkiaBitmap, SkBlendMode::kModulate);
     return true;
 }
 
@@ -1290,6 +1301,16 @@ bool SkiaSalGraphicsImpl::blendAlphaBitmap(const SalTwoRect& rPosAry,
                                            const SalBitmap& rMaskBitmap,
                                            const SalBitmap& rAlphaBitmap)
 {
+    // tdf#156361 use slow blending path if alpha mask blending is disabled
+    // SkiaSalGraphicsImpl::blendBitmap() fails unexpectedly in the following
+    // cases so return false and use the non-Skia alpha mask blending code:
+    // - Unexpected white areas when running a slideshow or printing:
+    //     https://bugs.documentfoundation.org/attachment.cgi?id=188447
+    // - Unexpected scaling of bitmap and/or alpha mask when exporting to PDF:
+    //     https://bugs.documentfoundation.org/attachment.cgi?id=188498
+    if (!SkiaHelper::isAlphaMaskBlendingEnabled())
+        return false;
+
     if (checkInvalidSourceOrDestination(rPosAry))
         return false;
 
@@ -1320,10 +1341,10 @@ bool SkiaSalGraphicsImpl::blendAlphaBitmap(const SalTwoRect& rPosAry,
     // First do the "( 1 - alpha ) * mask"
     // (no idea how to do "floor", but hopefully not needed in practice).
     sk_sp<SkShader> shaderAlpha
-        = SkShaders::Blend(SkBlendMode::kDstOut, rSkiaMaskBitmap.GetAlphaSkShader(samplingOptions),
+        = SkShaders::Blend(SkBlendMode::kDstIn, rSkiaMaskBitmap.GetAlphaSkShader(samplingOptions),
                            rSkiaAlphaBitmap.GetAlphaSkShader(samplingOptions));
     // And now draw the bitmap with "1 - x", where x is the "( 1 - alpha ) * mask".
-    sk_sp<SkShader> shader = SkShaders::Blend(SkBlendMode::kSrcOut, shaderAlpha,
+    sk_sp<SkShader> shader = SkShaders::Blend(SkBlendMode::kSrcIn, shaderAlpha,
                                               rSkiaSourceBitmap.GetSkShader(samplingOptions));
     drawShader(rPosAry, shader);
     return true;
@@ -1351,9 +1372,12 @@ void SkiaSalGraphicsImpl::drawMask(const SalTwoRect& rPosAry, const SalBitmap& r
 {
     assert(dynamic_cast<const SkiaSalBitmap*>(&rSalBitmap));
     const SkiaSalBitmap& skiaBitmap = static_cast<const SkiaSalBitmap&>(rSalBitmap);
+    // SkBlendMode::kDstOut must be used instead of SkBlendMode::kDstIn because
+    // the alpha channel of what is drawn appears to get inverted at some point
+    // after it is drawn
     drawShader(
         rPosAry,
-        SkShaders::Blend(SkBlendMode::kDstOut, // VCL alpha is one-minus-alpha.
+        SkShaders::Blend(SkBlendMode::kDstOut, // VCL alpha is alpha.
                          SkShaders::Color(toSkColor(nMaskColor)),
                          skiaBitmap.GetAlphaSkShader(makeSamplingOptions(rPosAry, mScaling))));
 }
@@ -1438,7 +1462,7 @@ void SkiaSalGraphicsImpl::invert(basegfx::B2DPolygon const& rPoly, SalInvert eFl
         aPaint.setStrokeWidth(2);
         constexpr float intervals[] = { 4.0f, 4.0f };
         aPaint.setStyle(SkPaint::kStroke_Style);
-        aPaint.setPathEffect(SkDashPathEffect::Make(intervals, SK_ARRAY_COUNT(intervals), 0));
+        aPaint.setPathEffect(SkDashPathEffect::Make(intervals, std::size(intervals), 0));
     }
     else
     {
@@ -1663,7 +1687,7 @@ sk_sp<SkImage> SkiaSalGraphicsImpl::mergeCacheBitmaps(const SkiaSalBitmap& bitma
     {
         canvas->clear(SK_ColorTRANSPARENT);
         paint.setShader(
-            SkShaders::Blend(SkBlendMode::kDstOut, bitmap.GetSkShader(samplingOptions, bitmapType),
+            SkShaders::Blend(SkBlendMode::kDstIn, bitmap.GetSkShader(samplingOptions, bitmapType),
                              alphaBitmap->GetAlphaSkShader(samplingOptions, alphaBitmapType)));
         canvas->drawPaint(paint);
     }
@@ -1725,7 +1749,7 @@ bool SkiaSalGraphicsImpl::drawAlphaBitmap(const SalTwoRect& rPosAry, const SalBi
     else
         drawShader(rPosAry,
                    SkShaders::Blend(
-                       SkBlendMode::kDstOut, // VCL alpha is one-minus-alpha.
+                       SkBlendMode::kDstIn,
                        rSkiaSourceBitmap.GetSkShader(makeSamplingOptions(rPosAry, mScaling)),
                        rSkiaAlphaBitmap.GetAlphaSkShader(makeSamplingOptions(rPosAry, mScaling))));
     return true;
@@ -1948,7 +1972,7 @@ bool SkiaSalGraphicsImpl::drawTransformedBitmap(const basegfx::B2DPoint& rNull,
         if (pSkiaAlphaBitmap)
         {
             SkPaint paint = makeBitmapPaint();
-            paint.setShader(SkShaders::Blend(SkBlendMode::kDstOut, // VCL alpha is one-minus-alpha.
+            paint.setShader(SkShaders::Blend(SkBlendMode::kDstIn,
                                              rSkiaBitmap.GetSkShader(samplingOptions),
                                              pSkiaAlphaBitmap->GetAlphaSkShader(samplingOptions)));
             if (fAlpha != 1.0)
@@ -2112,7 +2136,7 @@ void SkiaSalGraphicsImpl::drawGenericLayout(const GenericSalLayout& layout, Colo
     glyphIds.reserve(256);
     glyphForms.reserve(256);
     verticals.reserve(256);
-    DevicePoint aPos;
+    basegfx::B2DPoint aPos;
     const GlyphItem* pGlyph;
     int nStart = 0;
     while (layout.GetNextGlyph(&pGlyph, aPos, nStart))
@@ -2162,7 +2186,6 @@ bool SkiaSalGraphicsImpl::supportsOperation(OutDevSupportType eType) const
 {
     switch (eType)
     {
-        case OutDevSupportType::B2DDraw:
         case OutDevSupportType::TransparentRect:
             return true;
         default:

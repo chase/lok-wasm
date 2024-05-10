@@ -20,6 +20,7 @@
 #ifndef INCLUDED_SW_INC_UNOTBL_HXX
 #define INCLUDED_SW_INC_UNOTBL_HXX
 
+#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/container/XNamed.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/util/XSortable.hpp>
@@ -76,9 +77,6 @@ class SwXCell final : public SwXCellBaseClass,
 
     virtual const SwStartNode *GetStartNode() const override;
 
-    virtual css::uno::Reference< css::text::XTextCursor >
-        CreateCursor() override;
-
     bool IsValid() const;
 
     virtual ~SwXCell() override;
@@ -88,12 +86,6 @@ class SwXCell final : public SwXCellBaseClass,
 public:
     SwXCell(SwFrameFormat* pTableFormat, SwTableBox* pBox, size_t nPos);
     SwXCell(SwFrameFormat* pTableFormat, const SwStartNode& rStartNode); // XML import interface
-
-
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
     virtual void SAL_CALL acquire(  ) noexcept override;
@@ -115,8 +107,9 @@ public:
     virtual sal_Int32 SAL_CALL getError(  ) override;
 
     //XText
-    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL createTextCursor() override;
-    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL createTextCursorByRange(const css::uno::Reference< css::text::XTextRange > & aTextPosition) override;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursor() override;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursorByRange(
+            const ::css::uno::Reference< ::css::text::XTextRange >& aTextPosition ) override;
     virtual void SAL_CALL  setString(const OUString& aString) override;
 
     //XPropertySet
@@ -199,7 +192,7 @@ class SW_DLLPUBLIC SwXTextTableCursor final
 public:
     SwXTextTableCursor(SwFrameFormat* pFormat, SwTableBox const* pBox);
     SwXTextTableCursor(SwFrameFormat& rTableFormat, const SwTableCursor* pTableSelection);
-    DECLARE_XINTERFACE()
+    virtual void SAL_CALL release() noexcept override;
 
     //XTextTableCursor
     virtual OUString SAL_CALL getRangeName() override;
@@ -251,7 +244,7 @@ struct SwRangeDescriptor
     void Normalize();
 };
 
-class SAL_DLLPUBLIC_RTTI SwXTextTable final : public cppu::WeakImplHelper
+class SW_DLLPUBLIC SwXTextTable final : public cppu::WeakImplHelper
 <
     css::text::XTextTable,
     css::lang::XServiceInfo,
@@ -261,7 +254,6 @@ class SAL_DLLPUBLIC_RTTI SwXTextTable final : public cppu::WeakImplHelper
     css::container::XNamed,
     css::table::XAutoFormattable,
     css::util::XSortable,
-    css::lang::XUnoTunnel,
     css::sheet::XCellRangeData
 >
 {
@@ -277,15 +269,9 @@ public:
     static rtl::Reference<SwXTextTable>
             CreateXTextTable(SwFrameFormat * pFrameFormat);
 
-    SW_DLLPUBLIC static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
+    static void GetCellPosition(std::u16string_view aCellName, sal_Int32& o_rColumn, sal_Int32& o_rRow);
 
-    SW_DLLPUBLIC static void GetCellPosition(std::u16string_view aCellName, sal_Int32& o_rColumn, sal_Int32& o_rRow);
-
-    SW_DLLPUBLIC SwFrameFormat* GetFrameFormat();
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
-
+    SwFrameFormat* GetFrameFormat();
 
     //XTextTable
     virtual void SAL_CALL initialize( sal_Int32 nRows, sal_Int32 nColumns ) override;
@@ -358,7 +344,6 @@ class SwXCellRange final : public cppu::WeakImplHelper
 <
     css::table::XCellRange,
     css::lang::XServiceInfo,
-    css::lang::XUnoTunnel,
     css::beans::XPropertySet,
     css::chart::XChartDataArray,
     css::util::XSortable,
@@ -377,16 +362,11 @@ public:
             const sw::UnoCursorPointer& pCursor, SwFrameFormat& rFrameFormat,
             SwRangeDescriptor const & rDesc);
 
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
-
     void SetLabels(bool bFirstRowAsLabel, bool bFirstColumnAsLabel);
 
     std::vector<css::uno::Reference<css::table::XCell>> GetCells();
 
     const SwUnoCursor* GetTableCursor() const;
-
-    //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     //XCellRange
     virtual css::uno::Reference< css::table::XCell > SAL_CALL getCellByPosition( sal_Int32 nColumn, sal_Int32 nRow ) override;

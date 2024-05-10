@@ -42,18 +42,29 @@ public:
 class SdTpOptionsContents final : public SfxTabPage
 {
 private:
+    bool m_bDrawMode;
     std::unique_ptr<weld::CheckButton> m_xCbxRuler;
+    std::unique_ptr<weld::Widget> m_xCbxRulerImg;
     std::unique_ptr<weld::CheckButton> m_xCbxDragStripes;
+    std::unique_ptr<weld::Widget> m_xCbxDragStripesImg;
     std::unique_ptr<weld::CheckButton> m_xCbxHandlesBezier;
+    std::unique_ptr<weld::Widget> m_xCbxHandlesBezierImg;
     std::unique_ptr<weld::CheckButton> m_xCbxMoveOutline;
+    std::unique_ptr<weld::Widget> m_xCbxMoveOutlineImg;
 
 public:
     SdTpOptionsContents(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rInAttrs);
     static  std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* );
     virtual ~SdTpOptionsContents() override;
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
+
+    virtual void PageCreated(const SfxAllItemSet& aSet) override;
+
+    void SetDrawMode() { m_bDrawMode = true; }
 };
 
 /**
@@ -70,30 +81,37 @@ private:
     OUString aInfo1;
     OUString aInfo2;
 
+    bool                m_bDrawMode;
     MapUnit             ePoolUnit;
 
     std::unique_ptr<weld::CheckButton> m_xCbxQuickEdit;
+    std::unique_ptr<weld::Widget> m_xCbxQuickEditImg;
     std::unique_ptr<weld::CheckButton> m_xCbxPickThrough;
+    std::unique_ptr<weld::Widget> m_xCbxPickThroughImg;
 
     std::unique_ptr<weld::Frame> m_xNewDocumentFrame;
     std::unique_ptr<weld::CheckButton> m_xCbxStartWithTemplate;
+    std::unique_ptr<weld::Widget> m_xCbxStartWithTemplateImg;
 
     std::unique_ptr<weld::CheckButton> m_xCbxMasterPageCache;
+    std::unique_ptr<weld::Widget> m_xCbxMasterPageCacheImg;
     std::unique_ptr<weld::CheckButton> m_xCbxCopy;
+    std::unique_ptr<weld::Widget> m_xCbxCopyImg;
     std::unique_ptr<weld::CheckButton> m_xCbxMarkedHitMovesAlways;
-    std::unique_ptr<weld::Frame> m_xPresentationFrame;
+    std::unique_ptr<weld::Widget> m_xCbxMarkedHitMovesAlwaysImg;
 
     std::unique_ptr<weld::ComboBox> m_xLbMetric;
+    std::unique_ptr<weld::Widget> m_xLbMetricImg;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldTabstop;
+    std::unique_ptr<weld::Widget> m_xMtrFldTabstopImg;
 
-    std::unique_ptr<weld::CheckButton> m_xCbxEnableSdremote;
-    std::unique_ptr<weld::CheckButton> m_xCbxEnablePresenterScreen;
-    std::unique_ptr<weld::CheckButton> m_xCbxPresenterScreenFullScreen;
     std::unique_ptr<weld::CheckButton> m_xCbxCompatibility;
+    std::unique_ptr<weld::Widget> m_xCbxCompatibilityImg;
 
     //Scale
     std::unique_ptr<weld::Frame> m_xScaleFrame;
     std::unique_ptr<weld::ComboBox> m_xCbScale;
+    std::unique_ptr<weld::Widget> m_xCbScaleImg;
     std::unique_ptr<weld::Label> m_xNewDocLb;
     std::unique_ptr<weld::Label> m_xFiInfo1;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldOriginalWidth;
@@ -102,6 +120,7 @@ private:
     std::unique_ptr<weld::Label> m_xFiInfo2;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldOriginalHeight;
     std::unique_ptr<weld::CheckButton> m_xCbxDistort;
+    std::unique_ptr<weld::Widget> m_xCbxDistortImg;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldInfo1;
     std::unique_ptr<weld::MetricSpinButton> m_xMtrFldInfo2;
 
@@ -124,20 +143,16 @@ public:
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* );
     virtual ~SdTpOptionsMisc() override;
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool FillItemSet( SfxItemSet* ) override;
     virtual void Reset( const SfxItemSet * ) override;
 
     /** Hide Impress specific controls, make Draw specific controls visible
-        and arrange the visible controls.  Do not call this method or the
-        <member>SetImpressMode()</member> method more than once.
+        and arrange the visible controls.  Do not call this method more than once.
     */
     void SetDrawMode();
 
-    /** Hide Draw specific controls, make Impress specific controls visible
-        and arrange the visible controls.  Do not call this method or the
-        <member>SetDrawMode()</member> method more than once.
-    */
-    void SetImpressMode();
     virtual void        PageCreated(const SfxAllItemSet& aSet) override;
 };
 

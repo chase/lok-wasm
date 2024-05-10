@@ -62,8 +62,8 @@ ScLinkedAreaDlg::~ScLinkedAreaDlg()
 {
 }
 
-constexpr OUStringLiteral FILTERNAME_HTML = u"HTML (StarCalc)";
-constexpr OUStringLiteral FILTERNAME_QUERY = u"calc_HTML_WebQuery";
+constexpr OUString FILTERNAME_HTML = u"HTML (StarCalc)"_ustr;
+constexpr OUString FILTERNAME_QUERY = u"calc_HTML_WebQuery"_ustr;
 
 IMPL_LINK_NOARG(ScLinkedAreaDlg, BrowseHdl, weld::Button&, void)
 {
@@ -127,7 +127,7 @@ void ScLinkedAreaDlg::LoadDocument( const OUString& rFile, const OUString& rFilt
     m_pSourceShell = aLoader.GetDocShell();
     if (m_pSourceShell)
     {
-        ErrCode nErr = m_pSourceShell->GetErrorCode();
+        ErrCodeMsg nErr = m_pSourceShell->GetErrorCode();
         if (nErr)
             ErrorHandler::HandleError( nErr );      // including warnings
 
@@ -211,11 +211,11 @@ IMPL_LINK( ScLinkedAreaDlg, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg,
         aSourceRef = m_pSourceShell;
         m_pSourceShell->DoLoad( pMed.get() );
 
-        ErrCode nErr = m_pSourceShell->GetErrorCode();
+        ErrCodeMsg nErr = m_pSourceShell->GetErrorCode();
         if (nErr)
             ErrorHandler::HandleError( nErr );              // including warnings
 
-        if (!m_pSourceShell->GetError())                    // only errors
+        if (!m_pSourceShell->GetErrorIgnoreWarning())                    // only errors
         {
             m_xCbUrl->set_entry_text(pMed->GetName());
         }

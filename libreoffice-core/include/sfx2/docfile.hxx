@@ -70,7 +70,7 @@ class SFX2_DLLPUBLIC SfxMedium final : public SvRefBase
     SAL_DLLPRIVATE void CloseOutStream_Impl();
     SAL_DLLPRIVATE void CloseStreams_Impl(bool bInDestruction = false);
 
-    SAL_DLLPRIVATE void SetEncryptionDataToStorage_Impl();
+    SAL_DLLPRIVATE bool SetEncryptionDataToStorage_Impl();
 
 public:
 
@@ -122,7 +122,7 @@ public:
     const std::shared_ptr<const SfxFilter>& GetFilter() const;
     const OUString&     GetOrigURL() const;
 
-    SfxItemSet  *       GetItemSet() const;
+    SfxItemSet&         GetItemSet() const;
     void SetArgs(const css::uno::Sequence<css::beans::PropertyValue>& rArgs);
     const css::uno::Sequence<css::beans::PropertyValue> & GetArgs() const;
     void                Close(bool bInDestruction = false);
@@ -143,14 +143,14 @@ public:
     void                Download( const Link<void*,void>& aLink = Link<void*,void>());
     void                SetDoneLink( const Link<void*,void>& rLink );
 
-    ErrCode             GetErrorCode() const;
-    ErrCode             GetError() const
+    ErrCodeMsg          GetErrorCode() const;
+    ErrCodeMsg          GetErrorIgnoreWarning() const
                         { return GetErrorCode().IgnoreWarning(); }
-    ErrCode             GetWarningError() const;
-    ErrCode const &     GetLastStorageCreationState() const;
+    ErrCodeMsg const &  GetWarningError() const;
+    ErrCodeMsg const &  GetLastStorageCreationState() const;
 
-    void                SetError(ErrCode nError);
-    void                SetWarningError(ErrCode nWarningError);
+    void                SetError(ErrCodeMsg nError);
+    void                SetWarningError(const ErrCodeMsg& nWarningError);
 
     void                CloseInStream();
     void                CloseOutStream();
@@ -218,10 +218,14 @@ public:
     SAL_DLLPRIVATE OUString const & GetBackup_Impl();
 
     SAL_DLLPRIVATE css::uno::Reference< css::embed::XStorage > const & GetZipStorageToSign_Impl( bool bReadOnly = true );
+    SAL_DLLPRIVATE css::uno::Reference<css::embed::XStorage> GetScriptingStorageToSign_Impl();
     SAL_DLLPRIVATE void CloseZipStorage_Impl();
 
     // the storage that will be returned by the medium on GetStorage request
     SAL_DLLPRIVATE void SetStorage_Impl( const css::uno::Reference< css::embed::XStorage >& xNewStorage );
+    SAL_DLLPRIVATE void SetInnerStorage_Impl(const css::uno::Reference<css::embed::XStorage>& xStorage);
+    SAL_DLLPRIVATE css::uno::Reference<css::embed::XStorage>
+        TryEncryptedInnerPackage(css::uno::Reference<css::embed::XStorage> xStorage);
 
     SAL_DLLPRIVATE void CloseAndReleaseStreams_Impl();
     SAL_DLLPRIVATE void AddVersion_Impl( css::util::RevisionTag& rVersion );
@@ -250,7 +254,7 @@ public:
     SAL_DLLPRIVATE void CanDisposeStorage_Impl( bool bDisposeStorage );
     SAL_DLLPRIVATE bool WillDisposeStorageOnClose_Impl();
 
-    SAL_DLLPRIVATE void DoBackup_Impl();
+    SAL_DLLPRIVATE void DoBackup_Impl(bool bForceUsingBackupPath);
     SAL_DLLPRIVATE void DoInternalBackup_Impl( const ::ucbhelper::Content& aOriginalContent );
     SAL_DLLPRIVATE void DoInternalBackup_Impl( const ::ucbhelper::Content& aOriginalContent,
                                                 std::u16string_view aPrefix,

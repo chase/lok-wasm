@@ -186,13 +186,13 @@ public:
 
 bool isRotateItemUsed(const ScDocumentPool *pPool)
 {
-    return pPool->GetItemCount2( ATTR_ROTATE_VALUE ) > 0;
+    return pPool->GetItemSurrogates(ATTR_ROTATE_VALUE).size() > 0;
 }
 
 void initRowInfo(const ScDocument* pDoc, RowInfo* pRowInfo, const SCSIZE nMaxRow,
         double fRowScale, SCROW nRow1, SCTAB nTab, SCROW& rYExtra, SCSIZE& rArrRow, SCROW& rRow2)
 {
-    sal_uInt16 nDocHeight = ScGlobal::nStdRowHeight;
+    sal_uInt16 nDocHeight = pDoc->GetSheetOptimalMinRowHeight(nTab);
     SCROW nDocHeightEndRow = -1;
     for (SCROW nSignedY=nRow1-1; nSignedY<=rYExtra; nSignedY++)
     {
@@ -207,7 +207,7 @@ void initRowInfo(const ScDocument* pDoc, RowInfo* pRowInfo, const SCSIZE nMaxRow
             if (pDoc->ValidRow(nY))
                 nDocHeight = pDoc->GetRowHeight( nY, nTab, nullptr, &nDocHeightEndRow );
             else
-                nDocHeight = ScGlobal::nStdRowHeight;
+                nDocHeight = pDoc->GetSheetOptimalMinRowHeight(nTab);
         }
 
         if ( rArrRow==0 || nDocHeight || nY > pDoc->MaxRow() )
@@ -296,7 +296,7 @@ bool handleConditionalFormat(ScConditionalFormatList& rCondFormList, const ScCon
 
         ScCondFormatData aData = pCondForm->GetData(
                 pInfo->maCell, rAddr);
-        if (!aData.aStyleName.isEmpty())
+        if (!bAnyCondition && !aData.aStyleName.isEmpty())
         {
             SfxStyleSheetBase* pStyleSheet =
                 pStlPool->Find( aData.aStyleName, SfxStyleFamily::Para );
@@ -337,7 +337,7 @@ bool handleConditionalFormat(ScConditionalFormatList& rCondFormList, const ScCon
             pTableInfo->addIconSetInfo(std::move(aData.pIconSet));
         }
 
-        if (pInfo->mxColorScale && pInfo->pIconSet && pInfo->pDataBar)
+        if (bAnyCondition && pInfo->mxColorScale && pInfo->pIconSet && pInfo->pDataBar)
             break;
     }
 
@@ -488,11 +488,11 @@ void ScDocument::FillInfo(
                         const SvxLineItem* pBLTRLine = &pPattern->GetItem( ATTR_BORDER_BLTR );
 
                         const SvxShadowItem* pShadowAttr = &pPattern->GetItem(ATTR_SHADOW);
-                        if (pShadowAttr != pDefShadow)
+                        if (!SfxPoolItem::areSame(pShadowAttr, pDefShadow))
                             bAnyShadow = true;
 
                         const ScMergeAttr* pMergeAttr = &pPattern->GetItem(ATTR_MERGE);
-                        bool bMerged = ( pMergeAttr != pDefMerge && *pMergeAttr != *pDefMerge );
+                        bool bMerged = !SfxPoolItem::areSame( pMergeAttr, pDefMerge );
                         ScMF nOverlap = pPattern->GetItemSet().
                                                         Get(ATTR_MERGE_FLAG).GetValue();
                         bool bHOverlapped(nOverlap & ScMF::Hor);
@@ -530,7 +530,7 @@ void ScDocument::FillInfo(
                                 if ( GetPreviewCellStyle( nCol, nCurRow, nTab  ) != nullptr )
                                     bAnyPreview = true;
                                 RowInfo* pThisRowInfo = &pRowInfo[nArrRow];
-                                if (pBackground != pDefBackground)          // Column background == Default ?
+                                if (!SfxPoolItem::areSame(pBackground, pDefBackground))          // Column background == Default ?
                                     pThisRowInfo->bEmptyBack = false;
                                 if (bContainsCondFormat)
                                     pThisRowInfo->bEmptyBack = false;
@@ -687,7 +687,7 @@ void ScDocument::FillInfo(
                 if( bAnyCondition && pInfo->mxColorScale)
                 {
                     pRowInfo[nArrRow].bEmptyBack = false;
-                    pInfo->pBackground = &pPool->Put(SvxBrushItem(*pInfo->mxColorScale, ATTR_BACKGROUND));
+                    pInfo->pBackground = &pPool->DirectPutItemInPool(SvxBrushItem(*pInfo->mxColorScale, ATTR_BACKGROUND));
                 }
             }
         }
@@ -735,8 +735,28 @@ void ScDocument::FillInfo(
                         !(pShadowItem = pStartCond->GetItemIfSet(ATTR_SHADOW)) )
                         pShadowItem = &pStartPattern->GetItem(ATTR_SHADOW);
                     pInfo->pShadowAttr = pShadowItem;
-                    if (pInfo->pShadowAttr != pDefShadow)
+                    if (!SfxPoolItem::areSame(pInfo->pShadowAttr, pDefShadow))
                         bAnyShadow = true;
+
+                    const ScCondFormatIndexes& rCondFormatIndex
+                        = pStartPattern->GetItem(ATTR_CONDITIONAL).GetCondFormatData();
+
+                    if (pCondFormList && !pStartCond && !rCondFormatIndex.empty())
+                    {
+                        for (const auto& rItem : rCondFormatIndex)
+                        {
+                            const ScConditionalFormat* pCondForm = pCondFormList->GetFormat(rItem);
+                            if (pCondForm)
+                            {
+                                ScCondFormatData aData = pCondForm->GetData(
+                                    pInfo->maCell, ScAddress(nStartX, nStartY, nTab));
+
+                                // Color scale
+                                if (aData.mxColorScale && !pInfo->mxColorScale)
+                                    pInfo->mxColorScale = aData.mxColorScale;
+                            }
+                        }
+                    }
                 }
             }
         }

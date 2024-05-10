@@ -24,7 +24,7 @@
 #include <vcl/svapp.hxx>
 
 #include <AccEventListener.hxx>
-#include <AccObjectManagerAgent.hxx>
+#include <AccObjectWinManager.hxx>
 #include <unomsaaevent.hxx>
 
 #include <com/sun/star/accessibility/XAccessible.hpp>
@@ -41,9 +41,9 @@ using namespace com::sun::star::accessibility;
 using namespace cppu;
 
 AccEventListener::AccEventListener(css::accessibility::XAccessible* pAcc,
-                                   AccObjectManagerAgent* Agent)
+                                   AccObjectWinManager* pManager)
     : m_xAccessible(pAcc)
-    , pAgent(Agent)
+    , m_pObjManager(pManager)
 {
 }
 
@@ -59,6 +59,9 @@ void AccEventListener::notifyEvent(const css::accessibility::AccessibleEventObje
 
     switch (aEvent.EventId)
     {
+        case AccessibleEventId::CHILD:
+            HandleChildChangedEvent(aEvent.OldValue, aEvent.NewValue);
+            break;
         case AccessibleEventId::NAME_CHANGED:
             HandleNameChangedEvent(aEvent.NewValue);
             break;
@@ -79,18 +82,49 @@ void AccEventListener::notifyEvent(const css::accessibility::AccessibleEventObje
  */
 void AccEventListener::HandleNameChangedEvent(Any name)
 {
-    if (pAgent->IsTopWinAcc(m_xAccessible.get()))
+    if (m_pObjManager->IsTopWinAcc(m_xAccessible.get()))
     {
-        XAccessible* pAccDoc = pAgent->GetAccDocByAccTopWin(m_xAccessible.get());
+        XAccessible* pAccDoc = m_pObjManager->GetAccDocByAccTopWin(m_xAccessible.get());
         if (pAccDoc)
         {
-            pAgent->UpdateAccName(pAccDoc);
-            pAgent->NotifyAccEvent(UnoMSAAEvent::OBJECT_NAMECHANGE, pAccDoc);
+            m_pObjManager->UpdateAccName(pAccDoc);
+            m_pObjManager->NotifyAccEvent(pAccDoc, UnoMSAAEvent::OBJECT_NAMECHANGE);
         }
     }
 
-    pAgent->UpdateAccName(m_xAccessible.get(), name);
-    pAgent->NotifyAccEvent(UnoMSAAEvent::OBJECT_NAMECHANGE, m_xAccessible.get());
+    m_pObjManager->SetAccName(m_xAccessible.get(), name);
+    m_pObjManager->NotifyAccEvent(m_xAccessible.get(), UnoMSAAEvent::OBJECT_NAMECHANGE);
+}
+
+/**
+ * Handle the CHILD event
+ * @param oldValue the child to be deleted
+ * @param newValue the child to be added
+ */
+void AccEventListener::HandleChildChangedEvent(com::sun::star::uno::Any oldValue,
+                                               com::sun::star::uno::Any newValue)
+{
+    Reference<XAccessible> xChild;
+    if (newValue >>= xChild)
+    {
+        if (xChild.is())
+        {
+            XAccessible* pAcc = xChild.get();
+            m_pObjManager->InsertAccObj(pAcc, m_xAccessible.get());
+            m_pObjManager->InsertChildrenAccObj(pAcc);
+            m_pObjManager->NotifyAccEvent(pAcc, UnoMSAAEvent::CHILD_ADDED);
+        }
+    }
+    else if (oldValue >>= xChild)
+    {
+        if (xChild.is())
+        {
+            XAccessible* pAcc = xChild.get();
+            m_pObjManager->NotifyAccEvent(pAcc, UnoMSAAEvent::CHILD_REMOVED);
+            m_pObjManager->DeleteChildrenAccObj(pAcc);
+            m_pObjManager->DeleteAccObj(pAcc);
+        }
+    }
 }
 
 /**
@@ -98,7 +132,7 @@ void AccEventListener::HandleNameChangedEvent(Any name)
  */
 void AccEventListener::HandleDescriptionChangedEvent()
 {
-    pAgent->NotifyAccEvent(UnoMSAAEvent::OBJECT_DESCRIPTIONCHANGE, m_xAccessible.get());
+    m_pObjManager->NotifyAccEvent(m_xAccessible.get(), UnoMSAAEvent::OBJECT_DESCRIPTIONCHANGE);
 }
 
 /**
@@ -106,7 +140,7 @@ void AccEventListener::HandleDescriptionChangedEvent()
  */
 void AccEventListener::HandleBoundrectChangedEvent()
 {
-    pAgent->NotifyAccEvent(UnoMSAAEvent::BOUNDRECT_CHANGED, m_xAccessible.get());
+    m_pObjManager->NotifyAccEvent(m_xAccessible.get(), UnoMSAAEvent::BOUNDRECT_CHANGED);
 }
 
 /**
@@ -114,8 +148,8 @@ void AccEventListener::HandleBoundrectChangedEvent()
  */
 void AccEventListener::HandleVisibleDataChangedEvent()
 {
-    pAgent->UpdateValue(m_xAccessible.get());
-    pAgent->NotifyAccEvent(UnoMSAAEvent::VISIBLE_DATA_CHANGED, m_xAccessible.get());
+    m_pObjManager->UpdateValue(m_xAccessible.get());
+    m_pObjManager->NotifyAccEvent(m_xAccessible.get(), UnoMSAAEvent::VISIBLE_DATA_CHANGED);
 }
 
 /**
@@ -162,8 +196,8 @@ void AccEventListener::FireStateFocusedChange(bool enable)
 {
     if (enable)
     {
-        pAgent->IncreaseState(m_xAccessible.get(), AccessibleStateType::FOCUSED);
-        pAgent->NotifyAccEvent(UnoMSAAEvent::STATE_FOCUSED, m_xAccessible.get());
+        m_pObjManager->IncreaseState(m_xAccessible.get(), AccessibleStateType::FOCUSED);
+        m_pObjManager->NotifyAccEvent(m_xAccessible.get(), UnoMSAAEvent::STATE_FOCUSED);
     }
     else
     {
@@ -209,14 +243,14 @@ short AccEventListener::GetParentRole()
 {
     if (m_xAccessible.is())
     {
-        return pAgent->GetParentRole(m_xAccessible.get());
+        return m_pObjManager->GetParentRole(m_xAccessible.get());
     }
     return -1;
 }
 /**
  *  remove the listener from accessible object
  */
-void AccEventListener::RemoveMeFromBroadcaster()
+void AccEventListener::RemoveMeFromBroadcaster(bool const isNotifyDestroy)
 {
     try
     {
@@ -237,7 +271,10 @@ void AccEventListener::RemoveMeFromBroadcaster()
         catch (Exception const&)
         { // may throw if it's already disposed - ignore that
         }
-        pAgent->NotifyDestroy(m_xAccessible.get());
+        if (isNotifyDestroy)
+        {
+            m_pObjManager->NotifyDestroy(m_xAccessible.get());
+        }
         m_xAccessible.clear(); // release cyclic reference
     }
     catch (...)
@@ -253,7 +290,7 @@ void AccEventListener::disposing(const css::lang::EventObject& /*Source*/)
 {
     SolarMutexGuard g;
 
-    RemoveMeFromBroadcaster();
+    RemoveMeFromBroadcaster(true);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

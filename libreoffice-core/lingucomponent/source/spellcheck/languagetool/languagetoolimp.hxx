@@ -30,18 +30,6 @@
 #include <o3tl/lru_map.hxx>
 #include <tools/long.hxx>
 
-// Magical numbers
-#define MAX_CACHE_SIZE 10
-#define MAX_SUGGESTIONS_SIZE 10
-#define PROOFREADING_ERROR 2
-#define CURL_TIMEOUT 10L
-
-enum class HTTP_METHOD
-{
-    HTTP_GET,
-    HTTP_POST
-};
-
 class LanguageToolGrammarChecker
     : public cppu::WeakImplHelper<css::linguistic2::XProofreader, css::lang::XInitialization,
                                   css::lang::XServiceInfo, css::lang::XServiceDisplayName>
@@ -51,15 +39,6 @@ class LanguageToolGrammarChecker
         mCachedResults;
     LanguageToolGrammarChecker(const LanguageToolGrammarChecker&) = delete;
     LanguageToolGrammarChecker& operator=(const LanguageToolGrammarChecker&) = delete;
-    static void parseDudenResponse(css::linguistic2::ProofreadingResult& rResult,
-                                   std::string_view aJSONBody);
-    static void parseProofreadingJSONResponse(css::linguistic2::ProofreadingResult& rResult,
-                                              std::string_view aJSONBody);
-    static std::string makeDudenHttpRequest(std::string_view aURL, HTTP_METHOD method,
-                                            const OString& aPostData,
-                                            tools::Long& nStatusCode);
-    static std::string makeHttpRequest(std::string_view aURL, HTTP_METHOD method,
-                                       const OString& aPostData, tools::Long& nStatusCode);
 
 public:
     LanguageToolGrammarChecker();

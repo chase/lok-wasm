@@ -107,22 +107,13 @@ NumberingPopup::NumberingPopup(NumberingToolBoxControl& rController,
     mxValueSet->SetOutputSizePixel(aSize);
     mxValueSet->SetColor(Application::GetSettings().GetStyleSettings().GetFieldColor());
 
-    OUString aMoreItemText;
+    OUString aMoreItemText = SvxResId( RID_SVXSTR_CUSTOMIZE );
     if ( mePageType == NumberingPageType::BULLET )
-    {
-        aMoreItemText = SvxResId( RID_SVXSTR_MOREBULLETS );
         AddStatusListener( ".uno:CurrentBulletListType" );
-    }
     else if ( mePageType == NumberingPageType::SINGLENUM )
-    {
-        aMoreItemText = SvxResId( RID_SVXSTR_MORENUMBERING );
         AddStatusListener( ".uno:CurrentNumListType" );
-    }
     else
-    {
-        aMoreItemText = SvxResId( RID_SVXSTR_MORE );
         AddStatusListener( ".uno:CurrentOutlineType" );
-    }
 
     auto xImage = vcl::CommandInfoProvider::GetXGraphicForCommand(".uno:OutlineBullet", mrController.getFrameInterface());
     mxMoreButton->set_image(xImage);
@@ -208,7 +199,7 @@ void SAL_CALL NumberingToolBoxControl::initialize( const css::uno::Sequence< css
     if (m_pToolbar)
     {
         mxPopoverContainer.reset(new ToolbarPopupContainer(m_pToolbar));
-        m_pToolbar->set_item_popover(m_aCommandURL.toUtf8(), mxPopoverContainer->getTopLevel());
+        m_pToolbar->set_item_popover(m_aCommandURL, mxPopoverContainer->getTopLevel());
         return;
     }
 
@@ -216,7 +207,9 @@ void SAL_CALL NumberingToolBoxControl::initialize( const css::uno::Sequence< css
     ToolBoxItemId nId;
     if (getToolboxId(nId, &pToolBox))
     {
-        ToolBoxItemBits nBits = ( mePageType == NumberingPageType::OUTLINE ) ? ToolBoxItemBits::DROPDOWNONLY : ToolBoxItemBits::DROPDOWN;
+        ToolBoxItemBits nBits = mePageType == NumberingPageType::OUTLINE
+                                    ? ToolBoxItemBits::DROPDOWNONLY
+                                    : ToolBoxItemBits::DROPDOWN;
         pToolBox->SetItemBits( nId, pToolBox->GetItemBits( nId ) | nBits );
     }
 }

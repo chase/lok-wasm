@@ -80,8 +80,6 @@ ValueSet::ValueSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow)
     , mbFormat(true)
     , mbHighlight(false)
 {
-    maVirDev->SetBackground(Application::GetSettings().GetStyleSettings().GetFaceColor());
-
     mnItemWidth         = 0;
     mnItemHeight        = 0;
     mnTextOffset        = 0;
@@ -125,9 +123,8 @@ Reference<XAccessible> ValueSet::CreateAccessible()
 
 ValueSet::~ValueSet()
 {
-    Reference<XComponent> xComponent(mxAccessible, UNO_QUERY);
-    if (xComponent.is())
-        xComponent->dispose();
+    if (mxAccessible)
+        mxAccessible->Invalidate();
 
     ImplDeleteItems();
 }
@@ -156,7 +153,7 @@ void ValueSet::ImplDeleteItems()
 
 void ValueSet::Select()
 {
-    collectUIInformation(OStringToOUString(GetDrawingArea()->get_buildable_name(),RTL_TEXTENCODING_UTF8) , OStringToOUString(GetDrawingArea()->get_help_id(),RTL_TEXTENCODING_UTF8) , OUString::number(GetSelectedItemId()));
+    collectUIInformation(GetDrawingArea()->get_buildable_name() , GetDrawingArea()->get_help_id() , OUString::number(GetSelectedItemId()));
     maSelectHdl.Call( this );
 }
 
@@ -230,16 +227,13 @@ sal_uInt16 ValueSet::ImplGetVisibleItemCount() const
 
 void ValueSet::ImplFireAccessibleEvent( short nEventId, const Any& rOldValue, const Any& rNewValue )
 {
-    ValueSetAcc* pAcc = ValueSetAcc::getImplementation(mxAccessible);
-
-    if( pAcc )
-        pAcc->FireAccessibleEvent( nEventId, rOldValue, rNewValue );
+    if( mxAccessible )
+        mxAccessible->FireAccessibleEvent( nEventId, rOldValue, rNewValue );
 }
 
 bool ValueSet::ImplHasAccessibleListeners() const
 {
-    ValueSetAcc* pAcc = ValueSetAcc::getImplementation(mxAccessible);
-    return( pAcc && pAcc->HasAccessibleListeners() );
+    return mxAccessible && mxAccessible->HasAccessibleListeners();
 }
 
 IMPL_LINK(ValueSet, ImplScrollHdl, weld::ScrolledWindow&, rScrollWin, void)
@@ -267,9 +261,8 @@ void ValueSet::GetFocus()
     CustomWidgetController::GetFocus();
 
     // Tell the accessible object that we got the focus.
-    ValueSetAcc* pAcc = ValueSetAcc::getImplementation(mxAccessible);
-    if (pAcc)
-        pAcc->GetFocus();
+    if (mxAccessible)
+        mxAccessible->GetFocus();
 }
 
 void ValueSet::LoseFocus()
@@ -279,9 +272,8 @@ void ValueSet::LoseFocus()
     CustomWidgetController::LoseFocus();
 
     // Tell the accessible object that we lost the focus.
-    ValueSetAcc* pAcc = ValueSetAcc::getImplementation(mxAccessible);
-    if( pAcc )
-        pAcc->LoseFocus();
+    if( mxAccessible )
+        mxAccessible->LoseFocus();
 }
 
 void ValueSet::Resize()
@@ -685,7 +677,7 @@ void ValueSet::ImplDraw(vcl::RenderContext& rRenderContext)
     {
         if (!(GetStyle() & WB_FLATVALUESET))
         {
-            const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
+            const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
             Size aWinSize(GetOutputSizePixel());
             Point aPos1(NAME_LINE_OFF_X, mnTextOffset + NAME_LINE_OFF_Y);
             Point aPos2(aWinSize.Width() - (NAME_LINE_OFF_X * 2), mnTextOffset + NAME_LINE_OFF_Y);
@@ -806,7 +798,7 @@ void ValueSet::SelectItem( sal_uInt16 nItemId )
             {
                 Any aOldAny;
                 Any aNewAny;
-                aOldAny <<= Reference<XInterface>(static_cast<cppu::OWeakObject*>(pItemAcc));
+                aOldAny <<= Reference(getXWeak(pItemAcc));
                 ImplFireAccessibleEvent(AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, aOldAny, aNewAny );
             }
         }
@@ -829,7 +821,7 @@ void ValueSet::SelectItem( sal_uInt16 nItemId )
     {
         Any aOldAny;
         Any aNewAny;
-        aNewAny <<= Reference<XInterface>(static_cast<cppu::OWeakObject*>(pItemAcc));
+        aNewAny <<= Reference(getXWeak(pItemAcc));
         ImplFireAccessibleEvent(AccessibleEventId::ACTIVE_DESCENDANT_CHANGED, aOldAny, aNewAny);
     }
 
@@ -997,8 +989,9 @@ void ValueSet::Format(vcl::RenderContext const & rRenderContext)
     }
 
     // Init VirDev
-    maVirDev->SetSettings(rRenderContext.GetSettings());
+    maVirDev->SetBackground(Application::GetSettings().GetStyleSettings().GetFaceColor());
     maVirDev->SetOutputSizePixel(aWinSize);
+    maVirDev->Erase();
 
     // nothing is changed in case of too small items
     if ((mnItemWidth <= 0) ||
@@ -1083,8 +1076,8 @@ void ValueSet::Format(vcl::RenderContext const & rRenderContext)
         }
 
         // draw items
-        sal_uLong nFirstItem = static_cast<sal_uLong>(mnFirstLine) * mnCols;
-        sal_uLong nLastItem = nFirstItem + (mnVisLines * mnCols);
+        size_t nFirstItem = static_cast<size_t>(mnFirstLine) * mnCols;
+        size_t nLastItem = nFirstItem + (mnVisLines * mnCols);
 
         maItemListRect.SetLeft( x );
         maItemListRect.SetTop( y );
@@ -1231,7 +1224,7 @@ void ValueSet::ImplDrawSelect(vcl::RenderContext& rRenderContext,
     tools::Rectangle aRect(rRect);
 
     // draw selection
-    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
+    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
     rRenderContext.SetFillColor();
 
     Color aDoubleColor;
@@ -1264,7 +1257,7 @@ void ValueSet::ImplDrawSelect(vcl::RenderContext& rRenderContext,
         {
             rRenderContext.SetLineColor(aDoubleColor);
             tools::PolyPolygon aPolyPoly(1);
-            aPolyPoly.Insert(aRect);
+            aPolyPoly.Insert(tools::Polygon(aRect));
             rRenderContext.DrawTransparent(aPolyPoly, nTransparencePercent);
         }
     }
@@ -1281,7 +1274,7 @@ void ValueSet::ImplDrawSelect(vcl::RenderContext& rRenderContext,
             if (bDrawSel)
             {
                 tools::PolyPolygon aPolyPoly(1);
-                aPolyPoly.Insert(aRect);
+                aPolyPoly.Insert(tools::Polygon(aRect));
                 rRenderContext.DrawTransparent(aPolyPoly, nTransparencePercent);
             }
 
@@ -1300,7 +1293,7 @@ void ValueSet::ImplDrawSelect(vcl::RenderContext& rRenderContext,
             if (bDrawSel)
             {
                 tools::PolyPolygon aPolyPoly(1);
-                aPolyPoly.Insert(aRect);
+                aPolyPoly.Insert(tools::Polygon(aRect));
                 rRenderContext.DrawTransparent(aPolyPoly, nTransparencePercent);
             }
 
@@ -1394,7 +1387,7 @@ void ValueSet::ImplFormatItem(vcl::RenderContext const & rRenderContext, ValueSe
     if ((aRect.GetHeight() <= 0) || (aRect.GetWidth() <= 0))
         return;
 
-    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
+    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
 
     if (pItem == mpNoneItem.get())
     {

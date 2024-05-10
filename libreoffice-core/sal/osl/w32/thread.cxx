@@ -19,6 +19,7 @@
 
 #include "system.h"
 #include "thread.hxx"
+#include <thread_internal.hxx>
 
 #include <comphelper/windowserrorstring.hxx>
 #include <osl/diagnose.h>
@@ -42,7 +43,7 @@ namespace {
 typedef struct
 {
     HANDLE              m_hThread;      /* OS-handle used for all thread-functions */
-    DWORD               m_ThreadId;     /* identifier for this thread */
+    unsigned            m_ThreadId;     /* identifier for this thread */
     sal_Int32           m_nTerminationRequested;
     oslWorkerFunction   m_WorkerFunction;
     void*               m_pData;
@@ -53,7 +54,7 @@ typedef struct
 
 static oslThread oslCreateThread(oslWorkerFunction pWorker, void* pThreadData, sal_uInt32 nFlags);
 
-static DWORD WINAPI oslWorkerWrapperFunction(_In_ LPVOID pData)
+static unsigned __stdcall oslWorkerWrapperFunction(void* pData)
 {
     osl_TThreadImpl* pThreadImpl= static_cast<osl_TThreadImpl*>(pData);
 
@@ -88,13 +89,13 @@ static oslThread oslCreateThread(oslWorkerFunction pWorker,
     pThreadImpl->m_pData= pThreadData;
     pThreadImpl->m_nTerminationRequested= 0;
 
-    pThreadImpl->m_hThread= CreateThread(
+    pThreadImpl->m_hThread= reinterpret_cast<HANDLE>(_beginthreadex(
                                nullptr,                     /* no security */
                                0,                           /* default stack-size */
                                oslWorkerWrapperFunction,    /* worker-function */
                                pThreadImpl,                 /* provide worker-function with data */
                                nFlags,                      /* start thread immediately or suspended */
-                               &pThreadImpl->m_ThreadId);
+                               &pThreadImpl->m_ThreadId));
 
     if(pThreadImpl->m_hThread == nullptr)
     {
@@ -520,22 +521,9 @@ sal_Bool SAL_CALL osl_setThreadKeyData(oslThreadKey Key, void *pData)
     return false;
 }
 
-namespace
+rtl_TextEncoding getThreadTextEncodingForInitialization()
 {
-rtl_TextEncoding& getThreadTextEncodingImpl()
-{
-    static thread_local rtl_TextEncoding s_enc = rtl_getTextEncodingFromWindowsCodePage(GetACP());
-    return s_enc;
-}
-}
-
-rtl_TextEncoding SAL_CALL osl_getThreadTextEncoding(void) { return getThreadTextEncodingImpl(); }
-
-rtl_TextEncoding SAL_CALL osl_setThreadTextEncoding( rtl_TextEncoding Encoding )
-{
-    rtl_TextEncoding oldEncoding = getThreadTextEncodingImpl();
-    getThreadTextEncodingImpl() = Encoding;
-    return oldEncoding;
+    return rtl_getTextEncodingFromWindowsCodePage(GetACP());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -45,6 +45,7 @@
 #include <doc.hxx>
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentFieldsAccess.hxx>
+#include <docstyle.hxx>
 #include <fldbas.hxx>
 #include <fmtfld.hxx>
 #include <docufld.hxx>
@@ -188,7 +189,7 @@ namespace {
 
         if (pView)
         {
-            pView->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload.c_str());
+            pView->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, OString(aPayload));
         }
     }
 
@@ -225,6 +226,9 @@ SwPostItMgr::SwPostItMgr(SwView* pView)
     */
     // we want to receive stuff like SfxHintId::DocChanged
     StartListening(*mpView->GetDocShell());
+    // listen to stylesheet pool to update on stylesheet rename,
+    // as EditTextObject references styles by name.
+    StartListening(*static_cast<SwDocStyleSheetPool*>(mpView->GetDocShell()->GetStyleSheetPool())->GetEEStyleSheetPool());
     if (!mvPostItFields.empty())
     {
         mbWaitingForCalcRects = true;
@@ -238,7 +242,7 @@ SwPostItMgr::~SwPostItMgr()
         Application::RemoveUserEvent( mnEventId );
     // forget about all our Sidebar windows
     RemoveSidebarWin();
-    EndListening( *mpView->GetDocShell() );
+    EndListeningAll();
 
     mPages.clear();
 }
@@ -443,35 +447,14 @@ void SwPostItMgr::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                 }
                 break;
             }
-
-            case SwFormatFieldHintWhich::LANGUAGE:
-            {
-                SwFormatField* pFormatField = dynamic_cast<SwFormatField*>(&rBC);
-                for (auto const& postItField : mvPostItFields)
-                {
-                    if ( pFormatField == postItField->GetBroadcaster() )
-                    {
-                        if (postItField->mpPostIt)
-                        {
-                            const SvtScriptType nScriptType = SvtLanguageOptions::GetScriptTypeOfLanguage( postItField->GetFormatField().GetField()->GetLanguage() );
-                            sal_uInt16 nLangWhichId = 0;
-                            switch (nScriptType)
-                            {
-                            case SvtScriptType::LATIN :    nLangWhichId = EE_CHAR_LANGUAGE ; break;
-                            case SvtScriptType::ASIAN :    nLangWhichId = EE_CHAR_LANGUAGE_CJK; break;
-                            case SvtScriptType::COMPLEX :  nLangWhichId = EE_CHAR_LANGUAGE_CTL; break;
-                            default: break;
-                            }
-                            postItField->mpPostIt->SetLanguage(
-                                SvxLanguageItem(
-                                postItField->GetFormatField().GetField()->GetLanguage(),
-                                nLangWhichId) );
-                        }
-                        break;
-                    }
-                }
-                break;
-            }
+        }
+    }
+    else if ( const SfxStyleSheetModifiedHint * pStyleHint = dynamic_cast<const SfxStyleSheetModifiedHint*>(&rHint) )
+    {
+        for (const auto& postItField : mvPostItFields)
+        {
+            auto pField = static_cast<SwPostItField*>(postItField->GetFormatField().GetField());
+            pField->ChangeStyleSheetName(pStyleHint->GetOldName(), pStyleHint->GetStyleSheet());
         }
     }
     else
@@ -499,6 +482,11 @@ void SwPostItMgr::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                         mnEventId = Application::PostUserEvent( LINK( this, SwPostItMgr, CalcHdl) );
                     }
                 }
+                break;
+            }
+            case SfxHintId::LanguageChanged:
+            {
+                SetSpellChecking();
                 break;
             }
             case SfxHintId::SwSplitNodeOperation:
@@ -1489,7 +1477,7 @@ class FieldDocWatchingStack : public SfxListener
             if (!bAllInvalidated && m_rFilter(pField))
             {
                 EndListening(const_cast<SwFormatField&>(*pField));
-                m_aFormatFields.erase(std::remove(m_aFormatFields.begin(), m_aFormatFields.end(), pField), m_aFormatFields.end());
+                std::erase(m_aFormatFields, pField);
             }
         }
         else if (pHint->Which() == SwFormatFieldHintWhich::INSERTED)
@@ -2400,26 +2388,7 @@ sal_uInt16 SwPostItMgr::SearchReplace(const SwFormatField &pField, const i18nuti
 
 void SwPostItMgr::AssureStdModeAtShell()
 {
-        // deselect any drawing or frame and leave editing mode
-        SdrView* pSdrView = mpWrtShell->GetDrawView();
-        if ( pSdrView && pSdrView->IsTextEdit() )
-        {
-            bool bLockView = mpWrtShell->IsViewLocked();
-            mpWrtShell->LockView( true );
-            mpWrtShell->EndTextEdit();
-            mpWrtShell->LockView( bLockView );
-        }
-
-        if( mpWrtShell->IsSelFrameMode() || mpWrtShell->IsObjSelected())
-        {
-                mpWrtShell->UnSelectFrame();
-                mpWrtShell->LeaveSelFrameMode();
-                mpWrtShell->GetView().LeaveDrawCreate();
-                mpWrtShell->EnterStdMode();
-
-                mpWrtShell->DrawSelChanged();
-                mpView->StopShellTimer();
-        }
+    mpWrtShell->AssureStdMode();
 }
 
 bool SwPostItMgr::HasActiveSidebarWin() const

@@ -11,6 +11,8 @@
 
 #include "personalization.hxx"
 
+#include <dialmgr.hxx>
+
 #include <comphelper/processfactory.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <rtl/bootstrap.hxx>
@@ -21,6 +23,7 @@
 #include <vcl/settings.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <vcl/virdev.hxx>
+#include <personas.hrc>
 
 using namespace com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -33,11 +36,13 @@ SvxPersonalizationTabPage::SvxPersonalizationTabPage(weld::Container* pPage,
     : SfxTabPage(pPage, pController, "cui/ui/personalization_tab.ui", "PersonalizationTabPage",
                  &rSet)
     , m_xNoPersona(m_xBuilder->weld_radio_button("no_persona"))
+    , m_xPersonaImg(m_xBuilder->weld_widget("lockpersona"))
     , m_xDefaultPersona(m_xBuilder->weld_radio_button("default_persona"))
+    , m_xContentGrid(m_xBuilder->weld_container("gridpersonasetting"))
 {
     for (sal_uInt32 i = 0; i < MAX_DEFAULT_PERSONAS; ++i)
     {
-        OString sDefaultId("default" + OString::number(i));
+        OUString sDefaultId("default" + OUString::number(i));
         m_vDefaultPersonaImages[i] = m_xBuilder->weld_toggle_button(sDefaultId);
         m_vDefaultPersonaImages[i]->connect_clicked(
             LINK(this, SvxPersonalizationTabPage, DefaultPersona));
@@ -53,6 +58,23 @@ std::unique_ptr<SfxTabPage> SvxPersonalizationTabPage::Create(weld::Container* p
                                                               const SfxItemSet* rSet)
 {
     return std::make_unique<SvxPersonalizationTabPage>(pPage, pController, *rSet);
+}
+
+OUString SvxPersonalizationTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString radioButton[] = { "no_persona", "default_persona" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    if (const auto& pString = m_xBuilder->weld_label("personas_label"))
+        sAllStrings += pString->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SvxPersonalizationTabPage::FillItemSet(SfxItemSet*)
@@ -99,6 +121,16 @@ void SvxPersonalizationTabPage::Reset(const SfxItemSet*)
         m_xNoPersona->set_active(true);
     else
         m_xDefaultPersona->set_active(true);
+
+    if (officecfg::Office::Common::Misc::Persona::isReadOnly())
+    {
+        m_xNoPersona->set_sensitive(false);
+        m_xDefaultPersona->set_sensitive(false);
+        m_xPersonaImg->set_visible(true);
+    }
+
+    if (officecfg::Office::Common::Misc::PersonaSettings::isReadOnly())
+        m_xContentGrid->set_sensitive(false);
 }
 
 void SvxPersonalizationTabPage::LoadDefaultImages()
@@ -115,6 +147,7 @@ void SvxPersonalizationTabPage::LoadDefaultImages()
     bool foundOne = false;
 
     OStringBuffer aLine;
+    int nLineNumberFilePersona = 0;
     while (aStream.IsOpen() && !aStream.eof() && nIndex < MAX_DEFAULT_PERSONAS)
     {
         OUString aPersonaSetting, aPreviewFile, aName;
@@ -122,8 +155,8 @@ void SvxPersonalizationTabPage::LoadDefaultImages()
 
         aStream.ReadLine(aLine);
         aPersonaSetting = OStringToOUString(aLine, RTL_TEXTENCODING_UTF8);
-        aName = aPersonaSetting.getToken(1, ';', nParseIndex);
-        aPreviewFile = aPersonaSetting.getToken(0, ';', nParseIndex);
+        aName = CuiResId(RID_PERSONAS_COLOR[nLineNumberFilePersona].first);
+        aPreviewFile = aPersonaSetting.getToken(2, ';', nParseIndex);
 
         if (aPreviewFile.isEmpty())
             break;
@@ -146,6 +179,7 @@ void SvxPersonalizationTabPage::LoadDefaultImages()
         m_vDefaultPersonaImages[nIndex]->set_tooltip_text(aName);
         m_vDefaultPersonaImages[nIndex++]->show();
         foundOne = true;
+        ++nLineNumberFilePersona;
     }
 
     m_xDefaultPersona->set_sensitive(foundOne);

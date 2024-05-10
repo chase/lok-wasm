@@ -30,6 +30,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/random.hxx>
 #include <comphelper/scopeguard.hxx>
+#include <comphelper/lok.hxx>
 #include <com/sun/star/security/XCertificate.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <o3tl/char16_t2wchar_t.hxx>
@@ -644,7 +645,11 @@ NSSCMSMessage *CreateCMSMessage(const PRTime* time,
     // if it works, and fallback if it doesn't.
     if (SECKEYPrivateKey * pPrivateKey = PK11_FindKeyByAnyCert(cert, nullptr))
     {
-        SECKEY_DestroyPrivateKey(pPrivateKey);
+        if (!comphelper::LibreOfficeKit::isActive())
+        {
+            // pPrivateKey only exists in the memory in the LOK case, don't delete it.
+            SECKEY_DestroyPrivateKey(pPrivateKey);
+        }
         *cms_signer = NSS_CMSSignerInfo_Create(result, cert, SEC_OID_SHA256);
     }
     else
@@ -1032,6 +1037,7 @@ bool Signing::Sign(OStringBuffer& rCMSHexBuffer)
         ts_digest.len = aTsHashResult.size();
 
         unsigned char cOne = 1;
+        unsigned char cTRUE = 0xff; // under DER rules true is 0xff, false is 0x00
         src.version.type = siUnsignedInteger;
         src.version.data = &cOne;
         src.version.len = sizeof(cOne);
@@ -1051,8 +1057,8 @@ bool Signing::Sign(OStringBuffer& rCMSHexBuffer)
         src.nonce.len = sizeof(nNonce);
 
         src.certReq.type = siUnsignedInteger;
-        src.certReq.data = &cOne;
-        src.certReq.len = sizeof(cOne);
+        src.certReq.data = &cTRUE;
+        src.certReq.len = sizeof(cTRUE);
 
         src.extensions = nullptr;
 

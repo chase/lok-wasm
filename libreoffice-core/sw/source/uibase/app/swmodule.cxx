@@ -128,7 +128,7 @@ using namespace ::com::sun::star::uno;
 SwModule::SwModule( SfxObjectFactory* pWebFact,
                     SfxObjectFactory* pFact,
                     SfxObjectFactory* pGlobalFact )
-    : SfxModule("sw", {pWebFact, pFact, pGlobalFact}),
+    : SfxModule("sw"_ostr, {pWebFact, pFact, pGlobalFact}),
     m_pView(nullptr),
     m_bAuthorInitialised(false),
     m_bEmbeddedLoadSave( false ),
@@ -150,7 +150,10 @@ SwModule::SwModule( SfxObjectFactory* pWebFact,
 
     m_pStdFontConfig.reset(new SwStdFontConfig);
 
-    StartListening( *SfxGetpApp() );
+    {
+        SolarMutexGuard g;
+        StartListening( *SfxGetpApp() );
+    }
 
     if (!utl::ConfigManager::IsFuzzing())
     {

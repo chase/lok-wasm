@@ -197,28 +197,12 @@ Any SAL_CALL ODatabaseDocument::queryInterface( const Type& _rType )
         )
         return Any();
 
-    Any aReturn = ODatabaseDocument_OfficeDocument::queryInterface(_rType);
-    if (!aReturn.hasValue())
-        aReturn = ODatabaseDocument_Title::queryInterface(_rType);
-    return aReturn;
-}
-
-void SAL_CALL ODatabaseDocument::acquire(  ) noexcept
-{
-    ODatabaseDocument_OfficeDocument::acquire();
-}
-
-void SAL_CALL ODatabaseDocument::release(  ) noexcept
-{
-    ODatabaseDocument_OfficeDocument::release();
+    return ODatabaseDocument_OfficeDocument::queryInterface(_rType);
 }
 
 Sequence< Type > SAL_CALL ODatabaseDocument::getTypes(  )
 {
-    Sequence< Type > aTypes = ::comphelper::concatSequences(
-        ODatabaseDocument_OfficeDocument::getTypes(),
-        ODatabaseDocument_Title::getTypes()
-    );
+    Sequence< Type > aTypes = ODatabaseDocument_OfficeDocument::getTypes();
 
     // strip XEmbeddedScripts and XScriptInvocationContext if we have any form/report
     // which already contains macros. In this case, the database document itself is not
@@ -306,17 +290,17 @@ namespace
 
     Sequence< PropertyValue > lcl_appendFileNameToDescriptor( const ::comphelper::NamedValueCollection& _rDescriptor, const OUString& _rURL )
     {
+        if ( _rURL.isEmpty() )
+            return _rDescriptor.getPropertyValues();
+
         ::comphelper::NamedValueCollection aMutableDescriptor( _rDescriptor );
-        if ( !_rURL.isEmpty() )
-        {
-            aMutableDescriptor.put( "FileName", _rURL );
-            aMutableDescriptor.put( "URL", _rURL );
-        }
+        aMutableDescriptor.put( "FileName", _rURL );
+        aMutableDescriptor.put( "URL", _rURL );
         return aMutableDescriptor.getPropertyValues();
     }
 }
 
-constexpr OUStringLiteral sPictures = u"Pictures";
+constexpr OUString sPictures = u"Pictures"_ustr;
 
 // base documents seem to have a different behaviour to other documents, the
 // root storage contents at least seem to be re-used over different saves, thus if there is a
@@ -1659,7 +1643,7 @@ void ODatabaseDocument::impl_writeStorage_throw( const Reference< XStorage >& _r
     aDelegatorArguments.getArray()[nArgsLen++] <<= xInfoSet;
 
     Reference< XPropertySet > xProp( _rxTargetStorage, UNO_QUERY_THROW );
-    xProp->setPropertyValue( INFO_MEDIATYPE, Any( OUString(MIMETYPE_OASIS_OPENDOCUMENT_DATABASE_ASCII) ) );
+    xProp->setPropertyValue( INFO_MEDIATYPE, Any( MIMETYPE_OASIS_OPENDOCUMENT_DATABASE_ASCII ) );
 
     OUString aVersion;
     SvtSaveOptions::ODFSaneDefaultVersion const nDefVersion =
@@ -1869,6 +1853,11 @@ void ODatabaseDocument::disposing()
 void SAL_CALL ODatabaseDocument::dispose(  )
 {
     ::cppu::WeakComponentImplHelperBase::dispose();
+    m_xTitleHelper.clear();
+    m_xModuleManager.clear();
+    m_pEventExecutor.clear();
+    m_xCurrentController.clear();
+    m_xUIConfigurationManager.clear();
 }
 
 void SAL_CALL ODatabaseDocument::addEventListener( const Reference< lang::XEventListener >& _xListener )
@@ -2196,11 +2185,11 @@ extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
 com_sun_star_comp_dba_ODatabaseDocument(css::uno::XComponentContext* context,
         css::uno::Sequence<css::uno::Any> const &)
 {
-    Reference<XUnoTunnel> xDBContextTunnel(DatabaseContext::create(context), UNO_QUERY_THROW);
-    dbaccess::ODatabaseContext* pContext
-        = comphelper::getFromUnoTunnel<dbaccess::ODatabaseContext>(xDBContextTunnel);
+    Reference<XInterface> xDBContextTunnel(DatabaseContext::create(context), UNO_QUERY_THROW);
+    rtl::Reference<dbaccess::ODatabaseContext> pContext
+        = dynamic_cast<dbaccess::ODatabaseContext*>(xDBContextTunnel.get());
     assert(pContext);
-
+    
     rtl::Reference pImpl(
             new dbaccess::ODatabaseModelImpl(context, *pContext));
     css::uno::Reference<XInterface> inst(pImpl->createNewModel_deliverOwnership());

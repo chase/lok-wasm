@@ -371,6 +371,9 @@ public:
     virtual void RemoveAttribs(const ESelection& rSelection) override;
     virtual void GetPortions(sal_Int32 nPara, std::vector<sal_Int32>& rList) const override;
 
+    virtual OUString GetStyleSheet(sal_Int32 nPara) const override;
+    virtual void SetStyleSheet(sal_Int32 nPara, const OUString& rStyleName) override;
+
     virtual SfxItemState GetItemState(const ESelection& rSel, sal_uInt16 nWhich) const override;
     virtual SfxItemState GetItemState(sal_Int32 nPara, sal_uInt16 nWhich) const override;
 
@@ -383,7 +386,8 @@ public:
 
     virtual OUString CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos,
                                     std::optional<Color>& rpTxtColor,
-                                    std::optional<Color>& rpFldColor) override;
+                                    std::optional<Color>& rpFldColor,
+                                    std::optional<FontLineStyle>& rpFldLineStyle) override;
     virtual void FieldClicked(const SvxFieldItem&) override;
     virtual bool IsValid() const override;
 
@@ -625,7 +629,7 @@ public:
 
         if (weld::DrawingArea* pDrawingArea = m_pController->GetDrawingArea())
         {
-            Point aPos = pDrawingArea->get_accessible_location_on_screen();
+            AbsoluteScreenPixelPoint aPos = pDrawingArea->get_accessible_location_on_screen();
             aScreenLoc.X = aPos.X();
             aScreenLoc.Y = aPos.Y();
         }
@@ -1018,6 +1022,23 @@ void WeldTextForwarder::GetPortions(sal_Int32 nPara, std::vector<sal_Int32>& rLi
         pEditEngine->GetPortions(nPara, rList);
 }
 
+OUString WeldTextForwarder::GetStyleSheet(sal_Int32 nPara) const
+{
+    EditEngine* pEditEngine = m_rEditAcc.GetEditEngine();
+    if (auto pStyle = pEditEngine ? pEditEngine->GetStyleSheet(nPara) : nullptr)
+        return pStyle->GetName();
+    return OUString();
+}
+
+void WeldTextForwarder::SetStyleSheet(sal_Int32 nPara, const OUString& rStyleName)
+{
+    EditEngine* pEditEngine = m_rEditAcc.GetEditEngine();
+    auto pStyleSheetPool = pEditEngine ? pEditEngine->GetStyleSheetPool() : nullptr;
+    if (auto pStyle
+        = pStyleSheetPool ? pStyleSheetPool->Find(rStyleName, SfxStyleFamily::Para) : nullptr)
+        pEditEngine->SetStyleSheet(nPara, static_cast<SfxStyleSheet*>(pStyle));
+}
+
 void WeldTextForwarder::QuickInsertText(const OUString& rText, const ESelection& rSel)
 {
     EditEngine* pEditEngine = m_rEditAcc.GetEditEngine();
@@ -1056,10 +1077,12 @@ bool WeldTextForwarder::IsValid() const
 
 OUString WeldTextForwarder::CalcFieldValue(const SvxFieldItem& rField, sal_Int32 nPara,
                                            sal_Int32 nPos, std::optional<Color>& rpTxtColor,
-                                           std::optional<Color>& rpFldColor)
+                                           std::optional<Color>& rpFldColor,
+                                           std::optional<FontLineStyle>& rpFldLineStyle)
 {
     EditEngine* pEditEngine = m_rEditAcc.GetEditEngine();
-    return pEditEngine ? pEditEngine->CalcFieldValue(rField, nPara, nPos, rpTxtColor, rpFldColor)
+    return pEditEngine ? pEditEngine->CalcFieldValue(rField, nPara, nPos, rpTxtColor, rpFldColor,
+                                                     rpFldLineStyle)
                        : OUString();
 }
 
@@ -1644,6 +1667,20 @@ css::uno::Reference<css::datatransfer::dnd::XDropTarget> WeldEditView::GetDropTa
 css::uno::Reference<css::datatransfer::clipboard::XClipboard> WeldEditView::GetClipboard() const
 {
     return weld::CustomWidgetController::GetClipboard();
+}
+
+void WeldEditView::EditViewSelectionChange()
+{
+    Invalidate();
+
+#if !ENABLE_WASM_STRIP_ACCESSIBILITY
+    if (m_xAccessible.is())
+    {
+        ::accessibility::AccessibleTextHelper* pHelper = m_xAccessible->GetTextHelper();
+        if (pHelper)
+            pHelper->UpdateSelection();
+    }
+#endif
 }
 
 namespace

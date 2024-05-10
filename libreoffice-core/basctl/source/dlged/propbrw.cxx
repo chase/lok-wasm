@@ -141,7 +141,7 @@ void PropBrw::ImplReCreateController()
 
         // create a property browser controller
         Reference< XMultiComponentFactory > xFactory( xInspectorContext->getServiceManager(), UNO_SET_THROW );
-        static constexpr OUStringLiteral s_sControllerServiceName = u"com.sun.star.awt.PropertyBrowserController";
+        static constexpr OUString s_sControllerServiceName = u"com.sun.star.awt.PropertyBrowserController"_ustr;
         m_xBrowserController.set( xFactory->createInstanceWithContext( s_sControllerServiceName, xInspectorContext ), UNO_QUERY );
         if ( !m_xBrowserController.is() )
         {
@@ -242,11 +242,11 @@ Sequence< Reference< XInterface > >
     {
         SdrObject* pCurrent = _rMarkList.GetMark(i)->GetMarkedSdrObj();
 
-        std::unique_ptr<SdrObjListIter> pGroupIterator;
+        std::optional<SdrObjListIter> oGroupIterator;
         if (pCurrent->IsGroupObject())
         {
-            pGroupIterator.reset(new SdrObjListIter(pCurrent->GetSubList()));
-            pCurrent = pGroupIterator->IsMore() ? pGroupIterator->Next() : nullptr;
+            oGroupIterator.emplace(pCurrent->GetSubList());
+            pCurrent = oGroupIterator->IsMore() ? oGroupIterator->Next() : nullptr;
         }
 
         while (pCurrent)
@@ -259,7 +259,7 @@ Sequence< Reference< XInterface > >
             }
 
             // next element
-            pCurrent = pGroupIterator && pGroupIterator->IsMore() ? pGroupIterator->Next() : nullptr;
+            pCurrent = oGroupIterator && oGroupIterator->IsMore() ? oGroupIterator->Next() : nullptr;
         }
     }
 
@@ -443,7 +443,7 @@ void PropBrw::ImplUpdate( const Reference< XModel >& _rxContextDocument, SdrView
     {
         if ( pView )
         {
-            EndListening( *(pView->GetModel()) );
+            EndListening(pView->GetModel());
             pView = nullptr;
         }
 
@@ -464,7 +464,7 @@ void PropBrw::ImplUpdate( const Reference< XModel >& _rxContextDocument, SdrView
 
         if ( nMarkCount == 0 )
         {
-            EndListening( *(pView->GetModel()) );
+            EndListening(pView->GetModel());
             pView = nullptr;
             implSetNewObject( nullptr );
             return;
@@ -492,7 +492,7 @@ void PropBrw::ImplUpdate( const Reference< XModel >& _rxContextDocument, SdrView
         else
             implSetNewObject( xNewObject );
 
-        StartListening( *(pView->GetModel()) );
+        StartListening(pView->GetModel());
     }
     catch ( const PropertyVetoException& ) { /* silence */ }
     catch ( const Exception& )

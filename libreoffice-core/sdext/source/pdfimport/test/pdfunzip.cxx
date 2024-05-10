@@ -224,7 +224,8 @@ typedef int(*PDFFileHdl)(const char*, const char*, PDFFile*);
 static int handleFile( const char* pInFile, const char* pOutFile, const char* pPassword, PDFFileHdl pHdl )
 {
     int nRet = 0;
-    std::unique_ptr<PDFEntry> pEntry = pdfparse::PDFReader::read( pInFile );
+    std::unique_ptr<PDFEntry> pEntry
+        = pdfparse::PDFReader::read(OStringToOUString(pInFile, osl_getThreadTextEncoding()));
     if( pEntry )
     {
         PDFFile* pPDFFile = dynamic_cast<PDFFile*>(pEntry.get());
@@ -302,7 +303,7 @@ static int write_addStreams( const char* pInFile, const char* pOutFile, PDFFile*
         if( pTrailer && pTrailer->m_pDict )
         {
             // search for AdditionalStreams entry
-            auto add_stream = pTrailer->m_pDict->m_aMap.find( "AdditionalStreams" );
+            auto add_stream = pTrailer->m_pDict->m_aMap.find( "AdditionalStreams"_ostr );
             if( add_stream != pTrailer->m_pDict->m_aMap.end() )
             {
                 PDFArray* pStreams = dynamic_cast<PDFArray*>(add_stream->second);
@@ -328,7 +329,7 @@ static int write_fonts( const char* i_pInFile, const char* i_pOutFile, PDFFile* 
             continue;
 
         std::unordered_map<OString,PDFEntry*>::iterator map_it =
-                pDict->m_aMap.find( "Type" );
+                pDict->m_aMap.find( "Type"_ostr );
         if( map_it == pDict->m_aMap.end() )
             continue;
 
@@ -340,7 +341,7 @@ static int write_fonts( const char* i_pInFile, const char* i_pOutFile, PDFFile* 
 
         // the font name will be helpful, also there must be one in
         // a font descriptor
-        map_it = pDict->m_aMap.find( "FontName" );
+        map_it = pDict->m_aMap.find( "FontName"_ostr );
         if( map_it == pDict->m_aMap.end() )
             continue;
         pName = dynamic_cast<PDFName*>(map_it->second);
@@ -351,7 +352,7 @@ static int write_fonts( const char* i_pInFile, const char* i_pOutFile, PDFFile* 
         PDFObjectRef* pStreamRef = nullptr;
         const char* pFileType = nullptr;
         // we have a font descriptor, try for a type 1 font
-        map_it = pDict->m_aMap.find( "FontFile" );
+        map_it = pDict->m_aMap.find( "FontFile"_ostr );
         if( map_it != pDict->m_aMap.end() )
         {
             pStreamRef = dynamic_cast<PDFObjectRef*>(map_it->second);
@@ -362,7 +363,7 @@ static int write_fonts( const char* i_pInFile, const char* i_pOutFile, PDFFile* 
         // perhaps it's a truetype file ?
         if( ! pStreamRef )
         {
-            map_it  = pDict->m_aMap.find( "FontFile2" );
+            map_it  = pDict->m_aMap.find( "FontFile2"_ostr );
             if( map_it != pDict->m_aMap.end() )
             {
                 pStreamRef = dynamic_cast<PDFObjectRef*>(map_it->second);
@@ -378,17 +379,16 @@ static int write_fonts( const char* i_pInFile, const char* i_pOutFile, PDFFile* 
         if( ! pStream )
             continue;
 
-        OStringBuffer aOutStream( i_pOutFile );
-        aOutStream.append( "_font_" );
-        aOutStream.append( sal_Int32(pStreamRef->m_nNumber) );
-        aOutStream.append( "_" );
-        aOutStream.append( sal_Int32(pStreamRef->m_nGeneration) );
-        aOutStream.append( "_" );
-        aOutStream.append( aFontName );
+        OStringBuffer aOutStream( OString::Concat(i_pOutFile)
+            + "_font_"
+            + OString::number( sal_Int32(pStreamRef->m_nNumber) )
+            + "_"
+            + OString::number( sal_Int32(pStreamRef->m_nGeneration) )
+            + "_"
+            + aFontName );
         if( pFileType )
         {
-            aOutStream.append( "." );
-            aOutStream.append( pFileType );
+            aOutStream.append( OString::Concat(".") + pFileType );
         }
         FileEmitContext aContext( aOutStream.getStr(), i_pInFile, i_pPDFFile );
         aContext.m_bDecrypt = i_pPDFFile->isEncrypted();

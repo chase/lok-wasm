@@ -26,9 +26,11 @@
 #include <tools/gen.hxx>
 #include <editeng/editdata.hxx>
 #include <filter/msfilter/ww8fields.hxx>
+#include <filter/msfilter/msoleexp.hxx>
 
 #include <shellio.hxx>
 
+#include <comphelper/inthash.hxx> // MACRO-1786
 #include "ww8struc.hxx"
 #include "ww8scan.hxx"
 #include "types.hxx"
@@ -122,7 +124,6 @@ class WW8_WrPlcTextBoxes;
 class WW8_WrPct;            // administration
 class WW8_WrtBookmarks;
 class WW8_WrtRedlineAuthor;
-class SvxMSExportOLEObjects;
 class SwMSConvertControls;
 class WW8_WrPc;
 struct WW8_PdAttrDesc;
@@ -473,7 +474,7 @@ public:
     std::unique_ptr<WW8_WrtBookmarks> m_pBkmks;
     std::unique_ptr<WW8_WrtRedlineAuthor> m_pRedlAuthors;
     std::shared_ptr<NfKeywordTable> m_pKeyMap;
-    std::unique_ptr<SvxMSExportOLEObjects> m_pOLEExp;
+    std::optional<SvxMSExportOLEObjects> m_oOLEExp;
     std::unique_ptr<SwMSConvertControls> m_pOCXExp;
     WW8OleMap m_aOleMap;    // To remember all already exported ole objects
     ww8::WW8TableInfo::Pointer_t m_pTableInfo;
@@ -584,8 +585,14 @@ public:
 
     /// Used to split the runs according to the bookmarks start and ends
     typedef std::vector< ::sw::mark::IMark* > IMarkVector;
-    IMarkVector m_rSortedBookmarksStart;
-    IMarkVector m_rSortedBookmarksEnd;
+
+    // MACRO-1786: only the first element of previous vectors were ever used {
+    // tracks the next nearest mark start, nullptr means unset
+    const ::sw::mark::IMark* m_rSortedBookmarkStart = nullptr;
+    // tracks the next nearest mark end, nullptr means unset
+    const ::sw::mark::IMark* m_rSortedBookmarkEnd = nullptr;
+    // MACRO-1786 }
+
     IMarkVector m_rSortedAnnotationMarksStart;
     IMarkVector m_rSortedAnnotationMarksEnd;
 
@@ -826,6 +833,8 @@ public:
     /// Returns the index of a picture bullet, used in numberings.
     int GetGrfIndex(const SvxBrushItem& rBrush);
 
+    tools::Long GetParaTabStopOffset() const;
+
     enum ExportFormat { DOC = 0, RTF = 1, DOCX = 2};
     virtual ExportFormat GetExportFormat() const = 0;
 
@@ -923,6 +932,23 @@ protected:
 
     std::vector<const Graphic*> m_vecBulletPic; ///< Vector to record all the graphics of bullets
 
+    // MACRO-1786 {
+    /// Node index-content index pair to mark, O(1) lookup for exact match
+    using NodeIndexContentIndexPair = std::pair<sal_Int32, sal_Int32>;
+    std::unordered_map<NodeIndexContentIndexPair,
+                       std::vector<const ::sw::mark::IMark*>,
+                       comphelper::IntPairHash<NodeIndexContentIndexPair>> m_NodeToBookmarksStarts;
+    std::unordered_map<NodeIndexContentIndexPair,
+                       std::vector<const ::sw::mark::IMark*>,
+                       comphelper::IntPairHash<NodeIndexContentIndexPair>> m_NodeToBookmarksEnds;
+    // Node index to a map of content index to mark, used for seeking the next nearest mark
+    // O(1) node lookup, Θ(1) O(n - m) nearest content lookup
+    std::unordered_map<sal_Int32,
+                       std::multimap<sal_Int32, const ::sw::mark::IMark*>> m_NodeToBookmarksContentStarts;
+    std::unordered_map<sal_Int32,
+                       std::multimap<sal_Int32, const ::sw::mark::IMark*>> m_NodeToBookmarksContentEnds;
+    // MACRO-1786 }
+
 public:
     MSWordExportBase(SwDoc& rDocument, std::shared_ptr<SwUnoCursor> & pCurrentPam, SwPaM* pOriginalPam);
     virtual ~MSWordExportBase();
@@ -937,6 +963,8 @@ public:
 private:
     MSWordExportBase( const MSWordExportBase& ) = delete;
     MSWordExportBase& operator=( const MSWordExportBase& ) = delete;
+
+    void InitBookmarkLookup(); // MACRO-1786
 
     std::unordered_map<OUString, OUString> m_aBookmarkToWord;
     o3tl::sorted_vector<OUString> m_aWordBookmarks;
@@ -957,8 +985,8 @@ public:
     SwWW8Writer(std::u16string_view rFltName, const OUString& rBaseURL);
     virtual ~SwWW8Writer() override;
 
-    virtual ErrCode WriteStorage() override;
-    virtual ErrCode WriteMedium( SfxMedium& ) override;
+    virtual ErrCodeMsg WriteStorage() override;
+    virtual ErrCodeMsg WriteMedium( SfxMedium& ) override;
 
     // TODO most probably we want to be able to get these in
     // MSExportFilterBase
@@ -990,7 +1018,7 @@ public:
     bool InitStd97CodecUpdateMedium( ::msfilter::MSCodec_Std97& rCodec );
 
     using StgWriter::Write;
-    virtual ErrCode Write( SwPaM&, SfxMedium&, const OUString* ) override;
+    virtual ErrCodeMsg Write( SwPaM&, SfxMedium&, const OUString* ) override;
     //Seems not an expected to provide method to access the private member
     SfxMedium* GetMedia() { return mpMedium; }
 
@@ -1398,7 +1426,7 @@ class GraphicDetails
 {
 public:
     ww8::Frame maFly;                // surrounding FlyFrames
-    sal_uLong mnPos;                // FilePos of the graphics
+    sal_uInt64 mnPos;                // FilePos of the graphics
     sal_uInt16 mnWid;               // Width of the graphics
     sal_uInt16 mnHei;               // Height of the graphics
 
@@ -1549,7 +1577,7 @@ private:
     SwWW8AttrIter(const SwWW8AttrIter&) = delete;
     SwWW8AttrIter& operator=(const SwWW8AttrIter&) = delete;
 
-    void handleToggleProperty(SfxItemSet& rExportSet, const SwFormatCharFormat* pCharFormatItem, sal_uInt16 nWhich, const SfxPoolItem* pValue);
+    void handleToggleProperty(SfxItemSet& rExportSet, const SwFormatCharFormat& rCharFormatItem);
 public:
     SwWW8AttrIter( MSWordExportBase& rWr, const SwTextNode& rNd );
 

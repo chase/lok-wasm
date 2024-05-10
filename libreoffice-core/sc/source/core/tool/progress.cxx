@@ -31,6 +31,7 @@
 #define SC_PROGRESS_CXX
 #include <progress.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <globstr.hrc>
 #include <scresid.hxx>
 
@@ -52,10 +53,8 @@ static bool lcl_IsHiddenDocument( const SfxObjectShell* pObjSh )
         SfxMedium* pMed = pObjSh->GetMedium();
         if (pMed)
         {
-            SfxItemSet* pSet = pMed->GetItemSet();
-            const SfxBoolItem* pItem;
-            if ( pSet && (pItem = pSet->GetItemIfSet( SID_HIDDEN )) &&
-                        pItem->GetValue() )
+            if (const SfxBoolItem* pItem = pMed->GetItemSet().GetItemIfSet(SID_HIDDEN);
+                pItem && pItem->GetValue())
                 return true;
         }
     }

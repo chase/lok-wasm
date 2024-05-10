@@ -33,7 +33,7 @@
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <unotools/tempfile.hxx>
-#include <salhelper/singletonref.hxx>
+#include <comphelper/singletonref.hxx>
 #include <comphelper/sequence.hxx>
 
 #include <nss/nssinitializer.hxx>
@@ -93,9 +93,9 @@ public:
     }
 };
 
-salhelper::SingletonRef<InitNSSPrivate>* getInitNSSPrivate()
+comphelper::SingletonRef<InitNSSPrivate>* getInitNSSPrivate()
 {
-    static salhelper::SingletonRef<InitNSSPrivate> aInitNSSPrivate;
+    static comphelper::SingletonRef<InitNSSPrivate> aInitNSSPrivate;
     return &aInitNSSPrivate;
 }
 
@@ -587,11 +587,18 @@ css::uno::Reference< css::xml::crypto::XCipherContext > SAL_CALL ONSSInitializer
 {
     CK_MECHANISM_TYPE nNSSCipherID = 0;
     bool bW3CPadding = false;
-    if ( nCipherID != css::xml::crypto::CipherID::AES_CBC_W3C_PADDING )
-        throw css::lang::IllegalArgumentException("Unexpected cipher requested.", css::uno::Reference< css::uno::XInterface >(), 1 );
-
-    nNSSCipherID = CKM_AES_CBC;
-    bW3CPadding = true;
+    switch (nCipherID)
+    {
+        case css::xml::crypto::CipherID::AES_CBC_W3C_PADDING:
+            nNSSCipherID = CKM_AES_CBC;
+            bW3CPadding = true;
+            break;
+        case css::xml::crypto::CipherID::AES_GCM_W3C:
+            nNSSCipherID = CKM_AES_GCM;
+            break;
+        default:
+            throw css::lang::IllegalArgumentException("Unexpected cipher requested.", css::uno::Reference< css::uno::XInterface >(), 1);
+    }
 
     if ( aKey.getLength() != 16 && aKey.getLength() != 24 && aKey.getLength() != 32 )
         throw css::lang::IllegalArgumentException("Unexpected key length.", css::uno::Reference< css::uno::XInterface >(), 2 );
@@ -606,6 +613,7 @@ css::uno::Reference< css::xml::crypto::XCipherContext > SAL_CALL ONSSInitializer
             throw css::lang::IllegalArgumentException("Unexpected length of initialization vector.", css::uno::Reference< css::uno::XInterface >(), 3 );
 
         xResult = OCipherContext::Create( nNSSCipherID, aKey, aInitializationVector, bEncryption, bW3CPadding );
+        assert(xResult.is());
     }
 
     return xResult;

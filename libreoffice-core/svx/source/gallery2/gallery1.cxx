@@ -43,7 +43,7 @@
 #include <svx/galmisc.hxx>
 #include <svx/galtheme.hxx>
 #include <svx/gallery1.hxx>
-#include <svx/gallerybinaryengineentry.hxx>
+#include <galleryfilestorageentry.hxx>
 #include <vcl/weld.hxx>
 #include <com/sun/star/sdbc/XResultSet.hpp>
 #include <com/sun/star/ucb/XContentAccess.hpp>
@@ -53,7 +53,7 @@
 using namespace ::com::sun::star;
 
 
-const std::pair<sal_uInt16, rtl::OUStringConstExpr> aUnlocalized[] =
+constexpr std::pair<sal_uInt16, OUString> aUnlocalized[] =
 {
     { GALLERY_THEME_HOMEPAGE, RID_GALLERYSTR_THEME_HTMLBUTTONS },
     { GALLERY_THEME_POWERPOINT, RID_GALLERYSTR_THEME_POWERPOINT },
@@ -121,10 +121,10 @@ GalleryThemeEntry::GalleryThemeEntry( bool bCreateUniqueURL,
 
     if (bCreateUniqueURL)
     {
-        GalleryBinaryEngineEntry::CreateUniqueURL(rBaseURL,aURL);
+        GalleryFileStorageEntry::CreateUniqueURL(rBaseURL,aURL);
     }
 
-    mpGalleryStorageEngineEntry = std::make_unique<GalleryBinaryEngineEntry>();
+    mpGalleryStorageEngineEntry = std::make_unique<GalleryFileStorageEntry>();
     setStorageLocations(aURL);
 
     SetModified( _bNewFile );
@@ -163,6 +163,9 @@ GalleryThemeEntry::GalleryThemeEntry( bool bCreateUniqueURL,
         aName = rName;
 }
 
+GalleryThemeEntry::~GalleryThemeEntry()
+{}
+
 void GalleryThemeEntry::setStorageLocations(INetURLObject & rURL)
 {
     mpGalleryStorageEngineEntry->setStorageLocations(rURL);
@@ -173,7 +176,7 @@ GalleryTheme* GalleryThemeEntry::createGalleryTheme(Gallery* pGallery)
     return new GalleryTheme(pGallery,this);
 }
 
-std::unique_ptr<GalleryBinaryEngine> GalleryThemeEntry::createGalleryStorageEngine(GalleryObjectCollection& mrGalleryObjectCollection)
+std::unique_ptr<GalleryFileStorage> GalleryThemeEntry::createGalleryStorageEngine(GalleryObjectCollection& mrGalleryObjectCollection)
 {
     return mpGalleryStorageEngineEntry->createGalleryStorageEngine(mrGalleryObjectCollection, bReadOnly);
 }
@@ -344,8 +347,8 @@ void Gallery::ImplLoadSubDirs( const INetURLObject& rBaseURL, bool& rbDirIsReadO
 
             if( xContentAccess.is() )
             {
-                static constexpr OUStringLiteral s_sTitle = u"Title";
-                static constexpr OUStringLiteral s_sIsReadOnly = u"IsReadOnly";
+                static constexpr OUString s_sTitle = u"Title"_ustr;
+                static constexpr OUString s_sIsReadOnly = u"IsReadOnly"_ustr;
 
                 while( xResultSet->next() )
                 {
@@ -445,7 +448,7 @@ void Gallery::ImplLoadSubDirs( const INetURLObject& rBaseURL, bool& rbDirIsReadO
                                     }
                                 }
 
-                                GalleryThemeEntry* pEntry = GalleryBinaryEngineEntry::CreateThemeEntry( aThmURL, rbDirIsReadOnly || bReadOnly );
+                                GalleryThemeEntry* pEntry = GalleryFileStorageEntry::CreateThemeEntry( aThmURL, rbDirIsReadOnly || bReadOnly );
 
                                 if( pEntry )
                                     aThemeList.emplace_back( pEntry );
@@ -719,6 +722,11 @@ void Gallery::ReleaseTheme( GalleryTheme* pTheme, SfxListener& rListener )
 bool GalleryThemeEntry::IsDefault() const
 {
     return nId > 0 && nId != GALLERY_THEME_MYTHEME;
+}
+
+GalleryStorageLocations& GalleryThemeEntry::getGalleryStorageLocations() const
+{
+    return mpGalleryStorageEngineEntry->getGalleryStorageLocations();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

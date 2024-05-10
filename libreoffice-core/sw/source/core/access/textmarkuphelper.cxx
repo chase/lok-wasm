@@ -86,13 +86,13 @@ SwTextMarkupHelper::SwTextMarkupHelper( const SwAccessiblePortionData& rPortionD
 {
 }
 
-sal_Int32 SwTextMarkupHelper::getTextMarkupCount( const sal_Int32 nTextMarkupType )
-{
-    sal_Int32 nTextMarkupCount( 0 );
 
+std::unique_ptr<sw::WrongListIteratorCounter> SwTextMarkupHelper::getIterator(sal_Int32 nTextMarkupType)
+{
+    std::unique_ptr<sw::WrongListIteratorCounter> pIter;
     if (mpTextMarkupList)
     {
-        nTextMarkupCount = mpTextMarkupList->Count();
+        pIter.reset(new sw::WrongListIteratorCounter(*mpTextMarkupList));
     }
     else
     {
@@ -100,9 +100,27 @@ sal_Int32 SwTextMarkupHelper::getTextMarkupCount( const sal_Int32 nTextMarkupTyp
         SwWrongList const* (SwTextNode::*const pGetWrongList)() const = getTextMarkupFunc(nTextMarkupType);
         if (pGetWrongList)
         {
-            sw::WrongListIteratorCounter iter(*m_pTextFrame, pGetWrongList);
-            nTextMarkupCount = iter.GetElementCount();
+            pIter.reset(new sw::WrongListIteratorCounter(*m_pTextFrame, pGetWrongList));
         }
+    }
+
+    return pIter;
+}
+
+
+sal_Int32 SwTextMarkupHelper::getTextMarkupCount( const sal_Int32 nTextMarkupType )
+{
+    sal_Int32 nTextMarkupCount( 0 );
+
+    std::unique_ptr<sw::WrongListIteratorCounter> pIter = getIterator(nTextMarkupType);
+    // iterator may handle all items in the underlying text node in the model, which may be more
+    // than what is in the portion data (e.g. if a paragraph is split across multiple pages),
+    // only take into account those that are in the portion data
+    for (sal_uInt16 i = 0; i < pIter->GetElementCount(); i++)
+    {
+        std::optional<std::pair<TextFrameIndex, TextFrameIndex>> oIndices = pIter->GetElementAt(i);
+        if (oIndices && mrPortionData.IsValidCorePosition(oIndices->first) && mrPortionData.IsValidCorePosition(oIndices->second))
+            nTextMarkupCount++;
     }
 
     return nTextMarkupCount;
@@ -122,24 +140,30 @@ css::accessibility::TextSegment
     aTextMarkupSegment.SegmentStart = -1;
     aTextMarkupSegment.SegmentEnd = -1;
 
-    std::unique_ptr<sw::WrongListIteratorCounter> pIter;
-    if (mpTextMarkupList)
-    {
-        pIter.reset(new sw::WrongListIteratorCounter(*mpTextMarkupList));
-    }
-    else
-    {
-        assert(m_pTextFrame);
-        SwWrongList const* (SwTextNode::*const pGetWrongList)() const = getTextMarkupFunc(nTextMarkupType);
-        if (pGetWrongList)
-        {
-            pIter.reset(new sw::WrongListIteratorCounter(*m_pTextFrame, pGetWrongList));
-        }
-    }
-
+    std::unique_ptr<sw::WrongListIteratorCounter> pIter = getIterator(nTextMarkupType);
     if (pIter)
     {
-        auto const oElement(pIter->GetElementAt(nTextMarkupIndex));
+        std::optional<std::pair<TextFrameIndex, TextFrameIndex>> oElement;
+        const sal_uInt16 nIterElementCount = pIter->GetElementCount();
+        sal_Int32 nIndexInPortion = 0;
+        sal_uInt16 nIterIndex = 0;
+        while (!oElement && nIterIndex < nIterElementCount)
+        {
+            // iterator may handle all items in the underlying text node in the model, which may be more
+            // than what is in the portion data (e.g. if a paragraph is split across multiple pages),
+            // only take into account those that are in the portion data
+            std::optional<std::pair<TextFrameIndex, TextFrameIndex>> oIndices = pIter->GetElementAt(nIterIndex);
+            if (oIndices && mrPortionData.IsValidCorePosition(oIndices->first) && mrPortionData.IsValidCorePosition(oIndices->second))
+            {
+                if (nIndexInPortion == nTextMarkupIndex)
+                    oElement = oIndices;
+
+                nIndexInPortion++;
+            }
+
+            nIterIndex++;
+        }
+
         if (oElement)
         {
             const OUString& rText = mrPortionData.GetAccessibleString();
@@ -175,21 +199,7 @@ css::uno::Sequence< css::accessibility::TextSegment >
         return uno::Sequence< css::accessibility::TextSegment >();
     }
 
-    std::unique_ptr<sw::WrongListIteratorCounter> pIter;
-    if (mpTextMarkupList)
-    {
-        pIter.reset(new sw::WrongListIteratorCounter(*mpTextMarkupList));
-    }
-    else
-    {
-        assert(m_pTextFrame);
-        SwWrongList const* (SwTextNode::*const pGetWrongList)() const = getTextMarkupFunc(nTextMarkupType);
-        if (pGetWrongList)
-        {
-            pIter.reset(new sw::WrongListIteratorCounter(*m_pTextFrame, pGetWrongList));
-        }
-    }
-
+    std::unique_ptr<sw::WrongListIteratorCounter> pIter = getIterator(nTextMarkupType);
     std::vector< css::accessibility::TextSegment > aTmpTextMarkups;
     if (pIter)
     {

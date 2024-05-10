@@ -233,8 +233,8 @@ bool SwDocShell::InitNew( const uno::Reference < embed::XStorage >& xStor )
             FONT_INDEX_CTL,     RES_POOLCOLL_REGISTER_BASE
         };
 
-        sal_uInt16 nFontWhich = RES_CHRATR_FONT;
-        sal_uInt16 nFontHeightWhich = RES_CHRATR_FONTSIZE;
+        TypedWhichId<SvxFontItem> nFontWhich = RES_CHRATR_FONT;
+        TypedWhichId<SvxFontHeightItem> nFontHeightWhich = RES_CHRATR_FONTSIZE;
         LanguageType eLanguage = m_xDoc->GetDefault( RES_CHRATR_LANGUAGE ).GetLanguage();
         bool bDisableBuiltinStyles = !bFuzzing && officecfg::Office::Common::Load::DisableBuiltinStyles::get();
         sal_uInt8 nLimit = bDisableBuiltinStyles ? 0 : 24;
@@ -275,7 +275,7 @@ bool SwDocShell::InitNew( const uno::Reference < embed::XStorage >& xStor )
                 nFontHeight = SwStdFontConfig::GetDefaultHeightFor( aFontIdPoolId[nIdx], eLanguage );
             if(!pColl)
                 pColl = m_xDoc->getIDocumentStylePoolAccess().GetTextCollFromPool(aFontIdPoolId[nIdx + 1]);
-            SvxFontHeightItem aFontHeight( static_cast<const SvxFontHeightItem&>(pColl->GetFormatAttr( nFontHeightWhich )));
+            SvxFontHeightItem aFontHeight( pColl->GetFormatAttr( nFontHeightWhich ) );
             if(aFontHeight.GetHeight() != sal::static_int_cast<sal_uInt32, sal_Int32>(nFontHeight))
             {
                 aFontHeight.SetHeight(nFontHeight);
@@ -436,7 +436,7 @@ void SwDocShell::RemoveLink()
     {
         if (m_xBasePool.is())
         {
-            static_cast<SwDocStyleSheetPool*>(m_xBasePool.get())->dispose();
+            m_xBasePool->dispose();
             m_xBasePool.clear();
         }
         m_xDoc->SetOle2Link(Link<bool,void>());
@@ -493,12 +493,12 @@ bool  SwDocShell::Load( SfxMedium& rMedium )
         m_xBasePool = new SwDocStyleSheetPool( *m_xDoc, SfxObjectCreateMode::ORGANIZER == GetCreateMode() );
         if(GetCreateMode() != SfxObjectCreateMode::ORGANIZER)
         {
-            const SfxUInt16Item* pUpdateDocItem = SfxItemSet::GetItem<SfxUInt16Item>(rMedium.GetItemSet(), SID_UPDATEDOCMODE, false);
+            const SfxUInt16Item* pUpdateDocItem = rMedium.GetItemSet().GetItem(SID_UPDATEDOCMODE, false);
             m_nUpdateDocMode = pUpdateDocItem ? pUpdateDocItem->GetValue() : document::UpdateDocMode::NO_UPDATE;
         }
 
         SwWait aWait( *this, true );
-        ErrCode nErr = ERR_SWG_READ_ERROR;
+        ErrCodeMsg nErr = ERR_SWG_READ_ERROR;
         switch( GetCreateMode() )
         {
             case SfxObjectCreateMode::ORGANIZER:
@@ -583,7 +583,7 @@ bool  SwDocShell::LoadFrom( SfxMedium& rMedium )
     AddLink();      // set Link and update Data!!
 
     do {        // middle check loop
-        ErrCode nErr = ERR_SWG_READ_ERROR;
+        ErrCodeMsg nErr = ERR_SWG_READ_ERROR;
         OUString aStreamName = "styles.xml";
         uno::Reference < container::XNameAccess > xAccess = rMedium.GetStorage();
         if ( xAccess->hasByName( aStreamName ) && rMedium.GetStorage()->isStreamElement( aStreamName ) )
@@ -649,7 +649,8 @@ void SwDocShell::SubInitNew()
     //! get lingu options without loading lingu DLL
     SvtLinguOptions aLinguOpt;
 
-    if (!utl::ConfigManager::IsFuzzing())
+    const bool bFuzzing = utl::ConfigManager::IsFuzzing();
+    if (!bFuzzing)
         SvtLinguConfig().GetOptions(aLinguOpt);
 
     LanguageType nVal = MsLangId::resolveSystemLanguageByScriptType(aLinguOpt.nDefaultLanguage, css::i18n::ScriptType::LATIN),
@@ -684,7 +685,7 @@ void SwDocShell::SubInitNew()
         m_xDoc->SetDefaultPageMode( bSquaredPageMode );
 
         // only set Widow/Orphan defaults on a new, non-web document - not an opened one
-        if( GetMedium() && GetMedium()->GetOrigURL().isEmpty() )
+        if (GetMedium() && GetMedium()->GetOrigURL().isEmpty() && !bFuzzing)
         {
             m_xDoc->SetDefault( SvxWidowsItem(  sal_uInt8(2), RES_PARATR_WIDOWS)  );
             m_xDoc->SetDefault( SvxOrphansItem( sal_uInt8(2), RES_PARATR_ORPHANS) );

@@ -88,6 +88,12 @@ bool SoftEdgePrimitive2D::prepareValuesAndcheckValidity(
         basegfx::B2DRange aVisibleArea(rViewInformation.getViewport());
         aVisibleArea.grow(getRadius() * 2);
 
+        // To do this correctly, it needs to be done in discrete coordinates.
+        // The object may be transformed relative to the original#
+        // ObjectTransformation, e.g. when re-used in shadow
+        aVisibleArea.transform(rViewInformation.getViewTransformation());
+        rClippedRange.transform(rViewInformation.getObjectToViewTransformation());
+
         // calculate ClippedRange
         rClippedRange.intersect(aVisibleArea);
 
@@ -95,6 +101,9 @@ bool SoftEdgePrimitive2D::prepareValuesAndcheckValidity(
         // will be empty and we are done
         if (rClippedRange.isEmpty())
             return false;
+
+        // convert result back to object coordinates
+        rClippedRange.transform(rViewInformation.getInverseObjectToViewTransformation());
     }
 
     // calculate discrete pixel size of SoftRange. If it's too small to visualize, we are done
@@ -157,9 +166,14 @@ void SoftEdgePrimitive2D::create2DDecomposition(
         const sal_uInt32 nDiscreteClippedHeight(ceil(aDiscreteClippedSize.getY()));
         const geometry::ViewInformation2D aViewInformation2D;
         const sal_uInt32 nMaximumQuadraticPixels(250000);
+        // tdf#156808 force an alpha mask to be created even if it has no alpha
+        // We need an alpha mask, even if it is totally opaque, so that
+        // drawinglayer::primitive2d::ProcessAndBlurAlphaMask() can be called.
+        // Otherwise, blurring of edges will fail in cases like running in a
+        // slideshow or exporting to PDF.
         const BitmapEx aBitmapEx(::drawinglayer::convertToBitmapEx(
             std::move(xEmbedSeq), aViewInformation2D, nDiscreteClippedWidth, nDiscreteClippedHeight,
-            nMaximumQuadraticPixels));
+            nMaximumQuadraticPixels, true));
 
         if (aBitmapEx.IsEmpty())
             break;
@@ -187,8 +201,10 @@ void SoftEdgePrimitive2D::create2DDecomposition(
         }
 
         // Get the Alpha and use as base to blur and apply the effect
-        AlphaMask aMask(aBitmapEx.GetAlpha());
-        const AlphaMask blurMask(drawinglayer::primitive2d::ProcessAndBlurAlphaMask(
+        AlphaMask aMask(aBitmapEx.GetAlphaMask());
+        if (aMask.IsEmpty()) // There is no mask, fully opaque
+            break;
+        AlphaMask blurMask(drawinglayer::primitive2d::ProcessAndBlurAlphaMask(
             aMask, -fDiscreteSoftRadius * fScale, fDiscreteSoftRadius * fScale, 0));
         aMask.BlendWith(blurMask);
 

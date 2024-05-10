@@ -26,7 +26,7 @@
 #include <rtl/ustring.hxx>
 #include <tools/gen.hxx>
 #include <vcl/svapp.hxx>
-#include <cppuhelper/compbase5.hxx>
+#include <cppuhelper/compbase.hxx>
 #include <cppuhelper/implbase1.hxx>
 #include <cppuhelper/basemutex.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
@@ -48,7 +48,7 @@ namespace vcl {
 
 namespace accessibility {
 
-typedef ::cppu::WeakAggComponentImplHelper5<
+typedef ::cppu::WeakComponentImplHelper<
             css::accessibility::XAccessibleContext,
             css::accessibility::XAccessibleComponent,
             css::accessibility::XAccessibleEventBroadcaster,
@@ -241,7 +241,7 @@ protected:
     /** Derived classes return the bounding box in screen coordinates.
         @attention  This method requires locked mutex's and a living object.
         @return  The bounding box (VCL rect.) in screen coordinates. */
-    virtual tools::Rectangle implGetBoundingBoxOnScreen() = 0;
+    virtual AbsoluteScreenPixelRectangle implGetBoundingBoxOnScreen() = 0;
 
     /** Creates a bitset of states of the
         current object. This method calls FillStateSet at the BrowseBox which
@@ -268,10 +268,7 @@ protected:
         @return  The bounding box (VCL rect.) in screen coordinates.
         @throws css::lang::DisposedException
     */
-    tools::Rectangle getBoundingBoxOnScreen();
-
-    ::comphelper::AccessibleEventNotifier::TClientId getClientId() const { return m_aClientId; }
-    void setClientId(::comphelper::AccessibleEventNotifier::TClientId _aNewClientId) { m_aClientId = _aNewClientId; }
+    AbsoluteScreenPixelRectangle getBoundingBoxOnScreen();
 
 public:
     /** @return  The osl::Mutex member provided by the class BaseMutex. */
@@ -294,6 +291,9 @@ protected:
     css::uno::Reference< css::awt::XWindow > m_xFocusWindow;
 
 private:
+    ::comphelper::AccessibleEventNotifier::TClientId getClientId() const { return m_aClientId; }
+    void setClientId(::comphelper::AccessibleEventNotifier::TClientId _aNewClientId) { m_aClientId = _aNewClientId; }
+
     /** Localized name. */
     OUString maName;
     /** Localized description text. */

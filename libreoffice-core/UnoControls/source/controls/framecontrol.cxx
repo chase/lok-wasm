@@ -73,20 +73,23 @@ FrameControl::~FrameControl()
 
 Any SAL_CALL FrameControl::queryInterface( const Type& rType )
 {
-    // Attention:
-    //  Don't use mutex or guard in this method!!! Is a method of XInterface.
-    Any aReturn;
-    Reference< XInterface > xDel = BaseControl::impl_getDelegator();
-    if ( xDel.is() )
+    // Ask for my own supported interfaces ...
+    // Attention: XTypeProvider and XInterface are supported by WeakComponentImplHelper!
+    Any aReturn ( ::cppu::queryInterface(   rType                                               ,
+                                               static_cast< XControlModel*              > ( this )  ,
+                                               static_cast< XConnectionPointContainer*  > ( this )
+                                        )
+                );
+
+    // If searched interface not supported by this class ...
+    if ( !aReturn.hasValue() )
     {
-        // If a delegator exists, forward question to its queryInterface.
-        // Delegator will ask its own queryAggregation!
-        aReturn = xDel->queryInterface( rType );
-    }
-    else
-    {
-        // If a delegator is unknown, forward question to own queryAggregation.
-        aReturn = queryAggregation( rType );
+        // ... ask baseclasses.
+        aReturn = OPropertySetHelper::queryInterface( rType );
+        if ( !aReturn.hasValue() )
+        {
+            aReturn = BaseControl::queryInterface( rType );
+        }
     }
 
     return aReturn;
@@ -125,32 +128,6 @@ Sequence< Type > SAL_CALL FrameControl::getTypes()
                 BaseControl::getTypes() );
 
     return ourTypeCollection.getTypes();
-}
-
-//  XAggregation
-
-Any SAL_CALL FrameControl::queryAggregation( const Type& aType )
-{
-    // Ask for my own supported interfaces ...
-    // Attention: XTypeProvider and XInterface are supported by OComponentHelper!
-    Any aReturn ( ::cppu::queryInterface(   aType                                               ,
-                                               static_cast< XControlModel*              > ( this )  ,
-                                               static_cast< XConnectionPointContainer*  > ( this )
-                                        )
-                );
-
-    // If searched interface not supported by this class ...
-    if ( !aReturn.hasValue() )
-    {
-        // ... ask baseclasses.
-        aReturn = OPropertySetHelper::queryInterface( aType );
-        if ( !aReturn.hasValue() )
-        {
-            aReturn = BaseControl::queryAggregation( aType );
-        }
-    }
-
-    return aReturn;
 }
 
 OUString FrameControl::getImplementationName()
@@ -198,7 +175,25 @@ Reference< XControlModel > SAL_CALL FrameControl::getModel()
 
 void SAL_CALL FrameControl::dispose()
 {
-    impl_deleteFrame();
+    Reference< XFrame2 >  xOldFrame;
+    {
+        // do not dispose the frame in this guarded section (deadlock?)
+        MutexGuard aGuard( m_aMutex );
+        xOldFrame = std::move(m_xFrame);
+    }
+
+    // notify the listeners
+    sal_Int32 nFrameId = PropertyHandle::Frame;
+    Reference< XFrame2 >  xNullFrame;
+    Any aNewFrame( &xNullFrame, cppu::UnoType<XFrame2>::get());
+    Any aOldFrame( &xOldFrame, cppu::UnoType<XFrame2>::get());
+    fire( &nFrameId, &aNewFrame, &aOldFrame, 1, false );
+
+    // dispose the frame
+    if( xOldFrame.is() )
+        xOldFrame->dispose();
+
+    m_aConnectionPointContainer.clear();
     BaseControl::dispose();
 }
 
@@ -275,7 +270,7 @@ sal_Bool FrameControl::convertFastPropertyValue(        Any&        rConvertedVa
 
     if ( !bReturn )
     {
-        throw IllegalArgumentException("unknown handle " + OUString::number(nHandle), static_cast<cppu::OWeakObject*>(this), 1);
+        throw IllegalArgumentException("unknown handle " + OUString::number(nHandle), getXWeak(), 1);
     }
 
     return bReturn;
@@ -424,32 +419,6 @@ void FrameControl::impl_createFrame(    const   Reference< XWindowPeer >&   xPee
         xOldFrame->dispose ();
     }
 }
-
-//  private method
-
-void FrameControl::impl_deleteFrame()
-{
-    Reference< XFrame2 >  xOldFrame;
-    Reference< XFrame2 >  xNullFrame;
-
-    {
-        // do not dispose the frame in this guarded section (deadlock?)
-        MutexGuard aGuard( m_aMutex );
-        xOldFrame = m_xFrame;
-        m_xFrame.clear();
-    }
-
-    // notify the listeners
-    sal_Int32 nFrameId = PropertyHandle::Frame;
-    Any aNewFrame( &xNullFrame, cppu::UnoType<XFrame2>::get());
-    Any aOldFrame( &xOldFrame, cppu::UnoType<XFrame2>::get());
-    fire( &nFrameId, &aNewFrame, &aOldFrame, 1, false );
-
-    // dispose the frame
-    if( xOldFrame.is() )
-        xOldFrame->dispose();
-}
-
 
 }   // namespace unocontrols
 

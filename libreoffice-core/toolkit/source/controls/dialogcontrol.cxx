@@ -25,7 +25,7 @@
 #include <vcl/svapp.hxx>
 #include <controls/dialogcontrol.hxx>
 #include <controls/geometrycontrolmodel.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <helper/servicenames.hxx>
 #include <com/sun/star/awt/PosSize.hpp>
 #include <com/sun/star/awt/WindowAttribute.hpp>
@@ -137,9 +137,9 @@ class UnoControlDialogModel :   public ControlModelContainerBase
 protected:
     css::uno::Reference< css::graphic::XGraphicObject > mxGrfObj;
     css::uno::Any          ImplGetDefaultValue( sal_uInt16 nPropId ) const override;
-    ::cppu::IPropertyArrayHelper&       SAL_CALL getInfoHelper() override;
-    // ::cppu::OPropertySetHelper
-    void SAL_CALL setFastPropertyValue_NoBroadcast( sal_Int32 nHandle, const css::uno::Any& rValue ) override;
+    ::cppu::IPropertyArrayHelper& getInfoHelper() override;
+    // ::comphelper::OPropertySetHelper
+    void setFastPropertyValue_NoBroadcast( std::unique_lock<std::mutex>& rGuard, sal_Int32 nHandle, const css::uno::Any& rValue ) override;
 public:
     explicit UnoControlDialogModel( const css::uno::Reference< css::uno::XComponentContext >& rxContext );
     UnoControlDialogModel( const UnoControlDialogModel& rModel );
@@ -213,7 +213,8 @@ UnoControlDialogModel::UnoControlDialogModel( const UnoControlDialogModel& rMode
         if ( xSrcNameCont->hasByName( name ) )
             xNameCont->insertByName( name, xSrcNameCont->getByName( name ) );
     }
-    setFastPropertyValue_NoBroadcast( BASEPROPERTY_USERFORMCONTAINEES, Any( xNameCont ) );
+    std::unique_lock aGuard(m_aMutex);
+    setFastPropertyValue_NoBroadcast( aGuard, BASEPROPERTY_USERFORMCONTAINEES, Any( xNameCont ) );
 }
 
 rtl::Reference<UnoControlModel> UnoControlDialogModel::Clone() const
@@ -267,9 +268,9 @@ Reference< XPropertySetInfo > UnoControlDialogModel::getPropertySetInfo(  )
     return xInfo;
 }
 
-void SAL_CALL UnoControlDialogModel::setFastPropertyValue_NoBroadcast( sal_Int32 nHandle, const css::uno::Any& rValue )
+void UnoControlDialogModel::setFastPropertyValue_NoBroadcast( std::unique_lock<std::mutex>& rGuard, sal_Int32 nHandle, const css::uno::Any& rValue )
 {
-    ControlModelContainerBase::setFastPropertyValue_NoBroadcast( nHandle, rValue );
+    ControlModelContainerBase::setFastPropertyValue_NoBroadcast( rGuard, nHandle, rValue );
     try
     {
         if ( nHandle == BASEPROPERTY_IMAGEURL && ImplHasProperty( BASEPROPERTY_GRAPHIC ) )
@@ -278,20 +279,20 @@ void SAL_CALL UnoControlDialogModel::setFastPropertyValue_NoBroadcast( sal_Int32
             uno::Reference<graphic::XGraphic> xGraphic;
             if (rValue >>= sImageURL)
             {
-                setPropertyValue(
-                    GetPropertyName(BASEPROPERTY_GRAPHIC),
+                setFastPropertyValueImpl(rGuard,
+                    BASEPROPERTY_GRAPHIC,
                     uno::Any(ImageHelper::getGraphicAndGraphicObjectFromURL_nothrow(
                         mxGrfObj, sImageURL)));
             }
             else if (rValue >>= xGraphic)
             {
-                setPropertyValue("Graphic", uno::Any(xGraphic));
+                setFastPropertyValueImpl(rGuard, BASEPROPERTY_GRAPHIC, uno::Any(xGraphic));
             }
         }
     }
     catch( const css::uno::Exception& )
     {
-        OSL_ENSURE( false, "UnoControlDialogModel::setFastPropertyValue_NoBroadcast: caught an exception while setting ImageURL properties!" );
+        TOOLS_WARN_EXCEPTION( "toolkit", "caught an exception while setting ImageURL properties" );
     }
 }
 
@@ -330,7 +331,7 @@ void UnoDialogControl::dispose()
     SolarMutexGuard aGuard;
 
     EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >( this );
+    aEvt.Source = getXWeak();
     maTopWindowListeners.disposeAndClear( aEvt );
     ControlContainerBase::dispose();
 }
@@ -688,7 +689,7 @@ void SAL_CALL UnoMultiPageControl::disposing(const EventObject&)
 void SAL_CALL UnoMultiPageControl::dispose()
 {
     lang::EventObject aEvt;
-    aEvt.Source = static_cast<cppu::OWeakObject*>(this);
+    aEvt.Source = getXWeak();
     maTabListeners.disposeAndClear( aEvt );
     ControlContainerBase::dispose();
 }

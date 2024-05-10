@@ -153,8 +153,8 @@ class SVXCORE_DLLPUBLIC SdrUndoAttrObj : public SdrUndoObj
     std::optional<SfxItemSet> moRedoSet;
 
     // FIXME: Or should we better remember the StyleSheetNames?
-    rtl::Reference< SfxStyleSheetBase > mxUndoStyleSheet;
-    rtl::Reference< SfxStyleSheetBase > mxRedoStyleSheet;
+    rtl::Reference< SfxStyleSheet > mxUndoStyleSheet;
+    rtl::Reference< SfxStyleSheet > mxRedoStyleSheet;
     bool bStyleSheet;
     bool bHaveToTakeRedoSet;
 
@@ -230,7 +230,7 @@ public:
 };
 
 // Diagram ModelData changes
-class SVXCORE_DLLPUBLIC SdrUndoDiagramModelData : public SdrUndoObj
+class SVXCORE_DLLPUBLIC SdrUndoDiagramModelData final : public SdrUndoObj
 {
     std::shared_ptr< svx::diagram::DiagramDataState > m_aStartState;
     std::shared_ptr< svx::diagram::DiagramDataState > m_aEndState;
@@ -474,6 +474,20 @@ private:
     const OUString msOldStr;
     const OUString msNewStr;
 
+};
+
+class SdrUndoObjDecorative final : public SdrUndoObj
+{
+private:
+    bool const m_WasDecorative;
+
+public:
+    SdrUndoObjDecorative(SdrObject & rObj, bool const WasDecorative);
+
+    virtual void Undo() override;
+    virtual void Redo() override;
+
+    virtual OUString GetComment() const override;
 };
 
 
@@ -747,6 +761,8 @@ public:
                                                     SdrUndoObjStrAttr::ObjStrAttrType eObjStrAttrType,
                                                     const OUString& sOldStr,
                                                     const OUString& sNewStr );
+    static std::unique_ptr<SdrUndoAction> CreateUndoObjectDecorative(SdrObject& rObject,
+            bool const WasDecorative);
 
     // Diagram ModelData changes
     virtual std::unique_ptr<SdrUndoAction> CreateUndoDiagramModelData( SdrObject& rObject, std::shared_ptr< svx::diagram::DiagramDataState >& rStartState );

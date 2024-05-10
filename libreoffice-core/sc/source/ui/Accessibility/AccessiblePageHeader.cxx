@@ -111,6 +111,7 @@ void ScAccessiblePageHeader::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                     aEvent.EventId = AccessibleEventId::CHILD;
                     aEvent.Source = uno::Reference< XAccessibleContext >(this);
                     aEvent.OldValue <<= uno::Reference<XAccessible>(aOldAreas[i]);
+                    aEvent.IndexHint = -1;
 
                     CommitChange(aEvent); // child gone - event
                     aOldAreas[i]->dispose();
@@ -121,6 +122,7 @@ void ScAccessiblePageHeader::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
                     aEvent.EventId = AccessibleEventId::CHILD;
                     aEvent.Source = uno::Reference< XAccessibleContext >(this);
                     aEvent.NewValue <<= uno::Reference<XAccessible>(maAreas[i]);
+                    aEvent.IndexHint = -1;
 
                     CommitChange(aEvent); // new child - event
                 }
@@ -289,7 +291,7 @@ uno::Sequence<OUString> SAL_CALL ScAccessiblePageHeader::getSupportedServiceName
 
 OUString ScAccessiblePageHeader::createAccessibleDescription()
 {
-    OUString sDesc(mbHeader ? OUString(STR_ACC_HEADER_DESCR) : OUString(STR_ACC_FOOTER_DESCR));
+    OUString sDesc(mbHeader ? STR_ACC_HEADER_DESCR : STR_ACC_FOOTER_DESCR);
     return sDesc.replaceFirst("%1", ScResId(SCSTR_UNKNOWN));
 }
 
@@ -299,7 +301,7 @@ OUString ScAccessiblePageHeader::createAccessibleName()
     return sName.replaceFirst("%1", ScResId(SCSTR_UNKNOWN));
 }
 
-tools::Rectangle ScAccessiblePageHeader::GetBoundingBoxOnScreen() const
+AbsoluteScreenPixelRectangle ScAccessiblePageHeader::GetBoundingBoxOnScreen() const
 {
     tools::Rectangle aCellRect(GetBoundingBox());
     if (mpViewShell)
@@ -307,11 +309,11 @@ tools::Rectangle ScAccessiblePageHeader::GetBoundingBoxOnScreen() const
         vcl::Window* pWindow = mpViewShell->GetWindow();
         if (pWindow)
         {
-            tools::Rectangle aRect = pWindow->GetWindowExtentsRelative(nullptr);
+            AbsoluteScreenPixelRectangle aRect = pWindow->GetWindowExtentsAbsolute();
             aCellRect.Move(aRect.Left(), aRect.Top());
         }
     }
-    return aCellRect;
+    return AbsoluteScreenPixelRectangle(aCellRect);
 }
 
 tools::Rectangle ScAccessiblePageHeader::GetBoundingBox() const
@@ -329,7 +331,7 @@ tools::Rectangle ScAccessiblePageHeader::GetBoundingBox() const
         tools::Rectangle aClipRect(Point(0, 0), aRect.GetSize());
         vcl::Window* pWindow = mpViewShell->GetWindow();
         if (pWindow)
-            aClipRect = pWindow->GetWindowExtentsRelative(pWindow->GetAccessibleParentWindow());
+            aClipRect = pWindow->GetWindowExtentsRelative(*pWindow->GetAccessibleParentWindow());
         aRect = aClipRect.GetIntersection(aRect);
     }
     if (aRect.IsEmpty())

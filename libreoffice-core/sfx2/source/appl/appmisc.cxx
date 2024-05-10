@@ -27,6 +27,7 @@
 #include <com/sun/star/graphic/Primitive2DTools.hpp>
 #include <com/sun/star/uno/Reference.h>
 #include <unotools/configmgr.hxx>
+#include <comphelper/diagnose_ex.hxx>
 #include <comphelper/processfactory.hxx>
 #include <osl/diagnose.h>
 #include <rtl/bootstrap.hxx>
@@ -44,14 +45,14 @@
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <drawinglayer/primitive2d/transformprimitive2d.hxx>
 
+#define ShellClass_SfxApplication
+#include <sfxslots.hxx>
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::container;
-
-#define ShellClass_SfxApplication
-#include <sfxslots.hxx>
 
 SFX_IMPL_INTERFACE(SfxApplication,SfxShell)
 
@@ -194,7 +195,7 @@ bool SfxApplication::loadBrandSvg(const char *pName, BitmapEx &rBitmap, int nWid
     }
     catch(const uno::Exception&)
     {
-        OSL_ENSURE(false, "Got no graphic::XPrimitive2DRenderer (!)" );
+        TOOLS_WARN_EXCEPTION("sfx.appl", "Got no graphic::XPrimitive2DRenderer (!)" );
     }
     return false;
 }

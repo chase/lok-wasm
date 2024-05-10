@@ -35,10 +35,13 @@ $(eval $(call gb_UIConfig_add_popupmenufiles,modules/scalc,\
 	sc/uiconfig/scalc/popupmenu/pagebreak \
 	sc/uiconfig/scalc/popupmenu/pivot \
 	sc/uiconfig/scalc/popupmenu/preview \
+	sc/uiconfig/scalc/popupmenu/printranges \
 	sc/uiconfig/scalc/popupmenu/rowheader \
 	sc/uiconfig/scalc/popupmenu/row_operations \
 	sc/uiconfig/scalc/popupmenu/sheettab \
 	sc/uiconfig/scalc/popupmenu/sparkline \
+	sc/uiconfig/scalc/popupmenu/sparklinemenu \
+	sc/uiconfig/scalc/popupmenu/statisticsmenu \
 ))
 
 $(eval $(call gb_UIConfig_add_statusbarfiles,modules/scalc,\
@@ -123,6 +126,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/scalc,\
 	sc/uiconfig/scalc/ui/deletecolumnentry \
 	sc/uiconfig/scalc/ui/deletecontents \
 	sc/uiconfig/scalc/ui/descriptivestatisticsdialog \
+	sc/uiconfig/scalc/ui/drawtemplatedialog \
 	sc/uiconfig/scalc/ui/dropmenu \
 	sc/uiconfig/scalc/ui/doubledialog \
 	sc/uiconfig/scalc/ui/erroralerttabpage \

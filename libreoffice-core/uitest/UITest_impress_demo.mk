@@ -12,4 +12,5 @@ $(eval $(call gb_UITest_UITest,impress_demo))
 $(eval $(call gb_UITest_add_modules,impress_demo,$(SRCDIR)/uitest,\
 	impress_tests/ \
 ))
+
 # vim: set noet sw=4 ts=4:

@@ -74,7 +74,6 @@
 
 using ::com::sun::star::ucb::XAnyCompare;
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::beans;
@@ -340,8 +339,8 @@ namespace
     class FieldParamImporter
     {
         public:
-            typedef pair<OUString,OUString> field_param_t;
-            typedef vector<field_param_t> field_params_t;
+            typedef std::pair<OUString,OUString> field_param_t;
+            typedef std::vector<field_param_t> field_params_t;
             FieldParamImporter(const field_params_t* const pInParams, Reference<XNameContainer> const & xOutParams)
                 : m_pInParams(pInParams)
                 , m_xOutParams(xOutParams)
@@ -381,7 +380,7 @@ namespace
         {
             Sequence<OUString> vListEntriesSeq(vListEntries.size());
             copy(vListEntries.begin(), vListEntries.end(), vListEntriesSeq.getArray());
-            vOutParams[OUString(ODF_FORMDROPDOWN_LISTENTRY)] <<= vListEntriesSeq;
+            vOutParams[ODF_FORMDROPDOWN_LISTENTRY] <<= vListEntriesSeq;
         }
         for(const auto& rCurrent : vOutParams)
         {
@@ -407,7 +406,7 @@ XMLTextImportHelper::XMLTextImportHelper(
                     bProgress, bBlockMode, bOrganizerMode) )
     , m_xBackpatcherImpl( MakeBackpatcherImpl() )
 {
-    static constexpr OUStringLiteral s_PropNameDefaultListId = u"DefaultListId";
+    static constexpr OUString s_PropNameDefaultListId = u"DefaultListId"_ustr;
 
     Reference< XChapterNumberingSupplier > xCNSupplier( rModel, UNO_QUERY );
 
@@ -457,42 +456,42 @@ XMLTextImportHelper::XMLTextImportHelper(
     {
         Reference< XNameAccess > xFamilies(xFamiliesSupp->getStyleFamilies());
 
-        static const OUStringLiteral aParaStyles(u"ParagraphStyles");
+        static constexpr OUString aParaStyles(u"ParagraphStyles"_ustr);
         if( xFamilies->hasByName( aParaStyles ) )
         {
             m_xImpl->m_xParaStyles.set(xFamilies->getByName(aParaStyles),
                 UNO_QUERY);
         }
 
-        static const OUStringLiteral aCharStyles(u"CharacterStyles");
+        static constexpr OUString aCharStyles(u"CharacterStyles"_ustr);
         if( xFamilies->hasByName( aCharStyles ) )
         {
             m_xImpl->m_xTextStyles.set(xFamilies->getByName(aCharStyles),
                 UNO_QUERY);
         }
 
-        static const OUStringLiteral aNumStyles(u"NumberingStyles");
+        static constexpr OUString aNumStyles(u"NumberingStyles"_ustr);
         if( xFamilies->hasByName( aNumStyles ) )
         {
             m_xImpl->m_xNumStyles.set(xFamilies->getByName(aNumStyles),
                 UNO_QUERY);
         }
 
-        static const OUStringLiteral aFrameStyles(u"FrameStyles");
+        static constexpr OUString aFrameStyles(u"FrameStyles"_ustr);
         if( xFamilies->hasByName( aFrameStyles ) )
         {
             m_xImpl->m_xFrameStyles.set(xFamilies->getByName(aFrameStyles),
                 UNO_QUERY);
         }
 
-        static const OUStringLiteral aPageStyles(u"PageStyles");
+        static constexpr OUString aPageStyles(u"PageStyles"_ustr);
         if( xFamilies->hasByName( aPageStyles ) )
         {
             m_xImpl->m_xPageStyles.set(xFamilies->getByName(aPageStyles),
                 UNO_QUERY);
         }
 
-        static const OUStringLiteral aCellStyles(u"CellStyles");
+        static constexpr OUString aCellStyles(u"CellStyles"_ustr);
         if( xFamilies->hasByName( aCellStyles ) )
         {
             m_xImpl->m_xCellStyles.set(xFamilies->getByName(aCellStyles),
@@ -622,9 +621,9 @@ void XMLTextImportHelper::SetCursor( const Reference < XTextCursor > & rCursor )
 
 void XMLTextImportHelper::ResetCursor()
 {
-    m_xImpl->m_xCursor.set(nullptr);
-    m_xImpl->m_xText.set(nullptr);
-    m_xImpl->m_xCursorAsRange.set(nullptr);
+    m_xImpl->m_xCursor.clear();
+    m_xImpl->m_xText.clear();
+    m_xImpl->m_xCursorAsRange.clear();
 }
 
 
@@ -1004,8 +1003,40 @@ static bool lcl_HasListStyle( const OUString& sStyleName,
 
     return bRet;
 }
+
+namespace {
+
+auto IsPropertySet(uno::Reference<container::XNameContainer> const& rxParaStyles,
+        uno::Reference<beans::XPropertySet> const& rxPropSet,
+        OUString const& rProperty)
+{
+    uno::Reference<beans::XPropertyState> const xPropState(rxPropSet, uno::UNO_QUERY);
+    // note: this is true only if it is set in automatic style
+    if (xPropState->getPropertyState(rProperty) == beans::PropertyState_DIRECT_VALUE)
+    {
+        return true;
+    }
+    // check if it is set by any parent common style
+    OUString style;
+    rxPropSet->getPropertyValue("ParaStyleName") >>= style;
+    while (!style.isEmpty() && rxParaStyles.is() && rxParaStyles->hasByName(style))
+    {
+        uno::Reference<style::XStyle> const xStyle(rxParaStyles->getByName(style), uno::UNO_QUERY);
+        assert(xStyle.is());
+        uno::Reference<beans::XPropertyState> const xStyleProps(xStyle, uno::UNO_QUERY);
+        if (xStyleProps->getPropertyState(rProperty) == beans::PropertyState_DIRECT_VALUE)
+        {
+            return true;
+        }
+        style = xStyle->getParentStyle();
+    }
+    return false;
+};
+
+} // namespace
+
 OUString XMLTextImportHelper::SetStyleAndAttrs(
-        SvXMLImport const & rImport,
+        SvXMLImport & rImport,
         const Reference < XTextCursor >& rCursor,
         const OUString& rStyleName,
         bool bPara,
@@ -1015,14 +1046,14 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
         bool bSetListAttrs,
         bool bOutlineContentVisible)
 {
-    static constexpr OUStringLiteral s_NumberingRules = u"NumberingRules";
-    static constexpr OUStringLiteral s_NumberingIsNumber = u"NumberingIsNumber";
-    static constexpr OUStringLiteral s_NumberingLevel = u"NumberingLevel";
-    static constexpr OUStringLiteral s_ParaIsNumberingRestart = u"ParaIsNumberingRestart";
-    static constexpr OUStringLiteral s_NumberingStartValue = u"NumberingStartValue";
-    static constexpr OUStringLiteral s_PropNameListId = u"ListId";
-    static constexpr OUStringLiteral s_PageDescName = u"PageDescName";
-    static constexpr OUStringLiteral s_OutlineLevel = u"OutlineLevel";
+    static constexpr OUString s_NumberingRules = u"NumberingRules"_ustr;
+    static constexpr OUString s_NumberingIsNumber = u"NumberingIsNumber"_ustr;
+    static constexpr OUString s_NumberingLevel = u"NumberingLevel"_ustr;
+    static constexpr OUString s_ParaIsNumberingRestart = u"ParaIsNumberingRestart"_ustr;
+    static constexpr OUString s_NumberingStartValue = u"NumberingStartValue"_ustr;
+    static constexpr OUString s_PropNameListId = u"ListId"_ustr;
+    static constexpr OUString s_PageDescName = u"PageDescName"_ustr;
+    static constexpr OUString s_OutlineLevel = u"OutlineLevel"_ustr;
 
     const XmlStyleFamily nFamily = bPara ? XmlStyleFamily::TEXT_PARAGRAPH
                                          : XmlStyleFamily::TEXT_TEXT;
@@ -1085,12 +1116,24 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
         OUString sListId;
         sal_Int16 nStartValue(-1);
         bool bNumberingIsNumber(true);
+        // Assure that list style of automatic paragraph style is applied at paragraph. (#i101349#)
+        bool bApplyNumRules(pStyle && pStyle->IsListStyleSet());
+        bool bApplyNumRulesFix(false);
 
         if (pListBlock) {
+            // the xNumRules is always created, even without a list-style-name
+            if (!bApplyNumRules
+                && (pListBlock->HasListStyleName()
+                    || (pListItem != nullptr && pListItem->HasNumRulesOverride())))
+            {
+                bApplyNumRules = true; // tdf#114287
+                bApplyNumRulesFix = rImport.isGeneratorVersionOlderThan(SvXMLImport::AOO_4x, SvXMLImport::LO_76);
+            }
 
             if (!pListItem) {
                 bNumberingIsNumber = false; // list-header
             }
+
             // consider text:style-override property of <text:list-item>
             xNewNumRules.set(
                 (pListItem != nullptr && pListItem->HasNumRulesOverride())
@@ -1117,9 +1160,7 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
 
         if (pListBlock || pNumberedParagraph)
         {
-            // Assure that list style of automatic paragraph style is applied at paragraph. (#i101349#)
-            bool bApplyNumRules = pStyle && pStyle->IsListStyleSet();
-            if ( !bApplyNumRules )
+            if (!bApplyNumRules || bApplyNumRulesFix)
             {
                 bool bSameNumRules = xNewNumRules == xNumRules;
                 if( !bSameNumRules && xNewNumRules.is() && xNumRules.is() )
@@ -1143,7 +1184,14 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
                         }
                     }
                 }
-                bApplyNumRules = !bSameNumRules;
+                if (!bApplyNumRules)
+                {
+                    bApplyNumRules = !bSameNumRules;
+                }
+                if (!bSameNumRules)
+                {
+                    bApplyNumRulesFix = false;
+                }
             }
 
             if ( bApplyNumRules )
@@ -1157,6 +1205,19 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
                 {
                     xPropSet->setPropertyValue(
                         s_NumberingRules, Any(xNewNumRules) );
+                    if (bApplyNumRulesFix)
+                    {   // tdf#156146 override list margins for bug compatibility
+                        if (IsPropertySet(m_xImpl->m_xParaStyles, xPropSet, "ParaLeftMargin"))
+                        {
+                            uno::Any const left(xPropSet->getPropertyValue("ParaLeftMargin"));
+                            xPropSet->setPropertyValue("ParaLeftMargin", left);
+                        }
+                        if (IsPropertySet(m_xImpl->m_xParaStyles, xPropSet, "ParaFirstLineIndent"))
+                        {
+                            uno::Any const first(xPropSet->getPropertyValue("ParaFirstLineIndent"));
+                            xPropSet->setPropertyValue("ParaFirstLineIndent", first);
+                        }
+                    }
                 }
                 catch(const Exception&)
                 {
@@ -1429,7 +1490,7 @@ OUString XMLTextImportHelper::SetStyleAndAttrs(
                 {
                     if ( !lcl_HasListStyle( sStyleName,
                                     m_xImpl->m_xParaStyles, GetXMLImport(),
-                                    u"NumberingStyleName",
+                                    u"NumberingStyleName"_ustr,
                                     u"" ) )
                     {
                         // heading not in a list --> apply outline style
@@ -1622,12 +1683,12 @@ void XMLTextImportHelper::SetHyperlink(
     const OUString& rVisitedStyleName,
     XMLEventsImportContext* pEvents)
 {
-    static constexpr OUStringLiteral s_HyperLinkURL = u"HyperLinkURL";
-    static constexpr OUStringLiteral s_HyperLinkName = u"HyperLinkName";
-    static constexpr OUStringLiteral s_HyperLinkTarget = u"HyperLinkTarget";
-    static constexpr OUStringLiteral s_UnvisitedCharStyleName = u"UnvisitedCharStyleName";
-    static constexpr OUStringLiteral s_VisitedCharStyleName = u"VisitedCharStyleName";
-    static constexpr OUStringLiteral s_HyperLinkEvents = u"HyperLinkEvents";
+    static constexpr OUString s_HyperLinkURL = u"HyperLinkURL"_ustr;
+    static constexpr OUString s_HyperLinkName = u"HyperLinkName"_ustr;
+    static constexpr OUString s_HyperLinkTarget = u"HyperLinkTarget"_ustr;
+    static constexpr OUString s_UnvisitedCharStyleName = u"UnvisitedCharStyleName"_ustr;
+    static constexpr OUString s_VisitedCharStyleName = u"VisitedCharStyleName"_ustr;
+    static constexpr OUString s_HyperLinkEvents = u"HyperLinkEvents"_ustr;
 
     Reference < XPropertySet > xPropSet( rCursor, UNO_QUERY );
     Reference < XPropertySetInfo > xPropSetInfo(
@@ -2226,7 +2287,7 @@ void XMLTextImportHelper::ConnectFrameChains(
 
 bool XMLTextImportHelper::IsInFrame() const
 {
-    static constexpr OUStringLiteral s_TextFrame = u"TextFrame";
+    static constexpr OUString s_TextFrame = u"TextFrame"_ustr;
 
     bool bIsInFrame = false;
 

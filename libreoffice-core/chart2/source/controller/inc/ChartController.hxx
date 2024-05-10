@@ -37,7 +37,6 @@
 #include <com/sun/star/frame/XController2.hpp>
 #include <com/sun/star/frame/XLayoutManagerListener.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XMultiServiceFactory.hpp>
 
 #include <memory>
 #include <string_view>
@@ -61,7 +60,6 @@ namespace com::sun::star::uno { class XComponentContext; }
 namespace com::sun::star::util { class XCloseable; }
 namespace com::sun::star::view { class XSelectionSupplier; }
 
-
 class SdrModel;
 
 namespace svt
@@ -83,12 +81,15 @@ namespace chart
 {
 
 class UndoGuard;
+class ChartView;
 class ChartWindow;
 class DrawModelWrapper;
 class DrawViewWrapper;
 class ReferenceSizeProvider;
 class ViewElementListProvider;
 class Diagram;
+class AccessibleChartView;
+class AccessibleTextHelper;
 
 enum ChartDrawMode { CHARTDRAW_INSERT, CHARTDRAW_SELECT };
 
@@ -99,10 +100,8 @@ class ChartController final : public ::cppu::WeakImplHelper <
         ,css::view::XSelectionSupplier     //(optional interface)
         ,css::ui::XContextMenuInterception //(optional interface)
         ,css::util::XCloseListener         //(needed for communication with XModel)
-        ,css::lang::XServiceInfo
         ,css::frame::XDispatch
         ,css::awt::XWindow //this is the Window Controller part of this Controller, that will be given to a Frame via setComponent
-        ,css::lang::XMultiServiceFactory
         ,css::util::XModifyListener
         ,css::util::XModeChangeListener
         ,css::frame::XLayoutManagerListener
@@ -114,11 +113,6 @@ public:
     virtual ~ChartController() override;
 
     OUString GetContextName();
-
-    // css::lang::XServiceInfo
-    virtual OUString SAL_CALL getImplementationName() override;
-    virtual sal_Bool SAL_CALL supportsService( const OUString& ServiceName ) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
 
     // css::frame::XController (required interface)
     virtual void SAL_CALL
@@ -268,16 +262,6 @@ public:
     virtual void SAL_CALL
         removePaintListener( const css::uno::Reference< css::awt::XPaintListener >& xListener ) override;
 
-    // css::lang XMultiServiceFactory
-    virtual css::uno::Reference< css::uno::XInterface > SAL_CALL
-        createInstance( const OUString& aServiceSpecifier ) override;
-    virtual css::uno::Reference< css::uno::XInterface > SAL_CALL
-        createInstanceWithArguments( const OUString& ServiceSpecifier,
-                                     const css::uno::Sequence<
-                                         css::uno::Any >& Arguments ) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL
-        getAvailableServiceNames() override;
-
     // css::util::XModifyListener
     virtual void SAL_CALL modified(
         const css::lang::EventObject& aEvent ) override;
@@ -324,6 +308,15 @@ public:
 
     css::uno::Reference< css::accessibility::XAccessible > CreateAccessible();
 
+    /** Creates a helper accessibility class that must be initialized via initialize().  For
+        parameters see
+
+        The returned object should not be used directly.  Instead a proxy object
+        should use this helper to retrieve its children and add them to its own
+        children.
+     */
+    rtl::Reference< ::chart::AccessibleTextHelper > createAccessibleTextContext();
+
     static bool isObjectDeleteable( const css::uno::Any& rSelection );
 
     void setDrawMode( ChartDrawMode eMode ) { m_eDrawMode = eMode; }
@@ -341,7 +334,7 @@ public:
 
     void NotifyUndoActionHdl( std::unique_ptr<SdrUndoAction> );
 
-    css::uno::Reference<css::uno::XInterface> const & getChartView() const;
+    rtl::Reference<::chart::ChartView> const & getChartView() const { return m_xChartView; }
 
     rtl::Reference<::chart::ChartModel> getChartModel();
     rtl::Reference<::chart::Diagram> getFirstDiagram();
@@ -395,7 +388,7 @@ private:
 
     //view
     css::uno::Reference<css::awt::XWindow> m_xViewWindow;
-    css::uno::Reference<css::uno::XInterface> m_xChartView;
+    rtl::Reference<::chart::ChartView> m_xChartView;
     std::shared_ptr< DrawModelWrapper > m_pDrawModelWrapper;
     std::unique_ptr<DrawViewWrapper> m_pDrawViewWrapper;
 
@@ -436,7 +429,7 @@ private:
     void executeDispatch_ObjectProperties();
     void executeDispatch_FormatObject( std::u16string_view rDispatchCommand );
     void executeDlg_ObjectProperties( const OUString& rObjectCID );
-    bool executeDlg_ObjectProperties_withoutUndoGuard( const OUString& rObjectCID, bool bSuccessOnUnchanged );
+    void executeDlg_ObjectProperties_withUndoGuard( std::shared_ptr<UndoGuard> aUndoGuard, const OUString& rObjectCID, bool bSuccessOnUnchanged );
 
     void executeDispatch_ChartType();
 
@@ -528,7 +521,7 @@ private:
     void impl_notifySelectionChangeListeners();
     void impl_invalidateAccessible();
     void impl_initializeAccessible();
-    void impl_initializeAccessible( const css::uno::Reference< css::lang::XInitialization >& xInit );
+    void impl_initializeAccessible( AccessibleChartView& xInit );
 
     //sets the model member to null if it equals the parameter
     //returns true if successful
@@ -545,16 +538,6 @@ private:
     bool impl_DragDataPoint( std::u16string_view rCID, double fOffset );
 
     static const o3tl::sorted_vector< OUString >& impl_getAvailableCommands();
-
-    /** Creates a helper accessibility class that must be initialized via XInitialization.  For
-        parameters see
-
-        The returned object should not be used directly.  Instead a proxy object
-        should use this helper to retrieve its children and add them to its own
-        children.
-     */
-    css::uno::Reference< css::accessibility::XAccessibleContext >
-        impl_createAccessibleTextContext();
 
     void impl_PasteGraphic( css::uno::Reference< css::graphic::XGraphic > const & xGraphic,
                             const ::Point & aPosition );

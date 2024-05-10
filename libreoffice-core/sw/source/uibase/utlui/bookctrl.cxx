@@ -48,7 +48,7 @@ SwBookmarkControl::~SwBookmarkControl()
 void SwBookmarkControl::StateChangedAtStatusBarControl(
     sal_uInt16 /*nSID*/, SfxItemState eState, const SfxPoolItem* pState )
 {
-    if( eState != SfxItemState::DEFAULT || pState->IsVoidItem() )
+    if (eState != SfxItemState::DEFAULT || SfxItemState::DISABLED == eState)
     {
         GetStatusBar().SetItemText(GetId(), OUString());
         GetStatusBar().SetQuickHelpText(GetId(), OUString());
@@ -75,6 +75,10 @@ void SwBookmarkControl::Command( const CommandEvent& rCEvt )
     if( !(pWrtShell && pWrtShell->getIDocumentMarkAccess()->getAllMarksCount() > 0) )
         return;
 
+    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
+    if (!pViewFrm)
+        return;
+
     std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(nullptr, "modules/swriter/ui/bookmarkmenu.ui"));
     std::unique_ptr<weld::Menu> xPopup(xBuilder->weld_menu("menu"));
 
@@ -95,11 +99,11 @@ void SwBookmarkControl::Command( const CommandEvent& rCEvt )
     }
     ::tools::Rectangle aRect(rCEvt.GetMousePosPixel(), Size(1, 1));
     weld::Window* pParent = weld::GetPopupParent(GetStatusBar(), aRect);
-    OString sResult = xPopup->popup_at_rect(pParent, aRect);
+    OUString sResult = xPopup->popup_at_rect(pParent, aRect);
     if (!sResult.isEmpty())
     {
         SfxUInt16Item aBookmark( FN_STAT_BOOKMARK, aBookmarkIdx[sResult.toUInt32()] );
-        SfxViewFrame::Current()->GetDispatcher()->ExecuteList(FN_STAT_BOOKMARK,
+        pViewFrm->GetDispatcher()->ExecuteList(FN_STAT_BOOKMARK,
             SfxCallMode::ASYNCHRON|SfxCallMode::RECORD,
             { &aBookmark });
     }

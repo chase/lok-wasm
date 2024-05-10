@@ -118,7 +118,7 @@ void EMFWriter::ImplEndCommentRecord()
 {
     if( mbRecordOpen )
     {
-        sal_Int32 nActPos = m_rStm.Tell();
+        sal_uInt64 nActPos = m_rStm.Tell();
         m_rStm.Seek( mnRecordPos + 8 );
         m_rStm.WriteUInt32( nActPos - mnRecordPos - 0xc );
         m_rStm.Seek( nActPos );
@@ -146,7 +146,7 @@ void EMFWriter::ImplEndPlusRecord()
 
     if( mbRecordPlusOpen )
     {
-        sal_Int32 nActPos = m_rStm.Tell();
+        sal_uInt64 nActPos = m_rStm.Tell();
         sal_Int32 nSize = nActPos - mnRecordPlusPos;
         m_rStm.Seek( mnRecordPlusPos + 4 );
         m_rStm.WriteUInt32( nSize )         // Size
@@ -366,7 +366,8 @@ void EMFWriter::ImplEndRecord()
     if( !mbRecordOpen )
         return;
 
-    sal_Int32 nFillBytes, nActPos = m_rStm.Tell();
+    sal_Int32 nFillBytes;
+    sal_uInt64 nActPos = m_rStm.Tell();
     m_rStm.Seek( mnRecordPos + 4 );
     nFillBytes = nActPos - mnRecordPos;
     nFillBytes += 3;    // each record has to be dword aligned
@@ -645,7 +646,7 @@ void EMFWriter::ImplWritePolygonRecord( const tools::Polygon& rPoly, bool bClose
         return;
 
     if( rPoly.HasFlags() )
-        ImplWritePath( rPoly, bClose );
+        ImplWritePath( tools::PolyPolygon(rPoly), bClose );
     else
     {
         if( bClose )
@@ -821,7 +822,8 @@ void EMFWriter::ImplWriteBmpRecord( const Bitmap& rBmp, const Point& rPt,
 
     WriteDIB(rBmp, aMemStm, true, false);
 
-    sal_uInt32  nDIBSize = aMemStm.Tell(), nHeaderSize, nCompression, nColsUsed, nPalCount, nImageSize;
+    sal_uInt64  nDIBSize = aMemStm.Tell();
+    sal_uInt32  nHeaderSize, nCompression, nColsUsed, nPalCount, nImageSize;
     sal_uInt16  nBitCount;
 
     // get DIB parameters
@@ -1294,13 +1296,12 @@ void EMFWriter::ImplWrite( const GDIMetaFile& rMtf )
             {
                 const MetaBmpExAction*  pA = static_cast<const MetaBmpExAction *>(pAction);
                 Bitmap                  aBmp( pA->GetBitmapEx().GetBitmap() );
-                Bitmap                  aMsk( pA->GetBitmapEx().GetAlpha() );
+                AlphaMask               aMsk( pA->GetBitmapEx().GetAlphaMask() );
 
                 if( !aMsk.IsEmpty() )
                 {
                     aBmp.Replace( aMsk, COL_WHITE );
-                    aMsk.Invert();
-                    ImplWriteBmpRecord( aMsk, pA->GetPoint(), maVDev->PixelToLogic( aMsk.GetSizePixel() ), WIN_SRCPAINT );
+                    ImplWriteBmpRecord( aMsk.GetBitmap(), pA->GetPoint(), maVDev->PixelToLogic( aMsk.GetSizePixel() ), WIN_SRCPAINT );
                     ImplWriteBmpRecord( aBmp, pA->GetPoint(), maVDev->PixelToLogic( aBmp.GetSizePixel() ), WIN_SRCAND );
                 }
                 else
@@ -1312,13 +1313,12 @@ void EMFWriter::ImplWrite( const GDIMetaFile& rMtf )
             {
                 const MetaBmpExScaleAction* pA = static_cast<const MetaBmpExScaleAction*>(pAction);
                 Bitmap                      aBmp( pA->GetBitmapEx().GetBitmap() );
-                Bitmap                      aMsk( pA->GetBitmapEx().GetAlpha() );
+                AlphaMask                   aMsk( pA->GetBitmapEx().GetAlphaMask() );
 
                 if( !aMsk.IsEmpty() )
                 {
                     aBmp.Replace( aMsk, COL_WHITE );
-                    aMsk.Invert();
-                    ImplWriteBmpRecord( aMsk, pA->GetPoint(), pA->GetSize(), WIN_SRCPAINT );
+                    ImplWriteBmpRecord( aMsk.GetBitmap(), pA->GetPoint(), pA->GetSize(), WIN_SRCPAINT );
                     ImplWriteBmpRecord( aBmp, pA->GetPoint(), pA->GetSize(), WIN_SRCAND );
                 }
                 else
@@ -1332,13 +1332,12 @@ void EMFWriter::ImplWrite( const GDIMetaFile& rMtf )
                 BitmapEx                        aBmpEx( pA->GetBitmapEx() );
                 aBmpEx.Crop( tools::Rectangle( pA->GetSrcPoint(), pA->GetSrcSize() ) );
                 Bitmap                          aBmp( aBmpEx.GetBitmap() );
-                Bitmap                          aMsk( aBmpEx.GetAlpha() );
+                AlphaMask                       aMsk( aBmpEx.GetAlphaMask() );
 
                 if( !aMsk.IsEmpty() )
                 {
                     aBmp.Replace( aMsk, COL_WHITE );
-                    aMsk.Invert();
-                    ImplWriteBmpRecord( aMsk, pA->GetDestPoint(), pA->GetDestSize(), WIN_SRCPAINT );
+                    ImplWriteBmpRecord( aMsk.GetBitmap(), pA->GetDestPoint(), pA->GetDestSize(), WIN_SRCPAINT );
                     ImplWriteBmpRecord( aBmp, pA->GetDestPoint(), pA->GetDestSize(), WIN_SRCAND );
                 }
                 else

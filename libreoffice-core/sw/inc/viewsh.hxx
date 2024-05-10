@@ -59,7 +59,7 @@ class SvtAccessibilityOptions;
 class SwPagePreviewLayout;
 class SwTextFrame;
 
-struct SwAccessibilityOptions;
+class SwAccessibilityOptions;
 namespace vcl { class Region; }
 class SwPostItMgr;
 class SdrPaintWindow;
@@ -155,11 +155,8 @@ class SW_DLLPUBLIC SwViewShell : public sw::Ring<SwViewShell>
                                     // in this case MakeVisible is ineffectual.
     bool  mbInEndAction     :1;  // Avoid problems, cf. viewsh.cxx.
     bool  mbPreview         :1;  // If true it is a Preview-SwViewShell.
-    bool  mbFrameView       :1;  // If true it is a  (HTML-)Frame.
     bool  mbEnableSmooth    :1;  // Disable SmoothScroll, e.g. for drag
                                     // of scrollbars.
-    bool  mbEndActionByVirDev:1; // Paints from EndAction always via virtual device
-                                    // (e.g. when browsing).
     bool      mbShowHeaderSeparator:1; ///< Flag to say that we are showing the header control
     bool      mbShowFooterSeparator:1; ///< Flag to say that we are showing the footer control
     bool      mbHeaderFooterEdit:1;  ///< Flag to say that we are editing header or footer (according to the bShow(Header|Footer)Separator above)
@@ -229,9 +226,6 @@ public:
     sal_uInt16 ActionCount() const { return mnStartAction; }
     bool ActionPend() const { return mnStartAction != 0; }
     bool IsInEndAction() const { return mbInEndAction; }
-
-    void SetEndActionByVirDev( bool b ) { mbEndActionByVirDev = b; }
-    bool IsEndActionByVirDev() const    { return mbEndActionByVirDev; }
 
     // The ActionCount for all Shells is temporarily set to zero and then
     // restored at the RootFrame via UNO.
@@ -524,8 +518,6 @@ public:
 
     bool IsPreview() const { return mbPreview; }
 
-    bool IsFrameView()  const { return mbFrameView; }
-
     // Invalidates pages and contents.
     // When bSizeChanged==true, adds/removes
     // headers and footers as necessary.
@@ -543,7 +535,7 @@ public:
     void InvalidateAccessibleFocus();
 
     // Apply Accessibility options.
-    void ApplyAccessibilityOptions(SvtAccessibilityOptions const & rAccessibilityOptions);
+    void ApplyAccessibilityOptions();
 
     /** invalidate CONTENT_FLOWS_FROM/_TO relation for paragraphs
 

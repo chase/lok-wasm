@@ -26,6 +26,7 @@
 #include <unotools/configmgr.hxx>
 #include <TextLayoutCache.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <o3tl/string_view.hxx>
 
 #include <unicode/ubidi.h>
 #include <unicode/uchar.h>
@@ -145,7 +146,8 @@ SalLayoutGlyphsImpl* SalLayoutGlyphsImpl::cloneCharRange(sal_Int32 index, sal_In
         return nullptr;
     // LinearPos needs adjusting to start at xOffset/yOffset for the first item,
     // that's how it's computed in GenericSalLayout::LayoutText().
-    DevicePoint zeroPoint = pos->linearPos() - DevicePoint(pos->xOffset(), pos->yOffset());
+    basegfx::B2DPoint zeroPoint
+        = pos->linearPos() - basegfx::B2DPoint(pos->xOffset(), pos->yOffset());
     // Add and adjust all glyphs until the given length.
     // The check is written as 'charPos + charCount <= endPos' rather than 'charPos < endPos'
     // (or similarly for RTL) to make sure we include complete glyphs. If a glyph is composed
@@ -239,7 +241,7 @@ SalLayoutGlyphsCache* SalLayoutGlyphsCache::self()
     return cache.get();
 }
 
-static UBiDiDirection getBiDiDirection(const OUString& text, sal_Int32 index, sal_Int32 len)
+static UBiDiDirection getBiDiDirection(std::u16string_view text, sal_Int32 index, sal_Int32 len)
 {
     // Return whether all character are LTR, RTL, neutral or whether it's mixed.
     // This is sort of ubidi_getBaseDirection() and ubidi_getDirection(),
@@ -248,7 +250,7 @@ static UBiDiDirection getBiDiDirection(const OUString& text, sal_Int32 index, sa
     UBiDiDirection direction = UBIDI_NEUTRAL;
     while (index < end)
     {
-        switch (u_charDirection(text.iterateCodePoints(&index)))
+        switch (u_charDirection(o3tl::iterateCodePoints(text, &index)))
         {
             // Only characters with strong direction.
             case U_LEFT_TO_RIGHT:
@@ -270,7 +272,7 @@ static UBiDiDirection getBiDiDirection(const OUString& text, sal_Int32 index, sa
 }
 
 static SalLayoutGlyphs makeGlyphsSubset(const SalLayoutGlyphs& source,
-                                        const OutputDevice* outputDevice, const OUString& text,
+                                        const OutputDevice* outputDevice, std::u16string_view text,
                                         sal_Int32 index, sal_Int32 len)
 {
     // tdf#149264: We need to check if the text is LTR, RTL or mixed. Apparently
@@ -328,10 +330,6 @@ SalLayoutGlyphsCache::GetLayoutGlyphs(VclPtr<const OutputDevice> outputDevice, c
     if (nLen == 0)
         return nullptr;
     const CachedGlyphsKey key(outputDevice, text, nIndex, nLen, nLogicWidth);
-    // for now disable if the font is the one seen in tdf#119074
-    // https://github.com/harfbuzz/harfbuzz/issues/3824
-    if (key.fontMetric.GetFamilyName() == "XB Roya")
-        return nullptr;
     GlyphsCache::const_iterator it = mCachedGlyphs.find(key);
     if (it != mCachedGlyphs.end())
     {

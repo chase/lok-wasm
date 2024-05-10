@@ -99,20 +99,6 @@ void ODbaseIndex::refreshColumns()
         m_pColumns.reset(new ODbaseIndexColumns(this,m_aMutex,aVector));
 }
 
-const Sequence< sal_Int8 > & ODbaseIndex::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit implId;
-    return implId.getSeq();
-}
-
-// XUnoTunnel
-
-sal_Int64 ODbaseIndex::getSomething( const Sequence< sal_Int8 > & rId )
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<ODbaseIndex_BASE>{});
-}
-
 ONDXPagePtr const & ODbaseIndex::getRoot()
 {
     openIndexFile();
@@ -401,8 +387,7 @@ void ODbaseIndex::createINFEntry()
     bool bCase = isCaseSensitive();
     while (aNewEntry.isEmpty())
     {
-        aNewEntry = OString("NDX");
-        aNewEntry += OString::number(++nSuffix);
+        aNewEntry = "NDX" + OString::number(++nSuffix);
         for (sal_uInt16 i = 0; i < aInfFile.GetKeyCount(); i++)
         {
             aKeyName = aInfFile.GetKeyName(i);
@@ -565,8 +550,7 @@ void ODbaseIndex::CreateImpl()
 
     if(xSet->last())
     {
-        Reference< XUnoTunnel> xTunnel(xSet, UNO_QUERY_THROW);
-        ODbaseResultSet* pDbaseRes = comphelper::getFromUnoTunnel<ODbaseResultSet>(xTunnel);
+        ODbaseResultSet* pDbaseRes = dynamic_cast<ODbaseResultSet*>(xSet.getTyped().get());
         assert(pDbaseRes); //"No dbase resultset found? What's going on here!
         nRowsLeft = xSet->getRow();
 

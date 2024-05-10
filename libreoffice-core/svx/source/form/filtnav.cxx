@@ -796,7 +796,7 @@ bool FmFilterModel::ValidateText(FmFilterItem const * pItem, OUString& rText, OU
             OUString aPreparedText;
             Locale aAppLocale = Application::GetSettings().GetUILanguageTag().getLocale();
             pParseNode->parseNodeToPredicateStr(
-                aPreparedText, xConnection, xFormatter, xField, OUString(), aAppLocale, OUString("."), getParseContext() );
+                aPreparedText, xConnection, xFormatter, xField, OUString(), aAppLocale, ".", getParseContext() );
             rText = aPreparedText;
             return true;
         }
@@ -1151,9 +1151,7 @@ IMPL_LINK(FmFilterNavigator, EditedEntryHdl, const IterString&, rIterString, boo
         else
         {
             // display the error and return sal_False
-            SQLContext aError;
-            aError.Message = SvxResId(RID_STR_SYNTAXERROR);
-            aError.Details = aErrorMsg;
+            SQLContext aError(SvxResId(RID_STR_SYNTAXERROR), {}, {}, 0, {}, aErrorMsg);
             displayException(aError, VCLUnoHelper::GetInterface(m_xTopLevel));
 
             return false;
@@ -1526,7 +1524,7 @@ IMPL_LINK(FmFilterNavigator, PopupMenuHdl, const CommandEvent&, rEvt, bool)
                 xContextMenu->remove("isnotnull");
             }
 
-            OString sIdent = xContextMenu->popup_at_rect(m_xTreeView.get(), tools::Rectangle(aWhere, ::Size(1, 1)));
+            OUString sIdent = xContextMenu->popup_at_rect(m_xTreeView.get(), tools::Rectangle(aWhere, ::Size(1, 1)));
             if (sIdent == "edit")
             {
                 m_xTreeView->start_editing(*xClicked);

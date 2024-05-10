@@ -42,8 +42,8 @@
 using namespace com::sun::star::uno;
 using namespace com::sun::star::beans;
 
-constexpr OUStringLiteral SYMBOL_LIST = u"SymbolList";
-constexpr OUStringLiteral FONT_FORMAT_LIST = u"FontFormatList";
+constexpr OUString SYMBOL_LIST = u"SymbolList"_ustr;
+constexpr OUString FONT_FORMAT_LIST = u"FontFormatList"_ustr;
 
 static Sequence< OUString > lcl_GetFontPropertyNames()
 {
@@ -73,6 +73,7 @@ static Sequence<OUString> lcl_GetOtherPropertyNames()
                                "Misc/AutoCloseBrackets",
                                "Misc/DefaultSmSyntaxVersion",
                                "Misc/IgnoreSpacesRight",
+                               "Misc/InlineEditEnable",
                                "Misc/SmEditWindowZoomFactor",
                                "Print/FormulaText",
                                "Print/Frame",
@@ -90,6 +91,7 @@ static Sequence< OUString > lcl_GetFormatPropertyNames()
     //! see respective load/save routines here
     return Sequence< OUString > {
                         "StandardFormat/Textmode",
+                        "StandardFormat/RightToLeft",
                         "StandardFormat/GreekCharStyle",
                         "StandardFormat/ScaleNormalBracket",
                         "StandardFormat/HorizontalAlignment",
@@ -138,12 +140,13 @@ struct SmCfgOther
     SmPrintSize     ePrintSize;
     sal_uInt16      nPrintZoomFactor;
     sal_uInt16      nSmEditWindowZoomFactor;
-    sal_uInt16      nSmSyntaxVersion;
+    sal_Int16       nSmSyntaxVersion;
     bool            bPrintTitle;
     bool            bPrintFormulaText;
     bool            bPrintFrame;
     bool            bIsSaveOnlyUsedSymbols;
     bool            bIsAutoCloseBrackets;
+    bool            bInlineEditEnable;
     bool            bIgnoreSpacesRight;
     bool            bToolboxVisible;
     bool            bAutoRedraw;
@@ -152,7 +155,7 @@ struct SmCfgOther
     SmCfgOther();
 };
 
-constexpr sal_uInt16 nDefaultSmSyntaxVersion(5);
+constexpr sal_Int16 nDefaultSmSyntaxVersion(5);
 
 SmCfgOther::SmCfgOther()
     : ePrintSize(PRINT_SIZE_NORMAL)
@@ -165,6 +168,7 @@ SmCfgOther::SmCfgOther()
     , bPrintFrame(true)
     , bIsSaveOnlyUsedSymbols(true)
     , bIsAutoCloseBrackets(true)
+    , bInlineEditEnable(true)
     , bIgnoreSpacesRight(true)
     , bToolboxVisible(true)
     , bAutoRedraw(true)
@@ -430,8 +434,6 @@ void SmMathConfig::ReadSymbol( SmSym &rSymbol,
         if (pFntFmt)
             aFont = pFntFmt->GetFont();
     }
-    else
-        bOK = false;
     ++pValue;
 
     if (bOK)
@@ -738,7 +740,7 @@ void SmMathConfig::StripFontFormatList( const std::vector< SmSym > &rSymbols )
     SmFontFormatList aUsedList;
     for (i = 0;  i < rSymbols.size();  ++i)
     {
-        OSL_ENSURE( rSymbols[i].GetName().getLength() > 0, "non named symbol" );
+        OSL_ENSURE( !rSymbols[i].GetUiName().isEmpty(), "non named symbol" );
         aUsedList.GetFontFormatId( SmFontFormat( rSymbols[i].GetFace() ) , true );
     }
     const SmFormat & rStdFmt = GetStandardFormat();
@@ -792,6 +794,10 @@ void SmMathConfig::LoadOther()
     // Misc/DefaultSmSyntaxVersion
     if (sal_Int16 nTmp; pVal->hasValue() && (*pVal >>= nTmp))
         pOther->nSmSyntaxVersion = nTmp;
+    ++pVal;
+    // Misc/InlineEditEnable
+    if (bool bTmp; pVal->hasValue() && (*pVal >>= bTmp))
+        pOther->bInlineEditEnable = bTmp;
     ++pVal;
     // Misc/IgnoreSpacesRight
     if (bool bTmp; pVal->hasValue() && (*pVal >>= bTmp))
@@ -856,6 +862,8 @@ void SmMathConfig::SaveOther()
     *pVal++ <<= pOther->bIsAutoCloseBrackets;
     // Misc/DefaultSmSyntaxVersion
     *pVal++ <<= pOther->nSmSyntaxVersion;
+    // Misc/InlineEditEnable
+    *pVal++ <<= pOther->bInlineEditEnable;
     // Misc/IgnoreSpacesRight
     *pVal++ <<= pOther->bIgnoreSpacesRight;
     // Misc/SmEditWindowZoomFactor
@@ -974,6 +982,10 @@ void SmMathConfig::LoadFormat()
     if (pVal->hasValue()  &&  (*pVal >>= bTmp))
         pFormat->SetTextmode( bTmp );
     ++pVal;
+    // StandardFormat/RightToLeft
+    if (pVal->hasValue()  &&  (*pVal >>= bTmp))
+        pFormat->SetRightToLeft( bTmp );
+    ++pVal;
     // StandardFormat/GreekCharStyle
     if (pVal->hasValue()  &&  (*pVal >>= nTmp16))
         pFormat->SetGreekCharStyle( nTmp16 );
@@ -1052,6 +1064,8 @@ void SmMathConfig::SaveFormat()
 
     // StandardFormat/Textmode
     *pValue++ <<= pFormat->IsTextmode();
+    // StandardFormat/RightToLeft
+    *pValue++ <<= pFormat->IsRightToLeft();
     // StandardFormat/GreekCharStyle
     *pValue++ <<= pFormat->GetGreekCharStyle();
     // StandardFormat/ScaleNormalBracket
@@ -1241,7 +1255,7 @@ bool SmMathConfig::IsAutoCloseBrackets() const
     return pOther->bIsAutoCloseBrackets;
 }
 
-sal_uInt16 SmMathConfig::GetDefaultSmSyntaxVersion() const
+sal_Int16 SmMathConfig::GetDefaultSmSyntaxVersion() const
 {
     if (utl::ConfigManager::IsFuzzing())
         return nDefaultSmSyntaxVersion;
@@ -1281,7 +1295,7 @@ void SmMathConfig::SetAutoCloseBrackets( bool bVal )
     SetOtherIfNotEqual( pOther->bIsAutoCloseBrackets, bVal );
 }
 
-void SmMathConfig::SetDefaultSmSyntaxVersion( sal_uInt16 nVal )
+void SmMathConfig::SetDefaultSmSyntaxVersion( sal_Int16 nVal )
 {
     if (!pOther)
         LoadOther();
@@ -1290,6 +1304,27 @@ void SmMathConfig::SetDefaultSmSyntaxVersion( sal_uInt16 nVal )
         CommitLocker aLock(*this);
         pOther->nSmSyntaxVersion = nVal;
         SetOtherModified( true );
+    }
+}
+
+bool SmMathConfig::IsInlineEditEnable() const
+{
+    if (utl::ConfigManager::IsFuzzing())
+        return false;
+    if (!pOther)
+        const_cast<SmMathConfig*>(this)->LoadOther();
+    return pOther->bInlineEditEnable;
+}
+
+
+void SmMathConfig::SetInlineEditEnable( bool bVal )
+{
+    if (!pOther)
+        LoadOther();
+    if (SetOtherIfNotEqual( pOther->bInlineEditEnable, bVal ))
+    {
+        // reformat (displayed) formulas accordingly
+        Broadcast(SfxHint(SfxHintId::MathFormatChanged));
     }
 }
 
@@ -1389,6 +1424,10 @@ void SmMathConfig::ItemSetToConfig(const SfxItemSet &rSet)
     {   bVal = pRedrawItem->GetValue();
         SetAutoRedraw( bVal );
     }
+    if (const SfxBoolItem* pSpacesItem = rSet.GetItemIfSet(SID_INLINE_EDIT_ENABLE))
+    {   bVal = pSpacesItem->GetValue();
+        SetInlineEditEnable( bVal );
+    }
     if (const SfxBoolItem* pSpacesItem = rSet.GetItemIfSet(SID_NO_RIGHT_SPACES))
     {   bVal = pSpacesItem->GetValue();
         SetIgnoreSpacesRight( bVal );
@@ -1425,6 +1464,7 @@ void SmMathConfig::ConfigToItemSet(SfxItemSet &rSet) const
     rSet.Put(SfxBoolItem(SID_PRINTTEXT,  IsPrintFormulaText()));
     rSet.Put(SfxBoolItem(SID_PRINTFRAME, IsPrintFrame()));
     rSet.Put(SfxBoolItem(SID_AUTOREDRAW, IsAutoRedraw()));
+    rSet.Put(SfxBoolItem(SID_INLINE_EDIT_ENABLE, IsInlineEditEnable()));
     rSet.Put(SfxBoolItem(SID_NO_RIGHT_SPACES, IsIgnoreSpacesRight()));
     rSet.Put(SfxBoolItem(SID_SAVE_ONLY_USED_SYMBOLS, IsSaveOnlyUsedSymbols()));
     rSet.Put(SfxBoolItem(SID_AUTO_CLOSE_BRACKETS, IsAutoCloseBrackets()));

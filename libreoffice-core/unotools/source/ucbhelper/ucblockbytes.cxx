@@ -459,11 +459,11 @@ Moderator::Moderator(
 
     Reference < XActiveDataSink > xActiveSink(*pxSink,UNO_QUERY);
     if(xActiveSink.is())
-        pxSink->set( static_cast<cppu::OWeakObject*>(new ModeratorsActiveDataSink(*this)));
+        pxSink->set(getXWeak(new ModeratorsActiveDataSink(*this)));
 
     Reference<XActiveDataStreamer> xStreamer( *pxSink, UNO_QUERY );
     if ( xStreamer.is() )
-        pxSink->set( static_cast<cppu::OWeakObject*>(new ModeratorsActiveDataStreamer(*this)));
+        pxSink->set(getXWeak(new ModeratorsActiveDataStreamer(*this)));
 
     if(dec == 0)
         m_aArg.Argument <<= aPostArg;
@@ -728,14 +728,13 @@ static bool UCBOpenContentSync(
             {
                 Reference<XInteractionRetry> xRet;
                 if(xInteract.is()) {
-                    InteractiveNetworkConnectException aExcep;
                     INetURLObject aURL(
                         xContId.is() ?
                         xContId->getContentIdentifier() :
                         OUString() );
-                    aExcep.Server = aURL.GetHost();
-                    aExcep.Classification = InteractionClassification_ERROR;
-                    aExcep.Message = "server not responding after five seconds";
+                    InteractiveNetworkConnectException aExcep(
+                        "server not responding after five seconds", {},
+                        InteractionClassification_ERROR, aURL.GetHost());
                     Any request;
                     request <<= aExcep;
                     rtl::Reference<ucbhelper::InteractionRequest> xIR =
@@ -978,35 +977,39 @@ UcbLockBytes::~UcbLockBytes()
 
 Reference < XInputStream > UcbLockBytes::getInputStream()
 {
-    osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     m_bDontClose = true;
     return m_xInputStream;
 }
 
 void UcbLockBytes::setStream( const Reference<XStream>& aStream )
 {
-    osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
     if ( aStream.is() )
     {
         m_xOutputStream = aStream->getOutputStream();
-        setInputStream( aStream->getInputStream(), false );
+        setInputStreamImpl( aGuard, aStream->getInputStream(), false );
         m_xSeekable.set( aStream, UNO_QUERY );
     }
     else
     {
         m_xOutputStream.clear();
-        setInputStream( Reference < XInputStream >() );
+        setInputStreamImpl( aGuard, Reference < XInputStream >() );
     }
 }
 
 bool UcbLockBytes::setInputStream( const Reference<XInputStream> &rxInputStream, bool bSetXSeekable )
 {
+    std::unique_lock aGuard( m_aMutex );
+    return setInputStreamImpl(aGuard, rxInputStream, bSetXSeekable);
+}
+
+bool UcbLockBytes::setInputStreamImpl( std::unique_lock<std::mutex>& /*rGuard*/, const Reference<XInputStream> &rxInputStream, bool bSetXSeekable )
+{
     bool bRet = false;
 
     try
     {
-        osl::MutexGuard aGuard( m_aMutex );
-
         if ( !m_bDontClose && m_xInputStream.is() )
             m_xInputStream->closeInput();
 
@@ -1111,11 +1114,7 @@ ErrCode UcbLockBytes::ReadAt(sal_uInt64 const nPos,
                 return ERRCODE_IO_PENDING;
         }
 
-        Reference< css::lang::XUnoTunnel > xTunnel( xStream, UNO_QUERY );
-        comphelper::ByteReader* pByteReader = nullptr;
-        if (xTunnel)
-            pByteReader = reinterpret_cast< comphelper::ByteReader* >( xTunnel->getSomething( comphelper::ByteReader::getUnoTunnelId() ) );
-
+        comphelper::ByteReader* pByteReader = dynamic_cast< comphelper::ByteReader* >(xStream.get());
         if (pByteReader)
         {
             nSize = pByteReader->readSomeBytes( static_cast<sal_Int8*>(pBuffer), sal_Int32(nCount) );

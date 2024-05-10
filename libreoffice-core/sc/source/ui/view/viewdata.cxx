@@ -71,13 +71,14 @@
 
 #include <com/sun/star/container/XNameContainer.hpp>
 #include <com/sun/star/document/NamedPropertyValues.hpp>
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
 using namespace com::sun::star;
 
 #define SC_GROWY_SMALL_EXTRA    100
 #define SC_GROWY_BIG_EXTRA      200
 
-constexpr OUStringLiteral TAG_TABBARWIDTH = u"tw:";
+constexpr OUString TAG_TABBARWIDTH = u"tw:"_ustr;
 
 namespace {
 
@@ -781,6 +782,7 @@ ScViewData::ScViewData(ScDocument* pDoc, ScDocShell* pDocSh, ScTabViewShell* pVi
         nPPTX(0.0),
         nPPTY(0.0),
         maMarkData  (pDocSh ? pDocSh->GetDocument().GetSheetLimits() : pDoc->GetSheetLimits()),
+        maHighlightData (pDocSh ? pDocSh->GetDocument().GetSheetLimits() : pDoc->GetSheetLimits()),
         pDocShell   ( pDocSh ),
         mrDoc       (pDocSh ? pDocSh->GetDocument() : *pDoc),
         pView       ( pViewSh ),
@@ -823,7 +825,8 @@ ScViewData::ScViewData(ScDocument* pDoc, ScDocShell* pDocSh, ScTabViewShell* pVi
     maMarkData.SelectOneTable(0); // Sync with nTabNo
 
     aScrSize = Size( o3tl::convert(STD_COL_WIDTH * OLE_STD_CELLS_X, o3tl::Length::twip, o3tl::Length::px),
-                     o3tl::convert(ScGlobal::nStdRowHeight * OLE_STD_CELLS_Y, o3tl::Length::twip, o3tl::Length::px));
+                    o3tl::convert(mrDoc.GetSheetOptimalMinRowHeight(nTabNo) * OLE_STD_CELLS_Y,
+                                  o3tl::Length::twip, o3tl::Length::px));
     maTabData.emplace_back( new ScViewDataTable(nullptr) );
     pThisTab = maTabData[nTabNo].get();
 
@@ -1518,6 +1521,22 @@ tools::Rectangle ScViewData::GetEditArea( ScSplitPos eWhich, SCCOL nPosX, SCROW 
                             GetEditArea( pPattern, bForceToTop );
 }
 
+namespace {
+
+void notifyCellCursorAt(const ScTabViewShell* pViewShell, SCCOL nCol, SCROW nRow,
+                        const tools::Rectangle& rCursor)
+{
+    std::stringstream ss;
+    ss << rCursor.getX() << ", " << rCursor.getY() << ", " << rCursor.GetWidth() << ", "
+       << rCursor.GetHeight() << ", " << nCol << ", " << nRow;
+
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_CURSOR, ss.str().c_str());
+    SfxLokHelper::notifyOtherViews(pViewShell, LOK_CALLBACK_CELL_VIEW_CURSOR, "rectangle",
+                                   ss.str().c_str());
+}
+
+}
+
 void ScViewData::SetEditEngine( ScSplitPos eWhich,
                                 ScEditEngineDefaulter* pNewEngine,
                                 vcl::Window* pWin, SCCOL nNewX, SCROW nNewY )
@@ -1633,6 +1652,9 @@ void ScViewData::SetEditEngine( ScSplitPos eWhich,
     tools::Rectangle aOutputArea = pWin->PixelToLogic( aPixRect, GetLogicMode() );
     pEditView[eWhich]->SetOutputArea( aOutputArea );
 
+    if (bLOKPrintTwips)
+        notifyCellCursorAt(GetViewShell(), nNewX, nNewY, aPTwipsRect);
+
     if ( bActive && eWhich == GetActivePart() )
     {
         // keep the part that has the active edit view available after
@@ -1732,7 +1754,9 @@ void ScViewData::SetEditEngine( ScSplitPos eWhich,
 
         Size aPaperSize = pView->GetActiveWin()->PixelToLogic( Size( nSizeXPix, nSizeYPix ), GetLogicMode() );
         Size aPaperSizePTwips(nSizeXPTwips, nSizeYPTwips);
-        if ( bBreak && !bAsianVertical && SC_MOD()->GetInputOptions().GetTextWysiwyg() )
+        // In the LOK case the following code can make the cell background and visible area larger
+        // than needed which makes selecting the adjacent right cell impossible in some cases.
+        if ( bBreak && !bAsianVertical && SC_MOD()->GetInputOptions().GetTextWysiwyg() && !bLOKActive )
         {
             //  if text is formatted for printer, use the exact same paper width
             //  (and same line breaks) as for output.
@@ -2119,6 +2143,9 @@ void ScViewData::EditGrowX()
 
     pCurView->SetOutputArea(aArea);
 
+    if (bLOKPrintTwips)
+        notifyCellCursorAt(GetViewShell(), nEditCol, nEditRow, aAreaPTwips);
+
     //  In vertical mode, the whole text is moved to the next cell (right-aligned),
     //  so everything must be repainted. Otherwise, paint only the new area.
     //  If growing in centered alignment, if the cells left and right have different sizes,
@@ -2231,6 +2258,9 @@ void ScViewData::EditGrowY( bool bInitial )
         pCurView->SetLOKSpecialOutputArea(aAreaPTwips);
 
     pCurView->SetOutputArea(aArea);
+
+    if (bLOKPrintTwips)
+        notifyCellCursorAt(GetViewShell(), nEditCol, nEditRow, aAreaPTwips);
 
     if (nEditEndRow >= nBottom || bMaxReached)
     {
@@ -2629,7 +2659,7 @@ OString ScViewData::describeCellCursorAt(SCCOL nX, SCROW nY, bool bPixelAligned)
             << nX << ", " << nY;
     }
 
-    return ss.str().c_str();
+    return OString(ss.str());
 }
 
 //      Number of cells on a screen
@@ -3136,18 +3166,23 @@ ScDocFunc& ScViewData::GetDocFunc() const
 SfxBindings& ScViewData::GetBindings()
 {
     assert(pView && "GetBindings() without ViewShell");
-    return pView->GetViewFrame()->GetBindings();
+    return pView->GetViewFrame().GetBindings();
 }
 
 SfxDispatcher& ScViewData::GetDispatcher()
 {
     assert(pView && "GetDispatcher() without ViewShell");
-    return *pView->GetViewFrame()->GetDispatcher();
+    return *pView->GetViewFrame().GetDispatcher();
 }
 
 ScMarkData& ScViewData::GetMarkData()
 {
     return maMarkData;
+}
+
+ScMarkData& ScViewData::GetHighlightData()
+{
+    return maHighlightData;
 }
 
 const ScMarkData& ScViewData::GetMarkData() const
@@ -3521,12 +3556,6 @@ void ScViewData::WriteExtOptions( ScExtDocOptions& rDocOpt ) const
             const ScMarkData& rMarkData = GetMarkData();
             rTabSett.mbSelected = rMarkData.GetTableSelect( nTab );
             rMarkData.FillRangeListWithMarks( &rTabSett.maSelection, true );
-
-            // grid color
-            rTabSett.maGridColor = COL_AUTO;
-            const Color& rGridColor = maOptions.GetGridColor();
-            if (rGridColor != SC_STD_GRIDCOLOR)
-                rTabSett.maGridColor = rGridColor;
             rTabSett.mbShowGrid = pViewTab->bShowGrid;
 
             // view mode and zoom
@@ -3681,12 +3710,6 @@ void ScViewData::ReadExtOptions( const ScExtDocOptions& rDocOpt )
             // get some settings from displayed Excel sheet, set at Calc document
             if( nTab == GetTabNo() )
             {
-                // grid color -- #i47435# set automatic grid color explicitly
-                Color aGridColor(rTabSett.maGridColor);
-                if (aGridColor == COL_AUTO)
-                    aGridColor = SC_STD_GRIDCOLOR;
-                maOptions.SetGridColor(aGridColor, OUString());
-
                 // view mode and default zoom (for new sheets) from current sheet
                 if( rTabSett.mnNormalZoom )
                     aDefZoomX = aDefZoomY = Fraction( rTabSett.mnNormalZoom, 100L );
@@ -3711,7 +3734,7 @@ void ScViewData::WriteUserDataSequence(uno::Sequence <beans::PropertyValue>& rSe
     // + 1, because we have to put the view id in the sequence
     beans::PropertyValue* pSettings = rSettings.getArray();
 
-    sal_uInt16 nViewID(pView->GetViewFrame()->GetCurViewId());
+    sal_uInt16 nViewID(pView->GetViewFrame().GetCurViewId());
     pSettings[SC_VIEW_ID].Name = SC_VIEWID;
     pSettings[SC_VIEW_ID].Value <<= SC_VIEW + OUString::number(nViewID);
 
@@ -3764,6 +3787,8 @@ void ScViewData::WriteUserDataSequence(uno::Sequence <beans::PropertyValue>& rSe
     pSettings[SC_SHOWZERO].Value <<= maOptions.GetOption(VOPT_NULLVALS);
     pSettings[SC_SHOWNOTES].Name = SC_UNO_SHOWNOTES;
     pSettings[SC_SHOWNOTES].Value <<= maOptions.GetOption(VOPT_NOTES);
+    pSettings[SC_SHOWFORMULASMARKS].Name = SC_UNO_SHOWFORMULASMARKS;
+    pSettings[SC_SHOWFORMULASMARKS].Value <<= maOptions.GetOption(VOPT_FORMULAS_MARKS);
     pSettings[SC_SHOWGRID].Name = SC_UNO_SHOWGRID;
     pSettings[SC_SHOWGRID].Value <<= maOptions.GetOption(VOPT_GRID);
     pSettings[SC_GRIDCOLOR].Name = SC_UNO_GRIDCOLOR;
@@ -3908,18 +3933,15 @@ void ScViewData::ReadUserDataSequence(const uno::Sequence <beans::PropertyValue>
             maOptions.SetOption(VOPT_NULLVALS, ScUnoHelpFunctions::GetBoolFromAny(rSetting.Value));
         else if ( sName == SC_UNO_SHOWNOTES )
             maOptions.SetOption(VOPT_NOTES, ScUnoHelpFunctions::GetBoolFromAny(rSetting.Value));
+        else if ( sName == SC_UNO_SHOWFORMULASMARKS )
+            maOptions.SetOption(VOPT_FORMULAS_MARKS, ScUnoHelpFunctions::GetBoolFromAny(rSetting.Value));
         else if ( sName == SC_UNO_SHOWGRID )
             maOptions.SetOption(VOPT_GRID, ScUnoHelpFunctions::GetBoolFromAny(rSetting.Value));
         else if ( sName == SC_UNO_GRIDCOLOR )
         {
             Color aColor;
             if (rSetting.Value >>= aColor)
-            {
-                // #i47435# set automatic grid color explicitly
-                if( aColor == COL_AUTO )
-                    aColor = SC_STD_GRIDCOLOR;
                 maOptions.SetGridColor(aColor, OUString());
-            }
         }
         else if ( sName == SC_UNO_SHOWPAGEBR )
             maOptions.SetOption(VOPT_PAGEBREAKS, ScUnoHelpFunctions::GetBoolFromAny(rSetting.Value));
@@ -4103,7 +4125,8 @@ bool ScViewData::UpdateFixY( SCTAB nTab )               // true = value changed
 void ScViewData::UpdateOutlinerFlags( Outliner& rOutl ) const
 {
     ScDocument& rLocalDoc = GetDocument();
-    bool bOnlineSpell = rLocalDoc.GetDocOptions().IsAutoSpell();
+    const ScTabViewShell* pTabViewShell = GetViewShell();
+    const bool bOnlineSpell = pTabViewShell && pTabViewShell->IsAutoSpell();
 
     EEControlBits nCntrl = rOutl.GetControlWord();
     nCntrl |= EEControlBits::MARKNONURLFIELDS;

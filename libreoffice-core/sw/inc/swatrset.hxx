@@ -56,6 +56,12 @@ class SvxCharHiddenItem;
 class SwFormatFillOrder;
 class SwFormatFrameSize;
 class SvxPaperBinItem;
+class SvxLeftMarginItem;
+class SvxTextLeftMarginItem;
+class SvxFirstLineIndentItem;
+class SvxRightMarginItem;
+class SvxGutterLeftMarginItem;
+class SvxGutterRightMarginItem;
 class SvxLRSpaceItem;
 class SvxULSpaceItem;
 class SwFormatContent;
@@ -156,18 +162,29 @@ public:
 class SW_DLLPUBLIC SwAttrSet final : public SfxItemSet
 {
     // Pointer for Modify-System
-    SwAttrSet *m_pOldSet, *m_pNewSet;
+    SwAttrSet *m_pOldSet;
+    SwAttrSet *m_pNewSet;
 
-    // Notification-Callback
-    virtual void Changed( const SfxPoolItem& rOld, const SfxPoolItem& rNew ) override;
+    // helper class for change callback & local instance
+    // needed to forward the processing call to the correct instance
+    class callbackHolder final
+    {
+    private:
+        SwAttrSet* m_Set;
+    public:
+        callbackHolder(SwAttrSet* pSet) : m_Set(pSet) {}
+        void operator () (const SfxPoolItem* pOld, const SfxPoolItem* pNew) { m_Set->changeCallback(pOld, pNew); }
+    } m_aCallbackHolder;
 
-    void PutChgd( const SfxPoolItem& rI ) { SfxItemSet::PutDirect( rI ); }
+    // processor for change callback
+    void changeCallback(const SfxPoolItem* pOld, const SfxPoolItem* pNew) const;
 public:
     SwAttrSet( SwAttrPool&, sal_uInt16 nWhich1, sal_uInt16 nWhich2 );
     SwAttrSet( SwAttrPool&, const WhichRangesContainer& nWhichPairTable );
     SwAttrSet( const SwAttrSet& );
 
     virtual std::unique_ptr<SfxItemSet> Clone(bool bItems = true, SfxItemPool *pToPool = nullptr) const override;
+    SwAttrSet CloneAsValue(bool bItems = true) const;
 
     bool Put_BC( const SfxPoolItem& rAttr, SwAttrSet* pOld, SwAttrSet* pNew );
     bool Put_BC( const SfxItemSet& rSet, SwAttrSet* pOld, SwAttrSet* pNew );
@@ -240,6 +257,12 @@ public:
     inline const SwFormatFillOrder       &GetFillOrder( bool = true ) const;
     inline const SwFormatFrameSize             &GetFrameSize( bool = true ) const;
     inline const SvxPaperBinItem      &GetPaperBin( bool = true ) const;
+    inline const SvxLeftMarginItem &    GetLeftMargin(bool = true) const;
+    inline const SvxTextLeftMarginItem &GetTextLeftMargin(bool = true) const;
+    inline const SvxFirstLineIndentItem &GetFirstLineIndent(bool = true) const;
+    inline const SvxRightMarginItem &   GetRightMargin(bool = true) const;
+    inline const SvxGutterLeftMarginItem &GetGutterLeftMargin(bool = true) const;
+    inline const SvxGutterRightMarginItem &GetGutterRightMargin(bool = true) const;
     inline const SvxLRSpaceItem           &GetLRSpace( bool = true ) const;
     inline const SvxULSpaceItem           &GetULSpace( bool = true ) const;
     inline const SwFormatContent           &GetContent( bool = true ) const;

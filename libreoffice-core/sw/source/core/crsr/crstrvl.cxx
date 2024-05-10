@@ -416,12 +416,13 @@ bool SwCursorShell::GotoNxtPrvTableFormula( bool bNext, bool bOnlyErrors )
                                 &rPos, &tmp) );
     }
 
-    sal_uInt32 nMaxItems = GetDoc()->GetAttrPool().GetItemCount2( RES_BOXATR_FORMULA );
+    const registeredSfxPoolItems& rSurrogates(GetDoc()->GetAttrPool().GetItemSurrogates(RES_BOXATR_FORMULA));
+    const sal_uInt32 nMaxItems(rSurrogates.size());
     if( nMaxItems > 0 )
     {
         sal_uInt8 nMaxDo = 2;
         do {
-            for (const SfxPoolItem* pItem : GetDoc()->GetAttrPool().GetItemSurrogates(RES_BOXATR_FORMULA))
+            for (const SfxPoolItem* pItem : rSurrogates)
             {
                 const SwTableBox* pTBox;
                 auto pFormulaItem = dynamic_cast<const SwTableBoxFormula*>(pItem);
@@ -521,7 +522,8 @@ bool SwCursorShell::GotoNxtPrvTOXMark( bool bNext )
 
     const SwTextNode* pTextNd;
     const SwTextTOXMark* pTextTOX;
-    sal_uInt32 nMaxItems = GetDoc()->GetAttrPool().GetItemCount2( RES_TXTATR_TOXMARK );
+    const registeredSfxPoolItems& rSurrogates(GetDoc()->GetAttrPool().GetItemSurrogates(RES_TXTATR_TOXMARK));
+    const sal_uInt32 nMaxItems(rSurrogates.size());
     if( nMaxItems == 0 )
     {
         SvxSearchDialogWrapper::SetSearchLabel( SearchLabel::NavElementNotFound );
@@ -529,7 +531,7 @@ bool SwCursorShell::GotoNxtPrvTOXMark( bool bNext )
     }
 
     do {
-        for (const SfxPoolItem* pItem : GetDoc()->GetAttrPool().GetItemSurrogates(RES_TXTATR_TOXMARK))
+        for (const SfxPoolItem* pItem : rSurrogates)
         {
             auto pToxMarkItem = dynamic_cast<const SwTOXMark*>(pItem);
             if( !pToxMarkItem )
@@ -598,6 +600,7 @@ const SwTOXMark& SwCursorShell::GotoTOXMark( const SwTOXMark& rStart,
     SwPosition& rPos = *GetCursor()->GetPoint();
     rPos.Assign(rNewMark.GetTextTOXMark()->GetTextNode(),
                  rNewMark.GetTextTOXMark()->GetStart() );
+    GetCursor()->DeleteMark(); // tdf#158783 prevent UpdateCursor resetting point
 
     if( !m_pCurrentCursor->IsSelOvr() )
         UpdateCursor( SwCursorShell::SCROLLWIN | SwCursorShell::CHKRANGE |
@@ -1632,7 +1635,7 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
             if( !bRet && IsAttrAtPos::FormControl & rContentAtPos.eContentAtPos )
             {
                 IDocumentMarkAccess* pMarksAccess = GetDoc()->getIDocumentMarkAccess( );
-                sw::mark::IFieldmark* pFieldBookmark = pMarksAccess->getFieldmarkFor( aPos );
+                sw::mark::IFieldmark* pFieldBookmark = pMarksAccess->getInnerFieldmarkFor(aPos);
                 if (bCursorFoundExact && pFieldBookmark)
                 {
                     rContentAtPos.eContentAtPos = IsAttrAtPos::FormControl;
@@ -1791,8 +1794,6 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
                 sal_Int32 index = aPos.GetContentIndex();
                 pTextAttr = pTextNd->GetTextAttrAt(index, RES_TXTATR_INETFMT);
 
-                if(!pTextAttr && index > 0)
-                    pTextAttr = pTextNd->GetTextAttrAt(index - 1, RES_TXTATR_INETFMT);
                 // "detect" only INetAttrs with URLs
                 if( pTextAttr && !pTextAttr->GetINetFormat().GetValue().isEmpty() )
                 {
@@ -1896,7 +1897,8 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
             }
         }
 
-        if( !bRet && ( IsAttrAtPos::TableRedline & rContentAtPos.eContentAtPos ) )
+        if( !bRet && ( ( IsAttrAtPos::TableRedline & rContentAtPos.eContentAtPos ) ||
+                     ( IsAttrAtPos::TableColRedline & rContentAtPos.eContentAtPos ) ) )
         {
             const SwTableNode* pTableNd;
             const SwTableBox* pBox;
@@ -1906,17 +1908,34 @@ bool SwCursorShell::GetContentAtPos( const Point& rPt,
                 nullptr != ( pBox = pTableNd->GetTable().GetTableBox(
                 pSttNd->GetIndex() )) &&
                 nullptr != ( pTableLine = pBox->GetUpper() ) &&
-                RedlineType::None != pTableLine->GetRedlineType() )
+                ( RedlineType::None != pBox->GetRedlineType() ||
+                RedlineType::None != pTableLine->GetRedlineType() ) )
             {
-                SwRedlineTable::size_type nPos = 0;
-                nPos = pTableLine->UpdateTextChangesOnly(nPos);
-                if ( nPos != SwRedlineTable::npos )
+                const SwRedlineTable& aRedlineTable = GetDoc()->getIDocumentRedlineAccess().GetRedlineTable();
+                if ( RedlineType::None != pTableLine->GetRedlineType() )
                 {
-                    rContentAtPos.aFnd.pRedl = GetDoc()->getIDocumentRedlineAccess().GetRedlineTable()[nPos];
-                    rContentAtPos.eContentAtPos = IsAttrAtPos::TableRedline;
-                    bRet = true;
+                    SwRedlineTable::size_type nPos = 0;
+                    nPos = pTableLine->UpdateTextChangesOnly(nPos);
+                    if ( nPos != SwRedlineTable::npos )
+                    {
+                        rContentAtPos.aFnd.pRedl = aRedlineTable[nPos];
+                        rContentAtPos.eContentAtPos = IsAttrAtPos::TableRedline;
+                        bRet = true;
+                    }
                 }
-
+                else
+                {
+                    SwRedlineTable::size_type n = 0;
+                    SwNodeIndex aIdx( *pSttNd, 1 );
+                    const SwPosition aBoxStart(aIdx);
+                    const SwRangeRedline* pFnd = aRedlineTable.FindAtPosition( aBoxStart, n, /*next=*/true );
+                    if( pFnd && RedlineType::Delete == pFnd->GetType() )
+                    {
+                        rContentAtPos.aFnd.pRedl = aRedlineTable[n];
+                        rContentAtPos.eContentAtPos = IsAttrAtPos::TableColRedline;
+                        bRet = true;
+                    }
+                }
             }
         }
 
@@ -2394,13 +2413,16 @@ bool SwCursorShell::SetShadowCursorPos( const Point& rPt, SwFillMode eFillMode )
     case SwFillMode::Indent:
         if( nullptr != (pCNd = aPos.GetNode().GetContentNode() ))
         {
+            assert(pCNd->IsTextNode()); // ???
             SfxItemSetFixed<
                     RES_PARATR_ADJUST, RES_PARATR_ADJUST,
-                    RES_LR_SPACE, RES_LR_SPACE>  aSet( GetDoc()->GetAttrPool() );
-            SvxLRSpaceItem aLR(pCNd->GetAttr(RES_LR_SPACE));
-            aLR.SetTextLeft( aFPos.nTabCnt );
-            aLR.SetTextFirstLineOffset( 0 );
-            aSet.Put( aLR );
+                    RES_MARGIN_FIRSTLINE, RES_MARGIN_TEXTLEFT> aSet(GetDoc()->GetAttrPool());
+            SvxFirstLineIndentItem firstLine(pCNd->GetAttr(RES_MARGIN_FIRSTLINE));
+            SvxTextLeftMarginItem leftMargin(pCNd->GetAttr(RES_MARGIN_TEXTLEFT));
+            firstLine.SetTextFirstLineOffset(0);
+            leftMargin.SetTextLeft(aFPos.nTabCnt);
+            aSet.Put(firstLine);
+            aSet.Put(leftMargin);
 
             const SvxAdjustItem& rAdj = pCNd->GetAttr(RES_PARATR_ADJUST);
             if( SvxAdjust::Left != rAdj.GetAdjust() )
@@ -2763,10 +2785,9 @@ bool SwCursorShell::SelectNxtPrvHyperlink( bool bNext )
 
     // then check all the Flys with a URL or image map
     {
-        const SwFrameFormats* pFormats = GetDoc()->GetSpzFrameFormats();
-        for( SwFrameFormats::size_type n = 0, nEnd = pFormats->size(); n < nEnd; ++n )
+        for(sw::SpzFrameFormat* pSpz: *GetDoc()->GetSpzFrameFormats())
         {
-            SwFlyFrameFormat* pFormat = static_cast<SwFlyFrameFormat*>((*pFormats)[ n ]);
+            auto pFormat = static_cast<SwFlyFrameFormat*>(pSpz);
             const SwFormatURL& rURLItem = pFormat->GetURL();
             if( rURLItem.GetMap() || !rURLItem.GetURL().isEmpty() )
             {

@@ -79,7 +79,7 @@ void OutputDevice::SetLineColor( const Color& rColor )
     }
 
     if( mpAlphaVDev )
-        mpAlphaVDev->SetLineColor( COL_BLACK );
+        mpAlphaVDev->SetLineColor( COL_ALPHA_OPAQUE );
 }
 
 void OutputDevice::InitLineColor()
@@ -184,9 +184,7 @@ void OutputDevice::DrawLine( const Point& rStartPt, const Point& rEndPt )
     bool bDrawn = false;
 
     // #i101598# support AA and snap for lines, too
-    if( mpGraphics->supportsOperation(OutDevSupportType::B2DDraw)
-        && RasterOp::OverPaint == GetRasterOp()
-        && IsLineColor())
+    if (RasterOp::OverPaint == GetRasterOp() && IsLineColor())
     {
         // at least transform with double precision to device coordinates; this will
         // avoid pixel snap of single, appended lines
@@ -224,14 +222,13 @@ void OutputDevice::DrawLine( const Point& rStartPt, const Point& rEndPt )
 
 void OutputDevice::drawLine( basegfx::B2DPolyPolygon aLinePolyPolygon, const LineInfo& rInfo )
 {
-    const bool bTryB2d(mpGraphics->supportsOperation(OutDevSupportType::B2DDraw)
-        && RasterOp::OverPaint == GetRasterOp()
-        && IsLineColor());
+    static const bool bFuzzing = utl::ConfigManager::IsFuzzing();
+    const bool bTryB2d(RasterOp::OverPaint == GetRasterOp() && IsLineColor());
     basegfx::B2DPolyPolygon aFillPolyPolygon;
     const bool bDashUsed(LineStyle::Dash == rInfo.GetStyle());
     const bool bLineWidthUsed(rInfo.GetWidth() > 1);
 
-    if(bDashUsed && aLinePolyPolygon.count())
+    if (!bFuzzing && bDashUsed && aLinePolyPolygon.count())
     {
         ::std::vector< double > fDotDashArray = rInfo.GetDotDashArray();
         const double fAccumulated(::std::accumulate(fDotDashArray.begin(), fDotDashArray.end(), 0.0));
@@ -329,29 +326,26 @@ void OutputDevice::drawLine( basegfx::B2DPolyPolygon aLinePolyPolygon, const Lin
 
         bool bDone(false);
 
-        if(bTryB2d)
+        if (bFuzzing)
         {
-            bDone = mpGraphics->DrawPolyPolygon(
+            const basegfx::B2DRange aRange(basegfx::utils::getRange(aFillPolyPolygon));
+            if (aRange.getMaxX() - aRange.getMinX() > 0x10000000
+                || aRange.getMaxY() - aRange.getMinY() > 0x10000000)
+            {
+                SAL_WARN("vcl.gdi", "drawLine, skipping suspicious range of: "
+                                        << aRange << " for fuzzing performance");
+                bDone = true;
+            }
+        }
+
+        if (bTryB2d && !bDone)
+        {
+            mpGraphics->DrawPolyPolygon(
                 basegfx::B2DHomMatrix(),
                 aFillPolyPolygon,
                 0.0,
                 *this);
-        }
-
-        if(!bDone)
-        {
-            static const bool bFuzzing = utl::ConfigManager::IsFuzzing();
-            if (bFuzzing)
-            {
-                const basegfx::B2DRange aRange(basegfx::utils::getRange(aFillPolyPolygon));
-                if (aRange.getMaxX() - aRange.getMinX() > 0x10000000
-                    || aRange.getMaxY() - aRange.getMinY() > 0x10000000)
-                {
-                    SAL_WARN("vcl.gdi", "drawLine, skipping suspicious range of: "
-                                            << aRange << " for fuzzing performance");
-                    bDone = true;
-                }
-            }
+            bDone = true;
         }
 
         if(!bDone)

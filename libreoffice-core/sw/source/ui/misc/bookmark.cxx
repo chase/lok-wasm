@@ -110,9 +110,7 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, DeleteHdl, weld::Button&, void)
         SfxRequest aReq(m_rSh.GetView().GetViewFrame(), FN_DELETE_BOOKMARK);
         aReq.AppendItem(SfxStringItem(FN_DELETE_BOOKMARK, sRemoved));
         aReq.Done();
-        m_aTableBookmarks.erase(std::remove(m_aTableBookmarks.begin(), m_aTableBookmarks.end(),
-                                            std::make_pair(pBookmark, sRemoved)),
-                                m_aTableBookmarks.end());
+        std::erase(m_aTableBookmarks, std::make_pair(pBookmark, sRemoved));
 
         ++nSelectedRows;
 
@@ -217,20 +215,23 @@ IMPL_LINK_NOARG(SwInsertBookmarkDlg, RenameHdl, weld::Button&, void)
     aObj >>= xTmp;
     uno::Reference<container::XNamed> xNamed(xTmp, uno::UNO_QUERY);
     SwAbstractDialogFactory& rFact = swui::GetFactory();
-    ScopedVclPtr<AbstractSwRenameXNamedDlg> pDlg(
+    VclPtr<AbstractSwRenameXNamedDlg> pDlg(
         rFact.CreateSwRenameXNamedDlg(m_xDialog.get(), xNamed, xNameAccess));
     pDlg->SetForbiddenChars(BookmarkTable::aForbiddenChars
                             + OUStringChar(BookmarkTable::s_cSeparator));
 
-    if (pDlg->Execute())
-    {
-        ValidateBookmarks();
-        m_xDeleteBtn->set_sensitive(false);
-        m_xGotoBtn->set_sensitive(false);
-        m_xEditTextBtn->set_sensitive(false);
-        m_xRenameBtn->set_sensitive(false);
-        m_xInsertBtn->set_sensitive(false);
-    }
+    pDlg->StartExecuteAsync([pDlg, this](sal_Int32 nResult) {
+        if (nResult == RET_OK)
+        {
+            ValidateBookmarks();
+            m_xDeleteBtn->set_sensitive(false);
+            m_xGotoBtn->set_sensitive(false);
+            m_xEditTextBtn->set_sensitive(false);
+            m_xRenameBtn->set_sensitive(false);
+            m_xInsertBtn->set_sensitive(false);
+        }
+        pDlg->disposeOnce();
+    });
 }
 
 // callback to an insert button. Inserts a new text mark to the current position.
@@ -424,7 +425,7 @@ SwInsertBookmarkDlg::SwInsertBookmarkDlg(weld::Window* pParent, SwWrtShell& rS,
     // restore dialog size
     SvtViewOptions aDlgOpt(EViewType::Dialog, "BookmarkDialog");
     if (aDlgOpt.Exists())
-        m_xDialog->set_window_state(aDlgOpt.GetWindowState().toUtf8());
+        m_xDialog->set_window_state(aDlgOpt.GetWindowState());
 
     if (pSelected)
     {
@@ -443,8 +444,8 @@ SwInsertBookmarkDlg::~SwInsertBookmarkDlg()
 {
     // tdf#146261 - Remember size of bookmark dialog
     SvtViewOptions aDlgOpt(EViewType::Dialog, "BookmarkDialog");
-    OString sWindowState = m_xDialog->get_window_state(vcl::WindowDataMask::PosSize);
-    aDlgOpt.SetWindowState(OUString::fromUtf8(sWindowState));
+    OUString sWindowState = m_xDialog->get_window_state(vcl::WindowDataMask::PosSize);
+    aDlgOpt.SetWindowState(sWindowState);
 }
 
 IMPL_LINK(SwInsertBookmarkDlg, HeaderBarClick, int, nColumn, void)

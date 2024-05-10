@@ -207,7 +207,7 @@ static OUString const & HelpLocaleString()
     if (!aLocaleStr.isEmpty())
         return aLocaleStr;
 
-    static const OUStringLiteral aEnglish(u"en-US");
+    static constexpr OUString aEnglish(u"en-US"_ustr);
     // detect installed locale
     aLocaleStr = utl::ConfigManager::getUILocale();
 
@@ -510,11 +510,11 @@ OUString SfxHelp::CreateHelpURL_Impl( const OUString& aCommandURL, const OUStrin
         aHelpURL.append("/start");
     else
     {
-        aHelpURL.append('/');
-        aHelpURL.append(rtl::Uri::encode(aCommandURL,
-                                              rtl_UriCharClassRelSegment,
-                                              rtl_UriEncodeKeepEscapes,
-                                              RTL_TEXTENCODING_UTF8));
+        aHelpURL.append("/" +
+            rtl::Uri::encode(aCommandURL,
+                              rtl_UriCharClassRelSegment,
+                              rtl_UriEncodeKeepEscapes,
+                              RTL_TEXTENCODING_UTF8));
 
         OUStringBuffer aTempURL = aHelpURL;
         AppendConfigToken( aTempURL, true );
@@ -524,10 +524,7 @@ OUString SfxHelp::CreateHelpURL_Impl( const OUString& aCommandURL, const OUStrin
     AppendConfigToken( aHelpURL, true );
 
     if ( bHasAnchor )
-    {
-        aHelpURL.append('#');
-        aHelpURL.append(aAnchor);
-    }
+        aHelpURL.append("#" + aAnchor);
 
     return aHelpURL.makeStringAndClear();
 }
@@ -591,7 +588,7 @@ OUString SfxHelp::GetHelpText( const OUString& aCommandURL, const vcl::Window* p
     OUString sRealCommand = vcl::CommandInfoProvider::GetRealCommandForCommand(aProperties);
     OUString sHelpText = SfxHelp_Impl::GetHelpText( sRealCommand.isEmpty() ? aCommandURL : sRealCommand, sModuleName );
 
-    OString aNewHelpId;
+    OUString aNewHelpId;
 
     if (pWindow && sHelpText.isEmpty())
     {
@@ -600,7 +597,7 @@ OUString SfxHelp::GetHelpText( const OUString& aCommandURL, const vcl::Window* p
         while ( pParent )
         {
             aNewHelpId = pParent->GetHelpId();
-            sHelpText = SfxHelp_Impl::GetHelpText( OStringToOUString(aNewHelpId, RTL_TEXTENCODING_UTF8), sModuleName );
+            sHelpText = SfxHelp_Impl::GetHelpText( aNewHelpId, sModuleName );
             if (!sHelpText.isEmpty())
                 pParent = nullptr;
             else
@@ -618,8 +615,7 @@ OUString SfxHelp::GetHelpText( const OUString& aCommandURL, const vcl::Window* p
             sModuleName + ": " + aCommandURL;
         if ( !aNewHelpId.isEmpty() )
         {
-            sHelpText += " - " +
-                OStringToOUString(aNewHelpId, RTL_TEXTENCODING_UTF8);
+            sHelpText += " - " + aNewHelpId;
         }
     }
 
@@ -633,7 +629,7 @@ OUString SfxHelp::GetHelpText(const OUString& aCommandURL, const weld::Widget* p
     OUString sRealCommand = vcl::CommandInfoProvider::GetRealCommandForCommand(aProperties);
     OUString sHelpText = SfxHelp_Impl::GetHelpText( sRealCommand.isEmpty() ? aCommandURL : sRealCommand, sModuleName );
 
-    OString aNewHelpId;
+    OUString aNewHelpId;
 
     if (pWidget && sHelpText.isEmpty())
     {
@@ -642,7 +638,7 @@ OUString SfxHelp::GetHelpText(const OUString& aCommandURL, const weld::Widget* p
         while (xParent)
         {
             aNewHelpId = xParent->get_help_id();
-            sHelpText = SfxHelp_Impl::GetHelpText( OStringToOUString(aNewHelpId, RTL_TEXTENCODING_UTF8), sModuleName );
+            sHelpText = SfxHelp_Impl::GetHelpText( aNewHelpId, sModuleName );
             if (!sHelpText.isEmpty())
                 xParent.reset();
             else
@@ -660,8 +656,7 @@ OUString SfxHelp::GetHelpText(const OUString& aCommandURL, const weld::Widget* p
             sModuleName + ": " + aCommandURL;
         if ( !aNewHelpId.isEmpty() )
         {
-            sHelpText += " - " +
-                OStringToOUString(aNewHelpId, RTL_TEXTENCODING_UTF8);
+            sHelpText += " - " + aNewHelpId;
         }
     }
 
@@ -718,7 +713,7 @@ bool SfxHelp::Start(const OUString& rURL, weld::Widget* pWidget)
 /// Redirect the vnd.sun.star.help:// urls to http://help.libreoffice.org
 static bool impl_showOnlineHelp(const OUString& rURL, weld::Widget* pDialogParent)
 {
-    static constexpr OUStringLiteral aInternal(u"vnd.sun.star.help://");
+    static constexpr OUString aInternal(u"vnd.sun.star.help://"_ustr);
     if ( rURL.getLength() <= aInternal.getLength() || !rURL.startsWith(aInternal) )
         return false;
 
@@ -732,13 +727,13 @@ static bool impl_showOnlineHelp(const OUString& rURL, weld::Widget* pDialogParen
         if(SfxViewShell* pViewShell = SfxViewShell::Current())
         {
             pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED,
-                                                   aHelpLink.toUtf8().getStr());
+                                                   aHelpLink.toUtf8());
             return true;
         }
         else if (GetpApp())
         {
             GetpApp()->libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED,
-                                                   aHelpLink.toUtf8().getStr());
+                                                   aHelpLink.toUtf8());
             return true;
         }
 
@@ -875,7 +870,7 @@ bool rewriteFlatpakHelpRootUrl(OUString * helpRootUrl) {
             //   /.../runtime/org.libreoffice.LibreOffice.Help/<arch>/<branch>/<sha>/files
             // because the extension's files are stored at a different place than the app's files,
             // so use this hack until flatpak itself provides a better solution:
-            static constexpr OUStringLiteral segments = u"/app/org.libreoffice.LibreOffice/";
+            static constexpr OUString segments = u"/app/org.libreoffice.LibreOffice/"_ustr;
             auto const i1 = path.lastIndexOf(segments);
                 // use lastIndexOf instead of indexOf, in case the user-controlled prefix /.../
                 // happens to contain such segments
@@ -960,7 +955,7 @@ static bool impl_showOfflineHelp(const OUString& rURL, weld::Widget* pDialogPare
 
     // Get a html tempfile (for the flatpak case, create it in XDG_CACHE_HOME instead of /tmp for
     // technical reasons, so that it can be accessed by the browser running outside the sandbox):
-    OUString const aExtension(".html");
+    static constexpr OUStringLiteral aExtension(u".html");
     OUString * parent = nullptr;
     if (flatpak::isFlatpak() && !flatpak::createTemporaryHtmlDirectory(&parent)) {
         return false;
@@ -1086,8 +1081,8 @@ bool SfxHelp::Start_Impl(const OUString& rURL, const vcl::Window* pWindow)
                 vcl::Window* pParent = pWindow->GetParent();
                 while ( pParent )
                 {
-                    OString aHelpId = pParent->GetHelpId();
-                    aHelpURL = CreateHelpURL( OStringToOUString(aHelpId, RTL_TEXTENCODING_UTF8), aHelpModuleName );
+                    OUString aHelpId = pParent->GetHelpId();
+                    aHelpURL = CreateHelpURL( aHelpId, aHelpModuleName );
 
                     if ( !SfxContentHelper::IsHelpErrorDocument( aHelpURL ) )
                     {
@@ -1260,10 +1255,10 @@ bool SfxHelp::Start_Impl(const OUString& rURL, weld::Widget* pWidget, const OUSt
             {
                 bool bUseFinalFallback = true;
                 // no help found -> try ids of parents.
-                pWidget->help_hierarchy_foreach([&aHelpModuleName, &aHelpURL, &bUseFinalFallback](const OString& rHelpId){
+                pWidget->help_hierarchy_foreach([&aHelpModuleName, &aHelpURL, &bUseFinalFallback](const OUString& rHelpId){
                     if (rHelpId.isEmpty())
                         return false;
-                    aHelpURL = CreateHelpURL( OStringToOUString(rHelpId, RTL_TEXTENCODING_UTF8), aHelpModuleName);
+                    aHelpURL = CreateHelpURL(rHelpId, aHelpModuleName);
                     bool bFinished = !SfxContentHelper::IsHelpErrorDocument(aHelpURL);
                     if (bFinished)
                         bUseFinalFallback = false;

@@ -22,8 +22,8 @@
 
 #include <vcl/AccessibleBrowseBoxObjType.hxx>
 #include <vcl/window.hxx>
-
-namespace com::sun::star::accessibility { class XAccessible; }
+#include <cppuhelper/implbase.hxx>
+#include <com/sun/star/accessibility/XAccessible.hpp>
 
 namespace vcl
 {
@@ -88,7 +88,7 @@ public:
 
     virtual tools::Rectangle               calcHeaderRect( bool _bIsColumnBar, bool _bOnScreen = true ) = 0;
     virtual tools::Rectangle               calcTableRect( bool _bOnScreen = true ) = 0;
-    virtual tools::Rectangle               GetFieldRectPixelAbs( sal_Int32 _nRow, sal_uInt16 _nColumnPos, bool _bIsHeader, bool _bOnScreen = true ) = 0;
+    virtual tools::Rectangle               GetFieldRectPixel( sal_Int32 _nRow, sal_uInt16 _nColumnPos, bool _bIsHeader, bool _bOnScreen ) = 0;
 
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessibleCell( sal_Int32 _nRow, sal_uInt16 _nColumnPos ) = 0;
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessibleRowHeader( sal_Int32 _nRow ) = 0;
@@ -113,7 +113,8 @@ public:
     virtual bool                    GetGlyphBoundRects( const Point& rOrigin, const OUString& rStr, int nIndex, int nLen, std::vector< tools::Rectangle >& rVector ) = 0;
 
     // Window
-    virtual tools::Rectangle        GetWindowExtentsRelative(const vcl::Window *pRelativeWindow) const = 0;
+    virtual AbsoluteScreenPixelRectangle GetWindowExtentsAbsolute() const = 0;
+    virtual tools::Rectangle        GetWindowExtentsRelative(const vcl::Window& rRelativeWindow) const = 0;
     virtual void                    GrabFocus() = 0;
     virtual css::uno::Reference< css::accessibility::XAccessible > GetAccessible() = 0;
     virtual vcl::Window*                 GetAccessibleParentWindow() const = 0;
@@ -147,25 +148,19 @@ public:
     virtual css::uno::Reference< css::accessibility::XAccessible >
         getHeaderBar() = 0;
 
+    /** Returns the accessible object for the table.
+     */
+    virtual css::uno::Reference< css::accessibility::XAccessible> getTable() = 0;
+
 protected:
     ~IAccessibleTabListBox() {}
 };
 
 /** interface for an implementation of a browse box's Accessible component
 */
-class IAccessibleBrowseBox
+class IAccessibleBrowseBox : public cppu::WeakImplHelper<css::accessibility::XAccessible>
 {
 public:
-    /** returns the XAccessible object itself
-
-        The reference returned here can be used to control the life time of the
-        IAccessibleTableImplementation object.
-
-        The returned reference is guaranteed to not be <NULL/>.
-    */
-    virtual css::uno::Reference< css::accessibility::XAccessible >
-        getMyself() = 0;
-
     /** disposes the accessible implementation, so that it becomes defunc
     */
     virtual void dispose() = 0;

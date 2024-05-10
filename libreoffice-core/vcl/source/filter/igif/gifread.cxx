@@ -22,7 +22,7 @@
 #include "decode.hxx"
 #include "gifread.hxx"
 #include <memory>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <graphic/GraphicReader.hxx>
 
 #define NO_PENDING( rStm ) ( ( rStm ).GetError() != ERRCODE_IO_PENDING )
@@ -99,6 +99,7 @@ class GIFReader : public GraphicReader
     sal_uInt8           nGCDisposalMethod;      // 'Disposal Method' (see GIF docs)
     sal_uInt8           cTransIndex1;
     sal_uInt8           cNonTransIndex1;
+    bool                bEnhance;
 
     void                ReadPaletteEntries( BitmapPalette* pPal, sal_uLong nCount );
     void                ClearImageExtensions();
@@ -156,6 +157,7 @@ GIFReader::GIFReader( SvStream& rStm )
     , nGCTransparentIndex ( 0 )
     , cTransIndex1 ( 0 )
     , cNonTransIndex1 ( 0 )
+    , bEnhance( false )
 {
     maUpperName = "SVIGIF";
     aSrcBuf.resize(256);    // Memory buffer for ReadNextBlock
@@ -219,12 +221,12 @@ void GIFReader::CreateBitmaps(tools::Long nWidth, tools::Long nHeight, BitmapPal
     {
         const Color aWhite(COL_WHITE);
 
-        aBmp1 = Bitmap(aSize, vcl::PixelFormat::N1_BPP);
+        aBmp1 = Bitmap(aSize, vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256));
 
         if (!aAnimation.Count())
             aBmp1.Erase(aWhite);
 
-        pAcc1 = BitmapScopedWriteAccess(aBmp1);
+        pAcc1 = aBmp1;
 
         if (pAcc1)
         {
@@ -246,7 +248,7 @@ void GIFReader::CreateBitmaps(tools::Long nWidth, tools::Long nHeight, BitmapPal
         else
             aBmp8.Erase(COL_WHITE);
 
-        pAcc8 = BitmapScopedWriteAccess(aBmp8);
+        pAcc8 = aBmp8;
         bStatus = bool(pAcc8);
     }
 }
@@ -325,6 +327,13 @@ void GIFReader::ReadPaletteEntries( BitmapPalette* pPal, sal_uLong nCount )
         if( nCount < 255 )
             (*pPal)[ 254UL ] = COL_BLACK;
     }
+
+    // tdf#157793 limit tdf#157635 fix to only larger palettes
+    // I don't know why, but the fix for tdf#157635 causes
+    // images with a palette of 16 entries to be inverted.
+    // Also, fix tdf#158047 by allowing the tdf#157635 fix for
+    // palettes with 64 entries.
+    bEnhance = (nCount > 16);
 }
 
 bool GIFReader::ReadExtension()
@@ -661,10 +670,21 @@ void GIFReader::CreateNewBitmaps()
     if( bGCTransparent )
     {
         pAcc1.reset();
-        aAnimationFrame.maBitmapEx = BitmapEx( aBmp8, aBmp1 );
+        AlphaMask aAlphaMask(aBmp1);
+        aAlphaMask.Invert(); // convert from transparency to alpha
+        aAnimationFrame.maBitmapEx = BitmapEx( aBmp8, aAlphaMask );
     }
     else
-        aAnimationFrame.maBitmapEx = BitmapEx( aBmp8 );
+    {
+        // tdf#157576 and tdf#157635 mask out black pixels
+        // Due to the switch from transparency to alpha in commit
+        // 81994cb2b8b32453a92bcb011830fcb884f22ff3, mask out black
+        // pixels in bitmap.
+        if (bEnhance)
+            aAnimationFrame.maBitmapEx = BitmapEx( aBmp8, aBmp8 );
+        else
+            aAnimationFrame.maBitmapEx = BitmapEx( aBmp8 );
+    }
 
     aAnimationFrame.maPositionPixel = Point( nImagePosX, nImagePosY );
     aAnimationFrame.maSizePixel = Size( nImageWidth, nImageHeight );
@@ -709,13 +729,13 @@ Graphic GIFReader::GetIntermediateGraphic()
             pAcc1.reset();
             aImGraphic = BitmapEx( aBmp8, aBmp1 );
 
-            pAcc1 = BitmapScopedWriteAccess(aBmp1);
+            pAcc1 = aBmp1;
             bStatus = bStatus && pAcc1;
         }
         else
             aImGraphic = BitmapEx(aBmp8);
 
-        pAcc8 = BitmapScopedWriteAccess(aBmp8);
+        pAcc8 = aBmp8;
         bStatus = bStatus && pAcc8;
     }
 

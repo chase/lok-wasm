@@ -727,7 +727,7 @@ void GDIMetaFile::Move( tools::Long nX, tools::Long nY, tools::Long nDPIX, tools
     }
 }
 
-void GDIMetaFile::Scale( double fScaleX, double fScaleY )
+void GDIMetaFile::ScaleActions(double const fScaleX, double const fScaleY)
 {
     for( MetaAction* pAct = FirstAction(); pAct; pAct = NextAction() )
     {
@@ -743,6 +743,11 @@ void GDIMetaFile::Scale( double fScaleX, double fScaleY )
 
         pModAct->Scale( fScaleX, fScaleY );
     }
+}
+
+void GDIMetaFile::Scale( double fScaleX, double fScaleY )
+{
+    ScaleActions(fScaleX, fScaleY);
 
     m_aPrefSize.setWidth( FRound( m_aPrefSize.Width() * fScaleX ) );
     m_aPrefSize.setHeight( FRound( m_aPrefSize.Height() * fScaleY ) );
@@ -822,7 +827,7 @@ void GDIMetaFile::ImplAddGradientEx( GDIMetaFile&         rMtf,
                                      const Gradient&      rGrad     )
 {
     // Generate comment, GradientEx and Gradient actions (within DrawGradient)
-    ScopedVclPtrInstance< VirtualDevice > aVDev(rMapDev, DeviceFormat::DEFAULT);
+    ScopedVclPtrInstance< VirtualDevice > aVDev(rMapDev, DeviceFormat::WITHOUT_ALPHA);
     aVDev->EnableOutput( false );
     GDIMetaFile aGradMtf;
 
@@ -900,7 +905,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             case MetaActionType::RECT:
             {
                 MetaRectAction* pAct = static_cast<MetaRectAction*>(pAction);
-                aMtf.AddAction( new MetaPolygonAction( ImplGetRotatedPolygon( pAct->GetRect(), aRotAnchor, aRotOffset, fSin, fCos ) ) );
+                aMtf.AddAction( new MetaPolygonAction( ImplGetRotatedPolygon( tools::Polygon(pAct->GetRect()), aRotAnchor, aRotOffset, fSin, fCos ) ) );
             }
             break;
 
@@ -1005,7 +1010,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             case MetaActionType::BMPSCALE:
             {
                 MetaBmpScaleAction* pAct = static_cast<MetaBmpScaleAction*>(pAction);
-                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Rectangle( pAct->GetPoint(), pAct->GetSize() ), aRotAnchor, aRotOffset, fSin, fCos ) );
+                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Polygon(tools::Rectangle( pAct->GetPoint(), pAct->GetSize() )), aRotAnchor, aRotOffset, fSin, fCos ) );
                 tools::Rectangle           aBmpRect( aBmpPoly.GetBoundRect() );
                 BitmapEx            aBmpEx( pAct->GetBitmap() );
 
@@ -1018,7 +1023,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             case MetaActionType::BMPSCALEPART:
             {
                 MetaBmpScalePartAction* pAct = static_cast<MetaBmpScalePartAction*>(pAction);
-                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Rectangle( pAct->GetDestPoint(), pAct->GetDestSize() ), aRotAnchor, aRotOffset, fSin, fCos ) );
+                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Polygon(tools::Rectangle( pAct->GetDestPoint(), pAct->GetDestSize() )), aRotAnchor, aRotOffset, fSin, fCos ) );
                 tools::Rectangle               aBmpRect( aBmpPoly.GetBoundRect() );
                 BitmapEx                aBmpEx( pAct->GetBitmap() );
 
@@ -1032,7 +1037,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             case MetaActionType::BMPEXSCALE:
             {
                 MetaBmpExScaleAction*   pAct = static_cast<MetaBmpExScaleAction*>(pAction);
-                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Rectangle( pAct->GetPoint(), pAct->GetSize() ), aRotAnchor, aRotOffset, fSin, fCos ) );
+                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Polygon(tools::Rectangle( pAct->GetPoint(), pAct->GetSize() )), aRotAnchor, aRotOffset, fSin, fCos ) );
                 tools::Rectangle               aBmpRect( aBmpPoly.GetBoundRect() );
                 BitmapEx                aBmpEx( pAct->GetBitmapEx() );
 
@@ -1045,7 +1050,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             case MetaActionType::BMPEXSCALEPART:
             {
                 MetaBmpExScalePartAction*   pAct = static_cast<MetaBmpExScalePartAction*>(pAction);
-                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Rectangle( pAct->GetDestPoint(), pAct->GetDestSize() ), aRotAnchor, aRotOffset, fSin, fCos ) );
+                tools::Polygon aBmpPoly( ImplGetRotatedPolygon( tools::Polygon(tools::Rectangle( pAct->GetDestPoint(), pAct->GetDestSize() )), aRotAnchor, aRotOffset, fSin, fCos ) );
                 tools::Rectangle                   aBmpRect( aBmpPoly.GetBoundRect() );
                 BitmapEx                    aBmpEx( pAct->GetBitmapEx() );
 
@@ -1061,7 +1066,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
                 MetaGradientAction* pAct = static_cast<MetaGradientAction*>(pAction);
 
                 ImplAddGradientEx( aMtf, *aMapVDev,
-                                   ImplGetRotatedPolygon( pAct->GetRect(), aRotAnchor, aRotOffset, fSin, fCos ),
+                                   tools::PolyPolygon(ImplGetRotatedPolygon( tools::Polygon(pAct->GetRect()), aRotAnchor, aRotOffset, fSin, fCos )),
                                    pAct->GetGradient() );
             }
             break;
@@ -1136,7 +1141,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
                                 aStroke.getPath( aPath );
                                 aStroke.setPath( ImplGetRotatedPolygon( aPath, aRotAnchor, aRotOffset, fSin, fCos ) );
                                 WriteSvtGraphicStroke( aDest, aStroke );
-                                aMtf.AddAction( new MetaCommentAction( "XPATHSTROKE_SEQ_BEGIN", 0,
+                                aMtf.AddAction( new MetaCommentAction( "XPATHSTROKE_SEQ_BEGIN"_ostr, 0,
                                                     static_cast<const sal_uInt8*>( aDest.GetData()), aDest.Tell() ) );
                             }
                             else
@@ -1147,7 +1152,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
                                 aFill.getPath( aPath );
                                 aFill.setPath( ImplGetRotatedPolyPolygon( aPath, aRotAnchor, aRotOffset, fSin, fCos ) );
                                 WriteSvtGraphicFill( aDest, aFill );
-                                aMtf.AddAction( new MetaCommentAction( "XPATHFILL_SEQ_BEGIN", 0,
+                                aMtf.AddAction( new MetaCommentAction( "XPATHFILL_SEQ_BEGIN"_ostr, 0,
                                                     static_cast<const sal_uInt8*>( aDest.GetData()), aDest.Tell() ) );
                             }
                         }
@@ -1185,7 +1190,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             {
                 MetaFloatTransparentAction* pAct = static_cast<MetaFloatTransparentAction*>(pAction);
                 GDIMetaFile                 aTransMtf( pAct->GetGDIMetaFile() );
-                tools::Polygon aMtfPoly( ImplGetRotatedPolygon( tools::Rectangle( pAct->GetPoint(), pAct->GetSize() ), aRotAnchor, aRotOffset, fSin, fCos ) );
+                tools::Polygon aMtfPoly( ImplGetRotatedPolygon( tools::Polygon(tools::Rectangle( pAct->GetPoint(), pAct->GetSize() )), aRotAnchor, aRotOffset, fSin, fCos ) );
                 tools::Rectangle                   aMtfRect( aMtfPoly.GetBoundRect() );
 
                 aTransMtf.Rotate( nAngle10 );
@@ -1198,7 +1203,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             {
                 MetaEPSAction*  pAct = static_cast<MetaEPSAction*>(pAction);
                 GDIMetaFile     aEPSMtf( pAct->GetSubstitute() );
-                tools::Polygon aEPSPoly( ImplGetRotatedPolygon( tools::Rectangle( pAct->GetPoint(), pAct->GetSize() ), aRotAnchor, aRotOffset, fSin, fCos ) );
+                tools::Polygon aEPSPoly( ImplGetRotatedPolygon( tools::Polygon(tools::Rectangle( pAct->GetPoint(), pAct->GetSize() )), aRotAnchor, aRotOffset, fSin, fCos ) );
                 tools::Rectangle       aEPSRect( aEPSPoly.GetBoundRect() );
 
                 aEPSMtf.Rotate( nAngle10 );
@@ -1224,7 +1229,7 @@ void GDIMetaFile::Rotate( Degree10 nAngle10 )
             {
                 MetaISectRectClipRegionAction*  pAct = static_cast<MetaISectRectClipRegionAction*>(pAction);
                 aMtf.AddAction( new MetaISectRegionClipRegionAction(vcl::Region(
-                    ImplGetRotatedPolygon( pAct->GetRect(), aRotAnchor,
+                    ImplGetRotatedPolygon( tools::Polygon(pAct->GetRect()), aRotAnchor,
                         aRotOffset, fSin, fCos )) ) );
             }
             break;
@@ -1742,7 +1747,7 @@ Color GDIMetaFile::ImplColConvertFnc( const Color& rColor, const void* pColParam
     if( MtfConversion::N1BitThreshold == static_cast<const ImplColConvertParam*>(pColParam)->eConversion )
         cLum = ( cLum < 128 ) ? 0 : 255;
 
-    return Color( ColorTransparency, 255 - rColor.GetAlpha(), cLum, cLum, cLum );
+    return Color( ColorAlpha, rColor.GetAlpha(), cLum, cLum, cLum );
 }
 
 BitmapEx GDIMetaFile::ImplBmpConvertFnc( const BitmapEx& rBmpEx, const void* pBmpParam )
@@ -1770,7 +1775,7 @@ BitmapEx GDIMetaFile::ImplBmpMonoFnc( const BitmapEx& rBmpEx, const void* pBmpPa
     aBmp.Erase( static_cast<const ImplBmpMonoParam*>(pBmpParam)->aColor );
 
     if( rBmpEx.IsAlpha() )
-        return BitmapEx( aBmp, rBmpEx.GetAlpha() );
+        return BitmapEx( aBmp, rBmpEx.GetAlphaMask() );
     else
         return BitmapEx( aBmp );
 }
@@ -2079,15 +2084,15 @@ void GDIMetaFile::Adjust( short nLuminancePercent, short nContrastPercent,
 
     // calculate slope
     if( nContrastPercent >= 0 )
-        fM = 128.0 / ( 128.0 - 1.27 * MinMax( nContrastPercent, 0, 100 ) );
+        fM = 128.0 / ( 128.0 - 1.27 * std::clamp( nContrastPercent, short(0), short(100) ) );
     else
-        fM = ( 128.0 + 1.27 * MinMax( nContrastPercent, -100, 0 ) ) / 128.0;
+        fM = ( 128.0 + 1.27 * std::clamp( nContrastPercent, short(-100), short(0) ) ) / 128.0;
 
     if(!msoBrightness)
         // total offset = luminance offset + contrast offset
-        fOff = MinMax( nLuminancePercent, -100, 100 ) * 2.55 + 128.0 - fM * 128.0;
+        fOff = std::clamp( nLuminancePercent, short(-100), short(100) ) * 2.55 + 128.0 - fM * 128.0;
     else
-        fOff = MinMax( nLuminancePercent, -100, 100 ) * 2.55;
+        fOff = std::clamp( nLuminancePercent, short(-100), short(100) ) * 2.55;
 
     // channel offset = channel offset  + total offset
     fROff = nChannelRPercent * 2.55 + fOff;
@@ -2103,15 +2108,15 @@ void GDIMetaFile::Adjust( short nLuminancePercent, short nContrastPercent,
     {
         if(!msoBrightness)
         {
-            aColParam.pMapR[ nX ] = static_cast<sal_uInt8>(MinMax( FRound( nX * fM + fROff ), 0, 255 ));
-            aColParam.pMapG[ nX ] = static_cast<sal_uInt8>(MinMax( FRound( nX * fM + fGOff ), 0, 255 ));
-            aColParam.pMapB[ nX ] = static_cast<sal_uInt8>(MinMax( FRound( nX * fM + fBOff ), 0, 255 ));
+            aColParam.pMapR[ nX ] = FRound(std::clamp( nX * fM + fROff, 0.0, 255.0 ));
+            aColParam.pMapG[ nX ] = FRound(std::clamp( nX * fM + fGOff, 0.0, 255.0 ));
+            aColParam.pMapB[ nX ] = FRound(std::clamp( nX * fM + fBOff, 0.0, 255.0 ));
         }
         else
         {
-            aColParam.pMapR[ nX ] = static_cast<sal_uInt8>(MinMax( FRound( (nX+fROff/2-128) * fM + 128 + fROff/2 ), 0, 255 ));
-            aColParam.pMapG[ nX ] = static_cast<sal_uInt8>(MinMax( FRound( (nX+fGOff/2-128) * fM + 128 + fGOff/2 ), 0, 255 ));
-            aColParam.pMapB[ nX ] = static_cast<sal_uInt8>(MinMax( FRound( (nX+fBOff/2-128) * fM + 128 + fBOff/2 ), 0, 255 ));
+            aColParam.pMapR[ nX ] = FRound(std::clamp( (nX+fROff/2-128) * fM + 128 + fROff/2, 0.0, 255.0 ));
+            aColParam.pMapG[ nX ] = FRound(std::clamp( (nX+fGOff/2-128) * fM + 128 + fGOff/2, 0.0, 255.0 ));
+            aColParam.pMapB[ nX ] = FRound(std::clamp( (nX+fBOff/2-128) * fM + 128 + fBOff/2, 0.0, 255.0 ));
         }
         if( bGamma )
         {

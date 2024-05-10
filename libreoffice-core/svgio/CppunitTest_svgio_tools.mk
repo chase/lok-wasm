@@ -33,12 +33,14 @@ $(eval $(call gb_CppunitTest_use_libraries,svgio_tools,\
     comphelper \
     cppu \
     cppuhelper \
+    i18nlangtag \
     sal \
     salhelper \
     sax \
     svt \
     tk \
     tl \
+    utl \
     vcl \
 ))
 

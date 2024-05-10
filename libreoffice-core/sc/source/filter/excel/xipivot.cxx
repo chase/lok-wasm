@@ -704,7 +704,7 @@ void XclImpPivotCache::ReadPivotCacheStream( const XclImpStream& rStrm )
         rDoc.MakeTable( nScTab );
         OUStringBuffer aDummyName("DPCache");
         if( maTabName.getLength() > 0 )
-            aDummyName.append( '_' ).append( maTabName );
+            aDummyName.append( "_" + maTabName );
         OUString aName = aDummyName.makeStringAndClear();
         rDoc.CreateValidTabName( aName );
         rDoc.RenameTab( nScTab, aName );
@@ -1100,8 +1100,7 @@ static OUString lcl_convertExcelSubtotalName(const OUString& rName)
         const sal_Unicode c = p[i];
         if (c == '\\')
         {
-            aBuf.append(c);
-            aBuf.append(c);
+            aBuf.append(OUStringChar(c) + OUStringChar(c));
         }
         else
             aBuf.append(c);

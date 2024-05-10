@@ -32,48 +32,14 @@
 
 using namespace ::com::sun::star;
 using ::com::sun::star::beans::Property;
-using ::osl::MutexGuard;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
-
-namespace
-{
-
-struct StaticAreaWrapperPropertyArray_Initializer
-{
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
-
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::FillProperties::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticAreaWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticAreaWrapperPropertyArray_Initializer >
-{
-};
-
-} // anonymous namespace
 
 namespace chart::wrapper
 {
 
 AreaWrapper::AreaWrapper(std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
     : m_spChart2ModelContact(std::move(spChart2ModelContact))
-    , m_aEventListenerContainer(m_aMutex)
 {
 }
 
@@ -110,23 +76,25 @@ OUString SAL_CALL AreaWrapper::getShapeType()
 // ____ XComponent ____
 void SAL_CALL AreaWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
-    MutexGuard aGuard( m_aMutex);
     clearWrappedPropertySet();
 }
 
 void SAL_CALL AreaWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL AreaWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 // WrappedPropertySet
@@ -141,7 +109,19 @@ Reference< beans::XPropertySet > AreaWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& AreaWrapper::getPropertySequence()
 {
-    return *StaticAreaWrapperPropertyArray::get();
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::FillProperties::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
+
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > AreaWrapper::createWrappedProperties()

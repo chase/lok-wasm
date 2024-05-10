@@ -119,14 +119,9 @@ SwHTMLWrtTable::SwHTMLWrtTable( const SwHTMLTableLayout *pLayoutInfo )
 
 void SwHTMLWrtTable::Pixelize( sal_uInt16& rValue )
 {
-    if( rValue && Application::GetDefaultDevice() )
+    if( rValue )
     {
-        Size aSz( rValue, 0 );
-        aSz = Application::GetDefaultDevice()->LogicToPixel( aSz, MapMode(MapUnit::MapTwip) );
-        if( !aSz.Width() )
-            aSz.setWidth( 1 );
-        aSz = Application::GetDefaultDevice()->PixelToLogic( aSz, MapMode(MapUnit::MapTwip) );
-        rValue = o3tl::narrowing<sal_uInt16>(aSz.Width());
+        rValue = o3tl::convert(SwHTMLWriter::ToPixel(rValue), o3tl::Length::px, o3tl::Length::twip);
     }
 }
 
@@ -310,8 +305,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     }
 
     rWrt.OutNewLine();  // <TH>/<TD> in new line
-    OStringBuffer sOut;
-    sOut.append('<');
+    OStringBuffer sOut("<");
     OString aTag(bHead ? OOO_STRING_SVTOOLS_HTML_tableheader : OOO_STRING_SVTOOLS_HTML_tabledata);
     sOut.append(rWrt.GetNamespace() + aTag);
 
@@ -359,19 +353,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     tools::Long nHeight = pCell->GetHeight() > 0
                         ? GetAbsHeight( pCell->GetHeight(), nRow, nRowSpan )
                         : 0;
-    Size aPixelSz( nWidth, nHeight );
-
-    // output WIDTH (Argh: only for Netscape)
-    if( (aPixelSz.Width() || aPixelSz.Height()) && Application::GetDefaultDevice() )
-    {
-        Size aOldSz( aPixelSz );
-        aPixelSz = Application::GetDefaultDevice()->LogicToPixel( aPixelSz,
-                                                        MapMode(MapUnit::MapTwip) );
-        if( aOldSz.Width() && !aPixelSz.Width() )
-            aPixelSz.setWidth( 1 );
-        if( aOldSz.Height() && !aPixelSz.Height() )
-            aPixelSz.setHeight( 1 );
-    }
+    Size aPixelSz(SwHTMLWriter::ToPixel(nWidth), SwHTMLWriter::ToPixel(nHeight));
 
     // output WIDTH: from layout or calculated
     if( bOutWidth )
@@ -379,7 +361,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
         sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_width "=\"");
         if( nPercentWidth != SAL_MAX_UINT32 )
         {
-            sOut.append(static_cast<sal_Int32>(nPercentWidth)).append('%');
+            sOut.append(OString::number(static_cast<sal_Int32>(nPercentWidth)) + "%");
         }
         else
         {
@@ -467,7 +449,7 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
     sOut.append('>');
     rWrt.Strm().WriteOString( sOut );
     sOut.setLength(0);
-    rWrt.m_bLFPossible = true;
+    rWrt.SetLFPossible(true);
 
     rWrt.IncIndentLevel();  // indent the content of <TD>...</TD>
 
@@ -504,11 +486,11 @@ void SwHTMLWrtTable::OutTableCell( SwHTMLWriter& rWrt,
 
     rWrt.DecIndentLevel();  // indent the content of <TD>...</TD>
 
-    if( rWrt.m_bLFPossible )
+    if (rWrt.IsLFPossible())
         rWrt.OutNewLine();
     aTag = bHead ? OOO_STRING_SVTOOLS_HTML_tableheader : OOO_STRING_SVTOOLS_HTML_tabledata;
     HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rWrt.GetNamespace() + aTag), false);
-    rWrt.m_bLFPossible = true;
+    rWrt.SetLFPossible(true);
 }
 
 // output a line as lines
@@ -602,48 +584,39 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     // determine value of RULES
     bool bRowsHaveBorder = false;
     bool bRowsHaveBorderOnly = true;
-    SwWriteTableRow *pRow = m_aRows[0].get();
-    for( SwWriteTableRows::size_type nRow=1; nRow < m_aRows.size(); ++nRow )
+    assert(m_aRows.begin() != m_aRows.end());
+    for (auto row = m_aRows.begin(), next = std::next(row); next < m_aRows.end(); ++row, ++next)
     {
-        SwWriteTableRow *pNextRow = m_aRows[nRow].get();
-        bool bBorder = ( pRow->m_bBottomBorder || pNextRow->m_bTopBorder );
+        SwWriteTableRow* pRow = row->get();
+        SwWriteTableRow* pNextRow = next->get();
+        bool bBorder = ( pRow->HasBottomBorder() || pNextRow->HasTopBorder() );
         bRowsHaveBorder |= bBorder;
         bRowsHaveBorderOnly &= bBorder;
 
-        sal_uInt16 nBorder2 = pRow->m_bBottomBorder ? pRow->m_nBottomBorder : USHRT_MAX;
-        if( pNextRow->m_bTopBorder && pNextRow->m_nTopBorder < nBorder2 )
-            nBorder2 = pNextRow->m_nTopBorder;
-
-        pRow->m_bBottomBorder = bBorder;
-        pRow->m_nBottomBorder = nBorder2;
-
-        pNextRow->m_bTopBorder = bBorder;
-        pNextRow->m_nTopBorder = nBorder2;
-
-        pRow = pNextRow;
+        pRow->SetBottomBorder(bBorder);
+        pNextRow->SetTopBorder(bBorder);
     }
 
     bool bColsHaveBorder = false;
     bool bColsHaveBorderOnly = true;
-    SwWriteTableCol *pCol = m_aCols[0].get();
-    for( SwWriteTableCols::size_type nCol=1; nCol<m_aCols.size(); ++nCol )
+    assert(m_aCols.begin() != m_aCols.end());
+    for (auto col = m_aCols.begin(), next = std::next(col); next < m_aCols.end(); ++col, ++next)
     {
-        SwWriteTableCol *pNextCol = m_aCols[nCol].get();
+        SwWriteTableCol* pCol = col->get();
+        SwWriteTableCol* pNextCol = next->get();
         bool bBorder = ( pCol->m_bRightBorder || pNextCol->m_bLeftBorder );
         bColsHaveBorder |= bBorder;
         bColsHaveBorderOnly &= bBorder;
         pCol->m_bRightBorder = bBorder;
         pNextCol->m_bLeftBorder = bBorder;
-        pCol = pNextCol;
     }
 
     // close previous numbering, etc
     rWrt.ChangeParaToken( HtmlTokenId::NONE );
 
-    if( rWrt.m_bLFPossible )
+    if (rWrt.IsLFPossible())
         rWrt.OutNewLine();  // <TABLE> in new line
-    OStringBuffer sOut;
-    sOut.append('<').append(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_table);
+    OStringBuffer sOut("<" + rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_table);
 
     const SvxFrameDirection nOldDirection = rWrt.m_nDirection;
     if( pFrameFormat )
@@ -677,54 +650,37 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     {
         sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_width "=\"");
         if( HasRelWidths() )
-            sOut.append(static_cast<sal_Int32>(m_nTabWidth)).append('%');
-        else if( Application::GetDefaultDevice() )
-        {
-            sal_Int32 nPixWidth = Application::GetDefaultDevice()->LogicToPixel(
-                        Size(m_nTabWidth,0), MapMode(MapUnit::MapTwip) ).Width();
-            if( !nPixWidth )
-                nPixWidth = 1;
-
-            sOut.append(nPixWidth);
-        }
+            sOut.append(OString::number(static_cast<sal_Int32>(m_nTabWidth)) + "%");
         else
         {
-            OSL_ENSURE( Application::GetDefaultDevice(), "no Application-Window!?" );
-            sOut.append("100%");
+            sal_Int32 nPixWidth =  SwHTMLWriter::ToPixel(m_nTabWidth);
+            sOut.append(nPixWidth);
         }
         sOut.append("\"");
     }
 
-    if( (nHSpace || nVSpace) && Application::GetDefaultDevice() && !rWrt.mbReqIF)
+    if( (nHSpace || nVSpace) && !rWrt.mbReqIF)
     {
-        Size aPixelSpc =
-            Application::GetDefaultDevice()->LogicToPixel( Size(nHSpace,nVSpace),
-                                                   MapMode(MapUnit::MapTwip) );
-        if( !aPixelSpc.Width() && nHSpace )
-            aPixelSpc.setWidth( 1 );
-        if( !aPixelSpc.Height() && nVSpace )
-            aPixelSpc.setHeight( 1 );
-
-        if( aPixelSpc.Width() )
+        if (auto nPixHSpace = SwHTMLWriter::ToPixel(nHSpace))
         {
             sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_hspace
-                    "=\"" + OString::number(aPixelSpc.Width()) + "\"");
+                    "=\"" + OString::number(nPixHSpace) + "\"");
         }
 
-        if( aPixelSpc.Height() )
+        if (auto nPixVSpace = SwHTMLWriter::ToPixel(nVSpace))
         {
             sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_vspace
-                    "=\"" + OString::number(aPixelSpc.Height()) + "\"");
+                    "=\"" + OString::number(nPixVSpace) + "\"");
         }
     }
 
     // output CELLPADDING: from layout or calculated
     sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_cellpadding
-            "=\"" + OString::number(SwHTMLWriter::ToPixel(m_nCellPadding,false)) + "\"");
+            "=\"" + OString::number(SwHTMLWriter::ToPixel(m_nCellPadding)) + "\"");
 
     // output CELLSPACING: from layout or calculated
     sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_cellspacing
-            "=\"" + OString::number(SwHTMLWriter::ToPixel(m_nCellSpacing,false)) + "\"");
+            "=\"" + OString::number(SwHTMLWriter::ToPixel(m_nCellSpacing)) + "\"");
 
     rWrt.Strm().WriteOString( sOut );
     sOut.setLength(0);
@@ -762,8 +718,6 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
         HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_caption), false );
     }
 
-    const SwWriteTableCols::size_type nCols = m_aCols.size();
-
     // output <COLGRP>/<COL>: If exporting via layout only when during import
     // some were there, otherwise always.
     bool bColGroups = (bColsHaveBorder && !bColsHaveBorderOnly);
@@ -777,6 +731,7 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
             rWrt.IncIndentLevel(); // indent content of <COLGRP>
         }
 
+        const SwWriteTableCols::size_type nCols = m_aCols.size();
         for( SwWriteTableCols::size_type nCol=0; nCol<nCols; ++nCol )
         {
             rWrt.OutNewLine(); // </COL> in new line
@@ -784,7 +739,8 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
             const SwWriteTableCol *pColumn = m_aCols[nCol].get();
 
             HtmlWriter html(rWrt.Strm(), rWrt.maNamespace);
-            html.start(OOO_STRING_SVTOOLS_HTML_col);
+            html.prettyPrint(false); // We add newlines ourself
+            html.start(OOO_STRING_SVTOOLS_HTML_col ""_ostr);
 
             sal_uInt32 nWidth;
             bool bRel;
@@ -802,7 +758,7 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
             if( bRel )
                 html.attribute(OOO_STRING_SVTOOLS_HTML_O_width, Concat2View(OString::number(nWidth) + "*"));
             else
-                html.attribute(OOO_STRING_SVTOOLS_HTML_O_width, OString::number(SwHTMLWriter::ToPixel(nWidth,false)));
+                html.attribute(OOO_STRING_SVTOOLS_HTML_O_width, OString::number(SwHTMLWriter::ToPixel(nWidth)));
             html.end();
 
             if( bColGroups && pColumn->m_bRightBorder && nCol<nCols-1 )
@@ -836,7 +792,7 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     // can be outputted if there is a line below the cell.
     if( bTHead &&
         (bTSections || bColGroups) &&
-        m_nHeadEndRow<m_aRows.size()-1 && !m_aRows[m_nHeadEndRow]->m_bBottomBorder )
+        m_nHeadEndRow<m_aRows.size()-1 && !m_aRows[m_nHeadEndRow]->HasBottomBorder() )
         bTHead = false;
 
     // Output <TBODY> only if <THEAD> is outputted.
@@ -854,29 +810,18 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     sal_uInt16 nSkipRows = 0;
     for( SwWriteTableRows::size_type nRow = 0; nRow < m_aRows.size(); ++nRow )
     {
-        const SwWriteTableRow *pRow2 = m_aRows[nRow].get();
+        const SwWriteTableRow *pRow = m_aRows[nRow].get();
 
         if (nSkipRows == 0)
         {
-            OutTableCells(rWrt, pRow2->GetCells(), pRow2->GetBackground(), nSkipRows);
+            OutTableCells(rWrt, pRow->GetCells(), pRow->GetBackground(), nSkipRows);
         }
         else
         {
             --nSkipRows;
         }
-        if( !m_nCellSpacing && nRow < m_aRows.size()-1 && pRow2->m_bBottomBorder &&
-            pRow2->m_nBottomBorder > SvxBorderLineWidth::Thin )
-        {
-            for( auto nCnt = (pRow2->m_nBottomBorder / SvxBorderLineWidth::Thin) - 1; nCnt; --nCnt )
-            {
-                rWrt.OutNewLine();
-                HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_tablerow ));
-                HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_tablerow),
-                                            false );
-            }
-        }
         if( ( (bTHead && nRow==m_nHeadEndRow) ||
-              (bTBody && pRow2->m_bBottomBorder) ) &&
+              (bTBody && pRow->HasBottomBorder()) ) &&
             nRow < m_aRows.size()-1 )
         {
             rWrt.DecIndentLevel(); // indent content of <THEAD>/<TDATA>
@@ -911,15 +856,14 @@ void SwHTMLWrtTable::Write( SwHTMLWriter& rWrt, sal_Int16 eAlign,
     rWrt.m_nDirection = nOldDirection;
 }
 
-Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
+SwHTMLWriter& OutHTML_SwTableNode( SwHTMLWriter& rWrt, SwTableNode & rNode,
                            const SwFrameFormat *pFlyFrameFormat,
                            const OUString *pCaption, bool bTopCaption )
 {
 
     SwTable& rTable = rNode.GetTable();
 
-    SwHTMLWriter & rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-    rHTMLWrt.m_bOutTable = true;
+    rWrt.m_bOutTable = true;
 
     // The horizontal alignment of the frame (if exists) has priority.
     // NONE means that no horizontal alignment was outputted.
@@ -949,11 +893,11 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
 
     // maybe open a FORM
     bool bPreserveForm = false;
-    if( !rHTMLWrt.m_bPreserveForm )
+    if( !rWrt.m_bPreserveForm )
     {
-        rHTMLWrt.OutForm( true, &rNode );
-        bPreserveForm = rHTMLWrt.mxFormComps.is();
-        rHTMLWrt.m_bPreserveForm = bPreserveForm;
+        rWrt.OutForm( true, &rNode );
+        bPreserveForm = rWrt.mxFormComps.is();
+        rWrt.m_bPreserveForm = bPreserveForm;
     }
 
     SwFrameFormat *pFormat = rTable.GetFrameFormat();
@@ -1027,30 +971,30 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
     }
 
     // In ReqIF case, do not emulate indentation with fake description list
-    if( bCheckDefList && !rHTMLWrt.mbReqIF )
+    if( bCheckDefList && !rWrt.mbReqIF )
     {
-        OSL_ENSURE( !rHTMLWrt.GetNumInfo().GetNumRule() ||
-                rHTMLWrt.GetNextNumInfo(),
+        OSL_ENSURE( !rWrt.GetNumInfo().GetNumRule() ||
+                rWrt.GetNextNumInfo(),
                 "NumInfo for next paragraph is missing!" );
         const SvxLRSpaceItem& aLRItem = pFormat->GetLRSpace();
-        if( aLRItem.GetLeft() > 0 && rHTMLWrt.m_nDefListMargin > 0 &&
-            ( !rHTMLWrt.GetNumInfo().GetNumRule() ||
-              ( rHTMLWrt.GetNextNumInfo() &&
-                (rHTMLWrt.GetNumInfo().GetNumRule() != rHTMLWrt.GetNextNumInfo()->GetNumRule() ||
-                 rHTMLWrt.GetNextNumInfo()->IsRestart(rHTMLWrt.GetNumInfo())) ) ) )
+        if( aLRItem.GetLeft() > 0 && rWrt.m_nDefListMargin > 0 &&
+            ( !rWrt.GetNumInfo().GetNumRule() ||
+              ( rWrt.GetNextNumInfo() &&
+                (rWrt.GetNumInfo().GetNumRule() != rWrt.GetNextNumInfo()->GetNumRule() ||
+                 rWrt.GetNextNumInfo()->IsRestart(rWrt.GetNumInfo())) ) ) )
         {
             // If the paragraph before the table is not numbered or the
             // paragraph after the table starts with a new numbering or with
             // a different rule, we can maintain the indentation with a DL.
             // Otherwise we keep the indentation of the numbering.
             nNewDefListLvl = static_cast< sal_uInt16 >(
-                (aLRItem.GetLeft() + (rHTMLWrt.m_nDefListMargin/2)) /
-                rHTMLWrt.m_nDefListMargin );
+                (aLRItem.GetLeft() + (rWrt.m_nDefListMargin/2)) /
+                rWrt.m_nDefListMargin );
         }
     }
 
-    if( !pFlyFrameFormat && !rHTMLWrt.mbReqIF && nNewDefListLvl != rHTMLWrt.m_nDefListLvl )
-        rHTMLWrt.OutAndSetDefList( nNewDefListLvl );
+    if( !pFlyFrameFormat && !rWrt.mbReqIF && nNewDefListLvl != rWrt.m_nDefListLvl )
+        rWrt.OutAndSetDefList( nNewDefListLvl );
 
     // eFlyHoriOri and eTabHoriOri now only contain the values of
     // LEFT/CENTER and RIGHT!
@@ -1099,45 +1043,44 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
         nFlyHSpace = nFlyVSpace = 0;
 
     if( !pFormat->GetName().isEmpty() )
-        rHTMLWrt.OutImplicitMark( pFormat->GetName(), "table" );
+        rWrt.OutImplicitMark( pFormat->GetName(), "table" );
 
     if( text::HoriOrientation::NONE!=eDivHoriOri )
     {
-        if( rHTMLWrt.m_bLFPossible )
-            rHTMLWrt.OutNewLine();  // <CENTER> in new line
+        if (rWrt.IsLFPossible())
+            rWrt.OutNewLine();  // <CENTER> in new line
         if( text::HoriOrientation::CENTER==eDivHoriOri )
         {
-            if (!rHTMLWrt.mbXHTML)
+            if (!rWrt.mbXHTML)
             {
                 // Not XHTML's css center: start <center>.
-                HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_center) );
+                HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_center) );
             }
         }
         else
         {
-            if (rHTMLWrt.mbReqIF)
+            if (rWrt.mbReqIF)
             {
                 // In ReqIF, div cannot have an 'align' attribute. For now, use 'style' only
                 // for ReqIF; maybe it makes sense to use it in both cases?
                 static constexpr char sOut[] = OOO_STRING_SVTOOLS_HTML_division
                     " style=\"display: flex; flex-direction: column; align-items: flex-end\"";
-                HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + sOut));
+                HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rWrt.GetNamespace() + sOut));
             }
             else
             {
                 static constexpr char sOut[] = OOO_STRING_SVTOOLS_HTML_division
-                    " " OOO_STRING_SVTOOLS_HTML_O_align "=\""
-                    OOO_STRING_SVTOOLS_HTML_AL_right "\"";
-                HTMLOutFuncs::Out_AsciiTag( rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + sOut) );
+                    " " OOO_STRING_SVTOOLS_HTML_O_align "=\"" OOO_STRING_SVTOOLS_HTML_AL_right "\"";
+                HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rWrt.GetNamespace() + sOut));
             }
         }
-        rHTMLWrt.IncIndentLevel();  // indent content of <CENTER>
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.IncIndentLevel();  // indent content of <CENTER>
+        rWrt.SetLFPossible(true);
     }
 
     // If the table isn't in a frame, then you always can output a LF.
     if( text::HoriOrientation::NONE==eTabHoriOri )
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
 
     const SwHTMLTableLayout *pLayout = rTable.GetHTMLTableLayout();
 
@@ -1152,7 +1095,7 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
     if( pLayout && pLayout->IsExportable() )
     {
         SwHTMLWrtTable aTableWrt( pLayout );
-        aTableWrt.Write( rHTMLWrt, eTabHoriOri, rTable.GetRowsToRepeat() > 0,
+        aTableWrt.Write( rWrt, eTabHoriOri, rTable.GetRowsToRepeat() > 0,
                          pFormat, pCaption, bTopCaption,
                          nFlyHSpace, nFlyVSpace );
     }
@@ -1160,52 +1103,52 @@ Writer& OutHTML_SwTableNode( Writer& rWrt, SwTableNode & rNode,
     {
         SwHTMLWrtTable aTableWrt( rTable.GetTabLines(), nWidth,
                                   nBaseWidth, bRelWidths, 0, 0, rTable.GetRowsToRepeat() );
-        aTableWrt.Write( rHTMLWrt, eTabHoriOri, rTable.GetRowsToRepeat() > 0,
+        aTableWrt.Write( rWrt, eTabHoriOri, rTable.GetRowsToRepeat() > 0,
                          pFormat, pCaption, bTopCaption,
                          nFlyHSpace, nFlyVSpace );
     }
 
     // If the table wasn't in a frame, then you always can output a LF.
     if( text::HoriOrientation::NONE==eTabHoriOri )
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
 
     if( text::HoriOrientation::NONE!=eDivHoriOri )
     {
-        rHTMLWrt.DecIndentLevel();  // indent content of <CENTER>
-        rHTMLWrt.OutNewLine();      // </CENTER> in new line
+        rWrt.DecIndentLevel();  // indent content of <CENTER>
+        rWrt.OutNewLine();      // </CENTER> in new line
         OString aTag = text::HoriOrientation::CENTER == eDivHoriOri
                            ? OOO_STRING_SVTOOLS_HTML_center
                            : OOO_STRING_SVTOOLS_HTML_division;
-        if (!rHTMLWrt.mbXHTML || eDivHoriOri != text::HoriOrientation::CENTER)
+        if (!rWrt.mbXHTML || eDivHoriOri != text::HoriOrientation::CENTER)
         {
             // Not XHTML's css center: end <center>.
-            HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + aTag), false);
+            HTMLOutFuncs::Out_AsciiTag(rWrt.Strm(), Concat2View(rWrt.GetNamespace() + aTag), false);
         }
-        rHTMLWrt.m_bLFPossible = true;
+        rWrt.SetLFPossible(true);
     }
 
     // move Pam behind the table
-    rHTMLWrt.m_pCurrentPam->GetPoint()->Assign( *rNode.EndOfSectionNode() );
+    rWrt.m_pCurrentPam->GetPoint()->Assign( *rNode.EndOfSectionNode() );
 
     if( bPreserveForm )
     {
-        rHTMLWrt.m_bPreserveForm = false;
-        rHTMLWrt.OutForm( false );
+        rWrt.m_bPreserveForm = false;
+        rWrt.OutForm( false );
     }
 
-    rHTMLWrt.m_bOutTable = false;
+    rWrt.m_bOutTable = false;
 
-    if( rHTMLWrt.GetNextNumInfo() &&
-        rHTMLWrt.GetNextNumInfo()->GetNumRule() == rHTMLWrt.GetNumInfo().GetNumRule() &&
-        !rHTMLWrt.GetNextNumInfo()->IsRestart(rHTMLWrt.GetNumInfo()) )
+    if( rWrt.GetNextNumInfo() &&
+        rWrt.GetNextNumInfo()->GetNumRule() == rWrt.GetNumInfo().GetNumRule() &&
+        !rWrt.GetNextNumInfo()->IsRestart(rWrt.GetNumInfo()) )
     {
         // If the paragraph after the table is numbered with the same rule as the
         // one before, then the NumInfo of the next paragraph holds the level of
         // paragraph before the table. Therefore NumInfo must be fetched again
         // to maybe close the Num list.
-        rHTMLWrt.ClearNextNumInfo();
-        rHTMLWrt.FillNextNumInfo();
-        OutHTML_NumberBulletListEnd( rHTMLWrt, *rHTMLWrt.GetNextNumInfo() );
+        rWrt.ClearNextNumInfo();
+        rWrt.FillNextNumInfo();
+        OutHTML_NumberBulletListEnd( rWrt, *rWrt.GetNextNumInfo() );
     }
     return rWrt;
 }

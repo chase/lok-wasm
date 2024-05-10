@@ -145,6 +145,16 @@ SdrObjKind SwFlyDrawObj::GetObjIdentifier() const
     return SdrObjKind::SwFlyDrawObjIdentifier;
 }
 
+rtl::Reference<SdrObject> SwFlyDrawObj::CloneSdrObject(SdrModel& rTargetModel) const
+{
+    return new SwFlyDrawObj(rTargetModel);
+}
+
+void SwFlyDrawObj::NbcRotate(const Point& /*rRef*/, Degree100 /*nAngle*/, double /*sinAngle*/, double /*cosAngle*/)
+{
+    assert(false);
+}
+
 // TODO: Need own primitive to get the FlyFrame paint working
 namespace drawinglayer::primitive2d
 {
@@ -559,7 +569,7 @@ void SwVirtFlyDrawObj::SetRect() const
 const tools::Rectangle& SwVirtFlyDrawObj::GetCurrentBoundRect() const
 {
     SetRect();
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 const tools::Rectangle& SwVirtFlyDrawObj::GetLastBoundRect() const
@@ -580,7 +590,7 @@ void SwVirtFlyDrawObj::RecalcSnapRect()
 const tools::Rectangle& SwVirtFlyDrawObj::GetSnapRect()  const
 {
     SetRect();
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 void SwVirtFlyDrawObj::SetSnapRect(const tools::Rectangle& )
@@ -601,7 +611,7 @@ void SwVirtFlyDrawObj::NbcSetSnapRect(const tools::Rectangle& )
 const tools::Rectangle& SwVirtFlyDrawObj::GetLogicRect() const
 {
     SetRect();
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 void SwVirtFlyDrawObj::SetLogicRect(const tools::Rectangle& )

@@ -48,15 +48,14 @@ CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testTableSplitMergeAndAltText)
     sw::AccessibilityCheck aCheck(pDoc);
     aCheck.check();
     auto& aIssues = aCheck.getIssueCollection().getIssues();
-    CPPUNIT_ASSERT_EQUAL(size_t(7), aIssues.size());
+    CPPUNIT_ASSERT_EQUAL(size_t(6), aIssues.size());
 
     CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::NO_ALT_GRAPHIC, aIssues[0]->m_eIssueID);
-    CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::NO_ALT_OLE, aIssues[1]->m_eIssueID);
+    CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::TABLE_MERGE_SPLIT, aIssues[1]->m_eIssueID);
     CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::TABLE_MERGE_SPLIT, aIssues[2]->m_eIssueID);
     CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::TABLE_MERGE_SPLIT, aIssues[3]->m_eIssueID);
     CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::TABLE_MERGE_SPLIT, aIssues[4]->m_eIssueID);
-    CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::TABLE_MERGE_SPLIT, aIssues[5]->m_eIssueID);
-    CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::NO_ALT_SHAPE, aIssues[6]->m_eIssueID);
+    CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::NO_ALT_SHAPE, aIssues[5]->m_eIssueID);
 }
 
 CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckParagraphIssues)
@@ -83,6 +82,18 @@ CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckBackgroundImage)
     auto& aIssues = aCheck.getIssueCollection().getIssues();
     CPPUNIT_ASSERT_EQUAL(size_t(1), aIssues.size());
     CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::DOCUMENT_BACKGROUND, aIssues[0]->m_eIssueID);
+}
+
+CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckLinkedImage)
+{
+    createSwDoc("LinkedImageTest.fodt");
+    SwDoc* pDoc = getSwDoc();
+    CPPUNIT_ASSERT(pDoc);
+    sw::AccessibilityCheck aCheck(pDoc);
+    aCheck.check();
+    auto& aIssues = aCheck.getIssueCollection().getIssues();
+    CPPUNIT_ASSERT_EQUAL(size_t(4), aIssues.size());
+    CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::LINKED_GRAPHIC, aIssues[1]->m_eIssueID);
 }
 
 CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckNewlineSpace)
@@ -203,6 +214,21 @@ CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckTabsFormatting)
     CPPUNIT_ASSERT_EQUAL(sfx::AccessibilityIssueID::TEXT_FORMATTING, aIssues[3]->m_eIssueID);
 }
 
+//tdf#156550 - Accessibility sidebar complains about TOC hyperlinks
+CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckTOCHyperlink)
+{
+    createSwDoc("TOCHyperlinkTest.odt");
+    SwDoc* pDoc = getSwDoc();
+    CPPUNIT_ASSERT(pDoc);
+    sw::AccessibilityCheck aCheck(pDoc);
+    aCheck.check();
+    auto& aIssues = aCheck.getIssueCollection().getIssues();
+    // Without the fix in place, this test would have failed with
+    // - Expected: 0 (No Detected HYPERLINK_IS_TEXT Issues)
+    // - Actual  : 4 (Number of TOC Hyperlinks)
+    CPPUNIT_ASSERT_EQUAL(size_t(0), aIssues.size());
+}
+
 namespace
 {
 std::vector<std::shared_ptr<sfx::AccessibilityIssue>>
@@ -223,6 +249,17 @@ scanAccessibilityIssuesOnNodes(SwDoc* pDocument)
         }
     }
     return aIssues;
+}
+
+CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testCheckTabsinTOC)
+{
+    createSwDoc("Tabs-in-TOC.odt");
+    SwDoc* pDoc = getSwDoc();
+    CPPUNIT_ASSERT(pDoc);
+    sw::AccessibilityCheck aCheck(pDoc);
+    aCheck.check();
+    auto& aIssues = aCheck.getIssueCollection().getIssues();
+    CPPUNIT_ASSERT_EQUAL(size_t(0), aIssues.size());
 }
 
 void checkIssuePosition(std::shared_ptr<sfx::AccessibilityIssue> const& pIssue, int nLine,
@@ -329,7 +366,6 @@ CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testOnlineNodeSplitAppend)
 
     // Undo second change
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT_EQUAL(OUString("He heard quiet steps behind him. "),
                          getParagraph(1)->getString());
     CPPUNIT_ASSERT_EQUAL(OUString("That didn't bode well. Who could be following him this late at "
@@ -346,7 +382,6 @@ CPPUNIT_TEST_FIXTURE(AccessibilityCheckTest, testOnlineNodeSplitAppend)
 
     // Undo first change
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     CPPUNIT_ASSERT_EQUAL(sal_Int32(2),
                          pDoc->getOnlineAccessibilityCheck()->getNumberOfAccessibilityIssues());
     CPPUNIT_ASSERT_EQUAL(

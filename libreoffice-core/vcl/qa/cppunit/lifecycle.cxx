@@ -20,7 +20,7 @@
 #include <vcl/layout.hxx>
 #include <vcl/scheduler.hxx>
 #include <com/sun/star/awt/XWindow.hpp>
-#include <com/sun/star/awt/XWindowPeer.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/lang/XComponent.hpp>
 
 class LifecycleTest : public test::BootstrapFixture
@@ -72,7 +72,7 @@ void LifecycleTest::testVirtualDevice()
     VclPtr<VirtualDevice> pVDev = VclPtr< VirtualDevice >::Create();
     ScopedVclPtrInstance< VirtualDevice > pVDev2;
     VclPtrInstance<VirtualDevice> pVDev3;
-    VclPtrInstance<VirtualDevice> pVDev4(DeviceFormat::DEFAULT);
+    VclPtrInstance<VirtualDevice> pVDev4(DeviceFormat::WITHOUT_ALPHA);
     CPPUNIT_ASSERT(!!pVDev);
     CPPUNIT_ASSERT(!!pVDev2);
     CPPUNIT_ASSERT(!!pVDev3);
@@ -269,7 +269,7 @@ void LifecycleTest::testLeakage()
         aObjects.push_back(LeakTestObject::Create<VclVButtonBox>(xVBox));
     }
 
-    aObjects.push_back(LeakTestObject::Create<Dialog>(xParent, u"PrintProgressDialog", "vcl/ui/printprogressdialog.ui"));
+    aObjects.push_back(LeakTestObject::Create<Dialog>(xParent, u"PrintProgressDialog"_ustr, "vcl/ui/printprogressdialog.ui"));
     xParent.clear();
 
     for (auto i = aObjects.rbegin(); i != aObjects.rend(); ++i)

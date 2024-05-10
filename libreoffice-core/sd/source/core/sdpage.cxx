@@ -66,6 +66,7 @@
 #include <o3tl/sorted_vector.hxx>
 #include <xmloff/autolayout.hxx>
 
+#include <Annotation.hxx>
 #include <Outliner.hxx>
 #include <app.hrc>
 #include <createunopageimpl.hxx>
@@ -176,7 +177,8 @@ SdPage::~SdPage()
 
     clearChildNodes(mxAnimationNode);
 
-    // disconnect the UserCall link
+    // disconnect the UserCall link, so we don't get calls
+    // back into this dying object when the child objects die
     SdrObjListIter aIter( this, SdrIterMode::DeepWithGroups );
     while( aIter.IsMore() )
     {
@@ -184,9 +186,6 @@ SdPage::~SdPage()
         if( pChild->GetUserCall() == this )
             pChild->SetUserCall(nullptr);
     }
-
-    // clear SdrObjects with broadcasting
-    ClearSdrObjList();
 }
 
 namespace {
@@ -1811,7 +1810,6 @@ void SdPage::ScaleObjects(const Size& rNewPageSize, const ::tools::Rectangle& rN
     sd::ScopeLockGuard aGuard( maLockAutoLayoutArrangement );
 
     mbScaleObjects = bScaleAllObj;
-    SdrObject* pObj = nullptr;
     Point aRefPnt(0, 0);
     Size aNewPageSize(rNewPageSize);
     sal_Int32 nLeft  = rNewBorderRect.Left();
@@ -1861,16 +1859,16 @@ void SdPage::ScaleObjects(const Size& rNewPageSize, const ::tools::Rectangle& rN
     Fraction aFractX(aNewPageSize.Width(), nOldWidth);
     Fraction aFractY(aNewPageSize.Height(), nOldHeight);
 
-    const size_t nObjCnt = (mbScaleObjects ? GetObjCount() : 0);
+    if (!mbScaleObjects)
+        return;
 
-    for (size_t nObj = 0; nObj < nObjCnt; ++nObj)
+    for (const rtl::Reference<SdrObject>& pObj : *this)
     {
         bool bIsPresObjOnMaster = false;
 
         // all Objects
-        pObj = GetObj(nObj);
 
-        if (mbMaster && IsPresObj(pObj))
+        if (mbMaster && IsPresObj(pObj.get()))
         {
             // There is a presentation object on the master page
             bIsPresObjOnMaster = true;
@@ -2014,7 +2012,7 @@ void SdPage::ScaleObjects(const Size& rNewPageSize, const ::tools::Rectangle& rN
                     }
                     else if ( eObjKind != SdrObjKind::TitleText   &&
                               eObjKind != SdrObjKind::OutlineText &&
-                              DynCastSdrTextObj( pObj ) !=  nullptr       &&
+                              DynCastSdrTextObj( pObj.get() ) !=  nullptr       &&
                               pObj->GetOutlinerParaObject() )
                     {
                         /******************************************************
@@ -2514,9 +2512,10 @@ const OUString& SdPage::GetName() const
             // default name for handout pages
             sal_uInt16  nNum = (GetPageNum() + 1) / 2;
 
-            aCreatedPageName = SdResId(STR_PAGE) + " ";
             if (static_cast<SdDrawDocument&>(getSdrModelFromSdrPage()).GetDocumentType() == DocumentType::Draw )
                  aCreatedPageName = SdResId(STR_PAGE_NAME) + " ";
+            else
+                aCreatedPageName = SdResId(STR_PAGE) + " ";
 
             if( getSdrModelFromSdrPage().GetPageNumType() == css::style::NumberingType::NUMBER_NONE )
             {

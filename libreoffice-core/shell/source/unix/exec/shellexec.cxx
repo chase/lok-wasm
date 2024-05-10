@@ -107,7 +107,7 @@ void SAL_CALL ShellExec::execute( const OUString& aCommand, const OUString& aPar
             throw RuntimeException(
                 "Cannot translate URI reference to external format: "
                  + aCommand,
-                static_cast< cppu::OWeakObject * >(this));
+                getXWeak());
         }
 
 #ifdef MACOSX
@@ -205,14 +205,34 @@ void SAL_CALL ShellExec::execute( const OUString& aCommand, const OUString& aPar
             "XSystemShellExecute.execute URIS_ONLY with non-absolute"
                      " URI reference "
              + aCommand,
-            static_cast< cppu::OWeakObject * >(this), 0);
+            getXWeak(), 0);
     } else {
+#if defined MACOSX
+        auto usingOpen = false;
+        if (OString pathname8;
+            aCommand.convertToString(
+                &pathname8, RTL_TEXTENCODING_UTF8,
+                RTL_UNICODETOTEXT_FLAGS_UNDEFINED_ERROR | RTL_UNICODETOTEXT_FLAGS_INVALID_ERROR))
+        {
+            if (struct stat st; stat(pathname8.getStr(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                usingOpen = true;
+                aBuffer.append("open -a ");
+            }
+        }
+#endif
         escapeForShell(aBuffer, OUStringToOString(aCommand, osl_getThreadTextEncoding()));
-        aBuffer.append(" ");
-        if( nFlags != 42 )
-            escapeForShell(aBuffer, OUStringToOString(aParameter, osl_getThreadTextEncoding()));
-        else
-            aBuffer.append(OUStringToOString(aParameter, osl_getThreadTextEncoding()));
+        if (!aParameter.isEmpty()) {
+            aBuffer.append(" ");
+#if defined MACOSX
+            if (usingOpen) {
+                aBuffer.append("--args ");
+            }
+#endif
+            if( nFlags != 42 )
+                escapeForShell(aBuffer, OUStringToOString(aParameter, osl_getThreadTextEncoding()));
+            else
+                aBuffer.append(OUStringToOString(aParameter, osl_getThreadTextEncoding()));
+        }
     }
 
     // Prefer DESKTOP_LAUNCH when available

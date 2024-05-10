@@ -391,7 +391,7 @@ void SAL_CALL FmXGridControl::dispose()
     SolarMutexGuard aGuard;
 
     EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >(this);
+    aEvt.Source = getXWeak();
     m_aModifyListeners.disposeAndClear(aEvt);
     m_aUpdateListeners.disposeAndClear(aEvt);
     m_aContainerListeners.disposeAndClear(aEvt);
@@ -472,7 +472,7 @@ void SAL_CALL FmXGridControl::createPeer(const Reference< css::awt::XToolkit >& 
     vcl::Window* pParentWin = nullptr;
     if (rParentPeer.is())
     {
-        VCLXWindow* pParent = comphelper::getFromUnoTunnel<VCLXWindow>(rParentPeer);
+        VCLXWindow* pParent = dynamic_cast<VCLXWindow*>(rParentPeer.get());
         if (pParent)
             pParentWin = pParent->GetWindow();
     }
@@ -495,7 +495,7 @@ void SAL_CALL FmXGridControl::createPeer(const Reference< css::awt::XToolkit >& 
 //      if (--m_nPeerCreationLevel == 0)
     {
         DBG_ASSERT(getPeer().is(), "FmXGridControl::createPeer : something went wrong ... no top level peer !");
-        pPeer = comphelper::getFromUnoTunnel<FmXGridPeer>(getPeer());
+        pPeer = dynamic_cast<FmXGridPeer*>(getPeer().get());
 
         setPosSize( maComponentInfos.nX, maComponentInfos.nY, maComponentInfos.nWidth, maComponentInfos.nHeight, css::awt::PosSize::POSSIZE );
 
@@ -967,7 +967,7 @@ sal_Bool SAL_CALL FmXGridControl::supportsMode(const OUString& Mode)
 
 void SAL_CALL FmXGridControl::setFocus()
 {
-    FmXGridPeer* pPeer = comphelper::getFromUnoTunnel<FmXGridPeer>(getPeer());
+    rtl::Reference<FmXGridPeer> pPeer = dynamic_cast<FmXGridPeer*>(getPeer().get());
     if (pPeer)
     {
         VclPtr<FmGridControl> xGrid = pPeer->GetAs<FmGridControl>();
@@ -1020,26 +1020,23 @@ void FmXGridPeer::GridListenerDelegator::columnChanged()
 
 void FmXGridPeer::selectionChanged()
 {
+    std::unique_lock g(m_aMutex);
     EventObject aSource;
-    aSource.Source = static_cast< ::cppu::OWeakObject* >(this);
-    m_aSelectionListeners.notifyEach( &XSelectionChangeListener::selectionChanged, aSource);
+    aSource.Source = getXWeak();
+    m_aSelectionListeners.notifyEach( g, &XSelectionChangeListener::selectionChanged, aSource);
 }
 
 
 void FmXGridPeer::columnChanged()
 {
+    std::unique_lock g(m_aMutex);
     EventObject aEvent( *this );
-    m_aGridControlListeners.notifyEach( &XGridControlListener::columnChanged, aEvent );
+    m_aGridControlListeners.notifyEach( g, &XGridControlListener::columnChanged, aEvent );
 }
 
 
 FmXGridPeer::FmXGridPeer(const Reference< XComponentContext >& _rxContext)
             :m_xContext(_rxContext)
-            ,m_aModifyListeners(m_aMutex)
-            ,m_aUpdateListeners(m_aMutex)
-            ,m_aContainerListeners(m_aMutex)
-            ,m_aSelectionListeners(m_aMutex)
-            ,m_aGridControlListeners(m_aMutex)
             ,m_aMode("DataMode")
             ,m_nCursorListening(0)
             ,m_bInterceptingDispatch(false)
@@ -1078,8 +1075,6 @@ FmXGridPeer::~FmXGridPeer()
     setRowSet(Reference< XRowSet > ());
     setColumns(Reference< XIndexContainer > ());
 }
-
-UNO3_GETIMPLEMENTATION2_IMPL(FmXGridPeer, VCLXWindow);
 
 // XEventListener
 
@@ -1126,13 +1121,15 @@ void FmXGridPeer::disposing(const EventObject& e)
 
 void FmXGridPeer::addModifyListener(const Reference< css::util::XModifyListener >& l)
 {
-    m_aModifyListeners.addInterface( l );
+    std::unique_lock g(m_aMutex);
+    m_aModifyListeners.addInterface( g, l );
 }
 
 
 void FmXGridPeer::removeModifyListener(const Reference< css::util::XModifyListener >& l)
 {
-    m_aModifyListeners.removeInterface( l );
+    std::unique_lock g(m_aMutex);
+    m_aModifyListeners.removeInterface( g, l );
 }
 
 
@@ -1314,9 +1311,10 @@ Sequence< Any > SAL_CALL FmXGridPeer::queryFieldData( sal_Int32 nRow, const Type
 
 void FmXGridPeer::CellModified()
 {
+    std::unique_lock g(m_aMutex);
     EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >(this);
-    m_aModifyListeners.notifyEach( &XModifyListener::modified, aEvt );
+    aEvt.Source = getXWeak();
+    m_aModifyListeners.notifyEach( g, &XModifyListener::modified, aEvt );
 }
 
 // XPropertyChangeListener
@@ -1435,13 +1433,15 @@ void FmXGridPeer::propertyChange(const PropertyChangeEvent& evt)
 
 void FmXGridPeer::addUpdateListener(const Reference< XUpdateListener >& l)
 {
-    m_aUpdateListeners.addInterface(l);
+    std::unique_lock g(m_aMutex);
+    m_aUpdateListeners.addInterface(g, l);
 }
 
 
 void FmXGridPeer::removeUpdateListener(const Reference< XUpdateListener >& l)
 {
-    m_aUpdateListeners.removeInterface(l);
+    std::unique_lock g(m_aMutex);
+    m_aUpdateListeners.removeInterface(g, l);
 }
 
 
@@ -1451,8 +1451,9 @@ sal_Bool FmXGridPeer::commit()
     if (!m_xCursor.is() || !pGrid)
         return true;
 
-    EventObject aEvt(static_cast< ::cppu::OWeakObject* >(this));
-    ::comphelper::OInterfaceIteratorHelper3 aIter(m_aUpdateListeners);
+    std::unique_lock g(m_aMutex);
+    EventObject aEvt(getXWeak());
+    ::comphelper::OInterfaceIteratorHelper4 aIter(g, m_aUpdateListeners);
     bool bCancel = false;
     while (aIter.hasMoreElements() && !bCancel)
         if ( !aIter.next()->approveUpdate( aEvt ) )
@@ -1462,7 +1463,7 @@ sal_Bool FmXGridPeer::commit()
         bCancel = !pGrid->commit();
 
     if (!bCancel)
-        m_aUpdateListeners.notifyEach( &XUpdateListener::updated, aEvt );
+        m_aUpdateListeners.notifyEach( g, &XUpdateListener::updated, aEvt );
     return !bCancel;
 }
 
@@ -1550,7 +1551,7 @@ Reference< XIndexContainer >  FmXGridPeer::getColumns()
 
 void FmXGridPeer::addColumnListeners(const Reference< XPropertySet >& xCol)
 {
-    static const rtl::OUStringConstExpr aPropsListenedTo[] =
+    static constexpr OUString aPropsListenedTo[] =
     {
         FM_PROP_LABEL, FM_PROP_WIDTH, FM_PROP_HIDDEN, FM_PROP_ALIGN,
         FM_PROP_FORMATKEY
@@ -1575,7 +1576,7 @@ void FmXGridPeer::removeColumnListeners(const Reference< XPropertySet >& xCol)
 {
     // the same props as in addColumnListeners... linux has problems with global static UStrings, so
     // we have to do it this way...
-    static const rtl::OUStringConstExpr aPropsListenedTo[] =
+    static constexpr OUString aPropsListenedTo[] =
     {
         FM_PROP_LABEL, FM_PROP_WIDTH, FM_PROP_HIDDEN, FM_PROP_ALIGN,
         FM_PROP_FORMATKEY
@@ -1835,7 +1836,7 @@ void FmXGridPeer::setProperty( const OUString& PropertyName, const Any& Value)
         INetURLObject aHID( sHelpURL );
         if ( aHID.GetProtocol() == INetProtocol::Hid )
             sHelpURL = aHID.GetURLPath();
-        pGrid->SetHelpId( OUStringToOString( sHelpURL, RTL_TEXTENCODING_UTF8 ) );
+        pGrid->SetHelpId( sHelpURL );
     }
     else if ( PropertyName == FM_PROP_DISPLAYSYNCHRON )
     {
@@ -2038,12 +2039,14 @@ Any FmXGridPeer::getProperty( const OUString& _rPropertyName )
 
 void FmXGridPeer::dispose()
 {
-    EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >(this);
-    m_aModifyListeners.disposeAndClear(aEvt);
-    m_aUpdateListeners.disposeAndClear(aEvt);
-    m_aContainerListeners.disposeAndClear(aEvt);
-
+    {
+        std::unique_lock g(m_aMutex);
+        EventObject aEvt;
+        aEvt.Source = getXWeak();
+        m_aModifyListeners.disposeAndClear(g, aEvt);
+        m_aUpdateListeners.disposeAndClear(g, aEvt);
+        m_aContainerListeners.disposeAndClear(g, aEvt);
+    }
     // release all interceptors
     Reference< XDispatchProviderInterceptor > xInterceptor( m_xFirstDispatchInterceptor );
     m_xFirstDispatchInterceptor.clear();
@@ -2097,12 +2100,14 @@ void FmXGridPeer::dispose()
 
 void FmXGridPeer::addContainerListener(const Reference< XContainerListener >& l)
 {
-    m_aContainerListeners.addInterface( l );
+    std::unique_lock g(m_aMutex);
+    m_aContainerListeners.addInterface( g, l );
 }
 
 void FmXGridPeer::removeContainerListener(const Reference< XContainerListener >& l)
 {
-    m_aContainerListeners.removeInterface( l );
+    std::unique_lock g(m_aMutex);
+    m_aContainerListeners.removeInterface( g, l );
 }
 
 // css::data::XDatabaseCursorSupplier
@@ -2204,13 +2209,15 @@ void FmXGridPeer::setRowSet(const Reference< XRowSet >& _rDatabaseCursor)
 
 void SAL_CALL FmXGridPeer::addGridControlListener( const Reference< XGridControlListener >& _listener )
 {
-    m_aGridControlListeners.addInterface( _listener );
+    std::unique_lock g(m_aMutex);
+    m_aGridControlListeners.addInterface( g, _listener );
 }
 
 
 void SAL_CALL FmXGridPeer::removeGridControlListener( const Reference< XGridControlListener >& _listener )
 {
-    m_aGridControlListeners.removeInterface( _listener );
+    std::unique_lock g(m_aMutex);
+    m_aGridControlListeners.removeInterface( g, _listener );
 }
 
 
@@ -2389,7 +2396,8 @@ void FmXGridPeer::columnVisible(DbGridColumn const * pColumn)
     aEvt.Accessor <<= _nIndex;
     aEvt.Element  <<= xControl;
 
-    m_aContainerListeners.notifyEach( &XContainerListener::elementInserted, aEvt );
+    std::unique_lock g(m_aMutex);
+    m_aContainerListeners.notifyEach( g, &XContainerListener::elementInserted, aEvt );
 }
 
 
@@ -2404,7 +2412,8 @@ void FmXGridPeer::columnHidden(DbGridColumn const * pColumn)
     aEvt.Accessor <<= _nIndex;
     aEvt.Element  <<= xControl;
 
-    m_aContainerListeners.notifyEach( &XContainerListener::elementRemoved, aEvt );
+    std::unique_lock g(m_aMutex);
+    m_aContainerListeners.notifyEach( g, &XContainerListener::elementRemoved, aEvt );
 }
 
 
@@ -2588,13 +2597,15 @@ Any SAL_CALL FmXGridPeer::getSelection(  )
 
 void SAL_CALL FmXGridPeer::addSelectionChangeListener( const Reference< XSelectionChangeListener >& _rxListener )
 {
-    m_aSelectionListeners.addInterface( _rxListener );
+    std::unique_lock g(m_aMutex);
+    m_aSelectionListeners.addInterface( g, _rxListener );
 }
 
 
 void SAL_CALL FmXGridPeer::removeSelectionChangeListener( const Reference< XSelectionChangeListener >& _rxListener )
 {
-    m_aSelectionListeners.removeInterface( _rxListener );
+    std::unique_lock g(m_aMutex);
+    m_aSelectionListeners.removeInterface( g, _rxListener );
 }
 
 
@@ -2637,7 +2648,7 @@ Sequence< css::util::URL>& FmXGridPeer::getSupportedURLs()
 {
     static Sequence< css::util::URL> aSupported = []()
     {
-        static const rtl::OUStringConstExpr sSupported[] = {
+        static constexpr OUString sSupported[] = {
             FMURL_RECORD_MOVEFIRST,
             FMURL_RECORD_MOVEPREV,
             FMURL_RECORD_MOVENEXT,

@@ -78,12 +78,12 @@ private:
     std::unique_ptr<SfxItemSet>           m_pOutSet;
     std::unique_ptr<TabDlg_Impl>          m_pImpl;
     WhichRangesContainer                  m_pRanges;
-    OString             m_sAppPageId;
+    OUString             m_sAppPageId;
     bool                m_bStandardPushed;
     std::unique_ptr<SfxAllItemSet>       m_xItemSet;
 
-    DECL_DLLPRIVATE_LINK(ActivatePageHdl, const OString&, void);
-    DECL_DLLPRIVATE_LINK(DeactivatePageHdl, const OString&, bool);
+    DECL_DLLPRIVATE_LINK(ActivatePageHdl, const OUString&, void);
+    DECL_DLLPRIVATE_LINK(DeactivatePageHdl, const OUString&, bool);
     SAL_DLLPRIVATE void Start_Impl();
     SAL_DLLPRIVATE void CreatePages();
     SAL_DLLPRIVATE void setPreviewsToSamePlace();
@@ -91,15 +91,15 @@ private:
 protected:
     virtual short               Ok();
     virtual void                RefreshInputSet();
-    virtual SfxItemSet*         CreateInputItemSet(const OString& rName);
-    virtual void                PageCreated(const OString &rName, SfxTabPage &rPage);
+    virtual SfxItemSet*         CreateInputItemSet(const OUString& rName);
+    virtual void                PageCreated(const OUString &rName, SfxTabPage &rPage);
 
-    virtual void ActivatePage(const OString& rPage);
-    bool DeactivatePage(std::string_view aPage);
+    virtual void ActivatePage(const OUString& rPage);
+    bool DeactivatePage(std::u16string_view aPage);
 
     std::unique_ptr<SfxItemSet> m_xExampleSet;
     SfxItemSet*     GetInputSetImpl();
-    SfxTabPage*     GetTabPage(std::string_view rPageId) const;
+    SfxTabPage*     GetTabPage(std::u16string_view rPageId) const;
 
     /** prepare to leave the current page. Calls the DeactivatePage method of the current page, (if necessary),
         handles the item sets to copy.
@@ -111,36 +111,37 @@ protected:
      */
     void SavePosAndId();
 public:
-    SfxTabDialogController(weld::Widget* pParent, const OUString& rUIXMLDescription, const OString& rID,
+    SfxTabDialogController(weld::Widget* pParent, const OUString& rUIXMLDescription, const OUString& rID,
                            const SfxItemSet * = nullptr, bool bEditFmt = false);
     virtual ~SfxTabDialogController() override;
 
-    void                AddTabPage(const OString& rName,           // Name of the label for the existing page in the notebook .ui
+    void                AddTabPage(const OUString& rName,          // Name of the label for the existing page in the notebook .ui
                                    CreateTabPage pCreateFunc,      // != 0
                                    GetTabPageRanges pRangesFunc);  // can be 0
 
-    void                AddTabPage(const OString& rName,           // Name of the label for the existing page in the notebook .ui
+    void                AddTabPage(const OUString& rName,          // Name of the label for the existing page in the notebook .ui
                                    sal_uInt16 nPageCreateId);      // Identifier of the Factory Method to create the page
 
-    void                AddTabPage(const OString& rName,           // Name of the label for the new page to create
+    void                AddTabPage(const OUString& rName,          // Name of the label for the new page to create
                                    const OUString& rLabel,         // UI Label for the new page to create
                                    CreateTabPage pCreateFunc);     // != 0
 
-    void                AddTabPage(const OString& rName,           // Name of the label for the new page to create
+    void                AddTabPage(const OUString& rName,          // Name of the label for the new page to create
                                    const OUString& rLabel,         // UI Label for the new page to create
                                    sal_uInt16 nPageCreateId);      // Identifier of the Factory Method to create the page
 
-    void                RemoveTabPage( const OString& rName ); // Name of the label for the page in the notebook .ui
+    void                RemoveTabPage( const OUString& rName ); // Name of the label for the page in the notebook .ui
 
-    void                SetCurPageId(const OString& rName);
-    void                ShowPage(const OString& rName);  // SetCurPageId + call Activate on it
-    OString             GetCurPageId() const;
+    void                SetCurPageId(const OUString& rName);
+    void                ShowPage(const OUString& rName);  // SetCurPageId + call Activate on it
+    OUString             GetCurPageId() const;
     SfxTabPage*         GetCurTabPage() const { return GetTabPage(GetCurPageId()); }
 
     // may provide local slots converted by Map
     const WhichRangesContainer& GetInputRanges( const SfxItemPool& );
     void                SetInputSet( const SfxItemSet* pInSet );
     const SfxItemSet*   GetOutputItemSet() const { return m_pOutSet.get(); }
+    const SfxItemSet*   GetInputItemSet() const { return m_pSet.get(); }
 
     virtual weld::Button& GetOKButton() const override { return *m_xOKBtn; }
     weld::Button&       GetCancelButton() const { return *m_xCancelBtn; }
@@ -164,10 +165,10 @@ public:
     void Applied() { m_xExampleSet->Put(*GetInputSetImpl()); }
 
     //screenshotting
-    std::vector<OString> getAllPageUIXMLDescriptions() const;
-    bool selectPageByUIXMLDescription(const OString& rUIXMLDescription);
+    std::vector<OUString> getAllPageUIXMLDescriptions() const;
+    bool selectPageByUIXMLDescription(const OUString& rUIXMLDescription);
     BitmapEx createScreenshot() const;
-    OString GetScreenshotId() const;
+    OUString GetScreenshotId() const;
 };
 
 enum class DeactivateRC {
@@ -188,18 +189,20 @@ friend class SfxTabDialog;
 friend class SfxTabDialogController;
 
 private:
-    const SfxItemSet*   pSet;
-    OUString            aUserString;
-    bool                bHasExchangeSupport;
-    std::unordered_map<OString, css::uno::Any> maAdditionalProperties;
+    const SfxItemSet* mpSet;
+    OUString maUserString;
+    bool mbHasExchangeSupport;
+    std::unordered_map<OUString, css::uno::Any> maAdditionalProperties;
 
-    std::unique_ptr< TabPageImpl >        pImpl;
+    std::unique_ptr<TabPageImpl> mpImpl;
 
 protected:
-    SfxTabPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OString& rID, const SfxItemSet *rAttrSet);
+    SfxTabPage(weld::Container* pPage, weld::DialogController* pController, const OUString& rUIXMLDescription, const OUString& rID, const SfxItemSet *rAttrSet);
 
     sal_uInt16          GetWhich( sal_uInt16 nSlot, bool bDeep = true ) const
-                            { return pSet->GetPool()->GetWhich( nSlot, bDeep ); }
+    {
+        return mpSet->GetPool()->GetWhich(nSlot, bDeep);
+    }
     template<class T>
     TypedWhichId<T> GetWhich( TypedWhichId<T> nSlot, bool bDeep = true ) const
     {
@@ -223,23 +226,36 @@ public:
         m_xContainer->set_visible(bVisible);
     }
 
-    const SfxItemSet&   GetItemSet() const { return *pSet; }
+    const SfxItemSet& GetItemSet() const
+    {
+        return *mpSet;
+    }
 
     virtual bool        FillItemSet( SfxItemSet* );
     virtual void        Reset( const SfxItemSet* );
     // Allows to postpone some initialization to the first activation
     virtual bool        DeferResetToFirstActivation();
 
-    bool                HasExchangeSupport() const
-                            { return bHasExchangeSupport; }
-    void                SetExchangeSupport()
-                            { bHasExchangeSupport = true; }
+    bool HasExchangeSupport() const
+    {
+        return mbHasExchangeSupport;
+    }
+
+    void SetExchangeSupport()
+    {
+        mbHasExchangeSupport = true;
+    }
 
     virtual void            ActivatePage( const SfxItemSet& );
     virtual DeactivateRC    DeactivatePage( SfxItemSet* pSet );
-    void                    SetUserData(const OUString& rString)
-                              { aUserString = rString; }
-    const OUString&         GetUserData() const { return aUserString; }
+    void SetUserData(const OUString& rString)
+    {
+        maUserString = rString;
+    }
+    const OUString& GetUserData() const
+    {
+        return maUserString;
+    }
     virtual void            FillUserData();
     virtual bool            IsReadOnly() const;
     virtual void PageCreated (const SfxAllItemSet& aSet);
@@ -250,18 +266,19 @@ public:
         return static_cast<const T*>(GetItem(rSet, sal_uInt16(nSlot), bDeep));
     }
 
+    virtual OUString GetAllStrings();
     void SetFrame(const css::uno::Reference< css::frame::XFrame >& xFrame);
     css::uno::Reference< css::frame::XFrame > GetFrame() const;
 
     const SfxItemSet* GetDialogExampleSet() const;
 
-    OString         GetHelpId() const;
-    OString         GetConfigId() const { return GetHelpId(); }
+    OUString        GetHelpId() const;
+    OUString        GetConfigId() const { return GetHelpId(); }
     bool            IsVisible() const { return m_xContainer->get_visible(); }
 
     weld::Window*   GetFrameWeld() const;
 
-    std::unordered_map<OString, css::uno::Any>& getAdditionalProperties()
+    std::unordered_map<OUString, css::uno::Any>& getAdditionalProperties()
     {
         return maAdditionalProperties;
     }

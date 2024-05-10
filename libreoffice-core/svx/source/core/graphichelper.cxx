@@ -287,11 +287,11 @@ OUString GraphicHelper::ExportGraphic(weld::Window* pParent, const Graphic& rGra
                     if( aOut.GetOutStream() && !aOut.GetOutStream()->GetError())
                     {
                         aOut.GetOutStream()->WriteStream( *aIn.GetInStream() );
-                        if ( ERRCODE_NONE == aIn.GetError() )
+                        if ( ERRCODE_NONE == aIn.GetErrorIgnoreWarning() )
                         {
                             aOut.Close();
                             aOut.Commit();
-                            if ( ERRCODE_NONE == aOut.GetError() )
+                            if ( ERRCODE_NONE == aOut.GetErrorIgnoreWarning() )
                                 return sPath;
                         }
                     }
@@ -440,7 +440,7 @@ void GraphicHelper::SaveShapeAsGraphic(weld::Window* pParent,
         // populate filter dialog filter list and select default filter to match graphic mime type
 
         GraphicFilter& rGraphicFilter = GraphicFilter::GetGraphicFilter();
-        static const OUStringLiteral aDefaultMimeType(u"image/png");
+        static constexpr OUStringLiteral aDefaultMimeType(u"image/png");
         OUString aDefaultFormatName;
         sal_uInt16 nCount = rGraphicFilter.GetExportFormatCount();
 

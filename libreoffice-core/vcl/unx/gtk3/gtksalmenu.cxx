@@ -125,6 +125,7 @@ static void RemoveDisabledItemsFromNativeMenu(GLOMenu* pMenu, GList** pOldComman
                             g_free(pSubCommand);
                         }
                     }
+                    g_object_unref(pSubMenuModel);
                 }
             }
 
@@ -393,7 +394,7 @@ void GtkSalMenu::Update()
 
     bool bAlwaysShowDisabledEntries;
     if (pMenu->mbMenuBar)
-        bAlwaysShowDisabledEntries = true;
+        bAlwaysShowDisabledEntries = !bool(mpVCLMenu->GetMenuFlags() & MenuFlags::HideDisabledEntries);
     else
         bAlwaysShowDisabledEntries = bool(mpVCLMenu->GetMenuFlags() & MenuFlags::AlwaysShowDisabledEntries);
 
@@ -467,7 +468,7 @@ bool GtkSalMenu::ShowNativePopupMenu(FloatingWindow* pWin, const tools::Rectangl
     mpFrame->BlockTooltip();
 
 #if GTK_CHECK_VERSION(4, 0, 0)
-    tools::Rectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(xParent, rRect);
+    AbsoluteScreenPixelRectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(xParent, rRect);
     aFloatRect.Move(-mpFrame->maGeometry.x(), -mpFrame->maGeometry.y());
     GdkRectangle rect {static_cast<int>(aFloatRect.Left()), static_cast<int>(aFloatRect.Top()),
                        static_cast<int>(aFloatRect.GetWidth()), static_cast<int>(aFloatRect.GetHeight())};
@@ -488,7 +489,7 @@ bool GtkSalMenu::ShowNativePopupMenu(FloatingWindow* pWin, const tools::Rectangl
 #if GTK_CHECK_VERSION(3,22,0)
     if (gtk_check_version(3, 22, 0) == nullptr)
     {
-        tools::Rectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(xParent, rRect);
+        AbsoluteScreenPixelRectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(xParent, rRect);
         aFloatRect.Move(-mpFrame->maGeometry.x(), -mpFrame->maGeometry.y());
         GdkRectangle rect {static_cast<int>(aFloatRect.Left()), static_cast<int>(aFloatRect.Top()),
                            static_cast<int>(aFloatRect.GetWidth()), static_cast<int>(aFloatRect.GetHeight())};
@@ -534,14 +535,15 @@ bool GtkSalMenu::ShowNativePopupMenu(FloatingWindow* pWin, const tools::Rectangl
             nTime = GtkSalFrame::GetLastInputEventTime();
         }
 
-        // do the same strange semantics as vcl popup windows to arrive at a frame geometry
-        // in mirrored UI case; best done by actually executing the same code
+        // Do the same strange semantics as vcl popup windows to arrive at a frame geometry
+        // in mirrored UI case; best done by actually executing the same code.
+        // (see code in FloatingWindow::StartPopupMode)
         sal_uInt16 nArrangeIndex;
         Point aPos = FloatingWindow::ImplCalcPos(pWin, rRect, nFlags, nArrangeIndex);
-        aPos = FloatingWindow::ImplConvertToAbsPos(xParent, aPos);
+        AbsoluteScreenPixelPoint aPosAbs = FloatingWindow::ImplConvertToAbsPos(xParent, aPos);
 
         gtk_menu_popup(GTK_MENU(mpMenuWidget), nullptr, nullptr, MenuPositionFunc,
-                       &aPos, nButton, nTime);
+                       &aPosAbs, nButton, nTime);
     }
 #endif
 
@@ -797,7 +799,7 @@ namespace
 
 static void MenuButtonClicked(GtkWidget* pWidget, gpointer pMenu)
 {
-    OString aId(get_buildable_id(GTK_BUILDABLE(pWidget)));
+    OUString aId(get_buildable_id(GTK_BUILDABLE(pWidget)));
     static_cast<MenuBar*>(pMenu)->HandleMenuButtonEvent(aId.toUInt32());
 }
 
@@ -829,13 +831,14 @@ bool GtkSalMenu::AddMenuBarButton(const SalMenuButtonItem& rNewItem)
         pImage = gtk_image_new_from_gicon(pIcon);
 #endif
         g_object_unref(pIcon);
+        g_bytes_unref(pBytes);
     }
 
     GtkWidget* pButton = AddButton(pImage);
 
     maExtraButtons.emplace_back(rNewItem.mnId, pButton);
 
-    set_buildable_id(GTK_BUILDABLE(pButton), OString::number(rNewItem.mnId).getStr());
+    set_buildable_id(GTK_BUILDABLE(pButton), OUString::number(rNewItem.mnId));
 
     gtk_widget_set_tooltip_text(pButton, rNewItem.maToolTipText.toUtf8().getStr());
 
@@ -1360,7 +1363,8 @@ bool GtkSalMenu::NativeSetItemCommand( unsigned nSection,
 
     if ( aCurrentCommand == nullptr || g_strcmp0( aCurrentCommand, aCommand ) != 0 )
     {
-        bool bOldHasSubmenu = g_lo_menu_get_submenu_from_item_in_section(pMenu, nSection, nItemPos) != nullptr;
+        GLOMenu* pSubMenuModel = g_lo_menu_get_submenu_from_item_in_section(pMenu, nSection, nItemPos);
+        bool bOldHasSubmenu = pSubMenuModel != nullptr;
         bSubMenuAddedOrRemoved = bOldHasSubmenu != bIsSubmenu;
         if (bSubMenuAddedOrRemoved)
         {
@@ -1384,6 +1388,8 @@ bool GtkSalMenu::NativeSetItemCommand( unsigned nSection,
             g_lo_menu_set_action_and_target_value_to_item_in_section( pMenu, nSection, nItemPos, aItemCommand, pTarget );
             pTarget = nullptr;
         }
+        if (bOldHasSubmenu)
+            g_object_unref(pSubMenuModel);
 
         g_free( aItemCommand );
     }

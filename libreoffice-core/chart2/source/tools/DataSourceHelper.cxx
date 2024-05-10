@@ -219,11 +219,15 @@ rtl::Reference< DataSource > DataSourceHelper::pressUsedDataIntoRectangularForma
     //categories are always the first sequence
     rtl::Reference< Diagram > xDiagram( xChartDoc->getFirstChartDiagram());
 
-    Reference< chart2::data::XLabeledDataSequence > xCategories( DiagramHelper::getCategoriesFromDiagram( xDiagram ) );
+    Reference< chart2::data::XLabeledDataSequence > xCategories;
+    if (xDiagram)
+        xCategories = xDiagram->getCategories();
     if( xCategories.is() )
         aResultVector.push_back( xCategories );
 
-    std::vector< rtl::Reference< DataSeries > > aSeriesVector = DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+    std::vector< rtl::Reference< DataSeries > > aSeriesVector;
+    if (xDiagram)
+        aSeriesVector = xDiagram->getDataSeries();
     uno::Reference< chart2::data::XDataSource > xSeriesSource =
         DataSeriesHelper::getDataSource( aSeriesVector );
     const Sequence< Reference< chart2::data::XLabeledDataSequence > > aDataSequences( xSeriesSource->getDataSequences() );
@@ -252,11 +256,11 @@ uno::Sequence< OUString > DataSourceHelper::getUsedDataRanges(
 
     if( xDiagram.is())
     {
-        uno::Reference< data::XLabeledDataSequence > xCategories( DiagramHelper::getCategoriesFromDiagram( xDiagram ) );
+        uno::Reference< data::XLabeledDataSequence > xCategories( xDiagram->getCategories() );
         if( xCategories.is() )
             lcl_addRanges( aResult, xCategories );
 
-        std::vector< rtl::Reference< DataSeries > > aSeriesVector( DiagramHelper::getDataSeriesFromDiagram( xDiagram ) );
+        std::vector< rtl::Reference< DataSeries > > aSeriesVector( xDiagram->getDataSeries() );
         for (auto const& series : aSeriesVector)
         {
             lcl_addDataSourceRanges( aResult, series );
@@ -269,7 +273,7 @@ uno::Sequence< OUString > DataSourceHelper::getUsedDataRanges(
 
 uno::Sequence< OUString > DataSourceHelper::getUsedDataRanges( const rtl::Reference<::chart::ChartModel> & xChartModel )
 {
-    rtl::Reference< Diagram > xDiagram( ChartModelHelper::findDiagram( xChartModel ) );
+    rtl::Reference< Diagram > xDiagram( xChartModel->getFirstChartDiagram() );
     return getUsedDataRanges( xDiagram );
 }
 
@@ -279,7 +283,7 @@ rtl::Reference< DataSource > DataSourceHelper::getUsedData(
     std::vector< uno::Reference< chart2::data::XLabeledDataSequence > > aResult;
 
     rtl::Reference< Diagram > xDiagram =  rModel.getFirstChartDiagram();
-    uno::Reference< chart2::data::XLabeledDataSequence > xCategories( DiagramHelper::getCategoriesFromDiagram( xDiagram ) );
+    uno::Reference< chart2::data::XLabeledDataSequence > xCategories( xDiagram->getCategories() );
     if( xCategories.is() )
         aResult.push_back( xCategories );
 
@@ -316,8 +320,10 @@ bool DataSourceHelper::detectRangeSegmentation(
             rOutRangeString, rSequenceMapping, rOutUseColumns, rOutFirstCellAsLabel, rOutHasCategories );
         bSomethingDetected = !rOutRangeString.isEmpty();
 
-        uno::Reference< chart2::data::XLabeledDataSequence > xCategories(
-                    DiagramHelper::getCategoriesFromDiagram( xChartModel->getFirstChartDiagram() ));
+        rtl::Reference<Diagram> xDiagram = xChartModel->getFirstChartDiagram();
+        uno::Reference< chart2::data::XLabeledDataSequence > xCategories;
+        if (xDiagram)
+            xCategories = xDiagram->getCategories();
         rOutHasCategories = xCategories.is();
     }
     catch( uno::Exception & )
@@ -379,7 +385,7 @@ void DataSourceHelper::setRangeSegmentation(
     uno::Reference< data::XDataProvider > xDataProvider( xChartModel->getDataProvider() );
     if( !xDataProvider.is() )
         return;
-    rtl::Reference< Diagram > xDiagram( ChartModelHelper::findDiagram( xChartModel ) );
+    rtl::Reference< Diagram > xDiagram( xChartModel->getFirstChartDiagram() );
     if( !xDiagram.is() )
         return;
     rtl::Reference< ::chart::ChartTypeManager > xChartTypeManager = xChartModel->getTypeManager();

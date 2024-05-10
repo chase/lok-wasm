@@ -57,6 +57,8 @@
 #include <string_view>
 #include <vector>
 
+#include <officecfg/Office/Common.hxx>
+
 namespace vcl
 {
 
@@ -416,7 +418,7 @@ void Menu::RemoveEventListener( const Link<VclMenuEvent&,void>& rEventListener )
 
 MenuItemData* Menu::NbcInsertItem(sal_uInt16 nId, MenuItemBits nBits,
                                   const OUString& rStr, Menu* pMenu,
-                                  size_t nPos, const OString &rIdent)
+                                  size_t nPos, const OUString &rIdent)
 {
     // put Item in MenuItemList
     MenuItemData* pData = pItemList->Insert(nId, MenuItemType::STRING,
@@ -430,7 +432,7 @@ MenuItemData* Menu::NbcInsertItem(sal_uInt16 nId, MenuItemBits nBits,
 }
 
 void Menu::InsertItem(sal_uInt16 nItemId, const OUString& rStr, MenuItemBits nItemBits,
-    const OString &rIdent, sal_uInt16 nPos)
+    const OUString &rIdent, sal_uInt16 nPos)
 {
     SAL_WARN_IF( !nItemId, "vcl", "Menu::InsertItem(): ItemId == 0" );
     SAL_WARN_IF( GetItemPos( nItemId ) != MENU_ITEM_NOTFOUND, "vcl",
@@ -455,7 +457,7 @@ void Menu::InsertItem(sal_uInt16 nItemId, const OUString& rStr, MenuItemBits nIt
 }
 
 void Menu::InsertItem(sal_uInt16 nItemId, const Image& rImage,
-    MenuItemBits nItemBits, const OString &rIdent, sal_uInt16 nPos)
+    MenuItemBits nItemBits, const OUString &rIdent, sal_uInt16 nPos)
 {
     InsertItem(nItemId, OUString(), nItemBits, rIdent, nPos);
     SetItemImage( nItemId, rImage );
@@ -463,13 +465,13 @@ void Menu::InsertItem(sal_uInt16 nItemId, const Image& rImage,
 
 void Menu::InsertItem(sal_uInt16 nItemId, const OUString& rStr,
     const Image& rImage, MenuItemBits nItemBits,
-    const OString &rIdent, sal_uInt16 nPos)
+    const OUString &rIdent, sal_uInt16 nPos)
 {
     InsertItem(nItemId, rStr, nItemBits, rIdent, nPos);
     SetItemImage( nItemId, rImage );
 }
 
-void Menu::InsertSeparator(const OString &rIdent, sal_uInt16 nPos)
+void Menu::InsertSeparator(const OUString &rIdent, sal_uInt16 nPos)
 {
     // do nothing if it's a menu bar
     if (IsMenuBar())
@@ -528,7 +530,7 @@ static void ImplCopyItem( Menu* pThis, const Menu& rMenu, sal_uInt16 nPos, sal_u
         return;
 
     if ( eType == MenuItemType::SEPARATOR )
-        pThis->InsertSeparator( OString(), nNewPos );
+        pThis->InsertSeparator( {}, nNewPos );
     else
     {
         sal_uInt16 nId = rMenu.GetItemId( nPos );
@@ -577,6 +579,24 @@ void Menu::Clear()
 sal_uInt16 Menu::GetItemCount() const
 {
     return static_cast<sal_uInt16>(pItemList->size());
+}
+
+bool Menu::HasValidEntries(bool bCheckPopups) const
+{
+    bool bValidEntries = false;
+    sal_uInt16 nCount = GetItemCount();
+    for (sal_uInt16 n = 0; !bValidEntries && (n < nCount); n++)
+    {
+        MenuItemData* pItem = pItemList->GetDataFromPos(n);
+        if (pItem->bEnabled && (pItem->eType != MenuItemType::SEPARATOR))
+        {
+            if (bCheckPopups && pItem->pSubMenu)
+                bValidEntries = pItem->pSubMenu->HasValidEntries(true);
+            else
+                bValidEntries = true;
+        }
+    }
+    return bValidEntries;
 }
 
 sal_uInt16 Menu::ImplGetVisibleItemCount() const
@@ -630,7 +650,7 @@ sal_uInt16 Menu::GetItemId(sal_uInt16 nPos) const
         return 0;
 }
 
-sal_uInt16 Menu::GetItemId(std::string_view rIdent) const
+sal_uInt16 Menu::GetItemId(std::u16string_view rIdent) const
 {
     for (size_t n = 0; n < pItemList->size(); ++n)
     {
@@ -662,10 +682,10 @@ MenuItemType Menu::GetItemType( sal_uInt16 nPos ) const
         return MenuItemType::DONTKNOW;
 }
 
-OString Menu::GetItemIdent(sal_uInt16 nId) const
+OUString Menu::GetItemIdent(sal_uInt16 nId) const
 {
     const MenuItemData* pData = pItemList->GetData(nId);
-    return pData ? pData->sIdent : OString();
+    return pData ? pData->sIdent : OUString();
 }
 
 void Menu::SetItemBits( sal_uInt16 nItemId, MenuItemBits nBits )
@@ -675,11 +695,18 @@ void Menu::SetItemBits( sal_uInt16 nItemId, MenuItemBits nBits )
 
     if (pData && (pData->nBits != nBits))
     {
+        // these two menu item bits are relevant for (accessible) role
+        const MenuItemBits nRoleMask = MenuItemBits::CHECKABLE | MenuItemBits::RADIOCHECK;
+        const bool bRoleBitsChanged = (pData->nBits & nRoleMask) != (nBits & nRoleMask);
+
         pData->nBits = nBits;
 
         // update native menu
         if (ImplGetSalMenu())
             ImplGetSalMenu()->SetItemBits(nPos, nBits);
+
+        if (bRoleBitsChanged)
+            ImplCallEventListeners(VclEventId::MenuItemRoleChanged, nPos);
     }
 }
 
@@ -720,7 +747,7 @@ void Menu::SetPopupMenu( sal_uInt16 nItemId, PopupMenu* pMenu )
         return;
 
     // same menu, nothing to do
-    if ( static_cast<PopupMenu*>(pData->pSubMenu.get()) == pMenu )
+    if ( pData->pSubMenu.get() == pMenu )
         return;
 
     // remove old menu
@@ -752,7 +779,7 @@ PopupMenu* Menu::GetPopupMenu( sal_uInt16 nItemId ) const
     MenuItemData* pData = pItemList->GetData( nItemId );
 
     if ( pData )
-        return static_cast<PopupMenu*>(pData->pSubMenu.get());
+        return pData->pSubMenu.get();
     else
         return nullptr;
 }
@@ -875,9 +902,20 @@ void Menu::CheckItem( sal_uInt16 nItemId, bool bCheck )
     ImplCallEventListeners( bCheck ? VclEventId::MenuItemChecked : VclEventId::MenuItemUnchecked, nPos );
 }
 
-void Menu::CheckItem( std::string_view rIdent , bool bCheck )
+void Menu::CheckItem( std::u16string_view rIdent , bool bCheck )
 {
     CheckItem( GetItemId( rIdent ), bCheck );
+}
+
+bool Menu::IsItemCheckable(sal_uInt16 nItemId) const
+{
+    size_t nPos;
+    MenuItemData* pData = pItemList->GetData(nItemId, nPos);
+
+    if (!pData)
+        return false;
+
+    return pData->HasCheck();
 }
 
 bool Menu::IsItemChecked( sal_uInt16 nItemId ) const
@@ -1087,10 +1125,13 @@ OUString Menu::ImplGetHelpText( sal_uInt16 nItemId ) const
             if (!pData->aCommandStr.isEmpty())
                 pData->aHelpText = pHelp->GetHelpText( pData->aCommandStr, static_cast<weld::Widget*>(nullptr) );
             if (pData->aHelpText.isEmpty() && !pData->aHelpId.isEmpty())
-                pData->aHelpText = pHelp->GetHelpText( OStringToOUString( pData->aHelpId, RTL_TEXTENCODING_UTF8 ), static_cast<weld::Widget*>(nullptr) );
+                pData->aHelpText = pHelp->GetHelpText( pData->aHelpId, static_cast<weld::Widget*>(nullptr) );
         }
     }
 
+    //Fallback to Menu::GetAccessibleDescription without reentry to GetHelpText()
+    if (pData->aHelpText.isEmpty())
+        return pData->aAccessibleDescription;
     return pData->aHelpText;
 }
 
@@ -1117,7 +1158,7 @@ OUString Menu::GetTipHelpText( sal_uInt16 nItemId ) const
     return OUString();
 }
 
-void Menu::SetHelpId( sal_uInt16 nItemId, const OString& rHelpId )
+void Menu::SetHelpId( sal_uInt16 nItemId, const OUString& rHelpId )
 {
     MenuItemData* pData = pItemList->GetData( nItemId );
 
@@ -1125,9 +1166,9 @@ void Menu::SetHelpId( sal_uInt16 nItemId, const OString& rHelpId )
         pData->aHelpId = rHelpId;
 }
 
-OString Menu::GetHelpId( sal_uInt16 nItemId ) const
+OUString Menu::GetHelpId( sal_uInt16 nItemId ) const
 {
-    OString aRet;
+    OUString aRet;
 
     MenuItemData* pData = pItemList->GetData( nItemId );
 
@@ -1136,7 +1177,7 @@ OString Menu::GetHelpId( sal_uInt16 nItemId ) const
         if ( !pData->aHelpId.isEmpty() )
             aRet = pData->aHelpId;
         else
-            aRet = OUStringToOString( pData->aCommandStr, RTL_TEXTENCODING_UTF8 );
+            aRet = pData->aCommandStr;
     }
 
     return aRet;
@@ -2822,9 +2863,12 @@ bool PopupMenu::PrepareRun(const VclPtr<vcl::Window>& pParentWin, tools::Rectang
     if (bRealExecute)
         nPopupModeFlags |= FloatWinPopupFlags::NewLevel;
 
+    // MenuFlags get clobbered in the Activate function. Restore them after calling.
+    MenuFlags nMenuFlagsSaved = GetMenuFlags();
     bInCallback = true; // set it here, if Activate overridden
     Activate();
     bInCallback = false;
+    SetMenuFlags(nMenuFlagsSaved);
 
     if (pParentWin->isDisposed())
         return false;
@@ -2843,16 +2887,13 @@ bool PopupMenu::PrepareRun(const VclPtr<vcl::Window>& pParentWin, tools::Rectang
         else
             nMenuFlags &= ~MenuFlags::HideDisabledEntries;
     }
-    else
-        // #102790# context menus shall never show disabled entries
-        nMenuFlags |= MenuFlags::HideDisabledEntries;
 
     sal_uInt16 nVisibleEntries = ImplGetVisibleItemCount();
     if ( !nVisibleEntries )
     {
         OUString aTmpEntryText(VclResId(SV_RESID_STRING_NOSELECTIONPOSSIBLE));
 
-        MenuItemData* pData = NbcInsertItem(0xFFFF, MenuItemBits::NONE, aTmpEntryText, nullptr, 0xFFFF, OString());
+        MenuItemData* pData = NbcInsertItem(0xFFFF, MenuItemBits::NONE, aTmpEntryText, nullptr, 0xFFFF, {});
         size_t nPos = 0;
         pData = pItemList->GetData( pData->nId, nPos );
         assert(pData);
@@ -2879,15 +2920,15 @@ bool PopupMenu::PrepareRun(const VclPtr<vcl::Window>& pParentWin, tools::Rectang
 
     Size aSz = ImplCalcSize( pWin );
 
-    tools::Rectangle aDesktopRect(pWin->GetDesktopRectPixel());
-    if( Application::GetScreenCount() > 1 && Application::IsUnifiedDisplay() )
+    AbsoluteScreenPixelRectangle aDesktopRect(pWin->GetDesktopRectPixel());
+    if( Application::GetScreenCount() > 1 )
     {
         vcl::Window* pDeskW = pWindow->GetWindow( GetWindowType::RealParent );
         if( ! pDeskW )
             pDeskW = pWindow;
-        Point aDesktopTL(pDeskW->OutputToAbsoluteScreenPixel(rRect.TopLeft()));
+        AbsoluteScreenPixelPoint aDesktopTL(pDeskW->OutputToAbsoluteScreenPixel(rRect.TopLeft()));
         aDesktopRect = Application::GetScreenPosSizePixel(
-            Application::GetBestScreen(tools::Rectangle(aDesktopTL, rRect.GetSize())));
+            Application::GetBestScreen(AbsoluteScreenPixelRectangle(aDesktopTL, rRect.GetSize())));
     }
 
     tools::Long nMaxHeight = aDesktopRect.GetHeight();
@@ -2902,7 +2943,7 @@ bool PopupMenu::PrepareRun(const VclPtr<vcl::Window>& pParentWin, tools::Rectang
         if ( pRef->GetParent() )
             pRef = pRef->GetParent();
 
-        tools::Rectangle devRect(pRef->OutputToAbsoluteScreenPixel(rRect.TopLeft()),
+        AbsoluteScreenPixelRectangle devRect(pRef->OutputToAbsoluteScreenPixel(rRect.TopLeft()),
                                  pRef->OutputToAbsoluteScreenPixel(rRect.BottomRight()));
 
         tools::Long nHeightAbove = devRect.Top() - aDesktopRect.Top();

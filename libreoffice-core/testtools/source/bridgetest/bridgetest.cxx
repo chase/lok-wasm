@@ -67,10 +67,10 @@ using namespace com::sun::star::bridge;
 using namespace test::testtools::bridgetest;
 
 
-constexpr OUStringLiteral SERVICENAME = u"com.sun.star.test.bridge.BridgeTest";
-constexpr OUStringLiteral IMPLNAME = u"com.sun.star.comp.bridge.BridgeTest";
+constexpr OUString SERVICENAME = u"com.sun.star.test.bridge.BridgeTest"_ustr;
+constexpr OUString IMPLNAME = u"com.sun.star.comp.bridge.BridgeTest"_ustr;
 
-constexpr OUStringLiteral STRING_TEST_CONSTANT  = u"\" paco\' chorizo\\\' \"\'";
+constexpr OUString STRING_TEST_CONSTANT  = u"\" paco\' chorizo\\\' \"\'"_ustr;
 
 namespace bridge_test
 {
@@ -376,7 +376,7 @@ static bool performTest(
         assign(
             static_cast<TestElement &>(aData), true, '@', 17, 0x1234, 0xFEDC,
             0x12345678, 0xFEDCBA98, SAL_CONST_INT64(0x123456789ABCDEF0),
-            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.0815f, M_PI,
+            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.03125f, M_PI,
             TestEnum_LOLA, STRING_TEST_CONSTANT, 18, 0x5678, xI,
             Any(&xI, cppu::UnoType<XInterface>::get()));
         bRet &= check(aData.Any == xI, "### unexpected any!");
@@ -732,19 +732,19 @@ static bool performTest(
         assign(
             _arStruct[0], true, '@', 17, 0x1234, 0xFEDC, 0x12345678, 0xFEDCBA98,
             SAL_CONST_INT64(0x123456789ABCDEF0),
-            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.0815f, M_PI,
+            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.03125f, M_PI,
             TestEnum_LOLA, STRING_TEST_CONSTANT, 18, 0x5678, _arObj[0],
             Any(&_arObj[0], cppu::UnoType<XInterface>::get()));
         assign(
             _arStruct[1], true, 'A', 17, 0x1234, 0xFEDC, 0x12345678, 0xFEDCBA98,
             SAL_CONST_INT64(0x123456789ABCDEF0),
-            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.0815f, M_PI,
+            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.03125f, M_PI,
             TestEnum_TWO, STRING_TEST_CONSTANT, 18, 0x5678, _arObj[1],
             Any(&_arObj[1], cppu::UnoType<XInterface>::get()));
         assign(
             _arStruct[2], true, 'B', 17, 0x1234, 0xFEDC, 0x12345678, 0xFEDCBA98,
             SAL_CONST_INT64(0x123456789ABCDEF0),
-            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.0815f, M_PI,
+            SAL_CONST_UINT64(0xFEDCBA9876543210), 17.03125f, M_PI,
             TestEnum_CHECK, STRING_TEST_CONSTANT, 18, 0x5678, _arObj[2],
             Any(&_arObj[2], cppu::UnoType<XInterface>::get()));
         {
@@ -1005,7 +1005,8 @@ static bool raiseOnewayException( const Reference < XBridgeTest > & xLBT )
         bReturn = (
 #if OSL_DEBUG_LEVEL == 0
             // java stack traces trash Message
-            e.Message == STRING_TEST_CONSTANT &&
+            // The message might also contain source location
+            e.Message.indexOf(STRING_TEST_CONSTANT) >= 0 &&
 #endif
             xLBT->getInterface() == e.Context &&
             x == e.Context );
@@ -1263,6 +1264,10 @@ sal_Int32 TestBridgeImpl::run( const Sequence< OUString > & rArgs )
         bRet = check( raiseException( xLBT ) , "exception test" )&& bRet;
         bRet = check( raiseOnewayException( xLBT ),
                       "oneway exception test" ) && bRet;
+        // Check that a dynamic_cast from what is potentially a proxy object does not cause a crash
+        // (and the choice of TestBridgeImpl as target is rather arbitrary, it is just some type for
+        // which the dynamic_cast is known to be null):
+        bRet = (dynamic_cast<TestBridgeImpl *>(xOriginal.get()) == nullptr) && bRet;
         if (! bRet)
         {
             throw RuntimeException( "error: test failed!" );
@@ -1299,8 +1304,7 @@ Sequence< OUString > TestBridgeImpl::getSupportedServiceNames()
 static Reference< XInterface > TestBridgeImpl_create(
     const Reference< XComponentContext > & xContext )
 {
-    return Reference< XInterface >(
-        static_cast< OWeakObject * >( new TestBridgeImpl( xContext ) ) );
+    return getXWeak( new TestBridgeImpl( xContext ) );
 }
 
 }

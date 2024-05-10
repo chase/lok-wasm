@@ -52,9 +52,10 @@
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/interfacecontainer2.hxx>
 #include <vcl/GraphicObject.hxx>
-#include <sfx2/xmldump.hxx>
 
 #include <memory>
+
+typedef struct _xmlTextWriter* xmlTextWriterPtr;
 
 namespace com::sun::star::awt { class XRequestCallback; }
 namespace com::sun::star::chart2::data { class XDataProvider; }
@@ -75,6 +76,8 @@ class ChartTypeTemplate;
 class InternalDataProvider;
 class NameContainer;
 class PageBackground;
+class RangeHighlighter;
+class Title;
 
 namespace impl
 {
@@ -113,7 +116,7 @@ class UndoManager;
 class ChartView;
 
 class OOO_DLLPUBLIC_CHARTTOOLS SAL_LOPLUGIN_ANNOTATE("crosscast") ChartModel final :
-    public impl::ChartModel_Base, public sfx2::XmlDump
+    public impl::ChartModel_Base
 {
 
 private:
@@ -145,7 +148,7 @@ private:
     //the content of this should be always synchronized with the current m_xViewWindow size. The variable is necessary to hold the information as long as no view window exists.
     css::awt::Size                                     m_aVisualAreaSize;
     css::uno::Reference< css::frame::XModel >          m_xParent;
-    css::uno::Reference< css::chart2::data::XRangeHighlighter > m_xRangeHighlighter;
+    rtl::Reference< ::chart::RangeHighlighter >        m_xRangeHighlighter;
     css::uno::Reference<css::awt::XRequestCallback>    m_xPopupRequest;
     std::vector< GraphicObject >                            m_aGraphicObjectVector;
 
@@ -166,8 +169,7 @@ private:
     // Diagram Access
     rtl::Reference< ::chart::Diagram > m_xDiagram;
 
-    css::uno::Reference< css::chart2::XTitle >
-                                          m_xTitle;
+    rtl::Reference< ::chart::Title > m_xTitle;
 
     rtl::Reference< ::chart::PageBackground > m_xPageBackground;
 
@@ -452,7 +454,7 @@ public:
     virtual void SAL_CALL update() override;
 
     // XDumper
-    virtual OUString SAL_CALL dump(const OUString& rKind) override;
+    virtual OUString SAL_CALL dump(OUString const & kind) override;
 
     // normal methods
     css::uno::Reference< css::util::XNumberFormatsSupplier > const &
@@ -474,10 +476,12 @@ public:
 
     const rtl::Reference< ::chart::ChartTypeManager > & getTypeManager() const { return m_xChartTypeManager; }
 
-    /// See sfx2::XmlDump::dumpAsXml().
-    void dumpAsXml(xmlTextWriterPtr pWriter) const override;
+    rtl::Reference< ::chart::Title > getTitleObject2() const;
+    void setTitleObject( const rtl::Reference< ::chart::Title >& Title );
 
 private:
+    void dumpAsXml(xmlTextWriterPtr pWriter) const;
+
     sal_Int32 mnStart;
     sal_Int32 mnEnd;
 };

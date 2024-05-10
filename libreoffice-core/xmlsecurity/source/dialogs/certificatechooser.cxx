@@ -30,7 +30,8 @@
 
 #include <o3tl/safeint.hxx>
 #include <unotools/datetime.hxx>
-#include <unotools/useroptions.hxx>
+#include <unotools/charclass.hxx>
+
 
 #include <resourcemanager.hxx>
 #include <strings.hrc>
@@ -50,21 +51,17 @@ CertificateChooser::CertificateChooser(weld::Window* _pParent,
     , m_xOKBtn(m_xBuilder->weld_button("ok"))
     , m_xFTDescription(m_xBuilder->weld_label("description-label"))
     , m_xDescriptionED(m_xBuilder->weld_entry("description"))
+    , m_xSearchBox(m_xBuilder->weld_entry("searchbox"))
+    , m_xReloadBtn(m_xBuilder->weld_button("reloadcert"))
 {
     auto nControlWidth = m_xCertLB->get_approximate_digit_width() * 105;
     m_xCertLB->set_size_request(nControlWidth, m_xCertLB->get_height_rows(12));
 
-    std::vector<int> aWidths
-    {
-        o3tl::narrowing<int>(30*nControlWidth/100),
-        o3tl::narrowing<int>(30*nControlWidth/100),
-        o3tl::narrowing<int>(10*nControlWidth/100),
-        o3tl::narrowing<int>(20*nControlWidth/100)
-    };
-    m_xCertLB->set_column_fixed_widths(aWidths);
     m_xCertLB->connect_changed( LINK( this, CertificateChooser, CertificateHighlightHdl ) );
     m_xCertLB->connect_row_activated( LINK( this, CertificateChooser, CertificateSelectHdl ) );
     m_xViewBtn->connect_clicked( LINK( this, CertificateChooser, ViewButtonHdl ) );
+    m_xSearchBox->connect_changed(LINK(this, CertificateChooser, SearchModifyHdl));
+    m_xReloadBtn->connect_clicked( LINK( this, CertificateChooser, ReloadButtonHdl ) );
 
     mxSecurityContexts = std::move(rxSecurityContexts);
     mbInitialized = false;
@@ -132,12 +129,20 @@ OUString CertificateChooser::UsageInClearText(int bits)
     return result;
 }
 
-void CertificateChooser::ImplInitialize()
+void CertificateChooser::ImplInitialize(bool mbSearch)
 {
-    if ( mbInitialized )
+    if (mbInitialized && !mbSearch)
         return;
 
+    m_xCertLB->clear();
+    m_xCertLB->make_unsorted();
+    m_xCertLB->freeze();
+
     SvtUserOptions aUserOpts;
+
+    SvtSysLocale aSysLocale;
+    const CharClass& rCharClass = aSysLocale.GetCharClass();
+    const OUString aSearchStr(rCharClass.uppercase(m_xSearchBox->get_text()));
 
     switch (meAction)
     {
@@ -164,7 +169,9 @@ void CertificateChooser::ImplInitialize()
 
     }
 
-    for (auto &secContext : mxSecurityContexts)
+    ::std::optional<int> oSelectRow;
+    uno::Sequence<uno::Reference< security::XCertificate>> xCerts;
+    for (auto& secContext : mxSecurityContexts)
     {
         if (!secContext.is())
             continue;
@@ -172,33 +179,39 @@ void CertificateChooser::ImplInitialize()
         if (!secEnvironment.is())
             continue;
 
-        uno::Sequence< uno::Reference< security::XCertificate > > xCerts;
         try
         {
-            if ( meAction == UserAction::Sign || meAction == UserAction::SelectSign)
-                xCerts = secEnvironment->getPersonalCertificates();
+            if (xMemCerts.count(secContext))
+            {
+                xCerts = xMemCerts[secContext];
+            }
             else
-                xCerts = secEnvironment->getAllCertificates();
+            {
+                if (meAction == UserAction::Sign || meAction == UserAction::SelectSign)
+                    xCerts = secEnvironment->getPersonalCertificates();
+                else
+                    xCerts = secEnvironment->getAllCertificates();
+
+                for (sal_Int32 nCert = xCerts.getLength(); nCert;)
+                {
+                    uno::Reference< security::XCertificate > xCert = xCerts[ --nCert ];
+                    // Check if we have a private key for this...
+                    tools::Long nCertificateCharacters = secEnvironment->getCertificateCharacters(xCert);
+
+                    if (!(nCertificateCharacters & security::CertificateCharacters::HAS_PRIVATE_KEY))
+                    {
+                        ::comphelper::removeElementAt( xCerts, nCert );
+                    }
+                }
+                xMemCerts[secContext] = xCerts;
+            }
         }
         catch (security::NoPasswordException&)
         {
         }
 
-        for( sal_Int32 nCert = xCerts.getLength(); nCert; )
-        {
-            uno::Reference< security::XCertificate > xCert = xCerts[ --nCert ];
-            // Check if we have a private key for this...
-            tools::Long nCertificateCharacters = secEnvironment->getCertificateCharacters(xCert);
-
-            if (!(nCertificateCharacters & security::CertificateCharacters::HAS_PRIVATE_KEY))
-            {
-                ::comphelper::removeElementAt( xCerts, nCert );
-            }
-        }
-
-
         // fill list of certificates; the first entry will be selected
-        for ( const auto& xCert : std::as_const(xCerts) )
+        for (const auto& xCert : std::as_const(xCerts))
         {
             std::shared_ptr<UserData> userData = std::make_shared<UserData>();
             userData->xCertificate = xCert;
@@ -207,16 +220,22 @@ void CertificateChooser::ImplInitialize()
             mvUserData.push_back(userData);
 
             OUString sIssuer = xmlsec::GetContentPart( xCert->getIssuerName(), xCert->getCertificateKind());
+            OUString sExpDate = utl::GetDateString(xCert->getNotValidAfter());
+
+            // If we are searching and there is no match skip
+            if (mbSearch
+                && rCharClass.uppercase(sIssuer).indexOf(aSearchStr) < 0
+                && rCharClass.uppercase(sIssuer).indexOf(aSearchStr) < 0
+                && !aSearchStr.isEmpty())
+                    continue;
 
             m_xCertLB->append();
             int nRow = m_xCertLB->n_children() - 1;
-            m_xCertLB->set_text(nRow, xmlsec::GetContentPart(xCert->getSubjectName(), xCert->getCertificateKind()), 0);
-            m_xCertLB->set_text(nRow, sIssuer, 1);
-            m_xCertLB->set_text(nRow, xmlsec::GetCertificateKind(xCert->getCertificateKind()), 2);
-            m_xCertLB->set_text(nRow, utl::GetDateString(xCert->getNotValidAfter()), 3);
-            m_xCertLB->set_text(nRow, UsageInClearText(xCert->getCertificateUsage()), 4);
             OUString sId(weld::toId(userData.get()));
             m_xCertLB->set_id(nRow, sId);
+            m_xCertLB->set_text(nRow, xmlsec::GetContentPart(xCert->getSubjectName(), xCert->getCertificateKind()), 0);
+            m_xCertLB->set_text(nRow, sIssuer, 1);
+            m_xCertLB->set_text(nRow, sExpDate, 2);
 
 #if HAVE_FEATURE_GPGME
             // only GPG has preferred keys
@@ -224,7 +243,9 @@ void CertificateChooser::ImplInitialize()
                 if ( sIssuer == msPreferredKey )
                 {
                     if ( meAction == UserAction::Sign || meAction == UserAction::SelectSign )
-                        m_xCertLB->select(nRow);
+                    {
+                        oSelectRow.emplace(nRow);
+                    }
                     else if ( meAction == UserAction::Encrypt &&
                               aUserOpts.GetEncryptToSelf() )
                         mxEncryptToSelf = xCert;
@@ -234,7 +255,15 @@ void CertificateChooser::ImplInitialize()
         }
     }
 
-    // enable/disable buttons
+    m_xCertLB->thaw();
+    m_xCertLB->unselect_all();
+    m_xCertLB->make_sorted();
+
+    if (oSelectRow)
+    {
+        m_xCertLB->select(*oSelectRow);
+    }
+
     CertificateHighlightHdl(*m_xCertLB);
     mbInitialized = true;
 }
@@ -293,6 +322,23 @@ OUString CertificateChooser::GetUsageText()
         GetSelectedCertificates();
     return (xCerts.hasElements() && xCerts[0].is()) ?
         UsageInClearText(xCerts[0]->getCertificateUsage()) : OUString();
+}
+
+void CertificateChooser::ImplReloadCertificates()
+{
+    xMemCerts.clear();
+}
+
+IMPL_LINK_NOARG(CertificateChooser, ReloadButtonHdl, weld::Button&, void)
+{
+    ImplReloadCertificates();
+    mbInitialized = false;
+    ImplInitialize();
+}
+
+IMPL_LINK_NOARG(CertificateChooser, SearchModifyHdl, weld::Entry&, void)
+{
+    ImplInitialize(true);
 }
 
 IMPL_LINK_NOARG(CertificateChooser, CertificateHighlightHdl, weld::TreeView&, void)

@@ -68,15 +68,11 @@ using namespace ::com::sun::star;
 
 size_t SwDoc::GetFlyCount( FlyCntType eType, bool bIgnoreTextBoxes ) const
 {
-    const SwFrameFormats& rFormats = *GetSpzFrameFormats();
-    const size_t nSize = rFormats.size();
     size_t nCount = 0;
     const SwNodeIndex* pIdx;
 
-    for ( size_t i = 0; i < nSize; ++i)
+    for(sw::SpzFrameFormat* pFlyFormat: *GetSpzFrameFormats())
     {
-        const SwFrameFormat* pFlyFormat = rFormats[ i ];
-
         if (bIgnoreTextBoxes && SwTextBoxHelper::isTextBox(pFlyFormat, RES_FLYFRMFMT))
             continue;
 
@@ -115,16 +111,12 @@ size_t SwDoc::GetFlyCount( FlyCntType eType, bool bIgnoreTextBoxes ) const
 /// @attention If you change this, also update SwXFrameEnumeration in unocoll.
 SwFrameFormat* SwDoc::GetFlyNum( size_t nIdx, FlyCntType eType, bool bIgnoreTextBoxes )
 {
-    SwFrameFormats& rFormats = *GetSpzFrameFormats();
     SwFrameFormat* pRetFormat = nullptr;
-    const size_t nSize = rFormats.size();
     const SwNodeIndex* pIdx;
     size_t nCount = 0;
 
-    for( size_t i = 0; !pRetFormat && i < nSize; ++i )
+    for(sw::SpzFrameFormat* pFlyFormat: *GetSpzFrameFormats())
     {
-        SwFrameFormat* pFlyFormat = rFormats[ i ];
-
         if (bIgnoreTextBoxes && SwTextBoxHelper::isTextBox(pFlyFormat, RES_FLYFRMFMT))
             continue;
 
@@ -157,19 +149,33 @@ SwFrameFormat* SwDoc::GetFlyNum( size_t nIdx, FlyCntType eType, bool bIgnoreText
     return pRetFormat;
 }
 
+SwFrameFormat* SwDoc::GetFlyFrameFormatByName( const OUString& rFrameFormatName )
+{
+    auto pFrameFormats = GetSpzFrameFormats();
+    auto it = pFrameFormats->findByTypeAndName( RES_FLYFRMFMT, rFrameFormatName );
+    auto endIt = pFrameFormats->typeAndNameEnd();
+    for ( ; it != endIt; ++it)
+    {
+        sw::SpzFrameFormat* pFlyFormat = *it;
+        const SwNodeIndex* pIdx = pFlyFormat->GetContent().GetContentIdx();
+        if( !pIdx || !pIdx->GetNodes().IsDocNodes() )
+            continue;
+
+        const SwNode* pNd = GetNodes()[ pIdx->GetIndex() + 1 ];
+        if( !pNd->IsNoTextNode())
+            return pFlyFormat;
+    }
+    return nullptr;
+}
+
 std::vector<SwFrameFormat const*> SwDoc::GetFlyFrameFormats(
     FlyCntType const eType, bool const bIgnoreTextBoxes)
 {
-    SwFrameFormats& rFormats = *GetSpzFrameFormats();
-    const size_t nSize = rFormats.size();
-
     std::vector<SwFrameFormat const*> ret;
-    ret.reserve(nSize);
+    ret.reserve(GetSpzFrameFormats()->size());
 
-    for (size_t i = 0; i < nSize; ++i)
+    for(sw::SpzFrameFormat* pFlyFormat: *GetSpzFrameFormats())
     {
-        SwFrameFormat const*const pFlyFormat = rFormats[ i ];
-
         if (bIgnoreTextBoxes && SwTextBoxHelper::isTextBox(pFlyFormat, RES_FLYFRMFMT))
         {
             continue;
@@ -302,7 +308,7 @@ sal_Int8 SwDoc::SetFlyFrameAnchor( SwFrameFormat& rFormat, SfxItemSet& rSet, boo
     if ( RndStdIds::FLY_AS_CHAR == nOld )
     {
         // We need to handle InContents in a special way:
-        // The TextAttribut needs to be destroyed which, unfortunately, also
+        // The TextAttribute needs to be destroyed which, unfortunately, also
         // destroys the format. To avoid that, we disconnect the format from
         // the attribute.
         SwNode *pAnchorNode = rOldAnch.GetAnchorNode();
@@ -607,6 +613,28 @@ void SwDoc::SetFlyFrameDescription( SwFlyFrameFormat& rFlyFrameFormat,
 
     getIDocumentState().SetModified();
 }
+
+void SwDoc::SetFlyFrameDecorative(SwFlyFrameFormat& rFlyFrameFormat,
+                                  bool const isDecorative)
+{
+    if (rFlyFrameFormat.GetAttrSet().Get(RES_DECORATIVE).GetValue() == isDecorative)
+    {
+        return;
+    }
+
+    ::sw::DrawUndoGuard const drawUndoGuard(GetIDocumentUndoRedo());
+
+    if (GetIDocumentUndoRedo().DoesUndo())
+    {
+        GetIDocumentUndoRedo().AppendUndo(
+            std::make_unique<SwUndoFlyDecorative>(rFlyFrameFormat, isDecorative));
+    }
+
+    rFlyFrameFormat.SetObjDecorative(isDecorative);
+
+    getIDocumentState().SetModified();
+}
+
 
 bool SwDoc::SetFrameFormatToFly( SwFrameFormat& rFormat, SwFrameFormat& rNewFormat,
                             SfxItemSet* pSet, bool bKeepOrient )
@@ -961,7 +989,7 @@ bool SwDoc::ChgAnchor( const SdrMarkList& _rMrkList,
                 if ( pNewAnchorFrame)
                 {
                     // We need to handle InContents in a special way:
-                    // The TextAttribut needs to be destroyed which, unfortunately, also
+                    // The TextAttribute needs to be destroyed which, unfortunately, also
                     // destroys the format. To avoid that, we disconnect the format from
                     // the attribute.
                     const sal_Int32 nIndx( oOldAsCharAnchorPos->GetContentIndex() );
@@ -1038,7 +1066,7 @@ SwChainRet SwDoc::Chainable( const SwFrameFormat &rSource, const SwFrameFormat &
         return SwChainRet::NOT_EMPTY;
     }
 
-    for( auto pSpzFrameFm : *GetSpzFrameFormats() )
+    for(sw::SpzFrameFormat* pSpzFrameFm: *GetSpzFrameFormats())
     {
         const SwFormatAnchor& rAnchor = pSpzFrameFm->GetAnchor();
         // #i20622# - to-frame anchored objects are allowed.

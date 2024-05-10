@@ -105,6 +105,9 @@ void SwSearchProperties_Impl::FillItemSet(SfxItemSet& rSet, bool bIsValueSearch)
     pLineSpaceItem ,
     pLineNumItem ,
     pKeepItem ,
+    pFirstLineIndent,
+    pTextLeftMargin,
+    pRightMargin,
     pLRItem ,
     pULItem ,
     pBackItem ,
@@ -247,6 +250,15 @@ void SwSearchProperties_Impl::FillItemSet(SfxItemSet& rSet, bool bIsValueSearch)
             case  RES_UL_SPACE:
                 pTempItem = funcClone(nWID, pULItem);
             break;
+            case  RES_MARGIN_FIRSTLINE:
+                pTempItem = funcClone(nWID, pFirstLineIndent);
+            break;
+            case  RES_MARGIN_TEXTLEFT:
+                pTempItem = funcClone(nWID, pTextLeftMargin);
+            break;
+            case  RES_MARGIN_RIGHT:
+                pTempItem = funcClone(nWID, pRightMargin);
+            break;
             case  RES_LR_SPACE:
                 pTempItem = funcClone(nWID, pLRItem);
             break;
@@ -370,17 +382,6 @@ namespace
 {
 }
 
-const uno::Sequence< sal_Int8 > & SwXTextSearch::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXTextSearchUnoTunnelId;
-    return theSwXTextSearchUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SwXTextSearch::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 OUString SwXTextSearch::getSearchString()
 {
     SolarMutexGuard aGuard;
@@ -416,10 +417,10 @@ void SwXTextSearch::setPropertyValue(const OUString& rPropertyName, const uno::A
     SolarMutexGuard aGuard;
     const SfxItemPropertyMapEntry*  pEntry = m_pPropSet->getPropertyMap().getByName(rPropertyName);
     if(!pEntry)
-        throw beans::UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     if ( pEntry->nFlags & beans::PropertyAttribute::READONLY)
-        throw beans::PropertyVetoException ("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::PropertyVetoException ("Property is read-only: " + rPropertyName, getXWeak() );
     bool bVal = false;
     if(auto b = o3tl::tryAccess<bool>(aValue))
         bVal = *b;
@@ -449,7 +450,7 @@ uno::Any SwXTextSearch::getPropertyValue(const OUString& rPropertyName)
     const SfxItemPropertyMapEntry*  pEntry = m_pPropSet->getPropertyMap().getByName(rPropertyName);
     bool bSet = false;
     if(!pEntry)
-        throw beans::UnknownPropertyException("Unknown property: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+        throw beans::UnknownPropertyException("Unknown property: " + rPropertyName, getXWeak() );
 
     sal_Int16 nSet = 0;
     switch(pEntry->nWID)
@@ -568,7 +569,6 @@ void SwXTextSearch::FillSearchOptions( i18nutil::SearchOptions2& rSearchOpt ) co
 {
     if( m_bSimilarity )
     {
-        rSearchOpt.algorithmType = util::SearchAlgorithms_APPROXIMATE;
         rSearchOpt.AlgorithmType2 = util::SearchAlgorithms2::APPROXIMATE;
         rSearchOpt.changedChars = m_nLevExchange;
         rSearchOpt.deletedChars = m_nLevRemove;
@@ -578,12 +578,10 @@ void SwXTextSearch::FillSearchOptions( i18nutil::SearchOptions2& rSearchOpt ) co
     }
     else if( m_bExpr )
     {
-        rSearchOpt.algorithmType = util::SearchAlgorithms_REGEXP;
         rSearchOpt.AlgorithmType2 = util::SearchAlgorithms2::REGEXP;
     }
     else
     {
-        rSearchOpt.algorithmType = util::SearchAlgorithms_ABSOLUTE;
         rSearchOpt.AlgorithmType2 = util::SearchAlgorithms2::ABSOLUTE;
     }
 

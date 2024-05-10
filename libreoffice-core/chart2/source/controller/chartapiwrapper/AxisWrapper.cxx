@@ -335,33 +335,23 @@ void lcl_AddPropertiesToVector(
                   | beans::PropertyAttribute::MAYBEVOID );
 }
 
-struct StaticAxisWrapperPropertyArray_Initializer
+const Sequence< Property >& StaticAxisWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            lcl_AddPropertiesToVector( aProperties );
+            ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+            ::chart::wrapper::WrappedScaleTextProperties::addProperties( aProperties );
 
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        lcl_AddPropertiesToVector( aProperties );
-        ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-        ::chart::wrapper::WrappedScaleTextProperties::addProperties( aProperties );
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
 
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticAxisWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticAxisWrapperPropertyArray_Initializer >
-{
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 };
 
 } // anonymous namespace
@@ -372,7 +362,6 @@ namespace chart::wrapper
 AxisWrapper::AxisWrapper(
     tAxisType eType, std::shared_ptr<Chart2ModelContact> spChart2ModelContact) :
         m_spChart2ModelContact(std::move( spChart2ModelContact )),
-        m_aEventListenerContainer( m_aMutex ),
         m_eType( eType )
 {
 }
@@ -526,8 +515,9 @@ void AxisWrapper::getDimensionAndMainAxisBool( tAxisType eType, sal_Int32& rnDim
 // ____ XComponent ____
 void SAL_CALL AxisWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
     DisposeHelper::DisposeAndClear( m_xAxisTitle );
     DisposeHelper::DisposeAndClear( m_xMajorGrid );
@@ -539,13 +529,15 @@ void SAL_CALL AxisWrapper::dispose()
 void SAL_CALL AxisWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL AxisWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 //ReferenceSizePropertyProvider
@@ -605,7 +597,7 @@ Reference< beans::XPropertySet > AxisWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& AxisWrapper::getPropertySequence()
 {
-    return *StaticAxisWrapperPropertyArray::get();
+    return StaticAxisWrapperPropertyArray();
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > AxisWrapper::createWrappedProperties()

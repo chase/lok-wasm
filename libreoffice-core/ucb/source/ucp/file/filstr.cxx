@@ -165,13 +165,6 @@ XStream_impl::readSomeBytes(
     return static_cast<sal_Int32>(nrc);
 }
 
-sal_Int64 SAL_CALL XStream_impl::getSomething( const css::uno::Sequence< sal_Int8 >& rIdentifier )
-{
-    if (rIdentifier == comphelper::ByteReader::getUnoTunnelId())
-        return reinterpret_cast<sal_Int64>(static_cast<comphelper::ByteReader*>(this));
-    return 0;
-}
-
 sal_Int32 SAL_CALL
 XStream_impl::readSomeBytes(
     uno::Sequence< sal_Int8 >& aData,
@@ -219,9 +212,7 @@ XStream_impl::closeStream()
         osl::FileBase::RC err = m_aFile.close();
 
         if( err != osl::FileBase::E_None ) {
-            io::IOException ex;
-            ex.Message = "could not close file";
-            throw ex;
+            throw io::IOException("could not close file");
         }
 
         m_nIsOpen = false;
@@ -290,7 +281,7 @@ void XStream_impl::waitForCompletion()
     if (m_nIsOpen && m_aFile.sync() != osl::FileBase::E_None) {
         throw io::IOException(
             "could not synchronize file to disc",
-            static_cast< OWeakObject * >(this));
+            getXWeak());
     }
 }
 

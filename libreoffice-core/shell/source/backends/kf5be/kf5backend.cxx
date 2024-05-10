@@ -137,11 +137,10 @@ OString getExecutable()
 void readKDESettings(std::map<OUString, css::beans::Optional<css::uno::Any>>& rSettings)
 {
     const std::vector<OUString> aKeys
-        = { "EnableATToolSupport",  "ExternalMailer",       "SourceViewFontHeight",
-            "SourceViewFontName",   "WorkPathVariable",     "ooInetFTPProxyName",
-            "ooInetFTPProxyPort",   "ooInetHTTPProxyName",  "ooInetHTTPProxyPort",
-            "ooInetHTTPSProxyName", "ooInetHTTPSProxyPort", "ooInetNoProxy",
-            "ooInetProxyType" };
+        = { "EnableATToolSupport", "ExternalMailer",       "SourceViewFontHeight",
+            "SourceViewFontName",  "WorkPathVariable",     "ooInetHTTPProxyName",
+            "ooInetHTTPProxyPort", "ooInetHTTPSProxyName", "ooInetHTTPSProxyPort",
+            "ooInetNoProxy",       "ooInetProxyType" };
 
     for (const OUString& aKey : aKeys)
     {
@@ -220,16 +219,14 @@ Service::Service()
 
 void Service::setPropertyValue(OUString const&, css::uno::Any const&)
 {
-    throw css::lang::IllegalArgumentException("setPropertyValue not supported",
-                                              static_cast<cppu::OWeakObject*>(this), -1);
+    throw css::lang::IllegalArgumentException("setPropertyValue not supported", getXWeak(), -1);
 }
 
 css::uno::Any Service::getPropertyValue(OUString const& PropertyName)
 {
     if (PropertyName == "EnableATToolSupport" || PropertyName == "ExternalMailer"
         || PropertyName == "SourceViewFontHeight" || PropertyName == "SourceViewFontName"
-        || PropertyName == "WorkPathVariable" || PropertyName == "ooInetFTPProxyName"
-        || PropertyName == "ooInetFTPProxyPort" || PropertyName == "ooInetHTTPProxyName"
+        || PropertyName == "WorkPathVariable" || PropertyName == "ooInetHTTPProxyName"
         || PropertyName == "ooInetHTTPProxyPort" || PropertyName == "ooInetHTTPSProxyName"
         || PropertyName == "ooInetHTTPSProxyPort" || PropertyName == "ooInetNoProxy"
         || PropertyName == "ooInetProxyType")
@@ -247,7 +244,7 @@ css::uno::Any Service::getPropertyValue(OUString const& PropertyName)
         return css::uno::Any(css::beans::Optional<css::uno::Any>());
         //TODO: obtain values from KDE?
     }
-    throw css::beans::UnknownPropertyException(PropertyName, static_cast<cppu::OWeakObject*>(this));
+    throw css::beans::UnknownPropertyException(PropertyName, getXWeak());
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*

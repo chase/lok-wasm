@@ -40,7 +40,6 @@ using namespace ::com::sun::star;
 
 SvxSearchCharSet::SvxSearchCharSet(std::unique_ptr<weld::ScrolledWindow> pScrolledWindow, const VclPtr<VirtualDevice>& rVirDev)
     : SvxShowCharSet(std::move(pScrolledWindow), rVirDev)
-    , nCount(0)
 {
 }
 
@@ -48,10 +47,7 @@ int SvxSearchCharSet::LastInView() const
 {
     int nIndex = FirstInView();
     nIndex += ROW_COUNT * COLUMN_COUNT - 1;
-    int nCompare = nCount - 1;
-    if (nIndex > nCompare)
-        nIndex = nCompare;
-    return nIndex;
+    return std::min<int>(nIndex, getMaxCharCount() -1);
 }
 
 bool SvxSearchCharSet::KeyInput(const KeyEvent& rKEvt)
@@ -67,9 +63,11 @@ bool SvxSearchCharSet::KeyInput(const KeyEvent& rKEvt)
 
     switch (aCode.GetCode())
     {
+        case KEY_RETURN:
+            return SvxShowCharSet::KeyInput(rKEvt);
         case KEY_SPACE:
-            aSelectHdl.Call( this );
-            break;
+            aDoubleClkHdl.Call(this);
+            return true;
         case KEY_LEFT:
             --tmpSelected;
             break;
@@ -92,11 +90,10 @@ bool SvxSearchCharSet::KeyInput(const KeyEvent& rKEvt)
             tmpSelected = 0;
             break;
         case KEY_END:
-            tmpSelected = nCount - 1;
+            tmpSelected = getMaxCharCount() - 1;
             break;
         case KEY_TAB:   // some fonts have a character at these unicode control codes
         case KEY_ESCAPE:
-        case KEY_RETURN:
             bRet = false;
             tmpSelected = - 1;  // mark as invalid
             break;
@@ -143,133 +140,17 @@ void SvxSearchCharSet::SelectCharacter( const Subset* sub )
     Invalidate();
 }
 
+sal_UCS4 SvxSearchCharSet::GetCharFromIndex(int index) const
+{
+    std::unordered_map<sal_Int32, sal_UCS4>::const_iterator got = m_aItemList.find(index);
+    return (got != m_aItemList.end()) ? got->second : 0;
+}
+
 void SvxSearchCharSet::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&)
 {
     InitSettings(rRenderContext);
     RecalculateFont(rRenderContext);
     DrawChars_Impl(rRenderContext, FirstInView(), LastInView());
-}
-
-void SvxSearchCharSet::DrawChars_Impl(vcl::RenderContext& rRenderContext, int n1, int n2)
-{
-    if (n1 > LastInView() || n2 < FirstInView())
-        return;
-
-    Size aOutputSize(GetOutputSizePixel());
-
-    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
-    const Color aWindowTextColor(rStyleSettings.GetFieldTextColor());
-    Color aHighlightColor(rStyleSettings.GetHighlightColor());
-    Color aHighlightTextColor(rStyleSettings.GetHighlightTextColor());
-    Color aFaceColor(rStyleSettings.GetFaceColor());
-    Color aLightColor(rStyleSettings.GetLightColor());
-    Color aShadowColor(rStyleSettings.GetShadowColor());
-
-    int i;
-    rRenderContext.SetLineColor(aShadowColor);
-    for (i = 1; i < COLUMN_COUNT; ++i)
-    {
-        rRenderContext.DrawLine(Point(nX * i + m_nXGap, 0),
-                          Point(nX * i + m_nXGap, aOutputSize.Height()));
-    }
-    for (i = 1; i < ROW_COUNT; ++i)
-    {
-        rRenderContext.DrawLine(Point(0, nY * i + m_nYGap),
-                                Point(aOutputSize.Width(), nY * i + m_nYGap));
-    }
-
-    int nTextHeight = rRenderContext.GetTextHeight();
-    tools::Rectangle aBoundRect;
-    for (i = n1; i <= n2; ++i)
-    {
-        Point pix = MapIndexToPixel(i);
-        int x = pix.X();
-        int y = pix.Y();
-
-        OUStringBuffer buf;
-        std::unordered_map<sal_Int32, sal_UCS4>::const_iterator got = m_aItemList.find (i);
-        sal_UCS4 sName;
-
-        if(got == m_aItemList.end())
-            continue;
-        else
-            sName = got->second;
-
-        buf.appendUtf32(sName);
-        OUString aCharStr(buf.makeStringAndClear());
-        int nTextWidth = rRenderContext.GetTextWidth(aCharStr);
-        int tx = x + (nX - nTextWidth + 1) / 2;
-        int ty = y + (nY - nTextHeight + 1) / 2;
-        Point aPointTxTy(tx, ty);
-
-        // adjust position before it gets out of bounds
-        if (rRenderContext.GetTextBoundRect(aBoundRect, aCharStr) && !aBoundRect.IsEmpty())
-        {
-            // zero advance width => use ink width to center glyph
-            if (!nTextWidth)
-            {
-                aPointTxTy.setX( x - aBoundRect.Left() + (nX - aBoundRect.GetWidth() + 1) / 2 );
-            }
-
-            aBoundRect += aPointTxTy;
-
-            // shift back vertically if needed
-            int nYLDelta = aBoundRect.Top() - y;
-            int nYHDelta = (y + nY) - aBoundRect.Bottom();
-            if (nYLDelta <= 0)
-                aPointTxTy.AdjustY( -(nYLDelta - 1) );
-            else if (nYHDelta <= 0)
-                aPointTxTy.AdjustY(nYHDelta - 1 );
-
-            // shift back horizontally if needed
-            int nXLDelta = aBoundRect.Left() - x;
-            int nXHDelta = (x + nX) - aBoundRect.Right();
-            if (nXLDelta <= 0)
-                aPointTxTy.AdjustX( -(nXLDelta - 1) );
-            else if (nXHDelta <= 0)
-                aPointTxTy.AdjustX(nXHDelta - 1 );
-        }
-
-        Color aTextCol = rRenderContext.GetTextColor();
-        if (i != nSelectedIndex)
-        {
-            rRenderContext.SetTextColor(aWindowTextColor);
-            rRenderContext.DrawText(aPointTxTy, aCharStr);
-        }
-        else
-        {
-            Color aLineCol = rRenderContext.GetLineColor();
-            Color aFillCol = rRenderContext.GetFillColor();
-            rRenderContext.SetLineColor();
-            Point aPointUL(x + 1, y + 1);
-            if (HasFocus())
-            {
-                rRenderContext.SetFillColor(aHighlightColor);
-                rRenderContext.DrawRect(getGridRectangle(aPointUL, aOutputSize));
-
-                rRenderContext.SetTextColor(aHighlightTextColor);
-                rRenderContext.DrawText(aPointTxTy, aCharStr);
-            }
-            else
-            {
-                rRenderContext.SetFillColor(aFaceColor);
-                rRenderContext.DrawRect(getGridRectangle(aPointUL, aOutputSize));
-
-                rRenderContext.SetLineColor(aLightColor);
-                rRenderContext.DrawLine(aPointUL, Point(x + nX - 1, y + 1));
-                rRenderContext.DrawLine(aPointUL, Point(x + 1, y + nY - 1));
-
-                rRenderContext.SetLineColor(aShadowColor);
-                rRenderContext.DrawLine(Point(x + 1, y + nY - 1), Point(x + nX - 1, y + nY - 1));
-                rRenderContext.DrawLine(Point(x + nX - 1, y + nY - 1), Point(x + nX - 1, y + 1));
-
-                rRenderContext.DrawText(aPointTxTy, aCharStr);
-            }
-            rRenderContext.SetLineColor(aLineCol);
-            rRenderContext.SetFillColor(aFillCol);
-        }
-        rRenderContext.SetTextColor(aTextCol);
-    }
 }
 
 sal_UCS4 SvxSearchCharSet::GetSelectCharacter() const
@@ -302,6 +183,7 @@ void SvxSearchCharSet::RecalculateFont(vcl::RenderContext& rRenderContext)
     aFont.SetTransparent(true);
     rRenderContext.SetFont(aFont);
     rRenderContext.GetFontCharMap(mxFontCharMap);
+    m_aItems.clear();
     getFavCharacterList();
 
     nX = aSize.Width() / COLUMN_COUNT;
@@ -320,7 +202,7 @@ void SvxSearchCharSet::RecalculateFont(vcl::RenderContext& rRenderContext)
 void SvxSearchCharSet::UpdateScrollRange()
 {
     //scrollbar settings
-    int nLastRow = (nCount - 1 + COLUMN_COUNT) / COLUMN_COUNT;
+    int nLastRow = (getMaxCharCount() - 1 + COLUMN_COUNT) / COLUMN_COUNT;
     mxScrollArea->vadjustment_configure(mxScrollArea->vadjustment_get_value(), 0, nLastRow, 1, ROW_COUNT - 1, ROW_COUNT);
 }
 
@@ -351,7 +233,7 @@ void SvxSearchCharSet::SelectIndex(int nNewIndex, bool bFocus)
         int nDelta = (nNewIndex - LastInView() + COLUMN_COUNT) / COLUMN_COUNT;
         mxScrollArea->vadjustment_set_value(nOldPos + nDelta);
 
-        if( nNewIndex < nCount )
+        if (nNewIndex < getMaxCharCount())
         {
             nSelectedIndex = nNewIndex;
             Invalidate();
@@ -390,6 +272,7 @@ void SvxSearchCharSet::SelectIndex(int nNewIndex, bool bFocus)
             pItem->m_xItem->fireEvent( AccessibleEventId::STATE_CHANGED, aOldAny, aNewAny );
         }
 #endif
+        aSelectHdl.Call(this);
     }
     aHighHdl.Call( this );
 }
@@ -423,19 +306,18 @@ svx::SvxShowCharSetItem* SvxSearchCharSet::ImplGetItem( int _nPos )
 
 sal_Int32 SvxSearchCharSet::getMaxCharCount() const
 {
-    return nCount;
+    return m_aItemList.size();
 }
 
 void SvxSearchCharSet::ClearPreviousData()
 {
     m_aItemList.clear();
-    nCount = 0;
     Invalidate();
 }
 
 void SvxSearchCharSet::AppendCharToList(sal_UCS4 sChar)
 {
-    m_aItemList.insert(std::make_pair(nCount++, sChar));
+    m_aItemList.insert(std::make_pair(m_aItemList.size(), sChar));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

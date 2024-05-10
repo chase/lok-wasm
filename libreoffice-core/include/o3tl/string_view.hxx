@@ -17,23 +17,26 @@
 #include <string_view>
 
 #include <o3tl/intcmp.hxx>
+#include <rtl/character.hxx>
 #include <rtl/ustring.h>
 #include <rtl/math.h>
+#include <sal/types.h>
 
 namespace o3tl
 {
-// Like OUString::equalsIgnoreAsciiCase, but for two std::u16string_view:
-inline bool equalsAscii(std::u16string_view s1, const char* s2)
-{
-    return rtl_ustr_ascii_compare_WithLength(s1.data(), s1.size(), s2) == 0;
-}
-
-// Like OUString::equalsAsciiL
+// Like OUString::equalsAscii/OUString::equalsAsciiL, but for std::u16string_view:
 inline bool equalsAscii(std::u16string_view s1, std::string_view s2)
 {
-    return rtl_ustr_ascii_shortenedCompare_WithLength(s1.data(), s1.size(), s2.data(), s2.size())
-           == 0;
+    return s1.size() == s2.size()
+           && rtl_ustr_ascii_shortenedCompare_WithLength(s1.data(), s1.size(), s2.data(), s2.size())
+                  == 0;
 }
+
+// Like OUString::compareToAscii, but for std::u16string_view and std::string_view:
+inline int compareToAscii(std::u16string_view s1, std::string_view s2)
+{
+    return rtl_ustr_asciil_reverseCompare_WithLength(s1.data(), s1.size(), s2.data(), s2.size());
+};
 
 // Like OUString::equalsIgnoreAsciiCase, but for two std::u16string_view:
 inline bool equalsIgnoreAsciiCase(std::u16string_view s1, std::u16string_view s2)
@@ -45,6 +48,14 @@ inline bool equalsIgnoreAsciiCase(std::u16string_view s1, std::u16string_view s2
     return rtl_ustr_compareIgnoreAsciiCase_WithLength(s1.data(), s1.size(), s2.data(), s2.size())
            == 0;
 };
+
+inline bool equalsIgnoreAsciiCase(std::u16string_view s1, std::string_view s2)
+{
+    return s1.size() == s2.size()
+           && (rtl_ustr_ascii_shortenedCompareIgnoreAsciiCase_WithLength(s1.data(), s1.size(),
+                                                                         s2.data(), s2.size())
+               == 0);
+}
 
 inline bool equalsIgnoreAsciiCase(std::string_view s1, std::string_view s2)
 {
@@ -69,6 +80,41 @@ inline bool matchIgnoreAsciiCase(std::u16string_view s1, std::u16string_view s2,
     return rtl_ustr_shortenedCompareIgnoreAsciiCase_WithLength(
                s1.data() + fromIndex, s1.size() - fromIndex, s2.data(), s2.size(), s2.size())
            == 0;
+}
+
+// Like OUString::matchIgnoreAsciiCase, but for std::u16string_view and std::string_view:
+inline bool matchIgnoreAsciiCase(std::u16string_view s1, std::string_view s2,
+                                 sal_Int32 fromIndex = 0)
+{
+    return rtl_ustr_ascii_shortenedCompareIgnoreAsciiCase_WithLength(
+               s1.data() + fromIndex, s1.size() - fromIndex, s2.data(), s2.size())
+           == 0;
+}
+
+// Like OUString::endsWithIgnoreAsciiCase, but for std::u16string_view
+inline bool endsWithIgnoreAsciiCase(std::u16string_view s1, std::u16string_view s2,
+                                    std::u16string_view* rest = nullptr)
+{
+    auto const b = s2.size() <= s1.size() && matchIgnoreAsciiCase(s1, s2, s1.size() - s2.size());
+    if (b && rest != nullptr)
+    {
+        *rest = s1.substr(0, s1.size() - s2.size());
+    }
+    return b;
+}
+
+inline bool endsWithIgnoreAsciiCase(std::u16string_view s1, std::string_view s2,
+                                    std::u16string_view* rest = nullptr)
+{
+    auto const b = s2.size() <= s1.size()
+                   && rtl_ustr_ascii_compareIgnoreAsciiCase_WithLengths(
+                          s1.data() + s1.size() - s2.size(), s2.size(), s2.data(), s2.size())
+                          == 0;
+    if (b && rest != nullptr)
+    {
+        *rest = s1.substr(0, s1.size() - s2.size());
+    }
+    return b;
 }
 
 // Similar to O[U]String::getToken, returning the first token of a std::[u16]string_view starting
@@ -219,7 +265,7 @@ template <typename charT, typename traits = std::char_traits<charT>>
 constexpr bool ends_with(std::basic_string_view<charT, traits> sv,
                          std::basic_string_view<charT, traits> x) noexcept
 {
-#if defined __cpp_lib_ends_ends_with
+#if defined __cpp_lib_starts_ends_with
     return sv.ends_with(x);
 #else
     return sv.size() >= x.size()
@@ -229,7 +275,7 @@ constexpr bool ends_with(std::basic_string_view<charT, traits> sv,
 template <typename charT, typename traits = std::char_traits<charT>>
 constexpr bool ends_with(std::basic_string_view<charT, traits> sv, charT x) noexcept
 {
-#if defined __cpp_lib_ends_ends_with
+#if defined __cpp_lib_starts_ends_with
     return sv.ends_with(x);
 #else
     return !sv.empty() && traits::eq(sv.back(), x);
@@ -238,7 +284,7 @@ constexpr bool ends_with(std::basic_string_view<charT, traits> sv, charT x) noex
 template <typename charT, typename traits = std::char_traits<charT>>
 constexpr bool ends_with(std::basic_string_view<charT, traits> sv, charT const* x)
 {
-#if defined __cpp_lib_ends_ends_with
+#if defined __cpp_lib_starts_ends_with
     return sv.ends_with(x);
 #else
     return ends_with(sv, std::basic_string_view<charT, traits>(x));
@@ -367,7 +413,6 @@ constexpr bool ends_with(std::u16string_view sv, std::u16string_view x,
 
 namespace internal
 {
-// copy of implIsWhitespace from sal/rtl/strtmpl.hxx
 inline bool implIsWhitespace(sal_Unicode c)
 {
     /* Space or Control character? */
@@ -375,61 +420,41 @@ inline bool implIsWhitespace(sal_Unicode c)
         return true;
 
     /* Only in the General Punctuation area Space or Control characters are included? */
-    if ((c < 0x2000) || (c > 0x206F))
+    if ((c < 0x2000) || (c > 0x2029))
         return false;
 
-    if (((c >= 0x2000) && (c <= 0x200B)) || /* All Spaces           */
-        (c == 0x2028) || /* LINE SEPARATOR       */
-        (c == 0x2029)) /* PARAGRAPH SEPARATOR  */
+    if ((c <= 0x200B) || /* U+2000 - U+200B All Spaces */
+        (c >= 0x2028)) /* U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR */
         return true;
 
     return false;
 }
 } // namespace internal
 
-// Like OUString::trim, but for std::u16string_view:
-// copy of the trimView code from sal/rtl/strtmpl.hxx
-inline std::u16string_view trim(std::u16string_view str)
+// Like OUString::trim, but for std::[u16]string_view:
+template <typename charT, typename traits = std::char_traits<charT>>
+std::basic_string_view<charT, traits> trim(std::basic_string_view<charT, traits> str)
 {
-    sal_Int32 nLen = str.size();
-    sal_Int32 nPreSpaces = 0;
-    sal_Int32 nPostSpaces = 0;
-    sal_Int32 nIndex = str.size() - 1;
+    auto pFirst = str.data();
+    auto pLast = pFirst + str.size();
 
-    while ((nPreSpaces < nLen) && internal::implIsWhitespace(*(str.data() + nPreSpaces)))
-        nPreSpaces++;
+    while ((pFirst < pLast) && internal::implIsWhitespace(*pFirst))
+        ++pFirst;
 
-    while ((nIndex > nPreSpaces) && internal::implIsWhitespace(*(str.data() + nIndex)))
-    {
-        nPostSpaces++;
-        nIndex--;
-    }
+    if (pFirst == pLast)
+        return {};
 
-    return std::u16string_view{ str.data() + nPreSpaces,
-                                static_cast<size_t>(nLen - nPostSpaces - nPreSpaces) };
+    do
+        --pLast;
+    while (internal::implIsWhitespace(*pLast));
+
+    return std::basic_string_view<charT, traits>(pFirst, pLast - pFirst + 1);
 }
 
-// Like OString::trim, but for std::string_view:
-// copy of the trimView code from sal/rtl/strtmpl.hxx
-inline std::string_view trim(std::string_view str)
-{
-    sal_Int32 nLen = str.size();
-    sal_Int32 nPreSpaces = 0;
-    sal_Int32 nPostSpaces = 0;
-    sal_Int32 nIndex = str.size() - 1;
+// "deduction guides"
 
-    while ((nPreSpaces < nLen) && internal::implIsWhitespace(*(str.data() + nPreSpaces)))
-        nPreSpaces++;
-
-    while ((nIndex > nPreSpaces) && internal::implIsWhitespace(*(str.data() + nIndex)))
-    {
-        nPostSpaces++;
-        nIndex--;
-    }
-
-    return std::string_view{ str.data() + nPreSpaces,
-                             static_cast<size_t>(nLen - nPostSpaces - nPreSpaces) };
-}
+inline auto trim(std::string_view str) { return trim<>(str); }
+inline auto trim(std::u16string_view str) { return trim<>(str); }
 
 // Like OString::toInt32, but for std::string_view:
 inline sal_Int32 toInt32(std::u16string_view str, sal_Int16 radix = 10)
@@ -482,6 +507,52 @@ inline double toDouble(std::string_view str)
 {
     return rtl_math_stringToDouble(str.data(), str.data() + str.size(), '.', 0, nullptr, nullptr);
 }
+
+// Like OUString::iterateCodePoints, but for std::string_view:
+inline sal_uInt32 iterateCodePoints(std::u16string_view string, sal_Int32* indexUtf16,
+                                    sal_Int32 incrementCodePoints = 1)
+{
+    std::size_t n;
+    char16_t cu;
+    sal_uInt32 cp;
+    assert(indexUtf16 != nullptr);
+    n = *indexUtf16;
+    assert(n <= string.length());
+    while (incrementCodePoints < 0)
+    {
+        assert(n > 0);
+        cu = string[--n];
+        if (rtl::isLowSurrogate(cu) && n != 0 && rtl::isHighSurrogate(string[n - 1]))
+        {
+            --n;
+        }
+        ++incrementCodePoints;
+    }
+    assert(n < string.length());
+    cu = string[n];
+    if (rtl::isHighSurrogate(cu) && string.length() - n >= 2 && rtl::isLowSurrogate(string[n + 1]))
+    {
+        cp = rtl::combineSurrogates(cu, string[n + 1]);
+    }
+    else
+    {
+        cp = cu;
+    }
+    while (incrementCodePoints > 0)
+    {
+        assert(n < string.length());
+        cu = string[n++];
+        if (rtl::isHighSurrogate(cu) && n != string.length() && rtl::isLowSurrogate(string[n]))
+        {
+            ++n;
+        }
+        --incrementCodePoints;
+    }
+    assert(n <= string.length());
+    *indexUtf16 = n;
+    return cp;
 }
+
+} // namespace
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

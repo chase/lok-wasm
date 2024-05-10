@@ -623,7 +623,7 @@ Reference<XResultSet> SAL_CALL ODatabaseMetaData::getSchemas()
     Reference<XInterface> executed = statement->executeQuery(
         u"SELECT SCHEMA_NAME AS TABLE_SCHEM, CATALOG_NAME AS TABLE_CATALOG FROM INFORMATION_SCHEMA.SCHEMATA \
        WHERE SCHEMA_NAME NOT IN ('information_schema', 'mysql', 'performance_schema') \
-       ORDER BY SCHEMA_NAME");
+       ORDER BY SCHEMA_NAME"_ustr);
     Reference<XResultSet> rs(executed, UNO_QUERY_THROW);
     Reference<XResultSetMetaDataSupplier> supp(executed, UNO_QUERY_THROW);
     Reference<XResultSetMetaData> rs_meta = supp->getMetaData();
@@ -812,20 +812,14 @@ Reference<XResultSet> SAL_CALL ODatabaseMetaData::getTables(const Any& /*catalog
 
     if (types.getLength() == 1)
     {
-        buffer.append("AND TABLE_TYPE LIKE '");
-        buffer.append(types[0]);
-        buffer.append("'");
+        buffer.append("AND TABLE_TYPE LIKE '" + types[0] + "'");
     }
     else if (types.getLength() > 1)
     {
-        buffer.append("AND (TABLE_TYPE LIKE '");
-        buffer.append(types[0]);
-        buffer.append("'");
+        buffer.append("AND (TABLE_TYPE LIKE '" + types[0] + "'");
         for (sal_Int32 i = 1; i < types.getLength(); ++i)
         {
-            buffer.append(" OR TABLE_TYPE LIKE '");
-            buffer.append(types[i]);
-            buffer.append("'");
+            buffer.append(" OR TABLE_TYPE LIKE '" + types[i] + "'");
         }
         buffer.append(")");
     }
@@ -1017,11 +1011,23 @@ Reference<XResultSet> SAL_CALL ODatabaseMetaData::getBestRowIdentifier(const Any
 }
 
 Reference<XResultSet> SAL_CALL ODatabaseMetaData::getTablePrivileges(
-    const Any& /*catalog*/, const OUString& /*schemaPattern*/, const OUString& /*tableNamePattern*/)
+    const Any& /* catalog */, const OUString& schemaPattern, const OUString& tableNamePattern)
 {
-    // TODO
-    SAL_WARN("connectivity.mysqlc", "method not implemented");
-    throw SQLException("getTablePrivileges method not implemented", *this, "IM001", 0, Any());
+    OUString query("SELECT TABLE_SCHEMA TABLE_CAT, "
+                   "NULL TABLE_SCHEM, "
+                   "TABLE_NAME, "
+                   "NULL GRANTOR,"
+                   "GRANTEE, "
+                   "PRIVILEGE_TYPE PRIVILEGE, "
+                   "IS_GRANTABLE "
+                   "FROM INFORMATION_SCHEMA.TABLE_PRIVILEGES "
+                   "WHERE TABLE_SCHEMA LIKE '?' "
+                   "AND TABLE_NAME='?'");
+    query = query.replaceFirst("?", schemaPattern);
+    query = query.replaceFirst("?", tableNamePattern);
+    Reference<XStatement> statement = m_rConnection.createStatement();
+    Reference<XResultSet> rs = statement->executeQuery(query);
+    return rs;
 }
 
 Reference<XResultSet> SAL_CALL ODatabaseMetaData::getCrossReference(

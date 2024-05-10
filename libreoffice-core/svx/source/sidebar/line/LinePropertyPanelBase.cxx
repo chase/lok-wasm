@@ -31,7 +31,7 @@
 using namespace css;
 using namespace css::uno;
 
-constexpr OStringLiteral SELECTWIDTH = "SelectWidth";
+constexpr OUString SELECTWIDTH = u"SelectWidth"_ustr;
 
 namespace svx::sidebar {
 
@@ -260,16 +260,8 @@ void LinePropertyPanelBase::updateLineJoint(bool bDisabled, bool bSetOrDefault,
 void LinePropertyPanelBase::updateLineCap(bool bDisabled, bool bSetOrDefault,
         const SfxPoolItem* pState)
 {
-    if(bDisabled)
-    {
-        mxLBCapStyle->set_sensitive(false);
-        mxFTCapStyle->set_sensitive(false);
-    }
-    else
-    {
-        mxLBCapStyle->set_sensitive(true);
-        mxFTCapStyle->set_sensitive(true);
-    }
+    mxLBCapStyle->set_sensitive(!bDisabled);
+    mxFTCapStyle->set_sensitive(!bDisabled);
 
     if(bSetOrDefault)
     {
@@ -377,7 +369,7 @@ IMPL_LINK_NOARG(LinePropertyPanelBase, ChangeCapStyleHdl, weld::ComboBox&, void)
     setLineCap(pItem.get());
 }
 
-IMPL_LINK_NOARG(LinePropertyPanelBase, ToolboxWidthSelectHdl, const OString&, void)
+IMPL_LINK_NOARG(LinePropertyPanelBase, ToolboxWidthSelectHdl, const OUString&, void)
 {
     mxTBWidth->set_menu_item_active(SELECTWIDTH, !mxTBWidth->get_menu_item_active(SELECTWIDTH));
 }

@@ -21,8 +21,7 @@
 #include <comphelper/diagnose_ex.hxx>
 
 #include <rtl/ref.hxx>
-#include <cppuhelper/compbase.hxx>
-#include <cppuhelper/basemutex.hxx>
+#include <comphelper/compbase.hxx>
 
 #include <com/sun/star/awt/XMouseListener.hpp>
 #include <com/sun/star/awt/XMouseMotionListener.hpp>
@@ -161,7 +160,7 @@ public:
 
 }
 
-typedef cppu::WeakComponentImplHelper<
+typedef comphelper::WeakComponentImplHelper<
     awt::XMouseListener,
     awt::XMouseMotionListener > Listener_UnoBase;
 
@@ -173,13 +172,11 @@ namespace {
     XSlideViews, and passes on the events to the EventMultiplexer (via
     EventQueue indirection, to force the events into the main thread)
  */
-class EventMultiplexerListener : private cppu::BaseMutex,
-                                 public Listener_UnoBase
+class EventMultiplexerListener : public Listener_UnoBase
 {
 public:
     EventMultiplexerListener( EventQueue&           rEventQueue,
                               EventMultiplexerImpl& rEventMultiplexer ) :
-        Listener_UnoBase( m_aMutex ),
         mpEventQueue( &rEventQueue ),
         mpEventMultiplexer( &rEventMultiplexer )
     {
@@ -189,7 +186,7 @@ public:
     EventMultiplexerListener& operator=( const EventMultiplexerListener& ) = delete;
 
     // WeakComponentImplHelperBase::disposing
-    virtual void SAL_CALL disposing() override;
+    virtual void disposing(std::unique_lock<std::mutex>& rGuard) override;
 
 private:
     virtual void SAL_CALL disposing( const lang::EventObject& Source ) override;
@@ -324,6 +321,10 @@ struct EventMultiplexerImpl
     /// Schedules tick events, if mbIsAutoMode is true
     void handleTicks();
 
+    basegfx::B2DPoint toMatrixPoint(uno::Reference<presentation::XSlideShowView> xView,
+                                    basegfx::B2DPoint pnt);
+    basegfx::B2DPoint toNormalPoint(uno::Reference<presentation::XSlideShowView> xView,
+                                    basegfx::B2DPoint pnt);
 
     EventQueue&                         mrEventQueue;
     UnoViewContainer const&             mrViewContainer;
@@ -362,9 +363,8 @@ struct EventMultiplexerImpl
 };
 
 
-void SAL_CALL EventMultiplexerListener::disposing()
+void EventMultiplexerListener::disposing(std::unique_lock<std::mutex>& /*rGuard*/)
 {
-    osl::MutexGuard const guard( m_aMutex );
     mpEventQueue = nullptr;
     mpEventMultiplexer = nullptr;
 }
@@ -384,7 +384,7 @@ void SAL_CALL EventMultiplexerListener::disposing(
 void SAL_CALL EventMultiplexerListener::mousePressed(
     const awt::MouseEvent& e )
 {
-    osl::MutexGuard const guard( m_aMutex );
+    std::unique_lock const guard( m_aMutex );
 
     // notify mouse press. Don't call handlers directly, this
     // might not be the main thread!
@@ -399,7 +399,7 @@ void SAL_CALL EventMultiplexerListener::mousePressed(
 void SAL_CALL EventMultiplexerListener::mouseReleased(
     const awt::MouseEvent& e )
 {
-    osl::MutexGuard const guard( m_aMutex );
+    std::unique_lock const guard( m_aMutex );
 
     // notify mouse release. Don't call handlers directly,
     // this might not be the main thread!
@@ -427,7 +427,7 @@ void SAL_CALL EventMultiplexerListener::mouseExited(
 void SAL_CALL EventMultiplexerListener::mouseDragged(
     const awt::MouseEvent& e )
 {
-    osl::MutexGuard const guard( m_aMutex );
+    std::unique_lock const guard( m_aMutex );
 
     // notify mouse drag. Don't call handlers directly, this
     // might not be the main thread!
@@ -442,7 +442,7 @@ void SAL_CALL EventMultiplexerListener::mouseDragged(
 void SAL_CALL EventMultiplexerListener::mouseMoved(
     const awt::MouseEvent& e )
 {
-    osl::MutexGuard const guard( m_aMutex );
+    std::unique_lock const guard( m_aMutex );
 
     // notify mouse move. Don't call handlers directly, this
     // might not be the main thread!
@@ -577,6 +577,54 @@ void EventMultiplexerImpl::handleTicks()
     scheduleTick();
 }
 
+basegfx::B2DPoint
+EventMultiplexerImpl::toNormalPoint(uno::Reference<presentation::XSlideShowView> xView,
+                                    basegfx::B2DPoint pnt)
+{
+    UnoViewVector::const_iterator aIter;
+    const UnoViewVector::const_iterator aEnd(mrViewContainer.end());
+    if ((aIter = std::find_if(
+             mrViewContainer.begin(), aEnd,
+             [&xView](const UnoViewSharedPtr& pView) { return xView == pView->getUnoView(); }))
+        == aEnd)
+    {
+        return pnt;
+    }
+
+    basegfx::B2DPoint aPosition(pnt.getX(), pnt.getY());
+    basegfx::B2DHomMatrix aMatrix((*aIter)->getTransformation());
+    aPosition *= aMatrix;
+
+    aPosition.setX(basegfx::fround(aPosition.getX()));
+    aPosition.setY(basegfx::fround(aPosition.getY()));
+    return aPosition;
+}
+
+basegfx::B2DPoint
+EventMultiplexerImpl::toMatrixPoint(uno::Reference<presentation::XSlideShowView> xView,
+                                    basegfx::B2DPoint pnt)
+{
+    UnoViewVector::const_iterator aIter;
+    const UnoViewVector::const_iterator aEnd(mrViewContainer.end());
+    if ((aIter = std::find_if(
+             mrViewContainer.begin(), aEnd,
+             [&xView](const UnoViewSharedPtr& pView) { return xView == pView->getUnoView(); }))
+        == aEnd)
+    {
+        return pnt;
+    }
+
+    basegfx::B2DPoint aPosition(pnt.getX(), pnt.getY());
+    basegfx::B2DHomMatrix aMatrix((*aIter)->getTransformation());
+    if (!aMatrix.invert())
+        ENSURE_OR_THROW(false, "EventMultiplexer::notifyHandlers():"
+                               " view matrix singular");
+    aPosition *= aMatrix;
+
+    aPosition.setX(basegfx::fround(aPosition.getX()));
+    aPosition.setY(basegfx::fround(aPosition.getY()));
+    return aPosition;
+}
 
 void EventMultiplexerImpl::clear()
 {
@@ -1235,6 +1283,20 @@ void EventMultiplexer::notifyHyperlinkClicked(
     mpImpl->maHyperlinkHandlers.apply(
         [&hyperLink]( const PrioritizedHandlerEntry< HyperlinkHandler >& pHandler )
         { return pHandler.getHandler()->handleHyperlink( hyperLink ); } );
+}
+
+basegfx::B2DPoint EventMultiplexer::toMatrixPoint(uno::Reference<uno::XInterface> xInterface,
+                                                  basegfx::B2DPoint pnt)
+{
+    uno::Reference<presentation::XSlideShowView> xView(xInterface, uno::UNO_QUERY_THROW);
+    return mpImpl->toMatrixPoint(xView, pnt);
+}
+
+basegfx::B2DPoint EventMultiplexer::toNormalPoint(uno::Reference<uno::XInterface> xInterface,
+                                                  basegfx::B2DPoint pnt)
+{
+    uno::Reference<presentation::XSlideShowView> xView(xInterface, uno::UNO_QUERY_THROW);
+    return mpImpl->toNormalPoint(xView, pnt);
 }
 
 } // namespace presentation

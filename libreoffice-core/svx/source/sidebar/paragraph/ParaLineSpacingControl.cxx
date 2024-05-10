@@ -29,8 +29,11 @@
 
 #include <svl/intitem.hxx>
 #include <svl/itempool.hxx>
+#include <svl/itemset.hxx>
 
 #include <ParaLineSpacingPopup.hxx>
+
+#include <vcl/commandinfoprovider.hxx>
 
 #define DEFAULT_LINE_SPACING  200
 #define FIX_DIST_DEF          283
@@ -82,10 +85,10 @@ ParaLineSpacingControl::ParaLineSpacingControl(SvxLineSpacingToolBoxControl* pCo
     mxLineDistAtMetricBox->connect_value_changed( aLink2 );
 
     FieldUnit eUnit = FieldUnit::INCH;
-    const SfxUInt16Item* pItem = nullptr;
-    SfxViewFrame* pCurrent = SfxViewFrame::Current();
-    if (pCurrent && pCurrent->GetBindings().GetDispatcher()->QueryState(SID_ATTR_METRIC, pItem) >= SfxItemState::DEFAULT)
-        eUnit = static_cast<FieldUnit>(pItem->GetValue());
+    SfxPoolItemHolder aResult;
+    SfxViewFrame* pCurrent(SfxViewFrame::Current());
+    if (pCurrent && pCurrent->GetBindings().GetDispatcher()->QueryState(SID_ATTR_METRIC, aResult) >= SfxItemState::DEFAULT)
+        eUnit = static_cast<FieldUnit>(static_cast<const SfxUInt16Item*>(aResult.getItem())->GetValue());
     else
         eUnit = SfxModule::GetCurrentFieldUnit();
 
@@ -122,19 +125,24 @@ ParaLineSpacingControl::~ParaLineSpacingControl()
 
 void ParaLineSpacingControl::Initialize()
 {
-    const SvxLineSpacingItem* pItem(nullptr);
+    SfxPoolItemHolder aResult;
     SfxViewFrame* pCurrent = SfxViewFrame::Current();
     const bool bItemStateSet(nullptr != pCurrent);
     const SfxItemState eState(bItemStateSet
-        ? pCurrent->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PARA_LINESPACE, pItem)
+        ? pCurrent->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PARA_LINESPACE, aResult)
         : SfxItemState::DEFAULT);
 
     mxLineDist->set_sensitive(true);
 
     if( bItemStateSet && (eState == SfxItemState::DEFAULT || eState == SfxItemState::SET) )
     {
-        const SvxLineSpacingItem* currSPItem = pItem;
-        MapUnit eUnit = pCurrent->GetPool().GetMetric(currSPItem->Which());
+        const SvxLineSpacingItem* currSPItem(static_cast<const SvxLineSpacingItem*>(aResult.getItem()));
+        // It seems draw/impress and writer require different MapUnit values for fixed line spacing
+        // metric values to be correctly calculated.
+        MapUnit eUnit = MapUnit::Map100thMM; // works for draw/impress
+        if (vcl::CommandInfoProvider::GetModuleIdentifier(pCurrent->GetFrame().GetFrameInterface())
+                == "com.sun.star.text.TextDocument")
+            eUnit = MapUnit::MapTwip; // works for writer
         meLNSpaceUnit = eUnit;
 
         switch( currSPItem->GetLineSpaceRule() )

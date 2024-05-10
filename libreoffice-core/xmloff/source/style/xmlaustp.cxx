@@ -32,8 +32,6 @@
 #include <osl/diagnose.h>
 
 
-using namespace ::std;
-
 using namespace ::com::sun::star;
 using namespace ::xmloff::token;
 
@@ -58,9 +56,9 @@ namespace
 }
 
 void SvXMLAutoStylePoolP::exportStyleAttributes(
-        SvXMLAttributeList&,
+        comphelper::AttributeList&,
         XmlStyleFamily nFamily,
-        const vector< XMLPropertyState >& rProperties,
+        const std::vector< XMLPropertyState >& rProperties,
         const SvXMLExportPropertyMapper& rPropExp,
         const SvXMLUnitConverter&,
         const SvXMLNamespaceMap&
@@ -170,7 +168,7 @@ void SvXMLAutoStylePoolP::exportStyleAttributes(
 void SvXMLAutoStylePoolP::exportStyleContent(
         const css::uno::Reference< css::xml::sax::XDocumentHandler > &,
         XmlStyleFamily nFamily,
-        const vector< XMLPropertyState >& rProperties,
+        const std::vector< XMLPropertyState >& rProperties,
         const SvXMLExportPropertyMapper& rPropExp,
         const SvXMLUnitConverter&,
         const SvXMLNamespaceMap&
@@ -256,7 +254,7 @@ void SvXMLAutoStylePoolP::exportStyleContent(
 }
 
 SvXMLAutoStylePoolP::SvXMLAutoStylePoolP( SvXMLExport& rExport )
-    : pImpl( new SvXMLAutoStylePoolP_Impl( rExport ) )
+    : m_pImpl( new SvXMLAutoStylePoolP_Impl( rExport ) )
 {
 }
 
@@ -266,7 +264,7 @@ SvXMLAutoStylePoolP::~SvXMLAutoStylePoolP()
 
 SvXMLExport& SvXMLAutoStylePoolP::GetExport() const
 {
-    return pImpl->GetExport();
+    return m_pImpl->GetExport();
 }
 
 // TODO: remove this
@@ -287,33 +285,33 @@ void SvXMLAutoStylePoolP::AddFamily(
         const OUString& rStrPrefix,
         bool bAsFamily )
 {
-    pImpl->AddFamily( nFamily, rStrName, rMapper, rStrPrefix, bAsFamily );
+    m_pImpl->AddFamily( nFamily, rStrName, rMapper, rStrPrefix, bAsFamily );
 }
 
 void  SvXMLAutoStylePoolP::SetFamilyPropSetMapper(
         XmlStyleFamily nFamily,
         const rtl::Reference < SvXMLExportPropertyMapper > & rMapper )
 {
-    pImpl->SetFamilyPropSetMapper( nFamily, rMapper );
+    m_pImpl->SetFamilyPropSetMapper( nFamily, rMapper );
 }
 
 void SvXMLAutoStylePoolP::RegisterName( XmlStyleFamily nFamily,
                                          const OUString& rName )
 {
-    pImpl->RegisterName( nFamily, rName );
+    m_pImpl->RegisterName( nFamily, rName );
 }
 
 void SvXMLAutoStylePoolP::RegisterDefinedName( XmlStyleFamily nFamily,
                                          const OUString& rName )
 {
-    pImpl->RegisterDefinedName( nFamily, rName );
+    m_pImpl->RegisterDefinedName( nFamily, rName );
 }
 
 void SvXMLAutoStylePoolP::GetRegisteredNames(
     uno::Sequence<sal_Int32>& rFamilies,
     uno::Sequence<OUString>& rNames )
 {
-    pImpl->GetRegisteredNames( rFamilies, rNames );
+    m_pImpl->GetRegisteredNames( rFamilies, rNames );
 }
 
 void SvXMLAutoStylePoolP::RegisterNames(
@@ -325,66 +323,60 @@ void SvXMLAutoStylePoolP::RegisterNames(
     // iterate over sequence(s) and call RegisterName(..) for each pair
     const sal_Int32* pFamilies = aFamilies.getConstArray();
     const OUString* pNames = aNames.getConstArray();
-    sal_Int32 nCount = min( aFamilies.getLength(), aNames.getLength() );
+    sal_Int32 nCount = std::min( aFamilies.getLength(), aNames.getLength() );
     for( sal_Int32 n = 0; n < nCount; n++ )
         RegisterName( static_cast<XmlStyleFamily>(pFamilies[n]), pNames[n] );
 }
 
-/// retrieve the names of the properties used in the styles
-css::uno::Sequence<OUString> SvXMLAutoStylePoolP::GetPropertyNames( )
-{
-    return pImpl->GetPropertyNames();
-}
-
 OUString SvXMLAutoStylePoolP::Add( XmlStyleFamily nFamily,
-                                   vector< XMLPropertyState >&& rProperties )
+                                   std::vector< XMLPropertyState >&& rProperties )
 {
     OUString sName;
-    pImpl->Add(sName, nFamily, "", std::move(rProperties) );
+    m_pImpl->Add(sName, nFamily, "", std::move(rProperties) );
     return sName;
 }
 
 OUString SvXMLAutoStylePoolP::Add( XmlStyleFamily nFamily,
                                   const OUString& rParent,
-                                  vector< XMLPropertyState >&& rProperties, bool bDontSeek )
+                                  std::vector< XMLPropertyState >&& rProperties, bool bDontSeek )
 {
     OUString sName;
-    pImpl->Add(sName, nFamily, rParent, std::move(rProperties), bDontSeek);
+    m_pImpl->Add(sName, nFamily, rParent, std::move(rProperties), bDontSeek);
     return sName;
 }
 
 bool SvXMLAutoStylePoolP::Add(OUString& rName, XmlStyleFamily nFamily, const OUString& rParent, ::std::vector< XMLPropertyState >&& rProperties )
 {
-    return pImpl->Add(rName, nFamily, rParent, std::move(rProperties));
+    return m_pImpl->Add(rName, nFamily, rParent, std::move(rProperties));
 }
 
 bool SvXMLAutoStylePoolP::AddNamed( const OUString& rName, XmlStyleFamily nFamily, const OUString& rParent,
                                     std::vector< XMLPropertyState > rProperties )
 
 {
-    return pImpl->AddNamed(rName, nFamily, rParent, std::move(rProperties));
+    return m_pImpl->AddNamed(rName, nFamily, rParent, std::move(rProperties));
 }
 
 OUString SvXMLAutoStylePoolP::Find( XmlStyleFamily nFamily,
                                    const OUString& rParent,
-                                   const vector< XMLPropertyState >& rProperties ) const
+                                   const std::vector< XMLPropertyState >& rProperties ) const
 {
-    return pImpl->Find( nFamily, rParent, rProperties );
+    return m_pImpl->Find( nFamily, rParent, rProperties );
 }
 
 void SvXMLAutoStylePoolP::exportXML( XmlStyleFamily nFamily ) const
 {
-    pImpl->exportXML( nFamily, this );
+    m_pImpl->exportXML( nFamily, this );
 }
 
 void SvXMLAutoStylePoolP::ClearEntries()
 {
-    pImpl->ClearEntries();
+    m_pImpl->ClearEntries();
 }
 
 std::vector<xmloff::AutoStyleEntry> SvXMLAutoStylePoolP::GetAutoStyleEntries() const
 {
-    return pImpl->GetAutoStyleEntries();
+    return m_pImpl->GetAutoStyleEntries();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

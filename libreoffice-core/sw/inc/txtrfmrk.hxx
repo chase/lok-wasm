@@ -21,6 +21,8 @@
 
 #include "txatbase.hxx"
 
+class SwDoc;
+class SwWrtShell;
 class SwTextNode;
 
 // Attribute for content-/position references in text.
@@ -37,10 +39,12 @@ public:
 
     virtual const sal_Int32* GetEnd() const override;       // SwTextAttr
     virtual void SetEnd(sal_Int32) override;       // SwTextAttr
+    void UpdateFieldContent(SwDoc* pDoc, SwWrtShell& rWrtSh, OUString aContent);
 
     // get and set TextNode pointer
     inline const SwTextNode& GetTextNode() const;
     void ChgTextNode( SwTextNode* pNew ) { m_pTextNode = pNew; }
+    void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 };
 
 inline const SwTextNode& SwTextRefMark::GetTextNode() const

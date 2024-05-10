@@ -65,7 +65,7 @@ namespace svt
         sal_uInt16 nColId = GetCurItemId();
         if (nColId)
         {
-            sal_uInt32 nAutoWidth = static_cast<EditBrowseBox*>(GetParent())->GetAutoColumnWidth(nColId);
+            tools::Long nAutoWidth = static_cast<EditBrowseBox*>(GetParent())->GetAutoColumnWidth(nColId);
             if (nAutoWidth != static_cast<EditBrowseBox*>(GetParent())->GetColumnWidth(nColId))
             {
                 static_cast<EditBrowseBox*>(GetParent())->SetColumnWidth(nColId, nAutoWidth);
@@ -967,7 +967,7 @@ namespace svt
         if (!IsEditing())
             return;
 
-        if ( isAccessibleAlive() )
+        if ( isAccessibleAlive() && m_aImpl->m_xActiveCell)
         {
             commitBrowseBoxEvent( CHILD, Any(), Any( m_aImpl->m_xActiveCell ) );
             m_aImpl->clearActiveCell();

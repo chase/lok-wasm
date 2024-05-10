@@ -99,6 +99,7 @@
 #include <officecfg/Office/Common.hxx>
 #include <o3tl/temporary.hxx>
 #include <o3tl/safeint.hxx>
+#include <o3tl/string_view.hxx>
 #include <o3tl/typed_flags_set.hxx>
 #include <bitmaps.hlst>
 #include <sal/log.hxx>
@@ -141,7 +142,6 @@ class SvxStyleBox_Base
 {
 public:
     SvxStyleBox_Base(std::unique_ptr<weld::ComboBox> xWidget, OUString  rCommand, SfxStyleFamily eFamily,
-                     const Reference<XDispatchProvider>& rDispatchProvider,
                      const Reference<XFrame>& _xFrame, OUString aClearFormatKey,
                      OUString aMoreKey, bool bInSpecialMode, SvxStyleToolBoxControl& rCtrl);
 
@@ -236,7 +236,6 @@ protected:
     int                             m_nMaxUserDrawFontWidth;
     int                             m_nLastItemWithMenu;
     bool                            bRelease;
-    Reference< XDispatchProvider >  m_xDispatchProvider;
     Reference< XFrame >             m_xFrame;
     OUString                        m_aCommand;
     OUString                        aClearFormatKey;
@@ -248,7 +247,7 @@ protected:
     static Color    TestColorsVisible(const Color &FontCol, const Color &BackCol);
     void            UserDrawEntry(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect, const tools::Rectangle& rTextRect, const OUString &rStyleName, const std::vector<ScriptInfo>& rScriptChanges);
     void            SetupEntry(vcl::RenderContext& rRenderContext, sal_Int32 nItem, const tools::Rectangle& rRect, std::u16string_view rStyleName, bool bIsNotSelected);
-    DECL_LINK(MenuSelectHdl, const OString&, void);
+    DECL_LINK(MenuSelectHdl, const OUString&, void);
     DECL_STATIC_LINK(SvxStyleBox_Base, ShowMoreHdl, void*, void);
 };
 
@@ -256,7 +255,7 @@ class SvxStyleBox_Impl final : public InterimItemWindow
                              , public SvxStyleBox_Base
 {
 public:
-    SvxStyleBox_Impl(vcl::Window* pParent, const OUString& rCommand, SfxStyleFamily eFamily, const Reference< XDispatchProvider >& rDispatchProvider,
+    SvxStyleBox_Impl(vcl::Window* pParent, const OUString& rCommand, SfxStyleFamily eFamily,
                      const Reference< XFrame >& _xFrame,const OUString& rClearFormatKey, const OUString& rMoreKey, bool bInSpecialMode, SvxStyleToolBoxControl& rCtrl);
 
     virtual ~SvxStyleBox_Impl() override
@@ -339,9 +338,9 @@ protected:
     vcl::Font                      aCurFont;
     sal_uInt16                     nFtCount;
     bool                           bRelease;
-    Reference< XDispatchProvider > m_xDispatchProvider;
     Reference< XFrame >            m_xFrame;
     bool            mbCheckingUnknownFont;
+    bool            mbDropDownActive;
 
     void            ReleaseFocus_Impl();
 
@@ -350,17 +349,16 @@ protected:
     void            EndPreview()
     {
         Sequence< PropertyValue > aArgs;
-        SfxToolBoxControl::Dispatch( m_xDispatchProvider,
-                                         ".uno:CharEndPreviewFontName",
-                                         aArgs );
+        const Reference<XDispatchProvider> xProvider(m_xFrame, UNO_QUERY);
+        SfxToolBoxControl::Dispatch(xProvider, ".uno:CharEndPreviewFontName", aArgs);
     }
 
     bool            CheckFontIsAvailable(std::u16string_view fontname);
     void            CheckAndMarkUnknownFont();
 
 public:
-    SvxFontNameBox_Base(std::unique_ptr<weld::ComboBox> xWidget, const Reference<XDispatchProvider>& rDispatchProvider,
-                        const Reference<XFrame>& rFrame, SvxFontNameToolBoxControl& rCtrl);
+    SvxFontNameBox_Base(std::unique_ptr<weld::ComboBox> xWidget, const Reference<XFrame>& rFrame,
+                        SvxFontNameToolBoxControl& rCtrl);
     virtual ~SvxFontNameBox_Base()
     {
         m_xListener->dispose();
@@ -396,6 +394,8 @@ public:
     DECL_LINK(ActivateHdl, weld::ComboBox&, bool);
     DECL_LINK(FocusInHdl, weld::Widget&, void);
     DECL_LINK(FocusOutHdl, weld::Widget&, void);
+    DECL_LINK(PopupToggledHdl, weld::ComboBox&, void);
+    DECL_LINK(LivePreviewHdl, const FontMetric&, void);
     DECL_LINK(DumpAsPropertyTreeHdl, tools::JsonWriter&, void);
 };
 
@@ -422,7 +422,7 @@ private:
     virtual bool DoKeyInput(const KeyEvent& rKEvt) override;
 
 public:
-    SvxFontNameBox_Impl(vcl::Window* pParent, const Reference<XDispatchProvider>& rDispatchProvider,
+    SvxFontNameBox_Impl(vcl::Window* pParent,
                         const Reference<XFrame>& rFrame, SvxFontNameToolBoxControl& rCtrl);
 
     virtual void dispose() override
@@ -865,7 +865,6 @@ class SfxStyleControllerItem_Impl : public SfxStatusListener
 SvxStyleBox_Base::SvxStyleBox_Base(std::unique_ptr<weld::ComboBox> xWidget,
                                    OUString aCommand,
                                    SfxStyleFamily eFamily,
-                                   const Reference< XDispatchProvider >& rDispatchProvider,
                                    const Reference< XFrame >& _xFrame,
                                    OUString _aClearFormatKey,
                                    OUString _aMoreKey,
@@ -878,7 +877,6 @@ SvxStyleBox_Base::SvxStyleBox_Base(std::unique_ptr<weld::ComboBox> xWidget,
     , m_nMaxUserDrawFontWidth(0)
     , m_nLastItemWithMenu(-1)
     , bRelease( true )
-    , m_xDispatchProvider( rDispatchProvider )
     , m_xFrame(_xFrame)
     , m_aCommand(std::move( aCommand ))
     , aClearFormatKey(std::move( _aClearFormatKey ))
@@ -912,14 +910,13 @@ IMPL_LINK(SvxStyleBox_Base, CustomGetSizeHdl, OutputDevice&, rArg, Size)
 SvxStyleBox_Impl::SvxStyleBox_Impl(vcl::Window* pParent,
                                    const OUString& rCommand,
                                    SfxStyleFamily eFamily,
-                                   const Reference< XDispatchProvider >& rDispatchProvider,
                                    const Reference< XFrame >& _xFrame,
                                    const OUString& rClearFormatKey,
                                    const OUString& rMoreKey,
                                    bool bInSpec, SvxStyleToolBoxControl& rCtrl)
     : InterimItemWindow(pParent, "svx/ui/applystylebox.ui", "ApplyStyleBox")
-    , SvxStyleBox_Base(m_xBuilder->weld_combo_box("applystyle"), rCommand, eFamily,
-                       rDispatchProvider, _xFrame, rClearFormatKey, rMoreKey, bInSpec, rCtrl)
+    , SvxStyleBox_Base(m_xBuilder->weld_combo_box("applystyle"), rCommand, eFamily, _xFrame,
+                       rClearFormatKey, rMoreKey, bInSpec, rCtrl)
 {
     InitControlBase(m_xWidget.get());
 
@@ -938,7 +935,7 @@ void SvxStyleBox_Base::ReleaseFocus()
         m_xFrame->getContainerWindow()->setFocus();
 }
 
-IMPL_LINK(SvxStyleBox_Base, MenuSelectHdl, const OString&, rMenuIdent, void)
+IMPL_LINK(SvxStyleBox_Base, MenuSelectHdl, const OUString&, rMenuIdent, void)
 {
     if (m_nLastItemWithMenu < 0 || m_nLastItemWithMenu >= m_xWidget->get_count())
         return;
@@ -950,15 +947,14 @@ IMPL_LINK(SvxStyleBox_Base, MenuSelectHdl, const OString&, rMenuIdent, void)
                                    comphelper::makePropertyValue("Family",
                                                                  sal_Int16( eStyleFamily )) };
 
+    const Reference<XDispatchProvider> xProvider(m_xFrame, UNO_QUERY);
     if (rMenuIdent == "update")
     {
-        SfxToolBoxControl::Dispatch( m_xDispatchProvider,
-            ".uno:StyleUpdateByExample", aArgs );
+        SfxToolBoxControl::Dispatch(xProvider, ".uno:StyleUpdateByExample", aArgs);
     }
     else if (rMenuIdent == "edit")
     {
-        SfxToolBoxControl::Dispatch( m_xDispatchProvider,
-            ".uno:EditStyle", aArgs );
+        SfxToolBoxControl::Dispatch(xProvider, ".uno:EditStyle", aArgs);
     }
 }
 
@@ -998,8 +994,8 @@ void SvxStyleBox_Base::Select(bool bNonTravelSelect)
             bClear = true;
             //not only apply default style but also call 'ClearFormatting'
             Sequence< PropertyValue > aEmptyVals;
-            SfxToolBoxControl::Dispatch( m_xDispatchProvider, ".uno:ResetAttributes",
-                aEmptyVals);
+            const Reference<XDispatchProvider> xProvider(m_xFrame, UNO_QUERY);
+            SfxToolBoxControl::Dispatch(xProvider, ".uno:ResetAttributes", aEmptyVals);
         }
         else if (aSearchEntry == aMoreKey && m_xWidget->get_active() == (m_xWidget->get_count() - 1))
         {
@@ -1051,15 +1047,17 @@ void SvxStyleBox_Base::Select(bool bNonTravelSelect)
     pArgs[0].Value  <<= aSearchEntry;
     pArgs[1].Name   = "Family";
     pArgs[1].Value  <<= sal_Int16( eStyleFamily );
+
+    const Reference<XDispatchProvider> xProvider(m_xFrame, UNO_QUERY);
     if( bCreateNew )
     {
         pArgs[0].Name   = "Param";
-        SfxToolBoxControl::Dispatch( m_xDispatchProvider, ".uno:StyleNewByExample", aArgs);
+        SfxToolBoxControl::Dispatch(xProvider, ".uno:StyleNewByExample", aArgs);
     }
     else
     {
         pArgs[0].Name   = "Template";
-        SfxToolBoxControl::Dispatch( m_xDispatchProvider, m_aCommand, aArgs );
+        SfxToolBoxControl::Dispatch(xProvider, m_aCommand, aArgs);
     }
 }
 
@@ -1364,11 +1362,11 @@ void SvxStyleBox_Base::SetupEntry(vcl::RenderContext& rRenderContext, sal_Int32 
     if (!bIsNotSelected)
     {
         if (nItem == 0 || nItem == m_xWidget->get_count() - 1)
-            m_xWidget->set_item_menu(OString::number(nItem), nullptr);
+            m_xWidget->set_item_menu(OUString::number(nItem), nullptr);
         else
         {
             m_nLastItemWithMenu = nItem;
-            m_xWidget->set_item_menu(OString::number(nItem), m_xMenu.get());
+            m_xWidget->set_item_menu(OUString::number(nItem), m_xMenu.get());
         }
     }
 
@@ -1718,7 +1716,6 @@ static bool lcl_GetDocFontList(const FontList** ppFontList, SvxFontNameBox_Base*
 }
 
 SvxFontNameBox_Base::SvxFontNameBox_Base(std::unique_ptr<weld::ComboBox> xWidget,
-                                         const Reference<XDispatchProvider>& rDispatchProvider,
                                          const Reference<XFrame>& rFrame,
                                          SvxFontNameToolBoxControl& rCtrl)
     : m_xListener(new comphelper::ConfigurationListener("/org.openoffice.Office.Common/Font/View"))
@@ -1729,9 +1726,9 @@ SvxFontNameBox_Base::SvxFontNameBox_Base(std::unique_ptr<weld::ComboBox> xWidget
     , pFontList(nullptr)
     , nFtCount(0)
     , bRelease(true)
-    , m_xDispatchProvider(rDispatchProvider)
     , m_xFrame(rFrame)
     , mbCheckingUnknownFont(false)
+    , mbDropDownActive(false)
 {
     EnableControls();
 
@@ -1740,15 +1737,17 @@ SvxFontNameBox_Base::SvxFontNameBox_Base(std::unique_ptr<weld::ComboBox> xWidget
     m_xWidget->connect_entry_activate(LINK(this, SvxFontNameBox_Base, ActivateHdl));
     m_xWidget->connect_focus_in(LINK(this, SvxFontNameBox_Base, FocusInHdl));
     m_xWidget->connect_focus_out(LINK(this, SvxFontNameBox_Base, FocusOutHdl));
+    m_xWidget->connect_popup_toggled(LINK(this, SvxFontNameBox_Base, PopupToggledHdl));
+    m_xWidget->connect_live_preview(LINK(this, SvxFontNameBox_Base, LivePreviewHdl));
     m_xWidget->connect_get_property_tree(LINK(this, SvxFontNameBox_Base, DumpAsPropertyTreeHdl));
 
     m_xWidget->set_entry_width_chars(COMBO_WIDTH_IN_CHARS + 5);
 }
 
-SvxFontNameBox_Impl::SvxFontNameBox_Impl(vcl::Window* pParent, const Reference<XDispatchProvider>& rDispatchProvider,
-                                         const Reference<XFrame>& rFrame, SvxFontNameToolBoxControl& rCtrl)
+SvxFontNameBox_Impl::SvxFontNameBox_Impl(vcl::Window* pParent, const Reference<XFrame>& rFrame,
+                                         SvxFontNameToolBoxControl& rCtrl)
     : InterimItemWindow(pParent, "svx/ui/fontnamebox.ui", "FontNameBox", true, reinterpret_cast<sal_uInt64>(SfxViewShell::Current()))
-    , SvxFontNameBox_Base(m_xBuilder->weld_combo_box("fontnamecombobox"), rDispatchProvider, rFrame, rCtrl)
+    , SvxFontNameBox_Base(m_xBuilder->weld_combo_box("fontnamecombobox"), rFrame, rCtrl)
 {
     set_id("fontnamecombobox");
     SetOptimalSize();
@@ -1855,7 +1854,6 @@ bool SvxFontNameBox_Base::DoKeyInput(const KeyEvent& rKEvt)
                 ReleaseFocus_Impl();
                 bHandled = true;
             }
-            EndPreview();
             break;
     }
 
@@ -1875,6 +1873,30 @@ IMPL_LINK_NOARG(SvxFontNameBox_Base, FocusOutHdl, weld::Widget&, void)
         // send EndPreview
         EndPreview();
     }
+}
+
+IMPL_LINK(SvxFontNameBox_Base, LivePreviewHdl, const FontMetric&, rFontMetric, void)
+{
+    Sequence<PropertyValue> aArgs(1);
+
+    SvxFontItem aFontItem(rFontMetric.GetFamilyType(),
+                          rFontMetric.GetFamilyName(),
+                          rFontMetric.GetStyleName(),
+                          rFontMetric.GetPitch(),
+                          rFontMetric.GetCharSet(),
+                          SID_ATTR_CHAR_FONT);
+    PropertyValue* pArgs = aArgs.getArray();
+    aFontItem.QueryValue(pArgs[0].Value);
+    pArgs[0].Name = "CharPreviewFontName";
+    const Reference<XDispatchProvider> xProvider(m_xFrame, UNO_QUERY);
+    SfxToolBoxControl::Dispatch(xProvider, ".uno:CharPreviewFontName", aArgs);
+}
+
+IMPL_LINK_NOARG(SvxFontNameBox_Base, PopupToggledHdl, weld::ComboBox&, void)
+{
+    mbDropDownActive = !mbDropDownActive;
+    if (!mbDropDownActive)
+        EndPreview();
 }
 
 void SvxFontNameBox_Impl::SetOptimalSize()
@@ -1970,6 +1992,7 @@ void SvxFontNameBox_Base::Select(bool bNonTravelSelect)
         pArgs[0].Value  = a;
     }
 
+    const Reference<XDispatchProvider> xProvider(m_xFrame, UNO_QUERY);
     if (bNonTravelSelect)
     {
         CheckAndMarkUnknownFont();
@@ -1981,9 +2004,7 @@ void SvxFontNameBox_Base::Select(bool bNonTravelSelect)
         if (pFontItem)
         {
             pArgs[0].Name   = "CharFontName";
-            SfxToolBoxControl::Dispatch( m_xDispatchProvider,
-                                         ".uno:CharFontName",
-                                         aArgs );
+            SfxToolBoxControl::Dispatch(xProvider, ".uno:CharFontName", aArgs);
         }
     }
     else
@@ -1991,9 +2012,7 @@ void SvxFontNameBox_Base::Select(bool bNonTravelSelect)
         if (pFontItem)
         {
             pArgs[0].Name   = "CharPreviewFontName";
-            SfxToolBoxControl::Dispatch( m_xDispatchProvider,
-                                         ".uno:CharPreviewFontName",
-                                         aArgs );
+            SfxToolBoxControl::Dispatch(xProvider, ".uno:CharPreviewFontName", aArgs);
         }
     }
 }
@@ -2227,7 +2246,7 @@ IMPL_LINK(ColorWindow, SelectHdl, ValueSet*, pColorSet, void)
             mxPaletteManager->ReloadRecentColorSet(*mxRecentColorSet);
     }
 
-    maSelectedLink.Call(aNamedColor);
+    mxPaletteManager->SetSplitButtonColor(aNamedColor);
 
     // deliberate take a copy here in case maMenuButton.set_inactive
     // triggers a callback that destroys ourself
@@ -2273,7 +2292,7 @@ IMPL_LINK(ColorWindow, AutoColorClickHdl, weld::Button&, rButton, void)
     mxRecentColorSet->SetNoSelection();
     mpDefaultButton = &rButton;
 
-    maSelectedLink.Call(aNamedColor);
+    mxPaletteManager->SetSplitButtonColor(aNamedColor);
 
     // deliberate take a copy here in case maMenuButton.set_inactive
     // triggers a callback that destroys ourself
@@ -2350,7 +2369,7 @@ void ColorWindow::SelectEntry(const NamedColor& rNamedColor)
 
     const Color &rColor = rNamedColor.m_aColor;
 
-    if (mxButtonAutoColor->get_visible() && (rColor == COL_TRANSPARENT || rColor == COL_AUTO))
+    if (mxButtonAutoColor->get_visible() && rColor.IsFullyTransparent())
     {
         mpDefaultButton = mxButtonAutoColor.get();
         return;
@@ -3206,38 +3225,12 @@ void SvxStyleToolBoxControl::FillStyleBox()
 
     std::vector<OUString> aStyles;
 
+    // add used styles
+    pStyle = xIter->Next();
+    while ( pStyle )
     {
+        aStyles.push_back(pStyle->GetName());
         pStyle = xIter->Next();
-
-        if( pImpl->bSpecModeWriter || pImpl->bSpecModeCalc )
-        {
-            while ( pStyle )
-            {
-                // sort out default styles
-                bool bInsert = true;
-                OUString aName( pStyle->GetName() );
-                for( auto const & _i: pImpl->aDefaultStyles )
-                {
-                    if( _i.first == aName || _i.second == aName )
-                    {
-                        bInsert = false;
-                        break;
-                    }
-                }
-
-                if( bInsert )
-                    aStyles.push_back(aName);
-                pStyle = xIter->Next();
-            }
-        }
-        else
-        {
-            while ( pStyle )
-            {
-                aStyles.push_back(pStyle->GetName());
-                pStyle = xIter->Next();
-            }
-        }
     }
 
     if (pImpl->bSpecModeWriter || pImpl->bSpecModeCalc)
@@ -3245,11 +3238,16 @@ void SvxStyleToolBoxControl::FillStyleBox()
         pBox->append_text(pImpl->aClearForm);
         pBox->insert_separator(1, "separator");
 
-        // insert default styles
-        for (const auto &rStyle : pImpl->aDefaultStyles)
-            pBox->append_text(rStyle.second);
+        // add default styles if less than 12 items
+        for( const auto &rStyle : pImpl->aDefaultStyles )
+        {
+            if ( aStyles.size() + pBox->get_count() > 12)
+                break;
+            // insert default style only if not used (and added to rStyle before)
+            if (std::find(aStyles.begin(), aStyles.end(), rStyle.second) >= aStyles.end())
+                pBox->append_text(rStyle.second);
+        }
     }
-
     std::sort(aStyles.begin(), aStyles.end());
 
     for (const auto& rStyle : aStyles)
@@ -3348,7 +3346,7 @@ void SvxStyleToolBoxControl::statusChanged( const css::frame::FeatureStateEvent&
     SolarMutexGuard aGuard;
 
     if (m_pToolbar)
-        m_pToolbar->set_item_sensitive(m_aCommandURL.toUtf8(), rEvent.IsEnabled);
+        m_pToolbar->set_item_sensitive(m_aCommandURL, rEvent.IsEnabled);
     else
     {
         ToolBox* pToolBox = nullptr;
@@ -3377,7 +3375,6 @@ css::uno::Reference<css::awt::XWindow> SvxStyleToolBoxControl::createItemWindow(
         pImpl->m_xWeldBox.reset(new SvxStyleBox_Base(std::move(xWidget),
                                                      ".uno:StyleApply",
                                                      SfxStyleFamily::Para,
-                                                     Reference< XDispatchProvider >( m_xFrame->getController(), UNO_QUERY ),
                                                      m_xFrame,
                                                      pImpl->aClearForm,
                                                      pImpl->aMore,
@@ -3394,7 +3391,6 @@ css::uno::Reference<css::awt::XWindow> SvxStyleToolBoxControl::createItemWindow(
             pImpl->m_xVclBox = VclPtr<SvxStyleBox_Impl>::Create(pParent,
                                                                 ".uno:StyleApply",
                                                                 SfxStyleFamily::Para,
-                                                                Reference< XDispatchProvider >( m_xFrame->getController(), UNO_QUERY ),
                                                                 m_xFrame,
                                                                 pImpl->aClearForm,
                                                                 pImpl->aMore,
@@ -3444,7 +3440,7 @@ void SvxFontNameToolBoxControl::statusChanged( const css::frame::FeatureStateEve
     m_pBox->statusChanged_Impl(rEvent);
 
     if (m_pToolbar)
-        m_pToolbar->set_item_sensitive(m_aCommandURL.toUtf8(), rEvent.IsEnabled);
+        m_pToolbar->set_item_sensitive(m_aCommandURL, rEvent.IsEnabled);
     else
     {
         ToolBox* pToolBox = nullptr;
@@ -3467,9 +3463,7 @@ css::uno::Reference<css::awt::XWindow> SvxFontNameToolBoxControl::createItemWind
 
         xItemWindow = css::uno::Reference<css::awt::XWindow>(new weld::TransportAsXWindow(xWidget.get()));
 
-        m_xWeldBox.reset(new SvxFontNameBox_Base(std::move(xWidget),
-                                                 Reference<XDispatchProvider>(m_xFrame->getController(), UNO_QUERY),
-                                                 m_xFrame, *this));
+        m_xWeldBox.reset(new SvxFontNameBox_Base(std::move(xWidget), m_xFrame, *this));
         m_pBox = m_xWeldBox.get();
     }
     else
@@ -3478,9 +3472,7 @@ css::uno::Reference<css::awt::XWindow> SvxFontNameToolBoxControl::createItemWind
         if ( pParent )
         {
             SolarMutexGuard aSolarMutexGuard;
-            m_xVclBox = VclPtr<SvxFontNameBox_Impl>::Create(pParent,
-                                                            Reference<XDispatchProvider>(m_xFrame->getController(), UNO_QUERY),
-                                                            m_xFrame, *this);
+            m_xVclBox = VclPtr<SvxFontNameBox_Impl>::Create(pParent, m_xFrame, *this);
             m_pBox = m_xVclBox.get();
             xItemWindow = VCLUnoHelper::GetInterface(m_xVclBox);
         }
@@ -3538,7 +3530,7 @@ sal_uInt16 MapCommandToSlotId(const OUString& rCommand)
         return SID_ATTR_CHAR_COLOR;
     else if (rCommand == ".uno:FontColor")
         return SID_ATTR_CHAR_COLOR2;
-    else if (rCommand == ".uno:BackColor")
+    else if (rCommand == ".uno:BackColor") // deprecated - use CharBackColor
         return SID_ATTR_CHAR_COLOR_BACKGROUND;
     else if (rCommand == ".uno:CharBackColor")
         return SID_ATTR_CHAR_BACK_COLOR;
@@ -3577,13 +3569,11 @@ void SvxColorToolBoxControl::initialize( const css::uno::Sequence<css::uno::Any>
     auto aProperties = vcl::CommandInfoProvider::GetCommandProperties(getCommandURL(), getModuleName());
     OUString aCommandLabel = vcl::CommandInfoProvider::GetLabelForCommand(aProperties);
 
-    OString aId(m_aCommandURL.toUtf8());
-
     if (m_pToolbar)
     {
         mxPopoverContainer.reset(new ToolbarPopupContainer(m_pToolbar));
-        m_pToolbar->set_item_popover(aId, mxPopoverContainer->getTopLevel());
-        m_xBtnUpdater.reset(new svx::ToolboxButtonColorUpdater(m_nSlotId, aId, m_pToolbar, !m_bSplitButton, aCommandLabel, m_xFrame));
+        m_pToolbar->set_item_popover(m_aCommandURL, mxPopoverContainer->getTopLevel());
+        m_xBtnUpdater.reset(new svx::ToolboxButtonColorUpdater(m_nSlotId, m_aCommandURL, m_pToolbar, !m_bSplitButton, aCommandLabel, m_xFrame));
         return;
     }
 
@@ -3606,6 +3596,7 @@ void SvxColorToolBoxControl::update()
             addStatusListener( ".uno:CharColorExt");
             break;
 
+        case SID_ATTR_CHAR_BACK_COLOR:
         case SID_ATTR_CHAR_COLOR_BACKGROUND:
             addStatusListener( ".uno:CharBackgroundExt");
             break;
@@ -3649,20 +3640,15 @@ std::unique_ptr<WeldToolbarPopup> SvxColorToolBoxControl::weldPopupWindow()
 {
     EnsurePaletteManager();
 
-    const OString aId(m_aCommandURL.toUtf8());
-
     auto xPopover = std::make_unique<ColorWindow>(
                         m_aCommandURL,
                         m_xPaletteManager,
                         m_aColorStatus,
                         m_nSlotId,
                         m_xFrame,
-                        MenuOrToolMenuButton(m_pToolbar, aId),
+                        MenuOrToolMenuButton(m_pToolbar, m_aCommandURL),
                         [this] { return GetParentFrame(); },
                         m_aColorSelectFunction);
-
-    if ( m_bSplitButton )
-        xPopover->SetSelectedHdl( LINK( this, SvxColorToolBoxControl, SelectedHdl ) );
 
     return xPopover;
 }
@@ -3686,9 +3672,6 @@ VclPtr<vcl::Window> SvxColorToolBoxControl::createVclPopupWindow( vcl::Window* p
                         [this] { return GetParentFrame(); },
                         m_aColorSelectFunction);
 
-    if ( m_bSplitButton )
-        xPopover->SetSelectedHdl( LINK( this, SvxColorToolBoxControl, SelectedHdl ) );
-
     mxInterimPopover = VclPtr<InterimToolbarPopup>::Create(getFrameInterface(), pParent,
         std::move(xPopover), true);
 
@@ -3701,11 +3684,6 @@ VclPtr<vcl::Window> SvxColorToolBoxControl::createVclPopupWindow( vcl::Window* p
     return mxInterimPopover;
 }
 
-IMPL_LINK(SvxColorToolBoxControl, SelectedHdl, const NamedColor&, rColor, void)
-{
-    m_xBtnUpdater->Update(rColor);
-}
-
 void SvxColorToolBoxControl::statusChanged( const css::frame::FeatureStateEvent& rEvent )
 {
     ToolBox* pToolBox = nullptr;
@@ -3716,7 +3694,7 @@ void SvxColorToolBoxControl::statusChanged( const css::frame::FeatureStateEvent&
     if ( rEvent.FeatureURL.Complete == m_aCommandURL )
     {
         if (m_pToolbar)
-            m_pToolbar->set_item_sensitive(m_aCommandURL.toUtf8(), rEvent.IsEnabled);
+            m_pToolbar->set_item_sensitive(m_aCommandURL, rEvent.IsEnabled);
         else
             pToolBox->EnableItem( nId, rEvent.IsEnabled );
     }
@@ -3730,7 +3708,7 @@ void SvxColorToolBoxControl::statusChanged( const css::frame::FeatureStateEvent&
     else if ( rEvent.State >>= bValue )
     {
         if (m_pToolbar)
-            m_pToolbar->set_item_active(m_aCommandURL.toUtf8(), bValue);
+            m_pToolbar->set_item_active(m_aCommandURL, bValue);
         else if (pToolBox)
             pToolBox->CheckItem( nId, bValue );
     }
@@ -3743,8 +3721,7 @@ void SvxColorToolBoxControl::execute(sal_Int16 /*nSelectModifier*/)
         if (m_pToolbar)
         {
             // Toggle the popup also when toolbutton is activated
-            const OString aId(m_aCommandURL.toUtf8());
-            m_pToolbar->set_menu_item_active(aId, !m_pToolbar->get_menu_item_active(aId));
+            m_pToolbar->set_menu_item_active(m_aCommandURL, !m_pToolbar->get_menu_item_active(m_aCommandURL));
         }
         else
         {
@@ -3824,8 +3801,7 @@ void SAL_CALL SvxFrameToolBoxControl::execute(sal_Int16 /*KeyModifier*/)
     if (m_pToolbar)
     {
         // Toggle the popup also when toolbutton is activated
-        const OString aId(m_aCommandURL.toUtf8());
-        m_pToolbar->set_menu_item_active(aId, !m_pToolbar->get_menu_item_active(aId));
+        m_pToolbar->set_menu_item_active(m_aCommandURL, !m_pToolbar->get_menu_item_active(m_aCommandURL));
     }
     else
     {
@@ -3841,7 +3817,7 @@ void SvxFrameToolBoxControl::initialize( const css::uno::Sequence< css::uno::Any
     if (m_pToolbar)
     {
         mxPopoverContainer.reset(new ToolbarPopupContainer(m_pToolbar));
-        m_pToolbar->set_item_popover(m_aCommandURL.toUtf8(), mxPopoverContainer->getTopLevel());
+        m_pToolbar->set_item_popover(m_aCommandURL, mxPopoverContainer->getTopLevel());
     }
 
     ToolBox* pToolBox = nullptr;
@@ -3910,6 +3886,7 @@ SvxCurrencyToolBoxControl::~SvxCurrencyToolBoxControl() {}
 
 namespace
 {
+    /** Implementation of the currency combo widget **/
     class SvxCurrencyList_Impl : public WeldToolbarPopup
     {
     private:
@@ -4053,7 +4030,7 @@ void SvxCurrencyToolBoxControl::initialize( const css::uno::Sequence< css::uno::
     if (m_pToolbar)
     {
         mxPopoverContainer.reset(new ToolbarPopupContainer(m_pToolbar));
-        m_pToolbar->set_item_popover(m_aCommandURL.toUtf8(), mxPopoverContainer->getTopLevel());
+        m_pToolbar->set_item_popover(m_aCommandURL, mxPopoverContainer->getTopLevel());
         return;
     }
 
@@ -4147,12 +4124,19 @@ void SvxCurrencyToolBoxControl::GetCurrencySymbols(std::vector<OUString>& rList,
 {
     rCurrencyList.clear();
 
+    constexpr OUString aTwoSpace = u"  "_ustr;
     const NfCurrencyTable& rCurrencyTable = SvNumberFormatter::GetTheCurrencyTable();
     sal_uInt16 nCount = rCurrencyTable.size();
 
     sal_uInt16 nStart = 1;
 
-    OUString aString( ApplyLreOrRleEmbedding( rCurrencyTable[0].GetSymbol() ) + " " );
+    LanguageTag eLangTag = Application::GetSettings().GetLanguageTag();
+    OUString aString(ApplyLreOrRleEmbedding(rCurrencyTable[0].GetBankSymbol()));
+    aString += aTwoSpace;
+    aString += ApplyLreOrRleEmbedding(rCurrencyTable[0].GetSymbol());
+    aString += aTwoSpace;
+    aString += ApplyLreOrRleEmbedding(SvtLanguageTable::GetLanguageString(eLangTag.getLanguageType()));
+    aString += aTwoSpace;
     aString += ApplyLreOrRleEmbedding(SvtLanguageTable::GetLanguageString(rCurrencyTable[0].GetLanguage()));
 
     rList.push_back( aString );
@@ -4166,9 +4150,7 @@ void SvxCurrencyToolBoxControl::GetCurrencySymbols(std::vector<OUString>& rList,
     }
 
     CollatorWrapper aCollator( ::comphelper::getProcessComponentContext() );
-    aCollator.loadDefaultCollator( Application::GetSettings().GetLanguageTag().getLocale(), 0 );
-
-    static const OUStringLiteral aTwoSpace(u"  ");
+    aCollator.loadDefaultCollator(eLangTag.getLocale(), 0);
 
     for( sal_uInt16 i = 1; i < nCount; ++i )
     {
@@ -4340,7 +4322,7 @@ void ColorListBox::createColorWindow()
 
 void ColorListBox::SelectEntry(const NamedColor& rColor)
 {
-    if (rColor.m_aName.trim().isEmpty())
+    if (o3tl::trim(rColor.m_aName).empty())
     {
         SelectEntry(rColor.m_aColor);
         return;
@@ -4435,7 +4417,7 @@ MenuOrToolMenuButton::MenuOrToolMenuButton(weld::MenuButton* pMenuButton)
 {
 }
 
-MenuOrToolMenuButton::MenuOrToolMenuButton(weld::Toolbar* pToolbar, OString aIdent)
+MenuOrToolMenuButton::MenuOrToolMenuButton(weld::Toolbar* pToolbar, OUString aIdent)
     : m_pMenuButton(nullptr)
     , m_pToolbar(pToolbar)
     , m_aIdent(std::move(aIdent))

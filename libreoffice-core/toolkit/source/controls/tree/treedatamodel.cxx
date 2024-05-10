@@ -22,11 +22,11 @@
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
-#include <cppuhelper/implbase2.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <o3tl/safeint.hxx>
 #include <rtl/ref.hxx>
-#include <toolkit/helper/mutexandbroadcasthelper.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 #include <mutex>
 #include <utility>
 
@@ -45,8 +45,7 @@ class MutableTreeDataModel;
 
 typedef std::vector< rtl::Reference< MutableTreeNode > > TreeNodeVector;
 
-class MutableTreeDataModel : public ::cppu::WeakAggImplHelper2< XMutableTreeDataModel, XServiceInfo >,
-                             public MutexAndBroadcastHelper
+class MutableTreeDataModel : public ::cppu::WeakImplHelper< XMutableTreeDataModel, XServiceInfo >
 {
 public:
     MutableTreeDataModel();
@@ -73,11 +72,16 @@ public:
     virtual Sequence< OUString > SAL_CALL getSupportedServiceNames(  ) override;
 
 private:
+    void broadcastImpl( std::unique_lock<std::mutex>& rGuard, broadcast_type eType, const Reference< XTreeNode >& xParentNode, const Reference< XTreeNode >& rNode );
+
+    std::mutex m_aMutex;
+    comphelper::OInterfaceContainerHelper4<XTreeDataModelListener> maTreeDataModelListeners;
+    comphelper::OInterfaceContainerHelper4<XEventListener> maEventListeners;
     bool mbDisposed;
-    Reference< XTreeNode > mxRootNode;
+    rtl::Reference< MutableTreeNode > mxRootNode;
 };
 
-class MutableTreeNode: public ::cppu::WeakAggImplHelper2< XMutableTreeNode, XServiceInfo >
+class MutableTreeNode: public ::cppu::WeakImplHelper< XMutableTreeNode, XServiceInfo >
 {
     friend class MutableTreeDataModel;
 
@@ -139,18 +143,24 @@ MutableTreeDataModel::MutableTreeDataModel()
 
 void MutableTreeDataModel::broadcast( broadcast_type eType, const Reference< XTreeNode >& xParentNode, const Reference< XTreeNode >& rNode )
 {
-    ::cppu::OInterfaceContainerHelper* pIter = BrdcstHelper.getContainer( cppu::UnoType<XTreeDataModelListener>::get() );
-    if( !pIter )
+    std::unique_lock aGuard(m_aMutex);
+    broadcastImpl(aGuard, eType, xParentNode, rNode);
+}
+
+void MutableTreeDataModel::broadcastImpl( std::unique_lock<std::mutex>& rGuard, broadcast_type eType, const Reference< XTreeNode >& xParentNode, const Reference< XTreeNode >& rNode )
+{
+    if( !maTreeDataModelListeners.getLength(rGuard) )
         return;
 
-    Reference< XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
+    Reference< XInterface > xSource( getXWeak() );
     const Sequence< Reference< XTreeNode > > aNodes { rNode };
     TreeDataModelEvent aEvent( xSource, aNodes, xParentNode );
 
-    ::cppu::OInterfaceIteratorHelper aListIter(*pIter);
+    comphelper::OInterfaceIteratorHelper4 aListIter(rGuard, maTreeDataModelListeners);
+    rGuard.unlock();
     while(aListIter.hasMoreElements())
     {
-        XTreeDataModelListener* pListener = static_cast<XTreeDataModelListener*>(aListIter.next());
+        XTreeDataModelListener* pListener = aListIter.next().get();
         switch( eType )
         {
         case nodes_changed:     pListener->treeNodesChanged(aEvent); break;
@@ -171,16 +181,12 @@ void SAL_CALL MutableTreeDataModel::setRoot( const Reference< XMutableTreeNode >
     if( !xNode.is() )
         throw IllegalArgumentException();
 
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
-    if( xNode == mxRootNode )
+    std::unique_lock aGuard( m_aMutex );
+    if( xNode.get() == mxRootNode.get() )
         return;
 
     if( mxRootNode.is() )
-    {
-        rtl::Reference< MutableTreeNode > xOldImpl( dynamic_cast< MutableTreeNode* >( mxRootNode.get() ) );
-        if( xOldImpl.is() )
-            xOldImpl->mbIsInserted = false;
-    }
+        mxRootNode->mbIsInserted = false;
 
     rtl::Reference< MutableTreeNode > xImpl( dynamic_cast< MutableTreeNode* >( xNode.get() ) );
     if( !xImpl.is() || xImpl->mbIsInserted )
@@ -190,46 +196,51 @@ void SAL_CALL MutableTreeDataModel::setRoot( const Reference< XMutableTreeNode >
     mxRootNode = xImpl;
 
     Reference< XTreeNode > xParentNode;
-    broadcast( structure_changed, xParentNode, mxRootNode );
+    broadcastImpl( aGuard, structure_changed, xParentNode, mxRootNode );
 }
 
 Reference< XTreeNode > SAL_CALL MutableTreeDataModel::getRoot(  )
 {
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
+    std::unique_lock aGuard( m_aMutex );
     return mxRootNode;
 }
 
 void SAL_CALL MutableTreeDataModel::addTreeDataModelListener( const Reference< XTreeDataModelListener >& xListener )
 {
-    BrdcstHelper.addListener( cppu::UnoType<XTreeDataModelListener>::get(), xListener );
+    std::unique_lock aGuard( m_aMutex );
+    maTreeDataModelListeners.addInterface( aGuard, xListener );
 }
 
 void SAL_CALL MutableTreeDataModel::removeTreeDataModelListener( const Reference< XTreeDataModelListener >& xListener )
 {
-    BrdcstHelper.removeListener( cppu::UnoType<XTreeDataModelListener>::get(), xListener );
+    std::unique_lock aGuard( m_aMutex );
+    maTreeDataModelListeners.removeInterface( aGuard, xListener );
 }
 
 void SAL_CALL MutableTreeDataModel::dispose()
 {
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
+    std::unique_lock aGuard( m_aMutex );
 
     if( !mbDisposed )
     {
         mbDisposed = true;
         css::lang::EventObject aEvent;
-        aEvent.Source.set( static_cast< ::cppu::OWeakObject* >( this ) );
-        BrdcstHelper.aLC.disposeAndClear( aEvent );
+        aEvent.Source.set( getXWeak() );
+        maTreeDataModelListeners.disposeAndClear( aGuard, aEvent );
+        maEventListeners.disposeAndClear( aGuard, aEvent );
     }
 }
 
 void SAL_CALL MutableTreeDataModel::addEventListener( const Reference< XEventListener >& xListener )
 {
-    BrdcstHelper.addListener( cppu::UnoType<XEventListener>::get(), xListener );
+    std::unique_lock aGuard( m_aMutex );
+    maEventListeners.addInterface( aGuard, xListener );
 }
 
 void SAL_CALL MutableTreeDataModel::removeEventListener( const Reference< XEventListener >& xListener )
 {
-    BrdcstHelper.removeListener( cppu::UnoType<XEventListener>::get(), xListener );
+    std::unique_lock aGuard( m_aMutex );
+    maEventListeners.removeInterface( aGuard, xListener );
 }
 
 OUString SAL_CALL MutableTreeDataModel::getImplementationName(  )

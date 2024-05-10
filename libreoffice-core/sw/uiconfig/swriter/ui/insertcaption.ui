@@ -177,7 +177,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
-                        <property name="label" translatable="yes" context="insertcaption|separator_label">Separator:</property>
+                        <property name="label" translatable="yes" context="insertcaption|separator_label">Before caption:</property>
                         <property name="use_underline">True</property>
                         <property name="mnemonic_widget">separator_edit</property>
                       </object>
@@ -224,9 +224,10 @@
                         <property name="activates_default">True</property>
                         <property name="text" translatable="yes" context="insertcaption|separator_edit">: </property>
                         <property name="truncate-multiline">True</property>
+                        <property name="tooltip-text" translatable="yes" context="insertcaption|separator_edit|tooltip_text">Enter optional text characters to appear after the caption category and number and before the caption text.</property>
                         <child internal-child="accessible">
                           <object class="AtkObject" id="separator_edit-atkobject">
-                            <property name="AtkObject::accessible-description" translatable="yes" context="insertcaption|extended_tip|separator_edit">Enter optional text characters to appear between the number and the caption text.</property>
+                            <property name="AtkObject::accessible-description" translatable="yes" context="insertcaption|extended_tip|separator_edit">Enter optional text characters to appear after the caption category and number and before the caption text. The optional text characters are not inserted if no caption text is given.</property>
                           </object>
                         </child>
                       </object>
@@ -240,7 +241,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
-                        <property name="label" translatable="yes" context="insertcaption|num_separator">Numbering separator:</property>
+                        <property name="label" translatable="yes" context="insertcaption|num_separator">After number:</property>
                         <property name="use_underline">True</property>
                         <property name="mnemonic_widget">num_separator_edit</property>
                       </object>
@@ -257,9 +258,10 @@
                         <property name="activates_default">True</property>
                         <property name="text" translatable="yes" context="insertcaption|num_separator_edit">. </property>
                         <property name="truncate-multiline">True</property>
+                        <property name="tooltip-text" translatable="yes" context="insertcaption|num_separator_edit|tooltip_text">When “Caption order” (in Options) is “Numbering first”, enter optional text to appear after caption number.</property>
                         <child internal-child="accessible">
                           <object class="AtkObject" id="num_separator_edit-atkobject">
-                            <property name="AtkObject::accessible-description" translatable="yes" context="insertcaption|extended_tip|num_separator_edit">Type the text that you want to appear after the caption number.</property>
+                            <property name="AtkObject::accessible-description" translatable="yes" context="insertcaption|extended_tip|num_separator_edit">Enter optional text to appear after the caption number. Only available when “Numbering first” is selected for “Caption order” in Options.</property>
                           </object>
                         </child>
                       </object>

@@ -79,8 +79,7 @@ ScVbaAxes::createAxis( const uno::Reference< excel::XChart >& xChart, const uno:
     }
     else
         DebugHelper::runtimeexception(ERRCODE_BASIC_METHOD_FAILED);
-    uno::Reference< XHelperInterface > xParent( xChart, uno::UNO_QUERY_THROW );
-    return new ScVbaAxis( xParent, xContext, xAxisPropertySet, nType, nAxisGroup);
+    return new ScVbaAxis( pChart, xContext, xAxisPropertySet, nType, nAxisGroup);
 }
 
 namespace {
@@ -92,14 +91,14 @@ class AxisIndexWrapper : public ::cppu::WeakImplHelper< container::XIndexAccess 
     // on each getByIndex
     uno::Reference< uno::XComponentContext > mxContext;
     std::vector< AxesCoordinate > mCoordinates;
-    uno::Reference< excel::XChart > mxChart;
+    rtl::Reference< ScVbaChart > mxChart;
 public:
-    AxisIndexWrapper( uno::Reference< uno::XComponentContext > xContext, uno::Reference< excel::XChart > xChart ) : mxContext(std::move( xContext )), mxChart(std::move( xChart ))
+    AxisIndexWrapper( uno::Reference< uno::XComponentContext > xContext, rtl::Reference< ScVbaChart > xChart ) : mxContext(std::move( xContext )), mxChart(std::move( xChart ))
     {
         if ( !mxChart.is() )
             return;
 
-        ScVbaChart* pChart = static_cast< ScVbaChart* >( mxChart.get() );
+        ScVbaChart* pChart = mxChart.get();
         // primary
         bool bBool = false;
         uno::Reference< beans::XPropertySet > xDiagramPropertySet( pChart->xDiagramPropertySet() );
@@ -131,7 +130,7 @@ public:
             css::uno::Any anyEx = cppu::getCaughtException();
             throw css::lang::WrappedTargetException(
                    "Error Getting Index!",
-                   static_cast < OWeakObject * > ( this ),
+                   getXWeak(),
                    anyEx );
         }
     }
@@ -146,7 +145,7 @@ public:
     }
 };
 
-uno::Reference< container::XIndexAccess > createIndexWrapper( const uno::Reference< excel::XChart >& xChart, const uno::Reference< uno::XComponentContext >& xContext )
+uno::Reference< container::XIndexAccess > createIndexWrapper( const rtl::Reference< ScVbaChart >& xChart, const uno::Reference< uno::XComponentContext >& xContext )
 {
     return new AxisIndexWrapper( xContext, xChart );
 }
@@ -154,7 +153,7 @@ uno::Reference< container::XIndexAccess > createIndexWrapper( const uno::Referen
 }
 
 // #FIXME The collection semantics will never work as this object is not yet initialised correctly
-ScVbaAxes::ScVbaAxes( const uno::Reference< XHelperInterface >& xParent,const uno::Reference< uno::XComponentContext > & xContext, const uno::Reference< excel::XChart >& xChart ) : ScVbaAxes_BASE( xParent, xContext, createIndexWrapper( xChart, xContext )), moChartParent( xChart )
+ScVbaAxes::ScVbaAxes( const uno::Reference< XHelperInterface >& xParent,const uno::Reference< uno::XComponentContext > & xContext, const rtl::Reference< ScVbaChart >& xChart ) : ScVbaAxes_BASE( xParent, xContext, createIndexWrapper( xChart, xContext )), moChartParent( xChart )
 {
 }
 

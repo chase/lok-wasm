@@ -136,15 +136,13 @@ SdrPageView* SdrObjEditView::ShowSdrPage(SdrPage* pPage)
     {
         // Check if other views have an active text edit on the same page as
         // this one.
-        SdrViewIter aIter(pPageView->GetPage());
-        for (SdrView* pView = aIter.FirstView(); pView; pView = aIter.NextView())
-        {
+        SdrViewIter::ForAllViews(pPageView->GetPage(), [this](SdrView* pView) {
             if (pView == this || !pView->IsTextEdit())
-                continue;
+                return;
 
             OutputDevice* pOutDev = GetFirstOutputDevice();
             if (!pOutDev || pOutDev->GetOutDevType() != OUTDEV_WINDOW)
-                continue;
+                return;
 
             // Found one, so create an outliner view, to get invalidations when
             // the text edit changes.
@@ -155,7 +153,7 @@ SdrPageView* SdrObjEditView::ShowSdrPage(SdrPage* pPage)
                 = pView->ImpMakeOutlinerView(pOutDev->GetOwnerWindow(), nullptr, GetSfxViewShell());
             pOutlinerView->HideCursor();
             pView->GetTextEditOutliner()->InsertView(pOutlinerView);
-        }
+        });
     }
 
     return pPageView;
@@ -176,11 +174,9 @@ void lcl_RemoveTextEditOutlinerViews(SdrObjEditView const* pThis, SdrPageView co
     if (!pOutputDevice || pOutputDevice->GetOutDevType() != OUTDEV_WINDOW)
         return;
 
-    SdrViewIter aIter(pPageView->GetPage());
-    for (SdrView* pView = aIter.FirstView(); pView; pView = aIter.NextView())
-    {
+    SdrViewIter::ForAllViews(pPageView->GetPage(), [&pThis, &pOutputDevice](SdrView* pView) {
         if (pView == pThis || !pView->IsTextEdit())
-            continue;
+            return;
 
         SdrOutliner* pOutliner = pView->GetTextEditOutliner();
         for (size_t nView = 0; nView < pOutliner->GetViewCount(); ++nView)
@@ -192,7 +188,7 @@ void lcl_RemoveTextEditOutlinerViews(SdrObjEditView const* pThis, SdrPageView co
             pOutliner->RemoveView(pOutlinerView);
             delete pOutlinerView;
         }
-    }
+    });
 }
 }
 
@@ -235,11 +231,11 @@ void SdrObjEditView::Notify(SfxBroadcaster& rBC, const SfxHint& rHint)
     SdrHintKind eKind = pSdrHint->GetKind();
     if (eKind == SdrHintKind::RefDeviceChange)
     {
-        mpTextEditOutliner->SetRefDevice(mpModel->GetRefDevice());
+        mpTextEditOutliner->SetRefDevice(GetModel().GetRefDevice());
     }
     if (eKind == SdrHintKind::DefaultTabChange)
     {
-        mpTextEditOutliner->SetDefTab(mpModel->GetDefaultTabulator());
+        mpTextEditOutliner->SetDefTab(GetModel().GetDefaultTabulator());
     }
 }
 
@@ -1102,12 +1098,12 @@ void SdrObjEditView::ImpChainingEventHdl()
         // Handling Undo
         const int nText = 0; // XXX: hardcoded index (SdrTextObj::getText handles only 0)
 
-        const bool bUndoEnabled = GetModel() && IsUndoEnabled();
+        const bool bUndoEnabled = IsUndoEnabled();
         std::unique_ptr<SdrUndoObjSetText> pTxtUndo;
         if (bUndoEnabled)
             pTxtUndo.reset(
                 dynamic_cast<SdrUndoObjSetText*>(GetModel()
-                                                     ->GetSdrUndoFactory()
+                                                     .GetSdrUndoFactory()
                                                      .CreateUndoObjectSetText(*pTextObj, nText)
                                                      .release()));
 
@@ -1180,13 +1176,18 @@ IMPL_LINK(SdrObjEditView, ImpOutlinerCalcFieldValueHdl, EditFieldInfo*, pFI, voi
     {
         std::optional<Color> pTxtCol;
         std::optional<Color> pFldCol;
+        std::optional<FontLineStyle> pFldLineStyle;
         bOk = pTextObj->CalcFieldValue(pFI->GetField(), pFI->GetPara(), pFI->GetPos(), true,
-                                       pTxtCol, pFldCol, rStr);
+                                       pTxtCol, pFldCol, pFldLineStyle, rStr);
         if (bOk)
         {
             if (pTxtCol)
             {
                 pFI->SetTextColor(*pTxtCol);
+            }
+            if (pFldLineStyle)
+            {
+                pFI->SetFontLineStyle(*pFldLineStyle);
             }
             if (pFldCol)
             {
@@ -1198,7 +1199,7 @@ IMPL_LINK(SdrObjEditView, ImpOutlinerCalcFieldValueHdl, EditFieldInfo*, pFI, voi
             }
         }
     }
-    Outliner& rDrawOutl = mpModel->GetDrawOutliner(pTextObj.get());
+    Outliner& rDrawOutl = GetModel().GetDrawOutliner(pTextObj.get());
     Link<EditFieldInfo*, void> aDrawOutlLink = rDrawOutl.GetCalcFieldValueHdl();
     if (!bOk && aDrawOutlLink.IsSet())
     {
@@ -1306,8 +1307,7 @@ bool SdrObjEditView::SdrBeginTextEdit(SdrObject* pObj_, SdrPageView* pPV, vcl::W
                 = SdrMakeOutliner(OutlinerMode::TextObject, pObj->getSdrModelFromSdrObject());
 
         {
-            SvtAccessibilityOptions aOptions;
-            mpTextEditOutliner->ForceAutoColor(aOptions.GetIsAutomaticFontColor());
+            mpTextEditOutliner->ForceAutoColor(SvtAccessibilityOptions::GetIsAutomaticFontColor());
         }
 
         aOldCalcFieldValueLink = mpTextEditOutliner->GetCalcFieldValueHdl();
@@ -1453,11 +1453,10 @@ bool SdrObjEditView::SdrBeginTextEdit(SdrObject* pObj_, SdrPageView* pPV, vcl::W
                     // Register an outliner view for all other sdr views that
                     // show the same page, so that when the text edit changes,
                     // all interested windows get an invalidation.
-                    SdrViewIter aIter(pObj->getSdrPageFromSdrObject());
-                    for (SdrView* pView = aIter.FirstView(); pView; pView = aIter.NextView())
-                    {
+                    SdrViewIter::ForAllViews(pObj->getSdrPageFromSdrObject(), [this, &pWin](
+                                                                                  SdrView* pView) {
                         if (pView == this)
-                            continue;
+                            return;
 
                         for (sal_uInt32 nViewPaintWindow = 0;
                              nViewPaintWindow < pView->PaintWindowCount(); ++nViewPaintWindow)
@@ -1475,7 +1474,7 @@ bool SdrObjEditView::SdrBeginTextEdit(SdrObject* pObj_, SdrPageView* pPV, vcl::W
                                 mpTextEditOutliner->InsertView(pOutlView);
                             }
                         }
-                    }
+                    });
                 }
             }
 
@@ -1495,19 +1494,15 @@ bool SdrObjEditView::SdrBeginTextEdit(SdrObject* pObj_, SdrPageView* pPV, vcl::W
                 pWin->Invalidate(aTextEditArea);
             }
 
-            if (GetModel())
-            {
-                SdrHint aHint(SdrHintKind::BeginEdit, *pTextObj);
-                GetModel()->Broadcast(aHint);
-            }
+            SdrHint aHint(SdrHintKind::BeginEdit, *pTextObj);
+            GetModel().Broadcast(aHint);
 
             mpTextEditOutliner->setVisualizedPage(nullptr);
 
             if (mxSelectionController.is())
                 mxSelectionController->onSelectionHasChanged();
 
-            if (GetModel() && IsUndoEnabled()
-                && !GetModel()->GetDisableTextEditUsesCommonUndoManager())
+            if (IsUndoEnabled() && !GetModel().GetDisableTextEditUsesCommonUndoManager())
             {
                 SdrUndoManager* pSdrUndoManager = nullptr;
                 mpLocalTextEditUndoManager = createLocalTextUndoManager();
@@ -1577,8 +1572,8 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
     SdrUndoManager* pUndoEditUndoManager = nullptr;
     bool bNeedToUndoSavedRedoTextEdit(false);
 
-    if (GetModel() && IsUndoEnabled() && pTEObj && mpTextEditOutliner
-        && !GetModel()->GetDisableTextEditUsesCommonUndoManager())
+    if (IsUndoEnabled() && pTEObj && mpTextEditOutliner
+        && !GetModel().GetDisableTextEditUsesCommonUndoManager())
     {
         // change back the UndoManager to the remembered original one
         SfxUndoManager* pOriginal = mpTextEditOutliner->SetUndoManager(mpOldTextEditUndoManager);
@@ -1632,12 +1627,11 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
         assert(nullptr == mpOldTextEditUndoManager); // cannot be restored!
     }
 
-    if (GetModel())
-        if (auto pTextEditObj = mxWeakTextEditObj.get())
-        {
-            SdrHint aHint(SdrHintKind::EndEdit, *pTextEditObj);
-            GetModel()->Broadcast(aHint);
-        }
+    if (auto pTextEditObj = mxWeakTextEditObj.get())
+    {
+        SdrHint aHint(SdrHintKind::EndEdit, *pTextEditObj);
+        GetModel().Broadcast(aHint);
+    }
 
     // if new mechanism was used, clean it up. At cleanup no need to check
     // for LibreOfficeKit
@@ -1676,7 +1670,7 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
 
                 pTxtUndo.reset(
                     dynamic_cast<SdrUndoObjSetText*>(GetModel()
-                                                         ->GetSdrUndoFactory()
+                                                         .GetSdrUndoFactory()
                                                          .CreateUndoObjectSetText(*pTEObj, nText)
                                                          .release()));
             }
@@ -1724,7 +1718,7 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
                     SdrObjKind eIdent = pTEObj->GetObjIdentifier();
                     if (eIdent == SdrObjKind::Text)
                     {
-                        pDelUndo = GetModel()->GetSdrUndoFactory().CreateUndoDeleteObject(*pTEObj);
+                        pDelUndo = GetModel().GetSdrUndoFactory().CreateUndoDeleteObject(*pTEObj);
                     }
                 }
             }
@@ -1969,10 +1963,10 @@ bool SdrObjEditView::KeyInput(const KeyEvent& rKEvt, vcl::Window* pWin)
 
         if (mpTextEditOutlinerView->PostKeyEvent(rKEvt, pWin))
         {
-            if (mpModel)
+            if (mpTextEditOutliner && mpTextEditOutliner->IsModified())
             {
-                if (mpTextEditOutliner && mpTextEditOutliner->IsModified())
-                    mpModel->SetChanged();
+                GetModel().SetChanged();
+                SetInnerTextAreaForLOKit();
             }
 
             /* Start chaining processing */
@@ -2159,12 +2153,15 @@ bool SdrObjEditView::Command(const CommandEvent& rCEvt, vcl::Window* pWin)
         else
         {
             mpTextEditOutlinerView->Command(rCEvt);
-            if (mpModel && comphelper::LibreOfficeKit::isActive())
+            if (comphelper::LibreOfficeKit::isActive())
             {
                 // It could execute CommandEventId::ExtTextInput, while SdrObjEditView::KeyInput
                 // isn't called
                 if (mpTextEditOutliner && mpTextEditOutliner->IsModified())
-                    mpModel->SetChanged();
+                {
+                    GetModel().SetChanged();
+                    SetInnerTextAreaForLOKit();
+                }
             }
             return true;
         }
@@ -2358,7 +2355,7 @@ bool SdrObjEditView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
                 if (bUndo)
                 {
                     BegUndo(ImpGetDescriptionString(STR_EditSetAttributes));
-                    AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*pTextEditObj));
+                    AddUndo(GetModel().GetSdrUndoFactory().CreateUndoGeoObject(*pTextEditObj));
 
                     // If this is a text object also rescue the OutlinerParaObject since
                     // applying attributes to the object may change text layout when
@@ -2367,7 +2364,7 @@ bool SdrObjEditView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
                     // implementation itself.
                     bool bRescueText(pTextEditObj);
 
-                    AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoAttrObject(
+                    AddUndo(GetModel().GetSdrUndoFactory().CreateUndoAttrObject(
                         *pTextEditObj, false, !bNoEEItems || bRescueText));
                     EndUndo();
                 }
@@ -2384,7 +2381,7 @@ bool SdrObjEditView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
             // *pSet (otherwise it would be a copy).
             WhichRangesContainer pNewWhichTable
                 = RemoveWhichRange(pSet->GetRanges(), EE_ITEMS_START, EE_ITEMS_END);
-            SfxItemSet aSet(mpModel->GetItemPool(), std::move(pNewWhichTable));
+            SfxItemSet aSet(GetModel().GetItemPool(), std::move(pNewWhichTable));
             SfxWhichIter aIter(aSet);
             sal_uInt16 nWhich = aIter.FirstWhich();
             while (nWhich != 0)
@@ -2404,8 +2401,8 @@ bool SdrObjEditView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
                 if (IsUndoEnabled())
                 {
                     BegUndo(ImpGetDescriptionString(STR_EditSetAttributes));
-                    AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*pTextEditObj));
-                    AddUndo(GetModel()->GetSdrUndoFactory().CreateUndoAttrObject(*pTextEditObj));
+                    AddUndo(GetModel().GetSdrUndoFactory().CreateUndoGeoObject(*pTextEditObj));
+                    AddUndo(GetModel().GetSdrUndoFactory().CreateUndoAttrObject(*pTextEditObj));
                     EndUndo();
                 }
 
@@ -2428,8 +2425,11 @@ bool SdrObjEditView::SetAttributes(const SfxItemSet& rSet, bool bReplaceAll)
             mpTextEditOutlinerView->SetAttribs(rSet);
 
             Outliner* pTEOutliner = mpTextEditOutlinerView->GetOutliner();
-            if (mpModel && pTEOutliner && pTEOutliner->IsModified())
-                mpModel->SetChanged();
+            if (pTEOutliner && pTEOutliner->IsModified())
+            {
+                GetModel().SetChanged();
+                SetInnerTextAreaForLOKit();
+            }
 
             ImpMakeTextCursorAreaVisible();
         }
@@ -2814,7 +2814,7 @@ void SdrObjEditView::TakeFormatPaintBrush(std::shared_ptr<SfxItemSet>& rFormatSe
 
     OutlinerView* pOLV = GetTextEditOutlinerView();
 
-    rFormatSet = std::make_shared<SfxItemSet>(GetModel()->GetItemPool(),
+    rFormatSet = std::make_shared<SfxItemSet>(GetModel().GetItemPool(),
                                               GetFormatRangeImpl(pOLV != nullptr));
     if (pOLV)
     {

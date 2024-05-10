@@ -22,6 +22,8 @@
 
 #include <vcl/svtaccessiblefactory.hxx>
 #include <vcl/accessiblefactory.hxx>
+#include <vcl/accessibletable.hxx>
+#include <vcl/accessibletableprovider.hxx>
 
 #include <tools/svlibrary.h>
 #include <tools/debug.hxx>
@@ -91,7 +93,7 @@ namespace vcl
                 return nullptr;
             }
 
-            virtual vcl::IAccessibleBrowseBox*
+            virtual rtl::Reference<vcl::IAccessibleBrowseBox>
                 createAccessibleBrowseBox(
                     const css::uno::Reference< css::accessibility::XAccessible >& /*_rxParent*/,
                     vcl::IAccessibleTableProvider& /*_rBrowseBox*/
@@ -100,7 +102,7 @@ namespace vcl
                 return nullptr;
             }
 
-            virtual table::IAccessibleTableControl*
+            virtual rtl::Reference<table::IAccessibleTableControl>
                 createAccessibleTableControl(
                     const css::uno::Reference< css::accessibility::XAccessible >& /*_rxParent*/,
                     table::IAccessibleTable& /*_rTable*/
@@ -241,13 +243,11 @@ namespace vcl
         if (!s_pFactory)
         {
 #ifndef DISABLE_DYNLOADING
-            const OUString sModuleName( SVLIBRARY( "acc" ));
-            s_hAccessibleImplementationModule = osl_loadModuleRelative( &thisModule, sModuleName.pData, 0 );
+            s_hAccessibleImplementationModule = osl_loadModuleRelative( &thisModule, u"" SVLIBRARY( "acc" ) ""_ustr.pData, 0 );
             if ( s_hAccessibleImplementationModule != nullptr )
             {
-                const OUString sFactoryCreationFunc( "getSvtAccessibilityComponentFactory" );
                 s_pAccessibleFactoryFunc = reinterpret_cast<GetSvtAccessibilityComponentFactory>(
-                    osl_getFunctionSymbol( s_hAccessibleImplementationModule, sFactoryCreationFunc.pData ));
+                    osl_getFunctionSymbol( s_hAccessibleImplementationModule, u"getSvtAccessibilityComponentFactory"_ustr.pData ));
 
             }
             OSL_ENSURE( s_pAccessibleFactoryFunc, "ac_registerClient: could not load the library, or not retrieve the needed symbol!" );

@@ -19,6 +19,9 @@
 #include <sax/fastattribs.hxx>
 #include <unordered_map>
 #include <oox/export/drawingml.hxx>
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
 
 namespace oox
 {
@@ -143,16 +146,84 @@ bool ThemeExport::writeFontScheme(model::FontScheme const& rFontScheme)
     return true;
 }
 
+namespace
+{
+constexpr frozen::unordered_map<model::TransformationType, sal_Int32, 4> constTransformTypeTokenMap{
+    { model::TransformationType::Tint, XML_tint },
+    { model::TransformationType::Shade, XML_shade },
+    { model::TransformationType::LumMod, XML_lumMod },
+    { model::TransformationType::LumOff, XML_lumOff },
+};
+
+constexpr frozen::unordered_map<model::ThemeColorType, const char*, 12> constThemeColorTypeTokenMap{
+    { model::ThemeColorType::Dark1, "dk1" },
+    { model::ThemeColorType::Light1, "lt1" },
+    { model::ThemeColorType::Dark2, "dk2" },
+    { model::ThemeColorType::Light2, "lt2" },
+    { model::ThemeColorType::Accent1, "accent1" },
+    { model::ThemeColorType::Accent2, "accent2" },
+    { model::ThemeColorType::Accent3, "accent3" },
+    { model::ThemeColorType::Accent4, "accent4" },
+    { model::ThemeColorType::Accent5, "accent5" },
+    { model::ThemeColorType::Accent6, "accent6" },
+    { model::ThemeColorType::Hyperlink, "hlink" },
+    { model::ThemeColorType::FollowedHyperlink, "folHlink" }
+};
+
+constexpr frozen::unordered_map<model::SystemColorType, const char*, 30>
+    constSystemColorTypeTokenMap{
+        { model::SystemColorType::DarkShadow3D, "3dDkShadow" },
+        { model::SystemColorType::Light3D, "3dLight" },
+        { model::SystemColorType::ActiveBorder, "activeBorder" },
+        { model::SystemColorType::ActiveCaption, "activeCaption" },
+        { model::SystemColorType::AppWorkspace, "appWorkspace" },
+        { model::SystemColorType::Background, "background" },
+        { model::SystemColorType::ButtonFace, "btnFace" },
+        { model::SystemColorType::ButtonHighlight, "btnHighlight" },
+        { model::SystemColorType::ButtonShadow, "btnShadow" },
+        { model::SystemColorType::ButtonText, "btnText" },
+        { model::SystemColorType::CaptionText, "captionText" },
+        { model::SystemColorType::GradientActiveCaption, "gradientActiveCaption" },
+        { model::SystemColorType::GradientInactiveCaption, "gradientInactiveCaption" },
+        { model::SystemColorType::GrayText, "grayText" },
+        { model::SystemColorType::Highlight, "highlight" },
+        { model::SystemColorType::HighlightText, "highlightText" },
+        { model::SystemColorType::HotLight, "hotLight" },
+        { model::SystemColorType::InactiveBorder, "inactiveBorder" },
+        { model::SystemColorType::InactiveCaption, "inactiveCaption" },
+        { model::SystemColorType::InactiveCaptionText, "inactiveCaptionText" },
+        { model::SystemColorType::InfoBack, "infoBk" },
+        { model::SystemColorType::InfoText, "infoText" },
+        { model::SystemColorType::Menu, "menu" },
+        { model::SystemColorType::MenuBar, "menuBar" },
+        { model::SystemColorType::MenuHighlight, "menuHighlight" },
+        { model::SystemColorType::MenuText, "menuText" },
+        { model::SystemColorType::ScrollBar, "scrollBar" },
+        { model::SystemColorType::Window, "window" },
+        { model::SystemColorType::WindowFrame, "windowFrame" },
+        { model::SystemColorType::WindowText, "windowText" }
+    };
+
+constexpr frozen::unordered_map<sal_Int32, model::ThemeColorType, 12> constTokenMap{
+    { XML_dk1, model::ThemeColorType::Dark1 },
+    { XML_lt1, model::ThemeColorType::Light1 },
+    { XML_dk2, model::ThemeColorType::Dark2 },
+    { XML_lt2, model::ThemeColorType::Light2 },
+    { XML_accent1, model::ThemeColorType::Accent1 },
+    { XML_accent2, model::ThemeColorType::Accent2 },
+    { XML_accent3, model::ThemeColorType::Accent3 },
+    { XML_accent4, model::ThemeColorType::Accent4 },
+    { XML_accent5, model::ThemeColorType::Accent5 },
+    { XML_accent6, model::ThemeColorType::Accent6 },
+    { XML_hlink, model::ThemeColorType::Hyperlink },
+    { XML_folHlink, model::ThemeColorType::FollowedHyperlink }
+};
+
+} // end anonymous ns
+
 void ThemeExport::writeColorTransformations(
     std::vector<model::Transformation> const& rTransformations)
 {
-    static std::unordered_map<model::TransformationType, sal_Int32> constTransformTypeTokenMap = {
-        { model::TransformationType::Tint, XML_tint },
-        { model::TransformationType::Shade, XML_shade },
-        { model::TransformationType::LumMod, XML_lumMod },
-        { model::TransformationType::LumOff, XML_lumOff },
-    };
-
     for (model::Transformation const& rTransformation : rTransformations)
     {
         auto iterator = constTransformTypeTokenMap.find(rTransformation.meType);
@@ -194,19 +265,6 @@ void ThemeExport::writeColorHSL(model::ComplexColor const& rComplexColor)
 
 void ThemeExport::writeColorTheme(model::ComplexColor const& rComplexColor)
 {
-    static std::unordered_map<model::ThemeColorType, const char*> constThemeColorTypeTokenMap
-        = { { model::ThemeColorType::Dark1, "dk1" },
-            { model::ThemeColorType::Light1, "lt1" },
-            { model::ThemeColorType::Dark2, "dk2" },
-            { model::ThemeColorType::Light2, "lt2" },
-            { model::ThemeColorType::Accent1, "accent1" },
-            { model::ThemeColorType::Accent2, "accent2" },
-            { model::ThemeColorType::Accent3, "accent3" },
-            { model::ThemeColorType::Accent4, "accent4" },
-            { model::ThemeColorType::Accent5, "accent5" },
-            { model::ThemeColorType::Accent6, "accent6" },
-            { model::ThemeColorType::Hyperlink, "hlink" },
-            { model::ThemeColorType::FollowedHyperlink, "folHlink" } };
     auto iterator = constThemeColorTypeTokenMap.find(rComplexColor.getThemeColorType());
     if (iterator != constThemeColorTypeTokenMap.end())
     {
@@ -219,40 +277,8 @@ void ThemeExport::writeColorTheme(model::ComplexColor const& rComplexColor)
 
 void ThemeExport::writeColorSystem(model::ComplexColor const& rComplexColor)
 {
-    static std::unordered_map<model::SystemColorType, const char*> constThemeColorTypeTokenMap = {
-        { model::SystemColorType::DarkShadow3D, "3dDkShadow" },
-        { model::SystemColorType::Light3D, "3dLight" },
-        { model::SystemColorType::ActiveBorder, "activeBorder" },
-        { model::SystemColorType::ActiveCaption, "activeCaption" },
-        { model::SystemColorType::AppWorkspace, "appWorkspace" },
-        { model::SystemColorType::Background, "background" },
-        { model::SystemColorType::ButtonFace, "btnFace" },
-        { model::SystemColorType::ButtonHighlight, "btnHighlight" },
-        { model::SystemColorType::ButtonShadow, "btnShadow" },
-        { model::SystemColorType::ButtonText, "btnText" },
-        { model::SystemColorType::CaptionText, "captionText" },
-        { model::SystemColorType::GradientActiveCaption, "gradientActiveCaption" },
-        { model::SystemColorType::GradientInactiveCaption, "gradientInactiveCaption" },
-        { model::SystemColorType::GrayText, "grayText" },
-        { model::SystemColorType::Highlight, "highlight" },
-        { model::SystemColorType::HighlightText, "highlightText" },
-        { model::SystemColorType::HotLight, "hotLight" },
-        { model::SystemColorType::InactiveBorder, "inactiveBorder" },
-        { model::SystemColorType::InactiveCaption, "inactiveCaption" },
-        { model::SystemColorType::InactiveCaptionText, "inactiveCaptionText" },
-        { model::SystemColorType::InfoBack, "infoBk" },
-        { model::SystemColorType::InfoText, "infoText" },
-        { model::SystemColorType::Menu, "menu" },
-        { model::SystemColorType::MenuBar, "menuBar" },
-        { model::SystemColorType::MenuHighlight, "menuHighlight" },
-        { model::SystemColorType::MenuText, "menuText" },
-        { model::SystemColorType::ScrollBar, "scrollBar" },
-        { model::SystemColorType::Window, "window" },
-        { model::SystemColorType::WindowFrame, "windowFrame" },
-        { model::SystemColorType::WindowText, "windowText" },
-    };
-    auto iterator = constThemeColorTypeTokenMap.find(rComplexColor.getSystemColorType());
-    if (iterator != constThemeColorTypeTokenMap.end())
+    auto iterator = constSystemColorTypeTokenMap.find(rComplexColor.getSystemColorType());
+    if (iterator != constSystemColorTypeTokenMap.end())
     {
         const char* sValue = iterator->second;
         mpFS->startElementNS(XML_a, XML_sysClr, XML_val, sValue);
@@ -330,13 +356,13 @@ void ThemeExport::writeGradientFill(model::GradientFill const& rGradientFill)
         switch (rGradientFill.meGradientType)
         {
             case model::GradientType::Circle:
-                sPathType = "circle";
+                sPathType = "circle"_ostr;
                 break;
             case model::GradientType::Rectangle:
-                sPathType = "rect";
+                sPathType = "rect"_ostr;
                 break;
             case model::GradientType::Shape:
-                sPathType = "shape";
+                sPathType = "shape"_ostr;
                 break;
             default:
                 break;
@@ -359,166 +385,166 @@ void ThemeExport::writePatternFill(model::PatternFill const& rPatternFill)
     switch (rPatternFill.mePatternPreset)
     {
         case model::PatternPreset::Percent_5:
-            sPresetType = "pct5";
+            sPresetType = "pct5"_ostr;
             break;
         case model::PatternPreset::Percent_10:
-            sPresetType = "pct10";
+            sPresetType = "pct10"_ostr;
             break;
         case model::PatternPreset::Percent_20:
-            sPresetType = "pct20";
+            sPresetType = "pct20"_ostr;
             break;
         case model::PatternPreset::Percent_25:
-            sPresetType = "pct25";
+            sPresetType = "pct25"_ostr;
             break;
         case model::PatternPreset::Percent_30:
-            sPresetType = "pct30";
+            sPresetType = "pct30"_ostr;
             break;
         case model::PatternPreset::Percent_40:
-            sPresetType = "pct40";
+            sPresetType = "pct40"_ostr;
             break;
         case model::PatternPreset::Percent_50:
-            sPresetType = "pct50";
+            sPresetType = "pct50"_ostr;
             break;
         case model::PatternPreset::Percent_60:
-            sPresetType = "pct60";
+            sPresetType = "pct60"_ostr;
             break;
         case model::PatternPreset::Percent_70:
-            sPresetType = "pct70";
+            sPresetType = "pct70"_ostr;
             break;
         case model::PatternPreset::Percent_75:
-            sPresetType = "pct75";
+            sPresetType = "pct75"_ostr;
             break;
         case model::PatternPreset::Percent_80:
-            sPresetType = "pct80";
+            sPresetType = "pct80"_ostr;
             break;
         case model::PatternPreset::Percent_90:
-            sPresetType = "pct90";
+            sPresetType = "pct90"_ostr;
             break;
         case model::PatternPreset::Horizontal:
-            sPresetType = "horz";
+            sPresetType = "horz"_ostr;
             break;
         case model::PatternPreset::Vertical:
-            sPresetType = "vert";
+            sPresetType = "vert"_ostr;
             break;
         case model::PatternPreset::LightHorizontal:
-            sPresetType = "ltHorz";
+            sPresetType = "ltHorz"_ostr;
             break;
         case model::PatternPreset::LightVertical:
-            sPresetType = "ltVert";
+            sPresetType = "ltVert"_ostr;
             break;
         case model::PatternPreset::DarkHorizontal:
-            sPresetType = "dkHorz";
+            sPresetType = "dkHorz"_ostr;
             break;
         case model::PatternPreset::DarkVertical:
-            sPresetType = "dkVert";
+            sPresetType = "dkVert"_ostr;
             break;
         case model::PatternPreset::NarrowHorizontal:
-            sPresetType = "narHorz";
+            sPresetType = "narHorz"_ostr;
             break;
         case model::PatternPreset::NarrowVertical:
-            sPresetType = "narVert";
+            sPresetType = "narVert"_ostr;
             break;
         case model::PatternPreset::DashedHorizontal:
-            sPresetType = "dashHorz";
+            sPresetType = "dashHorz"_ostr;
             break;
         case model::PatternPreset::DashedVertical:
-            sPresetType = "dashVert";
+            sPresetType = "dashVert"_ostr;
             break;
         case model::PatternPreset::Cross:
-            sPresetType = "cross";
+            sPresetType = "cross"_ostr;
             break;
         case model::PatternPreset::DownwardDiagonal:
-            sPresetType = "dnDiag";
+            sPresetType = "dnDiag"_ostr;
             break;
         case model::PatternPreset::UpwardDiagonal:
-            sPresetType = "upDiag";
+            sPresetType = "upDiag"_ostr;
             break;
         case model::PatternPreset::LightDownwardDiagonal:
-            sPresetType = "ltDnDiag";
+            sPresetType = "ltDnDiag"_ostr;
             break;
         case model::PatternPreset::LightUpwardDiagonal:
-            sPresetType = "ltUpDiag";
+            sPresetType = "ltUpDiag"_ostr;
             break;
         case model::PatternPreset::DarkDownwardDiagonal:
-            sPresetType = "dkDnDiag";
+            sPresetType = "dkDnDiag"_ostr;
             break;
         case model::PatternPreset::DarkUpwardDiagonal:
-            sPresetType = "dkUpDiag";
+            sPresetType = "dkUpDiag"_ostr;
             break;
         case model::PatternPreset::WideDownwardDiagonal:
-            sPresetType = "wdDnDiag";
+            sPresetType = "wdDnDiag"_ostr;
             break;
         case model::PatternPreset::WideUpwardDiagonal:
-            sPresetType = "wdUpDiag";
+            sPresetType = "wdUpDiag"_ostr;
             break;
         case model::PatternPreset::DashedDownwardDiagonal:
-            sPresetType = "dashDnDiag";
+            sPresetType = "dashDnDiag"_ostr;
             break;
         case model::PatternPreset::DashedUpwardDiagonal:
-            sPresetType = "dashUpDiag";
+            sPresetType = "dashUpDiag"_ostr;
             break;
         case model::PatternPreset::DiagonalCross:
-            sPresetType = "diagCross";
+            sPresetType = "diagCross"_ostr;
             break;
         case model::PatternPreset::SmallCheckerBoard:
-            sPresetType = "smCheck";
+            sPresetType = "smCheck"_ostr;
             break;
         case model::PatternPreset::LargeCheckerBoard:
-            sPresetType = "lgCheck";
+            sPresetType = "lgCheck"_ostr;
             break;
         case model::PatternPreset::SmallGrid:
-            sPresetType = "smGrid";
+            sPresetType = "smGrid"_ostr;
             break;
         case model::PatternPreset::LargeGrid:
-            sPresetType = "lgGrid";
+            sPresetType = "lgGrid"_ostr;
             break;
         case model::PatternPreset::DottedGrid:
-            sPresetType = "dotGrid";
+            sPresetType = "dotGrid"_ostr;
             break;
         case model::PatternPreset::SmallConfetti:
-            sPresetType = "smConfetti";
+            sPresetType = "smConfetti"_ostr;
             break;
         case model::PatternPreset::LargeConfetti:
-            sPresetType = "lgConfetti";
+            sPresetType = "lgConfetti"_ostr;
             break;
         case model::PatternPreset::HorizontalBrick:
-            sPresetType = "horzBrick";
+            sPresetType = "horzBrick"_ostr;
             break;
         case model::PatternPreset::DiagonalBrick:
-            sPresetType = "diagBrick";
+            sPresetType = "diagBrick"_ostr;
             break;
         case model::PatternPreset::SolidDiamond:
-            sPresetType = "solidDmnd";
+            sPresetType = "solidDmnd"_ostr;
             break;
         case model::PatternPreset::OpenDiamond:
-            sPresetType = "openDmnd";
+            sPresetType = "openDmnd"_ostr;
             break;
         case model::PatternPreset::DottedDiamond:
-            sPresetType = "dotDmnd";
+            sPresetType = "dotDmnd"_ostr;
             break;
         case model::PatternPreset::Plaid:
-            sPresetType = "plaid";
+            sPresetType = "plaid"_ostr;
             break;
         case model::PatternPreset::Sphere:
-            sPresetType = "sphere";
+            sPresetType = "sphere"_ostr;
             break;
         case model::PatternPreset::Weave:
-            sPresetType = "weave";
+            sPresetType = "weave"_ostr;
             break;
         case model::PatternPreset::Divot:
-            sPresetType = "divot";
+            sPresetType = "divot"_ostr;
             break;
         case model::PatternPreset::Shingle:
-            sPresetType = "shingle";
+            sPresetType = "shingle"_ostr;
             break;
         case model::PatternPreset::Wave:
-            sPresetType = "wave";
+            sPresetType = "wave"_ostr;
             break;
         case model::PatternPreset::Trellis:
-            sPresetType = "trellis";
+            sPresetType = "trellis"_ostr;
             break;
         case model::PatternPreset::ZigZag:
-            sPresetType = "zigZag";
+            sPresetType = "zigZag"_ostr;
             break;
         default:
             break;
@@ -547,15 +573,15 @@ OString convertFlipMode(model::FlipMode eFlipMode)
     switch (eFlipMode)
     {
         case model::FlipMode::X:
-            return "x";
+            return "x"_ostr;
         case model::FlipMode::Y:
-            return "y";
+            return "y"_ostr;
         case model::FlipMode::XY:
-            return "xy";
+            return "xy"_ostr;
         case model::FlipMode::None:
-            return "none";
+            return "none"_ostr;
     }
-    return "none";
+    return "none"_ostr;
 }
 
 OString convertRectangleAlignment(model::RectangleAlignment eFlipMode)
@@ -563,23 +589,23 @@ OString convertRectangleAlignment(model::RectangleAlignment eFlipMode)
     switch (eFlipMode)
     {
         case model::RectangleAlignment::TopLeft:
-            return "tl";
+            return "tl"_ostr;
         case model::RectangleAlignment::Top:
-            return "t";
+            return "t"_ostr;
         case model::RectangleAlignment::TopRight:
-            return "tr";
+            return "tr"_ostr;
         case model::RectangleAlignment::Left:
-            return "l";
+            return "l"_ostr;
         case model::RectangleAlignment::Center:
-            return "ctr";
+            return "ctr"_ostr;
         case model::RectangleAlignment::Right:
-            return "r";
+            return "r"_ostr;
         case model::RectangleAlignment::BottomLeft:
-            return "bl";
+            return "bl"_ostr;
         case model::RectangleAlignment::Bottom:
-            return "b";
+            return "b"_ostr;
         case model::RectangleAlignment::BottomRight:
-            return "br";
+            return "br"_ostr;
         case model::RectangleAlignment::Unset:
             break;
     }
@@ -671,13 +697,13 @@ void ThemeExport::writeLineStyle(model::LineStyle const& rLineStyle)
     switch (rLineStyle.meCapType)
     {
         case model::CapType::Flat:
-            sCap = "flat";
+            sCap = "flat"_ostr;
             break;
         case model::CapType::Round:
-            sCap = "rnd";
+            sCap = "rnd"_ostr;
             break;
         case model::CapType::Square:
-            sCap = "sq";
+            sCap = "sq"_ostr;
             break;
         case model::CapType::Unset:
             break;
@@ -687,10 +713,10 @@ void ThemeExport::writeLineStyle(model::LineStyle const& rLineStyle)
     switch (rLineStyle.mePenAlignment)
     {
         case model::PenAlignmentType::Center:
-            sPenAlign = "ctr";
+            sPenAlign = "ctr"_ostr;
             break;
         case model::PenAlignmentType::Inset:
-            sPenAlign = "in";
+            sPenAlign = "in"_ostr;
             break;
         case model::PenAlignmentType::Unset:
             break;
@@ -700,19 +726,19 @@ void ThemeExport::writeLineStyle(model::LineStyle const& rLineStyle)
     switch (rLineStyle.meCompoundLineType)
     {
         case model::CompoundLineType::Single:
-            sCompoundLine = "sng";
+            sCompoundLine = "sng"_ostr;
             break;
         case model::CompoundLineType::Double:
-            sCompoundLine = "dbl";
+            sCompoundLine = "dbl"_ostr;
             break;
         case model::CompoundLineType::ThickThin_Double:
-            sCompoundLine = "thickThin";
+            sCompoundLine = "thickThin"_ostr;
             break;
         case model::CompoundLineType::ThinThick_Double:
-            sCompoundLine = "thinThick";
+            sCompoundLine = "thinThick"_ostr;
             break;
         case model::CompoundLineType::Triple:
-            sCompoundLine = "tri";
+            sCompoundLine = "tri"_ostr;
             break;
         case model::CompoundLineType::Unset:
             break;
@@ -729,37 +755,37 @@ void ThemeExport::writeLineStyle(model::LineStyle const& rLineStyle)
         switch (rLineStyle.maLineDash.mePresetType)
         {
             case model::PresetDashType::Dot:
-                sPresetType = "dot";
+                sPresetType = "dot"_ostr;
                 break;
             case model::PresetDashType::Dash:
-                sPresetType = "dash";
+                sPresetType = "dash"_ostr;
                 break;
             case model::PresetDashType::LargeDash:
-                sPresetType = "lgDash";
+                sPresetType = "lgDash"_ostr;
                 break;
             case model::PresetDashType::DashDot:
-                sPresetType = "dashDot";
+                sPresetType = "dashDot"_ostr;
                 break;
             case model::PresetDashType::LargeDashDot:
-                sPresetType = "lgDashDot";
+                sPresetType = "lgDashDot"_ostr;
                 break;
             case model::PresetDashType::LargeDashDotDot:
-                sPresetType = "lgDashDotDot";
+                sPresetType = "lgDashDotDot"_ostr;
                 break;
             case model::PresetDashType::Solid:
-                sPresetType = "solid";
+                sPresetType = "solid"_ostr;
                 break;
             case model::PresetDashType::SystemDash:
-                sPresetType = "sysDash";
+                sPresetType = "sysDash"_ostr;
                 break;
             case model::PresetDashType::SystemDot:
-                sPresetType = "sysDot";
+                sPresetType = "sysDot"_ostr;
                 break;
             case model::PresetDashType::SystemDashDot:
-                sPresetType = "sysDashDot";
+                sPresetType = "sysDashDot"_ostr;
                 break;
             case model::PresetDashType::SystemDashDotDot:
-                sPresetType = "sysDashDotDot";
+                sPresetType = "sysDashDotDot"_ostr;
                 break;
             case model::PresetDashType::Unset:
                 break;
@@ -847,21 +873,7 @@ bool ThemeExport::writeFormatScheme(model::FormatScheme const& rFormatScheme)
 
 bool ThemeExport::writeColorSet(model::Theme const& rTheme)
 {
-    static std::unordered_map<sal_Int32, model::ThemeColorType> constTokenMap
-        = { { XML_dk1, model::ThemeColorType::Dark1 },
-            { XML_lt1, model::ThemeColorType::Light1 },
-            { XML_dk2, model::ThemeColorType::Dark2 },
-            { XML_lt2, model::ThemeColorType::Light2 },
-            { XML_accent1, model::ThemeColorType::Accent1 },
-            { XML_accent2, model::ThemeColorType::Accent2 },
-            { XML_accent3, model::ThemeColorType::Accent3 },
-            { XML_accent4, model::ThemeColorType::Accent4 },
-            { XML_accent5, model::ThemeColorType::Accent5 },
-            { XML_accent6, model::ThemeColorType::Accent6 },
-            { XML_hlink, model::ThemeColorType::Hyperlink },
-            { XML_folHlink, model::ThemeColorType::FollowedHyperlink } };
-
-    static std::array<sal_Int32, 12> constTokenArray
+    static const constexpr std::array<sal_Int32, 12> constTokenArray
         = { XML_dk1,     XML_lt1,     XML_dk2,     XML_lt2,     XML_accent1, XML_accent2,
             XML_accent3, XML_accent4, XML_accent5, XML_accent6, XML_hlink,   XML_folHlink };
 
@@ -871,11 +883,15 @@ bool ThemeExport::writeColorSet(model::Theme const& rTheme)
 
     for (auto nToken : constTokenArray)
     {
-        model::ThemeColorType eColorType = constTokenMap[nToken];
-        Color aColor = pColorSet->getColor(eColorType);
-        mpFS->startElementNS(XML_a, nToken);
-        mpFS->singleElementNS(XML_a, XML_srgbClr, XML_val, I32SHEX(sal_Int32(aColor)));
-        mpFS->endElementNS(XML_a, nToken);
+        auto iterator = constTokenMap.find(nToken);
+        if (iterator != constTokenMap.end())
+        {
+            model::ThemeColorType eColorType = iterator->second;
+            Color aColor = pColorSet->getColor(eColorType);
+            mpFS->startElementNS(XML_a, nToken);
+            mpFS->singleElementNS(XML_a, XML_srgbClr, XML_val, I32SHEX(sal_Int32(aColor)));
+            mpFS->endElementNS(XML_a, nToken);
+        }
     }
 
     return true;

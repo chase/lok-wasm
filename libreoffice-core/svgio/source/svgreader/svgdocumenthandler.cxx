@@ -27,6 +27,7 @@
 #include <svgrectnode.hxx>
 #include <svggradientnode.hxx>
 #include <svggradientstopnode.hxx>
+#include <svgswitchnode.hxx>
 #include <svgsymbolnode.hxx>
 #include <svgusenode.hxx>
 #include <svgcirclenode.hxx>
@@ -41,13 +42,22 @@
 #include <svgstylenode.hxx>
 #include <svgimagenode.hxx>
 #include <svgclippathnode.hxx>
+#include <svgfecolormatrixnode.hxx>
+#include <svgfedropshadownode.hxx>
+#include <svgfefloodnode.hxx>
+#include <svgfeimagenode.hxx>
+#include <svgfegaussianblurnode.hxx>
+#include <svgfeoffsetnode.hxx>
+#include <svgfilternode.hxx>
 #include <svgmasknode.hxx>
 #include <svgmarkernode.hxx>
 #include <svgpatternnode.hxx>
 #include <svgtitledescnode.hxx>
 #include <sal/log.hxx>
 #include <osl/diagnose.h>
-#include <o3tl/string_view.hxx>
+
+#include <com/sun/star/lang/Locale.hpp>
+#include <drawinglayer/primitive2d/textlayoutdevice.hxx>
 
 using namespace com::sun::star;
 
@@ -56,7 +66,7 @@ namespace svgio::svgreader
 
 namespace
 {
-    svgio::svgreader::SvgCharacterNode* whiteSpaceHandling(svgio::svgreader::SvgNode const * pNode, svgio::svgreader::SvgCharacterNode* pLast)
+    svgio::svgreader::SvgCharacterNode* whiteSpaceHandling(svgio::svgreader::SvgNode const * pNode, svgio::svgreader::SvgTspanNode* pParentLine, svgio::svgreader::SvgCharacterNode* pLast)
     {
         if(pNode)
         {
@@ -76,54 +86,50 @@ namespace
                             // clean whitespace in text span
                             svgio::svgreader::SvgCharacterNode* pCharNode = static_cast< svgio::svgreader::SvgCharacterNode* >(pCandidate);
 
+                            pCharNode->setParentLine(pParentLine);
+
                             pCharNode->whiteSpaceHandling();
+                            pLast = pCharNode->addGap(pLast);
 
-                            // pCharNode may have lost all text. If that's the case, ignore
-                            // as invalid character node
-                            // Also ignore if textBeforeSpaceHandling just have spaces
-                            if(!pCharNode->getText().isEmpty() && !o3tl::trim(pCharNode->getTextBeforeSpaceHandling()).empty())
+                            double fTextWidth(0.0);
+
+                            const SvgStyleAttributes* pSvgStyleAttributes = pCharNode->getSvgStyleAttributes();
+
+                            if(pSvgStyleAttributes)
                             {
-                                if(pLast)
-                                {
-                                    bool bAddGap(true);
+                                const drawinglayer::attribute::FontAttribute aFontAttribute(
+                                        svgio::svgreader::SvgCharacterNode::getFontAttribute(*pSvgStyleAttributes));
 
-                                    // Do not add a gap if last node doesn't end with a space and
-                                    // current note doesn't start with a space
-                                    const sal_uInt32 nLastLength(pLast->getTextBeforeSpaceHandling().getLength());
-                                    if(pLast->getTextBeforeSpaceHandling()[nLastLength - 1] != ' ' && pCharNode->getTextBeforeSpaceHandling()[0] != ' ')
-                                        bAddGap = false;
+                                double fFontWidth(pSvgStyleAttributes->getFontSizeNumber().solve(*pCharNode));
+                                double fFontHeight(fFontWidth);
 
-                                    // With this option a baseline shift between two char parts ('words')
-                                    // will not add a space 'gap' to the end of the (non-last) word. This
-                                    // seems to be the standard behaviour, see last bugdoc attached #122524#
-                                    const svgio::svgreader::SvgStyleAttributes* pStyleLast = pLast->getSvgStyleAttributes();
-                                    const svgio::svgreader::SvgStyleAttributes* pStyleCurrent = pCandidate->getSvgStyleAttributes();
+                                css::lang::Locale aLocale;
 
-                                    if(pStyleLast && pStyleCurrent && pStyleLast->getBaselineShift() != pStyleCurrent->getBaselineShift())
-                                    {
-                                        bAddGap = false;
-                                    }
-
-                                    // add in-between whitespace (single space) to last
-                                    // known character node
-                                    if(bAddGap)
-                                    {
-                                        pLast->addGap();
-                                    }
-                                }
-
-                                // remember new last corrected character node
-                                pLast = pCharNode;
+                                drawinglayer::primitive2d::TextLayouterDevice aTextLayouterDevice;
+                                aTextLayouterDevice.setFontAttribute(aFontAttribute, fFontWidth, fFontHeight, aLocale);
+                                fTextWidth = aTextLayouterDevice.getTextWidth(pCharNode->getText(), 0.0, pCharNode->getText().getLength());
                             }
 
+                            pParentLine->concatenateTextLineWidth(fTextWidth);
                             break;
                         }
                         case SVGToken::Tspan:
+                        {
+                            svgio::svgreader::SvgTspanNode* pTspanNode = static_cast< svgio::svgreader::SvgTspanNode* >(pCandidate);
+
+                            // If x or y exist it means it's a new line of text
+                            if(!pTspanNode->getX().empty() || !pTspanNode->getY().empty())
+                                pParentLine = pTspanNode;
+
+                            // recursively clean whitespaces in subhierarchy
+                            pLast = whiteSpaceHandling(pCandidate, pParentLine, pLast);
+                            break;
+                        }
                         case SVGToken::TextPath:
                         case SVGToken::Tref:
                         {
                             // recursively clean whitespaces in subhierarchy
-                            pLast = whiteSpaceHandling(pCandidate, pLast);
+                            pLast = whiteSpaceHandling(pCandidate, pParentLine, pLast);
                             break;
                         }
                         default:
@@ -138,12 +144,12 @@ namespace
 
         return pLast;
     }
+
 } // end anonymous namespace
 
         SvgDocHdl::SvgDocHdl(const OUString& aAbsolutePath)
         :   maDocument(aAbsolutePath),
-            mpTarget(nullptr),
-            bSkip(false)
+            mpTarget(nullptr)
         {
         }
 
@@ -178,8 +184,6 @@ namespace
 
         void SvgDocHdl::startElement( const OUString& aName, const uno::Reference< xml::sax::XAttributeList >& xAttribs )
         {
-            if (bSkip)
-                return;
             if(aName.isEmpty())
                 return;
 
@@ -193,6 +197,13 @@ namespace
                     /// new basic node for Symbol. Content gets scanned, but
                     /// will not be decomposed (see SvgNode::decomposeSvgNode and bReferenced)
                     mpTarget = new SvgSymbolNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::Switch:
+                {
+                    /// new node for Switch
+                    mpTarget = new SvgSwitchNode(maDocument, mpTarget);
                     mpTarget->parseAttributes(xAttribs);
                     break;
                 }
@@ -258,14 +269,14 @@ namespace
                 case SVGToken::Polygon:
                 {
                     /// new node for Polygon
-                    mpTarget = new SvgPolyNode(maDocument, mpTarget, false);
+                    mpTarget = new SvgPolyNode(aSVGToken, maDocument, mpTarget);
                     mpTarget->parseAttributes(xAttribs);
                     break;
                 }
                 case SVGToken::Polyline:
                 {
                     /// new node for Polyline
-                    mpTarget = new SvgPolyNode(maDocument, mpTarget, true);
+                    mpTarget = new SvgPolyNode(aSVGToken, maDocument, mpTarget);
                     mpTarget->parseAttributes(xAttribs);
                     break;
                 }
@@ -319,7 +330,7 @@ namespace
                 }
                 case SVGToken::Tspan:
                 {
-                    mpTarget = new SvgTspanNode(maDocument, mpTarget);
+                    mpTarget = new SvgTspanNode(aSVGToken, maDocument, mpTarget);
                     mpTarget->parseAttributes(xAttribs);
                     break;
                 }
@@ -343,7 +354,7 @@ namespace
                     mpTarget = pNew;
 
                     // #i125326# there are attributes, read them. This will set isTextCss to false if
-                    // type attibute is different to "text/css"
+                    // type attribute is different to "text/css"
                     mpTarget->parseAttributes(xAttribs);
 
                     if(pNew->isTextCss())
@@ -371,6 +382,55 @@ namespace
                     mpTarget->parseAttributes(xAttribs);
                     break;
                 }
+                case SVGToken::FeColorMatrix:
+                {
+                    /// new node for feColorMatrix
+                    mpTarget = new SvgFeColorMatrixNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::FeDropShadow:
+                {
+                    /// new node for feDropShadow
+                    mpTarget = new SvgFeDropShadowNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::FeFlood:
+                {
+                    /// new node for feFlood
+                    mpTarget = new SvgFeFloodNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::FeImage:
+                {
+                    /// new node for feImage
+                    mpTarget = new SvgFeImageNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::FeGaussianBlur:
+                {
+                    /// new node for feGaussianBlur
+                    mpTarget = new SvgFeGaussianBlurNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::FeOffset:
+                {
+                    /// new node for feOffset
+                    mpTarget = new SvgFeOffsetNode(maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
+                case SVGToken::Filter:
+                {
+                    /// new node for Filter
+                    mpTarget = new SvgFilterNode(aSVGToken, maDocument, mpTarget);
+                    mpTarget->parseAttributes(xAttribs);
+                    break;
+                }
 
                 /// structural element marker
                 case SVGToken::Marker:
@@ -390,17 +450,9 @@ namespace
                     break;
                 }
 
-                // ignore FlowRoot and child nodes
-                case SVGToken::FlowRoot:
-                {
-                    bSkip = true;
-                    break;
-                }
-
                 default:
                 {
-                    /// invalid token, ignore
-                    SAL_INFO( "svgio", "Unknown Base SvgToken <" + aName + "> (!)" );
+                    mpTarget = new SvgNode(SVGToken::Unknown, maDocument, mpTarget);
                     break;
                 }
             }
@@ -411,108 +463,29 @@ namespace
             if(aName.isEmpty())
                 return;
 
+            if(!mpTarget)
+                return;
+
             const SVGToken aSVGToken(StrToSVGToken(aName, false));
-            SvgNode* pWhitespaceCheck(SVGToken::Text == aSVGToken ? mpTarget : nullptr);
+            SvgNode* pTextNode(SVGToken::Text == aSVGToken ? mpTarget : nullptr);
             SvgStyleNode* pCssStyle(SVGToken::Style == aSVGToken ? static_cast< SvgStyleNode* >(mpTarget) : nullptr);
             SvgTitleDescNode* pSvgTitleDescNode(SVGToken::Title == aSVGToken || SVGToken::Desc == aSVGToken ? static_cast< SvgTitleDescNode* >(mpTarget) : nullptr);
 
-            // if we are in skipping mode and we reach the flowRoot end tag: stop skipping mode
-            if(bSkip && aSVGToken == SVGToken::FlowRoot)
-                bSkip = false;
-            // we are in skipping mode: do nothing until we found the flowRoot end tag
-            else if(bSkip)
-                return;
-
-            switch (aSVGToken)
+            if(!mpTarget->getParent())
             {
-                /// valid tokens for which a new one was created
-
-                /// structural elements
-                case SVGToken::Defs:
-                case SVGToken::G:
-                case SVGToken::Svg:
-                case SVGToken::Symbol:
-                case SVGToken::Use:
-                case SVGToken::A:
-
-                /// shape elements
-                case SVGToken::Circle:
-                case SVGToken::Ellipse:
-                case SVGToken::Line:
-                case SVGToken::Path:
-                case SVGToken::Polygon:
-                case SVGToken::Polyline:
-                case SVGToken::Rect:
-                case SVGToken::Image:
-
-                /// title and description
-                case SVGToken::Title:
-                case SVGToken::Desc:
-
-                /// gradients
-                case SVGToken::LinearGradient:
-                case SVGToken::RadialGradient:
-
-                /// gradient stops
-                case SVGToken::Stop:
-
-                /// text
-                case SVGToken::Text:
-                case SVGToken::Tspan:
-                case SVGToken::TextPath:
-                case SVGToken::Tref:
-
-                /// styles (as stylesheets)
-                case SVGToken::Style:
-
-                /// structural elements clip-path and mask
-                case SVGToken::ClipPathNode:
-                case SVGToken::Mask:
-
-                /// structural element marker
-                case SVGToken::Marker:
-
-                /// structural element pattern
-                case SVGToken::Pattern:
-
-                /// content handling after parsing
-                {
-                    if(mpTarget)
-                    {
-                        if(!mpTarget->getParent())
-                        {
-                            // last element closing, save this tree
-                            maDocument.appendNode(std::unique_ptr<SvgNode>(mpTarget));
-                        }
-
-                        mpTarget = const_cast< SvgNode* >(mpTarget->getParent());
-                    }
-                    else
-                    {
-                        OSL_ENSURE(false, "Closing token, but no context (!)");
-                    }
-                    break;
-                }
-                default:
-                {
-                    /// invalid token, ignore
-                }
+                // last element closing, save this tree
+                maDocument.appendNode(std::unique_ptr<SvgNode>(mpTarget));
             }
 
-            if(pSvgTitleDescNode && mpTarget)
+            mpTarget = const_cast< SvgNode* >(mpTarget->getParent());
+
+            if (pSvgTitleDescNode && mpTarget)
             {
                 const OUString& aText(pSvgTitleDescNode->getText());
 
                 if(!aText.isEmpty())
                 {
-                    if(SVGToken::Title == aSVGToken)
-                    {
-                        mpTarget->parseAttribute(getStrTitle(), aSVGToken, aText);
-                    }
-                    else // if(SVGTokenDesc == aSVGToken)
-                    {
-                        mpTarget->parseAttribute(getStrDesc(), aSVGToken, aText);
-                    }
+                    mpTarget->parseAttribute(aSVGToken, aText);
                 }
             }
 
@@ -540,10 +513,10 @@ namespace
                 }
             }
 
-            if(pWhitespaceCheck)
+            if(pTextNode)
             {
                 // cleanup read strings
-                whiteSpaceHandling(pWhitespaceCheck, nullptr);
+                whiteSpaceHandling(pTextNode, static_cast< SvgTspanNode*>(pTextNode), nullptr);
             }
         }
 
@@ -561,24 +534,23 @@ namespace
                 case SVGToken::TextPath:
                 {
                     const auto& rChilds = mpTarget->getChildren();
-                    SvgCharacterNode* pTarget = nullptr;
 
                     if(!rChilds.empty())
                     {
-                        pTarget = dynamic_cast< SvgCharacterNode* >(rChilds[rChilds.size() - 1].get());
+                        SvgNode* pChild = rChilds[rChilds.size() - 1].get();
+                        if ( pChild->getType() == SVGToken::Character )
+                        {
+                            SvgCharacterNode& rSvgCharacterNode = static_cast< SvgCharacterNode& >(*pChild);
+
+                            // concatenate to current character span
+                            rSvgCharacterNode.concatenate(aChars);
+                            break;
+                        }
                     }
 
-                    if(pTarget)
-                    {
-                        // concatenate to current character span
-                        pTarget->concatenate(aChars);
-                    }
-                    else
-                    {
-                        // add character span as simplified tspan (no arguments)
-                        // as direct child of SvgTextNode/SvgTspanNode/SvgTextPathNode
-                        new SvgCharacterNode(maDocument, mpTarget, aChars);
-                    }
+                    // add character span as simplified tspan (no arguments)
+                    // as direct child of SvgTextNode/SvgTspanNode/SvgTextPathNode
+                    new SvgCharacterNode(maDocument, mpTarget, aChars);
                     break;
                 }
                 case SVGToken::Style:

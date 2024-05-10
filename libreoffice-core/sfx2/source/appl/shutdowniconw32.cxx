@@ -157,8 +157,8 @@ static HMENU createSystrayMenu( )
         SvtModuleOptions::EModule   eModuleIdentifier;
         UINT                        nMenuItemID;
         UINT                        nMenuIconID;
-        rtl::OUStringConstExpr      sURLDescription;
-    } static const aMenuItems[] =
+        OUString                    sURLDescription;
+    } static constexpr aMenuItems[] =
     {
         { SvtModuleOptions::EModule::WRITER,    IDM_WRITER, ICON_TEXT_DOCUMENT,         WRITER_URL },
         { SvtModuleOptions::EModule::CALC,      IDM_CALC,   ICON_SPREADSHEET_DOCUMENT,  CALC_URL },
@@ -181,7 +181,7 @@ static HMENU createSystrayMenu( )
             continue;
 
         addMenuItem( hMenu, nMenuItemID, nMenuIconID,
-            ShutdownIcon::GetUrlDescription( sURL.asView() ), pos, true, "" );
+            ShutdownIcon::GetUrlDescription( sURL ), pos, true, "" );
     }
 
 
@@ -426,7 +426,7 @@ static LRESULT CALLBACK executerWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LP
 }
 
 
-static DWORD WINAPI SystrayThread( LPVOID /*lpParam*/ )
+static unsigned __stdcall SystrayThread(void* /*lpParam*/)
 {
     osl_setThreadName("SystrayThread");
 
@@ -516,8 +516,8 @@ void win32_init_sys_tray()
             nullptr                      // window-creation data
             );
 
-        DWORD   dwThreadId;
-        CloseHandle(CreateThread(nullptr, 0, SystrayThread, nullptr, 0, &dwThreadId));
+        CloseHandle(reinterpret_cast<HANDLE>(
+            _beginthreadex(nullptr, 0, SystrayThread, nullptr, 0, nullptr)));
     }
 }
 
@@ -681,15 +681,16 @@ static OUString SHGetSpecialFolder( int nFolderID )
 
     if( hHdl == NOERROR )
     {
-        WCHAR *lpFolderA;
-        lpFolderA = ALLOC( WCHAR, 16000 );
+        if (WCHAR *lpFolderA = ALLOC(WCHAR, 16000))
+        {
+            SHGetPathFromIDListW(pidl, lpFolderA);
+            aFolder = o3tl::toU(lpFolderA);
 
-        SHGetPathFromIDListW( pidl, lpFolderA );
-        aFolder = o3tl::toU( lpFolderA );
-
-        FREE( lpFolderA );
-        SHFree_( pidl );
+            FREE(lpFolderA);
+            SHFree_(pidl);
+        }
     }
+
     return aFolder;
 }
 

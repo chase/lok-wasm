@@ -77,6 +77,7 @@
 #include <view.hxx>
 #include <hints.hxx>
 #include <tools/json_writer.hxx>
+#include <redline.hxx>
 
 using namespace com::sun::star;
 using namespace util;
@@ -599,7 +600,7 @@ bool SwCursorShell::SttEndDoc( bool bStt )
 
 const SwTableNode* SwCursorShell::IsCursorInTable() const
 {
-    if (m_pTableCursor)
+    if (m_pTableCursor && m_pTableCursor->GetSelectedBoxesCount())
     {   // find the table that has the selected boxes
         return m_pTableCursor->GetSelectedBoxes()[0]->GetSttNd()->FindTableNode();
     }
@@ -774,6 +775,8 @@ static typename SwCursorShell::StartsWith StartsWith(SwStartNode const& rStart)
         switch (rNode.GetNodeType())
         {
             case SwNodeType::Section:
+                if (rNode.GetSectionNode()->GetSection().IsHidden())
+                    return SwCursorShell::StartsWith::HiddenSection;
                 continue;
             case SwNodeType::Table:
                 return SwCursorShell::StartsWith::Table;
@@ -798,11 +801,16 @@ static typename SwCursorShell::StartsWith EndsWith(SwStartNode const& rStart)
         switch (rNode.GetNodeType())
         {
             case SwNodeType::End:
-                if (rNode.StartOfSectionNode()->IsTableNode())
+                if (auto pStartNode = rNode.StartOfSectionNode(); pStartNode->IsTableNode())
                 {
                     return SwCursorShell::StartsWith::Table;
                 }
-//TODO buggy SwUndoRedline in testTdf137503?                assert(rNode.StartOfSectionNode()->IsSectionNode());
+                else if (pStartNode->IsSectionNode())
+                {
+                    if (pStartNode->GetSectionNode()->GetSection().IsHidden())
+                        return SwCursorShell::StartsWith::HiddenSection;
+                }
+                    //TODO buggy SwUndoRedline in testTdf137503?                assert(rNode.StartOfSectionNode()->IsSectionNode());
             break;
             case SwNodeType::Text:
                 if (rNode.GetTextNode()->IsHidden())
@@ -943,14 +951,14 @@ bool SwCursorShell::MovePage( SwWhichPage fnWhichPage, SwPosPage fnPosPage )
     return bRet;
 }
 
-bool SwCursorShell::isInHiddenTextFrame(SwShellCursor* pShellCursor)
+bool SwCursorShell::isInHiddenFrame(SwShellCursor* pShellCursor)
 {
     SwContentNode *pCNode = pShellCursor->GetPointContentNode();
     std::pair<Point, bool> tmp(pShellCursor->GetPtPos(), false);
     SwContentFrame *const pFrame = pCNode
         ? pCNode->getLayoutFrame(GetLayout(), pShellCursor->GetPoint(), &tmp)
         : nullptr;
-    return !pFrame || (pFrame->IsTextFrame() && static_cast<SwTextFrame*>(pFrame)->IsHiddenNow());
+    return !pFrame || pFrame->IsHiddenNow();
 }
 
 // sw_redlinehide: this should work for all cases: GoCurrPara, GoNextPara, GoPrevPara
@@ -991,7 +999,7 @@ bool SwCursorShell::MovePara(SwWhichPara fnWhichPara, SwMoveFnCollection const &
         //which is what SwCursorShell::UpdateCursorPos will reset
         //the position to if we pass it a position in an
         //invisible hidden paragraph field
-        while (isInHiddenTextFrame(pTmpCursor)
+        while (isInHiddenFrame(pTmpCursor)
                 || !IsAtStartOrEndOfFrame(this, pTmpCursor, fnPosPara))
         {
             if (!pTmpCursor->MovePara(fnWhichPara, fnPosPara))
@@ -1440,6 +1448,20 @@ bool SwCursorShell::IsCursorInFootnote() const
     return aStartNodeType == SwStartNodeType::SwFootnoteStartNode;
 }
 
+Point SwCursorShell::GetCursorPagePos() const
+{
+    Point aRet(-1, -1);
+    if (SwFrame *pFrame = GetCurrFrame())
+    {
+        if (SwPageFrame* pCurrentPage = pFrame->FindPageFrame())
+        {
+            const Point& rDocPos = GetCursorDocPos();
+            aRet = rDocPos - pCurrentPage->getFrameArea().TopLeft();
+        }
+    }
+    return aRet;
+}
+
 bool SwCursorShell::IsInFrontOfLabel() const
 {
     return m_pCurrentCursor->IsInFrontOfLabel();
@@ -1588,14 +1610,14 @@ OUString SwCursorShell::getPageRectangles()
     OUStringBuffer aBuf;
     for (const SwFrame* pFrame = pLayout->GetLower(); pFrame; pFrame = pFrame->GetNext())
     {
-        aBuf.append(pFrame->getFrameArea().Left());
-        aBuf.append(", ");
-        aBuf.append(pFrame->getFrameArea().Top());
-        aBuf.append(", ");
-        aBuf.append(pFrame->getFrameArea().Width());
-        aBuf.append(", ");
-        aBuf.append(pFrame->getFrameArea().Height());
-        aBuf.append("; ");
+        aBuf.append(OUString::number(pFrame->getFrameArea().Left())
+            + ", "
+            + OUString::number(pFrame->getFrameArea().Top())
+            + ", "
+            + OUString::number(pFrame->getFrameArea().Width())
+            + ", "
+            + OUString::number(pFrame->getFrameArea().Height())
+            + "; ");
     }
     if (!aBuf.isEmpty())
         aBuf.setLength( aBuf.getLength() - 2); // remove the last "; "
@@ -1781,13 +1803,29 @@ void SwCursorShell::UpdateCursorPos()
     SwShellCursor* pShellCursor = getShellCursor( true );
     Size aOldSz( GetDocSize() );
 
-    if (isInHiddenTextFrame(pShellCursor) && !ExtendedSelectedAll())
+    if (isInHiddenFrame(pShellCursor) && !ExtendedSelectedAll())
     {
         SwCursorMoveState aTmpState(CursorMoveState::SetOnlyText);
         aTmpState.m_bSetInReadOnly = IsReadOnlyAvailable();
         GetLayout()->GetModelPositionForViewPoint( pShellCursor->GetPoint(), pShellCursor->GetPtPos(),
                                      &aTmpState );
         pShellCursor->DeleteMark();
+        // kde45196-1.html: try to get to a non-hidden paragraph, there must
+        // be one in the document body
+        while (isInHiddenFrame(pShellCursor))
+        {
+            if (!pShellCursor->MovePara(GoNextPara, fnParaStart))
+            {
+                break;
+            }
+        }
+        while (isInHiddenFrame(pShellCursor))
+        {
+            if (!pShellCursor->MovePara(GoPrevPara, fnParaStart))
+            {
+                break;
+            }
+        }
     }
     auto* pDoc = GetDoc();
     if (pDoc)
@@ -2154,6 +2192,14 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
             // created, because there used to be a Frame here!
             if ( !pFrame )
             {
+                // skip, if it is a hidden deleted cell without frame
+                if ( GetLayout()->IsHideRedlines() )
+                {
+                    const SwStartNode* pNd = pShellCursor->GetPointNode().FindTableBoxStartNode();
+                    if ( pNd && pNd->GetTableBox()->GetRedlineType() == RedlineType::Delete )
+                        return;
+                }
+
                 do
                 {
                     CalcLayout();
@@ -2415,9 +2461,8 @@ void SwCursorShell::sendLOKCursorUpdates()
         }
     }
 
-    char* pChar = aJsonWriter.extractData();
+    OString pChar = aJsonWriter.finishAndGetAsOString();
     GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_TABLE_SELECTED, pChar);
-    free(pChar);
 }
 
 void SwCursorShell::RefreshBlockCursor()
@@ -2708,7 +2753,7 @@ void SwCursorShell::ShowCursor()
     if (comphelper::LibreOfficeKit::isActive())
     {
         const OString aPayload = OString::boolean(m_bSVCursorVis);
-        GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload.getStr());
+        GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload);
         SfxLokHelper::notifyOtherViews(GetSfxViewShell(), LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", aPayload);
     }
 
@@ -2730,7 +2775,7 @@ void SwCursorShell::HideCursor()
     if (comphelper::LibreOfficeKit::isActive())
     {
         OString aPayload = OString::boolean(m_bSVCursorVis);
-        GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload.getStr());
+        GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CURSOR_VISIBLE, aPayload);
         SfxLokHelper::notifyOtherViews(GetSfxViewShell(), LOK_CALLBACK_VIEW_CURSOR_VISIBLE, "visible", aPayload);
     }
 }
@@ -2800,11 +2845,12 @@ void SwCursorShell::SwClientNotify(const SwModify&, const SfxHint& rHint)
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
     auto nWhich = pLegacy->GetWhich();
     if(!nWhich)
-        nWhich = sal::static_int_cast<sal_uInt16>(RES_MSG_BEGIN);
+        nWhich = RES_OBJECTDYING;
     if( m_bCallChgLnk &&
-        ( nWhich < RES_MSG_BEGIN || nWhich >= RES_MSG_END ||
-            nWhich == RES_FMT_CHG || nWhich == RES_UPDATE_ATTR ||
-            nWhich == RES_ATTRSET_CHG ))
+        ( !isFormatMessage(nWhich)
+                || nWhich == RES_FMT_CHG
+                || nWhich == RES_UPDATE_ATTR
+                || nWhich == RES_ATTRSET_CHG ))
         // messages are not forwarded
         // #i6681#: RES_UPDATE_ATTR is implicitly unset in
         // SwTextNode::Insert(SwTextHint*, sal_uInt16); we react here and thus do
@@ -2897,6 +2943,7 @@ OUString SwCursorShell::GetSelText() const
 }
 
 /** get the nth character of the current SSelection
+    in the same paragraph as the start/end.
 
     @param bEnd    Start counting from the end? From start otherwise.
     @param nOffset position of the character
@@ -2912,8 +2959,14 @@ sal_Unicode SwCursorShell::GetChar( bool bEnd, tools::Long nOffset )
     if( !pTextNd )
         return 0;
 
-    const sal_Int32 nPos = pPos->GetContentIndex();
-    const OUString& rStr = pTextNd->GetText();
+    SwTextFrame const*const pFrame(static_cast<SwTextFrame const*>(pTextNd->getLayoutFrame(GetLayout())));
+    if (!pFrame)
+    {
+        return 0;
+    }
+
+    const sal_Int32 nPos(sal_Int32(pFrame->MapModelToViewPos(*pPos)));
+    const OUString& rStr(pFrame->GetText());
     sal_Unicode cCh = 0;
 
     if (((nPos+nOffset) >= 0 ) && (nPos+nOffset) < rStr.getLength())
@@ -3072,7 +3125,7 @@ bool SwCursorShell::IsEndOfDoc() const
     if( !pCNd )
         pCNd = SwNodes::GoPrevious( &aIdx );
 
-    return aIdx == m_pCurrentCursor->GetPoint()->GetNode() &&
+    return aIdx == m_pCurrentCursor->GetPoint()->GetNode() && pCNd &&
             pCNd->Len() == m_pCurrentCursor->GetPoint()->GetContentIndex();
 }
 
@@ -3424,7 +3477,7 @@ bool SwCursorShell::FindValidContentNode( bool bOnlyText )
         GetDoc()->GetDocShell()->IsReadOnlyUI() )
         return true;
 
-    if( m_pCurrentCursor->HasMark() )
+    if( m_pCurrentCursor->HasMark() && !mbSelectAll )
         ClearMark();
 
     // first check for frames
@@ -3663,6 +3716,7 @@ bool SwCursorShell::HasReadonlySel(bool const isReplace) const
     {
         if ( m_pTableCursor != nullptr )
         {
+            // TODO: handling when a table cell (cells) is selected
             bRet = m_pTableCursor->HasReadOnlyBoxSel()
                    || m_pTableCursor->HasReadonlySel(GetViewOptions()->IsFormView(), isReplace);
         }
@@ -3678,6 +3732,38 @@ bool SwCursorShell::HasReadonlySel(bool const isReplace) const
             }
         }
     }
+    return bRet;
+}
+
+bool SwCursorShell::HasHiddenSections() const
+{
+    // Treat selections that span over start or end of paragraph of an outline node
+    // with folded outline content as read-only.
+    if (GetViewOptions()->IsShowOutlineContentVisibilityButton())
+    {
+        SwWrtShell* pWrtSh = GetDoc()->GetDocShell()->GetWrtShell();
+        if (pWrtSh && pWrtSh->HasFoldedOutlineContentSelected())
+            return true;
+    }
+    bool bRet = false;
+
+    if ( m_pTableCursor != nullptr )
+    {
+        bRet = m_pTableCursor->HasHiddenBoxSel()
+               || m_pTableCursor->HasHiddenSections();
+    }
+    else
+    {
+        for(const SwPaM& rCursor : m_pCurrentCursor->GetRingContainer())
+        {
+            if (rCursor.HasHiddenSections())
+            {
+                bRet = true;
+                break;
+            }
+        }
+    }
+
     return bRet;
 }
 
@@ -3728,9 +3814,9 @@ bool SwCursorShell::IsInRightToLeftText() const
     return SvxFrameDirection::Vertical_LR_TB == nDir || SvxFrameDirection::Horizontal_RL_TB == nDir;
 }
 
-/// If the current cursor position is inside a hidden range, the hidden range
-/// is selected.
-bool SwCursorShell::SelectHiddenRange()
+/// If the current cursor position is inside a hidden range true is returned. If bSelect is
+/// true, the hidden range is selected. If bSelect is false, the hidden range is not selected.
+bool SwCursorShell::IsInHiddenRange(const bool bSelect)
 {
     bool bRet = false;
     if ( !GetViewOptions()->IsShowHiddenChar() && !m_pCurrentCursor->HasMark() )
@@ -3747,9 +3833,12 @@ bool SwCursorShell::SelectHiddenRange()
             SwScriptInfo::GetBoundsOfHiddenRange( *pNode, nPos, nHiddenStart, nHiddenEnd );
             if ( COMPLETE_STRING != nHiddenStart )
             {
-                // make selection:
-                m_pCurrentCursor->SetMark();
-                m_pCurrentCursor->GetMark()->SetContent(nHiddenEnd);
+                if (bSelect)
+                {
+                    // make selection:
+                    m_pCurrentCursor->SetMark();
+                    m_pCurrentCursor->GetMark()->SetContent(nHiddenEnd);
+                }
                 bRet = true;
             }
         }

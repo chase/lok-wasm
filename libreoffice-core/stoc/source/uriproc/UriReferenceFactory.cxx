@@ -392,7 +392,7 @@ css::uno::Reference< css::uri::XUriReference > Factory::parse(
                 css::uno::Any anyEx = cppu::getCaughtException();
                 throw css::lang::WrappedTargetRuntimeException(
                     "creating service " + serviceName,
-                    static_cast< cppu::OWeakObject * >(this),
+                    getXWeak(),
                     anyEx);
             }
             if (service.is()) {
@@ -424,11 +424,9 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
             auto const path = uriReference->getPath();
             auto [segments, proc] = processSegments(path, {}, true);
             if (proc) {
-                OUStringBuffer abs(uriReference->getScheme());
-                abs.append(':');
+                OUStringBuffer abs(uriReference->getScheme() + ":");
                 if (uriReference->hasAuthority()) {
-                    abs.append("//");
-                    abs.append(uriReference->getAuthority());
+                    abs.append("//" + uriReference->getAuthority());
                 }
                 for (auto const & i : segments)
                 {
@@ -455,12 +453,10 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
                     abs.append(i.segment);
                 }
                 if (uriReference->hasQuery()) {
-                    abs.append('?');
-                    abs.append(uriReference->getQuery());
+                    abs.append("?" + uriReference->getQuery());
                 }
                 if (uriReference->hasFragment()) {
-                    abs.append('#');
-                    abs.append(uriReference->getFragment());
+                    abs.append("#" + uriReference->getFragment());
                 }
                 return parse(abs.makeStringAndClear());
             }
@@ -468,35 +464,27 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
         return clone(uriReference);
     } else if (!uriReference->hasAuthority()
                && uriReference->getPath().isEmpty()) {
-        OUStringBuffer abs(baseUriReference->getScheme());
-        abs.append(':');
+        OUStringBuffer abs(baseUriReference->getScheme() + ":");
         if (baseUriReference->hasAuthority()) {
-            abs.append("//");
-            abs.append(baseUriReference->getAuthority());
+            abs.append("//" + baseUriReference->getAuthority());
         }
         abs.append(baseUriReference->getPath());
         if (uriReference->hasQuery()) {
-            abs.append('?');
-            abs.append(uriReference->getQuery());
+            abs.append("?" + uriReference->getQuery());
         } else if (baseUriReference->hasQuery()) {
-            abs.append('?');
-            abs.append(baseUriReference->getQuery());
+            abs.append("?" + baseUriReference->getQuery());
         }
         if (uriReference->hasFragment()) {
-            abs.append('#');
-            abs.append(uriReference->getFragment());
+            abs.append("#" + uriReference->getFragment());
         }
         return parse(abs.makeStringAndClear());
     } else {
         OUStringBuffer abs(128);
-        abs.append(baseUriReference->getScheme());
-        abs.append(':');
+        abs.append(baseUriReference->getScheme() + ":");
         if (uriReference->hasAuthority()) {
-            abs.append("//");
-            abs.append(uriReference->getAuthority());
+            abs.append("//" + uriReference->getAuthority());
         } else if (baseUriReference->hasAuthority()) {
-            abs.append("//");
-            abs.append(baseUriReference->getAuthority());
+            abs.append("//" + baseUriReference->getAuthority());
         }
         if (uriReference->hasRelativePath()) {
             auto path1 = baseUriReference->getPath();
@@ -572,12 +560,10 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeAbsolute(
             }
         }
         if (uriReference->hasQuery()) {
-            abs.append('?');
-            abs.append(uriReference->getQuery());
+            abs.append("?" + uriReference->getQuery());
         }
         if (uriReference->hasFragment()) {
-            abs.append('#');
-            abs.append(uriReference->getFragment());
+            abs.append("#" + uriReference->getFragment());
         }
         return parse(abs.makeStringAndClear());
     }
@@ -606,8 +592,7 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeRelative(
                 uriReference->getAuthority()))
         {
             if (uriReference->hasAuthority()) {
-                rel.append("//");
-                rel.append(uriReference->getAuthority());
+                rel.append("//" + uriReference->getAuthority());
             }
             rel.append(uriReference->getPath());
         } else if ((equalIgnoreEscapeCase(
@@ -653,8 +638,7 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeRelative(
                 } else {
                     if (uriReference->getPath().startsWith("//")) {
                         assert(uriReference->hasAuthority());
-                        rel.append("//");
-                        rel.append(uriReference->getAuthority());
+                        rel.append("//" + uriReference->getAuthority());
                     }
                     rel.append(uriReference->getPath());
                 }
@@ -696,12 +680,10 @@ css::uno::Reference< css::uri::XUriReference > Factory::makeRelative(
             }
         }
         if (!omitQuery && uriReference->hasQuery()) {
-            rel.append('?');
-            rel.append(uriReference->getQuery());
+            rel.append("?" + uriReference->getQuery());
         }
         if (uriReference->hasFragment()) {
-            rel.append('#');
-            rel.append(uriReference->getFragment());
+            rel.append("#" + uriReference->getFragment());
         }
         return parse(rel.makeStringAndClear());
     }

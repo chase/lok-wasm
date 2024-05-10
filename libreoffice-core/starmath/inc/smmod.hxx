@@ -23,6 +23,7 @@
 #include <sfx2/app.hxx>
 #include <vcl/vclptr.hxx>
 #include <unotools/options.hxx>
+#include <optional>
 
 namespace svtools { class ColorConfig; }
 
@@ -48,24 +49,20 @@ class VirtualDevice;
 
 OUString SmResId(TranslateId aId);
 
-class SmLocalizedSymbolData
+namespace SmLocalizedSymbolData
 {
-public:
-    SmLocalizedSymbolData() = delete;
+    OUString GetUiSymbolName( std::u16string_view rExportName );
+    OUString GetExportSymbolName( std::u16string_view rUiName );
 
-    static OUString GetUiSymbolName( std::u16string_view rExportName );
-    static OUString GetExportSymbolName( std::u16string_view rUiName );
-
-    static OUString GetUiSymbolSetName( std::u16string_view rExportName );
-    static OUString GetExportSymbolSetName( std::u16string_view rUiName );
+    OUString GetUiSymbolSetName( std::u16string_view rExportName );
+    OUString GetExportSymbolSetName( std::u16string_view rUiName );
 };
 
 class SmModule final : public SfxModule, public utl::ConfigurationListener
 {
     std::unique_ptr<svtools::ColorConfig> mpColorConfig;
     std::unique_ptr<SmMathConfig> mpConfig;
-    std::unique_ptr<SmLocalizedSymbolData> mpLocSymbolData;
-    std::unique_ptr<SvtSysLocale> mpSysLocale;
+    std::optional<SvtSysLocale> moSysLocale;
     VclPtr<VirtualDevice>    mpVirtualDev;
 
 public:

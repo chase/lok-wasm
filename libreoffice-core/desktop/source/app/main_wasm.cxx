@@ -258,6 +258,14 @@ public:
     val getCommandValues(int viewId, std::string command)
     {
         doc_->setView(viewId);
+        desktop::WasmDocumentExtension* ext
+            = static_cast<desktop::WasmDocumentExtension*>(doc_->get());
+
+        if (command == ".uno:PageColor") {
+            return val(ext->getPageColor());
+        } else if (command == ".uno:PageOrientation") {
+            return val(ext->getPageOrientation());
+        }
         return val::u8string(doc_->getCommandValues(command.c_str()));
     }
 
@@ -315,6 +323,7 @@ public:
     }
 
     void setCurrentView(int viewId) { doc_->setView(viewId); }
+
 
 private:
     struct DocWithId

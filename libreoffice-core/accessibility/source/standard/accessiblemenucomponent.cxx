@@ -25,8 +25,9 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/awt/XDevice.hpp>
-#include <com/sun/star/awt/XWindowPeer.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
@@ -96,7 +97,7 @@ awt::Rectangle OAccessibleMenuComponent::implGetBounds()
         if ( pWindow )
         {
             // get bounding rectangle of the window in screen coordinates
-            tools::Rectangle aRect = pWindow->GetWindowExtentsRelative( nullptr );
+            AbsoluteScreenPixelRectangle aRect = pWindow->GetWindowExtentsAbsolute();
             aBounds = AWTRectangle( aRect );
 
             // get position of the accessible parent in screen coordinates
@@ -118,18 +119,6 @@ awt::Rectangle OAccessibleMenuComponent::implGetBounds()
 
     return aBounds;
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( OAccessibleMenuComponent, OAccessibleMenuBaseComponent, OAccessibleMenuComponent_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( OAccessibleMenuComponent, OAccessibleMenuBaseComponent, OAccessibleMenuComponent_BASE )
 
 
 // XAccessibleContext
@@ -245,7 +234,7 @@ awt::Point OAccessibleMenuComponent::getLocationOnScreen(  )
         vcl::Window* pWindow = m_pMenu->GetWindow();
         if ( pWindow )
         {
-            tools::Rectangle aRect = pWindow->GetWindowExtentsRelative( nullptr );
+            AbsoluteScreenPixelRectangle aRect = pWindow->GetWindowExtentsAbsolute();
             aPos = AWTPoint( aRect.TopLeft() );
         }
     }

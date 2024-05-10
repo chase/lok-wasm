@@ -108,7 +108,7 @@ OResultSet::OResultSet(OConnection& rConn, OCommonStatement* pStmt, MYSQL_RES* p
     : OResultSet_BASE(m_aMutex)
     , OPropertySetHelper(OResultSet_BASE::rBHelper)
     , m_pMysql(rConn.getMysqlConnection())
-    , m_aStatement(css::uno::Reference<css::uno::XWeak>(static_cast<OWeakObject*>(pStmt)))
+    , m_aStatement(css::uno::Reference(cppu::getXWeak(pStmt)))
     , m_pResult(pResult)
     , m_encoding(_encoding)
 {
@@ -509,8 +509,7 @@ DateTime SAL_CALL OResultSet::getTimestamp(sal_Int32 column)
     OString sVal = m_aRows[m_nRowPosition][column - 1];
 
     // YY-MM-DD HH:MM:SS
-    std::vector<OString> dateAndTime
-        = lcl_split(std::string_view(sVal.getStr(), getDataLength(column)), ' ');
+    std::vector<OString> dateAndTime = lcl_split(sVal.subView(0, getDataLength(column)), ' ');
 
     auto dateParts = lcl_split(dateAndTime.at(0), '-');
     auto timeParts = lcl_split(dateAndTime.at(1), ':');

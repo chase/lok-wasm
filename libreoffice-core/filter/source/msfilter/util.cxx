@@ -10,6 +10,7 @@
 #include <com/sun/star/awt/Size.hpp>
 #include <com/sun/star/lang/Locale.hpp>
 #include <rtl/ustring.hxx>
+#include <rtl/character.hxx>
 #include <comphelper/string.hxx>
 #include <unotools/fontcvt.hxx>
 #include <unotools/fontdefs.hxx>
@@ -311,15 +312,32 @@ const ApiPaperSize& PaperSizeConv::getApiSizeForMSPaperSizeIndex( sal_Int32 nMSO
     return spPaperSizeTable[ nMSOPaperIndex ];
 }
 
+OUString CreateDOCXStyleId(std::u16string_view const aName)
+{
+    OUStringBuffer aStyleIdBuf(aName.size());
+    for (size_t i = 0; i < aName.size(); ++i)
+    {
+        sal_Unicode nChar = aName[i];
+        if (rtl::isAsciiAlphanumeric(nChar) || nChar == '-')
+        {
+            // first letter should be uppercase
+            if (aStyleIdBuf.isEmpty())
+                aStyleIdBuf.append(char(rtl::toAsciiUpperCase(nChar)));
+            else
+                aStyleIdBuf.append(char(nChar));
+        }
+    }
+    return aStyleIdBuf.makeStringAndClear();
+}
+
 std::u16string_view findQuotedText( std::u16string_view rCommand,
-                const char* cStartQuote, const sal_Unicode uEndQuote )
+                std::u16string_view sStartQuote, const sal_Unicode uEndQuote )
 {
     std::u16string_view sRet;
-    OUString sStartQuote( OUString::createFromAscii(cStartQuote) );
     size_t nStartIndex = rCommand.find( sStartQuote );
     if( nStartIndex != std::u16string_view::npos )
     {
-        sal_Int32 nStartLength = sStartQuote.getLength();
+        sal_Int32 nStartLength = sStartQuote.size();
         size_t nEndIndex = rCommand.find( uEndQuote, nStartIndex + nStartLength);
         if( nEndIndex != std::u16string_view::npos && nEndIndex > nStartIndex )
         {
@@ -1001,7 +1019,7 @@ OString GetOOXMLPresetGeometry( std::u16string_view rShapeType )
         { u"ooxml-rect", "rect" },
     };
     auto i(aCustomShapeTypeTranslationHashMap.find(rShapeType));
-    return i == aCustomShapeTypeTranslationHashMap.end() ? "rect" : i->second;
+    return i == aCustomShapeTypeTranslationHashMap.end() ? "rect"_ostr : i->second;
 }
 
 MSO_SPT GETVMLShapeType(std::u16string_view aType)

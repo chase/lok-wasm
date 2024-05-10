@@ -60,28 +60,11 @@ sal_uInt16 GetExportMode()
             nExpMode = HTML_CFG_WRITER;
             break;
         case 4:
-            nExpMode = HTML_CFG_NS40;
-            break;
         default:
             nExpMode = HTML_CFG_NS40;
             break;
     }
     return nExpMode;
-}
-
-bool IsPrintLayoutExtension()
-{
-    bool bRet = officecfg::Office::Common::Filter::HTML::Export::PrintLayout::get();
-    switch (GetExportMode())
-    {
-        case HTML_CFG_MSIE:
-        case HTML_CFG_NS40:
-        case HTML_CFG_WRITER:
-            break;
-        default:
-            bRet = false;
-    }
-    return bRet;
 }
 
 } // namespace SvxHtmlOptions

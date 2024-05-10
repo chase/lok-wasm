@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_SW_INC_IDOCUMENTMARKACCESS_HXX
-#define INCLUDED_SW_INC_IDOCUMENTMARKACCESS_HXX
+#pragma once
 
 #include <sal/types.h>
 #include "IMark.hxx"
@@ -229,7 +228,8 @@ class IDocumentMarkAccess
             const SwNode& rEnd,
             std::vector< ::sw::mark::SaveBookmark>* pSaveBkmk, // Ugly: SaveBookmark is core-internal
             std::optional<sal_Int32> oStartContentIdx,
-            std::optional<sal_Int32> oEndContentIdx) =0;
+            std::optional<sal_Int32> oEndContentIdx,
+            bool isReplace) = 0;
 
         /** Deletes a mark.
 
@@ -279,6 +279,13 @@ class IDocumentMarkAccess
         */
         virtual const_iterator_t findMark(const OUString& rMark) const =0;
 
+        /** Find the first Mark that does not start before.
+
+            @returns
+            an iterator pointing to the mark, or pointing to getAllMarksEnd() if nothing was found.
+        */
+        virtual const_iterator_t findFirstMarkNotStartsBefore(const SwPosition& rPos) const =0;
+
         // interface IBookmarks (BOOKMARK, CROSSREF_NUMITEM_BOOKMARK, CROSSREF_HEADING_BOOKMARK )
 
         /** check if the selection would delete a BOOKMARK */
@@ -314,7 +321,7 @@ class IDocumentMarkAccess
         virtual const_iterator_t findFirstBookmarkStartsAfter(const SwPosition& rPos) const =0;
 
         /// Get the innermost bookmark that contains rPos.
-        virtual sw::mark::IMark* getBookmarkFor(const SwPosition& rPos) const = 0;
+        virtual sw::mark::IMark* getOneInnermostBookmarkFor(const SwPosition& rPos) const = 0;
 
         // Fieldmarks
         /** returns a STL-like random access iterator to the begin of the sequence of fieldmarks.
@@ -330,7 +337,7 @@ class IDocumentMarkAccess
 
         /// get Fieldmark for CH_TXT_ATR_FIELDSTART/CH_TXT_ATR_FIELDEND at rPos
         virtual ::sw::mark::IFieldmark* getFieldmarkAt(const SwPosition& rPos) const =0;
-        virtual ::sw::mark::IFieldmark* getFieldmarkFor(const SwPosition& pos) const =0;
+        virtual sw::mark::IFieldmark* getInnerFieldmarkFor(const SwPosition& pos) const = 0;
         virtual sw::mark::IFieldmark* getFieldmarkBefore(const SwPosition& pos, bool bLoop) const =0;
         virtual sw::mark::IFieldmark* getFieldmarkAfter(const SwPosition& pos, bool bLoop) const =0;
 
@@ -375,7 +382,5 @@ class IDocumentMarkAccess
     protected:
         virtual ~IDocumentMarkAccess() {};
 };
-
-#endif // IDOCUMENTBOOKMARKACCESS_HXX_INCLUDED
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

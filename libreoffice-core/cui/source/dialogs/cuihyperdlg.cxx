@@ -79,6 +79,9 @@ void SvxHlinkCtrl::StateChangedAtToolBoxControl( sal_uInt16 nSID, SfxItemState e
     }
 }
 
+// tdf#90496 - remember last used view in hyperlink dialog
+OUString SvxHpLinkDlg::msRememberedPageId("internet");
+
 //#                                                                      #
 //# Hyperlink - Dialog                                                   #
 //#                                                                      #
@@ -144,7 +147,8 @@ SvxHpLinkDlg::SvxHpLinkDlg(SfxBindings* pBindings, SfxChildWindow* pChild, weld:
         AddTabPage("newdocument", SvxHyperlinkNewDocTp::Create);
     }
 
-    SetCurPageId("internet");
+    // tdf#90496 - remember last used view in hyperlink dialog
+    SetCurPageId(msRememberedPageId);
 
     // Init Dialog
     Start();
@@ -187,8 +191,7 @@ void SvxHpLinkDlg::Close()
 {
     if (IsClosing())
         return;
-    SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-    if (pViewFrame)
+    if (SfxViewFrame* pViewFrame = SfxViewFrame::Current())
         pViewFrame->ToggleChildWindow(SID_HYPERLINK_DIALOG);
 }
 
@@ -233,7 +236,7 @@ IMPL_LINK_NOARG(SvxHpLinkDlg, ClickApplyHdl_Impl, weld::Button&, void)
 |************************************************************************/
 void SvxHpLinkDlg::SetPage ( SvxHyperlinkItem const * pItem )
 {
-    OString sPageId("internet");
+    OUString sPageId("internet");
 
     OUString aStrURL(pItem->GetURL());
     INetURLObject aURL(aStrURL);

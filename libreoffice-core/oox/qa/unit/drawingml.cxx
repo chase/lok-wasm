@@ -30,6 +30,7 @@
 #include <com/sun/star/table/XCellRange.hpp>
 #include <com/sun/star/util/XTheme.hpp>
 
+#include <docmodel/uno/UnoGradientTools.hxx>
 #include <docmodel/uno/UnoComplexColor.hxx>
 #include <docmodel/uno/UnoTheme.hxx>
 #include <docmodel/theme/Theme.hxx>
@@ -69,7 +70,7 @@ public:
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTransparentText)
 {
-    loadFromURL(u"transparent-text.pptx");
+    loadFromFile(u"transparent-text.pptx");
     saveAndReload("Impress Office Open XML");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -93,7 +94,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTransparentText)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf131082)
 {
-    loadFromURL(u"tdf131082.pptx");
+    loadFromFile(u"tdf131082.pptx");
     saveAndReload("Impress Office Open XML");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -114,7 +115,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf131082)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testPresetAdjustValue)
 {
-    loadFromURL(u"preset-adjust-value.pptx");
+    loadFromFile(u"preset-adjust-value.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -136,7 +137,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testPresetAdjustValue)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testChartDataLabelCharColor)
 {
-    loadFromURL(u"chart-data-label-char-color.docx");
+    loadFromFile(u"chart-data-label-char-color.docx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -161,19 +162,19 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testChartDataLabelCharColor)
     xDataPoint->getPropertyValue("CustomLabelFields") >>= aLabels;
     uno::Reference<beans::XPropertySet> xLabel = aLabels[0];
 
-    sal_Int32 nCharColor = 0;
+    Color nCharColor;
     xLabel->getPropertyValue("CharColor") >>= nCharColor;
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: 16777215
     // - Actual  : -1
     // i.e. the data label had no explicit (white) color.
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0xffffff), nCharColor);
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, nCharColor);
 }
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testGradientMultiStepTransparency)
 {
     // Load a document with a multi-step gradient.
-    loadFromURL(u"gradient-multistep-transparency.pptx");
+    loadFromFile(u"gradient-multistep-transparency.pptx");
 
     // Check the end transparency of the gradient.
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -191,16 +192,25 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testGradientMultiStepTransparency)
     // i.e. the end transparency was not 100%, but was 21%, leading to an unexpected visible line on
     // the right of this shape.
     // MCGR: Use the completely imported transparency gradient to check for correctness
-    const basegfx::BColorStops aColorStops(aTransparence.ColorStops);
+    const basegfx::BColorStops aColorStops
+        = model::gradient::getColorStopsFromUno(aTransparence.ColorStops);
 
     CPPUNIT_ASSERT_EQUAL(size_t(5), aColorStops.size());
-    CPPUNIT_ASSERT(basegfx::fTools::equal(aColorStops[4].getStopOffset(), 1.0));
-    CPPUNIT_ASSERT_EQUAL(aColorStops[4].getStopColor(), basegfx::BColor(0.0, 0.0, 0.0));
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(0.00, aColorStops[0].getStopOffset(), 1E-3);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(0.19, aColorStops[1].getStopOffset(), 1E-3);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(0.35, aColorStops[2].getStopOffset(), 1E-3);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(0.58, aColorStops[3].getStopOffset(), 1E-3);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(1.00, aColorStops[4].getStopOffset(), 1E-3);
+    CPPUNIT_ASSERT_EQUAL(Color(0xffffff), Color(aColorStops[0].getStopColor()));
+    CPPUNIT_ASSERT_EQUAL(Color(0x9e9e9e), Color(aColorStops[1].getStopColor()));
+    CPPUNIT_ASSERT_EQUAL(Color(0x363636), Color(aColorStops[2].getStopColor()));
+    CPPUNIT_ASSERT_EQUAL(Color(0x000000), Color(aColorStops[3].getStopColor()));
+    CPPUNIT_ASSERT_EQUAL(Color(0x000000), Color(aColorStops[4].getStopColor()));
 }
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testShapeTextAlignment)
 {
-    loadFromURL(u"shape-text-alignment.pptx");
+    loadFromFile(u"shape-text-alignment.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -218,7 +228,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testShapeTextAlignment)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testShapeTextAdjustLeft)
 {
-    loadFromURL(u"shape-text-adjust-left.pptx");
+    loadFromFile(u"shape-text-adjust-left.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -235,7 +245,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testShapeTextAdjustLeft)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testCameraRotationRevolution)
 {
-    loadFromURL(u"camera-rotation-revolution.docx");
+    loadFromFile(u"camera-rotation-revolution.docx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -259,7 +269,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testCameraRotationRevolution)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf146534_CameraRotationRevolutionNonWpsShapes)
 {
-    loadFromURL(u"camera-rotation-revolution-nonwps.pptx");
+    loadFromFile(u"camera-rotation-revolution-nonwps.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -292,11 +302,11 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTableShadow)
         CPPUNIT_ASSERT(xShape->getPropertyValue("Shadow") >>= bShadow);
 
         CPPUNIT_ASSERT(bShadow);
-        sal_Int32 nColor = 0;
+        Color nColor;
         CPPUNIT_ASSERT(xShape->getPropertyValue("ShadowColor") >>= nColor);
-        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0xff0000), nColor);
+        CPPUNIT_ASSERT_EQUAL(Color(0xff0000), nColor);
     };
-    loadFromURL(u"table-shadow.pptx");
+    loadFromFile(u"table-shadow.pptx");
     // Without the accompanying fix in place, this test would have failed, because shadow on a table
     // was lost on import.
     verify(mxComponent);
@@ -311,7 +321,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTableShadow)
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testGroupShapeSmartArt)
 {
     // Given a file with a smartart inside a group shape:
-    loadFromURL(u"smartart-groupshape.pptx");
+    loadFromFile(u"smartart-groupshape.pptx");
 
     // Then make sure that the smartart is not just an empty group shape:
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -329,7 +339,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf142605_CurveSize)
     // The document contains a Bezier curve, where the control points are outside the bounding
     // rectangle of the shape. Error was, that the export uses a path size which included the
     // control points.
-    loadFromURL(u"tdf142605_CurveSize.odp");
+    loadFromFile(u"tdf142605_CurveSize.odp");
     saveAndReload("Impress Office Open XML");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -341,7 +351,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf142605_CurveSize)
     CPPUNIT_ASSERT(xShapeProps.is());
     uno::Reference<container::XNamed> xShapeNamed(xShape, uno::UNO_QUERY);
     CPPUNIT_ASSERT(xShapeNamed.is());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Bézier curve 1"), xShapeNamed->getName());
+    CPPUNIT_ASSERT_EQUAL(u"Bézier curve 1"_ustr, xShapeNamed->getName());
 
     css::awt::Rectangle aBoundRect;
     xShapeProps->getPropertyValue("BoundRect") >>= aBoundRect;
@@ -356,7 +366,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testChartThemeOverride)
 {
     // Given a document with 2 slides, slide1 has a chart with a theme override and slide2 has a
     // shape:
-    loadFromURL(u"chart-theme-override.pptx");
+    loadFromFile(u"chart-theme-override.pptx");
 
     // Then make sure that the slide 2 shape's text color is blue, not red:
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -380,7 +390,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testChartThemeOverride)
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testPptxTheme)
 {
     // Given a PPTX file with a slide -> master slide -> theme:
-    loadFromURL(u"theme.pptx");
+    loadFromFile(u"theme.pptx");
 
     // Then make sure the theme + referring to that theme is imported:
     // Check the imported theme of the master page:
@@ -432,7 +442,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testPptxTheme)
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf132557_footerCustomShapes)
 {
     // slide with date, footer, slide number with custom shapes
-    loadFromURL(u"testTdf132557_footerCustomShapes.pptx");
+    loadFromFile(u"testTdf132557_footerCustomShapes.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -458,7 +468,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf132557_footerCustomShapes)
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testThemeColorTint_Table)
 {
     // Given a document with a table style, using theme color with tinting in the A2 cell:
-    loadFromURL(u"theme-tint.pptx");
+    loadFromFile(u"theme-tint.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -500,7 +510,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testThemeColorTint_Table)
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testThemeColor_Shape)
 {
     // Given a document with a table style, using theme color with tinting in the A2 cell:
-    loadFromURL(u"ThemeShapesReference.pptx");
+    loadFromFile(u"ThemeShapesReference.pptx");
 
     // Then make sure that we only import theming info to the doc model if the effects are limited
     // to lum mod / off that we can handle (i.e. no tint/shade):
@@ -571,7 +581,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testVert270AndTextRot)
     // tdf##149551. The document contains a shape with attributes 'rot="720000"' and 'vert="vert270"'
     // of the <bodyPr> element. Without the fix the simulation of vert270 had overwritten the text
     // rotation angle and thus 'rot'="720000" was lost.
-    loadFromURL(u"tdf149551_vert270AndTextRot.pptx");
+    loadFromFile(u"tdf149551_vert270AndTextRot.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -596,7 +606,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTextRot)
     // tdf#149551 The document contains a shape with attribute 'rot="720000"' of the <bodyPr> element.
     // Without fix, the text rotation angle was saved in "TextPreRotateAngle" instead of
     // "TextRotateAngle". That resulted in unrotated but sheared text.
-    loadFromURL(u"tdf149551_TextRot.pptx");
+    loadFromFile(u"tdf149551_TextRot.pptx");
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -627,7 +637,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTextRot)
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf113187ConstantArcTo)
 {
-    loadFromURL(u"tdf113187_arcTo_withoutReferences.pptx");
+    loadFromFile(u"tdf113187_arcTo_withoutReferences.pptx");
 
     // Get ViewBox of shape
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -648,7 +658,7 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf113187ConstantArcTo)
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf125085WordArtFontTheme)
 {
     // The font info for the shape is in the theme, the text run has no font settings.
-    loadFromURL(u"tdf125085_WordArtFontTheme.pptx");
+    loadFromFile(u"tdf125085_WordArtFontTheme.pptx");
 
     // Get shape and its properties
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -661,17 +671,17 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf125085WordArtFontTheme)
     // Without the fix some application defaults were used.
     OUString sFontName;
     xShapeProps->getPropertyValue("CharFontNameComplex") >>= sFontName;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Noto Serif Hebrew"), sFontName);
+    CPPUNIT_ASSERT_EQUAL(u"Noto Serif Hebrew"_ustr, sFontName);
     css::lang::Locale aLocal;
     xShapeProps->getPropertyValue("CharLocaleComplex") >>= aLocal;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"IL"), aLocal.Country);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"he"), aLocal.Language);
+    CPPUNIT_ASSERT_EQUAL(u"IL"_ustr, aLocal.Country);
+    CPPUNIT_ASSERT_EQUAL(u"he"_ustr, aLocal.Language);
 }
 
 CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf125085WordArtFontText)
 {
     // The font info for the shape is in the text run inside the shape.
-    loadFromURL(u"tdf125085_WordArtFontText.pptx");
+    loadFromFile(u"tdf125085_WordArtFontText.pptx");
 
     // Get shape and its properties
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
@@ -684,11 +694,11 @@ CPPUNIT_TEST_FIXTURE(OoxDrawingmlTest, testTdf125085WordArtFontText)
     // Without the fix some application defaults were used.
     OUString sFontName;
     xShapeProps->getPropertyValue("CharFontNameComplex") >>= sFontName;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Noto Serif Hebrew"), sFontName);
+    CPPUNIT_ASSERT_EQUAL(u"Noto Serif Hebrew"_ustr, sFontName);
     css::lang::Locale aLocal;
     xShapeProps->getPropertyValue("CharLocaleComplex") >>= aLocal;
-    CPPUNIT_ASSERT_EQUAL(OUString(u"IL"), aLocal.Country);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"he"), aLocal.Language);
+    CPPUNIT_ASSERT_EQUAL(u"IL"_ustr, aLocal.Country);
+    CPPUNIT_ASSERT_EQUAL(u"he"_ustr, aLocal.Language);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

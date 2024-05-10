@@ -41,7 +41,7 @@
 #include "cmis_resultset.hxx"
 #include <memory>
 
-#define OUSTR_TO_STDSTR(s) std::string( OUStringToOString( s, RTL_TEXTENCODING_UTF8 ).getStr() )
+#define OUSTR_TO_STDSTR(s) std::string( OUStringToOString( s, RTL_TEXTENCODING_UTF8 ) )
 #define STD_TO_OUSTR( str ) OUString( str.c_str(), str.length( ), RTL_TEXTENCODING_UTF8 )
 
 using namespace com::sun::star;
@@ -73,7 +73,7 @@ namespace cmis
     {
         return uno::Any( lang::IllegalArgumentException(
             "Wrong argument type!",
-            static_cast< cppu::OWeakObject * >( this ), -1) );
+            getXWeak(), -1) );
     }
 
     uno::Reference< sdbc::XRow > RepoContent::getPropertyValues(
@@ -134,11 +134,8 @@ namespace cmis
         // Set the proxy if needed. We are doing that all times as the proxy data shouldn't be cached.
         ucbhelper::InternetProxyDecider aProxyDecider( m_xContext );
         INetURLObject aBindingUrl( m_aURL.getBindingUrl( ) );
-        const ucbhelper::InternetProxyServer& rProxy = aProxyDecider.getProxy(
+        const OUString sProxy = aProxyDecider.getProxy(
                 INetURLObject::GetScheme( aBindingUrl.GetProtocol( ) ), aBindingUrl.GetHost(), aBindingUrl.GetPort() );
-        OUString sProxy = rProxy.aName;
-        if ( rProxy.nPort > 0 )
-            sProxy += ":" + OUString::number( rProxy.nPort );
         libcmis::SessionFactory::setProxySettings( OUSTR_TO_STDSTR( sProxy ), std::string(), std::string(), std::string() );
 
         if ( !m_aRepositories.empty() )

@@ -29,7 +29,6 @@
 #include <cppuhelper/weakref.hxx>
 #include <cppuhelper/weak.hxx>
 #include <rtl/ref.hxx>
-#include <type_traits>
 
 namespace unotools
 {
@@ -115,7 +114,7 @@ public:
          @return hard reference or null, if the weakly referenced interface has gone
     */
     rtl::Reference<interface_type> SAL_CALL get() const
-#if __cplusplus >= 202002L
+#if !(defined __clang__ && __clang_major__ <= 15)
         requires(!cppu::detail::isUnoInterfaceType<interface_type>)
 #endif
     {

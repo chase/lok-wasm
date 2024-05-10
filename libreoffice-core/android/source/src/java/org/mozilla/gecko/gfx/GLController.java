@@ -20,7 +20,6 @@ public class GLController {
 
     private LayerView mView;
     private int mGLVersion;
-    private boolean mSurfaceValid;
     private int mWidth, mHeight;
 
     private EGL10 mEGL;
@@ -28,8 +27,6 @@ public class GLController {
     private EGLConfig mEGLConfig;
     private EGLContext mEGLContext;
     private EGLSurface mEGLSurface;
-
-    private GL mGL;
 
     private static final int LOCAL_EGL_OPENGL_ES2_BIT = 4;
 
@@ -45,7 +42,6 @@ public class GLController {
     public GLController(LayerView view) {
         mView = view;
         mGLVersion = 2;
-        mSurfaceValid = false;
     }
 
     public void setGLVersion(int version) {
@@ -84,12 +80,11 @@ public class GLController {
                                                 getEGLError());
             }
 
-            mGL = null;
             mEGLContext = null;
         }
     }
 
-    public GL getGL()                       { return mEGLContext.getGL(); }
+    public GL10 getGL() { return (GL10) mEGLContext.getGL(); }
     public EGLDisplay getEGLDisplay()       { return mEGLDisplay;         }
     public EGLConfig getEGLConfig()         { return mEGLConfig;          }
     public EGLContext getEGLContext()       { return mEGLContext;         }
@@ -104,38 +99,6 @@ public class GLController {
         return mEGL.eglSwapBuffers(mEGLDisplay, mEGLSurface);
     }
 
-    public boolean checkForLostContext() {
-        if (mEGL.eglGetError() != EGL11.EGL_CONTEXT_LOST) {
-            return false;
-        }
-
-        mEGLDisplay = null;
-        mEGLConfig = null;
-        mEGLContext = null;
-        mEGLSurface = null;
-        mGL = null;
-        return true;
-    }
-
-    // This function is invoked by JNI
-    public synchronized void resumeCompositorIfValid() {
-        if (mSurfaceValid) {
-            mView.getListener().compositionResumeRequested(mWidth, mHeight);
-        }
-    }
-
-    // Wait until we are allowed to use EGL functions on the Surface backing
-    // this window. This function is invoked by JNI
-    public synchronized void waitForValidSurface() {
-        while (!mSurfaceValid) {
-            try {
-                wait();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
     public synchronized int getWidth() {
         return mWidth;
     }
@@ -145,14 +108,12 @@ public class GLController {
     }
 
     synchronized void surfaceDestroyed() {
-        mSurfaceValid = false;
         notifyAll();
     }
 
     synchronized void surfaceChanged(int newWidth, int newHeight) {
         mWidth = newWidth;
         mHeight = newHeight;
-        mSurfaceValid = true;
         notifyAll();
     }
 
@@ -183,11 +144,10 @@ public class GLController {
                                             getEGLError());
         }
 
-        mGL = mEGLContext.getGL();
-
         if (mView.getRenderer() != null) {
-            mView.getRenderer().onSurfaceCreated((GL10)mGL, mEGLConfig);
-            mView.getRenderer().onSurfaceChanged((GL10)mGL, mWidth, mHeight);
+            GL10 gl = (GL10) mEGLContext.getGL();
+            mView.getRenderer().onSurfaceCreated(gl, mEGLConfig);
+            mView.getRenderer().onSurfaceChanged(gl, mWidth, mHeight);
         }
     }
 
@@ -216,7 +176,8 @@ public class GLController {
             }
         }
 
-        throw new GLControllerException("No suitable EGL configuration found");
+        // if there's no 565 RGB configuration, select another one that fulfils the specification
+        return configs[0];
     }
 
     private void createEGLSurface() {
@@ -232,32 +193,11 @@ public class GLController {
                                             "surface! " + getEGLError());
         }
 
-        mGL = mEGLContext.getGL();
-
         if (mView.getRenderer() != null) {
-            mView.getRenderer().onSurfaceCreated((GL10)mGL, mEGLConfig);
-            mView.getRenderer().onSurfaceChanged((GL10)mGL, mView.getWidth(), mView.getHeight());
+            GL10 gl = (GL10) mEGLContext.getGL();
+            mView.getRenderer().onSurfaceCreated(gl, mEGLConfig);
+            mView.getRenderer().onSurfaceChanged(gl, mView.getWidth(), mView.getHeight());
         }
-    }
-
-    /**
-     * Provides an EGLSurface without assuming ownership of this surface.
-     * This class does not keep a reference to the provided EGL surface; the
-     * caller assumes ownership of the surface once it is returned.
-     */
-    private EGLSurface provideEGLSurface() {
-        if (mEGL == null) {
-            initEGL();
-        }
-
-        Object window = mView.getNativeWindow();
-        EGLSurface surface = mEGL.eglCreateWindowSurface(mEGLDisplay, mEGLConfig, window, null);
-        if (surface == null || surface == EGL10.EGL_NO_SURFACE) {
-            throw new GLControllerException("EGL window surface could not be created! " +
-                                            getEGLError());
-        }
-
-        return surface;
     }
 
     private String getEGLError() {

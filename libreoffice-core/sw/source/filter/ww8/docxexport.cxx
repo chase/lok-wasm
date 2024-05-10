@@ -55,6 +55,8 @@
 #include <oox/ole/olehelper.hxx>
 
 #include <svx/svdpage.hxx>
+#include <svx/xfillit0.hxx>
+#include <svx/xflbmtit.hxx>
 
 #include <map>
 #include <algorithm>
@@ -157,43 +159,49 @@ bool DocxExport::CollapseScriptsforWordOk( sal_uInt16 nScript, sal_uInt16 nWhich
     return true;
 }
 
+// MACRO-1786: O(1) lookup, fail fast without match {
 void DocxExport::AppendBookmarks( const SwTextNode& rNode, sal_Int32 nCurrentPos, sal_Int32 nLen, const SwRedlineData* pRedlineData )
 {
-    std::vector< OUString > aStarts;
-    std::vector< OUString > aEnds;
+    auto sIt = m_NodeToBookmarksStarts.find(std::make_pair(rNode.GetIndex().get(), nCurrentPos));
+    auto eIt = m_NodeToBookmarksEnds.find(std::make_pair(rNode.GetIndex().get(), nCurrentPos));
+    if (sIt == m_NodeToBookmarksStarts.end() && eIt == m_NodeToBookmarksEnds.end()) return;
 
-    IMarkVector aMarks;
-    if ( GetBookmarks( rNode, nCurrentPos, nCurrentPos + nLen, aMarks ) )
-    {
-        for ( IMark* pMark : aMarks )
+    const bool bIsFinal = rNode.GetText().getLength() == nCurrentPos;
+    const sal_Int32 nStt = nCurrentPos;
+    const sal_Int32 nEnd = nCurrentPos + nLen;
+    if (sIt != m_NodeToBookmarksStarts.end()) {
+        for (auto result = std::begin(sIt->second); result != std::end(sIt->second); ++result)
         {
-            const sal_Int32 nStart = pMark->GetMarkStart().GetContentIndex();
-            const sal_Int32 nEnd = pMark->GetMarkEnd().GetContentIndex();
+            const IMark* pMark = *result;
+            const auto& rStart = pMark->GetMarkStart();
+            const sal_Int32 nBStart = rStart.GetContentIndex();
 
-            if ( nStart == nCurrentPos )
-                aStarts.push_back( pMark->GetName() );
-
-            if ( nEnd == nCurrentPos )
-                aEnds.push_back( pMark->GetName() );
+            if ( nBStart == nCurrentPos && ( nBStart >= nStt ) && ( nBStart <= nEnd ) && rStart.GetNode() == rNode)
+                m_pAttrOutput->WriteBookmark_Impl( pMark->GetName(), /* isEnd */ false, /* isFinal */ bIsFinal, pRedlineData);
         }
     }
 
-    const OUString& aStr( rNode.GetText() );
-    const sal_Int32 nEnd = aStr.getLength();
+    if (eIt != m_NodeToBookmarksEnds.end()) {
+        for (auto result = std::begin(eIt->second); result != std::end(eIt->second); ++result)
+        {
+            const IMark* pMark = *result;
+            const auto& rEnd = pMark->GetMarkEnd();
+            const sal_Int32 nBEnd = pMark->GetMarkEnd().GetContentIndex();
 
-    if ( nCurrentPos == nEnd )
-        m_pAttrOutput->WriteFinalBookmarks_Impl( aStarts, aEnds );
-    else
-        m_pAttrOutput->WriteBookmarks_Impl( aStarts, aEnds, pRedlineData );
+            if ( nBEnd == nCurrentPos && ( nEnd >= nStt ) && ( nBEnd <= nEnd ) && rEnd.GetNode() == rNode)
+                m_pAttrOutput->WriteBookmark_Impl( pMark->GetName(), /* isEnd */ true, /* isFinal */ bIsFinal, pRedlineData);
+        }
+    }
 }
+// MACRO-1786 }
 
+// MACRO-1786: O(1) lookup, fail fast without match {
 void DocxExport::AppendBookmark( const OUString& rName )
 {
-    std::vector< OUString > aStarts { rName };
-    std::vector< OUString > aEnds { rName };
-
-    m_pAttrOutput->WriteBookmarks_Impl( aStarts, aEnds );
+    m_pAttrOutput->WriteBookmark_Impl(rName, false, false);
+    m_pAttrOutput->WriteBookmark_Impl(rName, true, false);
 }
+// }
 
 void DocxExport::AppendAnnotationMarks( const SwWW8AttrIter& rAttrs, sal_Int32 nCurrentPos, sal_Int32 nLen )
 {
@@ -968,7 +976,7 @@ void DocxExport::WriteDocVars(const sax_fastparser::FSHelperPtr& pFS)
 
     // Only write docVars if there will be at least a single docVar.
     bool bStarted = false;
-    constexpr OUStringLiteral aPrefix(u"com.sun.star.text.fieldmaster.User.");
+    constexpr OUString aPrefix(u"com.sun.star.text.fieldmaster.User."_ustr);
     for (const auto& rMasterName : std::as_const(aMasterNames))
     {
         if (!rMasterName.startsWith(aPrefix))
@@ -1098,10 +1106,10 @@ void DocxExport::WriteSettings()
                     FSNS(XML_w, XML_cryptProviderType), "rsaAES",
                     FSNS(XML_w, XML_cryptAlgorithmClass), "hash",
                     FSNS(XML_w, XML_cryptAlgorithmType), "typeAny",
-                    FSNS(XML_w, XML_cryptAlgorithmSid), OString::number(nAlgorithmSid).getStr(),
-                    FSNS(XML_w, XML_cryptSpinCount), OString::number(nCount).getStr(),
-                    FSNS(XML_w, XML_hash), sHash.toUtf8().getStr(),
-                    FSNS(XML_w, XML_salt), sSalt.toUtf8().getStr());
+                    FSNS(XML_w, XML_cryptAlgorithmSid), OString::number(nAlgorithmSid),
+                    FSNS(XML_w, XML_cryptSpinCount), OString::number(nCount),
+                    FSNS(XML_w, XML_hash), sHash,
+                    FSNS(XML_w, XML_salt), sSalt);
         }
     }
 
@@ -1191,7 +1199,7 @@ void DocxExport::WriteSettings()
         pFS->singleElementNS(XML_w, XML_dataType,
             FSNS( XML_w, XML_val ), "textFile" );
         pFS->singleElementNS( XML_w, XML_query,
-            FSNS( XML_w, XML_val ), OUStringToOString( sDataSource, RTL_TEXTENCODING_UTF8 ).getStr() );
+            FSNS( XML_w, XML_val ), sDataSource );
         pFS->endElementNS( XML_w, XML_mailMerge );
     }
 
@@ -1251,7 +1259,7 @@ void DocxExport::WriteSettings()
 
     /* Compatibility Mode (tdf#131304)
      * 11:  .doc level    [Word 97-2003]
-     * 12:  .docx default [Word 2007]  [LO < 7.0]
+     * 12:  .docx default [Word 2007]  [LO < 7.0] [ECMA 376 1st ed.]
      * 14:                [Word 2010]
      * 15:                [Word 2013/2016/2019]  [LO >= 7.0]
      *
@@ -1264,7 +1272,9 @@ void DocxExport::WriteSettings()
      * 2.) Many years later, change the TargetCompatilityMode for new documents, when we no longer care
      *     about working with perfect compatibility with older versions of MS Word.
      */
-    sal_Int32 nTargetCompatibilityMode = 15; //older versions might not open our files well
+    sal_Int32 nTargetCompatibilityMode =
+        (GetFilter().getVersion() == oox::core::ECMA_376_1ST_EDITION)
+        ? 12 : 15; //older versions might not open our files well
     bool bHasCompatibilityMode = false;
     const OUString aGrabBagName = UNO_NAME_MISC_OBJ_INTEROPGRABBAG;
     if ( xPropSetInfo->hasPropertyByName( aGrabBagName ) )
@@ -1491,7 +1501,7 @@ void DocxExport::WriteTheme()
     m_rFilter.addRelation(m_pDocumentFS->getOutputStream(), oox::getRelationship(Relationship::THEME), u"theme/theme1.xml" );
 
     oox::ThemeExport aThemeExport(&m_rFilter, oox::drawingml::DOCUMENT_DOCX);
-    aThemeExport.write(u"word/theme/theme1.xml", *pTheme);
+    aThemeExport.write(u"word/theme/theme1.xml"_ustr, *pTheme);
 }
 
 // See OOXMLDocumentImpl::resolveGlossaryStream
@@ -1902,11 +1912,6 @@ void DocxExport::WriteMainText()
     // setup the namespaces
     m_pDocumentFS->startElementNS( XML_w, XML_document, MainXmlNamespaces());
 
-    if ( getenv("SW_DEBUG_DOM") )
-    {
-        m_rDoc.dumpAsXml();
-    }
-
     // reset the incrementing linked-textboxes chain ID before re-saving.
     m_nLinkedTextboxesChainId=0;
     m_aLinkedTextboxesHelper.clear();
@@ -1914,11 +1919,50 @@ void DocxExport::WriteMainText()
     // Write background page color
     if (std::unique_ptr<SvxBrushItem> oBrush = getBackground(); oBrush)
     {
-        Color backgroundColor = oBrush->GetColor();
-        OString aBackgroundColorStr = msfilter::util::ConvertColor(backgroundColor);
+        m_pDocumentFS->startElementNS(XML_w, XML_background, FSNS(XML_w, XML_color),
+                                      msfilter::util::ConvertColor(oBrush->GetColor()));
 
-        m_pDocumentFS->singleElementNS(XML_w, XML_background, FSNS(XML_w, XML_color),
-                                       aBackgroundColorStr);
+        const SwAttrSet& rPageStyleAttrSet = m_rDoc.GetPageDesc(0).GetMaster().GetAttrSet();
+        const drawing::FillStyle eFillType = rPageStyleAttrSet.Get(XATTR_FILLSTYLE).GetValue();
+        const GraphicObject* pGraphicObj = oBrush->GetGraphicObject();
+        if (pGraphicObj) // image/pattern/texture
+        {
+            const OUString aRelId = m_pDrawingML->writeGraphicToStorage(pGraphicObj->GetGraphic());
+            if (!aRelId.isEmpty())
+            {
+                m_pDocumentFS->startElementNS(XML_v, XML_background);
+
+                // Although MSO treats everything as tile, it is better for LO to not always tile
+                OString sType = "frame"_ostr; // single image
+                if (rPageStyleAttrSet.Get(XATTR_FILLBMP_TILE).GetValue())
+                    sType = "tile"_ostr; // primarily for patterns / textures
+                m_pDocumentFS->singleElementNS(XML_v, XML_fill, FSNS(XML_r, XML_id), aRelId,
+                                            XML_type, sType);
+
+                m_pDocumentFS->endElementNS(XML_v, XML_background);
+            }
+        }
+        else if (eFillType == drawing::FillStyle_GRADIENT)
+        {
+            SfxItemSetFixed<XATTR_FILL_FIRST, XATTR_FILL_LAST> aSet(m_rDoc.GetAttrPool());
+            aSet.Set(rPageStyleAttrSet);
+
+            // Collect all of the gradient attributes into SdrExporter() AttrLists
+            m_pAttrOutput->OutputStyleItemSet(aSet, /*TestForDefault=*/true);
+            assert(SdrExporter().getFlyAttrList().is() && "type and fillcolor are always provided");
+            assert(SdrExporter().getFlyFillAttrList().is() && "color2 is always provided");
+
+            rtl::Reference<FastAttributeList> xFlyAttrList(SdrExporter().getFlyAttrList());
+            rtl::Reference<FastAttributeList> xFillAttrList(SdrExporter().getFlyFillAttrList());
+            m_pDocumentFS->startElementNS(XML_v, XML_background, xFlyAttrList);
+            m_pDocumentFS->singleElementNS(XML_v, XML_fill, xFillAttrList);
+            m_pDocumentFS->endElementNS(XML_v, XML_background);
+
+            SdrExporter().getFlyAttrList().clear();
+            SdrExporter().getFlyFillAttrList().clear();
+        }
+
+        m_pDocumentFS->endElementNS(XML_w, XML_background);
     }
 
     // body

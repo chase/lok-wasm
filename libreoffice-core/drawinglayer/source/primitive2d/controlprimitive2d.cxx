@@ -19,6 +19,7 @@
 
 #include <drawinglayer/primitive2d/controlprimitive2d.hxx>
 #include <com/sun/star/awt/XWindow.hpp>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <comphelper/processfactory.hxx>
 #include <com/sun/star/awt/XControl.hpp>
@@ -36,10 +37,10 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <drawinglayer/primitive2d/PolygonHairlinePrimitive2D.hxx>
 #include <drawinglayer/primitive2d/drawinglayer_primitivetypes2d.hxx>
-#include <svtools/optionsdrawinglayer.hxx>
 #include <vcl/window.hxx>
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <toolkit/helper/vclunohelper.hxx>
+#include <officecfg/Office/Common.hxx>
 
 using namespace com::sun::star;
 
@@ -98,7 +99,7 @@ namespace drawinglayer::primitive2d
                     basegfx::B2DVector aDiscreteSize(rViewInformation.getObjectToViewTransformation() * aScale);
 
                     // limit to a maximum square size, e.g. 300x150 pixels (45000)
-                    const double fDiscreteMax(SvtOptionsDrawinglayer::GetQuadraticFormControlRenderLimit());
+                    const double fDiscreteMax(officecfg::Office::Common::Drawinglayer::QuadraticFormControlRenderLimit::get());
                     const double fDiscreteQuadratic(aDiscreteSize.getX() * aDiscreteSize.getY());
                     const bool bScaleUsed(fDiscreteQuadratic > fDiscreteMax);
                     double fFactor(1.0);
@@ -146,16 +147,11 @@ namespace drawinglayer::primitive2d
                                 if(xControl.is())
                                 {
                                     uno::Reference<awt::XWindowPeer> xWindowPeer(xControl->getPeer());
-
-                                    VclPtr<vcl::Window> pWindow = VCLUnoHelper::GetWindow(xWindowPeer);
-                                    if (pWindow)
+                                    if (xWindowPeer)
                                     {
-                                        pWindow = pWindow->GetParent();
-
-                                        if(pWindow && MapUnit::Map100thMM == pWindow->GetMapMode().GetMapUnit())
-                                        {
-                                            bUserIs100thmm = true;
-                                        }
+                                        uno::Reference<awt::XVclWindowPeer> xPeerProps(xWindowPeer, uno::UNO_QUERY_THROW);
+                                        uno::Any aAny = xPeerProps->getProperty("ParentIs100thmm"); // see VCLXWindow::getProperty
+                                        aAny >>= bUserIs100thmm;
                                     }
                                 }
 
@@ -247,10 +243,12 @@ namespace drawinglayer::primitive2d
             uno::Reference< awt::XControlModel > xControlModel,
             uno::Reference<awt::XControl> xXControl,
             ::std::u16string_view const rTitle,
-            ::std::u16string_view const rDescription)
+            ::std::u16string_view const rDescription,
+            void const*const pAnchorKey)
         :   maTransform(std::move(aTransform)),
             mxControlModel(std::move(xControlModel)),
             mxXControl(std::move(xXControl))
+        , m_pAnchorStructureElementKey(pAnchorKey)
         {
             ::rtl::OUStringBuffer buf(rTitle);
             if (!rTitle.empty() && !rDescription.empty())

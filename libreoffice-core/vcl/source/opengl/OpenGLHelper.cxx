@@ -30,11 +30,12 @@
 #include <vector>
 #include <unordered_map>
 
+#include <driverblocklist.hxx>
 #include <opengl/zone.hxx>
 #include <vcl/opengl/OpenGLWrapper.hxx>
 #include <vcl/opengl/OpenGLContext.hxx>
 #include <desktop/crashreport.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <watchdog.hxx>
 #include <vcl/skia/SkiaHelper.hxx>
 #include <salinst.hxx>
@@ -43,8 +44,6 @@
 #if defined (_WIN32)
 #include <opengl/win/WinDeviceInfo.hxx>
 #endif
-
-#include "GLMHelper.hxx"
 
 static bool volatile gbInShaderCompile = false;
 
@@ -180,8 +179,8 @@ namespace
             sal_uInt8 val = pData[i];
             if( val != 0 )
                 bIsZero = false;
-            aHexStr.append( pHexData[ val & 0xf ] );
-            aHexStr.append( pHexData[ val >> 4 ] );
+            aHexStr.append(
+                OStringChar(pHexData[ val & 0xf ]) + OStringChar(pHexData[ val >> 4 ]) );
         }
         if( bIsZero )
             return OString();
@@ -559,7 +558,7 @@ BitmapEx OpenGLHelper::ConvertBufferToBitmapEx(const sal_uInt8* const pBuffer, t
 
     {
         BitmapScopedWriteAccess pWriteAccess( aBitmap );
-        AlphaScopedWriteAccess pAlphaWriteAccess( aAlpha );
+        BitmapScopedWriteAccess pAlphaWriteAccess( aAlpha );
 #ifdef _WIN32
         assert(pWriteAccess->GetScanlineFormat() == ScanlineFormat::N24BitTcBgr);
         assert(pWriteAccess->IsTopDown());
@@ -588,7 +587,7 @@ BitmapEx OpenGLHelper::ConvertBufferToBitmapEx(const sal_uInt8* const pBuffer, t
                 *pScan++ = pBuffer[nCurPos+2];
 
                 nCurPos += 3;
-                *pAlphaScan++ = static_cast<sal_uInt8>( 255 - pBuffer[nCurPos++] );
+                *pAlphaScan++ = pBuffer[nCurPos++];
             }
         }
     }
@@ -626,33 +625,6 @@ const char* OpenGLHelper::GLErrorString(GLenum errorCode)
     }
 
     return nullptr;
-}
-
-std::ostream& operator<<(std::ostream& rStrm, const glm::vec4& rPos)
-{
-    rStrm << "( " << rPos[0] << ", " << rPos[1] << ", " << rPos[2] << ", " << rPos[3] << ")";
-    return rStrm;
-}
-
-std::ostream& operator<<(std::ostream& rStrm, const glm::vec3& rPos)
-{
-    rStrm << "( " << rPos[0] << ", " << rPos[1] << ", " << rPos[2] << ")";
-    return rStrm;
-}
-
-std::ostream& operator<<(std::ostream& rStrm, const glm::mat4& rMatrix)
-{
-    for(int i = 0; i < 4; ++i)
-    {
-        rStrm << "\n( ";
-        for(int j = 0; j < 4; ++j)
-        {
-            rStrm << rMatrix[j][i];
-            rStrm << " ";
-        }
-        rStrm << ")\n";
-    }
-    return rStrm;
 }
 
 void OpenGLHelper::createFramebuffer(tools::Long nWidth, tools::Long nHeight, GLuint& nFramebufferId,

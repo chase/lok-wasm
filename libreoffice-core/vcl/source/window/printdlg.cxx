@@ -122,7 +122,7 @@ void PrintDialog::PrintPreviewWindow::Paint(vcl::RenderContext& rRenderContext, 
 {
     rRenderContext.Push();
     weld::SetPointFont(rRenderContext, rRenderContext.GetSettings().GetStyleSettings().GetLabelFont());
-
+    rRenderContext.SetTextColor(rRenderContext.GetSettings().GetStyleSettings().GetLabelTextColor());
     rRenderContext.SetBackground(Wallpaper(Application::GetSettings().GetStyleSettings().GetDialogColor()));
     rRenderContext.Erase();
 
@@ -234,14 +234,11 @@ void PrintDialog::PrintPreviewWindow::setPreview( const GDIMetaFile& i_rNewPrevi
     }
     Size aLogicPaperSize(o3tl::convert(i_rOrigSize, o3tl::Length::mm100, eUnit));
     OUString aNumText( rLocWrap.getNum( aLogicPaperSize.Width(), nDigits ) );
-    OUStringBuffer aBuf;
-    aBuf.append( aNumText + " " );
+    OUStringBuffer aBuf( aNumText + " " );
     aBuf.appendAscii( eUnit == o3tl::Length::mm ? "mm" : "in" );
     if( !i_rPaperName.empty() )
     {
-        aBuf.append( " (" );
-        aBuf.append( i_rPaperName );
-        aBuf.append( ')' );
+        aBuf.append( OUString::Concat(" (")  + i_rPaperName + ")" );
     }
     maHorzText = aBuf.makeStringAndClear();
 
@@ -546,7 +543,6 @@ PrintDialog::PrintDialog(weld::Window* i_pWindow, std::shared_ptr<PrinterControl
     , mxReverseOrderBox(m_xBuilder->weld_check_button("reverseorder"))
     , mxOKButton(m_xBuilder->weld_button("ok"))
     , mxCancelButton(m_xBuilder->weld_button("cancel"))
-    , mxHelpButton(m_xBuilder->weld_button("help"))
     , mxBackwardBtn(m_xBuilder->weld_button("backward"))
     , mxForwardBtn(m_xBuilder->weld_button("forward"))
     , mxFirstBtn(m_xBuilder->weld_button("btnFirst"))
@@ -679,7 +675,6 @@ PrintDialog::PrintDialog(weld::Window* i_pWindow, std::shared_ptr<PrinterControl
     // setup click hdl
     mxOKButton->connect_clicked(LINK(this, PrintDialog, ClickHdl));
     mxCancelButton->connect_clicked(LINK(this, PrintDialog, ClickHdl));
-    mxHelpButton->connect_clicked(LINK(this, PrintDialog, ClickHdl));
     mxSetupButton->connect_clicked( LINK( this, PrintDialog, ClickHdl ) );
     mxBackwardBtn->connect_clicked(LINK(this, PrintDialog, ClickHdl));
     mxForwardBtn->connect_clicked(LINK(this, PrintDialog, ClickHdl));
@@ -769,7 +764,7 @@ void PrintDialog::storeToSettings()
 
     pItem->setValue( "PrintDialog",
                      "WindowState",
-                     OStringToOUString(m_xDialog->get_window_state(vcl::WindowDataMask::All), RTL_TEXTENCODING_UTF8) );
+                     m_xDialog->get_window_state(vcl::WindowDataMask::All) );
 
     pItem->setValue( "PrintDialog",
                      "CopyCount",
@@ -803,7 +798,7 @@ void PrintDialog::readFromSettings()
     sal_uInt16 nCount = mxTabCtrl->get_n_pages();
     for (sal_uInt16 i = 0; i < nCount; ++i)
     {
-        OString sPageId = mxTabCtrl->get_page_ident(i);
+        OUString sPageId = mxTabCtrl->get_page_ident(i);
         if (aValue == mxTabCtrl->get_tab_label_text(sPageId))
         {
             mxTabCtrl->set_current_page(sPageId);
@@ -815,7 +810,7 @@ void PrintDialog::readFromSettings()
     aValue = pItem->getValue( "PrintDialog",
                               "WindowState" );
     if (!aValue.isEmpty())
-        m_xDialog->set_window_state(OUStringToOString(aValue, RTL_TEXTENCODING_UTF8));
+        m_xDialog->set_window_state(aValue);
 
     // collate
     aValue = pItem->getValue( "PrintDialog",
@@ -1049,7 +1044,7 @@ void PrintDialog::checkControlDependencies()
         mxSingleJobsBox->set_sensitive( false );
     }
 
-    OUString aImg(mxCollateBox->get_active() ? OUString(SV_PRINT_COLLATE_BMP) : OUString(SV_PRINT_NOCOLLATE_BMP));
+    OUString aImg(mxCollateBox->get_active() ? SV_PRINT_COLLATE_BMP : SV_PRINT_NOCOLLATE_BMP);
 
     mxCollateImage->set_from_icon_name(aImg);
 
@@ -1312,7 +1307,7 @@ namespace
     void setHelpId( weld::Widget* i_pWindow, const Sequence< OUString >& i_rHelpIds, sal_Int32 i_nIndex )
     {
         if( i_nIndex >= 0 && i_nIndex < i_rHelpIds.getLength() )
-            i_pWindow->set_help_id( OUStringToOString( i_rHelpIds.getConstArray()[i_nIndex], RTL_TEXTENCODING_UTF8 ) );
+            i_pWindow->set_help_id( i_rHelpIds.getConstArray()[i_nIndex] );
     }
 
     void setHelpText( weld::Widget* i_pWindow, const Sequence< OUString >& i_rHelpTexts, sal_Int32 i_nIndex )
@@ -1335,6 +1330,7 @@ void PrintDialog::setupOptionalUI()
             rOption.Value >>= sOptionsUIFile;
             mxCustomOptionsUIBuilder = Application::CreateBuilder(mxCustom.get(), sOptionsUIFile);
             std::unique_ptr<weld::Container> xWindow = mxCustomOptionsUIBuilder->weld_container("box");
+            xWindow->set_help_id("vcl/ui/printdialog/PrintDialog");
             xWindow->show();
             continue;
         }
@@ -1344,7 +1340,7 @@ void PrintDialog::setupOptionalUI()
 
         // extract ui element
         OUString aCtrlType;
-        OString aID;
+        OUString aID;
         OUString aText;
         OUString aPropertyName;
         Sequence< OUString > aChoices;
@@ -1360,7 +1356,7 @@ void PrintDialog::setupOptionalUI()
             if ( rEntry.Name == "ID" )
             {
                 rEntry.Value >>= aIDs;
-                aID = OUStringToOString(aIDs[0], RTL_TEXTENCODING_UTF8);
+                aID = aIDs[0];
             }
             if ( rEntry.Name == "Text" )
             {
@@ -1452,11 +1448,11 @@ void PrintDialog::setupOptionalUI()
 
             // set help id
             if (aHelpIds.hasElements())
-                pPage->set_help_id(OUStringToOString(aHelpIds.getConstArray()[0], RTL_TEXTENCODING_UTF8));
+                pPage->set_help_id(aHelpIds[0]);
 
             // set help text
             if (aHelpTexts.hasElements())
-                pPage->set_tooltip_text(aHelpTexts.getConstArray()[0]);
+                pPage->set_tooltip_text(aHelpTexts[0]);
 
             pPage->show();
         }
@@ -1555,7 +1551,7 @@ void PrintDialog::setupOptionalUI()
                 pVal->Value >>= nSelectVal;
             for( sal_Int32 m = 0; m < aChoices.getLength(); m++ )
             {
-                aID = OUStringToOString(aIDs[m], RTL_TEXTENCODING_UTF8);
+                aID = aIDs[m];
                 std::unique_ptr<weld::RadioButton> xBtn = m_xBuilder->weld_radio_button(aID);
                 if (!xBtn && mxCustomOptionsUIBuilder)
                     xBtn = mxCustomOptionsUIBuilder->weld_radio_button(aID);
@@ -1874,15 +1870,6 @@ IMPL_LINK(PrintDialog, ClickHdl, weld::Button&, rButton, void)
     {
         storeToSettings();
         m_xDialog->response(&rButton == mxOKButton.get() ? RET_OK : RET_CANCEL);
-    }
-    else if( &rButton == mxHelpButton.get() )
-    {
-        // start help system
-        Help* pHelp = Application::GetHelp();
-        if( pHelp )
-        {
-            pHelp->Start("vcl/ui/printdialog/PrintDialog", mxOKButton.get());
-        }
     }
     else if( &rButton == mxForwardBtn.get() )
     {

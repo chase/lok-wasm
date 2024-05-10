@@ -103,6 +103,7 @@ class SAL_DLLPUBLIC_RTTI ScGridWindow : public vcl::DocWindow, public DropTarget
 
     std::unique_ptr<sdr::overlay::OverlayObjectList> mpOOCursors;
     std::unique_ptr<sdr::overlay::OverlayObjectList> mpOOSelection;
+    std::unique_ptr<sdr::overlay::OverlayObjectList> mpOOHighlight;
     std::unique_ptr<sdr::overlay::OverlayObjectList> mpOOSelectionBorder;
     std::unique_ptr<sdr::overlay::OverlayObjectList> mpOOAutoFill;
     std::unique_ptr<sdr::overlay::OverlayObjectList> mpOODragRect;
@@ -291,6 +292,9 @@ class SAL_DLLPUBLIC_RTTI ScGridWindow : public vcl::DocWindow, public DropTarget
     void            DrawHiddenIndicator( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, vcl::RenderContext& rRenderContext);
     void            DrawPagePreview( SCCOL nX1, SCROW nY1, SCCOL nX2, SCROW nY2, vcl::RenderContext& rRenderContext);
 
+    bool            GetEditUrl( const Point& rPos,
+                                OUString* pName=nullptr, OUString* pUrl=nullptr, OUString* pTarget=nullptr );
+
     bool            HitRangeFinder( const Point& rMouse, RfCorner& rCorner, sal_uInt16* pIndex,
                                     SCCOL* pAddX, SCROW* pAddY );
 
@@ -387,8 +391,6 @@ public:
     /// Get the cell selection, coordinates are in logic units.
     void GetCellSelection(std::vector<tools::Rectangle>& rLogicRects);
 
-    bool GetEditUrl( const Point& rPos, OUString* pName=nullptr, OUString* pUrl=nullptr, OUString* pTarget=nullptr );
-
     virtual css::uno::Reference< css::accessibility::XAccessible > CreateAccessible() override;
 
     void            FakeButtonUp();
@@ -478,6 +480,7 @@ public:
     void            UpdateCursorOverlay();
     void            DeleteSelectionOverlay();
     void            UpdateSelectionOverlay();
+    void            UpdateHighlightOverlay();
     void            DeleteAutoFillOverlay();
     void            UpdateAutoFillOverlay();
     void            DeleteDragRectOverlay();

@@ -35,8 +35,10 @@
 #include <formula/grammar.hxx>
 #include <oox/export/utils.hxx>
 #include <oox/token/tokens.hxx>
+#include <com/sun/star/sheet/NamedRangeFlag.hdl>
 
 using namespace ::oox;
+using namespace ::com::sun::star;
 
 // *** Helper classes ***
 
@@ -333,7 +335,7 @@ void XclExpName::SaveXml( XclExpXmlStream& rStrm )
             // OOXTODO: XML_functionGroupId, "",
             // OOXTODO: XML_help, "",
             XML_hidden, ToPsz( ::get_flag( mnFlags, EXC_NAME_HIDDEN ) ),
-            XML_localSheetId, mnScTab == SCTAB_GLOBAL ? nullptr : OString::number( mnScTab ).getStr(),
+            XML_localSheetId, sax_fastparser::UseIf(OString::number( mnScTab ), mnScTab != SCTAB_GLOBAL),
             XML_name, maOrigName.toUtf8(),
             // OOXTODO: XML_publishToServer, "",
             // OOXTODO: XML_shortcutKey, "",
@@ -624,6 +626,10 @@ sal_uInt16 XclExpNameManagerImpl::CreateName( SCTAB nTab, const ScRangeData& rRa
     // store the index of the NAME record in the lookup map
     NamedExpMap::key_type key(nTab, rRangeData.GetName());
     maNamedExpMap[key] = nNameIdx;
+
+    // Check if it is a hidden named range
+    if ((rRangeData.GetUnoType() & sheet::NamedRangeFlag::HIDDEN) == sheet::NamedRangeFlag::HIDDEN)
+        xName->SetHidden(true);
 
     /*  Create the definition formula.
         This may cause recursive creation of other defined names. */

@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <officecfg/Office/Impress.hxx>
+#include <officecfg/Office/Security.hxx>
 #include <svl/itemset.hxx>
 #include <svl/intitem.hxx>
 #include <svl/eitem.hxx>
@@ -30,6 +32,16 @@
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
+
+namespace
+{
+enum PresenterConsoleMode
+{
+    FullScreen = 0,
+    Windowed = 1,
+    Disabled = 2
+};
+}
 
 SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxItemSet& rInAttrs,
                                   const std::vector<OUString> &rPageNames, SdCustomShowList* pCSList)
@@ -54,6 +66,13 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     , m_xCbxAnimationAllowed(m_xBuilder->weld_check_button("animationsallowed"))
     , m_xCbxChangePage(m_xBuilder->weld_check_button("changeslidesbyclick"))
     , m_xCbxAlwaysOnTop(m_xBuilder->weld_check_button("alwaysontop"))
+    , m_xCbxShowNavigationButton(m_xBuilder->weld_check_button("shownavigationbutton"))
+    , m_xLbNavigationButtonsSize(m_xBuilder->weld_combo_box("navigation_buttons_size_cb"))
+    , m_xFtNavigationButtonsSize(m_xBuilder->weld_label("navbar_btn_size_label"))
+    , m_xFrameEnableRemote(m_xBuilder->weld_frame("frameremote"))
+    , m_xCbxEnableRemote(m_xBuilder->weld_check_button("enableremote"))
+    , m_xCbxEnableRemoteInsecure(m_xBuilder->weld_check_button("enableremoteinsecure"))
+    , m_xLbConsole(m_xBuilder->weld_combo_box("console_cb"))
     , m_xFtMonitor(m_xBuilder->weld_label("presdisplay_label"))
     , m_xLBMonitor(m_xBuilder->weld_combo_box("presdisplay_cb"))
     , m_xMonitor(m_xBuilder->weld_label("monitor_str"))
@@ -74,6 +93,7 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     m_xRbtStandard->connect_toggled( aLink );
     m_xRbtWindow->connect_toggled( aLink );
     m_xRbtAuto->connect_toggled( aLink );
+    m_xCbxShowNavigationButton->connect_toggled( aLink );
 
     m_xTmfPause->connect_value_changed( LINK( this, SdStartPresentationDlg, ChangePauseHdl ) );
 
@@ -105,7 +125,7 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     else
         m_xRbtAtDia->set_active(true);
 
-    m_xLbDias->set_active_text( static_cast<const SfxStringItem&>( rOutAttrs.Get( ATTR_PRESENT_DIANAME ) ).GetValue() );
+    m_xLbDias->set_active_text( rOutAttrs.Get( ATTR_PRESENT_DIANAME ).GetValue() );
     m_xCbxManuel->set_active( static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_MANUEL ) ).GetValue() );
     m_xCbxMousepointer->set_active( static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_MOUSE ) ).GetValue() );
     m_xCbxPen->set_active( static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_PEN ) ).GetValue() );
@@ -113,9 +133,19 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     m_xCbxChangePage->set_active( static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_CHANGE_PAGE ) ).GetValue() );
     m_xCbxAlwaysOnTop->set_active( static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_ALWAYS_ON_TOP ) ).GetValue() );
 
+    const sal_Int32 nActiveNavigationBtnScale = officecfg::Office::Impress::Layout::Display::NavigationBtnScale::get();
+    const bool bShowNavbar = officecfg::Office::Impress::Misc::Start::ShowNavigationPanel::get();
+    m_xCbxShowNavigationButton->set_active( bShowNavbar );
+    if (nActiveNavigationBtnScale != -1)
+    {
+        m_xLbNavigationButtonsSize->set_active(nActiveNavigationBtnScale);
+    }
+    m_xLbNavigationButtonsSize->set_sensitive( bShowNavbar );
+    m_xFtNavigationButtonsSize->set_sensitive( bShowNavbar );
+
     const bool  bEndless = static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_ENDLESS ) ).GetValue();
     const bool  bWindow = !static_cast<const SfxBoolItem&>( rOutAttrs.Get( ATTR_PRESENT_FULLSCREEN ) ).GetValue();
-    const tools::Long  nPause = static_cast<const SfxUInt32Item&>( rOutAttrs.Get( ATTR_PRESENT_PAUSE_TIMEOUT ) ).GetValue();
+    const tools::Long  nPause = rOutAttrs.Get( ATTR_PRESENT_PAUSE_TIMEOUT ).GetValue();
 
     m_xFormatter->SetTime( tools::Time( 0, 0, nPause ) );
     // set cursor in timefield to end
@@ -130,6 +160,23 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
     else
         m_xRbtStandard->set_active(true);
 
+    if (!officecfg::Office::Impress::Misc::Start::EnablePresenterScreen::get())
+        m_xLbConsole->set_active(PresenterConsoleMode::Disabled);
+    else if (officecfg::Office::Impress::Misc::Start::PresenterScreenFullScreen::get())
+        m_xLbConsole->set_active(PresenterConsoleMode::FullScreen);
+    else
+        m_xLbConsole->set_active(PresenterConsoleMode::Windowed);
+
+#ifdef ENABLE_SDREMOTE
+    m_xCbxEnableRemote->connect_toggled( LINK(this, SdStartPresentationDlg, ChangeRemoteHdl) );
+    m_xCbxEnableRemote->set_active(officecfg::Office::Impress::Misc::Start::EnableSdremote::get());
+    ChangeRemoteHdl(*m_xCbxEnableRemote);
+    m_xCbxEnableRemoteInsecure->set_active(m_xCbxEnableRemote->get_active()
+        && officecfg::Office::Security::Net::AllowInsecureImpressRemoteWiFi::get());
+#else
+    m_xFrameEnableRemote->hide();
+#endif
+
     InitMonitorSettings();
 
     ChangeRangeHdl(*m_xRbtCustomshow);
@@ -140,6 +187,35 @@ SdStartPresentationDlg::SdStartPresentationDlg(weld::Window* pWindow, const SfxI
 
 SdStartPresentationDlg::~SdStartPresentationDlg()
 {
+}
+
+short SdStartPresentationDlg::run()
+{
+    short nRet = GenericDialogController::run();
+    if (nRet == RET_OK)
+    {
+        std::shared_ptr<comphelper::ConfigurationChanges> batch(
+            comphelper::ConfigurationChanges::create());
+        auto nActive = m_xLbConsole->get_active();
+        bool bEnabled = nActive != PresenterConsoleMode::Disabled;
+        officecfg::Office::Impress::Misc::Start::EnablePresenterScreen::set(bEnabled, batch);
+        if (bEnabled)
+        {
+            officecfg::Office::Impress::Misc::Start::PresenterScreenFullScreen::set(
+                nActive == PresenterConsoleMode::FullScreen, batch);
+        }
+        officecfg::Office::Impress::Misc::Start::ShowNavigationPanel::set(
+            m_xCbxShowNavigationButton->get_active(), batch);
+        officecfg::Office::Impress::Layout::Display::NavigationBtnScale::set(
+            m_xLbNavigationButtonsSize->get_active(), batch);
+
+#ifdef ENABLE_SDREMOTE
+        officecfg::Office::Impress::Misc::Start::EnableSdremote::set(m_xCbxEnableRemote->get_active(), batch);
+        officecfg::Office::Security::Net::AllowInsecureImpressRemoteWiFi::set(m_xCbxEnableRemoteInsecure->get_active(), batch);
+#endif
+        batch->commit();
+    }
+    return nRet;
 }
 
 OUString SdStartPresentationDlg::GetDisplayName( sal_Int32   nDisplay,
@@ -189,13 +265,12 @@ void SdStartPresentationDlg::InitMonitorSettings()
         }
         else
         {
-            bool bUnifiedDisplay = Application::IsUnifiedDisplay();
             sal_Int32 nExternalIndex = Application::GetDisplayExternalScreen();
 
             sal_Int32 nSelectedIndex (-1);
             sal_Int32 nDefaultExternalIndex (-1);
             const sal_Int32 nDefaultSelectedDisplay (
-                static_cast<const SfxInt32Item&>( rOutAttrs.Get( ATTR_PRESENT_DISPLAY ) ).GetValue());
+                rOutAttrs.Get( ATTR_PRESENT_DISPLAY ).GetValue());
 
             // Un-conditionally add a version for '0' the default external display
             sal_Int32 nInsertedEntry;
@@ -223,12 +298,9 @@ void SdStartPresentationDlg::InitMonitorSettings()
                     nDefaultExternalIndex = nInsertedEntry;
             }
 
-            if( bUnifiedDisplay )
-            {
-                nInsertedEntry = InsertDisplayEntry( m_xAllMonitors->get_label(), -1 );
-                if( nDefaultSelectedDisplay == -1 )
-                    nSelectedIndex = nInsertedEntry;
-            }
+            nInsertedEntry = InsertDisplayEntry( m_xAllMonitors->get_label(), -1 );
+            if( nDefaultSelectedDisplay == -1 )
+                nSelectedIndex = nInsertedEntry;
 
             if (nSelectedIndex < 0)
             {
@@ -274,6 +346,11 @@ void SdStartPresentationDlg::GetAttr( SfxItemSet& rAttr )
         pCustomShowList->Seek( nPos );
 }
 
+IMPL_LINK_NOARG(SdStartPresentationDlg, ChangeRemoteHdl, weld::Toggleable&, void)
+{
+    m_xCbxEnableRemoteInsecure->set_sensitive(m_xCbxEnableRemote->get_active());
+}
+
 /**
  *      Handler: Enabled/Disabled Listbox "Dias"
  */
@@ -297,6 +374,10 @@ IMPL_LINK_NOARG(SdStartPresentationDlg, ClickWindowPresentationHdl, weld::Toggle
     const bool bDisplay = !bWindow && ( mnMonitors > 1 );
     m_xFtMonitor->set_sensitive( bDisplay );
     m_xLBMonitor->set_sensitive( bDisplay );
+
+    const bool bShowNavbar = m_xCbxShowNavigationButton->get_active();
+    m_xLbNavigationButtonsSize->set_sensitive( bShowNavbar );
+    m_xFtNavigationButtonsSize->set_sensitive( bShowNavbar );
 
     if( bWindow )
     {

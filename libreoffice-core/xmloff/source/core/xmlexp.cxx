@@ -46,7 +46,6 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/propertysetinfo.hxx>
 #include <comphelper/propertyvalue.hxx>
-#include <xmloff/attrlist.hxx>
 #include <xmloff/namespacemap.hxx>
 #include <xmloff/xmluconv.hxx>
 #include <xmloff/xmlnamespace.hxx>
@@ -96,7 +95,7 @@
 #include <com/sun/star/document/XDocumentProperties.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
 #include <com/sun/star/document/XMLOasisBasicExporter.hpp>
-#include <com/sun/star/embed/XEncryptionProtectedSource2.hpp>
+#include <com/sun/star/embed/XEncryptionProtectedStorage.hpp>
 #include <com/sun/star/document/XGraphicStorageHandler.hpp>
 #include <com/sun/star/rdf/XMetadatable.hpp>
 #include <RDFaExportHelper.hxx>
@@ -115,17 +114,17 @@ using namespace ::com::sun::star::xml::sax;
 using namespace ::com::sun::star::io;
 using namespace ::xmloff::token;
 
-constexpr OUStringLiteral XML_MODEL_SERVICE_WRITER = u"com.sun.star.text.TextDocument";
-constexpr OUStringLiteral XML_MODEL_SERVICE_CALC = u"com.sun.star.sheet.SpreadsheetDocument";
-constexpr OUStringLiteral XML_MODEL_SERVICE_DRAW = u"com.sun.star.drawing.DrawingDocument";
-constexpr OUStringLiteral XML_MODEL_SERVICE_IMPRESS = u"com.sun.star.presentation.PresentationDocument";
-constexpr OUStringLiteral XML_MODEL_SERVICE_MATH = u"com.sun.star.formula.FormulaProperties";
-constexpr OUStringLiteral XML_MODEL_SERVICE_CHART = u"com.sun.star.chart.ChartDocument";
+constexpr OUString XML_MODEL_SERVICE_WRITER = u"com.sun.star.text.TextDocument"_ustr;
+constexpr OUString XML_MODEL_SERVICE_CALC = u"com.sun.star.sheet.SpreadsheetDocument"_ustr;
+constexpr OUString XML_MODEL_SERVICE_DRAW = u"com.sun.star.drawing.DrawingDocument"_ustr;
+constexpr OUString XML_MODEL_SERVICE_IMPRESS = u"com.sun.star.presentation.PresentationDocument"_ustr;
+constexpr OUString XML_MODEL_SERVICE_MATH = u"com.sun.star.formula.FormulaProperties"_ustr;
+constexpr OUString XML_MODEL_SERVICE_CHART = u"com.sun.star.chart.ChartDocument"_ustr;
 
 constexpr OUStringLiteral XML_USEPRETTYPRINTING = u"UsePrettyPrinting";
 
-constexpr OUStringLiteral XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE = u"vnd.sun.star.GraphicObject:";
-constexpr OUStringLiteral XML_EMBEDDEDOBJECT_URL_BASE = u"vnd.sun.star.EmbeddedObject:";
+constexpr OUString XML_EMBEDDEDOBJECTGRAPHIC_URL_BASE = u"vnd.sun.star.GraphicObject:"_ustr;
+constexpr OUString XML_EMBEDDEDOBJECT_URL_BASE = u"vnd.sun.star.EmbeddedObject:"_ustr;
 
 const std::pair<OUString, OUString> aServiceMap[] = {
     { XML_MODEL_SERVICE_WRITER, XML_EXPORT_FILTER_WRITER },
@@ -444,7 +443,7 @@ SvXMLExport::SvXMLExport(
     const enum XMLTokenEnum eClass, SvXMLExportFlags nExportFlags )
 :   mpImpl( new SvXMLExport_Impl ),
     m_xContext(xContext), m_implementationName(std::move(implementationName)),
-    mxAttrList( new SvXMLAttributeList ),
+    mxAttrList( new comphelper::AttributeList ),
     mpNamespaceMap( new SvXMLNamespaceMap ),
     mpAuthorIDs( new SvtSecurityMapPersonalInfo ),
     maUnitConv(xContext, util::MeasureUnit::MM_100TH, eDefaultMeasureUnit, getSaneDefaultVersion()),
@@ -469,7 +468,7 @@ SvXMLExport::SvXMLExport(
     m_xContext(xContext), m_implementationName(std::move(implementationName)),
     mxHandler( rHandler ),
     mxExtHandler( rHandler, uno::UNO_QUERY ),
-    mxAttrList( new SvXMLAttributeList ),
+    mxAttrList( new comphelper::AttributeList ),
     msOrigFileName(std::move( fileName )),
     mpNamespaceMap( new SvXMLNamespaceMap ),
     mpAuthorIDs( new SvtSecurityMapPersonalInfo ),
@@ -503,7 +502,7 @@ SvXMLExport::SvXMLExport(
     mxHandler( rHandler ),
     mxExtHandler( rHandler, uno::UNO_QUERY ),
     mxNumberFormatsSupplier (rModel, uno::UNO_QUERY),
-    mxAttrList( new SvXMLAttributeList ),
+    mxAttrList( new comphelper::AttributeList ),
     msOrigFileName(std::move( fileName )),
     mpNamespaceMap( new SvXMLNamespaceMap ),
     mpAuthorIDs( new SvtSecurityMapPersonalInfo ),
@@ -541,9 +540,9 @@ SvXMLExport::~SvXMLExport()
             {
                 if (mpProgressBarHelper)
                 {
-                    static constexpr OUStringLiteral sProgressMax(XML_PROGRESSMAX);
-                    static constexpr OUStringLiteral sProgressCurrent(XML_PROGRESSCURRENT);
-                    static constexpr OUStringLiteral sRepeat(XML_PROGRESSREPEAT);
+                    static constexpr OUString sProgressMax(XML_PROGRESSMAX);
+                    static constexpr OUString sProgressCurrent(XML_PROGRESSCURRENT);
+                    static constexpr OUString sRepeat(XML_PROGRESSREPEAT);
                     if (xPropertySetInfo->hasPropertyByName(sProgressMax) &&
                         xPropertySetInfo->hasPropertyByName(sProgressCurrent))
                     {
@@ -557,7 +556,7 @@ SvXMLExport::~SvXMLExport()
                 }
                 if (mpNumExport && (mnExportFlags & (SvXMLExportFlags::AUTOSTYLES | SvXMLExportFlags::STYLES)))
                 {
-                    static constexpr OUStringLiteral sWrittenNumberFormats(XML_WRITTENNUMBERSTYLES);
+                    static constexpr OUString sWrittenNumberFormats(XML_WRITTENNUMBERSTYLES);
                     if (xPropertySetInfo->hasPropertyByName(sWrittenNumberFormats))
                     {
                         mxExportInfo->setPropertyValue(sWrittenNumberFormats, Any(mpNumExport->GetWasUsed()));
@@ -702,7 +701,7 @@ void SAL_CALL SvXMLExport::initialize( const uno::Sequence< uno::Any >& aArgumen
 
     uno::Reference< beans::XPropertySetInfo > xPropertySetInfo =
         mxExportInfo->getPropertySetInfo();
-    static constexpr OUStringLiteral sBaseURI = u"BaseURI";
+    static constexpr OUString sBaseURI = u"BaseURI"_ustr;
     if( xPropertySetInfo->hasPropertyByName(sBaseURI) )
     {
         uno::Any aAny = mxExportInfo->getPropertyValue(sBaseURI);
@@ -711,14 +710,14 @@ void SAL_CALL SvXMLExport::initialize( const uno::Sequence< uno::Any >& aArgumen
         mpImpl->SetSchemeOf( msOrigFileName );
     }
     OUString sRelPath;
-    static constexpr OUStringLiteral sStreamRelPath = u"StreamRelPath";
+    static constexpr OUString sStreamRelPath = u"StreamRelPath"_ustr;
     if( xPropertySetInfo->hasPropertyByName(sStreamRelPath) )
     {
         uno::Any aAny = mxExportInfo->getPropertyValue(sStreamRelPath);
         aAny >>= sRelPath;
     }
     OUString sName;
-    static constexpr OUStringLiteral sStreamName = u"StreamName";
+    static constexpr OUString sStreamName = u"StreamName"_ustr;
     if( xPropertySetInfo->hasPropertyByName(sStreamName) )
     {
         uno::Any aAny = mxExportInfo->getPropertyValue(sStreamName);
@@ -735,8 +734,8 @@ void SAL_CALL SvXMLExport::initialize( const uno::Sequence< uno::Any >& aArgumen
     mpImpl->mStreamName = sName; // Note: may be empty (XSLT)
 
     // Written OpenDocument file format doesn't fit to the created text document (#i69627#)
-    static const OUStringLiteral sOutlineStyleAsNormalListStyle(
-            u"OutlineStyleAsNormalListStyle" );
+    static constexpr OUString sOutlineStyleAsNormalListStyle(
+            u"OutlineStyleAsNormalListStyle"_ustr );
     if( xPropertySetInfo->hasPropertyByName( sOutlineStyleAsNormalListStyle ) )
     {
         uno::Any aAny = mxExportInfo->getPropertyValue( sOutlineStyleAsNormalListStyle );
@@ -747,8 +746,8 @@ void SAL_CALL SvXMLExport::initialize( const uno::Sequence< uno::Any >& aArgumen
     if( xPropertySetInfo->hasPropertyByName( sTargetStorage ) )
         mxExportInfo->getPropertyValue( sTargetStorage ) >>= mpImpl->mxTargetStorage;
 
-    static const OUStringLiteral sExportTextNumberElement(
-            u"ExportTextNumberElement" );
+    static constexpr OUString sExportTextNumberElement(
+            u"ExportTextNumberElement"_ustr );
     if( xPropertySetInfo->hasPropertyByName( sExportTextNumberElement ) )
     {
         uno::Any aAny = mxExportInfo->getPropertyValue( sExportTextNumberElement );
@@ -870,7 +869,7 @@ uno::Sequence< OUString > SAL_CALL SvXMLExport::getSupportedServiceNames(  )
 OUString
 SvXMLExport::EnsureNamespace(OUString const & i_rNamespace)
 {
-    OUString const aPreferredPrefix("gen");
+    static constexpr OUString aPreferredPrefix(u"gen"_ustr);
     OUString sPrefix;
     sal_uInt16 nKey( GetNamespaceMap_().GetKeyByName( i_rNamespace ) );
     if( XML_NAMESPACE_UNKNOWN == nKey )
@@ -880,12 +879,9 @@ SvXMLExport::EnsureNamespace(OUString const & i_rNamespace)
         sPrefix = aPreferredPrefix;
         nKey = GetNamespaceMap_().GetKeyByPrefix( sPrefix );
         sal_Int32 n( 0 );
-        OUStringBuffer buf;
         while( nKey != USHRT_MAX )
         {
-            buf.append( aPreferredPrefix );
-            buf.append( ++n );
-            sPrefix = buf.makeStringAndClear();
+            sPrefix = aPreferredPrefix + OUString::number(++n);
             nKey = GetNamespaceMap_().GetKeyByPrefix( sPrefix );
         }
 
@@ -1088,8 +1084,8 @@ void SvXMLExport::ImplExportStyles()
     if( ( mnExportFlags & SvXMLExportFlags::CONTENT ) || !mxExportInfo.is() )
         return;
 
-    static constexpr OUStringLiteral sStyleNames( u"StyleNames" );
-    static constexpr OUStringLiteral sStyleFamilies( u"StyleFamilies" );
+    static constexpr OUString sStyleNames( u"StyleNames"_ustr );
+    static constexpr OUString sStyleFamilies( u"StyleFamilies"_ustr );
     uno::Reference< beans::XPropertySetInfo > xPropertySetInfo = mxExportInfo->getPropertySetInfo();
     if ( xPropertySetInfo->hasPropertyByName( sStyleNames ) && xPropertySetInfo->hasPropertyByName( sStyleFamilies ) )
     {
@@ -1189,12 +1185,25 @@ lcl_AddGrddl(SvXMLExport const & rExport, const SvXMLExportFlags /*nExportMode*/
 #endif
 }
 
+// note: the point of this is presumably to mitigate SHA/1k info leak of plain text
 void SvXMLExport::addChaffWhenEncryptedStorage()
 {
-    uno::Reference< embed::XEncryptionProtectedSource2 > xEncr(mpImpl->mxTargetStorage, uno::UNO_QUERY);
+    uno::Reference<embed::XEncryptionProtectedStorage> const xEncr(mpImpl->mxTargetStorage, uno::UNO_QUERY);
 
     if (xEncr.is() && xEncr->hasEncryptionData() && mxExtHandler.is())
     {
+        uno::Sequence<beans::NamedValue> const algo(xEncr->getEncryptionAlgorithms());
+        for (auto const& it : algo)
+        {
+            if (it.Name == "ChecksumAlgorithm")
+            {
+                if (!it.Value.hasValue())
+                {
+                    return; // no checksum => no chaff
+                }
+                break;
+            }
+        }
         mxExtHandler->comment(OStringToOUString(comphelper::xml::makeXMLChaff(), RTL_TEXTENCODING_ASCII_US));
     }
 }
@@ -2063,9 +2072,6 @@ XMLImageMapExport& SvXMLExport::GetImageMapExport()
 
     return *mpImageMapExport;
 }
-
-// XUnoTunnel & co
-UNO3_GETIMPLEMENTATION_IMPL(SvXMLExport);
 
 void SvXMLExport::ExportEmbeddedOwnObject( Reference< XComponent > const & rComp )
 {

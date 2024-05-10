@@ -95,11 +95,10 @@ AlphaMask implcreateAlphaMask(drawinglayer::primitive2d::Primitive2DContainer& r
     // prepare for mask creation
     pContent->SetMapMode(MapMode(MapUnit::MapPixel));
 
-    // set alpha to all white (fully transparent)
+    // set transparency to all white (fully transparent)
     pContent->Erase();
 
     basegfx::BColorModifierSharedPtr aBColorModifier;
-
     if (bUseLuminance)
     {
         // new mode: bUseLuminance allows simple creation of alpha channels
@@ -108,11 +107,10 @@ AlphaMask implcreateAlphaMask(drawinglayer::primitive2d::Primitive2DContainer& r
     }
     else
     {
-        // Embed primitives to paint them black
+        // Embed primitives to paint them black (fully opaque)
         aBColorModifier
             = std::make_shared<basegfx::BColorModifier_replace>(basegfx::BColor(0.0, 0.0, 0.0));
     }
-    // embed primitives to paint them black
     const drawinglayer::primitive2d::Primitive2DReference xRef(
         new drawinglayer::primitive2d::ModifiedColorPrimitive2D(std::move(rSequence),
                                                                 aBColorModifier));
@@ -125,7 +123,14 @@ AlphaMask implcreateAlphaMask(drawinglayer::primitive2d::Primitive2DContainer& r
     // get alpha channel from vdev
     pContent->EnableMapMode(false);
     const Point aEmptyPoint;
-    return AlphaMask(pContent->GetBitmap(aEmptyPoint, rSizePixel));
+
+    // Convert from transparency->alpha.
+    // FIXME in theory I should be able to directly construct alpha by using black as background
+    // and white as foreground, but that doesn't work for some reason.
+    Bitmap aContentBitmap = pContent->GetBitmap(aEmptyPoint, rSizePixel);
+    aContentBitmap.Invert();
+
+    return AlphaMask(aContentBitmap);
 }
 }
 
@@ -151,7 +156,7 @@ AlphaMask createAlphaMask(drawinglayer::primitive2d::Primitive2DContainer&& rSeq
 BitmapEx convertToBitmapEx(drawinglayer::primitive2d::Primitive2DContainer&& rSeq,
                            const geometry::ViewInformation2D& rViewInformation2D,
                            sal_uInt32 nDiscreteWidth, sal_uInt32 nDiscreteHeight,
-                           sal_uInt32 nMaxSquarePixels)
+                           sal_uInt32 nMaxSquarePixels, bool bForceAlphaMaskCreation)
 {
     drawinglayer::primitive2d::Primitive2DContainer aSequence(std::move(rSeq));
 
@@ -256,15 +261,34 @@ BitmapEx convertToBitmapEx(drawinglayer::primitive2d::Primitive2DContainer&& rSe
     }
 #endif
 
-    if (aAlpha.hasAlpha())
+    if (bForceAlphaMaskCreation || aAlpha.hasAlpha())
     {
         // Need to correct content using known alpha to get to background-free
-        // RGBA result, usable e.g. in PNG export(s) or convert-to-bitmap
-        aRetval.RemoveBlendedStartColor(COL_WHITE, aAlpha);
+        // RGBA result, usable e.g. in PNG export(s) or convert-to-bitmap.
+        // Now that vcl supports bitmaps with an alpha channel, only apply
+        // this correction to bitmaps without an alpha channel.
+        if (pContent->GetBitCount() < 32)
+        {
+            aRetval.RemoveBlendedStartColor(COL_BLACK, aAlpha);
+        }
+        else
+        {
+            // tdf#157558 invert and remove blended white color
+            // Before commit 81994cb2b8b32453a92bcb011830fcb884f22ff3,
+            // RemoveBlendedStartColor(COL_BLACK, aAlpha) would darken
+            // the bitmap when running a slideshow, printing, or exporting
+            // to PDF. To get the same effect, the alpha mask must be
+            // inverted, RemoveBlendedStartColor(COL_WHITE, aAlpha)
+            // called, and the alpha mask uninverted.
+            aAlpha.Invert();
+            aRetval.RemoveBlendedStartColor(COL_WHITE, aAlpha);
+            aAlpha.Invert();
+        }
+        // return combined result
+        return BitmapEx(aRetval, aAlpha);
     }
-
-    // return combined result
-    return BitmapEx(aRetval, aAlpha);
+    else
+        return BitmapEx(aRetval);
 }
 
 BitmapEx convertPrimitive2DContainerToBitmapEx(primitive2d::Primitive2DContainer&& rSequence,

@@ -43,9 +43,9 @@ import android.view.animation.AnimationUtils;
 import android.view.animation.OvershootInterpolator;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.libreoffice.AboutDialogFragment;
+import org.libreoffice.BuildConfig;
 import org.libreoffice.LibreOfficeMainActivity;
 import org.libreoffice.LocaleHelper;
 import org.libreoffice.R;
@@ -174,11 +174,16 @@ public class LibreOfficeUIActivity extends AppCompatActivity implements Settings
         ActionBar actionBar = getSupportActionBar();
 
         if (actionBar != null) {
-            actionBar.setIcon(R.drawable.lo_icon);
+            actionBar.setIcon(R.mipmap.ic_launcher);
         }
 
         editFAB = findViewById(R.id.editFAB);
         editFAB.setOnClickListener(this);
+        // allow creating new docs only when experimental editing is enabled
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        final boolean bEditingEnabled = BuildConfig.ALLOW_EDITING && preferences.getBoolean(LibreOfficeMainActivity.ENABLE_EXPERIMENTAL_PREFS_KEY, false);
+        editFAB.setVisibility(bEditingEnabled ? View.VISIBLE : View.INVISIBLE);
+
         impressFAB = findViewById(R.id.newImpressFAB);
         impressFAB.setOnClickListener(this);
         writerFAB = findViewById(R.id.newWriterFAB);
@@ -191,7 +196,7 @@ public class LibreOfficeUIActivity extends AppCompatActivity implements Settings
         impressLayout = findViewById(R.id.impressLayout);
         calcLayout = findViewById(R.id.calcLayout);
         drawLayout = findViewById(R.id.drawLayout);
-        TextView openFileView = findViewById(R.id.open_file_view);
+        TextView openFileView = findViewById(R.id.open_file_button);
         openFileView.setOnClickListener(this);
 
 
@@ -259,15 +264,7 @@ public class LibreOfficeUIActivity extends AppCompatActivity implements Settings
     }
 
     private void showSystemFilePickerAndOpenFile() {
-        Intent intent = new Intent();
-        if (Build.VERSION.SDK_INT >= 19) {
-            intent.setAction(Intent.ACTION_OPEN_DOCUMENT);
-        }
-        else {
-            // Intent.ACTION_OPEN_DOCUMENT added in API level 19, but minSdkVersion is currently 16
-            intent.setAction(Intent.ACTION_GET_CONTENT);
-        }
-
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, SUPPORTED_MIME_TYPES);
 
@@ -356,13 +353,6 @@ public class LibreOfficeUIActivity extends AppCompatActivity implements Settings
 
     private void addDocumentToRecents(Uri fileUri) {
         SharedPreferences prefs = getSharedPreferences(EXPLORER_PREFS_KEY, MODE_PRIVATE);
-        if (Build.VERSION.SDK_INT < 19) {
-            // ContentResolver#takePersistableUriPermission only available from SDK level 19 on
-            Log.i(LOGTAG, "Recently used files not supported, requires SDK version >= 19.");
-            // drop potential entries
-            prefs.edit().putString(RECENT_DOCUMENTS_KEY, "").apply();
-            return;
-        }
 
         // preserve permissions across device reboots,
         // s. https://developer.android.com/training/data-storage/shared/documents-files#persist-permissions
@@ -445,18 +435,12 @@ public class LibreOfficeUIActivity extends AppCompatActivity implements Settings
     public void onClick(View v) {
         int id = v.getId();
         if (id == R.id.editFAB) {
-            // Intent.ACTION_CREATE_DOCUMENT, used in 'createNewFileDialog' requires SDK version 19
-            if (Build.VERSION.SDK_INT < 19) {
-                Toast.makeText(this,
-                    getString(R.string.creating_new_files_not_supported), Toast.LENGTH_SHORT).show();
-                return;
-            }
             if (isFabMenuOpen) {
                 collapseFabMenu();
             } else {
                 expandFabMenu();
             }
-        } else if (id == R.id.open_file_view) {
+        } else if (id == R.id.open_file_button) {
             showSystemFilePickerAndOpenFile();
         } else if (id == R.id.newWriterFAB) {
             loadNewDocument(DocumentType.WRITER);

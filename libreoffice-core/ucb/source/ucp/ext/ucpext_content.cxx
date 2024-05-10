@@ -488,7 +488,7 @@ namespace ucb::ucp::ext
         Sequence< Any > aRet( i_rValues.getLength() );
 
         PropertyChangeEvent aEvent;
-        aEvent.Source         = static_cast< cppu::OWeakObject * >( this );
+        aEvent.Source         = getXWeak();
         aEvent.Further        = false;
         aEvent.PropertyHandle = -1;
 
@@ -577,7 +577,7 @@ namespace ucb::ucp::ext
 
     bool Content::impl_isFolder()
     {
-        if ( !!m_aIsFolder )
+        if ( m_aIsFolder.has_value() )
             return *m_aIsFolder;
 
         bool bIsFolder = false;

@@ -29,6 +29,7 @@
 #include <drawinglayer/primitive2d/PolyPolygonStrokePrimitive2D.hxx>
 #include <drawinglayer/primitive2d/PolyPolygonColorPrimitive2D.hxx>
 #include <drawinglayer/primitive2d/hiddengeometryprimitive2d.hxx>
+#include <drawinglayer/primitive2d/softedgeprimitive2d.hxx>
 #include <drawinglayer/primitive2d/textdecoratedprimitive2d.hxx>
 #include <primitive2d/textlineprimitive2d.hxx>
 #include <drawinglayer/primitive2d/textprimitive2d.hxx>
@@ -38,7 +39,9 @@
 #include <drawinglayer/primitive2d/structuretagprimitive2d.hxx>
 #include <drawinglayer/primitive2d/svggradientprimitive2d.hxx>
 #include <drawinglayer/primitive2d/metafileprimitive2d.hxx>
+#include <drawinglayer/primitive2d/modifiedcolorprimitive2d.hxx>
 #include <drawinglayer/primitive2d/sceneprimitive2d.hxx>
+#include <drawinglayer/primitive2d/shadowprimitive2d.hxx>
 #include <drawinglayer/geometry/viewinformation2d.hxx>
 #include <drawinglayer/attribute/lineattribute.hxx>
 #include <drawinglayer/attribute/fontattribute.hxx>
@@ -82,9 +85,9 @@ void writeMatrix(::tools::XmlWriter& rWriter, const basegfx::B2DHomMatrix& rMatr
     rWriter.attribute("xy21", rMatrix.get(1, 0));
     rWriter.attribute("xy22", rMatrix.get(1, 1));
     rWriter.attribute("xy23", rMatrix.get(1, 2));
-    rWriter.attribute("xy31", rMatrix.get(2, 0));
-    rWriter.attribute("xy32", rMatrix.get(2, 1));
-    rWriter.attribute("xy33", rMatrix.get(2, 2));
+    rWriter.attribute("xy31", 0);
+    rWriter.attribute("xy32", 0);
+    rWriter.attribute("xy33", 1);
 }
 
 void writeMatrix3D(::tools::XmlWriter& rWriter, const basegfx::B3DHomMatrix& rMatrix)
@@ -164,38 +167,38 @@ void writeLineAttribute(::tools::XmlWriter& rWriter,
     switch (rLineAttribute.getLineJoin())
     {
         case basegfx::B2DLineJoin::NONE:
-            rWriter.attribute("linejoin", "NONE");
+            rWriter.attribute("linejoin", "NONE"_ostr);
             break;
         case basegfx::B2DLineJoin::Bevel:
-            rWriter.attribute("linejoin", "Bevel");
+            rWriter.attribute("linejoin", "Bevel"_ostr);
             break;
         case basegfx::B2DLineJoin::Miter:
         {
-            rWriter.attribute("linejoin", "Miter");
+            rWriter.attribute("linejoin", "Miter"_ostr);
             rWriter.attribute("miterangle",
                               basegfx::rad2deg(rLineAttribute.getMiterMinimumAngle()));
             break;
         }
         case basegfx::B2DLineJoin::Round:
-            rWriter.attribute("linejoin", "Round");
+            rWriter.attribute("linejoin", "Round"_ostr);
             break;
         default:
-            rWriter.attribute("linejoin", "Unknown");
+            rWriter.attribute("linejoin", "Unknown"_ostr);
             break;
     }
     switch (rLineAttribute.getLineCap())
     {
         case css::drawing::LineCap::LineCap_BUTT:
-            rWriter.attribute("linecap", "BUTT");
+            rWriter.attribute("linecap", "BUTT"_ostr);
             break;
         case css::drawing::LineCap::LineCap_ROUND:
-            rWriter.attribute("linecap", "ROUND");
+            rWriter.attribute("linecap", "ROUND"_ostr);
             break;
         case css::drawing::LineCap::LineCap_SQUARE:
-            rWriter.attribute("linecap", "SQUARE");
+            rWriter.attribute("linecap", "SQUARE"_ostr);
             break;
         default:
-            rWriter.attribute("linecap", "Unknown");
+            rWriter.attribute("linecap", "Unknown"_ostr);
             break;
     }
 
@@ -216,34 +219,34 @@ void writeSdrLineAttribute(::tools::XmlWriter& rWriter,
     switch (rLineAttribute.getJoin())
     {
         case basegfx::B2DLineJoin::NONE:
-            rWriter.attribute("linejoin", "NONE");
+            rWriter.attribute("linejoin", "NONE"_ostr);
             break;
         case basegfx::B2DLineJoin::Bevel:
-            rWriter.attribute("linejoin", "Bevel");
+            rWriter.attribute("linejoin", "Bevel"_ostr);
             break;
         case basegfx::B2DLineJoin::Miter:
-            rWriter.attribute("linejoin", "Miter");
+            rWriter.attribute("linejoin", "Miter"_ostr);
             break;
         case basegfx::B2DLineJoin::Round:
-            rWriter.attribute("linejoin", "Round");
+            rWriter.attribute("linejoin", "Round"_ostr);
             break;
         default:
-            rWriter.attribute("linejoin", "Unknown");
+            rWriter.attribute("linejoin", "Unknown"_ostr);
             break;
     }
     switch (rLineAttribute.getCap())
     {
         case css::drawing::LineCap::LineCap_BUTT:
-            rWriter.attribute("linecap", "BUTT");
+            rWriter.attribute("linecap", "BUTT"_ostr);
             break;
         case css::drawing::LineCap::LineCap_ROUND:
-            rWriter.attribute("linecap", "ROUND");
+            rWriter.attribute("linecap", "ROUND"_ostr);
             break;
         case css::drawing::LineCap::LineCap_SQUARE:
-            rWriter.attribute("linecap", "SQUARE");
+            rWriter.attribute("linecap", "SQUARE"_ostr);
             break;
         default:
-            rWriter.attribute("linecap", "Unknown");
+            rWriter.attribute("linecap", "Unknown"_ostr);
             break;
     }
 
@@ -279,22 +282,22 @@ void writeSdrFillAttribute(::tools::XmlWriter& rWriter,
         {
             default: // GradientStyle_MAKE_FIXED_SIZE
             case css::awt::GradientStyle_LINEAR:
-                rWriter.attribute("style", "Linear");
+                rWriter.attribute("style", "Linear"_ostr);
                 break;
             case css::awt::GradientStyle_AXIAL:
-                rWriter.attribute("style", "Axial");
+                rWriter.attribute("style", "Axial"_ostr);
                 break;
             case css::awt::GradientStyle_RADIAL:
-                rWriter.attribute("style", "Radial");
+                rWriter.attribute("style", "Radial"_ostr);
                 break;
             case css::awt::GradientStyle_ELLIPTICAL:
-                rWriter.attribute("style", "Elliptical");
+                rWriter.attribute("style", "Elliptical"_ostr);
                 break;
             case css::awt::GradientStyle_SQUARE:
-                rWriter.attribute("style", "Square");
+                rWriter.attribute("style", "Square"_ostr);
                 break;
             case css::awt::GradientStyle_RECT:
-                rWriter.attribute("style", "Rect");
+                rWriter.attribute("style", "Rect"_ostr);
                 break;
         }
         rWriter.attribute("border", rGradient.getBorder());
@@ -329,13 +332,13 @@ void writeSdrFillAttribute(::tools::XmlWriter& rWriter,
         switch (rHatch.getStyle())
         {
             case drawinglayer::attribute::HatchStyle::Single:
-                rWriter.attribute("style", "Single");
+                rWriter.attribute("style", "Single"_ostr);
                 break;
             case drawinglayer::attribute::HatchStyle::Double:
-                rWriter.attribute("style", "Double");
+                rWriter.attribute("style", "Double"_ostr);
                 break;
             case drawinglayer::attribute::HatchStyle::Triple:
-                rWriter.attribute("style", "Triple");
+                rWriter.attribute("style", "Triple"_ostr);
                 break;
         }
         rWriter.attribute("distance", rHatch.getDistance());
@@ -362,19 +365,19 @@ void writeShadeMode(::tools::XmlWriter& rWriter, const css::drawing::ShadeMode& 
     switch (rMode)
     {
         case css::drawing::ShadeMode_FLAT:
-            rWriter.attribute("shadeMode", "Flat");
+            rWriter.attribute("shadeMode", "Flat"_ostr);
             break;
         case css::drawing::ShadeMode_SMOOTH:
-            rWriter.attribute("shadeMode", "Smooth");
+            rWriter.attribute("shadeMode", "Smooth"_ostr);
             break;
         case css::drawing::ShadeMode_PHONG:
-            rWriter.attribute("shadeMode", "Phong");
+            rWriter.attribute("shadeMode", "Phong"_ostr);
             break;
         case css::drawing::ShadeMode_DRAFT:
-            rWriter.attribute("shadeMode", "Draft");
+            rWriter.attribute("shadeMode", "Draft"_ostr);
             break;
         default:
-            rWriter.attribute("shadeMode", "Undefined");
+            rWriter.attribute("shadeMode", "Undefined"_ostr);
             break;
     }
 }
@@ -384,13 +387,13 @@ void writeProjectionMode(::tools::XmlWriter& rWriter, const css::drawing::Projec
     switch (rMode)
     {
         case css::drawing::ProjectionMode_PARALLEL:
-            rWriter.attribute("projectionMode", "Parallel");
+            rWriter.attribute("projectionMode", "Parallel"_ostr);
             break;
         case css::drawing::ProjectionMode_PERSPECTIVE:
-            rWriter.attribute("projectionMode", "Perspective");
+            rWriter.attribute("projectionMode", "Perspective"_ostr);
             break;
         default:
-            rWriter.attribute("projectionMode", "Undefined");
+            rWriter.attribute("projectionMode", "Undefined"_ostr);
             break;
     }
 }
@@ -400,16 +403,16 @@ void writeNormalsKind(::tools::XmlWriter& rWriter, const css::drawing::NormalsKi
     switch (rKind)
     {
         case css::drawing::NormalsKind_SPECIFIC:
-            rWriter.attribute("normalsKind", "Specific");
+            rWriter.attribute("normalsKind", "Specific"_ostr);
             break;
         case css::drawing::NormalsKind_FLAT:
-            rWriter.attribute("normalsKind", "Flat");
+            rWriter.attribute("normalsKind", "Flat"_ostr);
             break;
         case css::drawing::NormalsKind_SPHERE:
-            rWriter.attribute("normalsKind", "Sphere");
+            rWriter.attribute("normalsKind", "Sphere"_ostr);
             break;
         default:
-            rWriter.attribute("normalsKind", "Undefined");
+            rWriter.attribute("normalsKind", "Undefined"_ostr);
             break;
     }
 }
@@ -420,16 +423,16 @@ void writeTextureProjectionMode(::tools::XmlWriter& rWriter, const char* pElemen
     switch (rMode)
     {
         case css::drawing::TextureProjectionMode_OBJECTSPECIFIC:
-            rWriter.attribute(pElement, "Specific");
+            rWriter.attribute(pElement, "Specific"_ostr);
             break;
         case css::drawing::TextureProjectionMode_PARALLEL:
-            rWriter.attribute(pElement, "Parallel");
+            rWriter.attribute(pElement, "Parallel"_ostr);
             break;
         case css::drawing::TextureProjectionMode_SPHERE:
-            rWriter.attribute(pElement, "Sphere");
+            rWriter.attribute(pElement, "Sphere"_ostr);
             break;
         default:
-            rWriter.attribute(pElement, "Undefined");
+            rWriter.attribute(pElement, "Undefined"_ostr);
             break;
     }
 }
@@ -439,16 +442,16 @@ void writeTextureKind(::tools::XmlWriter& rWriter, const css::drawing::TextureKi
     switch (rKind)
     {
         case css::drawing::TextureKind2_LUMINANCE:
-            rWriter.attribute("textureKind", "Luminance");
+            rWriter.attribute("textureKind", "Luminance"_ostr);
             break;
         case css::drawing::TextureKind2_INTENSITY:
-            rWriter.attribute("textureKind", "Intensity");
+            rWriter.attribute("textureKind", "Intensity"_ostr);
             break;
         case css::drawing::TextureKind2_COLOR:
-            rWriter.attribute("textureKind", "Color");
+            rWriter.attribute("textureKind", "Color"_ostr);
             break;
         default:
-            rWriter.attribute("textureKind", "Undefined");
+            rWriter.attribute("textureKind", "Undefined"_ostr);
             break;
     }
 }
@@ -458,16 +461,16 @@ void writeTextureMode(::tools::XmlWriter& rWriter, const css::drawing::TextureMo
     switch (rMode)
     {
         case css::drawing::TextureMode_REPLACE:
-            rWriter.attribute("textureMode", "Replace");
+            rWriter.attribute("textureMode", "Replace"_ostr);
             break;
         case css::drawing::TextureMode_MODULATE:
-            rWriter.attribute("textureMode", "Modulate");
+            rWriter.attribute("textureMode", "Modulate"_ostr);
             break;
         case css::drawing::TextureMode_BLEND:
-            rWriter.attribute("textureMode", "Blend");
+            rWriter.attribute("textureMode", "Blend"_ostr);
             break;
         default:
-            rWriter.attribute("textureMode", "Undefined");
+            rWriter.attribute("textureMode", "Undefined"_ostr);
             break;
     }
 }
@@ -489,16 +492,16 @@ void writeSpreadMethod(::tools::XmlWriter& rWriter,
     switch (rSpreadMethod)
     {
         case drawinglayer::primitive2d::SpreadMethod::Pad:
-            rWriter.attribute("spreadmethod", "pad");
+            rWriter.attribute("spreadmethod", "pad"_ostr);
             break;
         case drawinglayer::primitive2d::SpreadMethod::Reflect:
-            rWriter.attribute("spreadmethod", "reflect");
+            rWriter.attribute("spreadmethod", "reflect"_ostr);
             break;
         case drawinglayer::primitive2d::SpreadMethod::Repeat:
-            rWriter.attribute("spreadmethod", "repeat");
+            rWriter.attribute("spreadmethod", "repeat"_ostr);
             break;
         default:
-            rWriter.attribute("spreadmethod", "unknown");
+            rWriter.attribute("spreadmethod", "unknown"_ostr);
     }
 }
 
@@ -614,8 +617,7 @@ public:
                 default:
                 {
                     rWriter.startElement("unhandled");
-                    rWriter.attribute("id",
-                                      OUStringToOString(sCurrentElementTag, RTL_TEXTENCODING_UTF8));
+                    rWriter.attribute("id", sCurrentElementTag);
                     rWriter.attribute("idNumber", nId);
 
                     drawinglayer::geometry::ViewInformation3D aViewInformation3D;
@@ -917,6 +919,15 @@ void Primitive2dXmlDump::decomposeAndWrite(
                 const drawinglayer::attribute::FontAttribute& aFontAttribute
                     = rTextSimplePortionPrimitive2D.getFontAttribute();
                 rWriter.attribute("familyname", aFontAttribute.getFamilyName());
+                const std::vector<double> aDx = rTextSimplePortionPrimitive2D.getDXArray();
+                if (aDx.size())
+                {
+                    for (size_t iDx = 0; iDx < aDx.size(); ++iDx)
+                    {
+                        OString sName = "dx" + OString::number(iDx);
+                        rWriter.attribute(sName, OString::number(aDx[iDx]));
+                    }
+                }
                 rWriter.endElement();
             }
             break;
@@ -1115,11 +1126,17 @@ void Primitive2dXmlDump::decomposeAndWrite(
             case PRIMITIVE2D_ID_SHADOWPRIMITIVE2D:
             {
                 // ShadowPrimitive2D.
+                const ShadowPrimitive2D& rShadowPrimitive2D
+                    = dynamic_cast<const ShadowPrimitive2D&>(*pBasePrimitive);
                 rWriter.startElement("shadow");
-                drawinglayer::primitive2d::Primitive2DContainer aPrimitiveContainer;
-                pBasePrimitive->get2DDecomposition(aPrimitiveContainer,
-                                                   drawinglayer::geometry::ViewInformation2D());
-                decomposeAndWrite(aPrimitiveContainer, rWriter);
+                rWriter.attribute("color",
+                                  convertColorToString(rShadowPrimitive2D.getShadowColor()));
+                rWriter.attributeDouble("blur", rShadowPrimitive2D.getShadowBlur());
+
+                rWriter.startElement("transform");
+                writeMatrix(rWriter, rShadowPrimitive2D.getShadowTransform());
+                rWriter.endElement();
+
                 rWriter.endElement();
                 break;
             }
@@ -1127,11 +1144,26 @@ void Primitive2dXmlDump::decomposeAndWrite(
             case PRIMITIVE2D_ID_MODIFIEDCOLORPRIMITIVE2D:
             {
                 // ModifiedColorPrimitive2D.
+                const ModifiedColorPrimitive2D& rModifiedColorPrimitive2D
+                    = dynamic_cast<const ModifiedColorPrimitive2D&>(*pBasePrimitive);
                 rWriter.startElement("modifiedColor");
-                drawinglayer::primitive2d::Primitive2DContainer aPrimitiveContainer;
-                pBasePrimitive->get2DDecomposition(aPrimitiveContainer,
-                                                   drawinglayer::geometry::ViewInformation2D());
-                decomposeAndWrite(aPrimitiveContainer, rWriter);
+                const basegfx::BColorModifierSharedPtr& aColorModifier
+                    = rModifiedColorPrimitive2D.getColorModifier();
+                rWriter.attribute("modifier", aColorModifier->getModifierName());
+
+                decomposeAndWrite(rModifiedColorPrimitive2D.getChildren(), rWriter);
+                rWriter.endElement();
+                break;
+            }
+            case PRIMITIVE2D_ID_SOFTEDGEPRIMITIVE2D:
+            {
+                // SoftEdgePrimitive2D.
+                const SoftEdgePrimitive2D& rSoftEdgePrimitive2D
+                    = dynamic_cast<const SoftEdgePrimitive2D&>(*pBasePrimitive);
+                rWriter.startElement("softedge");
+                rWriter.attribute("radius", OUString::number(rSoftEdgePrimitive2D.getRadius()));
+
+                decomposeAndWrite(rSoftEdgePrimitive2D.getChildren(), rWriter);
                 rWriter.endElement();
                 break;
             }
@@ -1175,7 +1207,7 @@ void Primitive2dXmlDump::decomposeAndWrite(
 
             default:
             {
-                OString aName("unhandled");
+                const char* aName = "unhandled";
                 switch (nId)
                 {
                     case PRIMITIVE2D_ID_RANGE_SVX | 14: // PRIMITIVE2D_ID_SDRCELLPRIMITIVE2D
@@ -1185,8 +1217,7 @@ void Primitive2dXmlDump::decomposeAndWrite(
                     }
                 }
                 rWriter.startElement(aName);
-                rWriter.attribute("id",
-                                  OUStringToOString(sCurrentElementTag, RTL_TEXTENCODING_UTF8));
+                rWriter.attribute("id", sCurrentElementTag);
                 rWriter.attribute("idNumber", nId);
 
                 auto pBufferedDecomposition

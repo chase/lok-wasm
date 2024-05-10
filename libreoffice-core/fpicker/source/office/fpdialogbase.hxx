@@ -52,14 +52,14 @@ namespace o3tl {
     template<> struct typed_flags<PickerFlags> : is_typed_flags<PickerFlags, 0x00ffff> {};
 }
 
-inline constexpr OUStringLiteral FILEDIALOG_FILTER_ALL = u"*.*";
+inline constexpr OUString FILEDIALOG_FILTER_ALL = u"*.*"_ustr;
 
 // SvtFileDialog_Base
 
 class SvtFileDialog_Base : public weld::GenericDialogController, public ::svt::IFilePickerController
 {
 public:
-    SvtFileDialog_Base(weld::Window* pParent, const OUString& rUIXMLDescription, const OString& rID)
+    SvtFileDialog_Base(weld::Window* pParent, const OUString& rUIXMLDescription, const OUString& rID)
         : weld::GenericDialogController(pParent, rUIXMLDescription, rID)
     {
     }

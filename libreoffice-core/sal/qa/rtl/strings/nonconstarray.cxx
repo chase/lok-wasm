@@ -85,19 +85,15 @@ private:
         CPPUNIT_ASSERT_EQUAL(sal_Int32(1), OUString(s.a).getLength());
         // Ideally, the below would work the same as the above.  However, the const reference makes
         // the ConstCharArrayDetector instead of the NonConstCharArrayDetector kick in, so that the
-        // call to OUString(r.a) would fire the ConstCharArrayDetector<T>::isValid assert (and in
-        // NDEBUG builds the CPPUNIT_ASSERT_EQUAL would fail with 3 != 1)::
-        if ((false))
-        {
-            S const& r = s;
-            CPPUNIT_ASSERT_EQUAL(sal_Int32(1), OUString(r.a).getLength());
-        }
+        // call to OUString(r.a) would pick the deleted ConstCharArrayDetector overload:
+        //  S const& r = s;
+        //  CPPUNIT_ASSERT_EQUAL(sal_Int32(1), OUString(r.a).getLength());
     }
 
     void testP2266R3()
     {
-        CPPUNIT_ASSERT_EQUAL(OString("foo"), returnOString());
-        CPPUNIT_ASSERT_EQUAL(OString("foo"), returnOStringBuffer().makeStringAndClear());
+        CPPUNIT_ASSERT_EQUAL("foo"_ostr, returnOString());
+        CPPUNIT_ASSERT_EQUAL("foo"_ostr, returnOStringBuffer().makeStringAndClear());
     }
 
     CPPUNIT_TEST_SUITE(Test);

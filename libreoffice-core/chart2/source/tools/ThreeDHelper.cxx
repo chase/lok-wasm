@@ -56,240 +56,13 @@ bool lcl_isRightAngledAxesSetAndSupported( const rtl::Reference< Diagram >& xDia
         if(bRightAngledAxes)
         {
             if( ChartTypeHelper::isSupportingRightAngledAxes(
-                    DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) ) )
+                    xDiagram->getChartTypeByIndex( 0 ) ) )
             {
                 return true;
             }
         }
     }
     return false;
-}
-
-void lcl_RotateLightSource( const Reference< beans::XPropertySet >& xSceneProperties
-                           , const OUString& rLightSourceDirection
-                           , const OUString& rLightSourceOn
-                           , const ::basegfx::B3DHomMatrix& rRotationMatrix )
-{
-    if( !xSceneProperties.is() )
-        return;
-
-    bool bLightOn = false;
-    if( !(xSceneProperties->getPropertyValue( rLightSourceOn ) >>= bLightOn) )
-        return;
-
-    if( bLightOn )
-    {
-        drawing::Direction3D aLight;
-        if( xSceneProperties->getPropertyValue( rLightSourceDirection ) >>= aLight )
-        {
-            ::basegfx::B3DVector aLightVector( BaseGFXHelper::Direction3DToB3DVector( aLight ) );
-            aLightVector = rRotationMatrix*aLightVector;
-
-            xSceneProperties->setPropertyValue( rLightSourceDirection
-                , uno::Any( BaseGFXHelper::B3DVectorToDirection3D( aLightVector ) ) );
-        }
-    }
-}
-
-void lcl_rotateLights( const ::basegfx::B3DHomMatrix& rLightRottion, const Reference< beans::XPropertySet >& xSceneProperties )
-{
-    if(!xSceneProperties.is())
-        return;
-
-    ::basegfx::B3DHomMatrix aLightRottion( rLightRottion );
-    BaseGFXHelper::ReduceToRotationMatrix( aLightRottion );
-
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection1", "D3DSceneLightOn1", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection2", "D3DSceneLightOn2", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection3", "D3DSceneLightOn3", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection4", "D3DSceneLightOn4", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection5", "D3DSceneLightOn5", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection6", "D3DSceneLightOn6", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection7", "D3DSceneLightOn7", aLightRottion );
-    lcl_RotateLightSource( xSceneProperties, "D3DSceneLightDirection8", "D3DSceneLightOn8", aLightRottion );
-}
-
-::basegfx::B3DHomMatrix lcl_getInverseRotationMatrix( const Reference< beans::XPropertySet >& xSceneProperties )
-{
-    ::basegfx::B3DHomMatrix aInverseRotation;
-    double fXAngleRad=0.0;
-    double fYAngleRad=0.0;
-    double fZAngleRad=0.0;
-    ThreeDHelper::getRotationAngleFromDiagram(
-        xSceneProperties, fXAngleRad, fYAngleRad, fZAngleRad );
-    aInverseRotation.rotate( 0.0, 0.0, -fZAngleRad );
-    aInverseRotation.rotate( 0.0, -fYAngleRad, 0.0 );
-    aInverseRotation.rotate( -fXAngleRad, 0.0, 0.0 );
-    return aInverseRotation;
-}
-
-::basegfx::B3DHomMatrix lcl_getCompleteRotationMatrix( const Reference< beans::XPropertySet >& xSceneProperties )
-{
-    ::basegfx::B3DHomMatrix aCompleteRotation;
-    double fXAngleRad=0.0;
-    double fYAngleRad=0.0;
-    double fZAngleRad=0.0;
-    ThreeDHelper::getRotationAngleFromDiagram(
-        xSceneProperties, fXAngleRad, fYAngleRad, fZAngleRad );
-    aCompleteRotation.rotate( fXAngleRad, fYAngleRad, fZAngleRad );
-    return aCompleteRotation;
-}
-
-bool lcl_isEqual( const drawing::Direction3D& rA, const drawing::Direction3D& rB )
-{
-    return ::rtl::math::approxEqual(rA.DirectionX, rB.DirectionX)
-        && ::rtl::math::approxEqual(rA.DirectionY, rB.DirectionY)
-        && ::rtl::math::approxEqual(rA.DirectionZ, rB.DirectionZ);
-}
-
-bool lcl_isLightScheme( const rtl::Reference< Diagram >& xDiagram, bool bRealistic )
-{
-    if(!xDiagram.is())
-        return false;
-
-    bool bIsOn = false;
-    xDiagram->getPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_2 ) >>= bIsOn;
-    if(!bIsOn)
-        return false;
-
-    rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
-
-    sal_Int32 nColor = 0;
-    xDiagram->getPropertyValue( UNO_NAME_3D_SCENE_LIGHTCOLOR_2 ) >>= nColor;
-    if( nColor != ::chart::ChartTypeHelper::getDefaultDirectLightColor( !bRealistic, xChartType ) )
-        return false;
-
-    sal_Int32 nAmbientColor = 0;
-    xDiagram->getPropertyValue( UNO_NAME_3D_SCENE_AMBIENTCOLOR ) >>= nAmbientColor;
-    if( nAmbientColor != ::chart::ChartTypeHelper::getDefaultAmbientLightColor( !bRealistic, xChartType ) )
-        return false;
-
-    drawing::Direction3D aDirection(0,0,0);
-    xDiagram->getPropertyValue( UNO_NAME_3D_SCENE_LIGHTDIRECTION_2 ) >>= aDirection;
-
-    drawing::Direction3D aDefaultDirection( bRealistic
-        ? ChartTypeHelper::getDefaultRealisticLightDirection(xChartType)
-        : ChartTypeHelper::getDefaultSimpleLightDirection(xChartType) );
-
-    //rotate default light direction when right angled axes are off but supported
-    {
-        bool bRightAngledAxes = false;
-        xDiagram->getPropertyValue( "RightAngledAxes") >>= bRightAngledAxes;
-        if(!bRightAngledAxes)
-        {
-            if( ChartTypeHelper::isSupportingRightAngledAxes(
-                    DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) ) )
-            {
-                ::basegfx::B3DHomMatrix aRotation( lcl_getCompleteRotationMatrix( xDiagram ) );
-                BaseGFXHelper::ReduceToRotationMatrix( aRotation );
-                ::basegfx::B3DVector aLightVector( BaseGFXHelper::Direction3DToB3DVector( aDefaultDirection ) );
-                aLightVector = aRotation*aLightVector;
-                aDefaultDirection = BaseGFXHelper::B3DVectorToDirection3D( aLightVector );
-            }
-        }
-    }
-
-    return lcl_isEqual( aDirection, aDefaultDirection );
-}
-
-bool lcl_isRealisticLightScheme( const rtl::Reference< Diagram >& xDiagram )
-{
-    return lcl_isLightScheme( xDiagram, true /*bRealistic*/ );
-}
-bool lcl_isSimpleLightScheme( const rtl::Reference< Diagram >& xDiagram )
-{
-    return lcl_isLightScheme( xDiagram, false /*bRealistic*/ );
-}
-void lcl_setLightsForScheme( const rtl::Reference< Diagram >& xDiagram, const ThreeDLookScheme& rScheme )
-{
-    if(!xDiagram.is())
-        return;
-    if( rScheme == ThreeDLookScheme::ThreeDLookScheme_Unknown)
-        return;
-
-    xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_2, uno::Any( true ) );
-
-    rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
-    uno::Any aADirection( rScheme == ThreeDLookScheme::ThreeDLookScheme_Simple
-        ? ChartTypeHelper::getDefaultSimpleLightDirection(xChartType)
-        : ChartTypeHelper::getDefaultRealisticLightDirection(xChartType) );
-
-    xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTDIRECTION_2, aADirection );
-    //rotate light direction when right angled axes are off but supported
-    {
-        bool bRightAngledAxes = false;
-        xDiagram->getPropertyValue( "RightAngledAxes") >>= bRightAngledAxes;
-        if(!bRightAngledAxes)
-        {
-            if( ChartTypeHelper::isSupportingRightAngledAxes( xChartType ) )
-            {
-                ::basegfx::B3DHomMatrix aRotation( lcl_getCompleteRotationMatrix( xDiagram ) );
-                BaseGFXHelper::ReduceToRotationMatrix( aRotation );
-                lcl_RotateLightSource( xDiagram, "D3DSceneLightDirection2", "D3DSceneLightOn2", aRotation );
-            }
-        }
-    }
-
-    sal_Int32 nColor = ::chart::ChartTypeHelper::getDefaultDirectLightColor(
-        rScheme == ThreeDLookScheme::ThreeDLookScheme_Simple, xChartType);
-    xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTCOLOR_2, uno::Any( nColor ) );
-
-    sal_Int32 nAmbientColor = ::chart::ChartTypeHelper::getDefaultAmbientLightColor(
-        rScheme == ThreeDLookScheme::ThreeDLookScheme_Simple, xChartType);
-    xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_AMBIENTCOLOR, uno::Any( nAmbientColor ) );
-}
-
-bool lcl_isRealisticScheme( drawing::ShadeMode aShadeMode
-                    , sal_Int32 nRoundedEdges
-                    , sal_Int32 nObjectLines )
-{
-    if(aShadeMode!=drawing::ShadeMode_SMOOTH)
-        return false;
-    if(nRoundedEdges!=5)
-        return false;
-    if(nObjectLines!=0)
-        return false;
-    return true;
-}
-
-bool lcl_isSimpleScheme( drawing::ShadeMode aShadeMode
-                    , sal_Int32 nRoundedEdges
-                    , sal_Int32 nObjectLines
-                    , const rtl::Reference< Diagram >& xDiagram )
-{
-    if(aShadeMode!=drawing::ShadeMode_FLAT)
-        return false;
-    if(nRoundedEdges!=0)
-        return false;
-    if(nObjectLines==0)
-    {
-        rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
-        return ChartTypeHelper::noBordersForSimpleScheme( xChartType );
-    }
-    if(nObjectLines!=1)
-        return false;
-    return true;
-}
-
-void lcl_setRealisticScheme( drawing::ShadeMode& rShadeMode
-                    , sal_Int32& rnRoundedEdges
-                    , sal_Int32& rnObjectLines )
-{
-    rShadeMode = drawing::ShadeMode_SMOOTH;
-    rnRoundedEdges = 5;
-    rnObjectLines = 0;
-}
-
-void lcl_setSimpleScheme( drawing::ShadeMode& rShadeMode
-                    , sal_Int32& rnRoundedEdges
-                    , sal_Int32& rnObjectLines
-                    , const rtl::Reference< Diagram >& xDiagram )
-{
-    rShadeMode = drawing::ShadeMode_FLAT;
-    rnRoundedEdges = 0;
-
-    rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
-    rnObjectLines = ChartTypeHelper::noBordersForSimpleScheme( xChartType ) ? 0 : 1;
 }
 
 } //end anonymous namespace
@@ -316,60 +89,6 @@ drawing::CameraGeometry ThreeDHelper::getDefaultCameraGeometry( bool bPie )
 
 namespace
 {
-::basegfx::B3DHomMatrix lcl_getCameraMatrix( const uno::Reference< beans::XPropertySet >& xSceneProperties )
-{
-    drawing::HomogenMatrix aCameraMatrix;
-
-    drawing::CameraGeometry aCG( ThreeDHelper::getDefaultCameraGeometry() );
-    if( xSceneProperties.is() )
-        xSceneProperties->getPropertyValue( "D3DCameraGeometry" ) >>= aCG;
-
-    ::basegfx::B3DVector aVPN( BaseGFXHelper::Direction3DToB3DVector( aCG.vpn ) );
-    ::basegfx::B3DVector aVUP( BaseGFXHelper::Direction3DToB3DVector( aCG.vup ) );
-
-    //normalize vectors:
-    aVPN.normalize();
-    aVUP.normalize();
-
-    ::basegfx::B3DVector aCross = ::basegfx::cross( aVUP, aVPN );
-
-    //first line is VUP x VPN
-    aCameraMatrix.Line1.Column1 = aCross[0];
-    aCameraMatrix.Line1.Column2 = aCross[1];
-    aCameraMatrix.Line1.Column3 = aCross[2];
-    aCameraMatrix.Line1.Column4 = 0.0;
-
-    //second line is VUP
-    aCameraMatrix.Line2.Column1 = aVUP[0];
-    aCameraMatrix.Line2.Column2 = aVUP[1];
-    aCameraMatrix.Line2.Column3 = aVUP[2];
-    aCameraMatrix.Line2.Column4 = 0.0;
-
-    //third line is VPN
-    aCameraMatrix.Line3.Column1 = aVPN[0];
-    aCameraMatrix.Line3.Column2 = aVPN[1];
-    aCameraMatrix.Line3.Column3 = aVPN[2];
-    aCameraMatrix.Line3.Column4 = 0.0;
-
-    //fourth line is 0 0 0 1
-    aCameraMatrix.Line4.Column1 = 0.0;
-    aCameraMatrix.Line4.Column2 = 0.0;
-    aCameraMatrix.Line4.Column3 = 0.0;
-    aCameraMatrix.Line4.Column4 = 1.0;
-
-    return BaseGFXHelper::HomogenMatrixToB3DHomMatrix( aCameraMatrix );
-}
-
-double lcl_shiftAngleToIntervalMinusPiToPi( double fAngleRad )
-{
-    //valid range:  ]-Pi,Pi]
-    while( fAngleRad<=-M_PI )
-        fAngleRad+=(2*M_PI);
-    while( fAngleRad>M_PI )
-        fAngleRad-=(2*M_PI);
-    return fAngleRad;
-}
-
 void lcl_ensureIntervalMinus1To1( double& rSinOrCos )
 {
     if (rSinOrCos < -1.0)
@@ -888,171 +607,6 @@ void ThreeDHelper::adaptRadAnglesForRightAngledAxes( double& rfXAngleRad, double
     rfYAngleRad = ThreeDHelper::getValueClippedToRange(rfYAngleRad, basegfx::deg2rad(ThreeDHelper::getYDegreeAngleLimitForRightAngledAxes()) );
 }
 
-void ThreeDHelper::getRotationAngleFromDiagram(
-        const Reference< beans::XPropertySet >& xSceneProperties, double& rfXAngleRad, double& rfYAngleRad, double& rfZAngleRad )
-{
-    //takes the camera and the transformation matrix into account
-
-    rfXAngleRad = rfYAngleRad = rfZAngleRad = 0.0;
-
-    if( !xSceneProperties.is() )
-        return;
-
-    //get camera rotation
-    ::basegfx::B3DHomMatrix aFixCameraRotationMatrix( lcl_getCameraMatrix( xSceneProperties ) );
-    BaseGFXHelper::ReduceToRotationMatrix( aFixCameraRotationMatrix );
-
-    //get scene rotation
-    ::basegfx::B3DHomMatrix aSceneRotation;
-    {
-        drawing::HomogenMatrix aHomMatrix;
-        if( xSceneProperties->getPropertyValue( "D3DTransformMatrix") >>= aHomMatrix )
-        {
-            aSceneRotation = BaseGFXHelper::HomogenMatrixToB3DHomMatrix( aHomMatrix );
-            BaseGFXHelper::ReduceToRotationMatrix( aSceneRotation );
-        }
-    }
-
-    ::basegfx::B3DHomMatrix aResultRotation = aFixCameraRotationMatrix * aSceneRotation;
-    ::basegfx::B3DTuple aRotation( BaseGFXHelper::GetRotationFromMatrix( aResultRotation ) );
-
-    rfXAngleRad = lcl_shiftAngleToIntervalMinusPiToPi(aRotation.getX());
-    rfYAngleRad = lcl_shiftAngleToIntervalMinusPiToPi(aRotation.getY());
-    rfZAngleRad = lcl_shiftAngleToIntervalMinusPiToPi(aRotation.getZ());
-
-    if(rfZAngleRad<-M_PI_2 || rfZAngleRad>M_PI_2)
-    {
-        rfZAngleRad-=M_PI;
-        rfXAngleRad-=M_PI;
-        rfYAngleRad=(M_PI-rfYAngleRad);
-
-        rfXAngleRad = lcl_shiftAngleToIntervalMinusPiToPi(rfXAngleRad);
-        rfYAngleRad = lcl_shiftAngleToIntervalMinusPiToPi(rfYAngleRad);
-        rfZAngleRad = lcl_shiftAngleToIntervalMinusPiToPi(rfZAngleRad);
-    }
-}
-
-void ThreeDHelper::switchRightAngledAxes( const Reference< beans::XPropertySet >& xSceneProperties, bool bRightAngledAxes )
-{
-    try
-    {
-        if( xSceneProperties.is() )
-        {
-            bool bOldRightAngledAxes = false;
-            xSceneProperties->getPropertyValue( "RightAngledAxes") >>= bOldRightAngledAxes;
-            if( bOldRightAngledAxes!=bRightAngledAxes)
-            {
-                xSceneProperties->setPropertyValue( "RightAngledAxes", uno::Any( bRightAngledAxes ));
-                if(bRightAngledAxes)
-                {
-                    ::basegfx::B3DHomMatrix aInverseRotation( lcl_getInverseRotationMatrix( xSceneProperties ) );
-                    lcl_rotateLights( aInverseRotation, xSceneProperties );
-                }
-                else
-                {
-                    ::basegfx::B3DHomMatrix aCompleteRotation( lcl_getCompleteRotationMatrix( xSceneProperties ) );
-                    lcl_rotateLights( aCompleteRotation, xSceneProperties );
-                }
-            }
-        }
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-}
-
-void ThreeDHelper::setRotationAngleToDiagram(
-    const rtl::Reference< Diagram >& xDiagram
-        , double fXAngleRad, double fYAngleRad, double fZAngleRad )
-{
-    //the rotation of the camera is not touched but taken into account
-    //the rotation difference is applied to the transformation matrix
-
-    //the light sources will be adapted also
-
-    if( !xDiagram.is() )
-        return;
-
-    try
-    {
-        //remind old rotation for adaptation of light directions
-        ::basegfx::B3DHomMatrix aInverseOldRotation( lcl_getInverseRotationMatrix( xDiagram ) );
-
-        ::basegfx::B3DHomMatrix aInverseCameraRotation;
-        {
-            ::basegfx::B3DTuple aR( BaseGFXHelper::GetRotationFromMatrix(
-                    lcl_getCameraMatrix( xDiagram ) ) );
-            aInverseCameraRotation.rotate( 0.0, 0.0, -aR.getZ() );
-            aInverseCameraRotation.rotate( 0.0, -aR.getY(), 0.0 );
-            aInverseCameraRotation.rotate( -aR.getX(), 0.0, 0.0 );
-        }
-
-        ::basegfx::B3DHomMatrix aCumulatedRotation;
-        aCumulatedRotation.rotate( fXAngleRad, fYAngleRad, fZAngleRad );
-
-        //calculate new scene matrix
-        ::basegfx::B3DHomMatrix aSceneRotation = aInverseCameraRotation*aCumulatedRotation;
-        BaseGFXHelper::ReduceToRotationMatrix( aSceneRotation );
-
-        //set new rotation to transformation matrix
-        xDiagram->setPropertyValue(
-            "D3DTransformMatrix", uno::Any( BaseGFXHelper::B3DHomMatrixToHomogenMatrix( aSceneRotation )));
-
-        //rotate lights if RightAngledAxes are not set or not supported
-        bool bRightAngledAxes = false;
-        xDiagram->getPropertyValue( "RightAngledAxes") >>= bRightAngledAxes;
-        if(!bRightAngledAxes || !ChartTypeHelper::isSupportingRightAngledAxes(
-                    DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) ) )
-        {
-            ::basegfx::B3DHomMatrix aNewRotation;
-            aNewRotation.rotate( fXAngleRad, fYAngleRad, fZAngleRad );
-            lcl_rotateLights( aNewRotation*aInverseOldRotation, xDiagram );
-        }
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-}
-
-void ThreeDHelper::getRotationFromDiagram( const rtl::Reference< Diagram >& xSceneProperties
-            , sal_Int32& rnHorizontalAngleDegree, sal_Int32& rnVerticalAngleDegree )
-{
-    double fXAngle, fYAngle, fZAngle;
-    ThreeDHelper::getRotationAngleFromDiagram( xSceneProperties, fXAngle, fYAngle, fZAngle );
-
-    if( !lcl_isRightAngledAxesSetAndSupported( xSceneProperties ) )
-    {
-        ThreeDHelper::convertXYZAngleRadToElevationRotationDeg(
-            rnHorizontalAngleDegree, rnVerticalAngleDegree, fXAngle, fYAngle, fZAngle);
-        rnVerticalAngleDegree*=-1;
-    }
-    else
-    {
-        rnHorizontalAngleDegree = basegfx::fround(basegfx::rad2deg(fXAngle));
-        rnVerticalAngleDegree = basegfx::fround(-1.0 * basegfx::rad2deg(fYAngle));
-        // nZRotation = basegfx::fround(-1.0 * basegfx::rad2deg(fZAngle));
-    }
-
-    rnHorizontalAngleDegree = NormAngle180(rnHorizontalAngleDegree);
-    rnVerticalAngleDegree = NormAngle180(rnVerticalAngleDegree);
-}
-
-void ThreeDHelper::setRotationToDiagram( const rtl::Reference< Diagram >& xDiagram
-            , sal_Int32 nHorizontalAngleDegree, sal_Int32 nVerticalYAngleDegree )
-{
-    //todo: x and y is not equal to horz and vert in case of RightAngledAxes==false
-    double fXAngle = basegfx::deg2rad(nHorizontalAngleDegree);
-    double fYAngle = basegfx::deg2rad(-1 * nVerticalYAngleDegree);
-    double fZAngle = 0.0;
-
-    if( !lcl_isRightAngledAxesSetAndSupported( xDiagram ) )
-        ThreeDHelper::convertElevationRotationDegToXYZAngleRad(
-            nHorizontalAngleDegree, -1*nVerticalYAngleDegree, fXAngle, fYAngle, fZAngle );
-
-    ThreeDHelper::setRotationAngleToDiagram( xDiagram, fXAngle, fYAngle, fZAngle );
-}
 
 void ThreeDHelper::getCameraDistanceRange( double& rfMinimumDistance, double& rfMaximumDistance )
 {
@@ -1068,57 +622,6 @@ void ThreeDHelper::ensureCameraDistanceRange( double& rfCameraDistance )
         rfCameraDistance = fMin;
     if( rfCameraDistance > fMax )
         rfCameraDistance = fMax;
-}
-
-double ThreeDHelper::getCameraDistance(
-        const Reference< beans::XPropertySet >& xSceneProperties )
-{
-    double fCameraDistance = FIXED_SIZE_FOR_3D_CHART_VOLUME;
-
-    if( !xSceneProperties.is() )
-        return fCameraDistance;
-
-    try
-    {
-        drawing::CameraGeometry aCG( ThreeDHelper::getDefaultCameraGeometry() );
-        xSceneProperties->getPropertyValue( "D3DCameraGeometry" ) >>= aCG;
-        ::basegfx::B3DVector aVRP( BaseGFXHelper::Position3DToB3DVector( aCG.vrp ) );
-        fCameraDistance = aVRP.getLength();
-
-        ensureCameraDistanceRange( fCameraDistance );
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-    return fCameraDistance;
-}
-
-void ThreeDHelper::setCameraDistance(
-        const Reference< beans::XPropertySet >& xSceneProperties, double fCameraDistance )
-{
-    if( !xSceneProperties.is() )
-        return;
-
-    try
-    {
-        if( fCameraDistance <= 0 )
-            fCameraDistance = FIXED_SIZE_FOR_3D_CHART_VOLUME;
-
-        drawing::CameraGeometry aCG( ThreeDHelper::getDefaultCameraGeometry() );
-        xSceneProperties->getPropertyValue( "D3DCameraGeometry" ) >>= aCG;
-        ::basegfx::B3DVector aVRP( BaseGFXHelper::Position3DToB3DVector( aCG.vrp ) );
-        if( ::basegfx::fTools::equalZero( aVRP.getLength() ) )
-            aVRP = ::basegfx::B3DVector(0,0,1);
-        aVRP.setLength(fCameraDistance);
-        aCG.vrp = BaseGFXHelper::B3DVectorToPosition3D( aVRP );
-
-        xSceneProperties->setPropertyValue( "D3DCameraGeometry", uno::Any( aCG ));
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
 }
 
 double ThreeDHelper::CameraDistanceToPerspective( double fCameraDistance )
@@ -1149,137 +652,6 @@ double ThreeDHelper::PerspectiveToCameraDistance( double fPerspective )
     return fRet;
 }
 
-ThreeDLookScheme ThreeDHelper::detectScheme( const rtl::Reference< Diagram >& xDiagram )
-{
-    ThreeDLookScheme aScheme = ThreeDLookScheme::ThreeDLookScheme_Unknown;
-
-    sal_Int32 nRoundedEdges;
-    sal_Int32 nObjectLines;
-    ThreeDHelper::getRoundedEdgesAndObjectLines( xDiagram, nRoundedEdges, nObjectLines );
-
-    //get shade mode and light settings:
-    drawing::ShadeMode aShadeMode( drawing::ShadeMode_SMOOTH );
-    try
-    {
-        if( xDiagram.is() )
-            xDiagram->getPropertyValue( "D3DSceneShadeMode" )>>= aShadeMode;
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-
-    if( lcl_isSimpleScheme( aShadeMode, nRoundedEdges, nObjectLines, xDiagram ) )
-    {
-        if( lcl_isSimpleLightScheme(xDiagram) )
-            aScheme = ThreeDLookScheme::ThreeDLookScheme_Simple;
-    }
-    else if( lcl_isRealisticScheme( aShadeMode, nRoundedEdges, nObjectLines ) )
-    {
-        if( lcl_isRealisticLightScheme(xDiagram) )
-            aScheme = ThreeDLookScheme::ThreeDLookScheme_Realistic;
-    }
-
-    return aScheme;
-}
-
-void ThreeDHelper::setScheme( const rtl::Reference< Diagram >& xDiagram, ThreeDLookScheme aScheme )
-{
-    if( aScheme == ThreeDLookScheme::ThreeDLookScheme_Unknown )
-        return;
-
-    drawing::ShadeMode aShadeMode;
-    sal_Int32 nRoundedEdges;
-    sal_Int32 nObjectLines;
-
-    if( aScheme == ThreeDLookScheme::ThreeDLookScheme_Simple )
-        lcl_setSimpleScheme(aShadeMode,nRoundedEdges,nObjectLines,xDiagram);
-    else
-        lcl_setRealisticScheme(aShadeMode,nRoundedEdges,nObjectLines);
-
-    try
-    {
-        ThreeDHelper::setRoundedEdgesAndObjectLines( xDiagram, nRoundedEdges, nObjectLines );
-
-        if( xDiagram.is() )
-        {
-            drawing::ShadeMode aOldShadeMode;
-            if( ! ( (xDiagram->getPropertyValue( "D3DSceneShadeMode" )>>=aOldShadeMode) &&
-                    aOldShadeMode == aShadeMode ))
-            {
-                xDiagram->setPropertyValue( "D3DSceneShadeMode", uno::Any( aShadeMode ));
-            }
-        }
-
-        lcl_setLightsForScheme( xDiagram, aScheme );
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-
-}
-
-void ThreeDHelper::set3DSettingsToDefault( const rtl::Reference< Diagram >& xDiagram )
-{
-    if(xDiagram.is())
-    {
-        xDiagram->setPropertyToDefault( "D3DSceneDistance");
-        xDiagram->setPropertyToDefault( "D3DSceneFocalLength");
-    }
-    ThreeDHelper::setDefaultRotation( xDiagram );
-    ThreeDHelper::setDefaultIllumination( xDiagram );
-}
-
-void ThreeDHelper::setDefaultRotation( const uno::Reference< beans::XPropertySet >& xSceneProperties, bool bPieOrDonut )
-{
-    if( !xSceneProperties.is() )
-        return;
-
-    drawing::CameraGeometry aCameraGeo( ThreeDHelper::getDefaultCameraGeometry( bPieOrDonut ) );
-    xSceneProperties->setPropertyValue( "D3DCameraGeometry", uno::Any( aCameraGeo ));
-
-    ::basegfx::B3DHomMatrix aSceneRotation;
-    if( bPieOrDonut )
-        aSceneRotation.rotate( -M_PI/3.0, 0, 0 );
-    xSceneProperties->setPropertyValue( "D3DTransformMatrix",
-        uno::Any( BaseGFXHelper::B3DHomMatrixToHomogenMatrix( aSceneRotation )));
-}
-
-void ThreeDHelper::setDefaultRotation( const rtl::Reference< Diagram >& xDiagram )
-{
-    bool bPieOrDonut( DiagramHelper::isPieOrDonutChart( xDiagram ) );
-    ThreeDHelper::setDefaultRotation( xDiagram, bPieOrDonut );
-}
-
-void ThreeDHelper::setDefaultIllumination( const rtl::Reference<::chart::Diagram>& xDiagram )
-{
-    if( !xDiagram.is() )
-        return;
-
-    drawing::ShadeMode aShadeMode( drawing::ShadeMode_SMOOTH );
-    try
-    {
-        xDiagram->getPropertyValue( "D3DSceneShadeMode" )>>= aShadeMode;
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_1, uno::Any( false ) );
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_3, uno::Any( false ) );
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_4, uno::Any( false ) );
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_5, uno::Any( false ) );
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_6, uno::Any( false ) );
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_7, uno::Any( false ) );
-        xDiagram->setPropertyValue( UNO_NAME_3D_SCENE_LIGHTON_8, uno::Any( false ) );
-    }
-    catch( const uno::Exception & )
-    {
-        DBG_UNHANDLED_EXCEPTION("chart2");
-    }
-
-    ThreeDLookScheme aScheme = (aShadeMode == drawing::ShadeMode_FLAT)
-                                   ? ThreeDLookScheme::ThreeDLookScheme_Simple
-                                   : ThreeDLookScheme::ThreeDLookScheme_Realistic;
-    lcl_setLightsForScheme( xDiagram, aScheme );
-}
-
 void ThreeDHelper::getRoundedEdgesAndObjectLines(
             const rtl::Reference< Diagram > & xDiagram
             , sal_Int32& rnRoundedEdges, sal_Int32& rnObjectLines )
@@ -1294,7 +666,7 @@ void ThreeDHelper::getRoundedEdgesAndObjectLines(
         drawing::LineStyle aLineStyle( drawing::LineStyle_SOLID );
 
         std::vector< rtl::Reference< DataSeries > > aSeriesList =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
         sal_Int32 nSeriesCount = static_cast<sal_Int32>( aSeriesList.size() );
 
         OUString aPercentDiagonalPropertyName( "PercentDiagonal" );
@@ -1393,7 +765,7 @@ void ThreeDHelper::setRoundedEdgesAndObjectLines(
     uno::Any aARoundedEdges( static_cast< sal_Int16 >( nRoundedEdges ));
 
     std::vector< rtl::Reference< DataSeries > > aSeriesList =
-        DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+        xDiagram->getDataSeries();
     for( auto const&  xSeries : aSeriesList)
     {
         if( nRoundedEdges>=0 && nRoundedEdges<=100 )
@@ -1409,7 +781,7 @@ CuboidPlanePosition ThreeDHelper::getAutomaticCuboidPlanePositionForStandardLeft
     CuboidPlanePosition eRet(CuboidPlanePosition_Left);
 
     double fXAngleRad=0.0; double fYAngleRad=0.0; double fZAngleRad=0.0;
-    ThreeDHelper::getRotationAngleFromDiagram( xDiagram, fXAngleRad, fYAngleRad, fZAngleRad );
+    xDiagram->getRotationAngle( fXAngleRad, fYAngleRad, fZAngleRad );
     if( lcl_isRightAngledAxesSetAndSupported( xDiagram ) )
     {
         ThreeDHelper::adaptRadAnglesForRightAngledAxes( fXAngleRad, fYAngleRad );
@@ -1424,7 +796,7 @@ CuboidPlanePosition ThreeDHelper::getAutomaticCuboidPlanePositionForStandardBack
     CuboidPlanePosition eRet(CuboidPlanePosition_Back);
 
     double fXAngleRad=0.0; double fYAngleRad=0.0; double fZAngleRad=0.0;
-    ThreeDHelper::getRotationAngleFromDiagram( xDiagram, fXAngleRad, fYAngleRad, fZAngleRad );
+    xDiagram->getRotationAngle( fXAngleRad, fYAngleRad, fZAngleRad );
     if( lcl_isRightAngledAxesSetAndSupported( xDiagram ) )
     {
         ThreeDHelper::adaptRadAnglesForRightAngledAxes( fXAngleRad, fYAngleRad );
@@ -1439,7 +811,7 @@ CuboidPlanePosition ThreeDHelper::getAutomaticCuboidPlanePositionForStandardBott
     CuboidPlanePosition eRet(CuboidPlanePosition_Bottom);
 
     double fXAngleRad=0.0; double fYAngleRad=0.0; double fZAngleRad=0.0;
-    ThreeDHelper::getRotationAngleFromDiagram( xDiagram, fXAngleRad, fYAngleRad, fZAngleRad );
+    xDiagram->getRotationAngle( fXAngleRad, fYAngleRad, fZAngleRad );
     if( lcl_isRightAngledAxesSetAndSupported( xDiagram ) )
     {
         ThreeDHelper::adaptRadAnglesForRightAngledAxes( fXAngleRad, fYAngleRad );

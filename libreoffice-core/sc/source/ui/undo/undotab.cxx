@@ -61,6 +61,64 @@ using namespace com::sun::star;
 using ::std::unique_ptr;
 using ::std::vector;
 
+namespace
+{
+void lcl_OnTabsChanged(const ScTabViewShell* pViewShell, const ScDocument& rDoc, SCTAB nTab, bool bInvalidateTiles = false)
+{
+    for (SCTAB nTabIndex = nTab; nTabIndex < rDoc.GetTableCount(); ++nTabIndex)
+    {
+        if (!rDoc.IsVisible(nTabIndex))
+            continue;
+        if (bInvalidateTiles)
+            pViewShell->libreOfficeKitViewInvalidateTilesCallback(nullptr, nTabIndex, 0);
+        ScTabViewShell::notifyAllViewsSheetGeomInvalidation(
+            pViewShell,
+            true /* bColsAffected */, true /* bRowsAffected */,
+            true /* bSizes*/, true /* bHidden */, true /* bFiltered */,
+            true /* bGroups */, nTabIndex);
+    }
+}
+
+template<typename T>
+void lcl_MakeJsonArray(tools::JsonWriter& rJson, const std::vector<T>& v, const char *pArrayName)
+{
+    if (!v.empty())
+    {
+        auto jsonArray = rJson.startArray(pArrayName);
+        std::stringstream ss;
+        for (std::size_t i = 0; i < v.size(); ++i)
+        {
+            SCTAB tabIndex = v[i];
+            ss << tabIndex;
+            if (i < v.size() - 1)
+                ss << ",";
+            ss << " ";
+        }
+        if (!ss.str().empty())
+            rJson.putRaw(ss.str());
+    }
+}
+
+void lcl_UndoCommandResult(const ScTabViewShell* pViewShell,
+                           const char *pCmdName, const char *pCmdType,
+                           const std::vector<SCTAB>* pNewTabs,
+                           const std::vector<SCTAB>* pOldTabs = nullptr)
+{
+    tools::JsonWriter aJson;
+    aJson.put("commandName", pCmdName);
+    aJson.put("success", true);
+    {
+        auto result = aJson.startNode("result");
+        aJson.put("type", pCmdType);
+        if (pNewTabs)
+            lcl_MakeJsonArray(aJson, *pNewTabs, "newTabs");
+        if (pOldTabs)
+            lcl_MakeJsonArray(aJson, *pOldTabs, "oldTabs");
+    }
+
+    pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_UNO_COMMAND_RESULT, aJson.finishAndGetAsOString());
+}
+}
 
 ScUndoInsertTab::ScUndoInsertTab( ScDocShell* pNewDocShell,
                                   SCTAB nTabNum,
@@ -119,6 +177,15 @@ void ScUndoInsertTab::Undo()
     if ( pChangeTrack )
         pChangeTrack->Undo( nEndChangeAction, nEndChangeAction );
 
+    if (comphelper::LibreOfficeKit::isActive())
+    {
+        ScDocument& rDoc = pDocShell->GetDocument();
+        lcl_OnTabsChanged(pViewShell, rDoc, nTab);
+        std::vector<SCTAB> aTabs{nTab};
+        lcl_UndoCommandResult(pViewShell, ".uno:Undo", "ScUndoInsertTab", &aTabs);
+
+    }
+
     //  SetTabNo(...,sal_True) for all views to sync with drawing layer pages
     pDocShell->Broadcast( SfxHint( SfxHintId::ScForceSetTab ) );
 }
@@ -142,6 +209,14 @@ void ScUndoInsertTab::Redo()
     pDocShell->SetInUndo( false );              //! EndRedo
 
     SetChangeTrack();
+
+    if (comphelper::LibreOfficeKit::isActive())
+    {
+        ScDocument& rDoc = pDocShell->GetDocument();
+        lcl_OnTabsChanged(pViewShell, rDoc, nTab);
+        std::vector<SCTAB> aTabs{nTab};
+        lcl_UndoCommandResult(pViewShell, ".uno:Redo", "ScUndoInsertTab", &aTabs);
+    }
 }
 
 void ScUndoInsertTab::Repeat(SfxRepeatTarget& rTarget)
@@ -360,6 +435,13 @@ void ScUndoDeleteTab::Undo()
     if ( pChangeTrack )
         pChangeTrack->Undo( nStartChangeAction, nEndChangeAction );
 
+    ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (comphelper::LibreOfficeKit::isActive() && !theTabs.empty())
+    {
+        lcl_OnTabsChanged(pViewShell, rDoc, theTabs[0]);
+        lcl_UndoCommandResult(pViewShell, ".uno:Undo", "ScUndoDeleteTab", &theTabs);
+    }
+
     for(SCTAB nTab: theTabs)
     {
         pDocShell->Broadcast( ScTablesHint( SC_TAB_INSERTED, nTab) );
@@ -373,7 +455,6 @@ void ScUndoDeleteTab::Undo()
     pDocShell->PostPaint(0,0,0, rDoc.MaxCol(),rDoc.MaxRow(),MAXTAB, PaintPartFlags::All );  // incl. extras
 
     // not ShowTable due to SetTabNo(..., sal_True):
-    ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
     if (pViewShell)
         pViewShell->SetTabNo( lcl_GetVisibleTabBefore( rDoc, theTabs[0] ), true );
 }
@@ -392,6 +473,13 @@ void ScUndoDeleteTab::Redo()
     pDocShell->SetInUndo( true );               //! EndRedo
 
     SetChangeTrack();
+
+    if (comphelper::LibreOfficeKit::isActive() && !theTabs.empty())
+    {
+        ScDocument& rDoc = pDocShell->GetDocument();
+        lcl_OnTabsChanged(pViewShell, rDoc, theTabs[0]);
+        lcl_UndoCommandResult(pViewShell, ".uno:Redo", "ScUndoDeleteTab", &theTabs);
+    }
 
     //  SetTabNo(...,sal_True) for all views to sync with drawing layer pages
     pDocShell->Broadcast( SfxHint( SfxHintId::ScForceSetTab ) );
@@ -540,6 +628,15 @@ void ScUndoMoveTab::DoChange( bool bUndo ) const
                 rDoc.RenameTab(nNewTab, rNewName);
             }
         }
+    }
+
+    if (comphelper::LibreOfficeKit::isActive() && !mpNewTabs->empty())
+    {
+        const auto newTabsMinIt = std::min_element(mpNewTabs->begin(), mpNewTabs->end());
+        const auto oldTabsMinIt = std::min_element(mpOldTabs->begin(), mpOldTabs->end());
+        SCTAB nTab = std::min(*newTabsMinIt, *oldTabsMinIt);
+        lcl_OnTabsChanged(pViewShell, rDoc, nTab, true /* bInvalidateTiles */);
+        lcl_UndoCommandResult(pViewShell, bUndo ? ".uno:Undo" : ".uno:Redo", "ScUndoMoveTab", mpOldTabs.get(), mpNewTabs.get());
     }
 
     SfxGetpApp()->Broadcast( SfxHint( SfxHintId::ScTablesChanged ) );    // Navigator
@@ -1331,8 +1428,8 @@ void ScUndoPrintRange::DoChange(bool bUndo)
         else
             pNewRanges->GetPrintRangesInfo(aJsonWriter);
 
-        const std::string message = aJsonWriter.extractAsStdString();
-        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_PRINT_RANGES, message.c_str());
+        const OString message = aJsonWriter.finishAndGetAsOString();
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_PRINT_RANGES, message);
     }
 
     pDocShell->PostPaint( ScRange(0,0,nTab,rDoc.MaxCol(),rDoc.MaxRow(),nTab), PaintPartFlags::Grid );

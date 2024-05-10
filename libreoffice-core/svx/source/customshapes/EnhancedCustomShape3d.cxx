@@ -141,7 +141,16 @@ drawing::ShadeMode GetShadeMode( const SdrCustomShapeGeometryItem& rItem, const 
     drawing::ShadeMode eRet( eDefault );
     const Any* pAny = rItem.GetPropertyValueByName( "Extrusion", "ShadeMode" );
     if ( pAny )
-        *pAny >>= eRet;
+    {
+        if (!(*pAny >>= eRet))
+        {
+            sal_Int32 nEnum = 0;
+            if(*pAny >>= nEnum)
+            {
+                eRet = static_cast<drawing::ShadeMode>(nEnum);
+            }
+        }
+    }
     return eRet;
 }
 
@@ -238,13 +247,6 @@ rtl::Reference<SdrObject> EnhancedCustomShape3d::Create3DObject(
     rtl::Reference<SdrObject> pRet;
     const SdrCustomShapeGeometryItem& rGeometryItem(rSdrObjCustomShape.GetMergedItem(SDRATTR_CUSTOMSHAPE_GEOMETRY));
     double fMap(1.0), *pMap = nullptr;
-    Fraction aFraction( rSdrObjCustomShape.getSdrModelFromSdrObject().GetScaleFraction() );
-
-    if ( aFraction.GetNumerator() != 1 || aFraction.GetDenominator() != 1 )
-    {
-        fMap *= double(aFraction);
-        pMap = &fMap;
-    }
 
     if ( rSdrObjCustomShape.getSdrModelFromSdrObject().GetScaleUnit() != MapUnit::Map100thMM )
     {
@@ -339,8 +341,17 @@ rtl::Reference<SdrObject> EnhancedCustomShape3d::Create3DObject(
 
         drawing::ProjectionMode eProjectionMode( drawing::ProjectionMode_PARALLEL );
         const Any* pAny = rGeometryItem.GetPropertyValueByName( "Extrusion", "ProjectionMode" );
-        if ( pAny )
-            *pAny >>= eProjectionMode;
+        if (pAny)
+        {
+            if(!(*pAny >>= eProjectionMode))
+            {
+                sal_Int32 nEnum = 0;
+                if(*pAny >>= nEnum)
+                {
+                    eProjectionMode = static_cast<drawing::ProjectionMode>(nEnum);
+                }
+            }
+        }
         // pShape2d Convert in scenes which include 3D Objects
         E3dDefaultAttributes a3DDefaultAttr;
         a3DDefaultAttr.SetDefaultLatheCharacterMode( true );
@@ -826,6 +837,14 @@ rtl::Reference<SdrObject> EnhancedCustomShape3d::Create3DObject(
                 aSecondLightDirection.DirectionZ = 1.0;
             basegfx::B3DVector aLight2Vector(aSecondLightDirection.DirectionX, -aSecondLightDirection.DirectionY, aSecondLightDirection.DirectionZ);
             aLight2Vector.normalize();
+
+            // tdf#160421 a single flip inverts the light directions currently (March 2024). So invert
+            // their directions here for rendering.
+            if (bIsMirroredX != bIsMirroredY)
+            {
+                aLight1Vector *= -1.0;
+                aLight2Vector *= -1.0;
+            }
 
             // Light Intensity
 

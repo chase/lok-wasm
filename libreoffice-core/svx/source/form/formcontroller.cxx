@@ -810,9 +810,7 @@ void FormController::getFastPropertyValue( Any& rValue, sal_Int32 nHandle ) cons
                             if ( !aFilter.isEmpty() )
                                 aFilter.append( " OR " );
 
-                            aFilter.append( "( " );
-                            aFilter.append( aRowFilter );
-                            aFilter.append( " )" );
+                            aFilter.append( "( " + aRowFilter + " )" );
                         }
                     }
                 }
@@ -1526,7 +1524,7 @@ void FormController::impl_onModify()
             m_bModified = true;
     }
 
-    EventObject aEvt(static_cast<cppu::OWeakObject*>(this));
+    EventObject aEvt(getXWeak());
     m_aModifyListeners.notifyEach( &XModifyListener::modified, aEvt );
 }
 
@@ -3084,7 +3082,7 @@ void FormController::setFilter(::std::vector<FmFieldInfo>& rFieldInfos)
                         {
                             OString aVal = m_pParser->getContext().getIntlKeywordAscii(IParseContext::InternationalKeyCode::And);
                             OUString aCompText = aRow[rFieldInfo.xText] + " "  +
-                                OUString(aVal.getStr(),aVal.getLength(),RTL_TEXTENCODING_ASCII_US) + " " +
+                                OStringToOUString(aVal, RTL_TEXTENCODING_ASCII_US) + " " +
                                 ::comphelper::getString(rRefValue.Value);
                             aRow[rFieldInfo.xText] = aCompText;
                         }
@@ -3526,9 +3524,7 @@ namespace
     void displayErrorSetFocus(const OUString& _rMessage, const Reference<XControl>& _rxFocusControl,
                               const css::uno::Reference<css::awt::XWindow>& rDialogParent)
     {
-        SQLContext aError;
-        aError.Message = SvxResId(RID_STR_WRITEERROR);
-        aError.Details = _rMessage;
+        SQLContext aError(SvxResId(RID_STR_WRITEERROR), {}, {}, 0, {}, _rMessage);
         displayException(aError, rDialogParent);
 
         if ( _rxFocusControl.is() )
@@ -3544,7 +3540,7 @@ namespace
     {
         try
         {
-            static constexpr OUStringLiteral s_sFormsCheckRequiredFields = u"FormsCheckRequiredFields";
+            static constexpr OUString s_sFormsCheckRequiredFields = u"FormsCheckRequiredFields"_ustr;
 
             // first, check whether the form has a property telling us the answer
             // this allows people to use the XPropertyContainer interface of a form to control
@@ -3928,11 +3924,8 @@ sal_Bool SAL_CALL FormController::confirmDelete(const RowChangeEvent& aEvent)
         rtl::Reference<OInteractionDisapprove> pDisapprove = new OInteractionDisapprove;
 
         // the request
-        SQLWarning aWarning;
-        aWarning.Message = sTitle;
-        SQLWarning aDetails;
-        aDetails.Message = SvxResId(RID_STR_DELETECONFIRM);
-        aWarning.NextException <<= aDetails;
+        SQLWarning aDetails(SvxResId(RID_STR_DELETECONFIRM), {}, {}, 0, {});
+        SQLWarning aWarning(sTitle, {}, {}, 0, css::uno::Any(aDetails));
 
         rtl::Reference<OInteractionRequest> pRequest = new OInteractionRequest( Any( aWarning ) );
 

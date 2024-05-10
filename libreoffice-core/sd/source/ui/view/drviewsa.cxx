@@ -114,7 +114,7 @@ DrawViewShell::DrawViewShell( ViewShellBase& rViewShellBase, vcl::Window* pParen
     , mbIsInSwitchPage(false)
     , mpSelectionChangeHandler(new svx::sidebar::SelectionChangeHandler(
           [this] () { return this->GetSidebarContextName(); },
-          uno::Reference<frame::XController>(&rViewShellBase.GetDrawController()),
+          uno::Reference<frame::XController>(rViewShellBase.GetDrawController()),
           vcl::EnumContext::Context::Default))
     , mbMouseButtonDown(false)
     , mbMouseSelecting(false)
@@ -143,6 +143,11 @@ DrawViewShell::DrawViewShell( ViewShellBase& rViewShellBase, vcl::Window* pParen
 }
 
 DrawViewShell::~DrawViewShell()
+{
+    suppress_fun_call_w_exception(ImplDestroy());
+}
+
+void DrawViewShell::ImplDestroy()
 {
     SD_MOD()->GetColorConfig().RemoveListener(this);
 
@@ -338,6 +343,10 @@ void DrawViewShell::Construct(DrawDocShell* pDocSh, PageKind eInitialPageKind)
         mxScannerManager = scanner::ScannerManager::create( xContext );
 
         mxScannerListener = new ScannerEventListener( this );
+    }
+    catch (DeploymentException const &)
+    {
+        SAL_INFO("sd", "Scanner manager not available");
     }
     catch (Exception const &)
     {
@@ -667,7 +676,11 @@ void DrawViewShell::GetStatusBarState(SfxItemSet& rSet)
         sal_Int32 nPageCount = sal_Int32(GetDoc()->GetSdPageCount(mePageKind));
         sal_Int32 nActivePageCount = sal_Int32(GetDoc()->GetActiveSdPageCount());
         // Always show the slide/page number.
-        OUString aOUString = (nPageCount == nActivePageCount) ? SdResId(STR_SD_PAGE_COUNT) : SdResId(STR_SD_PAGE_COUNT_CUSTOM);
+        OUString aOUString;
+        if (GetDoc()->GetDocumentType() == DocumentType::Draw)
+            aOUString = (nPageCount == nActivePageCount) ? SdResId(STR_SD_PAGE_COUNT_DRAW) : SdResId(STR_SD_PAGE_COUNT_CUSTOM_DRAW);
+        else
+            aOUString = (nPageCount == nActivePageCount) ? SdResId(STR_SD_PAGE_COUNT) : SdResId(STR_SD_PAGE_COUNT_CUSTOM);
 
         aOUString = aOUString.replaceFirst("%1", OUString::number(maTabControl->GetCurPagePos() + 1));
         aOUString = aOUString.replaceFirst("%2", OUString::number(nPageCount));

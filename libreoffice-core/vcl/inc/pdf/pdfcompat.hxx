@@ -9,15 +9,13 @@
 
 #pragma once
 
-#include <config_features.h>
-#include <tools/gen.hxx>
+#include <o3tl/unit_conversion.hxx>
 #include <tools/stream.hxx>
-#include <tools/UnitConversion.hxx>
-#include <vcl/graph.hxx>
+#include <vcl/BinaryDataContainer.hxx>
 
 namespace vcl::pdf
 {
-/// Convert to inch, then assume 96 DPI.
+/// Convert to inch, then apply custom resolution.
 inline double pointToPixel(const double fPoint, const double fResolutionDPI)
 {
     return o3tl::convert(fPoint, o3tl::Length::pt, o3tl::Length::in) * fResolutionDPI;

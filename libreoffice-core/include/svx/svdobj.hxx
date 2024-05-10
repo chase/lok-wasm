@@ -20,6 +20,7 @@
 
 #include <memory>
 #include <com/sun/star/uno/Any.hxx>
+#include <cppuhelper/weak.hxx>
 #include <cppuhelper/weakref.hxx>
 #include <rtl/ustring.hxx>
 #include <vcl/outdev.hxx>
@@ -33,9 +34,6 @@
 #include <tools/link.hxx>
 #include <tools/gen.hxx>
 #include <unotools/resmgr.hxx>
-#include <unotools/weakref.hxx>
-#include <osl/diagnose.h>
-#include <typeinfo>
 
 #include <unordered_set>
 
@@ -78,8 +76,6 @@ class Fraction;
 enum class PointerStyle;
 class Graphic;
 class SvxShape;
-namespace svx { enum class ShapePropertyProviderId; }
-
 namespace basegfx
 {
     class B2DPoint;
@@ -91,7 +87,6 @@ namespace sdr { class ObjectUser; }
 namespace sdr::properties { class BaseProperties; }
 namespace sdr::contact { class ViewContact; }
 
-namespace svx { class PropertyChangeNotifier; }
 namespace com::sun::star::drawing { class XShape; }
 namespace svx::diagram { class IDiagramHelper; }
 
@@ -130,7 +125,7 @@ class SVXCORE_DLLPUBLIC SdrObjUserCall
 public:
     virtual ~SdrObjUserCall();
     virtual void Changed(const SdrObject& rObj, SdrUserCallType eType, const tools::Rectangle& rOldBoundRect);
-    virtual sal_Int32 GetPDFAnchorStructureElementId(SdrObject const& rObj, OutputDevice const&);
+    virtual void const* GetPDFAnchorStructureElementKey(SdrObject const& rObj);
 };
 
 class SVXCORE_DLLPUBLIC SdrObjMacroHitRec
@@ -151,8 +146,8 @@ public:
  */
 class SVXCORE_DLLPUBLIC SdrObjUserData
 {
-    SdrInventor                      nInventor;
-    sal_uInt16                       nIdentifier;
+    SdrInventor                      m_nInventor;
+    sal_uInt16                       m_nIdentifier;
 
     void operator=(const SdrObjUserData& rData) = delete;
     bool operator==(const SdrObjUserData& rData) const = delete;
@@ -164,8 +159,8 @@ public:
     virtual ~SdrObjUserData();
 
     virtual std::unique_ptr<SdrObjUserData> Clone(SdrObject* pObj1) const = 0; // #i71039# NULL -> 0
-    SdrInventor GetInventor() const { return nInventor;}
-    sal_uInt16 GetId() const { return nIdentifier;}
+    SdrInventor GetInventor() const { return m_nInventor;}
+    sal_uInt16 GetId() const { return m_nIdentifier;}
 };
 
 /**
@@ -365,8 +360,7 @@ public:
     virtual SdrLayerID GetLayer() const;
     virtual void NbcSetLayer(SdrLayerID nLayer);
     virtual void SetLayer(SdrLayerID nLayer);
-    // renaming GetSdrLayerIDSet -> getMergedHierarchySdrLayerIDSet to make clear what happens here. rSet needs to be empty.
-    void getMergedHierarchySdrLayerIDSet(SdrLayerIDSet& rSet) const;
+    bool isVisibleOnAnyOfTheseLayers(const SdrLayerIDSet& rSet) const;
 
     void SendUserCall(SdrUserCallType eUserCall, const tools::Rectangle& rBoundRect) const;
 
@@ -382,6 +376,8 @@ public:
     virtual OUString GetTitle() const;
     virtual void SetDescription(const OUString& rStr);
     virtual OUString GetDescription() const;
+    virtual void SetDecorative(bool isDecorative);
+    virtual bool IsDecorative() const;
 
     // for group objects
     bool IsGroupObject() const;
@@ -443,7 +439,7 @@ public:
     virtual bool HasLimitedRotation() const;
 
     // Returns a copy of the object. Every inherited class must reimplement this.
-    virtual rtl::Reference<SdrObject> CloneSdrObject(SdrModel& rTargetModel) const;
+    virtual rtl::Reference<SdrObject> CloneSdrObject(SdrModel& rTargetModel) const = 0;
     // helper, since Clone always return the type of the current subclass
     template<class T>
     static rtl::Reference<T> Clone(T const & rObj, SdrModel& rTargetModel)
@@ -543,7 +539,7 @@ public:
     virtual void NbcMove  (const Size& rSiz);
     virtual void NbcResize(const Point& rRef, const Fraction& xFact, const Fraction& yFact);
     virtual void NbcCrop  (const basegfx::B2DPoint& rRef, double fxFact, double fyFact);
-    virtual void NbcRotate(const Point& rRef, Degree100 nAngle, double sn, double cs);
+    virtual void NbcRotate(const Point& rRef, Degree100 nAngle, double sn, double cs) = 0;
     // Utility for call sites that don't have sin and cos handy
     void NbcRotate(const Point& rRef, Degree100 nAngle);
     virtual void NbcMirror(const Point& rRef1, const Point& rRef2);
@@ -763,6 +759,7 @@ public:
     void SetMarkProtect(bool bProt);
     bool IsMarkProtect() const { return m_bMarkProt;}
     virtual bool IsSdrTextObj() const { return false; }
+    virtual bool IsTextPath() const { return false ; }
 
     /// Whether the aspect ratio should be kept by default when resizing.
     virtual bool shouldKeepAspectRatio() const { return false; }
@@ -781,21 +778,12 @@ public:
 
     static SdrObject* getSdrObjectFromXShape( const css::uno::Reference< css::uno::XInterface >& xInt );
 
-    // retrieves the instance responsible for notifying changes in the properties of the shape associated with
-    // the SdrObject
-    //
-    // @precond
-    //     There already exists an SvxShape instance associated with the SdrObject
-    // @throws css::uno::RuntimeException
-    //     if there does nt yet exists an SvxShape instance associated with the SdrObject.
-    svx::PropertyChangeNotifier& getShapePropertyChangeNotifier();
-
     // notifies a change in the given property, to all applicable listeners registered at the associated SvxShape
     //
     // This method is equivalent to calling getShapePropertyChangeNotifier().notifyPropertyChange( _eProperty ),
     // exception that it is allowed to be called when there does not yet exist an associated SvxShape - in which
     // case the method will silently return without doing anything.
-    void notifyShapePropertyChange( const svx::ShapePropertyProviderId _eProperty ) const;
+    void notifyShapePropertyChange( const OUString& rPropName ) const;
 
     // transformation interface for StarOfficeAPI. This implements support for
     // homogen 3x3 matrices containing the transformation of the SdrObject. At the
@@ -929,7 +917,7 @@ protected:
 
     virtual ~SdrObject() override;
 
-    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties();
+    virtual std::unique_ptr<sdr::properties::BaseProperties> CreateObjectSpecificProperties() = 0;
 
     virtual std::unique_ptr<sdr::contact::ViewContact> CreateObjectSpecificViewContact();
 

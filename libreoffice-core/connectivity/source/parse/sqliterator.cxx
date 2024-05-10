@@ -266,7 +266,7 @@ namespace
     {
         OUString sComposedName;
 
-        static constexpr OUStringLiteral s_sWildcard = u"%" ;
+        static constexpr OUString s_sWildcard = u"%"_ustr ;
 
         // we want all catalogues, all schemas, all tables
         Sequence< OUString > sTableTypes { "VIEW", "TABLE", s_sWildcard }; // this last one just to be sure to include anything else...
@@ -1216,10 +1216,10 @@ void OSQLParseTreeIterator::traverseSearchCondition(OSQLParseNode const * pSearc
         OSL_ENSURE(pSearchCondition->count() == 2,"OSQLParseTreeIterator: error in parse tree!");
         const OSQLParseNode* pPart2 = pSearchCondition->getChild(1);
 
-        sal_Int32 nCurentPos = pPart2->count()-2;
+        sal_Int32 nCurrentPos = pPart2->count()-2;
 
-        OSQLParseNode * pNum_value_exp  = pPart2->getChild(nCurentPos);
-        OSQLParseNode * pOptEscape      = pPart2->getChild(nCurentPos+1);
+        OSQLParseNode * pNum_value_exp  = pPart2->getChild(nCurrentPos);
+        OSQLParseNode * pOptEscape      = pPart2->getChild(nCurrentPos+1);
 
         OSL_ENSURE(pNum_value_exp != nullptr,"OSQLParseTreeIterator: error in parse tree!");
         OSL_ENSURE(pOptEscape != nullptr,"OSQLParseTreeIterator: error in parse tree!");

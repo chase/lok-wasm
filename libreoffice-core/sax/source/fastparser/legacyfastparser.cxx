@@ -75,7 +75,7 @@ void NamespaceHandler::addNSDeclAttributes( rtl::Reference < comphelper::Attribu
             sDecl = "xmlns";
         else
             sDecl = "xmlns:" + rPrefix;
-        rAttrList->AddAttribute( sDecl, "CDATA", rNamespaceURI );
+        rAttrList->AddAttribute( sDecl, rNamespaceURI );
     }
     m_aNamespaceDefines.clear();
 }
@@ -131,8 +131,8 @@ private:
     OUString getNamespacePrefixFromToken( sal_Int32 nToken );
     OUString getNameFromToken( sal_Int32 nToken );
 
-    static constexpr OUStringLiteral aDefaultNamespace = u"";
-    static constexpr OUStringLiteral aNamespaceSeparator = u":";
+    static constexpr OUString aDefaultNamespace = u""_ustr;
+    static constexpr OUString aNamespaceSeparator = u":"_ustr;
 
 public:
     CallbackDocumentHandler( Reference< XDocumentHandler > const & xDocumentHandler,
@@ -233,7 +233,7 @@ void SAL_CALL CallbackDocumentHandler::startUnknownElement( const OUString& /*Na
         if ( !rAttrNamespacePrefix.isEmpty() )
             sAttrName = rAttrNamespacePrefix + aNamespaceSeparator + sAttrName;
 
-        rAttrList->AddAttribute( sAttrName, "CDATA", rAttrValue );
+        rAttrList->AddAttribute( sAttrName, rAttrValue );
     }
 
     const Sequence< xml::Attribute > unknownAttribs = Attribs->getUnknownAttributes();
@@ -242,7 +242,7 @@ void SAL_CALL CallbackDocumentHandler::startUnknownElement( const OUString& /*Na
         const OUString& rAttrValue = rAttr.Value;
         const OUString& rAttrName = rAttr.Name;
 
-        rAttrList->AddAttribute( rAttrName, "CDATA", rAttrValue );
+        rAttrList->AddAttribute( rAttrName, rAttrValue );
     }
     m_xDocumentHandler->startElement( Name, rAttrList );
 }

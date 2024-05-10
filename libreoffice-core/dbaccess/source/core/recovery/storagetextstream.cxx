@@ -28,15 +28,8 @@ namespace dbaccess
     using ::com::sun::star::uno::XComponentContext;
     using ::com::sun::star::embed::XStorage;
     using ::com::sun::star::io::TextOutputStream;
-    using ::com::sun::star::io::XTextOutputStream2;
 
-    // StorageTextOutputStream_Data
-    struct StorageTextOutputStream_Data
-    {
-        Reference< XTextOutputStream2 >  xTextOutput;
-    };
-
-    constexpr OUStringLiteral sLineFeed = u"\n";
+    constexpr OUString sLineFeed = u"\n"_ustr;
 
     // StorageTextOutputStream
     StorageTextOutputStream::StorageTextOutputStream(   const Reference<XComponentContext>& i_rContext,
@@ -44,11 +37,10 @@ namespace dbaccess
                                                         const OUString& i_rStreamName
                                                     )
         :StorageOutputStream( i_rParentStorage, i_rStreamName )
-        ,m_pData( new StorageTextOutputStream_Data )
     {
-        m_pData->xTextOutput = TextOutputStream::create( i_rContext );
-        m_pData->xTextOutput->setEncoding( "UTF-8" );
-        m_pData->xTextOutput->setOutputStream( getOutputStream() );
+        mxTextOutput = TextOutputStream::create( i_rContext );
+        mxTextOutput->setEncoding( "UTF-8" );
+        mxTextOutput->setOutputStream( getOutputStream() );
     }
 
     StorageTextOutputStream::~StorageTextOutputStream()
@@ -57,13 +49,13 @@ namespace dbaccess
 
     void StorageTextOutputStream::writeLine( const OUString& i_rLine )
     {
-        m_pData->xTextOutput->writeString( i_rLine );
-        m_pData->xTextOutput->writeString( sLineFeed );
+        mxTextOutput->writeString( i_rLine );
+        mxTextOutput->writeString( sLineFeed );
     }
 
     void StorageTextOutputStream::writeLine()
     {
-        m_pData->xTextOutput->writeString( sLineFeed );
+        mxTextOutput->writeString( sLineFeed );
     }
 
 } // namespace dbaccess

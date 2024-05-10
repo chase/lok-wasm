@@ -100,7 +100,6 @@ using namespace ::com::sun::star::accessibility;
 using namespace ::com::sun::star::container;
 
 using beans::PropertyValue;
-using beans::XMultiPropertySet;
 using beans::UnknownPropertyException;
 using beans::PropertyState_DIRECT_VALUE;
 
@@ -112,7 +111,7 @@ namespace com::sun::star::text {
     class XText;
 }
 
-constexpr OUStringLiteral sServiceName = u"com.sun.star.text.AccessibleParagraphView";
+constexpr OUString sServiceName = u"com.sun.star.text.AccessibleParagraphView"_ustr;
 constexpr OUStringLiteral sImplementationName = u"com.sun.star.comp.Writer.SwAccessibleParagraphView";
 
 OUString const & SwAccessibleParagraph::GetString()
@@ -282,18 +281,22 @@ void SwAccessibleParagraph::InvalidateContent_( bool bVisibleDataFired )
         FireVisibleDataEvent();
     }
 
+    bool bNewIsBlockQuote = IsBlockQuote();
     bool bNewIsHeading = IsHeading();
     //Get the real heading level, Heading1 ~ Heading10
     m_nHeadingLevel = GetRealHeadingLevel();
+    bool bOldIsBlockQuote;
     bool bOldIsHeading;
     {
         std::scoped_lock aGuard( m_Mutex );
+        bOldIsBlockQuote = m_bIsBlockQuote;
         bOldIsHeading = m_bIsHeading;
+        m_bIsBlockQuote = bNewIsBlockQuote;
         if( m_bIsHeading != bNewIsHeading )
             m_bIsHeading = bNewIsHeading;
     }
 
-    if( bNewIsHeading != bOldIsHeading )
+    if (bNewIsBlockQuote != bOldIsBlockQuote || bNewIsHeading != bOldIsHeading)
     {
         // The role has changed
         AccessibleEventObject aEvent;
@@ -398,6 +401,7 @@ SwAccessibleParagraph::SwAccessibleParagraph(
         const SwTextFrame& rTextFrame )
     : SwAccessibleContext( pInitMap, AccessibleRole::PARAGRAPH, &rTextFrame )
     , m_nOldCaretPos( -1 )
+    , m_bIsBlockQuote(false)
     , m_bIsHeading( false )
     //Get the real heading level, Heading1 ~ Heading10
     , m_nHeadingLevel (-1)
@@ -406,6 +410,7 @@ SwAccessibleParagraph::SwAccessibleParagraph(
     , m_bLastHasSelection(false)  //To add TEXT_SELECTION_CHANGED event
 {
     StartListening(const_cast<SwTextFrame&>(rTextFrame));
+    m_bIsBlockQuote = IsBlockQuote();
     m_bIsHeading = IsHeading();
     //Get the real heading level, Heading1 ~ Heading10
     m_nHeadingLevel = GetRealHeadingLevel();
@@ -464,12 +469,8 @@ void SwAccessibleParagraph::ExecuteAtViewShell( sal_uInt16 nSlot )
     if( !pSfxShell )
         return;
 
-    SfxViewFrame *pFrame = pSfxShell->GetViewFrame();
-    OSL_ENSURE( pFrame != nullptr, "View frame expected!" );
-    if( !pFrame )
-        return;
-
-    SfxDispatcher *pDispatcher = pFrame->GetDispatcher();
+    SfxViewFrame& rFrame = pSfxShell->GetViewFrame();
+    SfxDispatcher *pDispatcher = rFrame.GetDispatcher();
     OSL_ENSURE( pDispatcher != nullptr, "Dispatcher expected!" );
     if( !pDispatcher )
         return;
@@ -541,13 +542,18 @@ const SwRangeRedline* SwAccessibleParagraph::GetRedlineAtIndex()
 
 bool SwAccessibleParagraph::GetCharBoundary(
     i18n::Boundary& rBound,
+    std::u16string_view text,
     sal_Int32 nPos )
 {
     if( GetPortionData().FillBoundaryIFDateField( rBound,  nPos) )
         return true;
 
+    auto nPosEnd = nPos;
+    o3tl::iterateCodePoints(text, &nPosEnd);
+
     rBound.startPos = nPos;
-    rBound.endPos = nPos+1;
+    rBound.endPos = nPosEnd;
+
     return true;
 }
 
@@ -674,7 +680,7 @@ bool SwAccessibleParagraph::GetTextBoundary(
             break;
 
         case AccessibleTextType::CHARACTER:
-            bRet = GetCharBoundary( rBound, nPos );
+            bRet = GetCharBoundary( rBound, rText, nPos );
             break;
 
         case AccessibleTextType::LINE:
@@ -720,7 +726,7 @@ lang::Locale SAL_CALL SwAccessibleParagraph::getLocale()
     const SwTextFrame *pTextFrame = GetFrame()->DynCastTextFrame();
     if( !pTextFrame )
     {
-        throw uno::RuntimeException("no SwTextFrame", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no SwTextFrame", getXWeak());
     }
 
     lang::Locale aLoc(g_pBreakIt->GetLocale(pTextFrame->GetLangOfChar(TextFrameIndex(0), 0, true)));
@@ -1129,7 +1135,7 @@ css::uno::Sequence< css::style::TabStop > SwAccessibleParagraph::GetCurrentTabSt
         vcl::Window *pWin = GetWindow();
         if (!pWin)
         {
-            throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+            throw uno::RuntimeException("no Window", getXWeak());
         }
 
         SwRect aTmpRect(0, 0, tabs[0].Position, 0);
@@ -1605,7 +1611,7 @@ uno::Sequence< PropertyValue > SwAccessibleParagraph::getDefaultAttributes(
     _getDefaultAttributesImpl( aRequestedAttributes, aDefAttrSeq );
 
     // #i92233#
-    constexpr OUStringLiteral sMMToPixelRatio = u"MMToPixelRatio";
+    static constexpr OUString sMMToPixelRatio = u"MMToPixelRatio"_ustr;
     bool bProvideMMToPixelRatio( !aRequestedAttributes.hasElements() ||
                                  (comphelper::findValue(aRequestedAttributes, sMMToPixelRatio) != -1) );
 
@@ -1762,7 +1768,8 @@ void SwAccessibleParagraph::_getSupplementalAttributesImpl(
                 RES_PARATR_TABSTOP, RES_PARATR_TABSTOP,
                 RES_PARATR_NUMRULE, RES_PARATR_NUMRULE,
                 RES_PARATR_LIST_BEGIN, RES_PARATR_LIST_END - 1,
-                RES_LR_SPACE, RES_UL_SPACE>
+                RES_MARGIN_FIRSTLINE, RES_MARGIN_RIGHT,
+                RES_UL_SPACE, RES_UL_SPACE>
         aSet( const_cast<SwAttrPool&>(pTextNode->GetDoc().GetAttrPool()) );
 
     if ( pTextNode->HasBullet() || pTextNode->HasNumber() )
@@ -1771,12 +1778,14 @@ void SwAccessibleParagraph::_getSupplementalAttributesImpl(
         aSet.Put( pTextNode->GetAttr(RES_PARATR_LIST_ISCOUNTED) );
     }
     aSet.Put( pTextNode->SwContentNode::GetAttr(RES_UL_SPACE) );
-    aSet.Put( pTextNode->SwContentNode::GetAttr(RES_LR_SPACE) );
+    aSet.Put( pTextNode->SwContentNode::GetAttr(RES_MARGIN_FIRSTLINE) );
+    aSet.Put( pTextNode->SwContentNode::GetAttr(RES_MARGIN_TEXTLEFT) );
+    aSet.Put( pTextNode->SwContentNode::GetAttr(RES_MARGIN_RIGHT) );
     aSet.Put( pTextNode->SwContentNode::GetAttr(RES_PARATR_ADJUST) );
 
     tAccParaPropValMap aSupplementalAttrSeq;
     {
-        o3tl::span<const SfxItemPropertyMapEntry> pPropMap(
+        std::span<const SfxItemPropertyMapEntry> pPropMap(
                 aSwMapProvider.GetPropertyMapEntries( PROPERTY_MAP_ACCESSIBILITY_TEXT_ATTRIBUTE ) );
         for (const auto & rEntry : pPropMap)
         {
@@ -1896,7 +1905,6 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
         pos = pFrame->MapViewToModel(nCorePos + TextFrameIndex(1)); // try this one instead
         assert(pos.first->Len() != pos.second);
     }
-    const SwTextNode *const pTextNode(pos.first);
 
     sal_Int32 nValues = rValues.size();
     for (sal_Int32 i = 0;  i < nValues;  ++i)
@@ -1953,47 +1961,9 @@ void SwAccessibleParagraph::_correctValues( const sal_Int32 nIndex,
             continue;
         }
 
-        // UnderLine
-        if (rValue.Name == UNO_NAME_CHAR_UNDERLINE)
-        {
-            //misspelled word
-            SwCursorShell* pCursorShell = GetCursorShell();
-            if( pCursorShell != nullptr && pCursorShell->GetViewOptions() && pCursorShell->GetViewOptions()->IsOnlineSpell())
-            {
-                const SwWrongList* pWrongList = pTextNode->GetWrong();
-                if( nullptr != pWrongList )
-                {
-                    sal_Int32 nBegin = pos.second;
-                    sal_Int32 nLen = 1;
-                    if (pWrongList->InWrongWord(nBegin, nLen) && !pTextNode->IsSymbolAt(nBegin))
-                    {
-                        rValue.Value <<= sal_uInt16(LINESTYLE_WAVE);
-                    }
-                }
-            }
-            continue;
-        }
-
         // UnderLineColor
         if (rValue.Name == UNO_NAME_CHAR_UNDERLINE_COLOR)
         {
-            //misspelled word
-            SwCursorShell* pCursorShell = GetCursorShell();
-            if( pCursorShell != nullptr && pCursorShell->GetViewOptions() && pCursorShell->GetViewOptions()->IsOnlineSpell())
-            {
-                const SwWrongList* pWrongList = pTextNode->GetWrong();
-                if( nullptr != pWrongList )
-                {
-                    sal_Int32 nBegin = pos.second;
-                    sal_Int32 nLen = 1;
-                    if (pWrongList->InWrongWord(nBegin, nLen) && !pTextNode->IsSymbolAt(nBegin))
-                    {
-                        rValue.Value <<= sal_Int32(0x00ff0000);
-                        continue;
-                    }
-                }
-            }
-
             uno::Any &anyChar = rValue.Value;
             sal_uInt32 crUnderline = static_cast<sal_uInt32>( reinterpret_cast<sal_uIntPtr>(anyChar.pReserved));
             if ( COL_AUTO == Color(ColorTransparency, crUnderline) )
@@ -2086,7 +2056,7 @@ awt::Rectangle SwAccessibleParagraph::getCharacterBounds(
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
     tools::Rectangle aScreenRect( GetMap()->CoreToPixel( aCoreRect ));
@@ -2120,7 +2090,7 @@ sal_Int32 SwAccessibleParagraph::getIndexAtPoint( const awt::Point& rPoint )
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
     Point aPoint( rPoint.X, rPoint.Y );
     SwRect aLogBounds( GetBounds( *(GetMap()), GetFrame() ) ); // twip rel to doc root
@@ -2345,13 +2315,14 @@ OUString SwAccessibleParagraph::getTextRange(
     }
 
     // now skip to previous word
-    if (nTextType==2 || nTextType == 3)
+    if (nTextType == AccessibleTextType::WORD || nTextType == AccessibleTextType::SENTENCE)
     {
         i18n::Boundary preBound = aBound;
         while(preBound.startPos==aBound.startPos && nIndex > 0)
         {
-            nIndex = min( nIndex, preBound.startPos ) - 1;
-            if( nIndex < 0 ) break;
+            nIndex = min(nIndex, preBound.startPos);
+            if (nIndex <= 0) break;
+            rText.iterateCodePoints(&nIndex, -1);
             GetTextBoundary( preBound, rText, nIndex, nTextType );
         }
         //if (nIndex>0)
@@ -2368,9 +2339,10 @@ OUString SwAccessibleParagraph::getTextRange(
         bool bWord = false;
         while( !bWord )
         {
-            nIndex = min( nIndex, aBound.startPos ) - 1;
-            if( nIndex >= 0 )
+            nIndex = min(nIndex, aBound.startPos);
+            if (nIndex > 0)
             {
+                rText.iterateCodePoints(&nIndex, -1);
                 bWord = GetTextBoundary( aBound, rText, nIndex, nTextType );
             }
             else
@@ -2428,7 +2400,7 @@ OUString SwAccessibleParagraph::getTextRange(
         sal_Bool bWord = sal_False;
     bWord = GetTextBoundary( aBound, rText, nIndex, nTextType );
 
-        if (nTextType==2)
+        if (nTextType == AccessibleTextType::WORD)
         {
                 Boundary nexBound=aBound;
 
@@ -2510,7 +2482,7 @@ sal_Bool SwAccessibleParagraph::scrollSubstringTo( sal_Int32 nStartIndex,
 
     vcl::Window *pWin = GetWindow();
     if ( ! pWin )
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
 
     /* Start and end character bounds, in pixels, relative to the paragraph */
     awt::Rectangle startR, endR;
@@ -3314,7 +3286,7 @@ sal_Int32 SAL_CALL SwAccessibleParagraph::getNumberOfLineWithCaret()
                 vcl::Window *pWin = GetWindow();
                 if (!pWin)
                 {
-                    throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+                    throw uno::RuntimeException("no Window", getXWeak());
                 }
 
                 tools::Rectangle aScreenRect( GetMap()->CoreToPixel( aCursorCoreRect ));
@@ -3499,16 +3471,13 @@ bool SwAccessibleParagraph::GetSelectionAtIndex(
 sal_Int16 SAL_CALL SwAccessibleParagraph::getAccessibleRole()
 {
     SolarMutexGuard g;
-
     //Get the real heading level, Heading1 ~ Heading10
     if (m_nHeadingLevel > 0)
-    {
         return AccessibleRole::HEADING;
-    }
+    if (m_bIsBlockQuote)
+        return AccessibleRole::BLOCK_QUOTE;
     else
-    {
         return AccessibleRole::PARAGRAPH;
-    }
 }
 
 //Get the real heading level, Heading1 ~ Heading10
@@ -3533,23 +3502,30 @@ sal_Int32 SwAccessibleParagraph::GetRealHeadingLevel()
     return -1;
 }
 
+bool SwAccessibleParagraph::IsBlockQuote()
+{
+    uno::Reference<css::beans::XPropertySet> xPortion = CreateUnoPortion(0, 0);
+    uno::Any aStyleAny = xPortion->getPropertyValue("ParaStyleName");
+    OUString sValue;
+    if (aStyleAny >>= sValue)
+        return sValue == "Quotations";
+    return false;
+}
+
 uno::Any SAL_CALL SwAccessibleParagraph::getExtendedAttributes()
 {
     SolarMutexGuard g;
 
-    uno::Any Ret;
-    OUString strHeading("heading-level:");
-    if( m_nHeadingLevel >= 0 )
-        strHeading += OUString::number(m_nHeadingLevel);
-    // tdf#84102: expose the same attribute with the name "level"
-    strHeading += ";level:";
-    if( m_nHeadingLevel >= 0 )
-        strHeading += OUString::number(m_nHeadingLevel);
-    strHeading += ";";
+    OUString strHeading;
+    if (m_nHeadingLevel >= 0)
+    {
+        // report heading level using the "level" object attribute as specified in ARIA,
+        // maps to attributes of the same name for AT-SPI, IAccessible2, UIA
+        // https://www.w3.org/TR/core-aam-1.2/#ariaLevelHeading
+        strHeading = "level:" + OUString::number(m_nHeadingLevel) + ";";
+    }
 
-    Ret <<= strHeading;
-
-    return Ret;
+    return uno::Any(strHeading);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

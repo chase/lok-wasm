@@ -23,7 +23,6 @@ $(eval $(call gb_Library_set_componentfile,tk,toolkit/util/tk,services))
 
 $(eval $(call gb_Library_use_externals,tk,\
     boost_headers \
-    epoxy \
 ))
 
 $(eval $(call gb_Library_set_include,tk,\
@@ -125,7 +124,6 @@ $(eval $(call gb_Library_add_exception_objects,tk,\
     toolkit/source/hatchwindow/ipwin \
     toolkit/source/helper/accessibilityclient \
     toolkit/source/helper/btndlg \
-    toolkit/source/helper/formpdfexport \
     toolkit/source/helper/imagealign \
     toolkit/source/helper/listenermultiplexer \
     toolkit/source/helper/property \

@@ -167,7 +167,7 @@ namespace svt
     class SVT_DLLPUBLIC ControlBase : public InterimItemWindow
     {
     public:
-        ControlBase(BrowserDataWin* pParent, const OUString& rUIXMLDescription, const OString& rID);
+        ControlBase(BrowserDataWin* pParent, const OUString& rUIXMLDescription, const OUString& rID);
 
         virtual void SetEditableReadOnly(bool bReadOnly);
 
@@ -368,7 +368,7 @@ namespace svt
             int nStartPos, nEndPos;
             weld::Entry& rEntry = m_rEdit.get_widget();
             rEntry.get_selection_bounds(nStartPos, nEndPos);
-            return rEntry.get_text().copy(nStartPos, nEndPos - nStartPos);
+            return rEntry.get_text().copy(std::min(nStartPos, nEndPos), std::abs(nEndPos - nStartPos));
         }
 
         virtual bool IsValueChangedFromSaved() const override

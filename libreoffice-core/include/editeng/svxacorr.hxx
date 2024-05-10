@@ -28,6 +28,7 @@
 #include <tools/date.hxx>
 #include <editeng/swafopt.hxx>
 #include <editeng/editengdllapi.h>
+#include <unotools/charclass.hxx>
 
 #include <optional>
 #include <map>
@@ -35,7 +36,6 @@
 #include <string_view>
 #include <utility>
 
-class CharClass;
 class SfxPoolItem;
 class SotStorage;
 class SvxAutoCorrect;
@@ -66,7 +66,7 @@ enum class ACFlags : sal_uInt32 {
     ChgOrdinalNumber     = 0x00000008,   // Ordinal-Number 1st, 2nd,..
     ChgToEnEmDash        = 0x00000010,   // - -> Endash/Emdash
     ChgWeightUnderl      = 0x00000020,   // * -> Bold, _ -> Underscore
-    SetINetAttr          = 0x00000040,   // Set INetAttribut
+    SetINetAttr          = 0x00000040,   // Set INetAttribute
     Autocorrect          = 0x00000080,   // Call AutoCorrect
     ChgQuotes            = 0x00000100,   // replace double quotes
     SaveWordCplSttLst    = 0x00000200,   // Save Auto correction of Capital letter at beginning of sentence.
@@ -76,13 +76,14 @@ enum class ACFlags : sal_uInt32 {
     CorrectCapsLock      = 0x00002000,   // Correct accidental use of cAPS LOCK key
     TransliterateRTL     = 0x00004000,   // Transliterate RTL text
     ChgAngleQuotes       = 0x00008000,   // >>, << -> angle quotes in some languages
+    SetDOIAttr           = 0x00010000,   // Set DOIAttribute
 
     ChgWordLstLoad       = 0x20000000,   // Replacement list loaded
     CplSttLstLoad        = 0x40000000,   // Exception list for Capital letters Start loaded
     WordStartLstLoad        = 0x80000000,   // Exception list for Word Start loaded
 };
 namespace o3tl {
-    template<> struct typed_flags<ACFlags> : is_typed_flags<ACFlags, 0xe000ffff> {};
+    template<> struct typed_flags<ACFlags> : is_typed_flags<ACFlags, 0xe001ffff> {};
 }
 
 enum class ACQuotes
@@ -254,7 +255,7 @@ class EDITENG_DLLPUBLIC SvxAutoCorrect
     // all languages in a table
     std::map<LanguageTag, SvxAutoCorrectLanguageLists> m_aLangTable;
     std::map<LanguageTag, sal_Int64> aLastFileTable;
-    std::unique_ptr<CharClass> pCharClass;
+    std::optional<CharClass> moCharClass;
 
     LanguageType eCharClassLang;
 
@@ -410,10 +411,15 @@ public:
     bool FnChgToEnEmDash( SvxAutoCorrDoc&, const OUString&,
                                 sal_Int32 nSttPos, sal_Int32 nEndPos,
                                 LanguageType eLang );
-    bool FnAddNonBrkSpace( SvxAutoCorrDoc&, std::u16string_view,
+    // Returns an updated position, at which the insertion/removal happened. It may be
+    // a smaller value, if leading spaces were removed. If unsuccessful, returns -1.
+    sal_Int32 FnAddNonBrkSpace( SvxAutoCorrDoc&, std::u16string_view,
                                 sal_Int32 nEndPos,
                                 LanguageType eLang, bool& io_bNbspRunNext );
     bool FnSetINetAttr( SvxAutoCorrDoc&, const OUString&,
+                                sal_Int32 nSttPos, sal_Int32 nEndPos,
+                                LanguageType eLang );
+    bool FnSetDOIAttr( SvxAutoCorrDoc&, const OUString&,
                                 sal_Int32 nSttPos, sal_Int32 nEndPos,
                                 LanguageType eLang );
     bool FnChgWeightUnderl( SvxAutoCorrDoc&, const OUString&,
@@ -436,9 +442,9 @@ public:
 
     CharClass& GetCharClass( LanguageType eLang )
     {
-        if( !pCharClass || eLang != eCharClassLang )
+        if( !moCharClass || eLang != eCharClassLang )
             GetCharClass_( eLang );
-        return *pCharClass;
+        return *moCharClass;
     }
 };
 

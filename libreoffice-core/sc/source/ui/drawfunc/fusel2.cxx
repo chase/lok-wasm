@@ -53,9 +53,8 @@ bool FuSelection::TestDetective( const SdrPageView* pPV, const Point& rPos )
     {
         if (ScDetectiveFunc::IsNonAlienArrow( pObject ))
         {
-            sal_uInt16 nHitLog = static_cast<sal_uInt16>(pWindow->PixelToLogic(
-                                Size(pView->GetHitTolerancePixel(),0)).Width());
-            if (SdrObjectPrimitiveHit(*pObject, rPos, nHitLog, *pPV, nullptr, false))
+            double fHitLog = pWindow->PixelToLogic(Size(pView->GetHitTolerancePixel(),0)).Width();
+            if (SdrObjectPrimitiveHit(*pObject, rPos, {fHitLog, fHitLog}, *pPV, nullptr, false))
             {
                 ScViewData& rViewData = rViewShell.GetViewData();
                 ScSplitPos ePos = rViewShell.FindWindow( pWindow );
@@ -144,16 +143,6 @@ bool FuSelection::IsNoteCaptionClicked( const Point& rPos ) const
         }
     }
     return false;
-}
-
-void FuSelection::ActivateNoteHandles(SdrObject* pObject)
-{
-    if( pView && ScDrawLayer::IsNoteCaption( pObject ) )
-    {
-        // Leave the internal layer unlocked - relock in ScDrawView::MarkListHasChanged()
-        pView->UnlockInternalLayer();
-        pView->MarkObj( pObject, pView->GetSdrPageView() );
-    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

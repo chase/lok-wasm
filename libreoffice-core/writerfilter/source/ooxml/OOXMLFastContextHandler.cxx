@@ -22,7 +22,7 @@
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
 #include <com/sun/star/xml/sax/SAXException.hpp>
 #include <ooxml/resourceids.hxx>
-#include <oox/mathml/import.hxx>
+#include <oox/mathml/imexport.hxx>
 #include <oox/token/namespaces.hxx>
 #include <oox/shape/ShapeFilterBase.hxx>
 #include <sal/log.hxx>
@@ -57,7 +57,6 @@ namespace writerfilter::ooxml
 {
 using namespace ::com::sun::star;
 using namespace oox;
-using namespace ::std;
 using namespace ::com::sun::star::xml::sax;
 
 /*
@@ -74,7 +73,7 @@ OOXMLFastContextHandler::OOXMLFastContextHandler
   mbIsMathPara(false),
   mpStream(nullptr),
   mnTableDepth(0),
-  inPositionV(false),
+  m_inPositionV(false),
   mbAllowInCell(true),
   mbIsVMLfound(false),
   m_xContext(context),
@@ -97,7 +96,7 @@ OOXMLFastContextHandler::OOXMLFastContextHandler(OOXMLFastContextHandler * pCont
   mpStream(pContext->mpStream),
   mpParserState(pContext->mpParserState),
   mnTableDepth(pContext->mnTableDepth),
-  inPositionV(pContext->inPositionV),
+  m_inPositionV(pContext->m_inPositionV),
   mbAllowInCell(pContext->mbAllowInCell),
   mbIsVMLfound(pContext->mbIsVMLfound),
   m_xContext(pContext->m_xContext),
@@ -135,6 +134,7 @@ bool OOXMLFastContextHandler::prepareMceContext(Token_t nElement, const uno::Ref
                 "wps",
                 "wpg",
                 "w14",
+                "wpc",
             };
             for (const char *p : aFeatures)
             {
@@ -230,9 +230,9 @@ void OOXMLFastContextHandler::lcl_startFastElement
 {
     OOXMLFactory::startAction(this);
     if( Element == (NMSP_dmlWordDr|XML_positionV) )
-        inPositionV = true;
+        m_inPositionV = true;
     else if( Element == (NMSP_dmlWordDr|XML_positionH) )
-        inPositionV = false;
+        m_inPositionV = false;
 }
 
 void OOXMLFastContextHandler::lcl_endFastElement
@@ -385,7 +385,7 @@ void OOXMLFastContextHandler::startCharacterGroup()
         mpParserState->resolveCharacterProperties(*mpStream);
         if (mpParserState->isStartFootnote())
         {
-            mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uFtnSep), 1);
+            mpStream->utext(&uFtnSep, 1);
             mpParserState->setStartFootnote(false);
         }
     }
@@ -583,13 +583,13 @@ void OOXMLFastContextHandler::lockField()
 void OOXMLFastContextHandler::ftnednref()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uFtnEdnRef), 1);
+        mpStream->utext(&uFtnEdnRef, 1);
 }
 
 void OOXMLFastContextHandler::ftnednsep()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uFtnEdnSep), 1);
+        mpStream->utext(&uFtnEdnSep, 1);
 }
 
 void OOXMLFastContextHandler::ftnedncont()
@@ -601,13 +601,13 @@ void OOXMLFastContextHandler::ftnedncont()
 void OOXMLFastContextHandler::pgNum()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uPgNum), 1);
+        mpStream->utext(&uPgNum, 1);
 }
 
 void OOXMLFastContextHandler::tab()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uTab), 1);
+        mpStream->utext(&uTab, 1);
 }
 
 void OOXMLFastContextHandler::symbol()
@@ -619,19 +619,19 @@ void OOXMLFastContextHandler::symbol()
 void OOXMLFastContextHandler::cr()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uCR), 1);
+        mpStream->utext(&uCR, 1);
 }
 
 void OOXMLFastContextHandler::noBreakHyphen()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uNoBreakHyphen), 1);
+        mpStream->utext(&uNoBreakHyphen, 1);
 }
 
 void OOXMLFastContextHandler::softHyphen()
 {
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uSoftHyphen), 1);
+        mpStream->utext(&uSoftHyphen, 1);
 }
 
 void OOXMLFastContextHandler::handleLastParagraphInSection()
@@ -648,7 +648,7 @@ void OOXMLFastContextHandler::endOfParagraph()
     if (! mpParserState->isInCharacterGroup())
         startCharacterGroup();
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uCR), 1);
+        mpStream->utext(&uCR, 1);
 
     mpParserState->getDocument()->incrementProgress();
 }
@@ -713,15 +713,13 @@ void OOXMLFastContextHandler::text(const OUString & sText)
     {
         sNormalizedText = TrimXMLWhitespace(sNormalizedText).replaceAll("\t", " ");
     }
-    mpStream->utext(reinterpret_cast < const sal_uInt8 * >
-                    (sNormalizedText.getStr()),
-                    sNormalizedText.getLength());
+    mpStream->utext(sNormalizedText.getStr(), sNormalizedText.getLength());
 }
 
 void OOXMLFastContextHandler::positionOffset(const OUString& rText)
 {
     if (isForwardEvents())
-        mpStream->positionOffset(rText, inPositionV);
+        mpStream->positionOffset(rText, m_inPositionV);
 }
 
 void OOXMLFastContextHandler::ignore()
@@ -997,9 +995,7 @@ void OOXMLFastContextHandlerStream::sendProperty(Id nId)
     OOXMLPropertySetEntryToString aHandler(nId);
     getPropertySetAttrs()->resolve(aHandler);
     const OUString & sText = aHandler.getString();
-    mpStream->utext(reinterpret_cast < const sal_uInt8 * >
-                    (sText.getStr()),
-                    sText.getLength());
+    mpStream->utext(sText.getStr(), sText.getLength());
 }
 
 
@@ -1293,12 +1289,12 @@ void OOXMLFastContextHandlerValue::pushBiDiEmbedLevel()
 {
     const bool bRtl
         = mpValue && mpValue->getInt() == NS_ooxml::LN_Value_ST_Direction_rtl;
-    OOXMLFactory::characters(this, bRtl ? OUString(u"\u202B") : OUString(u"\u202A")); // RLE / LRE
+    OOXMLFactory::characters(this, bRtl ? u"\u202B"_ustr : u"\u202A"_ustr); // RLE / LRE
 }
 
 void OOXMLFastContextHandlerValue::popBiDiEmbedLevel()
 {
-    OOXMLFactory::characters(this, u"\u202C"); // PDF (POP DIRECTIONAL FORMATTING)
+    OOXMLFactory::characters(this, u"\u202C"_ustr); // PDF (POP DIRECTIONAL FORMATTING)
 }
 
 void OOXMLFastContextHandlerValue::handleGridAfter()
@@ -1529,7 +1525,7 @@ void OOXMLFastContextHandlerTextTableRow::endRow()
     startCharacterGroup();
 
     if (isForwardEvents())
-        mpStream->utext(reinterpret_cast<const sal_uInt8*>(&uCR), 1);
+        mpStream->utext(&uCR, 1);
 
     endCharacterGroup();
     endParagraphGroup();
@@ -1715,9 +1711,9 @@ void OOXMLFastContextHandlerShape::lcl_startFastElement
 
     if (mrShapeContext.is())
     {
-        if (Element == DGM_TOKEN(relIds))
+        if (Element == DGM_TOKEN(relIds) || Element == WPC_TOKEN(wpc))
         {
-            // It is a SmartArt. Make size available for generated group.
+            // It is a SmartArt or a WordprocessingCanvas. Make size available for generated group.
             // Search for PropertySet in parents
             OOXMLFastContextHandler* pHandler = getParent();
             while (pHandler && pHandler->getId() != NS_ooxml::LN_anchor_anchor
@@ -1831,8 +1827,20 @@ void OOXMLFastContextHandlerShape::sendShape( Token_t Element )
     uno::Reference<beans::XPropertySet> xShapePropSet(xShape, uno::UNO_QUERY);
     if (mnTableDepth > 0 && xShapePropSet.is() && mbIsVMLfound) //if we had a table
     {
+        bool bForceShapeIntoCell = mbAllowInCell;
+        // According to tdf#153909 and GraphicImport's LN_shape handling,
+        // through-anchored shapes should not force the shape into the cell
+        if (bForceShapeIntoCell)
+        {
+            text::WrapTextMode nSurround = text::WrapTextMode_NONE;
+            xShapePropSet->getPropertyValue("Surround") >>= nSurround;
+            sal_Int32 nHoriRelation = -1;
+            xShapePropSet->getPropertyValue("HoriOrientRelation") >>= nHoriRelation;
+            bForceShapeIntoCell = (nSurround != text::WrapTextMode_THROUGH)
+                                   || (nHoriRelation != text::RelOrientation::FRAME);
+        }
         xShapePropSet->setPropertyValue(dmapper::getPropertyName(dmapper::PROP_FOLLOW_TEXT_FLOW),
-                                        uno::Any(mbAllowInCell));
+                                        uno::Any(bForceShapeIntoCell));
     }
     // Notify the dmapper that the shape is ready to use
     if ( !bIsPicture )
@@ -1844,7 +1852,8 @@ void OOXMLFastContextHandlerShape::sendShape( Token_t Element )
 
 bool OOXMLFastContextHandlerShape::isDMLGroupShape() const
 {
-    return (mrShapeContext->getFullWPGSupport() && mrShapeContext->isWordProcessingGroupShape());
+    return (mrShapeContext->getFullWPGSupport() && mrShapeContext->isWordProcessingGroupShape())
+            || mrShapeContext->isWordprocessingCanvas();
 };
 
 void OOXMLFastContextHandlerShape::lcl_endFastElement
@@ -2182,9 +2191,9 @@ OOXMLPropertySet::Pointer_t OOXMLFastContextHandlerWrapper::getPropertySet()
     return pResult;
 }
 
-string OOXMLFastContextHandlerWrapper::getType() const
+std::string OOXMLFastContextHandlerWrapper::getType() const
 {
-    string sResult = "Wrapper(";
+    std::string sResult = "Wrapper(";
 
     if (mxWrappedContext.is())
     {
@@ -2257,21 +2266,21 @@ Token_t OOXMLFastContextHandlerWrapper::getToken() const
 
 OOXMLFastContextHandlerLinear::OOXMLFastContextHandlerLinear(OOXMLFastContextHandler* pContext)
     : OOXMLFastContextHandlerProperties(pContext)
-    , depthCount( 0 )
+    , m_depthCount( 0 )
 {
 }
 
 void OOXMLFastContextHandlerLinear::lcl_startFastElement(Token_t Element,
     const uno::Reference< xml::sax::XFastAttributeList >& Attribs)
 {
-    buffer.appendOpeningTag( Element, Attribs );
-    ++depthCount;
+    m_buffer.appendOpeningTag( Element, Attribs );
+    ++m_depthCount;
 }
 
 void OOXMLFastContextHandlerLinear::lcl_endFastElement(Token_t Element)
 {
-    buffer.appendClosingTag( Element );
-    if( --depthCount == 0 )
+    m_buffer.appendClosingTag( Element );
+    if( --m_depthCount == 0 )
         process();
 }
 
@@ -2286,7 +2295,7 @@ OOXMLFastContextHandlerLinear::lcl_createFastChildContext(Token_t,
 
 void OOXMLFastContextHandlerLinear::lcl_characters(const OUString& aChars)
 {
-    buffer.appendCharacters( aChars );
+    m_buffer.appendCharacters( aChars );
 }
 
 /*
@@ -2311,11 +2320,9 @@ void OOXMLFastContextHandlerMath::process()
     if (!ref.is())
         return;
     uno::Reference< uno::XInterface > component(ref->getComponent(), uno::UNO_QUERY_THROW);
-// gcc4.4 (and 4.3 and possibly older) have a problem with dynamic_cast directly to the target class,
-// so help it with an intermediate cast. I'm not sure what exactly the problem is, seems to be unrelated
-// to RTLD_GLOBAL, so most probably a gcc bug.
-    oox::FormulaImportBase& import = dynamic_cast<oox::FormulaImportBase&>(dynamic_cast<SfxBaseModel&>(*component));
-    import.readFormulaOoxml(buffer);
+    if( oox::FormulaImExportBase* import
+        = dynamic_cast< oox::FormulaImExportBase* >( component.get()))
+        import->readFormulaOoxml( m_buffer );
     if (!isForwardEvents())
         return;
 

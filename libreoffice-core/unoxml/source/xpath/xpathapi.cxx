@@ -110,8 +110,8 @@ namespace XPath
     static void lcl_collectNamespaces(
             nsmap_t & rNamespaces, Reference< XNode > const& xNamespaceNode)
     {
-        DOM::CNode *const pCNode(comphelper::getFromUnoTunnel<DOM::CNode>(xNamespaceNode));
-        if (!pCNode) { throw RuntimeException(); }
+        DOM::CNode *const pCNode(dynamic_cast<DOM::CNode*>(xNamespaceNode.get()));
+        if (!pCNode) { throw RuntimeException("Could not use the namespace node in order to collect namespace declarations."); }
 
         ::osl::MutexGuard const g(pCNode->GetOwnerDocument().GetMutex());
 
@@ -227,15 +227,11 @@ namespace XPath
             }
             int line = pError->line;
             if (line) {
-                buf.append("Line: ");
-                buf.append(static_cast<sal_Int32>(line));
-                buf.append("\n");
+                buf.append("Line: " + OUString::number(static_cast<sal_Int32>(line)) + "\n");
             }
             int column = pError->int2;
             if (column) {
-                buf.append("Column: ");
-                buf.append(static_cast<sal_Int32>(column));
-                buf.append("\n");
+                buf.append("Column: " + OUString::number(static_cast<sal_Int32>(column)) + "\n");
             }
         } else {
             buf.append("no error argument!");
@@ -283,7 +279,7 @@ namespace XPath
             Reference< XNode > const& xContextNode,
             const OUString& expr)
     {
-        if (!xContextNode.is()) { throw RuntimeException(); }
+        if (!xContextNode.is()) { throw RuntimeException("xContextNode does not exist!"); }
 
         nsmap_t nsmap;
         extensions_t extensions;
@@ -296,17 +292,16 @@ namespace XPath
 
         // get the node and document
         ::rtl::Reference<DOM::CDocument> const pCDoc(
-                dynamic_cast<DOM::CDocument*>( comphelper::getFromUnoTunnel<DOM::CNode>(
-                        xContextNode->getOwnerDocument())));
-        if (!pCDoc.is()) { throw RuntimeException(); }
+                dynamic_cast<DOM::CDocument*>(xContextNode->getOwnerDocument().get()));
+        if (!pCDoc.is()) { throw RuntimeException("Interface pointer for the owner document of the xContextNode does not exist."); }
 
-        DOM::CNode *const pCNode = comphelper::getFromUnoTunnel<DOM::CNode>(xContextNode);
-        if (!pCNode) { throw RuntimeException(); }
+        DOM::CNode *const pCNode = dynamic_cast<DOM::CNode*>(xContextNode.get());
+        if (!pCNode) { throw RuntimeException("xContextNode interface pointer does not exist."); }
 
         ::osl::MutexGuard const g(pCDoc->GetMutex()); // lock the document!
 
         xmlNodePtr const pNode = pCNode->GetNodePtr();
-        if (!pNode) { throw RuntimeException(); }
+        if (!pNode) { throw RuntimeException("Node pointer for xContextNode does not exist."); }
         xmlDocPtr pDoc = pNode->doc;
 
         /* NB: workaround for #i87252#:
@@ -386,7 +381,7 @@ namespace XPath
             Reference< XXPathExtension> const& xExtension)
     {
         if (!xExtension.is()) {
-            throw RuntimeException();
+            throw RuntimeException("Extension instance xExtension to be used by XPath does not exist.");
         }
         std::scoped_lock const g(m_Mutex);
         m_extensions.push_back( xExtension );

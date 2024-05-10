@@ -167,7 +167,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
             {
                 // Frame already exists, open frame dialog for editing.
                 SfxStringItem aDefPage(FN_FORMAT_FRAME_DLG, "columns");
-                rSh.GetView().GetViewFrame()->GetDispatcher()->ExecuteList(
+                rSh.GetView().GetViewFrame().GetDispatcher()->ExecuteList(
                         FN_FORMAT_FRAME_DLG,
                         SfxCallMode::SYNCHRON|SfxCallMode::RECORD,
                         { &aDefPage });
@@ -192,7 +192,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                 aSet.Put(aCol);
                 // Template AutoUpdate
                 SwFrameFormat* pFormat = rSh.GetSelectedFrameFormat();
-                if(pFormat && pFormat->IsAutoUpdateFormat())
+                if(pFormat && pFormat->IsAutoUpdateOnDirectFormat())
                 {
                     rSh.AutoUpdateFrame(pFormat, aSet);
                 }
@@ -246,7 +246,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
 
         case FN_FRAME_UNCHAIN:
             rSh.Unchain( *rSh.GetFlyFrameFormat() );
-            GetView().GetViewFrame()->GetBindings().Invalidate(FN_FRAME_CHAIN);
+            GetView().GetViewFrame().GetBindings().Invalidate(FN_FRAME_CHAIN);
             break;
         case FN_FORMAT_FOOTNOTE_DLG:
         {
@@ -446,7 +446,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
             const SelectionType nSel = rSh.GetSelectionType();
             if (nSel & SelectionType::Graphic)
             {
-                rSh.GetView().GetViewFrame()->GetDispatcher()->Execute(FN_FORMAT_GRAFIC_DLG);
+                rSh.GetView().GetViewFrame().GetDispatcher()->Execute(FN_FORMAT_GRAFIC_DLG);
                 bUpdateMgr = false;
             }
             else
@@ -515,12 +515,12 @@ void SwFrameShell::Execute(SfxRequest &rReq)
                 const uno::Reference < embed::XEmbeddedObject > xObj( rSh.GetOleRef() );
                 aSet.Put( SfxBoolItem( FN_OLE_IS_MATH, xObj.is() && SotExchange::IsMath( xObj->getClassID() ) ) );
 
-                OString sDefPage;
+                OUString sDefPage;
                 const SfxStringItem* pDlgItem;
                 if(pArgs && (pDlgItem = pArgs->GetItemIfSet(FN_FORMAT_FRAME_DLG, false)))
-                    sDefPage = OUStringToOString(pDlgItem->GetValue(), RTL_TEXTENCODING_UTF8);
+                    sDefPage = pDlgItem->GetValue();
 
-                aSet.Put(SfxFrameItem( SID_DOCFRAME, &GetView().GetViewFrame()->GetFrame()));
+                aSet.Put(SfxFrameItem( SID_DOCFRAME, &GetView().GetViewFrame().GetFrame()));
                 FieldUnit eMetric = ::GetDfltMetric(dynamic_cast<SwWebView*>( &GetView()) != nullptr );
                 SW_MOD()->PutItem(SfxUInt16Item(SID_ATTR_METRIC, static_cast< sal_uInt16 >(eMetric) ));
                 SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
@@ -563,7 +563,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
 
                         // Template AutoUpdate
                         SwFrameFormat* pFormat = rSh.GetSelectedFrameFormat();
-                        if(pFormat && pFormat->IsAutoUpdateFormat())
+                        if(pFormat && pFormat->IsAutoUpdateOnDirectFormat())
                         {
                             rSh.AutoUpdateFrame(pFormat, *pOutSet);
                             // Anything which is not supported by the format must be set hard.
@@ -696,19 +696,22 @@ void SwFrameShell::Execute(SfxRequest &rReq)
             {
                 OUString aDescription(rSh.GetObjDescription());
                 OUString aTitle(rSh.GetObjTitle());
+                bool isDecorative(rSh.IsObjDecorative());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(
                     pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
-                        aTitle, aDescription ));
+                        aTitle, aDescription, isDecorative));
 
                 if ( pDlg->Execute() == RET_OK )
                 {
                     pDlg->GetDescription(aDescription);
                     pDlg->GetTitle(aTitle);
+                    pDlg->IsDecorative(isDecorative);
 
                     rSh.SetObjDescription(aDescription);
                     rSh.SetObjTitle(aTitle);
+                    rSh.SetObjDecorative(isDecorative);
                 }
             }
         }
@@ -720,7 +723,7 @@ void SwFrameShell::Execute(SfxRequest &rReq)
     if ( bUpdateMgr )
     {
         SwFrameFormat* pFormat = rSh.GetSelectedFrameFormat();
-        if ( bCopyToFormat && pFormat && pFormat->IsAutoUpdateFormat() )
+        if ( bCopyToFormat && pFormat && pFormat->IsAutoUpdateOnDirectFormat() )
         {
             rSh.AutoUpdateFrame(pFormat, aMgr.GetAttrSet());
         }
@@ -1096,7 +1099,7 @@ void SwFrameShell::ExecFrameStyle(SfxRequest const & rReq)
     rSh.GetFlyFrameAttr( aFrameSet );
     const SvxBoxItem& rBoxItem = aFrameSet.Get(RES_BOX);
 
-    if (pPoolBoxItem == &rBoxItem)
+    if (SfxPoolItem::areSame(pPoolBoxItem, &rBoxItem))
         bDefault = true;
 
     std::unique_ptr<SvxBoxItem> aBoxItem(rBoxItem.Clone());
@@ -1250,7 +1253,7 @@ void SwFrameShell::ExecFrameStyle(SfxRequest const & rReq)
     aFrameSet.Put( std::move(aBoxItem) );
     // Template AutoUpdate
     SwFrameFormat* pFormat = rSh.GetSelectedFrameFormat();
-    if(pFormat && pFormat->IsAutoUpdateFormat())
+    if(pFormat && pFormat->IsAutoUpdateOnDirectFormat())
     {
         rSh.AutoUpdateFrame(pFormat, aFrameSet);
     }
@@ -1351,7 +1354,7 @@ void SwFrameShell::ExecDrawAttrArgsTextFrame(SfxRequest const & rReq)
     }
     else
     {
-        SfxDispatcher* pDis = rSh.GetView().GetViewFrame()->GetDispatcher();
+        SfxDispatcher* pDis = rSh.GetView().GetViewFrame().GetDispatcher();
 
         switch(rReq.GetSlot())
         {
@@ -1380,8 +1383,8 @@ void SwFrameShell::ExecDrawDlgTextFrame(SfxRequest const & rReq)
 
             if(rSh.IsFrameSelected())
             {
-                SdrModel* pDoc = rSh.GetDrawView()->GetModel();
-                SfxItemSet aNewAttr(pDoc->GetItemPool());
+                SdrModel& rModel = rSh.GetDrawView()->GetModel();
+                SfxItemSet aNewAttr(rModel.GetItemPool());
 
                 // get attributes from FlyFrame
                 rSh.GetFlyFrameAttr(aNewAttr);
@@ -1390,7 +1393,7 @@ void SwFrameShell::ExecDrawDlgTextFrame(SfxRequest const & rReq)
                 VclPtr<AbstractSvxAreaTabDialog> pDlg(pFact->CreateSvxAreaTabDialog(
                     GetView().GetFrameWeld(),
                     &aNewAttr,
-                    pDoc,
+                    &rModel,
                     false,
                     false));
 
@@ -1409,7 +1412,7 @@ void SwFrameShell::ExecDrawDlgTextFrame(SfxRequest const & rReq)
                             0
                         };
 
-                        SfxBindings &rBnd = GetView().GetViewFrame()->GetBindings();
+                        SfxBindings &rBnd = GetView().GetViewFrame().GetBindings();
 
                         rBnd.Invalidate(aInval);
                         rBnd.Update(SID_ATTR_FILL_STYLE);

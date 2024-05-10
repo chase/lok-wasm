@@ -27,19 +27,16 @@ namespace framework
 {
 bool AcceleratorCache::hasKey(const css::awt::KeyEvent& aKey) const
 {
-    SolarMutexGuard g;
     return (m_lKey2Commands.find(aKey) != m_lKey2Commands.end());
 }
 
 bool AcceleratorCache::hasCommand(const OUString& sCommand) const
 {
-    SolarMutexGuard g;
     return (m_lCommand2Keys.find(sCommand) != m_lCommand2Keys.end());
 }
 
 AcceleratorCache::TKeyList AcceleratorCache::getAllKeys() const
 {
-    SolarMutexGuard g;
     TKeyList lKeys;
     lKeys.reserve(m_lKey2Commands.size());
 
@@ -53,8 +50,6 @@ AcceleratorCache::TKeyList AcceleratorCache::getAllKeys() const
 
 void AcceleratorCache::setKeyCommandPair(const css::awt::KeyEvent& aKey, const OUString& sCommand)
 {
-    SolarMutexGuard g;
-
     // register command for the specified key
     m_lKey2Commands[aKey] = sCommand;
 
@@ -65,7 +60,6 @@ void AcceleratorCache::setKeyCommandPair(const css::awt::KeyEvent& aKey, const O
 
 AcceleratorCache::TKeyList AcceleratorCache::getKeysByCommand(const OUString& sCommand) const
 {
-    SolarMutexGuard g;
     TCommand2Keys::const_iterator pCommand = m_lCommand2Keys.find(sCommand);
     if (pCommand == m_lCommand2Keys.end())
         throw css::container::NoSuchElementException();
@@ -74,7 +68,6 @@ AcceleratorCache::TKeyList AcceleratorCache::getKeysByCommand(const OUString& sC
 
 OUString AcceleratorCache::getCommandByKey(const css::awt::KeyEvent& aKey) const
 {
-    SolarMutexGuard g;
     TKey2Commands::const_iterator pKey = m_lKey2Commands.find(aKey);
     if (pKey == m_lKey2Commands.end())
         throw css::container::NoSuchElementException();
@@ -83,8 +76,6 @@ OUString AcceleratorCache::getCommandByKey(const css::awt::KeyEvent& aKey) const
 
 void AcceleratorCache::removeKey(const css::awt::KeyEvent& aKey)
 {
-    SolarMutexGuard g;
-
     // check if key exists
     TKey2Commands::const_iterator pKey = m_lKey2Commands.find(aKey);
     if (pKey == m_lKey2Commands.end())
@@ -99,20 +90,32 @@ void AcceleratorCache::removeKey(const css::awt::KeyEvent& aKey)
     // remove key from primary list
     m_lKey2Commands.erase(aKey);
 
-    // remove key from optimized command list
-    m_lCommand2Keys.erase(sCommand);
+    // get keylist for that command
+    TCommand2Keys::iterator pCommand = m_lCommand2Keys.find(sCommand);
+    if (pCommand == m_lCommand2Keys.end())
+        return;
+    TKeyList& lKeys = pCommand->second;
+
+    // one or more keys assign
+    if (lKeys.size() == 1)
+        // remove key from optimized command list
+        m_lCommand2Keys.erase(sCommand);
+    else // only remove this key from the keylist
+    {
+        auto pKeys = ::std::find(lKeys.begin(), lKeys.end(), aKey);
+
+        if (pKeys != lKeys.end())
+            lKeys.erase(pKeys);
+    }
 }
 
 void AcceleratorCache::removeCommand(const OUString& sCommand)
 {
-    SolarMutexGuard g;
-
     const TKeyList& lKeys = getKeysByCommand(sCommand);
     for (auto const& lKey : lKeys)
     {
         removeKey(lKey);
     }
-    m_lCommand2Keys.erase(sCommand);
 }
 
 } // namespace framework

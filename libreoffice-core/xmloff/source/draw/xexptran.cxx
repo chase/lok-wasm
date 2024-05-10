@@ -36,8 +36,6 @@
 
 using namespace ::com::sun::star;
 
-using std::make_unique;
-
 // parsing help functions for simple chars
 static void Imp_SkipSpaces(std::u16string_view rStr, sal_Int32& rPos, const sal_Int32 nLen)
 {
@@ -357,12 +355,12 @@ void SdXMLImExTransform2D::SetString(const OUString& rNew, const SvXMLUnitConver
     const OUString aStr = msString;
     const sal_Int32 nLen(aStr.getLength());
 
-    static const OUStringLiteral aString_rotate( u"rotate" );
-    static const OUStringLiteral aString_scale( u"scale" );
-    static const OUStringLiteral aString_translate( u"translate" );
-    static const OUStringLiteral aString_skewX( u"skewX" );
-    static const OUStringLiteral aString_skewY( u"skewY" );
-    static const OUStringLiteral aString_matrix( u"matrix" );
+    static constexpr OUStringLiteral aString_rotate( u"rotate" );
+    static constexpr OUStringLiteral aString_scale( u"scale" );
+    static constexpr OUStringLiteral aString_translate( u"translate" );
+    static constexpr OUStringLiteral aString_skewX( u"skewX" );
+    static constexpr OUStringLiteral aString_skewY( u"skewY" );
+    static constexpr OUStringLiteral aString_matrix( u"matrix" );
 
     sal_Int32 nPos(0);
 
@@ -764,12 +762,12 @@ void SdXMLImExTransform3D::SetString(const OUString& rNew, const SvXMLUnitConver
     const OUString aStr = msString;
     const sal_Int32 nLen(aStr.getLength());
 
-    static const OUStringLiteral aString_rotatex( u"rotatex" );
-    static const OUStringLiteral aString_rotatey( u"rotatey" );
-    static const OUStringLiteral aString_rotatez( u"rotatez" );
-    static const OUStringLiteral aString_scale( u"scale" );
-    static const OUStringLiteral aString_translate( u"translate" );
-    static const OUStringLiteral aString_matrix( u"matrix" );
+    static constexpr OUStringLiteral aString_rotatex( u"rotatex" );
+    static constexpr OUStringLiteral aString_rotatey( u"rotatey" );
+    static constexpr OUStringLiteral aString_rotatez( u"rotatez" );
+    static constexpr OUStringLiteral aString_scale( u"scale" );
+    static constexpr OUStringLiteral aString_translate( u"translate" );
+    static constexpr OUStringLiteral aString_matrix( u"matrix" );
 
     sal_Int32 nPos(0);
 

@@ -26,6 +26,7 @@
 #include <cellvalue.hxx>
 #include <document.hxx>
 #include <docuno.hxx>
+#include <docsh.hxx>
 #include <postit.hxx>
 #include <sheetdata.hxx>
 #include <cellform.hxx>
@@ -374,7 +375,7 @@ void ScXMLTableRowCellContext::PushFormat(sal_Int32 nBegin, sal_Int32 nEnd, cons
     rFmt.maSelection.nEndPos = nEnd;
 
     // Store the used text styles for export.
-    ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(rXMLImport.GetModel())->GetSheetSaveData();
+    ScSheetSaveData* pSheetData = rXMLImport.GetScModel()->GetSheetSaveData();
     ScAddress aCellPos = rXMLImport.GetTables().GetCurrentCellPos();
     pSheetData->AddTextStyle(rStyleName, aCellPos, rFmt.maSelection);
 
@@ -523,7 +524,7 @@ void ScXMLTableRowCellContext::PushFormat(sal_Int32 nBegin, sal_Int32 nEnd, cons
             case EE_CHAR_FONTWIDTH:
             {
                 if (!pPoolItem)
-                    pPoolItem.reset(new SvxCharScaleWidthItem(100, pEntry->mnItemID));
+                    pPoolItem.reset(new SvxCharScaleWidthItem(100, TypedWhichId<SvxCharScaleWidthItem>(pEntry->mnItemID)));
 
                 pPoolItem->PutValue(rProp.maValue, pEntry->mnFlag);
             }
@@ -539,7 +540,7 @@ void ScXMLTableRowCellContext::PushFormat(sal_Int32 nBegin, sal_Int32 nEnd, cons
             case EE_CHAR_EMPHASISMARK:
             {
                 if (!pPoolItem)
-                    pPoolItem.reset(new SvxEmphasisMarkItem(FontEmphasisMark::NONE, pEntry->mnItemID));
+                    pPoolItem.reset(new SvxEmphasisMarkItem(FontEmphasisMark::NONE, TypedWhichId<SvxEmphasisMarkItem>(pEntry->mnItemID)));
 
                 pPoolItem->PutValue(rProp.maValue, pEntry->mnFlag);
             }
@@ -811,7 +812,7 @@ void ScXMLTableRowCellContext::SetContentValidation( const ScRange& rScRange )
     // is the below still needed?
     // For now, any sheet with validity is blocked from stream-copying.
     // Later, the validation names could be stored along with the style names.
-    ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetImport().GetModel())->GetSheetSaveData();
+    ScSheetSaveData* pSheetData = GetScImport().GetScModel()->GetSheetSaveData();
     pSheetData->BlockSheet( GetScImport().GetTables().GetCurrentSheet() );
 }
 
@@ -838,6 +839,16 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
     if( mxAnnotationData->mxShape.is() && mxAnnotationData->mxShapes.is() )
     {
         OSL_ENSURE( mxAnnotationData->mxShapes.get() == xShapes.get(), "ScXMLTableRowCellContext::SetAnnotation - different drawing pages" );
+
+        /*  Don't attempt to get the style from the SdrObject,
+            as it might be a default assigned one. */
+        auto pStyle = rXMLImport.GetShapeImport()->GetAutoStylesContext()->FindStyleChildContext(
+            XmlStyleFamily::SD_GRAPHICS_ID, mxAnnotationData->maStyleName);
+        OUString aStyleName = pStyle ? pStyle->GetParentName() : mxAnnotationData->maStyleName;
+        assert(!rXMLImport.GetShapeImport()->GetAutoStylesContext()->FindStyleChildContext(
+            XmlStyleFamily::SD_GRAPHICS_ID, aStyleName));
+        aStyleName = rXMLImport.GetStyleDisplayName(XmlStyleFamily::SD_GRAPHICS_ID, aStyleName);
+
         SdrObject* pObject = SdrObject::getSdrObjectFromXShape(mxAnnotationData->mxShape);
         OSL_ENSURE( pObject, "ScXMLTableRowCellContext::SetAnnotation - cannot get SdrObject from shape" );
 
@@ -849,7 +860,7 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
             {
                 OSL_ENSURE( !pCaption->GetLogicRect().IsEmpty(), "ScXMLTableRowCellContext::SetAnnotation - invalid caption rectangle" );
                 // create the cell note with the caption object
-                pNote = ScNoteUtil::CreateNoteFromCaption( *pDoc, rPos, pCaption );
+                pNote = ScNoteUtil::CreateNoteFromCaption( *pDoc, rPos, pCaption, !aStyleName.isEmpty() );
                 // forget pointer to object (do not create note again below)
                 pObject = nullptr;
             }
@@ -880,13 +891,13 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
                 if(!comphelper::LibreOfficeKit::isActive())
                 {
                     pNote = ScNoteUtil::CreateNoteFromObjectData( *pDoc, rPos,
-                        std::move(aItemSet), *pOutlinerObj,
+                        std::move(aItemSet), aStyleName, *pOutlinerObj,
                         aCaptionRect, mxAnnotationData->mbShown );
                 }
                 else
                 {
                     pNote = ScNoteUtil::CreateNoteFromObjectData( *pDoc, rPos,
-                        std::move(aItemSet), *pOutlinerObj,
+                        std::move(aItemSet), aStyleName, *pOutlinerObj,
                         aCaptionRect, false );
                 }
 
@@ -924,7 +935,7 @@ void ScXMLTableRowCellContext::SetAnnotation(const ScAddress& rPos)
     }
 
     // store the style names for stream copying
-    ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(rXMLImport.GetModel())->GetSheetSaveData();
+    ScSheetSaveData* pSheetData = rXMLImport.GetScModel()->GetSheetSaveData();
     pSheetData->HandleNoteStyles( mxAnnotationData->maStyleName, mxAnnotationData->maTextStyle, rPos );
 
     for (const auto& rContentStyle : mxAnnotationData->maContentStyles)
@@ -1479,10 +1490,9 @@ void ScXMLTableRowCellContext::HasSpecialCaseFormulaText()
 
 bool ScXMLTableRowCellContext::IsPossibleErrorString() const
 {
-    if(mbNewValueType && !mbErrorValue)
-        return false;
-    else if(mbNewValueType && mbErrorValue)
-        return true;
+    if(mbNewValueType)
+        return mbErrorValue;
+
     return mbPossibleErrorCell || (mbCheckWithCompilerForError && maStringValue &&
             GetScImport().GetFormulaErrorConstant(*maStringValue) != FormulaError::NONE);
 }

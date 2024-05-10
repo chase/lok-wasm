@@ -114,8 +114,7 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
         short decsep = 0;
         short ndig = 0;
         short ncdig = 0;    // number of digits after decimal point
-        OUStringBuffer aSearchStr("0123456789DEde");
-        aSearchStr.append(cNonIntntlDecSep);
+        OUStringBuffer aSearchStr(OUString::Concat("0123456789DEde") + OUStringChar(cNonIntntlDecSep));
         if( cIntntlDecSep != cNonIntntlDecSep )
             aSearchStr.append(cIntntlDecSep);
         if( cIntntlDecSepAlt && cIntntlDecSepAlt != cNonIntntlDecSep )
@@ -123,7 +122,7 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
         if( bOnlyIntntl )
             aSearchStr.append(cIntntlGrpSep);
         const OUString pSearchStr = aSearchStr.makeStringAndClear();
-        static const OUStringLiteral pDdEe = u"DdEe";
+        static constexpr OUStringLiteral pDdEe = u"DdEe";
         while( ImpStrChr( pSearchStr, *p ) )
         {
             aBuf.append( *p );
@@ -192,7 +191,7 @@ ErrCode ImpScan( const OUString& rWSrc, double& nVal, SbxDataType& rType,
             eScanType = SbxDOUBLE;
 
         // type detection?
-        static const OUStringLiteral pTypes = u"%!&#";
+        static constexpr OUStringLiteral pTypes = u"%!&#";
         if( ImpStrChr( pTypes, *p ) )
             p++;
     }
@@ -489,7 +488,7 @@ const VbaFormatInfo* getFormatInfo( std::u16string_view rFmt )
 constexpr OUStringLiteral VBAFORMAT_GENERALDATE = u"General Date";
 constexpr OUStringLiteral VBAFORMAT_C = u"c";
 constexpr OUStringLiteral VBAFORMAT_N = u"n";
-constexpr OUStringLiteral VBAFORMAT_NN = u"nn";
+constexpr OUString VBAFORMAT_NN = u"nn"_ustr;
 constexpr OUStringLiteral VBAFORMAT_W = u"w";
 constexpr OUStringLiteral VBAFORMAT_Y = u"y";
 constexpr OUStringLiteral VBAFORMAT_LOWERCASE = u"<";

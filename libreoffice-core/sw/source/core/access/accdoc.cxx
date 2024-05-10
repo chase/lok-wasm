@@ -51,8 +51,7 @@
 #include <dview.hxx>
 #include <dcontact.hxx>
 #include <svx/svdmark.hxx>
-constexpr OUStringLiteral sServiceName = u"com.sun.star.text.AccessibleTextDocumentView";
-constexpr OUStringLiteral sImplementationName = u"com.sun.star.comp.Writer.SwAccessibleDocumentView";
+constexpr OUString sServiceName = u"com.sun.star.text.AccessibleTextDocumentView"_ustr;
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::accessibility;
@@ -105,6 +104,7 @@ void SwAccessibleDocumentBase::AddChild( vcl::Window *pWin, bool bFireEvent )
             AccessibleEventObject aEvent;
             aEvent.EventId = AccessibleEventId::CHILD;
             aEvent.NewValue <<= mpChildWin->GetAccessible();
+            aEvent.IndexHint = -1;
             FireAccessibleEvent( aEvent );
         }
     }
@@ -120,6 +120,7 @@ void SwAccessibleDocumentBase::RemoveChild( vcl::Window *pWin )
         AccessibleEventObject aEvent;
         aEvent.EventId = AccessibleEventId::CHILD;
         aEvent.OldValue <<= mpChildWin->GetAccessible();
+        aEvent.IndexHint = -1;
         FireAccessibleEvent( aEvent );
 
         mpChildWin = nullptr;
@@ -226,10 +227,10 @@ awt::Rectangle SAL_CALL SwAccessibleDocumentBase::getBounds()
         vcl::Window *pWin = GetWindow();
         if (!pWin)
         {
-            throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+            throw uno::RuntimeException("no Window", getXWeak());
         }
 
-        tools::Rectangle aPixBounds( pWin->GetWindowExtentsRelative( pWin->GetAccessibleParentWindow() ) );
+        tools::Rectangle aPixBounds( pWin->GetWindowExtentsRelative( *pWin->GetAccessibleParentWindow() ) );
         awt::Rectangle aBox( aPixBounds.Left(), aPixBounds.Top(),
                              aPixBounds.GetWidth(), aPixBounds.GetHeight() );
 
@@ -248,10 +249,10 @@ awt::Point SAL_CALL SwAccessibleDocumentBase::getLocation()
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
-    Point aPixPos( pWin->GetWindowExtentsRelative( pWin->GetAccessibleParentWindow() ).TopLeft() );
+    Point aPixPos( pWin->GetWindowExtentsRelative( *pWin->GetAccessibleParentWindow() ).TopLeft() );
     awt::Point aLoc( aPixPos.getX(), aPixPos.getY() );
 
     return aLoc;
@@ -264,10 +265,10 @@ css::awt::Point SAL_CALL SwAccessibleDocumentBase::getLocationOnScreen()
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
-    Point aPixPos( pWin->GetWindowExtentsRelative( nullptr ).TopLeft() );
+    Point aPixPos( pWin->GetWindowExtentsAbsolute().TopLeft() );
     awt::Point aLoc( aPixPos.getX(), aPixPos.getY() );
 
     return aLoc;
@@ -280,10 +281,10 @@ css::awt::Size SAL_CALL SwAccessibleDocumentBase::getSize()
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
-    Size aPixSize( pWin->GetWindowExtentsRelative( nullptr ).GetSize() );
+    Size aPixSize( pWin->GetWindowExtentsAbsolute().GetSize() );
     awt::Size aSize( aPixSize.Width(), aPixSize.Height() );
 
     return aSize;
@@ -297,10 +298,10 @@ sal_Bool SAL_CALL SwAccessibleDocumentBase::containsPoint(
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
-    tools::Rectangle aPixBounds( pWin->GetWindowExtentsRelative( nullptr ) );
+    tools::Rectangle aPixBounds( pWin->GetWindowExtentsAbsolute() );
     aPixBounds.Move(-aPixBounds.Left(), -aPixBounds.Top());
 
     Point aPixPoint( aPoint.X, aPoint.Y );
@@ -319,13 +320,13 @@ uno::Reference< XAccessible > SAL_CALL SwAccessibleDocumentBase::getAccessibleAt
         vcl::Window *pWin = GetWindow();
         if (!pWin)
         {
-            throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+            throw uno::RuntimeException("no Window", getXWeak());
         }
         if (pWin->isDisposed()) // tdf#147967
             return nullptr;
 
         Point aPixPoint( aPoint.X, aPoint.Y ); // px rel to window
-        if( mpChildWin->GetWindowExtentsRelative( pWin ).Contains( aPixPoint ) )
+        if( mpChildWin->GetWindowExtentsRelative( *pWin ).Contains( aPixPoint ) )
             return mpChildWin->GetAccessible();
     }
 
@@ -419,7 +420,7 @@ IMPL_LINK( SwAccessibleDocument, WindowChildEventListener, VclWindowEvent&, rEve
 
 OUString SAL_CALL SwAccessibleDocument::getImplementationName()
 {
-    return sImplementationName;
+    return u"com.sun.star.comp.Writer.SwAccessibleDocumentView"_ustr;
 }
 
 sal_Bool SAL_CALL SwAccessibleDocument::supportsService(const OUString& sTestServiceName)
@@ -533,9 +534,14 @@ uno::Any SAL_CALL SwAccessibleDocument::getExtendedAttributes()
             ";total-pages:" +
             OUString::number( pCursorShell->GetPageCnt() ) + ";";
 
+        // cursor position relative to the page
+        Point aCursorPagePos = pFEShell->GetCursorPagePos();
+        sValue += "cursor-position-in-page-horizontal:" + OUString::number(aCursorPagePos.getX())
+                + ";cursor-position-in-page-vertical:" + OUString::number(aCursorPagePos.getY()) + ";";
+
         SwContentFrame* pCurrFrame = pCursorShell->GetCurrFrame();
         SwPageFrame* pCurrPage=static_cast<SwFrame*>(pCurrFrame)->FindPageFrame();
-        sal_uLong nLineNum = 0;
+        sal_Int32 nLineNum = 0;
         SwTextFrame* pTextFrame = nullptr;
         SwTextFrame* pCurrTextFrame = nullptr;
         pTextFrame = static_cast< SwTextFrame* >(pCurrPage->ContainsContent());

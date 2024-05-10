@@ -180,7 +180,7 @@ void Edit::setMaxWidthChars(sal_Int32 nWidth)
     }
 }
 
-bool Edit::set_property(const OString &rKey, const OUString &rValue)
+bool Edit::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "width-chars")
         SetWidthInChars(rValue.toInt32());
@@ -473,20 +473,9 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
     const OUString aText = ImplGetText();
     const sal_Int32 nLen = aText.getLength();
 
-    sal_Int32 nDXBuffer[256];
-    std::unique_ptr<sal_Int32[]> pDXBuffer;
-    sal_Int32* pDX = nDXBuffer;
-
+    KernArray aDX;
     if (nLen)
-    {
-        if (o3tl::make_unsigned(2 * nLen) > SAL_N_ELEMENTS(nDXBuffer))
-        {
-            pDXBuffer.reset(new sal_Int32[2 * (nLen + 1)]);
-            pDX = pDXBuffer.get();
-        }
-
-        GetOutDev()->GetCaretPositions(aText, pDX, 0, nLen);
-    }
+        GetOutDev()->GetCaretPositions(aText, aDX, 0, nLen);
 
     tools::Long nTH = GetTextHeight();
     Point aPos(mnXOffset, ImplGetTextYPosition());
@@ -548,8 +537,8 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
         for(sal_Int32 i = 0; i < nLen; ++i)
         {
             tools::Rectangle aRect(aPos, Size(10, nTH));
-            aRect.SetLeft( pDX[2 * i] + mnXOffset + ImplGetExtraXOffset() );
-            aRect.SetRight( pDX[2 * i + 1] + mnXOffset + ImplGetExtraXOffset() );
+            aRect.SetLeft( aDX[2 * i] + mnXOffset + ImplGetExtraXOffset() );
+            aRect.SetRight( aDX[2 * i + 1] + mnXOffset + ImplGetExtraXOffset() );
             aRect.Normalize();
             bool bHighlight = false;
             if (i >= aTmpSel.Min() && i < aTmpSel.Max())
@@ -626,8 +615,8 @@ void Edit::ImplRepaint(vcl::RenderContext& rRenderContext, const tools::Rectangl
                     while (nIndex < mpIMEInfos->nLen && mpIMEInfos->pAttribs[nIndex] == nAttr)  // #112631# check nIndex before using it
                     {
                         tools::Rectangle aRect( aPos, Size( 10, nTH ) );
-                        aRect.SetLeft( pDX[2 * (nIndex + mpIMEInfos->nPos)] + mnXOffset + ImplGetExtraXOffset() );
-                        aRect.SetRight( pDX[2 * (nIndex + mpIMEInfos->nPos) + 1] + mnXOffset + ImplGetExtraXOffset() );
+                        aRect.SetLeft( aDX[2 * (nIndex + mpIMEInfos->nPos)] + mnXOffset + ImplGetExtraXOffset() );
+                        aRect.SetRight( aDX[2 * (nIndex + mpIMEInfos->nPos) + 1] + mnXOffset + ImplGetExtraXOffset() );
                         aRect.Normalize();
                         aClip.Union(aRect);
                         nIndex++;
@@ -835,7 +824,7 @@ void Edit::ImplInsertText( const OUString& rStr, const Selection* pNewSel, bool 
 
                 // the text that needs to be checked is only the one
                 // before the current cursor position
-                const OUString aOldText( maText.getStr(), nTmpPos);
+                const OUString aOldText( maText.subView(0, nTmpPos) );
                 OUString aTmpText( aOldText );
                 if (officecfg::Office::Common::I18N::CTL::CTLSequenceCheckingTypeAndReplace::get())
                 {
@@ -901,7 +890,7 @@ void Edit::ImplSetText( const OUString& rText, const Selection* pNewSelection )
 {
     // we delete text by "selecting" the old text completely then calling InsertText; this is flicker free
     if ( ( rText.getLength() > mnMaxTextLen ) ||
-         ( std::u16string_view(rText) == std::u16string_view(maText.getStr(), maText.getLength())
+         ( std::u16string_view(rText) == std::u16string_view(maText)
            && (!pNewSelection || (*pNewSelection == maSelection)) ) )
         return;
 
@@ -1072,24 +1061,15 @@ void Edit::ImplShowCursor( bool bOnlyIfVisible )
 
     tools::Long nTextPos = 0;
 
-    sal_Int32   nDXBuffer[256];
-    std::unique_ptr<sal_Int32[]> pDXBuffer;
-    sal_Int32*  pDX = nDXBuffer;
-
     if( !aText.isEmpty() )
     {
-        if( o3tl::make_unsigned(2*aText.getLength()) > SAL_N_ELEMENTS(nDXBuffer) )
-        {
-            pDXBuffer.reset(new sal_Int32[2*(aText.getLength()+1)]);
-            pDX = pDXBuffer.get();
-        }
-
-        GetOutDev()->GetCaretPositions( aText, pDX, 0, aText.getLength() );
+        KernArray aDX;
+        GetOutDev()->GetCaretPositions(aText, aDX, 0, aText.getLength());
 
         if( maSelection.Max() < aText.getLength() )
-            nTextPos = pDX[ 2*maSelection.Max() ];
+            nTextPos = aDX[ 2*maSelection.Max() ];
         else
-            nTextPos = pDX[ 2*aText.getLength()-1 ];
+            nTextPos = aDX[ 2*aText.getLength()-1 ];
     }
 
     tools::Long nCursorWidth = 0;
@@ -1196,31 +1176,26 @@ sal_Int32 Edit::ImplGetCharPos( const Point& rWindowPos ) const
     sal_Int32 nIndex = EDIT_NOLIMIT;
     OUString aText = ImplGetText();
 
-    sal_Int32   nDXBuffer[256];
-    std::unique_ptr<sal_Int32[]> pDXBuffer;
-    sal_Int32*  pDX = nDXBuffer;
-    if( o3tl::make_unsigned(2*aText.getLength()) > SAL_N_ELEMENTS(nDXBuffer) )
-    {
-        pDXBuffer.reset(new sal_Int32[2*(aText.getLength()+1)]);
-        pDX = pDXBuffer.get();
-    }
+    if (aText.isEmpty())
+        return nIndex;
 
-    GetOutDev()->GetCaretPositions( aText, pDX, 0, aText.getLength() );
+    KernArray aDX;
+    GetOutDev()->GetCaretPositions(aText, aDX, 0, aText.getLength());
     tools::Long nX = rWindowPos.X() - mnXOffset - ImplGetExtraXOffset();
     for (sal_Int32 i = 0; i < aText.getLength(); aText.iterateCodePoints(&i))
     {
-        if( (pDX[2*i] >= nX && pDX[2*i+1] <= nX) ||
-            (pDX[2*i+1] >= nX && pDX[2*i] <= nX))
+        if( (aDX[2*i] >= nX && aDX[2*i+1] <= nX) ||
+            (aDX[2*i+1] >= nX && aDX[2*i] <= nX))
         {
             nIndex = i;
-            if( pDX[2*i] < pDX[2*i+1] )
+            if( aDX[2*i] < aDX[2*i+1] )
             {
-                if( nX > (pDX[2*i]+pDX[2*i+1])/2 )
+                if( nX > (aDX[2*i]+aDX[2*i+1])/2 )
                     aText.iterateCodePoints(&nIndex);
             }
             else
             {
-                if( nX < (pDX[2*i]+pDX[2*i+1])/2 )
+                if( nX < (aDX[2*i]+aDX[2*i+1])/2 )
                     aText.iterateCodePoints(&nIndex);
             }
             break;
@@ -1230,7 +1205,7 @@ sal_Int32 Edit::ImplGetCharPos( const Point& rWindowPos ) const
     {
         nIndex = 0;
         sal_Int32 nFinalIndex = 0;
-        tools::Long nDiff = std::abs( pDX[0]-nX );
+        tools::Long nDiff = std::abs( aDX[0]-nX );
         sal_Int32 i = 0;
         if (!aText.isEmpty())
         {
@@ -1238,7 +1213,7 @@ sal_Int32 Edit::ImplGetCharPos( const Point& rWindowPos ) const
         }
         while (i < aText.getLength())
         {
-            tools::Long nNewDiff = std::abs( pDX[2*i]-nX );
+            tools::Long nNewDiff = std::abs( aDX[2*i]-nX );
 
             if( nNewDiff < nDiff )
             {
@@ -1250,7 +1225,7 @@ sal_Int32 Edit::ImplGetCharPos( const Point& rWindowPos ) const
 
             aText.iterateCodePoints(&i);
         }
-        if (nIndex == nFinalIndex && std::abs( pDX[2*nIndex+1] - nX ) < nDiff)
+        if (nIndex == nFinalIndex && std::abs( aDX[2*nIndex+1] - nX ) < nDiff)
             nIndex = EDIT_NOLIMIT;
     }
 
@@ -1306,6 +1281,19 @@ void Edit::ImplPaste( uno::Reference< datatransfer::clipboard::XClipboard > cons
         uno::Any aData = xDataObj->getTransferData( aFlavor );
         OUString aText;
         aData >>= aText;
+
+        // tdf#127588 - extend selection to the entire field or paste the text
+        // from the clipboard to the current position if there is no selection
+        if (mnMaxTextLen < EDIT_NOLIMIT && maSelection.Len() == 0)
+        {
+            const sal_Int32 aTextLen = aText.getLength();
+            if (aTextLen == mnMaxTextLen)
+            {
+                maSelection.Min() = 0;
+                maSelection.Max() = mnMaxTextLen;
+            } else
+                maSelection.Max() = std::min<sal_Int32>(maSelection.Min() + aTextLen, mnMaxTextLen);
+        }
 
         Selection aSelection(maSelection);
         aSelection.Normalize();
@@ -1851,6 +1839,8 @@ void Edit::ImplInvalidateOutermostBorder( vcl::Window* pWin )
 
 void Edit::GetFocus()
 {
+    Control::GetFocus();
+
     if ( mpSubEdit )
         mpSubEdit->ImplGrabFocus( GetGetFocusFlags() );
     else if ( !mbActivePopup )
@@ -1894,8 +1884,6 @@ void Edit::GetFocus()
 
         SetInputContext( InputContext( GetFont(), !IsReadOnly() ? InputContextFlags::Text|InputContextFlags::ExtText : InputContextFlags::NONE ) );
     }
-
-    Control::GetFocus();
 }
 
 void Edit::LoseFocus()
@@ -1986,18 +1974,19 @@ void Edit::Command( const CommandEvent& rCEvt )
             bEnablePaste = bData;
         }
 
-        pPopup->EnableItem(pPopup->GetItemId("cut"), bEnableCut);
-        pPopup->EnableItem(pPopup->GetItemId("copy"), bEnableCopy);
-        pPopup->EnableItem(pPopup->GetItemId("delete"), bEnableDelete);
-        pPopup->EnableItem(pPopup->GetItemId("paste"), bEnablePaste);
-        pPopup->EnableItem(pPopup->GetItemId("specialchar"), bEnableSpecialChar);
+        pPopup->EnableItem(pPopup->GetItemId(u"cut"), bEnableCut);
+        pPopup->EnableItem(pPopup->GetItemId(u"copy"), bEnableCopy);
+        pPopup->EnableItem(pPopup->GetItemId(u"delete"), bEnableDelete);
+        pPopup->EnableItem(pPopup->GetItemId(u"paste"), bEnablePaste);
+        pPopup->SetItemText(pPopup->GetItemId(u"specialchar"),
+            BuilderUtils::convertMnemonicMarkup(VclResId(STR_SPECIAL_CHARACTER_MENU_ENTRY)));
+        pPopup->EnableItem(pPopup->GetItemId(u"specialchar"), bEnableSpecialChar);
         pPopup->EnableItem(
-            pPopup->GetItemId("undo"),
-            std::u16string_view(maUndoText)
-                != std::u16string_view(maText.getStr(), maText.getLength()));
+            pPopup->GetItemId(u"undo"),
+            std::u16string_view(maUndoText) != std::u16string_view(maText));
         bool bAllSelected = maSelection.Min() == 0 && maSelection.Max() == maText.getLength();
-        pPopup->EnableItem(pPopup->GetItemId("selectall"), !bAllSelected);
-        pPopup->ShowItem(pPopup->GetItemId("specialchar"), pImplFncGetSpecialChars != nullptr);
+        pPopup->EnableItem(pPopup->GetItemId(u"selectall"), !bAllSelected);
+        pPopup->ShowItem(pPopup->GetItemId(u"specialchar"), pImplFncGetSpecialChars != nullptr);
 
         mbActivePopup = true;
         Selection aSaveSel = GetSelection(); // if someone changes selection in Get/LoseFocus, e.g. URL bar
@@ -2010,7 +1999,7 @@ void Edit::Command( const CommandEvent& rCEvt )
         }
         sal_uInt16 n = pPopup->Execute( this, aPos );
         SetSelection( aSaveSel );
-        OString sCommand = pPopup->GetItemIdent(n);
+        OUString sCommand = pPopup->GetItemIdent(n);
         if (sCommand == "undo")
         {
             Undo();
@@ -2150,9 +2139,8 @@ void Edit::Command( const CommandEvent& rCEvt )
         if (mpIMEInfos && mpIMEInfos->nLen > 0)
         {
             OUString aText = ImplGetText();
-            std::vector<sal_Int32> aDX(2*(aText.getLength()+1));
-
-            GetOutDev()->GetCaretPositions( aText, aDX.data(), 0, aText.getLength() );
+            KernArray aDX;
+            GetOutDev()->GetCaretPositions(aText, aDX, 0, aText.getLength());
 
             tools::Long    nTH = GetTextHeight();
             Point   aPos( mnXOffset, ImplGetTextYPosition() );
@@ -2720,7 +2708,7 @@ VclPtr<PopupMenu> Edit::CreatePopupMenu()
 {
     if (!mpUIBuilder)
         mpUIBuilder.reset(new VclBuilder(nullptr, AllSettings::GetUIRootDir(), "vcl/ui/editmenu.ui", ""));
-    VclPtr<PopupMenu> pPopup = mpUIBuilder->get_menu("menu");
+    VclPtr<PopupMenu> pPopup = mpUIBuilder->get_menu(u"menu");
     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
     if (rStyleSettings.GetHideDisabledMenuItems())
         pPopup->SetMenuFlags( MenuFlags::HideDisabledEntries );
@@ -2728,13 +2716,13 @@ VclPtr<PopupMenu> Edit::CreatePopupMenu()
         pPopup->SetMenuFlags ( MenuFlags::AlwaysShowDisabledEntries );
     if (rStyleSettings.GetContextMenuShortcuts())
     {
-        pPopup->SetAccelKey(pPopup->GetItemId("undo"), vcl::KeyCode( KeyFuncType::UNDO));
-        pPopup->SetAccelKey(pPopup->GetItemId("cut"), vcl::KeyCode( KeyFuncType::CUT));
-        pPopup->SetAccelKey(pPopup->GetItemId("copy"), vcl::KeyCode( KeyFuncType::COPY));
-        pPopup->SetAccelKey(pPopup->GetItemId("paste"), vcl::KeyCode( KeyFuncType::PASTE));
-        pPopup->SetAccelKey(pPopup->GetItemId("delete"), vcl::KeyCode( KeyFuncType::DELETE));
-        pPopup->SetAccelKey(pPopup->GetItemId("selectall"), vcl::KeyCode( KEY_A, false, true, false, false));
-        pPopup->SetAccelKey(pPopup->GetItemId("specialchar"), vcl::KeyCode( KEY_S, true, true, false, false));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"undo"), vcl::KeyCode( KeyFuncType::UNDO));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"cut"), vcl::KeyCode( KeyFuncType::CUT));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"copy"), vcl::KeyCode( KeyFuncType::COPY));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"paste"), vcl::KeyCode( KeyFuncType::PASTE));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"delete"), vcl::KeyCode( KeyFuncType::DELETE));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"selectall"), vcl::KeyCode( KEY_A, false, true, false, false));
+        pPopup->SetAccelKey(pPopup->GetItemId(u"specialchar"), vcl::KeyCode( KEY_S, true, true, false, false));
     }
     return pPopup;
 }

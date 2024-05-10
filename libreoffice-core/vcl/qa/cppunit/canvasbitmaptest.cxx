@@ -36,7 +36,7 @@
 #include <vcl/bitmapex.hxx>
 
 #include <canvasbitmap.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 #include <algorithm>
 
@@ -87,7 +87,7 @@ void checkCanvasBitmap( const rtl::Reference<VclCanvasBitmap>& xBmp,
     int      extraBpp = 0;
 
     {
-        Bitmap::ScopedReadAccess pAcc( aContainedBmp );
+        BitmapScopedReadAccess pAcc( aContainedBmp );
         nDepth = pAcc->GetBitCount();
         if( pAcc->GetScanlineFormat() == ScanlineFormat::N32BitTcMask )
             extraBpp = 8; // the format has 8 unused bits
@@ -385,20 +385,13 @@ private:
         return false;
     }
 
-    struct PaletteColorSpaceHolder: public rtl::StaticWithInit<uno::Reference<rendering::XColorSpace>,
-                                                               PaletteColorSpaceHolder>
-    {
-        uno::Reference<rendering::XColorSpace> operator()()
-        {
-            return vcl::unotools::createStandardColorSpace();
-        }
-    };
-
     virtual uno::Reference< rendering::XColorSpace > SAL_CALL getColorSpace(  ) override
     {
         // this is the method from XBitmapPalette. Return palette color
         // space here
-        return PaletteColorSpaceHolder::get();
+        static uno::Reference<rendering::XColorSpace> aColorSpace =
+            vcl::unotools::createStandardColorSpace();
+        return aColorSpace;
     }
 
     // XIntegerBitmapColorSpace
@@ -640,7 +633,6 @@ void CanvasBitmapTest::runTest()
 {
     static vcl::PixelFormat ePixelFormatArray[] =
     {
-        vcl::PixelFormat::N1_BPP,
         vcl::PixelFormat::N8_BPP,
         vcl::PixelFormat::N24_BPP
     };
@@ -680,17 +672,17 @@ void CanvasBitmapTest::runTest()
 
         checkCanvasBitmap( xBmp, "single bitmap", nDepth );
 
-        Bitmap aMask(Size(200,200), vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256));
-        aMask.Erase(COL_WHITE);
+        AlphaMask aMask(Size(200,200));
+        aMask.Erase(255);
         {
             BitmapScopedWriteAccess pAcc(aMask);
             if( pAcc.get() )
             {
-                pAcc->SetFillColor(COL_BLACK);
+                pAcc->SetFillColor(COL_ALPHA_OPAQUE);
                 pAcc->FillRect(tools::Rectangle(0,0,100,100));
-                pAcc->SetPixel(0,0,BitmapColor(255));
-                pAcc->SetPixel(0,1,BitmapColor(0));
-                pAcc->SetPixel(0,2,BitmapColor(255));
+                pAcc->SetPixel(0,0,BitmapColor(0));
+                pAcc->SetPixel(0,1,BitmapColor(255));
+                pAcc->SetPixel(0,2,BitmapColor(0));
             }
         }
 
@@ -699,17 +691,16 @@ void CanvasBitmapTest::runTest()
         checkCanvasBitmap( xBmp, "masked bitmap", nDepth );
 
         AlphaMask aAlpha(Size(200,200));
-        aAlpha.Erase(255);
+        aAlpha.Erase(0);
         {
-            BitmapWriteAccess* pAcc = aAlpha.AcquireWriteAccess();
+            BitmapScopedWriteAccess pAcc(aAlpha);
             if( pAcc )
             {
-                pAcc->SetFillColor(COL_BLACK);
+                pAcc->SetFillColor(COL_ALPHA_OPAQUE);
                 pAcc->FillRect(tools::Rectangle(0,0,100,100));
-                pAcc->SetPixel(0,0,BitmapColor(255));
-                pAcc->SetPixel(0,1,BitmapColor(0));
-                pAcc->SetPixel(0,2,BitmapColor(255));
-                aAlpha.ReleaseAccess(pAcc);
+                pAcc->SetPixel(0,0,BitmapColor(0));
+                pAcc->SetPixel(0,1,BitmapColor(255));
+                pAcc->SetPixel(0,2,BitmapColor(0));
             }
         }
 
@@ -732,7 +723,7 @@ void CanvasBitmapTest::runTest()
                             vcl::PixelFormat::N8_BPP,  aBmp.getPixelFormat());
     {
         Bitmap aBitmap = aBmp.GetBitmap();
-        BitmapReadAccess* pBmpAcc   = aBitmap.AcquireReadAccess();
+        BitmapScopedReadAccess pBmpAcc(aBitmap);
 
         CPPUNIT_ASSERT_MESSAGE( "Bitmap has invalid BitmapReadAccess",
                                 pBmpAcc );
@@ -743,8 +734,6 @@ void CanvasBitmapTest::runTest()
                                BitmapColor(2), pBmpAcc->GetPixel(2,2));
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(9,2) incorrect content",
                                BitmapColor(9), pBmpAcc->GetPixel(2,9));
-
-        Bitmap::ReleaseAccess(pBmpAcc);
     }
 
     xTestBmp.set( new TestBitmap( geometry::IntegerSize2D(10,10), false ));
@@ -758,8 +747,9 @@ void CanvasBitmapTest::runTest()
                             vcl::PixelFormat::N24_BPP,  aBmp.getPixelFormat());
     {
         Bitmap aBitmap = aBmp.GetBitmap();
-        BitmapReadAccess* pBmpAcc   = aBitmap.AcquireReadAccess();
-        BitmapReadAccess* pAlphaAcc = aBmp.GetAlpha().AcquireReadAccess();
+        BitmapScopedReadAccess pBmpAcc(aBitmap);
+        AlphaMask aBitmapAlpha = aBmp.GetAlphaMask();
+        BitmapScopedReadAccess pAlphaAcc(aBitmapAlpha);
 
         CPPUNIT_ASSERT_MESSAGE( "Bitmap has invalid BitmapReadAccess",
                                 pBmpAcc);
@@ -769,18 +759,15 @@ void CanvasBitmapTest::runTest()
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(0,0) incorrect content",
                                BitmapColor(0,1,0), pBmpAcc->GetPixel(0,0));
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(0,0) incorrect alpha content",
-                               BitmapColor(255), pAlphaAcc->GetPixel(0,0));
+                               BitmapColor(0), pAlphaAcc->GetPixel(0,0));
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(2,2) incorrect content",
                                BitmapColor(0,3,2), pBmpAcc->GetPixel(2,2));
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(2,2) incorrect alpha content",
-                               BitmapColor(253), pAlphaAcc->GetPixel(2,2));
+                               BitmapColor(2), pAlphaAcc->GetPixel(2,2));
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(9,2) incorrect content",
                                BitmapColor(0,3,9), pBmpAcc->GetPixel(2,9));
         CPPUNIT_ASSERT_EQUAL_MESSAGE("(9,2) correct alpha content",
-                               BitmapColor(253), pAlphaAcc->GetPixel(2,9));
-
-        aBmp.GetAlpha().ReleaseAccess(pAlphaAcc);
-        Bitmap::ReleaseAccess(pBmpAcc);
+                               BitmapColor(2), pAlphaAcc->GetPixel(2,9));
     }
 }
 

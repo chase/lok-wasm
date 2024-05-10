@@ -124,7 +124,7 @@ public:
     mutable uno::Reference< sheet::XFormulaOpCodeMapper>    m_xOpCodeMapper;
     uno::Sequence< sheet::FormulaToken >                    m_aTokenList;
     ::std::unique_ptr<FormulaTokenArray>                    m_pTokenArray;
-    ::std::unique_ptr<FormulaTokenArrayPlainIterator>       m_pTokenArrayIterator;
+    ::std::optional<FormulaTokenArrayPlainIterator>         m_oTokenArrayIterator;
     mutable uno::Sequence< sheet::FormulaOpCodeMapEntry >   m_aSpecialOpCodes;
     mutable uno::Sequence< sheet::FormulaToken >            m_aSeparatorsOpCodes;
     mutable uno::Sequence< sheet::FormulaOpCodeMapEntry >   m_aFunctionOpCodes;
@@ -141,9 +141,9 @@ public:
     const OUString          m_aTitle2;
     FormulaHelper           m_aFormulaHelper;
 
-    OString                 m_aEditHelpId;
+    OUString                m_aEditHelpId;
 
-    OString                 m_aOldHelp;
+    OUString                 m_aOldHelp;
     bool                    m_bMakingTree;  // in method of constructing tree
 
     bool                    m_bEditFlag;
@@ -375,7 +375,7 @@ sal_Int32 FormulaDlg_Impl::GetFunctionPos(sal_Int32 nPos)
     const sal_Unicode sep = m_pHelper->getFunctionManager()->getSingleToken(IFunctionManager::eSep);
 
     sal_Int32 nFuncPos = SAL_MAX_INT32;
-    OUString  aFormString = m_aFormulaHelper.GetCharClass()->uppercase(m_xMEdit->get_text());
+    OUString  aFormString = m_aFormulaHelper.GetCharClass().uppercase(m_xMEdit->get_text());
 
     const uno::Reference< sheet::XFormulaParser > xParser(m_pHelper->getFormulaParser());
     const table::CellAddress aRefPos(m_pHelper->getReferencePosition());
@@ -522,7 +522,7 @@ void FormulaDlg_Impl::UpdateValues( bool bForceRecalcStruct )
             assert( 0 <= nPos && nPos < m_pHelper->getCurrentFormula().getLength());
             OUStringBuffer aBuf;
             const FormulaToken* pToken = nullptr;
-            for (pToken = m_pTokenArrayIterator->First(); pToken; pToken = m_pTokenArrayIterator->Next())
+            for (pToken = m_oTokenArrayIterator->First(); pToken; pToken = m_oTokenArrayIterator->Next())
             {
                 pCompiler->CreateStringFromToken( aBuf, pToken);
                 if (nPos < aBuf.getLength())
@@ -637,7 +637,7 @@ void FormulaDlg_Impl::MakeTree(StructPage* _pTree, weld::TreeIter* pParent, cons
                 pEntry = xEntry.get();
             }
 
-            MakeTree(_pTree, pEntry, _pToken, m_pTokenArrayIterator->PrevRPN(), nParas);
+            MakeTree(_pTree, pEntry, _pToken, m_oTokenArrayIterator->PrevRPN(), nParas);
 
             if (bCalcSubformula)
             {
@@ -663,8 +663,8 @@ void FormulaDlg_Impl::MakeTree(StructPage* _pTree, weld::TreeIter* pParent, cons
             }
 
             --Count;
-            m_pTokenArrayIterator->NextRPN();   /* TODO: what's this to be? ThisRPN()? */
-            MakeTree( _pTree, pParent, _pToken, m_pTokenArrayIterator->PrevRPN(), Count);
+            m_oTokenArrayIterator->NextRPN();   /* TODO: what's this to be? ThisRPN()? */
+            MakeTree( _pTree, pParent, _pToken, m_oTokenArrayIterator->PrevRPN(), Count);
         }
         else
         {
@@ -729,7 +729,7 @@ void FormulaDlg_Impl::MakeTree(StructPage* _pTree, weld::TreeIter* pParent, cons
                 _pTree->InsertEntry(aResult, pParent, STRUCT_END, 0, _pToken, *xEntry);
             }
             --Count;
-            MakeTree( _pTree, pParent, _pToken, m_pTokenArrayIterator->PrevRPN(), Count);
+            MakeTree( _pTree, pParent, _pToken, m_oTokenArrayIterator->PrevRPN(), Count);
         }
     }
     catch (const uno::Exception&)
@@ -741,7 +741,7 @@ void FormulaDlg_Impl::MakeTree(StructPage* _pTree, weld::TreeIter* pParent, cons
 void FormulaDlg_Impl::fillTree(StructPage* _pTree)
 {
     InitFormulaOpCodeMapper();
-    FormulaToken* pToken = m_pTokenArrayIterator->LastRPN();
+    FormulaToken* pToken = m_oTokenArrayIterator->LastRPN();
 
     if ( pToken != nullptr)
     {
@@ -765,7 +765,7 @@ void FormulaDlg_Impl::UpdateTokenArray( const OUString& rStrExp)
     }
     InitFormulaOpCodeMapper();
     m_pTokenArray = m_pHelper->convertToTokenArray(m_aTokenList);
-    m_pTokenArrayIterator.reset(new FormulaTokenArrayPlainIterator(*m_pTokenArray));
+    m_oTokenArrayIterator.emplace(*m_pTokenArray);
     const sal_Int32 nLen = static_cast<sal_Int32>(m_pTokenArray->GetLen());
     FormulaToken** pTokens = m_pTokenArray->GetArray();
     if ( pTokens && nLen == m_aTokenList.getLength() )
@@ -828,7 +828,8 @@ void FormulaDlg_Impl::FillListboxes()
     }
     else if ( pData )
     {
-        m_xFuncPage->SetCategory( 1 );
+        // tdf#104487 - remember last used function category
+        m_xFuncPage->SetCategory(FuncPage::GetRememeberdFunctionCategory());
         m_xFuncPage->SetFunction( -1 );
     }
     FuncSelHdl(*m_xFuncPage);
@@ -869,7 +870,7 @@ void FormulaDlg_Impl::FillControls( bool &rbNext, bool &rbPrev)
             m_xFtEditName->set_label( m_pFuncDesc->getFunctionName() );
             m_xFtEditName->show();
             m_xParaWinBox->show();
-            const OString aHelpId = m_pFuncDesc->getHelpId();
+            const OUString aHelpId = m_pFuncDesc->getHelpId();
             if ( !aHelpId.isEmpty() )
                 m_xMEdit->set_help_id(aHelpId);
         }

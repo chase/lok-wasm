@@ -108,7 +108,7 @@ class SW_DLLPUBLIC SwTabFrame final: public SwLayoutFrame, public SwFlowFrame
      * created and constructed and inserted directly after this.
      * Join() gets the Follow's content and destroys it.
      */
-    bool Split( const SwTwips nCutPos, bool bTryToSplit, bool bTableRowKeep );
+    bool Split(const SwTwips nCutPos, bool bTryToSplit, bool bTableRowKeep, bool & rIsFootnoteGrowth);
     void Join();
 
     void UpdateAttr_(
@@ -116,6 +116,8 @@ class SW_DLLPUBLIC SwTabFrame final: public SwLayoutFrame, public SwFlowFrame
         const SfxPoolItem*, SwTabFrameInvFlags &,
         SwAttrSetChg *pa = nullptr,
         SwAttrSetChg *pb = nullptr );
+    void Invalidate(SwTabFrameInvFlags);
+    void HandleTableHeadlineChange();
 
     virtual bool ShouldBwdMoved( SwLayoutFrame *pNewUpper, bool &rReformat ) override;
 
@@ -142,7 +144,6 @@ public:
     inline       SwTabFrame *GetFollow();
     SwTabFrame* FindMaster( bool bFirstMaster = false ) const;
 
-    virtual bool GetInfo( SfxPoolItem &rHint ) const override;
     virtual void PaintSwFrame( vcl::RenderContext& rRenderContext, SwRect const&,
                         SwPrintData const*const pPrintData = nullptr ) const override;
     virtual void CheckDirection( bool bVert ) override;
@@ -237,7 +238,7 @@ public:
 
     sal_uInt16 GetBottomLineSize() const;
 
-    virtual void dumpAsXmlAttributes(xmlTextWriterPtr writer) const override;
+    void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
 };
 
 inline const SwFrame *SwTabFrame::FindLastContentOrTable() const

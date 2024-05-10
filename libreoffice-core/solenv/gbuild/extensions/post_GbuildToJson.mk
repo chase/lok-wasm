@@ -38,6 +38,7 @@ $(gb_GbuildToJson_PHONY):
 	@true
 
 define gb_LinkTarget__command
+$(call gb_Output_announce,$(2),$(true),GBJ,1)
 mkdir -p $(WORKDIR)/GbuildToJson/$(dir $(2))
 mkdir -p $(WORKDIR)/LinkTarget/$(dir $(2))
 (cd $(SRCDIR) && \

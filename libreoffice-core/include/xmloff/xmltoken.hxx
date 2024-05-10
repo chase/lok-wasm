@@ -518,6 +518,7 @@ namespace xmloff::token {
         XML_CONTOUR_PATH,
         XML_CONTOUR_POLYGON,
         XML_CONTRAST,
+        XML_CONTRIBUTOR,
         XML_CONTROL,
         XML_CONVERSION_MODE,
         XML_CONVERSION_TYPE,
@@ -542,6 +543,7 @@ namespace xmloff::token {
         XML_COUNTRY,
         XML_COUNTRY_ASIAN,
         XML_COUNTRY_COMPLEX,
+        XML_COVERAGE,
         XML_COVERED_TABLE_CELL,
         XML_CREATE_DATE,
         XML_CREATE_DATE_STRING,
@@ -1627,6 +1629,7 @@ namespace xmloff::token {
         XML_REL_HEIGHT_REL,
         XML_REL_WIDTH,
         XML_REL_WIDTH_REL,
+        XML_RELATION,
         XML_RELATIVE,
         XML_RELATIVE_TAB_STOP_POSITION,
         XML_RELN,
@@ -1648,6 +1651,7 @@ namespace xmloff::token {
         XML_RIGHT_TO_LEFT,
         XML_RIGHTARC,
         XML_RIGHTCIRCLE,
+        XML_RIGHTS,
         XML_RING,
         XML_ROLE,
         XML_ROLL_FROM_BOTTOM,
@@ -3463,13 +3467,17 @@ namespace xmloff::token {
         XML_EXTERNALDATA,
 
         XML_EXPONENT_INTERVAL,
+        XML_EXPONENT_LOWERCASE,
         XML_FORCED_EXPONENT_SIGN,
+        XML_BLANK_EXPONENT_DIGITS,
         XML_MIN_DECIMAL_PLACES,
         XML_MAX_DENOMINATOR_VALUE,
         XML_MAX_NUMERATOR_DIGITS,
         XML_ZEROS_NUMERATOR_DIGITS,
         XML_ZEROS_DENOMINATOR_DIGITS,
         XML_INTEGER_FRACTION_DELIMITER,
+        XML_MAX_BLANK_INTEGER_DIGITS,
+        XML_BLANK_WIDTH_CHAR,
 
         // tdf#115319
         XML_REFERENCE_LANGUAGE,
@@ -3489,6 +3497,8 @@ namespace xmloff::token {
         XML_MARGIN_GUTTER,
 
         XML_LOCAL_URL,
+        XML_TARGET_TYPE,
+        XML_TARGET_URL,
 
         // Math ml
         XML_DIR,

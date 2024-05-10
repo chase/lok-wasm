@@ -32,7 +32,7 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/script/ModuleSizeExceededRequest.hpp>
 #include <com/sun/star/task/ErrorCodeIOException.hpp>
-#include <com/sun/star/task/ErrorCodeRequest.hpp>
+#include <com/sun/star/task/ErrorCodeRequest2.hpp>
 #include <com/sun/star/task/InteractionHandler.hpp>
 #include <com/sun/star/task/XInteractionAbort.hpp>
 #include <com/sun/star/task/XInteractionApprove.hpp>
@@ -84,6 +84,7 @@
 
 #include "iahndl.hxx"
 #include "nameclashdlg.hxx"
+#include <comphelper/string.hxx>
 
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::uno::UNO_QUERY;
@@ -140,9 +141,16 @@ void UUIInteractionHelper::handlerequest(
         = static_cast< UUIInteractionHelper * >(pInteractionHelper);
     bool bDummy = false;
     OUString aDummy;
-    pHND->bHandled
-        = pUUI->handleRequest_impl(pHND->m_rRequest, false, bDummy, aDummy);
-    pHND->set();
+    try
+    {
+        pHND->bHandled
+            = pUUI->handleRequest_impl(pHND->m_rRequest, false, bDummy, aDummy);
+        pHND->set();
+    }
+    catch (css::uno::Exception&)
+    {
+        TOOLS_WARN_EXCEPTION("uui", "");
+    }
 }
 
 bool
@@ -254,17 +262,6 @@ UUIInteractionHelper::isInformationalErrorMessageRequest(
     uno::Reference< task::XInteractionAbort > xAbort(
         rContinuations[0], uno::UNO_QUERY);
     return xAbort.is();
-}
-
-bool
-UUIInteractionHelper::tryOtherInteractionHandler(
-    uno::Reference< task::XInteractionRequest > const & rRequest)
-{
-    InteractionHandlerDataList dataList;
-    getInteractionHandlerList(dataList);
-
-    return std::any_of(dataList.cbegin(), dataList.cend(),
-        [&](const InteractionHandlerData& rData) { return handleCustomRequest( rRequest, rData.ServiceName ); });
 }
 
 namespace
@@ -382,19 +379,8 @@ UUIInteractionHelper::handleRequest_impl(
         if (aAnyRequest >>= aModSizeException )
         {
             std::vector< OUString > aArguments;
-            uno::Sequence< OUString > sModules
-                = aModSizeException.Names;
-            if ( sModules.hasElements() )
-            {
-                OUStringBuffer aName;
-                for ( sal_Int32 index=0; index< sModules.getLength(); ++index )
-                {
-                    if ( index )
-                        aName.append(",");
-                    aName.append(sModules[index]);
-                }
-                aArguments.push_back( aName.makeStringAndClear() );
-            }
+            aArguments.push_back(
+                comphelper::string::convertCommaSeparated(aModSizeException.Names));
             handleErrorHandlerRequest( task::InteractionClassification_WARNING,
                                        ERRCODE_UUI_IO_MODULESIZEEXCEEDED,
                                        aArguments,
@@ -713,6 +699,17 @@ UUIInteractionHelper::handleRequest_impl(
             return true;
         }
 
+        task::ErrorCodeRequest2 aErrorCodeRequest2;
+        if (aAnyRequest >>= aErrorCodeRequest2)
+        {
+            handleGenericErrorRequest(
+                    ErrCodeMsg(ErrCode(aErrorCodeRequest2.ErrCode), aErrorCodeRequest2.Arg1, aErrorCodeRequest2.Arg2, static_cast<DialogMask>(aErrorCodeRequest2.DialogMask)),
+                    rRequest->getContinuations(),
+                    bObtainErrorStringOnly,
+                    bHasErrorString,
+                    rErrorString);
+            return true;
+        }
         task::ErrorCodeRequest aErrorCodeRequest;
         if (aAnyRequest >>= aErrorCodeRequest)
         {
@@ -830,10 +827,6 @@ UUIInteractionHelper::handleRequest_impl(
             // typed InteractionHandlers (ooo.Interactions)
             if ( handleTypedHandlerImplementations( rRequest ) )
                 return true;
-
-            // legacy configuration (ooo.ucb.InteractionHandlers)
-            if (tryOtherInteractionHandler( rRequest ))
-                return true;
         }
 
         // Not handled.
@@ -848,80 +841,6 @@ UUIInteractionHelper::handleRequest_impl(
         DBG_UNHANDLED_EXCEPTION("uui");
     }
     return false;
-}
-
-void
-UUIInteractionHelper::getInteractionHandlerList(
-    InteractionHandlerDataList &rdataList)
-{
-    try
-    {
-        uno::Reference< lang::XMultiServiceFactory > xConfigProv =
-            configuration::theDefaultProvider::get( m_xContext );
-
-        uno::Sequence<uno::Any> aArguments(comphelper::InitAnyPropertySequence(
-        {
-            {"nodepath", uno::Any(OUString("/org.openoffice.ucb.InteractionHandler/InteractionHandlers"))}
-        }));
-
-        uno::Reference< uno::XInterface > xInterface(
-                xConfigProv->createInstanceWithArguments(
-                    "com.sun.star.configuration.ConfigurationAccess" , aArguments ) );
-
-        if ( !xInterface.is() )
-            throw uno::RuntimeException("unable to instantiate config access");
-
-        uno::Reference< container::XNameAccess > xNameAccess(
-            xInterface, uno::UNO_QUERY_THROW );
-        const uno::Sequence< OUString > aElems = xNameAccess->getElementNames();
-
-        if ( aElems.hasElements() )
-        {
-            uno::Reference< container::XHierarchicalNameAccess >
-                                xHierNameAccess( xInterface, uno::UNO_QUERY_THROW );
-
-            // Iterate over children.
-            for ( const auto& rElem : aElems )
-            {
-                try
-                {
-                    InteractionHandlerData aInfo;
-
-                    // Obtain service name.
-                    OUString aKeyBuffer = "['" + rElem + "']/ServiceName";
-
-                    OUString aValue;
-                    if ( !( xHierNameAccess->getByHierarchicalName(
-                                aKeyBuffer ) >>= aValue ) )
-                    {
-                        OSL_FAIL( "GetInteractionHandlerList - "
-                                    "Error getting item value!" );
-                        continue;
-                    }
-
-                    aInfo.ServiceName = aValue;
-
-                    // Append info to list.
-                    rdataList.push_back( aInfo );
-                }
-                catch ( container::NoSuchElementException& )
-                {
-                    // getByHierarchicalName
-
-                    OSL_FAIL( "GetInteractionHandlerList - "
-                                "caught NoSuchElementException!" );
-                }
-            }
-        }
-    }
-    catch ( uno::RuntimeException const & )
-    {
-        throw;
-    }
-    catch ( uno::Exception const & )
-    {
-        TOOLS_WARN_EXCEPTION( "uui", "GetInteractionHandlerList" );
-    }
 }
 
 const uno::Reference< awt::XWindow>&
@@ -1050,7 +969,7 @@ UUIInteractionHelper::handleNameClashResolveRequest(
 
 void
 UUIInteractionHelper::handleGenericErrorRequest(
-    ErrCode nErrorCode,
+    ErrCodeMsg nErrorCode,
     uno::Sequence< uno::Reference<
         task::XInteractionContinuation > > const & rContinuations,
     bool bObtainErrorStringOnly,
@@ -1076,10 +995,9 @@ UUIInteractionHelper::handleGenericErrorRequest(
         // Note: It's important to convert the transported long to the
         // required  unsigned long value. Otherwise using as flag field
         // can fail ...
-        ErrCode  nError(nErrorCode);
-        bool bWarning = !nError.IgnoreWarning();
+        bool bWarning = !nErrorCode.IgnoreWarning();
 
-        if ( nError == ERRCODE_SFX_INCOMPLETE_ENCRYPTION )
+        if ( nErrorCode == ERRCODE_SFX_INCOMPLETE_ENCRYPTION )
         {
             // the security warning box needs a special title
             OUString aErrorString;
@@ -1239,7 +1157,7 @@ bool ErrorResource::getString(ErrCode nErrorCode, OUString &rString) const
 {
     for (const std::pair<TranslateId, ErrCode>* pStringArray = m_pStringArray; pStringArray->first; ++pStringArray)
     {
-        if (nErrorCode.StripWarningAndDynamic() == pStringArray->second.StripWarningAndDynamic())
+        if (nErrorCode.StripWarning() == pStringArray->second.StripWarning())
         {
             rString = Translate::get(pStringArray->first, m_rResLocale);
             return true;

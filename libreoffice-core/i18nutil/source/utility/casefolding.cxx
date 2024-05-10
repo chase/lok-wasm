@@ -26,6 +26,8 @@
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <rtl/character.hxx>
 
+#include <unicode/uchar.h>
+
 using namespace com::sun::star::lang;
 using namespace com::sun::star::uno;
 
@@ -92,18 +94,20 @@ const Mapping& casefolding::getConditionalValue(const sal_Unicode* str, sal_Int3
 
 Mapping casefolding::getValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 len, Locale const & aLocale, MappingType nMappingType)
 {
+    if (pos > 0 && rtl::isHighSurrogate(str[pos-1]) && rtl::isLowSurrogate(str[pos]))
+        return { 0, 0, { 0, 0, 0 } };
+
     Mapping dummy = { 0, 1, { str[pos], 0, 0 } };
 
     sal_uInt32 c;
-    if (pos > 0 && rtl::isHighSurrogate(str[pos-1]) && rtl::isLowSurrogate(str[pos])) {
-        c = rtl::combineSurrogates(str[pos-1], str[pos]);
-        if (c >= SAL_N_ELEMENTS(CaseMappingIndex) * 256)
-            return dummy;
-    } else {
+    if (pos + 1 < len && rtl::isHighSurrogate(str[pos]) && rtl::isLowSurrogate(str[pos + 1]))
+        c = rtl::combineSurrogates(str[pos], str[pos + 1]);
+    else
         c = str[pos];
-    }
 
-    sal_Int16 address = CaseMappingIndex[c >> 8];
+    sal_Int16 address = -1;
+    if (c < SAL_N_ELEMENTS(CaseMappingIndex) * 256)
+        address = CaseMappingIndex[c >> 8];
 
     if (address >= 0) {
         address = (address << 8) + (c & 0xFF);
@@ -125,10 +129,44 @@ Mapping casefolding::getValue(const sal_Unicode* str, sal_Int32 pos, sal_Int32 l
                     // Should not come here
                     throw RuntimeException();
                 }
-            } else
+            }
+            else
+            {
                 dummy.map[0] = CaseMappingValue[address].value;
+                return dummy;
+            }
         }
     }
+
+    // If the code point is not supported by our case mapping tables,
+    // fallback to ICU functions.
+    // TODO: this does not handle special case mapping as these require
+    // using ustring.h APIs, which work on the whole string not character
+    // by character.
+    // TODO: what is the difference between ToLower and UpperToLower etc.?
+    sal_uInt32 value = c;
+    switch (nMappingType)
+    {
+        case MappingType::ToLower:
+        case MappingType::UpperToLower:
+            value = u_tolower(c);
+            break;
+        case MappingType::ToUpper:
+        case MappingType::LowerToUpper:
+            value = u_toupper(c);
+            break;
+        case MappingType::ToTitle:
+            value = u_totitle(c);
+            break;
+        case MappingType::SimpleFolding:
+        case MappingType::FullFolding:
+            value = u_foldCase(c, U_FOLD_CASE_DEFAULT);
+            break;
+        default: break;
+    }
+
+    dummy.nmap = rtl::splitSurrogates(value, dummy.map);
+
     return dummy;
 }
 

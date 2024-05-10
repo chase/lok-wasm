@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <libxml/xmlwriter.h>
+
 #include <hintids.hxx>
 #include <hints.hxx>
 #include <editeng/lrspitem.hxx>
@@ -59,6 +61,8 @@
 #include <calbck.hxx>
 #include <o3tl/string_view.hxx>
 #include <svl/numformat.hxx>
+#include <txtfld.hxx>
+#include <rolbck.hxx>
 
 #ifdef DBG_UTIL
 #define CHECK_TABLE(t) (t).CheckConsistency();
@@ -263,8 +267,8 @@ static void lcl_ModifyBoxes( SwTableBoxes &rBoxes, const tools::Long nOld,
 static void lcl_ModifyLines( SwTableLines &rLines, const tools::Long nOld,
                          const tools::Long nNew, std::vector<SwFormat*>& rFormatArr, const bool bCheckSum )
 {
-    for ( size_t i = 0; i < rLines.size(); ++i )
-        ::lcl_ModifyBoxes( rLines[i]->GetTabBoxes(), nOld, nNew, rFormatArr );
+    for ( auto &rLine : rLines)
+        ::lcl_ModifyBoxes( rLine->GetTabBoxes(), nOld, nNew, rFormatArr );
     if( bCheckSum )
     {
         for(SwFormat* pFormat : rFormatArr)
@@ -320,6 +324,11 @@ static void lcl_ModifyBoxes( SwTableBoxes &rBoxes, const tools::Long nOld,
 
 void SwTable::SwClientNotify(const SwModify&, const SfxHint& rHint)
 {
+    if(rHint.GetId() == SfxHintId::SwAutoFormatUsedHint) {
+        auto& rAutoFormatUsedHint = static_cast<const sw::AutoFormatUsedHint&>(rHint);
+        rAutoFormatUsedHint.CheckNode(GetTableNode());
+        return;
+    }
     if (rHint.GetId() != SfxHintId::SwLegacyModify)
         return;
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
@@ -1580,7 +1589,7 @@ bool SwTable::IsEmpty() const
     return true;
 }
 
-bool SwTable::HasDeletedRow() const
+bool SwTable::HasDeletedRowOrCell() const
 {
     const SwRedlineTable& aRedlineTable = GetFrameFormat()->GetDoc()->getIDocumentRedlineAccess().GetRedlineTable();
     if ( aRedlineTable.empty() )
@@ -1589,8 +1598,17 @@ bool SwTable::HasDeletedRow() const
     SwRedlineTable::size_type nRedlinePos = 0;
     for (size_t i = 0; i < m_aLines.size(); ++i)
     {
+        // has a deleted row
         if ( m_aLines[i]->IsDeleted(nRedlinePos) )
             return true;
+
+        // has a deleted cell in the not deleted row
+        SwTableBoxes& rBoxes = m_aLines[i]->GetTabBoxes();
+        for( size_t j = 0; j < rBoxes.size(); ++j )
+        {
+            if ( RedlineType::Delete == rBoxes[j]->GetRedlineType() )
+                return true;
+        }
     }
     return false;
 }
@@ -1608,6 +1626,128 @@ bool SwTable::IsDeleted() const
             return false;
     }
     return true;
+}
+
+void SwTable::GatherFormulas(std::vector<SwTableBoxFormula*>& rvFormulas)
+{
+    for(const SfxPoolItem* pItem: GetFrameFormat()->GetDoc()->GetAttrPool().GetItemSurrogates(RES_BOXATR_FORMULA))
+    {
+        auto pBoxFormula = dynamic_cast<const SwTableBoxFormula*>(pItem);
+        assert(pBoxFormula); // use StaticWhichCast instead?
+        if(!pBoxFormula->GetDefinedIn())
+            continue;
+        const SwNode* pNd = pBoxFormula->GetNodeOfFormula();
+        if(!pNd || &pNd->GetNodes() != &pNd->GetDoc().GetNodes()) // is this ever valid or should we assert here?
+            continue;
+        rvFormulas.push_back(const_cast<SwTableBoxFormula*>(pBoxFormula));
+    }
+}
+
+void SwTable::Split(OUString sNewTableName, sal_uInt16 nSplitLine, SwHistory* pHistory)
+{
+    SwTableFormulaUpdate aHint(this);
+    aHint.m_eFlags = TBL_SPLITTBL;
+    aHint.m_aData.pNewTableNm = &sNewTableName;
+    aHint.m_nSplitLine = nSplitLine;
+
+    std::vector<SwTableBoxFormula*> vFormulas;
+    GatherFormulas(vFormulas);
+    for(auto pBoxFormula: vFormulas)
+    {
+        const SwNode* pNd = pBoxFormula->GetNodeOfFormula();
+        const SwTableNode* pTableNd = pNd->FindTableNode();
+        if(pTableNd == nullptr)
+            continue;
+        if(&pTableNd->GetTable() == this)
+        {
+            sal_uInt16 nLnPos = SwTableFormula::GetLnPosInTable(*this, pBoxFormula->GetTableBox());
+            aHint.m_bBehindSplitLine = USHRT_MAX != nLnPos && aHint.m_nSplitLine <= nLnPos;
+        }
+        else
+            aHint.m_bBehindSplitLine = false;
+        pBoxFormula->ToSplitMergeBoxNmWithHistory(aHint, pHistory);
+    }
+}
+
+void SwTable::Merge(SwTable& rTable, SwHistory* pHistory)
+{
+    SwTableFormulaUpdate aHint(this);
+    aHint.m_eFlags = TBL_MERGETBL;
+    aHint.m_aData.pDelTable = &rTable;
+    std::vector<SwTableBoxFormula*> vFormulas;
+    GatherFormulas(vFormulas);
+    for(auto pBoxFormula: vFormulas)
+        pBoxFormula->ToSplitMergeBoxNmWithHistory(aHint, pHistory);
+}
+
+void SwTable::UpdateFields(TableFormulaUpdateFlags eFlags)
+{
+    auto pDoc = GetFrameFormat()->GetDoc();
+    auto pFieldType = pDoc->getIDocumentFieldsAccess().GetFieldType(SwFieldIds::Table, OUString(), false);
+    if(!pFieldType)
+        return;
+    std::vector<SwFormatField*> vFields;
+    pFieldType->GatherFields(vFields);
+    for(auto pFormatField : vFields)
+    {
+        SwTableField* pField = static_cast<SwTableField*>(pFormatField->GetField());
+        // table where this field is located
+        const SwTableNode* pTableNd;
+        const SwTextNode& rTextNd = pFormatField->GetTextField()->GetTextNode();
+        pTableNd = rTextNd.FindTableNode();
+        if(pTableNd == nullptr || &pTableNd->GetTable() != this)
+            continue;
+
+        switch(eFlags)
+        {
+            case TBL_BOXNAME:
+                // to the external representation
+                pField->PtrToBoxNm(this);
+                break;
+            case TBL_RELBOXNAME:
+                // to the relative representation
+                pField->ToRelBoxNm(this);
+                break;
+            case TBL_BOXPTR:
+                // to the internal representation
+                // JP 17.06.96: internal representation on all formulas
+                //              (reference to other table!!!)
+                pField->BoxNmToPtr( &pTableNd->GetTable() );
+                break;
+            default:
+                assert(false); // Only TBL_BOXNAME, TBL_RELBOXNAME and TBL_BOXPTR are supported
+                break;
+        }
+    }
+    // process all table box formulas
+    for(const SfxPoolItem* pItem : pDoc->GetAttrPool().GetItemSurrogates(RES_BOXATR_FORMULA))
+    {
+        auto pBoxFormula = const_cast<SwTableBoxFormula*>(pItem->DynamicWhichCast(RES_BOXATR_FORMULA));
+        if(pBoxFormula && pBoxFormula->GetDefinedIn())
+        {
+            if(eFlags == TBL_BOXPTR)
+                pBoxFormula->TryBoxNmToPtr();
+            else if(eFlags == TBL_RELBOXNAME)
+                pBoxFormula->TryRelBoxNm();
+            else
+                pBoxFormula->ChangeState();
+        }
+    }
+}
+
+void SwTable::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwTable"));
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("table-format"), "%p", GetFrameFormat());
+    for (const auto& pLine : GetTabLines())
+    {
+        (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwTableLine"));
+        (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", pLine);
+        pLine->GetFrameFormat()->dumpAsXml(pWriter);
+        (void)xmlTextWriterEndElement(pWriter);
+    }
+    (void)xmlTextWriterEndElement(pWriter);
 }
 
 // TODO Set HasTextChangesOnly=true, if needed based on the redlines in the cells.
@@ -1766,6 +1906,27 @@ SwRedlineTable::size_type SwTableLine::UpdateTextChangesOnly(
     return nRet;
 }
 
+SwRedlineTable::size_type SwTableLine::GetTableRedline() const
+{
+    const SwRedlineTable& aRedlineTable = GetFrameFormat()->GetDoc()->getIDocumentRedlineAccess().GetRedlineTable();
+    const SwStartNode* pFirstBox = GetTabBoxes().front()->GetSttNd();
+    const SwStartNode* pLastBox = GetTabBoxes().back()->GetSttNd();
+
+    // Box with no start node
+    if ( !pFirstBox || !pLastBox )
+        return SwRedlineTable::npos;
+
+    const SwPosition aLineStart(*pFirstBox);
+    const SwPosition aLineEnd(*pLastBox);
+    SwRedlineTable::size_type n = 0;
+
+    const SwRangeRedline* pFnd = aRedlineTable.FindAtPosition( aLineStart, n, /*next=*/false );
+    if( pFnd && *pFnd->Start() < aLineStart && *pFnd->End() > aLineEnd )
+        return n;
+
+    return SwRedlineTable::npos;
+}
+
 bool SwTableLine::IsTracked(SwRedlineTable::size_type& rRedlinePos, bool bOnlyDeleted) const
 {
    SwRedlineTable::size_type nPos = UpdateTextChangesOnly(rRedlinePos);
@@ -1782,7 +1943,19 @@ bool SwTableLine::IsTracked(SwRedlineTable::size_type& rRedlinePos, bool bOnlyDe
 
 bool SwTableLine::IsDeleted(SwRedlineTable::size_type& rRedlinePos) const
 {
-   return IsTracked(rRedlinePos, true);
+   // if not a deleted row, check the deleted columns
+   if ( !IsTracked(rRedlinePos, /*bOnlyDeleted=*/true) )
+   {
+       const SwTableBoxes& rBoxes = GetTabBoxes();
+       for( size_t i = 0; i < rBoxes.size(); ++i )
+       {
+           // there is a not deleted column
+           if ( rBoxes[i]->GetRedlineType() != RedlineType::Delete )
+               return false;
+       }
+   }
+
+   return true;
 }
 
 RedlineType SwTableLine::GetRedlineType() const
@@ -1808,6 +1981,11 @@ RedlineType SwTableLine::GetRedlineType() const
     else if ( RedlineType::None != m_eRedlineType )
         // empty the cache
         const_cast<SwTableLine*>(this)->SetRedlineType( RedlineType::None );
+
+    // is the whole table part of a changed text
+    SwRedlineTable::size_type nTableRedline = GetTableRedline();
+    if ( nTableRedline != SwRedlineTable::npos )
+        return aRedlineTable[nTableRedline]->GetType();
 
     return RedlineType::None;
 }
@@ -2088,6 +2266,16 @@ bool SwTableBox::IsEmpty( bool bWithRemainingNestedTable ) const
         const SwContentNode *pCNd = pFirstNode->GetContentNode();
         if ( pCNd && !pCNd->Len() )
             return true;
+
+        // tdf#157011 OOXML w:std cell content is imported with terminating 0x01 characters,
+        // i.e. an empty box can contain double 0x01: handle it to avoid losing change tracking
+        // FIXME regression since commit b5c616d10bff3213840d4893d13b4493de71fa56
+        if ( pCNd && pCNd->Len() == 2 && pCNd->GetTextNode() )
+        {
+            const OUString &rText = pCNd->GetTextNode()->GetText();
+            if ( rText[0] == 0x01 && rText[1] == 0x01 )
+                return true;
+        }
     }
     else if ( bWithRemainingNestedTable )
     {
@@ -2108,20 +2296,6 @@ bool SwTable::GetInfo( SfxPoolItem& rInfo ) const
 {
     switch( rInfo.Which() )
     {
-        case RES_AUTOFMT_DOCNODE:
-        {
-            const SwTableNode* pNode = GetTableNode();
-            if (pNode && &pNode->GetNodes() == static_cast<SwAutoFormatGetDocNode&>(rInfo).pNodes)
-            {
-                if (!m_TabSortContentBoxes.empty())
-                {
-                    SwNodeIndex aIdx( *m_TabSortContentBoxes[0]->GetSttNd() );
-                    GetFrameFormat()->GetDoc()->GetNodes().GoNext( &aIdx );
-                }
-                return false;
-            }
-            break;
-        }
         case RES_FINDNEARESTNODE:
             if( GetFrameFormat() &&
                 GetFrameFormat()->GetFormatAttr( RES_PAGEDESC ).GetPageDesc() &&
@@ -2130,10 +2304,6 @@ bool SwTable::GetInfo( SfxPoolItem& rInfo ) const
                 static_cast<SwFindNearestNode&>(rInfo).CheckNode( *
                     m_TabSortContentBoxes[0]->GetSttNd()->FindTableNode() );
             break;
-
-        case RES_CONTENT_VISIBLE:
-            static_cast<SwPtrMsgPoolItem&>(rInfo).pObject = SwIterator<SwFrame,SwFormat>( *GetFrameFormat() ).First();
-            return false;
     }
     return true;
 }
@@ -2591,7 +2761,7 @@ void SwTableBoxFormat::SwClientNotify(const SwModify& rMod, const SfxHint& rHint
             break;
     }
 
-    // something changed and some BoxAttribut remained in the set!
+    // something changed and some BoxAttribute remained in the set!
     if( pNewFormat || pNewFormula || pNewVal )
     {
         GetDoc()->getIDocumentFieldsAccess().SetFieldsDirty(true, nullptr, SwNodeOffset(0));
@@ -2815,6 +2985,60 @@ void SwTableBox::ActualiseValueBox()
         if( rText != sNewText )
             ChgTextToNum( *this, sNewText, pCol, false ,nNdPos);
     }
+}
+
+SwRedlineTable::size_type SwTableBox::GetRedline() const
+{
+    const SwRedlineTable& aRedlineTable = GetFrameFormat()->GetDoc()->getIDocumentRedlineAccess().GetRedlineTable();
+    const SwStartNode *pSttNd = GetSttNd();
+
+    if ( aRedlineTable.empty() || !pSttNd )
+        return SwRedlineTable::npos;
+
+    // check table row property "HasTextChangesOnly", if it's defined and its value is
+    // false, return with the first redline of the cell
+    const SvxPrintItem *pHasTextChangesOnlyProp =
+            GetFrameFormat()->GetAttrSet().GetItem<SvxPrintItem>(RES_PRINT);
+    if ( !pHasTextChangesOnlyProp || pHasTextChangesOnlyProp->GetValue() )
+        return SwRedlineTable::npos;
+
+    SwPosition aCellStart( *GetSttNd(), SwNodeOffset(0) );
+    SwPosition aCellEnd( *GetSttNd()->EndOfSectionNode(), SwNodeOffset(-1) );
+    SwNodeIndex pEndNodeIndex(aCellEnd.GetNode());
+    SwRedlineTable::size_type nRedlinePos = 0;
+    for( ; nRedlinePos < aRedlineTable.size(); ++nRedlinePos )
+    {
+        const SwRangeRedline* pRedline = aRedlineTable[ nRedlinePos ];
+
+        if ( pRedline->Start()->GetNodeIndex() > pEndNodeIndex.GetIndex() )
+        {
+            // no more redlines in the actual cell,
+            // check the next ones
+            break;
+        }
+
+        // redline in the cell
+        if ( aCellStart <= *pRedline->Start() )
+            return nRedlinePos;
+    }
+
+    return SwRedlineTable::npos;
+}
+
+RedlineType SwTableBox::GetRedlineType() const
+{
+    SwRedlineTable::size_type nPos = GetRedline();
+    if ( nPos != SwRedlineTable::npos )
+    {
+        const SwRedlineTable& aRedlineTable = GetFrameFormat()->GetDoc()->getIDocumentRedlineAccess().GetRedlineTable();
+        const SwRangeRedline* pRedline = aRedlineTable[ nPos ];
+        if ( RedlineType::Delete == pRedline->GetType() ||
+             RedlineType::Insert == pRedline->GetType() )
+        {
+            return pRedline->GetType();
+        }
+    }
+    return RedlineType::None;
 }
 
 struct SwTableCellInfo::Impl

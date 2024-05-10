@@ -146,7 +146,7 @@ public class ToolbarController implements Toolbar.OnMenuItemClickListener {
             @Override
             public void run() {
                 mMainMenu.setGroupVisible(R.id.group_edit_actions, false);
-                mToolbarTop.setNavigationIcon(R.drawable.lo_icon);
+                mToolbarTop.setNavigationIcon(R.mipmap.ic_launcher);
                 mToolbarTop.setLogo(null);
                 setEditModeOn(false);
                 mContext.hideBottomToolbar();
@@ -245,6 +245,8 @@ public class ToolbarController implements Toolbar.OnMenuItemClickListener {
                 // but current document is readonly
                 Toast.makeText(mContext, mContext.getString(R.string.readonly_file), Toast.LENGTH_LONG).show();
             }
+        } else {
+            hideItem(R.id.action_save);
         }
         mMainMenu.findItem(R.id.action_parts).setVisible(mContext.isDrawerEnabled());
     }

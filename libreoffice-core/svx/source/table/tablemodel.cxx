@@ -39,6 +39,7 @@
 #include "tablecolumns.hxx"
 #include "tableundo.hxx"
 #include <o3tl/safeint.hxx>
+#include <sdr/properties/cellproperties.hxx>
 #include <svx/svdotable.hxx>
 #include <svx/svdmodel.hxx>
 #include <svx/strings.hrc>
@@ -552,7 +553,7 @@ void TableModel::notifyModification()
         if( pModifyListeners )
         {
             lang::EventObject aSource;
-            aSource.Source = static_cast< ::cppu::OWeakObject* >(this);
+            aSource.Source = getXWeak();
             pModifyListeners->notifyEach(&util::XModifyListener::modified, aSource);
         }
     }
@@ -979,7 +980,7 @@ void TableModel::optimize()
             {
                 try
                 {
-                    static const OUStringLiteral sWidth(u"Width");
+                    static constexpr OUString sWidth(u"Width"_ustr);
                     sal_Int32 nWidth1 = 0, nWidth2 = 0;
                     uno::Reference<beans::XPropertySet> xSet1( static_cast< XCellRange* >( maColumns[nCol].get() ), uno::UNO_QUERY_THROW );
                     uno::Reference<beans::XPropertySet> xSet2( static_cast< XCellRange* >( maColumns[nCol-1].get() ), uno::UNO_QUERY_THROW );
@@ -1016,7 +1017,7 @@ void TableModel::optimize()
             {
                 try
                 {
-                    static const OUStringLiteral sHeight(u"Height");
+                    static constexpr OUString sHeight(u"Height"_ustr);
                     sal_Int32 nHeight1 = 0, nHeight2 = 0;
                     uno::Reference<beans::XPropertySet> xSet1( static_cast< XCellRange* >( maRows[nRow].get() ), uno::UNO_QUERY_THROW );
                     uno::Reference<beans::XPropertySet> xSet2( static_cast< XCellRange* >( maRows[nRow-1].get() ), uno::UNO_QUERY_THROW );

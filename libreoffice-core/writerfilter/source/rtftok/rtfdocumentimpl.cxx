@@ -8,9 +8,11 @@
  */
 
 #include "rtfdocumentimpl.hxx"
+
 #include <algorithm>
 #include <memory>
 #include <string_view>
+
 #include <com/sun/star/embed/XEmbeddedObject.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/io/WrongFormatException.hpp>
@@ -18,6 +20,8 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
 #include <com/sun/star/text/XDependentTextField.hpp>
+#include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
+
 #include <i18nlangtag/languagetag.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <unotools/streamwrap.hxx>
@@ -31,9 +35,8 @@
 #include <comphelper/classids.hxx>
 #include <comphelper/embeddedobjectcontainer.hxx>
 #include <svl/lngmisc.hxx>
-#include <sfx2/sfxbasemodel.hxx>
 #include <sfx2/classificationhelper.hxx>
-#include <oox/mathml/import.hxx>
+#include <oox/mathml/imexport.hxx>
 #include <ooxml/resourceids.hxx>
 #include <oox/token/namespaces.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
@@ -327,7 +330,6 @@ RTFDocumentImpl::RTFDocumentImpl(uno::Reference<uno::XComponentContext> const& x
     , m_hasFHeader(false)
     , m_hasRFooter(false)
     , m_hasFFooter(false)
-    , m_bAfterCellBeforeRow(false)
 {
     OSL_ASSERT(xInputStream.is());
     m_pInStream = utl::UcbStreamHelper::CreateStream(xInputStream, true);
@@ -343,6 +345,9 @@ RTFDocumentImpl::RTFDocumentImpl(uno::Reference<uno::XComponentContext> const& x
 
     m_pTokenizer = new RTFTokenizer(*this, m_pInStream.get(), m_xStatusIndicator);
     m_pSdrImport = new RTFSdrImport(*this, m_xDstDoc);
+
+    // unlike OOXML, this is enabled by default
+    m_aSettingsTableSprms.set(NS_ooxml::LN_CT_Compat_splitPgBreakAndParaMark, new RTFValue(1));
 }
 
 RTFDocumentImpl::~RTFDocumentImpl() = default;
@@ -393,7 +398,7 @@ void RTFDocumentImpl::resolveSubstream(std::size_t nPos, Id nId, OUString const&
 void RTFDocumentImpl::outputSettingsTable()
 {
     // tdf#136740: do not change target document settings when pasting
-    if (!m_bIsNewDoc)
+    if (!m_bIsNewDoc || isSubstream())
         return;
     writerfilter::Reference<Properties>::Pointer_t pProp
         = new RTFReferenceProperties(m_aSettingsTableAttributes, m_aSettingsTableSprms);
@@ -555,7 +560,6 @@ RTFDocumentImpl::getProperties(const RTFSprms& rAttributes, RTFSprms const& rSpr
             }
         }
 
-        // Get rid of direct formatting what is already in the style.
         RTFSprms sprms(aSprms.cloneAndDeduplicate(aStyleSprms, nStyleType, true, &aSprms));
         RTFSprms attributes(rAttributes.cloneAndDeduplicate(aStyleAttributes, nStyleType, true));
         return new RTFReferenceProperties(std::move(attributes), std::move(sprms));
@@ -642,13 +646,14 @@ void RTFDocumentImpl::runProps()
 
 void RTFDocumentImpl::runBreak()
 {
-    sal_uInt8 const sBreak[] = { 0xd };
-    Mapper().text(sBreak, 1);
+    sal_Unicode const sBreak[] = { 0x0d };
+    Mapper().utext(sBreak, 1);
     m_bNeedCr = false;
 }
 
 void RTFDocumentImpl::tableBreak()
 {
+    checkFirstRun(); // ooo113308-1.rtf has a header at offset 151084 that doesn't startParagraphGroup() without this
     runBreak();
     Mapper().endParagraphGroup();
     Mapper().startParagraphGroup();
@@ -667,7 +672,10 @@ void RTFDocumentImpl::parBreak()
     m_bHadPicture = false;
 
     // start new one
-    Mapper().startParagraphGroup();
+    if (!m_bParAtEndOfSection)
+    {
+        Mapper().startParagraphGroup();
+    }
 }
 
 void RTFDocumentImpl::sectBreak(bool bFinal)
@@ -681,14 +689,26 @@ void RTFDocumentImpl::sectBreak(bool bFinal)
     // unless this is the end of the doc, we had nothing since the last section break and this is not a continuous one.
     // Also, when pasting, it's fine to not have any paragraph inside the document at all.
     if (m_bNeedPar && (!bFinal || m_bNeedSect || bContinuous) && !isSubstream() && m_bIsNewDoc)
+    {
+        m_bParAtEndOfSection = true;
         dispatchSymbol(RTFKeyword::PAR);
+    }
     // It's allowed to not have a non-table paragraph at the end of an RTF doc, add it now if required.
     if (m_bNeedFinalPar && bFinal)
     {
         dispatchFlag(RTFKeyword::PARD);
+        m_bParAtEndOfSection = true;
         dispatchSymbol(RTFKeyword::PAR);
         m_bNeedSect = bNeedSect;
     }
+    // testTdf148515, if RTF ends with \row, endParagraphGroup() must be called!
+    if (!m_bParAtEndOfSection || m_aStates.top().getCurrentBuffer())
+    {
+        Mapper().endParagraphGroup(); // < top para context dies with page break
+    }
+    m_bParAtEndOfSection = false;
+    // paragraph properties are *done* now - only section properties following
+
     while (!m_nHeaderFooterPositions.empty())
     {
         std::pair<Id, std::size_t> aPair = m_nHeaderFooterPositions.front();
@@ -721,7 +741,6 @@ void RTFDocumentImpl::sectBreak(bool bFinal)
 
     // The trick is that we send properties of the previous section right now, which will be exactly what dmapper expects.
     Mapper().props(pProperties);
-    Mapper().endParagraphGroup();
 
     // End Section
     if (!m_pSuperstream)
@@ -789,8 +808,9 @@ OUString RTFDocumentImpl::getStyleName(int nIndex)
     if (!m_pSuperstream)
     {
         OUString aRet;
-        if (m_aStyleNames.find(nIndex) != m_aStyleNames.end())
-            aRet = m_aStyleNames[nIndex];
+        auto it = m_aStyleNames.find(nIndex);
+        if (it != m_aStyleNames.end())
+            aRet = it->second;
         return aRet;
     }
 
@@ -802,8 +822,9 @@ Id RTFDocumentImpl::getStyleType(int nIndex)
     if (!m_pSuperstream)
     {
         Id nRet = 0;
-        if (m_aStyleTypes.find(nIndex) != m_aStyleTypes.end())
-            nRet = m_aStyleTypes[nIndex];
+        auto it = m_aStyleTypes.find(nIndex);
+        if (it != m_aStyleTypes.end())
+            nRet = it->second;
         return nRet;
     }
 
@@ -1048,6 +1069,16 @@ void RTFDocumentImpl::resolvePict(bool const bInline, uno::Reference<drawing::XS
     RTFSprms aAttributes;
     // shape attribute
     RTFSprms aPicAttributes;
+    if (m_aStates.top().getPicture().nCropT != 0 || m_aStates.top().getPicture().nCropB != 0
+        || m_aStates.top().getPicture().nCropL != 0 || m_aStates.top().getPicture().nCropR != 0)
+    {
+        text::GraphicCrop const crop{ m_aStates.top().getPicture().nCropT,
+                                      m_aStates.top().getPicture().nCropB,
+                                      m_aStates.top().getPicture().nCropL,
+                                      m_aStates.top().getPicture().nCropR };
+        auto const pCrop = new RTFValue(crop);
+        aPicAttributes.set(NS_ooxml::LN_CT_BlipFillProperties_srcRect, pCrop);
+    }
     auto pShapeValue = new RTFValue(xShape);
     aPicAttributes.set(NS_ooxml::LN_shape, pShapeValue);
     // pic sprm
@@ -1331,8 +1362,6 @@ RTFError RTFDocumentImpl::resolveChars(char ch)
     return RTFError::OK;
 }
 
-bool RTFFrame::inFrame() const { return m_nW > 0 || m_nH > 0 || m_nX > 0 || m_nY > 0; }
-
 void RTFDocumentImpl::singleChar(sal_uInt8 nValue, bool bRunProps)
 {
     sal_uInt8 sValue[] = { nValue };
@@ -1609,7 +1638,7 @@ void RTFDocumentImpl::text(OUString& rString)
         runProps();
 
     if (!pCurrentBuffer)
-        Mapper().utext(reinterpret_cast<sal_uInt8 const*>(rString.getStr()), rString.getLength());
+        Mapper().utext(rString.getStr(), rString.getLength());
     else
     {
         auto pValue = new RTFValue(rString);
@@ -1758,8 +1787,7 @@ void RTFDocumentImpl::replayBuffer(RTFBuffer_t& rBuffer, RTFSprms* const pSprms,
         else if (std::get<0>(aTuple) == BUFFER_UTEXT)
         {
             OUString const aString(std::get<1>(aTuple)->getString());
-            Mapper().utext(reinterpret_cast<sal_uInt8 const*>(aString.getStr()),
-                           aString.getLength());
+            Mapper().utext(aString.getStr(), aString.getLength());
         }
         else if (std::get<0>(aTuple) == BUFFER_ENDRUN)
             Mapper().endCharacterGroup();
@@ -2116,6 +2144,8 @@ RTFError RTFDocumentImpl::pushState()
         case Destination::FIELDRESULT:
         case Destination::SHAPETEXT:
         case Destination::FORMFIELD:
+            //TODO: if this is pushed then the font encoding is used which results in a broken command string
+            // if it is not pushed to NORMAL then it is not restored in time.
         case Destination::FIELDINSTRUCTION:
         case Destination::PICT:
             m_aStates.top().setDestination(Destination::NORMAL);
@@ -2339,7 +2369,7 @@ RTFError RTFDocumentImpl::beforePopState(RTFParserState& rState)
 
             if (m_aStates.top().isFieldLocked())
                 singleChar(cFieldLock);
-            singleChar(cFieldSep);
+            singleChar(cFieldSep, true);
         }
         break;
         case Destination::FIELDRESULT:
@@ -2565,8 +2595,8 @@ RTFError RTFDocumentImpl::beforePopState(RTFParserState& rState)
                                  : std::u16string_view(u"TC"));
             str = OUString::Concat(field) + " \"" + str.replaceAll("\"", "\\\"") + "\"";
             singleChar(cFieldStart);
-            Mapper().utext(reinterpret_cast<sal_uInt8 const*>(str.getStr()), str.getLength());
-            singleChar(cFieldSep);
+            Mapper().utext(str.getStr(), str.getLength());
+            singleChar(cFieldSep, true);
             // no result
             singleChar(cFieldEnd);
         }
@@ -2947,7 +2977,11 @@ RTFError RTFDocumentImpl::beforePopState(RTFParserState& rState)
         case Destination::SHAPE:
             m_bNeedFinalPar = true;
             m_bNeedCr = m_bNeedCrOrig;
-            if (rState.getFrame().inFrame())
+            // tdf#47036 insert paragraph break for graphic object inside text
+            // frame at start of document - TODO: the object may actually be
+            // anchored inside the text frame and this ends up putting the
+            // anchor in the body, but better than losing the shape...
+            if (rState.getFrame().hasProperties() && m_pSdrImport->isTextGraphicObject())
             {
                 // parBreak() modifies m_aStates.top() so we can't apply resetFrame() directly on aState
                 resetFrame();
@@ -2970,12 +3004,9 @@ RTFError RTFDocumentImpl::beforePopState(RTFParserState& rState)
             {
                 uno::Reference<util::XCloseable> xComponent(xObject->getComponent(),
                                                             uno::UNO_SET_THROW);
-                // gcc4.4 (and 4.3 and possibly older) have a problem with dynamic_cast directly to the target class,
-                // so help it with an intermediate cast. I'm not sure what exactly the problem is, seems to be unrelated
-                // to RTLD_GLOBAL, so most probably a gcc bug.
-                auto& rImport = dynamic_cast<oox::FormulaImportBase&>(
-                    dynamic_cast<SfxBaseModel&>(*xComponent));
-                rImport.readFormulaOoxml(m_aMathBuffer);
+                if (oox::FormulaImExportBase* pImport
+                    = dynamic_cast<oox::FormulaImExportBase*>(xComponent.get()))
+                    pImport->readFormulaOoxml(m_aMathBuffer);
 
                 auto pValue = new RTFValue(xObject);
                 RTFSprms aMathAttributes;
@@ -3613,7 +3644,7 @@ RTFError RTFDocumentImpl::popState()
 
     checkUnicode(/*bUnicode =*/true, /*bHex =*/true);
     RTFParserState aState(m_aStates.top());
-    m_bWasInFrame = aState.getFrame().inFrame();
+    m_bWasInFrame = aState.getFrame().hasProperties();
 
     // dmapper expects some content in header/footer, so if there would be nothing, add an empty paragraph.
     if (m_pTokenizer->getGroup() == 1 && m_bFirstRun)
@@ -3654,10 +3685,28 @@ RTFError RTFDocumentImpl::popState()
         // \par means an empty paragraph at the end of footnotes/endnotes, but
         // not in case of other substreams, like headers.
         if (m_bNeedCr && m_nStreamType != NS_ooxml::LN_footnote
-            && m_nStreamType != NS_ooxml::LN_endnote && m_bIsNewDoc)
+            && m_nStreamType != NS_ooxml::LN_endnote)
+        {
+            if (!m_bIsNewDoc)
+            {
+                // Make sure all the paragraph settings are set, but do not add next paragraph
+                Mapper().markLastParagraph();
+            }
             dispatchSymbol(RTFKeyword::PAR);
+        }
         if (m_bNeedSect) // may be set by dispatchSymbol above!
             sectBreak(true);
+        else if (!m_pSuperstream)
+        {
+            Mapper().markLastSectionGroup(); // ensure it's set for \par below
+        }
+        if (m_bNeedPar && !m_pSuperstream)
+        {
+            assert(!m_bNeedSect);
+            dispatchSymbol(RTFKeyword::PAR);
+            m_bNeedSect = false; // reset - m_bNeedPar was set for \sect at
+                // end of doc so don't need another one
+        }
     }
 
     m_aStates.pop();
@@ -3704,8 +3753,7 @@ RTFError RTFDocumentImpl::handleEmbeddedObject()
 
     uno::Reference<io::XInputStream> xInputStream(
         new utl::OSeekableInputStreamWrapper(pStream.release(), /*_bOwner=*/true));
-    auto pStreamValue = new RTFValue(xInputStream);
-    m_aOLEAttributes.set(NS_ooxml::LN_inputstream, pStreamValue);
+    m_aOLEAttributes.set(NS_ooxml::LN_inputstream, new RTFValue(xInputStream));
 
     return RTFError::OK;
 }
@@ -3772,8 +3820,11 @@ void RTFDocumentImpl::checkUnicode(bool bUnicode, bool bHex)
     if (bHex && !m_aHexBuffer.isEmpty())
     {
         rtl_TextEncoding nEncoding = m_aStates.top().getCurrentEncoding();
-        if (m_aStates.top().getDestination() == Destination::FONTENTRY
-            && m_aStates.top().getCurrentEncoding() == RTL_TEXTENCODING_SYMBOL)
+        if (nEncoding == RTL_TEXTENCODING_SYMBOL
+            && (m_aStates.top().getDestination() == Destination::FONTENTRY
+                || (m_aStates.size() > 1
+                    && m_aStates[m_aStates.size() - 2].getDestination()
+                           == Destination::FIELDINSTRUCTION)))
             nEncoding = RTL_TEXTENCODING_MS_1252;
         OUString aString = OStringToOUString(m_aHexBuffer, nEncoding);
         m_aHexBuffer.setLength(0);
@@ -3853,11 +3904,6 @@ RTFFrame::RTFFrame(RTFParserState* pParserState)
 
 void RTFFrame::setSprm(Id nId, Id nValue)
 {
-    if (m_pDocumentImpl->getFirstRun() && !m_pDocumentImpl->isStyleSheetImport())
-    {
-        m_pDocumentImpl->checkFirstRun();
-        m_pDocumentImpl->setNeedPar(false);
-    }
     switch (nId)
     {
         case NS_ooxml::LN_CT_FramePr_w:
@@ -3895,6 +3941,12 @@ void RTFFrame::setSprm(Id nId, Id nValue)
             break;
         default:
             break;
+    }
+
+    if (m_pDocumentImpl->getFirstRun() && !m_pDocumentImpl->isStyleSheetImport() && hasProperties())
+    {
+        m_pDocumentImpl->checkFirstRun();
+        m_pDocumentImpl->setNeedPar(false);
     }
 }
 
@@ -3950,7 +4002,7 @@ RTFSprms RTFFrame::getSprms()
             case NS_ooxml::LN_CT_FramePr_hAnchor:
             {
                 if (m_nHoriAnchor == 0)
-                    m_nHoriAnchor = NS_ooxml::LN_Value_doc_ST_HAnchor_margin;
+                    m_nHoriAnchor = NS_ooxml::LN_Value_doc_ST_HAnchor_text;
                 pValue = new RTFValue(m_nHoriAnchor);
             }
             break;
@@ -3995,9 +4047,13 @@ RTFSprms RTFFrame::getSprms()
 
 bool RTFFrame::hasProperties() const
 {
-    return m_nX != 0 || m_nY != 0 || m_nW != 0 || m_nH != 0 || m_nHoriPadding != 0
-           || m_nVertPadding != 0 || m_nHoriAlign != 0 || m_nHoriAnchor != 0 || m_nVertAlign != 0
-           || m_nVertAnchor != 0;
+    // tdf#153178 \dxfrtext \dfrmtxtx \dfrmtxty \wrapdefault do *not* create frame
+    return m_nX != 0 || m_nY != 0 || m_nW != 0 || m_nH != 0
+           || (m_nHoriAlign && m_nHoriAlign != NS_ooxml::LN_Value_doc_ST_XAlign_left)
+           || (m_nHoriAnchor && m_nHoriAnchor != NS_ooxml::LN_Value_doc_ST_HAnchor_text)
+           || (m_nVertAlign && m_nVertAlign != NS_ooxml::LN_Value_doc_ST_YAlign_inline)
+           || (m_nVertAnchor && m_nVertAnchor != NS_ooxml::LN_Value_doc_ST_VAnchor_margin)
+           || (m_oWrap && *m_oWrap != NS_ooxml::LN_Value_doc_ST_Wrap_auto);
 }
 
 } // namespace writerfilter

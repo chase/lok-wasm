@@ -683,8 +683,7 @@ bool MathType::HandleRecords(int nLevel, sal_uInt8 nSelector,
             {
                 OUString aStr;
                 TypeFaceToString(aStr,nTypeFace);
-                aStr += "\"";
-                rRet.insert(nTextStart,aStr);
+                rRet.insert(nTextStart, aStr + "\"");
                 rRet.append("\"");
             }
             else if (nRecord == END && !rRet.isEmpty())
@@ -1916,7 +1915,7 @@ bool MathType::ConvertFromStarMath( SfxMedium& rMedium )
         pS->WriteUChar( 0x01 );
         pS->WriteUChar( 0x03 );
         pS->WriteUChar( 0x00 );
-        sal_uInt32 nSize = pS->Tell();
+        sal_uInt64 nSize = pS->Tell();
         nPendingAttributes=0;
 
         HandleNodes(pTree, 0);
@@ -1977,16 +1976,6 @@ void MathType::HandleNodes(SmNode *pNode,int nLevel)
         case SmNodeType::SubSup:
             HandleSubSupScript(pNode,nLevel);
             break;
-        case SmNodeType::Expression:
-        {
-            size_t nSize = pNode->GetNumSubNodes();
-            for (size_t i = 0; i < nSize; ++i)
-            {
-                if (SmNode *pTemp = pNode->GetSubNode(i))
-                    HandleNodes(pTemp,nLevel+1);
-            }
-            break;
-        }
         case SmNodeType::Table:
             //Root Node, PILE equivalent, i.e. vertical stack
             HandleTable(pNode,nLevel);
@@ -2018,6 +2007,7 @@ void MathType::HandleNodes(SmNode *pNode,int nLevel)
             else
                 pS->WriteUInt16( 0xEB05 );
             break;
+        case SmNodeType::Expression: // same treatment as the default one
         default:
         {
             size_t nSize = pNode->GetNumSubNodes();
@@ -2895,8 +2885,7 @@ bool MathType::HandleChar(sal_Int32 &rTextStart, int &rSetSize, int nLevel,
             {
                 OUString aStr;
                 TypeFaceToString(aStr,nOldTypeFace);
-                aStr += "\"";
-                rRet.insert(std::min(rTextStart, rRet.getLength()), aStr);
+                rRet.insert(std::min(rTextStart, rRet.getLength()), aStr + "\"");
 
                 aStr.clear();
                 TypeFaceToString(aStr,nTypeFace);
@@ -2921,8 +2910,7 @@ bool MathType::HandleChar(sal_Int32 &rTextStart, int &rSetSize, int nLevel,
                 rRet.insert(nOldLen, "\"");
                 OUString aStr;
                 TypeFaceToString(aStr,nOldTypeFace);
-                aStr += "\"";
-                rRet.insert(rTextStart,aStr);
+                rRet.insert(rTextStart, aStr + "\"");
             }
             rTextStart = rRet.getLength();
         }
@@ -2934,8 +2922,7 @@ bool MathType::HandleChar(sal_Int32 &rTextStart, int &rSetSize, int nLevel,
                 rRet.insert(nOldLen, "\"");
                 OUString aStr;
                 TypeFaceToString(aStr,nOldTypeFace);
-                aStr += "\"";
-                rRet.insert(rTextStart, aStr);
+                rRet.insert(rTextStart, aStr + "\"");
             }
             rTextStart = rRet.getLength();
         }

@@ -56,6 +56,9 @@
 #include <vcl/svapp.hxx>
 #include <sal/log.hxx>
 #include <osl/diagnose.h>
+#include <o3tl/string_view.hxx>
+
+#include <hintids.hxx>
 
 #include "css1kywd.hxx"
 #include "svxcss1.hxx"
@@ -284,7 +287,7 @@ struct SvxCSS1ItemIds
     sal_uInt16 nOrphans;
     sal_uInt16 nFormatSplit;
 
-    TypedWhichId<SvxLRSpaceItem> nLRSpace{0};
+    // this looks a bit superfluous? TypedWhichId<SvxLRSpaceItem> nLRSpace{0};
     TypedWhichId<SvxULSpaceItem> nULSpace{0};
     sal_uInt16 nBox;
     sal_uInt16 nBrush;
@@ -739,7 +742,10 @@ SvxCSS1Parser::SvxCSS1Parser( SfxItemPool& rPool, OUString aBaseURL,
     aItemIds.nOrphans = initTrueWhich( SID_ATTR_PARA_ORPHANS );
     aItemIds.nFormatSplit = initTrueWhich( SID_ATTR_PARA_SPLIT );
 
-    aItemIds.nLRSpace = TypedWhichId<SvxLRSpaceItem>(initTrueWhich( SID_ATTR_LRSPACE ));
+    // every id that is used must be added
+    m_aWhichMap = m_aWhichMap.MergeRange(RES_MARGIN_FIRSTLINE, RES_MARGIN_FIRSTLINE);
+    m_aWhichMap = m_aWhichMap.MergeRange(RES_MARGIN_TEXTLEFT, RES_MARGIN_TEXTLEFT);
+    m_aWhichMap = m_aWhichMap.MergeRange(RES_MARGIN_RIGHT, RES_MARGIN_RIGHT);
     aItemIds.nULSpace = TypedWhichId<SvxULSpaceItem>(initTrueWhich( SID_ATTR_ULSPACE ));
     aItemIds.nBox = initTrueWhich( SID_ATTR_BORDER_OUTER );
     aItemIds.nBrush = initTrueWhich( SID_ATTR_BRUSH );
@@ -861,11 +867,11 @@ void SvxCSS1Parser::ParseStyleOption( const OUString& rIn,
 }
 
 bool SvxCSS1Parser::GetEnum( const CSS1PropertyEnum *pPropTable,
-                          const OUString &rValue, sal_uInt16& rEnum )
+                          std::u16string_view rValue, sal_uInt16& rEnum )
 {
     while( pPropTable->pName )
     {
-        if( !rValue.equalsIgnoreAsciiCaseAscii( pPropTable->pName ) )
+        if( !o3tl::equalsIgnoreAsciiCase( rValue, pPropTable->pName ) )
             pPropTable++;
         else
             break;
@@ -879,15 +885,8 @@ bool SvxCSS1Parser::GetEnum( const CSS1PropertyEnum *pPropTable,
 
 void SvxCSS1Parser::PixelToTwip( tools::Long &rWidth, tools::Long &rHeight )
 {
-    if( Application::GetDefaultDevice() )
-    {
-        Size aTwipSz( rWidth, rHeight );
-        aTwipSz = Application::GetDefaultDevice()->PixelToLogic( aTwipSz,
-                                                          MapMode(MapUnit::MapTwip) );
-
-        rWidth = aTwipSz.Width();
-        rHeight = aTwipSz.Height();
-    }
+    rWidth = o3tl::convert(rWidth, o3tl::Length::px, o3tl::Length::twip);
+    rHeight = o3tl::convert(rHeight, o3tl::Length::px, o3tl::Length::twip);
 }
 
 sal_uInt32 SvxCSS1Parser::GetFontHeight( sal_uInt16 nSize ) const
@@ -919,11 +918,9 @@ void SvxCSS1Parser::InsertMapEntry( const OUString& rKey,
                                     const SvxCSS1PropertyInfo& rProp,
                                     CSS1Map& rMap )
 {
-    CSS1Map::iterator itr = rMap.find(rKey);
-    if (itr == rMap.end())
-    {
-        rMap.insert(std::make_pair(rKey, std::make_unique<SvxCSS1MapEntry>(rItemSet, rProp)));
-    }
+    auto [itr,inserted] = rMap.insert(std::make_pair(rKey, nullptr));
+    if (inserted)
+        itr->second = std::make_unique<SvxCSS1MapEntry>(rItemSet, rProp);
     else
     {
         SvxCSS1MapEntry *const p = itr->second.get();
@@ -944,25 +941,24 @@ void SvxCSS1Parser::MergeStyles( const SfxItemSet& rSrcSet,
     }
     else
     {
-        SvxLRSpaceItem aLRSpace( rTargetSet.Get(aItemIds.nLRSpace) );
+        // not sure if this is really necessary?
+        SfxItemSet copy(rSrcSet);
+        if (!rSrcInfo.m_bTextIndent)
+        {
+            copy.ClearItem(RES_MARGIN_FIRSTLINE);
+        }
+        if (!rSrcInfo.m_bLeftMargin)
+        {
+            copy.ClearItem(RES_MARGIN_TEXTLEFT);
+        }
+        if (!rSrcInfo.m_bRightMargin)
+        {
+            copy.ClearItem(RES_MARGIN_RIGHT);
+        }
+
         SvxULSpaceItem aULSpace( rTargetSet.Get(aItemIds.nULSpace) );
 
-        rTargetSet.Put( rSrcSet );
-
-        if( rSrcInfo.m_bLeftMargin || rSrcInfo.m_bRightMargin ||
-            rSrcInfo.m_bTextIndent )
-        {
-            const SvxLRSpaceItem& rNewLRSpace = rSrcSet.Get( aItemIds.nLRSpace );
-
-            if( rSrcInfo.m_bLeftMargin )
-                aLRSpace.SetLeft( rNewLRSpace.GetLeft() );
-            if( rSrcInfo.m_bRightMargin )
-                aLRSpace.SetRight( rNewLRSpace.GetRight() );
-            if( rSrcInfo.m_bTextIndent )
-                aLRSpace.SetTextFirstLineOffset( rNewLRSpace.GetTextFirstLineOffset() );
-
-            rTargetSet.Put( aLRSpace );
-        }
+        rTargetSet.Put(copy);
 
         if( rSrcInfo.m_bTopMargin || rSrcInfo.m_bBottomMargin )
         {
@@ -1991,18 +1987,8 @@ static void ParseCSS1_text_indent( const CSS1Expression *pExpr,
     if( !bSet )
         return;
 
-    if( const SvxLRSpaceItem* pItem = rItemSet.GetItemIfSet( aItemIds.nLRSpace, false ) )
-    {
-        SvxLRSpaceItem aLRItem( *pItem );
-        aLRItem.SetTextFirstLineOffset( nIndent );
-        rItemSet.Put( aLRItem );
-    }
-    else
-    {
-        SvxLRSpaceItem aLRItem( aItemIds.nLRSpace );
-        aLRItem.SetTextFirstLineOffset( nIndent );
-        rItemSet.Put( aLRItem );
-    }
+    SvxFirstLineIndentItem const firstLine(nIndent, RES_MARGIN_FIRSTLINE);
+    rItemSet.Put(firstLine);
     rPropInfo.m_bTextIndent = true;
 }
 
@@ -2058,18 +2044,10 @@ static void ParseCSS1_margin_left( const CSS1Expression *pExpr,
     rPropInfo.m_nLeftMargin = nLeft;
     if( nLeft < 0 )
         nLeft = 0;
-    if( const SvxLRSpaceItem* pItem = rItemSet.GetItemIfSet( aItemIds.nLRSpace, false ) )
-    {
-        SvxLRSpaceItem aLRItem( *pItem );
-        aLRItem.SetTextLeft( o3tl::narrowing<sal_uInt16>(nLeft) );
-        rItemSet.Put( aLRItem );
-    }
-    else
-    {
-        SvxLRSpaceItem aLRItem( aItemIds.nLRSpace );
-        aLRItem.SetTextLeft( o3tl::narrowing<sal_uInt16>(nLeft) );
-        rItemSet.Put( aLRItem );
-    }
+
+    // TODO: other things may need a SvxLeftMarginItem ? but they currently convert it anyway so they can convert that too.
+    SvxTextLeftMarginItem const leftMargin(o3tl::narrowing<sal_uInt16>(nLeft), RES_MARGIN_TEXTLEFT);
+    rItemSet.Put(leftMargin);
     rPropInfo.m_bLeftMargin = true;
 }
 
@@ -2121,18 +2099,9 @@ static void ParseCSS1_margin_right( const CSS1Expression *pExpr,
     rPropInfo.m_nRightMargin = nRight;
     if( nRight < 0 )
         nRight = 0;
-    if( const SvxLRSpaceItem* pItem = rItemSet.GetItemIfSet( aItemIds.nLRSpace, false ) )
-    {
-        SvxLRSpaceItem aLRItem( *pItem );
-        aLRItem.SetRight( o3tl::narrowing<sal_uInt16>(nRight) );
-        rItemSet.Put( aLRItem );
-    }
-    else
-    {
-        SvxLRSpaceItem aLRItem( aItemIds.nLRSpace );
-        aLRItem.SetRight( o3tl::narrowing<sal_uInt16>(nRight) );
-        rItemSet.Put( aLRItem );
-    }
+
+    SvxRightMarginItem rightMargin(o3tl::narrowing<sal_uInt16>(nRight), RES_MARGIN_RIGHT);
+    rItemSet.Put(rightMargin);
     rPropInfo.m_bRightMargin = true;
 }
 
@@ -2349,23 +2318,15 @@ static void ParseCSS1_margin( const CSS1Expression *pExpr,
                 nMargins[1] = 0;
         }
 
-        if( const SvxLRSpaceItem* pItem = rItemSet.GetItemIfSet( aItemIds.nLRSpace, false ) )
+        if (bSetMargins[3])
         {
-            SvxLRSpaceItem aLRItem( *pItem );
-            if( bSetMargins[3] )
-                aLRItem.SetLeft( o3tl::narrowing<sal_uInt16>(nMargins[3]) );
-            if( bSetMargins[1] )
-                aLRItem.SetRight( o3tl::narrowing<sal_uInt16>(nMargins[1]) );
-            rItemSet.Put( aLRItem );
+            SvxTextLeftMarginItem const leftMargin(o3tl::narrowing<sal_uInt16>(nMargins[3]), RES_MARGIN_TEXTLEFT);
+            rItemSet.Put(leftMargin);
         }
-        else
+        if (bSetMargins[1])
         {
-            SvxLRSpaceItem aLRItem( aItemIds.nLRSpace );
-            if( bSetMargins[3] )
-                aLRItem.SetLeft( o3tl::narrowing<sal_uInt16>(nMargins[3]) );
-            if( bSetMargins[1] )
-                aLRItem.SetRight( o3tl::narrowing<sal_uInt16>(nMargins[1]) );
-            rItemSet.Put( aLRItem );
+            SvxRightMarginItem const rightMargin(o3tl::narrowing<sal_uInt16>(nMargins[1]), RES_MARGIN_RIGHT);
+            rItemSet.Put(rightMargin);
         }
     }
 
@@ -3083,85 +3044,94 @@ static void ParseCSS1_visibility(const CSS1Expression* pExpr, SfxItemSet& /*rIte
     rPropInfo.m_bVisible = pExpr->GetString() != "hidden";
 }
 
+static void ParseCSS1_white_space(const CSS1Expression* pExpr, SfxItemSet& /*rItemSet*/,
+                                  SvxCSS1PropertyInfo& rPropInfo, const SvxCSS1Parser& /*rParser*/)
+{
+    if (pExpr->GetType() == CSS1_IDENT)
+    {
+        if (pExpr->GetString().equalsIgnoreAsciiCase("pre")
+            || pExpr->GetString().equalsIgnoreAsciiCase("pre-wrap"))
+        {
+            rPropInfo.m_bPreserveSpace = true;
+        }
+    }
+}
+
 namespace {
 
 // the assignment of property to parsing function
 struct CSS1PropEntry
 {
-    const char * pName;
+    std::string_view pName;
     FnParseCSS1Prop pFunc;
 };
 
 }
 
-#define CSS1_PROP_ENTRY(p) \
-    { sCSS1_P_##p, ParseCSS1_##p }
-
 // the table with assignments
-CSS1PropEntry const aCSS1PropFnTab[] =
+CSS1PropEntry constexpr aCSS1PropFnTab[] =
 {
-    CSS1_PROP_ENTRY(background),
-    CSS1_PROP_ENTRY(background_color),
-    CSS1_PROP_ENTRY(border),
-    CSS1_PROP_ENTRY(border_bottom),
-    CSS1_PROP_ENTRY(border_bottom_width),
-    CSS1_PROP_ENTRY(border_color),
-    CSS1_PROP_ENTRY(border_left),
-    CSS1_PROP_ENTRY(border_left_width),
-    CSS1_PROP_ENTRY(border_right),
-    CSS1_PROP_ENTRY(border_right_width),
-    CSS1_PROP_ENTRY(border_style),
-    CSS1_PROP_ENTRY(border_top),
-    CSS1_PROP_ENTRY(border_top_width),
-    CSS1_PROP_ENTRY(border_width),
-    CSS1_PROP_ENTRY(color),
-    CSS1_PROP_ENTRY(column_count),
-    CSS1_PROP_ENTRY(direction),
-    CSS1_PROP_ENTRY(float),
-    CSS1_PROP_ENTRY(font),
-    CSS1_PROP_ENTRY(font_family),
-    CSS1_PROP_ENTRY(font_size),
-    CSS1_PROP_ENTRY(font_style),
-    CSS1_PROP_ENTRY(font_variant),
-    CSS1_PROP_ENTRY(font_weight),
-    CSS1_PROP_ENTRY(height),
-    CSS1_PROP_ENTRY(left),
-    CSS1_PROP_ENTRY(letter_spacing),
-    CSS1_PROP_ENTRY(line_height),
-    CSS1_PROP_ENTRY(list_style_type),
-    CSS1_PROP_ENTRY(margin),
-    CSS1_PROP_ENTRY(margin_bottom),
-    CSS1_PROP_ENTRY(margin_left),
-    CSS1_PROP_ENTRY(margin_right),
-    CSS1_PROP_ENTRY(margin_top),
-    CSS1_PROP_ENTRY(orphans),
-    CSS1_PROP_ENTRY(padding),
-    CSS1_PROP_ENTRY(padding_bottom),
-    CSS1_PROP_ENTRY(padding_left),
-    CSS1_PROP_ENTRY(padding_right),
-    CSS1_PROP_ENTRY(padding_top),
-    CSS1_PROP_ENTRY(page_break_after),
-    CSS1_PROP_ENTRY(page_break_before),
-    CSS1_PROP_ENTRY(page_break_inside),
-    CSS1_PROP_ENTRY(position),
-    CSS1_PROP_ENTRY(size),
-    CSS1_PROP_ENTRY(so_language),
-    CSS1_PROP_ENTRY(text_align),
-    CSS1_PROP_ENTRY(text_decoration),
-    CSS1_PROP_ENTRY(text_indent),
-    CSS1_PROP_ENTRY(text_transform),
-    CSS1_PROP_ENTRY(top),
-    CSS1_PROP_ENTRY(visibility),
-    CSS1_PROP_ENTRY(widows),
-    CSS1_PROP_ENTRY(width),
+    { sCSS1_P_background, ParseCSS1_background },
+    { sCSS1_P_background_color, ParseCSS1_background_color },
+    { sCSS1_P_border, ParseCSS1_border },
+    { sCSS1_P_border_bottom, ParseCSS1_border_bottom },
+    { sCSS1_P_border_bottom_width, ParseCSS1_border_bottom_width },
+    { sCSS1_P_border_color, ParseCSS1_border_color },
+    { sCSS1_P_border_left, ParseCSS1_border_left },
+    { sCSS1_P_border_left_width, ParseCSS1_border_left_width },
+    { sCSS1_P_border_right, ParseCSS1_border_right },
+    { sCSS1_P_border_right_width, ParseCSS1_border_right_width },
+    { sCSS1_P_border_style, ParseCSS1_border_style },
+    { sCSS1_P_border_top, ParseCSS1_border_top },
+    { sCSS1_P_border_top_width, ParseCSS1_border_top_width },
+    { sCSS1_P_border_width, ParseCSS1_border_width },
+    { sCSS1_P_color, ParseCSS1_color },
+    { sCSS1_P_column_count, ParseCSS1_column_count },
+    { sCSS1_P_direction, ParseCSS1_direction },
+    { sCSS1_P_float, ParseCSS1_float },
+    { sCSS1_P_font, ParseCSS1_font },
+    { sCSS1_P_font_family, ParseCSS1_font_family },
+    { sCSS1_P_font_size, ParseCSS1_font_size },
+    { sCSS1_P_font_style, ParseCSS1_font_style },
+    { sCSS1_P_font_variant, ParseCSS1_font_variant },
+    { sCSS1_P_font_weight, ParseCSS1_font_weight },
+    { sCSS1_P_height, ParseCSS1_height },
+    { sCSS1_P_left, ParseCSS1_left },
+    { sCSS1_P_letter_spacing, ParseCSS1_letter_spacing },
+    { sCSS1_P_line_height, ParseCSS1_line_height },
+    { sCSS1_P_list_style_type, ParseCSS1_list_style_type },
+    { sCSS1_P_margin, ParseCSS1_margin },
+    { sCSS1_P_margin_bottom, ParseCSS1_margin_bottom },
+    { sCSS1_P_margin_left, ParseCSS1_margin_left },
+    { sCSS1_P_margin_right, ParseCSS1_margin_right },
+    { sCSS1_P_margin_top, ParseCSS1_margin_top },
+    { sCSS1_P_orphans, ParseCSS1_orphans },
+    { sCSS1_P_padding, ParseCSS1_padding },
+    { sCSS1_P_padding_bottom, ParseCSS1_padding_bottom },
+    { sCSS1_P_padding_left, ParseCSS1_padding_left },
+    { sCSS1_P_padding_right, ParseCSS1_padding_right },
+    { sCSS1_P_padding_top, ParseCSS1_padding_top },
+    { sCSS1_P_page_break_after, ParseCSS1_page_break_after },
+    { sCSS1_P_page_break_before, ParseCSS1_page_break_before },
+    { sCSS1_P_page_break_inside, ParseCSS1_page_break_inside },
+    { sCSS1_P_position, ParseCSS1_position },
+    { sCSS1_P_size, ParseCSS1_size },
+    { sCSS1_P_so_language, ParseCSS1_so_language },
+    { sCSS1_P_text_align, ParseCSS1_text_align },
+    { sCSS1_P_text_decoration, ParseCSS1_text_decoration },
+    { sCSS1_P_text_indent, ParseCSS1_text_indent },
+    { sCSS1_P_text_transform, ParseCSS1_text_transform },
+    { sCSS1_P_top, ParseCSS1_top },
+    { sCSS1_P_visibility, ParseCSS1_visibility },
+    { sCSS1_white_space, ParseCSS1_white_space },
+    { sCSS1_P_widows, ParseCSS1_widows },
+    { sCSS1_P_width, ParseCSS1_width },
 };
 
-#if !defined NDEBUG
-static bool CSS1PropEntryCompare( const CSS1PropEntry &lhs, const CSS1PropEntry &rhs)
-{
-    return strcmp(lhs.pName, rhs.pName) < 0;
-}
-#endif
+static_assert(std::is_sorted(std::begin(aCSS1PropFnTab), std::end(aCSS1PropFnTab),
+                             [](const auto& lhs, const auto& rhs) constexpr
+                             { return lhs.pName < rhs.pName; }));
+
 static bool CSS1PropEntryFindCompare(CSS1PropEntry const & lhs, OUString const & s)
 {
     return s.compareToIgnoreAsciiCaseAscii(lhs.pName) > 0;
@@ -3171,15 +3141,6 @@ void SvxCSS1Parser::DeclarationParsed( const OUString& rProperty,
                                        std::unique_ptr<CSS1Expression> pExpr )
 {
     OSL_ENSURE( m_pItemSet, "DeclarationParsed() without ItemSet" );
-
-    static bool bSortedPropFns = false;
-
-    if( !bSortedPropFns )
-    {
-        assert( std::is_sorted( std::begin(aCSS1PropFnTab), std::end(aCSS1PropFnTab),
-                                CSS1PropEntryCompare ) );
-        bSortedPropFns = true;
-    }
 
     auto it = std::lower_bound( std::begin(aCSS1PropFnTab), std::end(aCSS1PropFnTab), rProperty,
                                 CSS1PropEntryFindCompare );

@@ -60,8 +60,8 @@ SfxPoolItem* SvxOrphansItem::CreateDefault() { return new  SvxOrphansItem(0, 0);
 SfxPoolItem* SvxHyphenZoneItem::CreateDefault() { return new  SvxHyphenZoneItem(false, 0);}
 SfxPoolItem* SvxTabStopItem::CreateDefault() { return new  SvxTabStopItem(0);}
 SfxPoolItem* SvxFormatSplitItem::CreateDefault() { return new  SvxFormatSplitItem(false, 0);}
-SfxPoolItem* SvxPageModelItem::CreateDefault() { return new  SvxPageModelItem(0);}
-SfxPoolItem* SvxParaVertAlignItem::CreateDefault() { return new  SvxParaVertAlignItem(Align::Automatic, 0);}
+SfxPoolItem* SvxPageModelItem::CreateDefault() { return new  SvxPageModelItem(TypedWhichId<SvxPageModelItem>(0));}
+SfxPoolItem* SvxParaVertAlignItem::CreateDefault() { return new  SvxParaVertAlignItem(Align::Automatic, TypedWhichId<SvxParaVertAlignItem>(0));}
 
 namespace {
 
@@ -977,7 +977,7 @@ bool SvxTabStopItem::PutValue( const uno::Any& rVal, sal_uInt8 nMemberId )
                 return false;
             if (bConvert)
                 nNewDefaultDistance = o3tl::toTwips(nNewDefaultDistance, o3tl::Length::mm100);
-            if (nNewDefaultDistance <= 0)
+            if (nNewDefaultDistance < 0)
                 return false;
             mnDefaultDistance = nNewDefaultDistance;
             break;
@@ -1243,7 +1243,7 @@ bool SvxForbiddenRuleItem::GetPresentation(
 *************************************************************************/
 
 SvxParaVertAlignItem::SvxParaVertAlignItem( Align nValue,
-    const sal_uInt16 nW )
+    TypedWhichId<SvxParaVertAlignItem> nW )
     : SfxUInt16Item( nW, static_cast<sal_uInt16>(nValue) )
 {
 }

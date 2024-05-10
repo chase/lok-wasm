@@ -20,13 +20,13 @@
 
 #include <sfx2/tabdlg.hxx>
 #include <svx/langbox.hxx>
+#include <unotools/collatorwrapper.hxx>
 
 #include <map>
 #include <set>
 #include <utility>
 
 class CharClass;
-class CollatorWrapper;
 class SmartTagMgr;
 
 namespace editeng { class SortedAutoCompleteStrings; }
@@ -57,6 +57,7 @@ private:
     OUString m_sStartCap;
     OUString m_sBoldUnderline;
     OUString m_sURL;
+    OUString m_sDOI;
     OUString m_sNoDblSpaces;
     OUString m_sDash;
     OUString m_sAccidentalCaps;
@@ -92,9 +93,11 @@ class OfaSwAutoFmtOptionsPage : public SfxTabPage
     OUString        sNoDblSpaces;
     OUString        sCorrectCapsLock;
     OUString        sDetectURL;
+    OUString        sDetectDOI;
     OUString        sDash;
     OUString        sRightMargin;
     OUString        sNum;
+    OUString        sBulletsAfterSpace;
     OUString        sBorder;
     OUString        sTable;
     OUString        sReplaceTemplates;
@@ -166,7 +169,7 @@ private:
     std::set<OUString>      aFormatText;
     std::map<LanguageType, DoubleStringArray>
                             aDoubleStringTable;
-    std::unique_ptr<CollatorWrapper>  pCompareClass;
+    CollatorWrapper         maCompareClass;
     std::unique_ptr<CharClass>        pCharClass;
     LanguageType            eLang;
 
@@ -227,7 +230,7 @@ class OfaAutocorrExceptPage : public SfxTabPage
 {
 private:
     StringsTable    aStringsTable;
-    std::unique_ptr<CollatorWrapper> pCompareClass;
+    CollatorWrapper maCompareClass;
     LanguageType    eLang;
 
     std::unique_ptr<weld::Entry> m_xAbbrevED;

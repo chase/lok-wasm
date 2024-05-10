@@ -251,6 +251,7 @@ ContextHandlerRef ShapeContextBase::createShapeContext( ContextHandler2Helper co
                 return new ShapeContext( rParent, rShapes.createShape< BezierShape >(), rAttribs );
             else
                 return new ShapeContext( rParent, rShapes.createShape< ComplexShape >(), rAttribs );
+        case VML_TOKEN(background):
         case VML_TOKEN( rect ):
             return new RectangleShapeContext( rParent, rAttribs, rShapes.createShape< RectangleShape >() );
         case VML_TOKEN( roundrect ):
@@ -295,7 +296,7 @@ ShapeTypeContext::ShapeTypeContext(ContextHandler2Helper const & rParent,
     {
         mrTypeModel.maShapeName = rAttribs.getXString( XML_id, OUString() );
         // get ShapeType and ShapeId from name for compatibility
-        static constexpr OUStringLiteral sShapeTypePrefix = u"shapetype_";
+        static constexpr OUString sShapeTypePrefix = u"shapetype_"_ustr;
         OUString tmp;
         if( mrTypeModel.maShapeName.startsWith( sShapeTypePrefix ) )
         {

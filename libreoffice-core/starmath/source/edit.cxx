@@ -30,6 +30,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <svl/stritem.hxx>
+#include <svl/itemset.hxx>
 #include <sfx2/viewfrm.hxx>
 #include <osl/diagnose.h>
 #include <o3tl/string_view.hxx>
@@ -160,10 +161,7 @@ void SmEditTextWindow::StartCursorMove()
 
 void SmEditWindow::InvalidateSlots()
 {
-    SfxBindings& rBind = GetView()->GetViewFrame()->GetBindings();
-    rBind.Invalidate(SID_COPY);
-    rBind.Invalidate(SID_CUT);
-    rBind.Invalidate(SID_DELETE);
+    GetView()->InvalidateSlots();
 }
 
 SmViewShell * SmEditWindow::GetView()
@@ -288,6 +286,12 @@ bool SmEditTextWindow::Command(const CommandEvent& rCEvt)
 
 bool SmEditTextWindow::KeyInput(const KeyEvent& rKEvt)
 {
+    if (rKEvt.GetKeyCode().GetCode() == KEY_F1)
+    {
+        mrEditWindow.GetView()->StartMainHelp();
+        return true;
+    }
+
     if (rKEvt.GetKeyCode().GetCode() == KEY_ESCAPE)
     {
         bool bCallBase = true;
@@ -325,7 +329,7 @@ bool SmEditTextWindow::KeyInput(const KeyEvent& rKEvt)
             if (index != -1)
             {
                 selected = selected.copy(index, sal_Int32(aSelection.nEndPos-index));
-                if (selected.trim().isEmpty())
+                if (o3tl::trim(selected).empty())
                     autoClose = true;
             }
             else
@@ -336,7 +340,7 @@ bool SmEditTextWindow::KeyInput(const KeyEvent& rKEvt)
                 else
                 {
                     selected = selected.copy(aSelection.nEndPos);
-                    if (selected.trim().isEmpty())
+                    if (o3tl::trim(selected).empty())
                         autoClose = true;
                 }
             }
@@ -550,10 +554,6 @@ void SmEditTextWindow::GetFocus()
     EditEngine *pEditEngine = GetEditEngine();
     if (pEditEngine)
         pEditEngine->SetStatusEventHdl(LINK(this, SmEditTextWindow, EditStatusHdl));
-
-    //Let SmViewShell know we got focus
-    if (mrEditWindow.GetView() && SmViewShell::IsInlineEditEnabled())
-        mrEditWindow.GetView()->SetInsertIntoEditWindow(true);
 }
 
 void SmEditTextWindow::LoseFocus()
@@ -659,7 +659,7 @@ void SmEditWindow::SelPrevMark()
     sal_Int32 nPara = eSelection.nStartPara;
     sal_Int32 nMax = eSelection.nStartPos;
     OUString aText(pEditEngine->GetText(nPara));
-    static const OUStringLiteral aMark(u"<?>");
+    static constexpr OUStringLiteral aMark(u"<?>");
     sal_Int32 nPos;
 
     while ( (nPos = aText.lastIndexOf(aMark, nMax)) < 0 )
@@ -833,10 +833,10 @@ void SmEditTextWindow::Flush()
         pEditEngine->ClearModifyFlag();
         if (SmViewShell *pViewSh = mrEditWindow.GetView())
         {
-            std::unique_ptr<SfxStringItem> pTextToFlush = std::make_unique<SfxStringItem>(SID_TEXT, GetText());
-            pViewSh->GetViewFrame()->GetDispatcher()->ExecuteList(
+            SfxStringItem aTextToFlush(SID_TEXT, GetText());
+            pViewSh->GetViewFrame().GetDispatcher()->ExecuteList(
                     SID_TEXT, SfxCallMode::RECORD,
-                    { pTextToFlush.get() });
+                    { &aTextToFlush });
         }
     }
     if (aCursorMoveIdle.IsActive())

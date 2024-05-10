@@ -437,12 +437,9 @@ void SmDrawingVisitor::Visit( SmRootSymbolNode* pNode )
     Point aBarPos( maPosition + aBarOffset );
 
     tools::Rectangle  aBar( aBarPos, Size( nBarWidth, nBarHeight ) );
-    //! avoid GROWING AND SHRINKING of drawn rectangle when constantly
-    //! increasing zoomfactor.
-    //  This is done by shifting its output-position to a point that
-    //  corresponds exactly to a pixel on the output device.
-    Point  aDrawPos( mrDev.PixelToLogic( mrDev.LogicToPixel( aBar.TopLeft( ) ) ) );
-    aBar.SetPos( aDrawPos );
+
+    if (mrFormat.IsRightToLeft() && mrDev.GetOutDevType() != OUTDEV_WINDOW)
+        mrDev.ReMirror(aBar);
 
     mrDev.DrawRect( aBar );
 }
@@ -460,6 +457,10 @@ void SmDrawingVisitor::Visit( SmPolyLineNode* pNode )
     Point aOffset ( Point( ) - pNode->GetPolygon( ).GetBoundRect( ).TopLeft( )
                    + Point( nBorderwidth, nBorderwidth ) ),
           aPos ( maPosition + aOffset );
+
+    if (mrFormat.IsRightToLeft() && mrDev.GetOutDevType() != OUTDEV_WINDOW)
+        mrDev.ReMirror(aPos);
+
     pNode->GetPolygon( ).Move( aPos.X( ), aPos.Y( ) );    //Works because Polygon wraps a pointer
 
     SmTmpDevice aTmpDev ( mrDev, false );
@@ -489,12 +490,8 @@ void SmDrawingVisitor::Visit( SmRectangleNode* pNode )
 
     SAL_WARN_IF( aTmp.IsEmpty(), "starmath", "Empty rectangle" );
 
-    //! avoid GROWING AND SHRINKING of drawn rectangle when constantly
-    //! increasing zoomfactor.
-    //  This is done by shifting its output-position to a point that
-    //  corresponds exactly to a pixel on the output device.
-    Point  aPos ( mrDev.PixelToLogic( mrDev.LogicToPixel( aTmp.TopLeft( ) ) ) );
-    aTmp.SetPos( aPos );
+    if (mrFormat.IsRightToLeft() && mrDev.GetOutDevType() != OUTDEV_WINDOW)
+        mrDev.ReMirror(aTmp);
 
     mrDev.DrawRect( aTmp );
 }
@@ -509,8 +506,9 @@ void SmDrawingVisitor::DrawTextNode( SmTextNode* pNode )
 
     Point  aPos ( maPosition );
     aPos.AdjustY(pNode->GetBaselineOffset( ) );
-    // round to pixel coordinate
-    aPos = mrDev.PixelToLogic( mrDev.LogicToPixel( aPos ) );
+
+    if (mrFormat.IsRightToLeft() && mrDev.GetOutDevType() != OUTDEV_WINDOW)
+        mrDev.ReMirror(aPos);
 
     mrDev.DrawStretchText( aPos, pNode->GetWidth( ), pNode->GetText( ) );
 }
@@ -871,71 +869,20 @@ void SmCaretPosGraphBuildingVisitor::Visit( SmSubSupNode* pNode )
     bodyRight->SetRight( right );
     right->SetLeft( bodyRight );
 
-    //If there's an LSUP
-    SmNode* pChild = pNode->GetSubSup( LSUP );
-    if( pChild ){
-        SmCaretPosGraphEntry *cLeft; //Child left
-        cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
+    SmNode* pChild;
+    for (SmSubSup const nodeType : { LSUP, LSUB, CSUP, CSUB, RSUP, RSUB })
+    {
+        pChild = pNode->GetSubSup(nodeType);
+        if( pChild )
+        {
+            SmCaretPosGraphEntry *cLeft; //Child left
+            cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), ((nodeType == RSUP) || (nodeType == RSUB))?bodyRight:left );
 
-        mpRightMost = cLeft;
-        pChild->Accept( this );
+            mpRightMost = cLeft;
+            pChild->Accept( this );
 
-        mpRightMost->SetRight( bodyLeft );
-    }
-    //If there's an LSUB
-    pChild = pNode->GetSubSup( LSUB );
-    if( pChild ){
-        SmCaretPosGraphEntry *cLeft; //Child left
-        cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-
-        mpRightMost = cLeft;
-        pChild->Accept( this );
-
-        mpRightMost->SetRight( bodyLeft );
-    }
-    //If there's a CSUP
-    pChild = pNode->GetSubSup( CSUP );
-    if( pChild ){
-        SmCaretPosGraphEntry *cLeft; //Child left
-        cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-
-        mpRightMost = cLeft;
-        pChild->Accept( this );
-
-        mpRightMost->SetRight( right );
-    }
-    //If there's a CSUB
-    pChild = pNode->GetSubSup( CSUB );
-    if( pChild ){
-        SmCaretPosGraphEntry *cLeft; //Child left
-        cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-
-        mpRightMost = cLeft;
-        pChild->Accept( this );
-
-        mpRightMost->SetRight( right );
-    }
-    //If there's an RSUP
-    pChild = pNode->GetSubSup( RSUP );
-    if( pChild ){
-        SmCaretPosGraphEntry *cLeft; //Child left
-        cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), bodyRight );
-
-        mpRightMost = cLeft;
-        pChild->Accept( this );
-
-        mpRightMost->SetRight( right );
-    }
-    //If there's an RSUB
-    pChild = pNode->GetSubSup( RSUB );
-    if( pChild ){
-        SmCaretPosGraphEntry *cLeft; //Child left
-        cLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), bodyRight );
-
-        mpRightMost = cLeft;
-        pChild->Accept( this );
-
-        mpRightMost->SetRight( right );
+            mpRightMost->SetRight( ((nodeType == LSUP) || (nodeType == LSUB))?bodyLeft:right );
+        }
     }
 
     //Set return parameters
@@ -1005,70 +952,20 @@ void SmCaretPosGraphBuildingVisitor::Visit( SmOperNode* pNode )
     SmSubSupNode* pSubSup = pOper->GetType( ) == SmNodeType::SubSup ? static_cast<SmSubSupNode*>(pOper) : nullptr;
 
     if( pSubSup ) {
-        SmNode* pChild = pSubSup->GetSubSup( LSUP );
-        if( pChild ) {
+        SmNode* pChild;
+        for (SmSubSup const nodeType : { LSUP, LSUB, CSUP, CSUB, RSUP, RSUB })
+        {
+            pChild = pSubSup->GetSubSup(nodeType);
+            if( pChild )
+            {
             //Create position in front of pChild
-            SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-            //Visit pChild
-            mpRightMost = childLeft;
-            pChild->Accept( this );
-            //Set right on mpRightMost from pChild
-            mpRightMost->SetRight( bodyLeft );
-        }
-
-        pChild = pSubSup->GetSubSup( LSUB );
-        if( pChild ) {
-            //Create position in front of pChild
-            SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-            //Visit pChild
-            mpRightMost = childLeft;
-            pChild->Accept( this );
-            //Set right on mpRightMost from pChild
-            mpRightMost->SetRight( bodyLeft );
-        }
-
-        pChild = pSubSup->GetSubSup( CSUP );
-        if ( pChild ) {//TO
-            //Create position in front of pChild
-            SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-            //Visit pChild
-            mpRightMost = childLeft;
-            pChild->Accept( this );
-            //Set right on mpRightMost from pChild
-            mpRightMost->SetRight( bodyLeft );
-        }
-
-        pChild = pSubSup->GetSubSup( CSUB );
-        if( pChild ) { //FROM
-            //Create position in front of pChild
-            SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-            //Visit pChild
-            mpRightMost = childLeft;
-            pChild->Accept( this );
-            //Set right on mpRightMost from pChild
-            mpRightMost->SetRight( bodyLeft );
-        }
-
-        pChild = pSubSup->GetSubSup( RSUP );
-        if ( pChild ) {
-            //Create position in front of pChild
-            SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-            //Visit pChild
-            mpRightMost = childLeft;
-            pChild->Accept( this );
-            //Set right on mpRightMost from pChild
-            mpRightMost->SetRight( bodyLeft );
-        }
-
-        pChild = pSubSup->GetSubSup( RSUB );
-        if ( pChild ) {
-            //Create position in front of pChild
-            SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
-            //Visit pChild
-            mpRightMost = childLeft;
-            pChild->Accept( this );
-            //Set right on mpRightMost from pChild
-            mpRightMost->SetRight( bodyLeft );
+                SmCaretPosGraphEntry *childLeft = mpGraph->Add( SmCaretPos( pChild, 0 ), left );
+                //Visit pChild
+                mpRightMost = childLeft;
+                pChild->Accept( this );
+                //Set right on mpRightMost from pChild
+                mpRightMost->SetRight( bodyLeft );
+            }
         }
     }
 
@@ -1126,8 +1023,11 @@ void SmCaretPosGraphBuildingVisitor::Visit( SmTextNode* pNode )
 {
     SAL_WARN_IF( pNode->GetText().isEmpty(), "starmath", "Empty SmTextNode is bad" );
 
-    int size = pNode->GetText().getLength();
-    for( int i = 1; i <= size; i++ ){
+    OUString& aText = pNode->GetText();
+    sal_Int32 i = 0;
+    while (i < aText.getLength())
+    {
+        aText.iterateCodePoints(&i);
         SmCaretPosGraphEntry* pRight = mpRightMost;
         mpRightMost = mpGraph->Add( SmCaretPos( pNode, i ), pRight );
         pRight->SetRight( mpRightMost );
@@ -2275,7 +2175,7 @@ void SmNodeToTextVisitor::Visit( SmUnHorNode* pNode )
 void SmNodeToTextVisitor::Visit( SmBinHorNode* pNode )
 {
     const SmNode *pParent = pNode->GetParent();
-    bool bBraceNeeded = pParent && pParent->GetType() == SmNodeType::Font;
+    bool bBraceNeeded = pParent;
     SmNode *pLeft  = pNode->LeftOperand(),
            *pOper  = pNode->Symbol(),
            *pRight = pNode->RightOperand();
@@ -2305,11 +2205,11 @@ void SmNodeToTextVisitor::Visit( SmBinVerNode* pNode )
     } else{
         SmNode *pNum    = pNode->GetSubNode( 0 ),
                *pDenom  = pNode->GetSubNode( 2 );
-        Append(u"frac {");
+        Append(u"{ frac {");
         LineToText( pNum );
         Append(u"} {");
         LineToText( pDenom );
-        Append(u"}");
+        Append(u"} }");
     }
 }
 
@@ -2669,6 +2569,8 @@ void SmNodeToTextVisitor::Visit( SmBlankNode* pNode )
 
 void SmNodeToTextVisitor::Visit( SmErrorNode* )
 {
+    // Add something for error nodes so that we can parse this back.
+    Append(u"{}");
 }
 
 void SmNodeToTextVisitor::Visit( SmLineNode* pNode )
@@ -2684,7 +2586,7 @@ void SmNodeToTextVisitor::Visit( SmLineNode* pNode )
 
 void SmNodeToTextVisitor::Visit( SmExpressionNode* pNode )
 {
-    bool bracketsNeeded = pNode->GetNumSubNodes() != 1 || pNode->GetSubNode(0)->GetType() == SmNodeType::BinHor;
+    bool bracketsNeeded = pNode->GetNumSubNodes() != 1;
     if (!bracketsNeeded)
     {
         const SmNode *pParent = pNode->GetParent();

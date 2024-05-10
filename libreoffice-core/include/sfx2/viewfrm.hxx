@@ -65,6 +65,7 @@ class SFX2_DLLPUBLIC SfxViewFrame final : public SfxShell, public SfxListener
     DECL_DLLPRIVATE_LINK(DonationHandler, weld::Button&, void);
     DECL_DLLPRIVATE_LINK(WhatsNewHandler, weld::Button&, void);
     DECL_DLLPRIVATE_LINK(MacroButtonHandler, weld::Button&, void);
+    DECL_DLLPRIVATE_LINK(SecurityButtonHandler, weld::Button&, void);
     DECL_DLLPRIVATE_LINK(EventButtonHandler, weld::Button&, void);
     DECL_DLLPRIVATE_LINK(SwitchReadOnlyHandler, weld::Button&, void);
     DECL_DLLPRIVATE_LINK(SignDocumentHandler, weld::Button&, void);
@@ -96,11 +97,11 @@ public:
     static SfxViewFrame*    LoadDocumentIntoFrame( SfxObjectShell const & i_rDoc, const css::uno::Reference< css::frame::XFrame >& i_rFrameItem );
     static SfxViewFrame*    DisplayNewDocument( SfxObjectShell const & i_rDoc, const SfxRequest& i_rCreateDocRequest );
 
-    static SfxViewFrame*    Current();
-    static SfxViewFrame*    GetFirst( const SfxObjectShell* pDoc = nullptr, bool bOnlyVisible = true );
-    static SfxViewFrame*    GetNext( const SfxViewFrame& rPrev, const SfxObjectShell* pDoc = nullptr, bool bOnlyVisible = true );
+    SAL_WARN_UNUSED_RESULT static SfxViewFrame* Current();
+    SAL_WARN_UNUSED_RESULT static SfxViewFrame* GetFirst( const SfxObjectShell* pDoc = nullptr, bool bOnlyVisible = true );
+    SAL_WARN_UNUSED_RESULT static SfxViewFrame* GetNext( const SfxViewFrame& rPrev, const SfxObjectShell* pDoc = nullptr, bool bOnlyVisible = true );
 
-    static SfxViewFrame*    Get( const css::uno::Reference< css::frame::XController>& i_rController, const SfxObjectShell* i_pDoc );
+    SAL_WARN_UNUSED_RESULT static SfxViewFrame* Get( const css::uno::Reference< css::frame::XController>& i_rController, const SfxObjectShell* i_pDoc );
 
             void            DoActivate(bool bMDI);
             void            DoDeactivate(bool bMDI, SfxViewFrame const *pOld);
@@ -174,6 +175,7 @@ public:
                                     InfobarType eType);
     bool              HasInfoBarWithID(std::u16string_view sId);
     void AppendReadOnlyInfobar();
+    void HandleSecurityInfobar(const OUString& sSecondaryMessage);
 
     SAL_DLLPRIVATE void GetDocNumber_Impl();
     SAL_DLLPRIVATE void SetViewShell_Impl( SfxViewShell *pVSh );

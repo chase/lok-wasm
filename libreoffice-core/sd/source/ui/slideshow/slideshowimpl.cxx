@@ -37,13 +37,15 @@
 #include <com/sun/star/frame/XLayoutManager.hpp>
 #include <com/sun/star/presentation/SlideShow.hpp>
 #include <com/sun/star/media/XPlayer.hpp>
-#include <officecfg/Office/Common.hxx>
+#include <officecfg/Office/Impress.hxx>
+#include <officecfg/Office/Recovery.hxx>
 #include <svl/stritem.hxx>
 #include <svl/urihelper.hxx>
 #include <basic/sbstar.hxx>
 
 #include <toolkit/helper/vclunohelper.hxx>
 #include <comphelper/diagnose_ex.hxx>
+#include <comphelper/sequence.hxx>
 
 #include <sfx2/infobar.hxx>
 #include <sfx2/dispatch.hxx>
@@ -59,6 +61,7 @@
 #include <svx/srchdlg.hxx>
 #include <svx/hyperdlg.hxx>
 #include <svx/svxids.hrc>
+#include <svx/unoapi.hxx>
 #include <AnimationChildWindow.hxx>
 #include <notifydocumentevent.hxx>
 #include "slideshowimpl.hxx"
@@ -481,12 +484,12 @@ void AnimationSlideController::displayCurrentSlide( const Reference< XSlideShow 
         xShow->displaySlide( xSlide, xDrawPages, xAnimNode, comphelper::containerToSequence(aProperties) );
 }
 
-constexpr OUStringLiteral gsOnClick( u"OnClick" );
-constexpr OUStringLiteral gsBookmark( u"Bookmark" );
-constexpr OUStringLiteral gsVerb( u"Verb" );
+constexpr OUString gsOnClick( u"OnClick"_ustr );
+constexpr OUString gsBookmark( u"Bookmark"_ustr );
+constexpr OUString gsVerb( u"Verb"_ustr );
 
 SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, ViewShell* pViewSh, ::sd::View* pView, SdDrawDocument* pDoc, vcl::Window* pParentWindow )
-: mxModel(pDoc->getUnoModel(),UNO_QUERY_THROW)
+: mxModel(pDoc->getUnoModel())
 , maUpdateTimer("SlideShowImpl maUpdateTimer")
 , maInputFreezeTimer("SlideShowImpl maInputFreezeTimer")
 , maDeactivateTimer("SlideShowImpl maDeactivateTimer")
@@ -514,6 +517,8 @@ SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, 
 , mdUserPaintStrokeWidth ( 150.0 )
 , mnEndShowEvent(nullptr)
 , mnContextMenuEvent(nullptr)
+, mnEventObjectChange(nullptr)
+, mnEventPageOrderChange(nullptr)
 , mxPresentation( xPresentation )
 {
     if( mpViewShell )
@@ -530,7 +535,7 @@ SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, 
     maInputFreezeTimer.SetTimeout( 20 );
 
         // no autosave during show
-    if( officecfg::Office::Common::Save::Document::AutoSave::get() )
+    if (officecfg::Office::Recovery::AutoSave::Enabled::get())
         mbAutoSaveWasOn = true;
 
     Application::AddEventListener( LINK( this, SlideshowImpl, EventListenerHdl ) );
@@ -543,10 +548,19 @@ SlideshowImpl::SlideshowImpl( const Reference< XPresentation2 >& xPresentation, 
         mnUserPaintColor = pOptions->GetPresentationPenColor();
         mdUserPaintStrokeWidth = pOptions->GetPresentationPenWidth();
     }
+
+    // to be able to react on various changes in the DrawModel, this class
+    // is now derived from SfxListener and registers itself at the DrawModel
+    if (nullptr != mpDoc)
+        StartListening(*mpDoc);
 }
 
 SlideshowImpl::~SlideshowImpl()
 {
+    // stop listening to DrawModel (see above)
+    if (nullptr != mpDoc)
+        EndListening(*mpDoc);
+
     SdModule *pModule = SD_MOD();
     //rhbz#806663 SlideshowImpl can outlive SdModule
     SdOptions* pOptions = pModule ?
@@ -586,6 +600,10 @@ void SlideshowImpl::disposing(std::unique_lock<std::mutex>&)
         Application::RemoveUserEvent( mnEndShowEvent );
     if( mnContextMenuEvent )
         Application::RemoveUserEvent( mnContextMenuEvent );
+    if( mnEventObjectChange )
+        Application::RemoveUserEvent( mnEventObjectChange );
+    if( mnEventPageOrderChange )
+        Application::RemoveUserEvent( mnEventPageOrderChange );
 
     maInputFreezeTimer.Stop();
 
@@ -1077,6 +1095,66 @@ bool SlideshowImpl::startShowImpl( const Sequence< beans::PropertyValue >& aProp
                         Any( xPointerBitmap ),
                         beans::PropertyState_DIRECT_VALUE ) );
             }
+            if (officecfg::Office::Impress::Misc::Start::ShowNavigationPanel::get())
+            {
+                NavbarButtonSize btnScale = static_cast<NavbarButtonSize>(officecfg::Office::Impress::Layout::Display::NavigationBtnScale::get());
+                OUString prevSlidePath = "";
+                OUString nextSlidePath = "";
+                OUString menuPath = "";
+                switch (btnScale)
+                {
+                    case NavbarButtonSize::Large:
+                    {
+                        prevSlidePath = BMP_PREV_SLIDE_LARGE;
+                        nextSlidePath = BMP_NEXT_SLIDE_LARGE;
+                        menuPath = BMP_MENU_SLIDE_LARGE;
+                        break;
+                    }
+                    case NavbarButtonSize::XLarge:
+                    {
+                        prevSlidePath = BMP_PREV_SLIDE_EXTRALARGE;
+                        nextSlidePath = BMP_NEXT_SLIDE_EXTRALARGE;
+                        menuPath = BMP_MENU_SLIDE_EXTRALARGE;
+                        break;
+                    }
+                    case NavbarButtonSize::Auto:
+                    case NavbarButtonSize::Small:
+                    default:
+                    {
+                        prevSlidePath = BMP_PREV_SLIDE_SMALL;
+                        nextSlidePath = BMP_NEXT_SLIDE_SMALL;
+                        menuPath = BMP_MENU_SLIDE_SMALL;
+                        break;
+                    }
+                }
+                BitmapEx prevSlideBm(prevSlidePath);
+                const Reference<rendering::XBitmap> xPrevSBitmap(
+                    vcl::unotools::xBitmapFromBitmapEx(prevSlideBm));
+                if (xPrevSBitmap.is())
+                {
+                    mxShow->setProperty(beans::PropertyValue("NavigationSlidePrev", -1,
+                                                             Any(xPrevSBitmap),
+                                                             beans::PropertyState_DIRECT_VALUE));
+                }
+                BitmapEx menuSlideBm(menuPath);
+                const Reference<rendering::XBitmap> xMenuSBitmap(
+                    vcl::unotools::xBitmapFromBitmapEx(menuSlideBm));
+                if (xMenuSBitmap.is())
+                {
+                    mxShow->setProperty(beans::PropertyValue("NavigationSlideMenu", -1,
+                                                             Any(xMenuSBitmap),
+                                                             beans::PropertyState_DIRECT_VALUE));
+                }
+                BitmapEx nextSlideBm(nextSlidePath);
+                const Reference<rendering::XBitmap> xNextSBitmap(
+                    vcl::unotools::xBitmapFromBitmapEx(nextSlideBm));
+                if (xNextSBitmap.is())
+                {
+                    mxShow->setProperty(beans::PropertyValue("NavigationSlideNext", -1,
+                                                             Any(xNextSBitmap),
+                                                             beans::PropertyState_DIRECT_VALUE));
+                }
+            }
         }
 
         for( const auto& rProp : aProperties )
@@ -1499,8 +1577,7 @@ void SlideshowImpl::click( const Reference< XShape >& xShape )
             SfxStringItem aUrl( SID_FILE_NAME, aURL.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
             SfxBoolItem aBrowsing( SID_BROWSE, true );
 
-            SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-            if (pViewFrm)
+            if (SfxViewFrame* pViewFrm = SfxViewFrame::Current())
             {
                 SfxUnoFrameItem aDocFrame(SID_FILLFRAME, pViewFrm->GetFrame().GetFrameInterface());
                 pViewFrm->GetDispatcher()->ExecuteList( SID_OPENDOC,
@@ -1578,6 +1655,12 @@ sal_Int32 SlideshowImpl::getSlideNumberForBookmark( const OUString& rStrBookmark
         return -1;
 
     return ( nPgNum - 1) >> 1;
+}
+
+void SlideshowImpl::contextMenuShow(const css::awt::Point& point)
+{
+    maPopupMousePos = { point.X, point.Y };
+    mnContextMenuEvent = Application::PostUserEvent(LINK(this, SlideshowImpl, ContextMenuHdl));
 }
 
 void SlideshowImpl::hyperLinkClicked( OUString const& aHyperLink )
@@ -1765,6 +1848,7 @@ bool SlideshowImpl::keyInput(const KeyEvent& rKEvt)
             case KEY_SPACE:
             case KEY_RIGHT:
             case KEY_DOWN:
+            case KEY_XF86FORWARD:
                 gotoNextEffect();
                 break;
 
@@ -1810,6 +1894,7 @@ bool SlideshowImpl::keyInput(const KeyEvent& rKEvt)
             case KEY_LEFT:
             case KEY_UP:
             case KEY_BACKSPACE:
+            case KEY_XF86BACK:
                 gotoPreviousEffect();
                 break;
 
@@ -2005,7 +2090,7 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
                     OUString sId(OUString::number(CM_SLIDES + nPageNumber));
                     xPageMenu->append_check(sId, pPage->GetName());
                     if (nPageNumber == nCurrentSlideNumber)
-                        xPageMenu->set_active(sId.toUtf8(), true);
+                        xPageMenu->set_active(sId, true);
                 }
             }
         }
@@ -2049,7 +2134,7 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
         }
 
         if (nWidth == mdUserPaintStrokeWidth)
-            xWidthMenu->set_active(OString::number(nWidth), true);
+            xWidthMenu->set_active(OUString::number(nWidth), true);
     }
 
     ::tools::Rectangle aRect(maPopupMousePos, Size(1,1));
@@ -2063,31 +2148,31 @@ IMPL_LINK_NOARG(SlideshowImpl, ContextMenuHdl, void*, void)
         resume();
 }
 
-void SlideshowImpl::ContextMenuSelectHdl(std::string_view rMenuId)
+void SlideshowImpl::ContextMenuSelectHdl(std::u16string_view rMenuId)
 {
-    if (rMenuId == "prev")
+    if (rMenuId == u"prev")
     {
         gotoPreviousSlide();
         mbWasPaused = false;
     }
-    else if(rMenuId == "next")
+    else if(rMenuId == u"next")
     {
         gotoNextSlide();
         mbWasPaused = false;
     }
-    else if (rMenuId == "first")
+    else if (rMenuId == u"first")
     {
         gotoFirstSlide();
         mbWasPaused = false;
     }
-    else if (rMenuId == "last")
+    else if (rMenuId == u"last")
     {
         gotoLastSlide();
         mbWasPaused = false;
     }
-    else if (rMenuId == "black" || rMenuId == "white")
+    else if (rMenuId == u"black" || rMenuId == u"white")
     {
-        const Color aBlankColor(rMenuId == "white" ? COL_WHITE : COL_BLACK);
+        const Color aBlankColor(rMenuId == u"white" ? COL_WHITE : COL_BLACK);
         if( mbWasPaused )
         {
             if( mpShowWindow->GetShowWindowMode() == SHOWWINDOWMODE_BLANK )
@@ -2107,7 +2192,7 @@ void SlideshowImpl::ContextMenuSelectHdl(std::string_view rMenuId)
             mbWasPaused = true;
         }
     }
-    else if (rMenuId == "color")
+    else if (rMenuId == u"color")
     {
         //Open a color picker based on SvColorDialog
         ::Color aColor( ColorTransparency, mnUserPaintColor );
@@ -2121,42 +2206,42 @@ void SlideshowImpl::ContextMenuSelectHdl(std::string_view rMenuId)
         }
         mbWasPaused = false;
     }
-    else if (rMenuId == "4")
+    else if (rMenuId == u"4")
     {
         setPenWidth(4.0);
         mbWasPaused = false;
     }
-    else if (rMenuId == "100")
+    else if (rMenuId == u"100")
     {
         setPenWidth(100.0);
         mbWasPaused = false;
     }
-    else if (rMenuId == "150")
+    else if (rMenuId == u"150")
     {
         setPenWidth(150.0);
         mbWasPaused = false;
     }
-    else if (rMenuId == "200")
+    else if (rMenuId == u"200")
     {
         setPenWidth(200.0);
         mbWasPaused = false;
     }
-    else if (rMenuId == "400")
+    else if (rMenuId == u"400")
     {
         setPenWidth(400.0);
         mbWasPaused = false;
     }
-    else if (rMenuId == "erase")
+    else if (rMenuId == u"erase")
     {
         setEraseAllInk(true);
         mbWasPaused = false;
     }
-    else if (rMenuId == "pen")
+    else if (rMenuId == u"pen")
     {
         setUsePen(!mbUsePen);
         mbWasPaused = false;
     }
-    else if (rMenuId == "edit")
+    else if (rMenuId == u"edit")
     {
         // When in autoplay mode (pps/ppsx), offer editing of the presentation
         // Turn autostart off, else Impress will close when exiting the Presentation
@@ -2170,7 +2255,7 @@ void SlideshowImpl::ContextMenuSelectHdl(std::string_view rMenuId)
         }
         endPresentation();
     }
-    else if (rMenuId == "end")
+    else if (rMenuId == u"end")
     {
         // in case the user cancels the presentation, switch to current slide
         // in edit mode
@@ -2401,7 +2486,7 @@ void SlideshowImpl::setActiveXToolbarsVisible( bool bVisible )
     if ( !(!maPresSettings.mbFullScreen && mpDocSh && mpDocSh->GetMedium()) )
         return;
 
-    const SfxBoolItem* pItem = SfxItemSet::GetItem<SfxBoolItem>(mpDocSh->GetMedium()->GetItemSet(), SID_VIEWONLY, false);
+    const SfxBoolItem* pItem = mpDocSh->GetMedium()->GetItemSet().GetItem(SID_VIEWONLY, false);
     if ( !(pItem && pItem->GetValue()) )
         return;
 
@@ -2720,7 +2805,7 @@ void SAL_CALL SlideshowImpl::gotoNextEffect(  )
     if( !(mxShow.is() && mpSlideController && mpShowWindow) )
         return;
 
-    if( mbIsPaused )
+    if( mbIsPaused && mpShowWindow->GetShowWindowMode() != SHOWWINDOWMODE_END )
         resume();
 
     const ShowWindowMode eMode = mpShowWindow->GetShowWindowMode();
@@ -2746,13 +2831,10 @@ void SAL_CALL SlideshowImpl::gotoPreviousEffect(  )
     if( !(mxShow.is() && mpSlideController && mpShowWindow) )
         return;
 
-    if( mbIsPaused )
-        resume();
-
     const ShowWindowMode eMode = mpShowWindow->GetShowWindowMode();
-    if( (eMode == SHOWWINDOWMODE_PAUSE) || (eMode == SHOWWINDOWMODE_BLANK) )
+    if( (eMode == SHOWWINDOWMODE_PAUSE) || (eMode == SHOWWINDOWMODE_BLANK) || mbIsPaused )
     {
-        mpShowWindow->RestartShow();
+        resume();
     }
     else
     {
@@ -3011,6 +3093,184 @@ sal_Bool SAL_CALL SlideshowImpl::hasElements(  )
     return getSlideCount() != 0;
 }
 
+namespace
+{
+    class AsyncUpdateSlideshow_Impl
+    {
+    public:
+        struct AsyncUpdateSlideshowData
+        {
+            SlideshowImpl* pSlideshowImpl;
+            uno::Reference< css::drawing::XDrawPage > XCurrentSlide;
+            SdrHintKind eHintKind;
+        };
+
+        static ImplSVEvent* AsyncUpdateSlideshow(
+            SlideshowImpl* pSlideshowImpl,
+            uno::Reference< css::drawing::XDrawPage >& rXCurrentSlide,
+            SdrHintKind eHintKind)
+        {
+            AsyncUpdateSlideshowData* pNew(new AsyncUpdateSlideshowData);
+            pNew->pSlideshowImpl = pSlideshowImpl;
+            pNew->XCurrentSlide = rXCurrentSlide;
+            pNew->eHintKind = eHintKind;
+            return Application::PostUserEvent(LINK(nullptr, AsyncUpdateSlideshow_Impl, Update), pNew);
+            // coverity[leaked_storage] - pDisruptor takes care of its own destruction at idle time
+        }
+
+        DECL_STATIC_LINK(AsyncUpdateSlideshow_Impl, Update, void*, void);
+    };
+
+    IMPL_STATIC_LINK(AsyncUpdateSlideshow_Impl, Update, void*, pData, void)
+    {
+        AsyncUpdateSlideshowData* pSlideData(static_cast<AsyncUpdateSlideshowData*>(pData));
+        pSlideData->pSlideshowImpl->AsyncNotifyEvent(pSlideData->XCurrentSlide, pSlideData->eHintKind);
+        delete pSlideData;
+    }
+}
+
+void SlideshowImpl::AsyncNotifyEvent(
+    const uno::Reference< css::drawing::XDrawPage >& rXCurrentSlide,
+    const SdrHintKind eHintKind)
+{
+    if (SdrHintKind::ObjectChange == eHintKind)
+    {
+        mnEventObjectChange = nullptr;
+
+        // refresh single slide
+        gotoSlide(rXCurrentSlide);
+    }
+    else if (SdrHintKind::PageOrderChange == eHintKind)
+    {
+        mnEventPageOrderChange = nullptr;
+
+        // order of pages (object pages or master pages) changed (Insert/Remove/ChangePos)
+        // rXCurrentSlide is the current slide before the change.
+        Reference< XDrawPagesSupplier > xDrawPages( mpDoc->getUnoModel(), UNO_QUERY_THROW );
+        Reference< XIndexAccess > xSlides( xDrawPages->getDrawPages(), UNO_QUERY_THROW );
+        const sal_Int32 nNewSlideCount(xSlides.is() ? xSlides->getCount() : 0);
+
+        if (nNewSlideCount != mpSlideController->getSlideNumberCount())
+        {
+            // need to reinitialize AnimationSlideController
+            OUString aPresSlide( maPresSettings.maPresPage );
+            createSlideList( maPresSettings.mbAll, aPresSlide );
+        }
+
+        // Check if current slide before change is still valid (maybe removed)
+        const sal_Int32 nSlideCount(mpSlideController->getSlideNumberCount());
+        bool bSlideStillValid(false);
+
+        for (sal_Int32 nSlide(0); !bSlideStillValid && nSlide < nSlideCount; nSlide++)
+        {
+            if (rXCurrentSlide == mpSlideController->getSlideByNumber(nSlide))
+            {
+                bSlideStillValid = true;
+            }
+        }
+
+        if(bSlideStillValid)
+        {
+            // stay on that slide
+            gotoSlide(rXCurrentSlide);
+        }
+        else
+        {
+            // not possible to stay on that slide, go to 1st slide (kinda restart)
+            gotoFirstSlide();
+        }
+    }
+}
+
+void SlideshowImpl::Notify(SfxBroadcaster& /*rBC*/, const SfxHint& rHint)
+{
+    if (SfxHintId::ThisIsAnSdrHint != rHint.GetId())
+        // nothing to do for non-SdrHints
+        return;
+
+    if (nullptr == mpDoc)
+        // better do nothing when no DrawModel (should not happen)
+        return;
+
+    // tdf#158664 I am surprised, but the 'this' instance keeps incarnated
+    // when the slideshow was running once, so need to check for
+    // SlideShow instance/running to be safe.
+    // NOTE: isRunning() checks mxShow.is(), that is what we want
+    if (!isRunning())
+        // no SlideShow instance or not running, nothing to do
+        return;
+
+    const SdrHintKind eHintKind(static_cast<const SdrHint&>(rHint).GetKind());
+
+    if (SdrHintKind::ObjectChange == eHintKind)
+    {
+        if (nullptr != mnEventObjectChange)
+            // avoid multiple events
+            return;
+
+        // Object changed, object & involved page included in rHint.
+        uno::Reference< css::drawing::XDrawPage > XCurrentSlide(getCurrentSlide());
+        if (!XCurrentSlide.is())
+            return;
+
+        SdrPage* pCurrentSlide(GetSdrPageFromXDrawPage(XCurrentSlide));
+        if (nullptr == pCurrentSlide)
+            return;
+
+        const SdrPage* pHintPage(static_cast<const SdrHint&>(rHint).GetPage());
+        if (nullptr == pHintPage)
+            return;
+
+        bool bCurrentSlideIsInvolved(false);
+
+        if (pHintPage->IsMasterPage())
+        {
+            if (pCurrentSlide->TRG_HasMasterPage())
+            {
+                // current slide uses MasterPage on which the change happened
+                bCurrentSlideIsInvolved = (pHintPage == &pCurrentSlide->TRG_GetMasterPage());
+            }
+        }
+        else
+        {
+            // object on current slide was changed
+            bCurrentSlideIsInvolved = (pHintPage == pCurrentSlide);
+        }
+
+        if (!bCurrentSlideIsInvolved)
+            // nothing to do when current slide is not involved
+            return;
+
+        // Refresh current slide. Need to do that asynchronous, else e.g.
+        // text edit changes EditEngine/Outliner are not progressed far
+        // enough (ObjectChanged broadcast which we are in here seems
+        // to early for some cases)
+        mnEventObjectChange = AsyncUpdateSlideshow_Impl::AsyncUpdateSlideshow(this, XCurrentSlide, eHintKind);
+    }
+    else if (SdrHintKind::PageOrderChange == eHintKind)
+    {
+        // Unfortunately we get multiple events, e.g. when drag/drop position change in
+        // slide sorter on left side of EditView. This includes some with page number +1,
+        // then again -1 (it's a position change). Problem is that in-between already
+        // a re-schedule seems to happen, so indeed AsyncNotifyEvent will change to +1/-1
+        // already. Since we get even more, at least try to take the last one. I found no
+        // good solution yet for this.
+        if (nullptr != mnEventPageOrderChange)
+            Application::RemoveUserEvent( mnEventPageOrderChange );
+
+        // order of pages (object pages or master pages) changed (Insert/Remove/ChangePos)
+        uno::Reference< css::drawing::XDrawPage > XCurrentSlide(getCurrentSlide());
+        mnEventPageOrderChange = AsyncUpdateSlideshow_Impl::AsyncUpdateSlideshow(this, XCurrentSlide, eHintKind);
+    }
+    else if (SdrHintKind::ModelCleared == eHintKind)
+    {
+        // immediately end presentation
+        endPresentation();
+    }
+
+    // maybe need to add reactions here to other Hint-Types
+}
+
 Reference< XSlideShow > SAL_CALL SlideshowImpl::getSlideShow()
 {
     return mxShow;
@@ -3133,8 +3393,7 @@ void PresentationSettingsEx::SetPropertyValue( std::u16string_view rProperty, co
 // XAnimationListener
 
 SlideShowListenerProxy::SlideShowListenerProxy( rtl::Reference< SlideshowImpl > xController, css::uno::Reference< css::presentation::XSlideShow > xSlideShow )
-: maListeners( m_aMutex )
-, mxController(std::move( xController ))
+: mxController(std::move( xController ))
 , mxSlideShow(std::move( xSlideShow ))
 {
 }
@@ -3181,21 +3440,23 @@ void SlideShowListenerProxy::removeShapeEventListener( const css::uno::Reference
 
 void SlideShowListenerProxy::addSlideShowListener( const css::uno::Reference< css::presentation::XSlideShowListener >& xListener )
 {
-    maListeners.addInterface(xListener);
+    std::unique_lock g(m_aMutex);
+    maListeners.addInterface(g, xListener);
 }
 
 void SlideShowListenerProxy::removeSlideShowListener( const css::uno::Reference< css::presentation::XSlideShowListener >& xListener )
 {
-    maListeners.removeInterface(xListener);
+    std::unique_lock g(m_aMutex);
+    maListeners.removeInterface(g, xListener);
 }
 
 void SAL_CALL SlideShowListenerProxy::beginEvent( const Reference< XAnimationNode >& xNode )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    if( maListeners.getLength() >= 0 )
+    if( maListeners.getLength(aGuard) >= 0 )
     {
-        maListeners.forEach(
+        maListeners.forEach(aGuard,
             [&] (Reference<XAnimationListener> const& xListener) {
                 return xListener->beginEvent(xNode);
             } );
@@ -3204,11 +3465,11 @@ void SAL_CALL SlideShowListenerProxy::beginEvent( const Reference< XAnimationNod
 
 void SAL_CALL SlideShowListenerProxy::endEvent( const Reference< XAnimationNode >& xNode )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    if( maListeners.getLength() >= 0 )
+    if( maListeners.getLength(aGuard) >= 0 )
     {
-        maListeners.forEach(
+        maListeners.forEach(aGuard,
             [&] (Reference<XAnimationListener> const& xListener) {
                 return xListener->endEvent(xNode);
             } );
@@ -3217,11 +3478,11 @@ void SAL_CALL SlideShowListenerProxy::endEvent( const Reference< XAnimationNode 
 
 void SAL_CALL SlideShowListenerProxy::repeat( const Reference< XAnimationNode >& xNode, ::sal_Int32 nRepeat )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    if( maListeners.getLength() >= 0 )
+    if( maListeners.getLength(aGuard) >= 0 )
     {
-        maListeners.forEach(
+        maListeners.forEach(aGuard,
             [&] (Reference<XAnimationListener> const& xListener) {
                 return xListener->repeat(xNode, nRepeat);
             } );
@@ -3232,9 +3493,9 @@ void SAL_CALL SlideShowListenerProxy::repeat( const Reference< XAnimationNode >&
 
 void SAL_CALL SlideShowListenerProxy::paused(  )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    maListeners.forEach(
+    maListeners.forEach(aGuard,
         [](uno::Reference<presentation::XSlideShowListener> const& xListener)
         {
             xListener->paused();
@@ -3243,9 +3504,9 @@ void SAL_CALL SlideShowListenerProxy::paused(  )
 
 void SAL_CALL SlideShowListenerProxy::resumed(  )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    maListeners.forEach(
+    maListeners.forEach(aGuard,
         [](uno::Reference<presentation::XSlideShowListener> const& xListener)
         {
             xListener->resumed();
@@ -3254,9 +3515,9 @@ void SAL_CALL SlideShowListenerProxy::resumed(  )
 
 void SAL_CALL SlideShowListenerProxy::slideTransitionStarted( )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    maListeners.forEach(
+    maListeners.forEach(aGuard,
         [](uno::Reference<presentation::XSlideShowListener> const& xListener)
         {
             xListener->slideTransitionStarted();
@@ -3265,9 +3526,9 @@ void SAL_CALL SlideShowListenerProxy::slideTransitionStarted( )
 
 void SAL_CALL SlideShowListenerProxy::slideTransitionEnded( )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    maListeners.forEach(
+    maListeners.forEach(aGuard,
         [](uno::Reference<presentation::XSlideShowListener> const& xListener)
         {
             xListener->slideTransitionEnded ();
@@ -3276,9 +3537,9 @@ void SAL_CALL SlideShowListenerProxy::slideTransitionEnded( )
 
 void SAL_CALL SlideShowListenerProxy::slideAnimationsEnded(  )
 {
-    ::osl::MutexGuard aGuard( m_aMutex );
+    std::unique_lock aGuard( m_aMutex );
 
-    maListeners.forEach(
+    maListeners.forEach(aGuard,
         [](uno::Reference<presentation::XSlideShowListener> const& xListener)
         {
             xListener->slideAnimationsEnded ();
@@ -3288,11 +3549,11 @@ void SAL_CALL SlideShowListenerProxy::slideAnimationsEnded(  )
 void SlideShowListenerProxy::slideEnded(sal_Bool bReverse)
 {
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
-        if( maListeners.getLength() >= 0 )
+        if( maListeners.getLength(aGuard) >= 0 )
         {
-            maListeners.forEach(
+            maListeners.forEach(aGuard,
                 [&] (Reference<XSlideShowListener> const& xListener) {
                     return xListener->slideEnded(bReverse);
                 } );
@@ -3309,11 +3570,11 @@ void SlideShowListenerProxy::slideEnded(sal_Bool bReverse)
 void SlideShowListenerProxy::hyperLinkClicked( OUString const& aHyperLink )
 {
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
+        std::unique_lock aGuard( m_aMutex );
 
-        if( maListeners.getLength() >= 0 )
+        if( maListeners.getLength(aGuard) >= 0 )
         {
-            maListeners.forEach(
+            maListeners.forEach(aGuard,
                 [&] (Reference<XSlideShowListener> const& xListener) {
                     return xListener->hyperLinkClicked(aHyperLink);
                 } );
@@ -3331,7 +3592,8 @@ void SlideShowListenerProxy::hyperLinkClicked( OUString const& aHyperLink )
 
 void SAL_CALL SlideShowListenerProxy::disposing( const css::lang::EventObject& aDisposeEvent )
 {
-    maListeners.disposeAndClear( aDisposeEvent );
+    std::unique_lock g(m_aMutex);
+    maListeners.disposeAndClear( g, aDisposeEvent );
     mxController.clear();
     mxSlideShow.clear();
 }
@@ -3343,6 +3605,13 @@ void SAL_CALL SlideShowListenerProxy::click( const Reference< XShape >& xShape, 
     SolarMutexGuard aSolarGuard;
     if( mxController.is() )
         mxController->click(xShape );
+}
+
+void SAL_CALL SlideShowListenerProxy::contextMenuShow(const css::awt::Point& point)
+{
+    SolarMutexGuard aSolarGuard;
+    if (mxController.is())
+        mxController->contextMenuShow(point);
 }
 
 } // namespace ::sd

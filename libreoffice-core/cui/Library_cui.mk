@@ -71,7 +71,6 @@ $(eval $(call gb_Library_use_externals,cui,\
 	boost_headers \
 	$(call gb_Helper_optional,OPENCL,\
 		clew) \
-    epoxy \
     icuuc \
     icu_headers \
     libxml2 \
@@ -205,6 +204,7 @@ $(eval $(call gb_Library_add_exception_objects,cui,\
     cui/source/options/sdbcdriverenum \
     cui/source/options/securityoptions \
     cui/source/options/treeopt \
+    cui/source/options/treeopthelper \
     cui/source/options/tsaurls \
     cui/source/options/webconninfo \
     cui/source/tabpages/align \

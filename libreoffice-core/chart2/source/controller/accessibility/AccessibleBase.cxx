@@ -21,6 +21,8 @@
 #include "AccessibleChartShape.hxx"
 #include <ObjectHierarchy.hxx>
 #include <ObjectIdentifier.hxx>
+#include <ChartView.hxx>
+#include <ChartController.hxx>
 #include <chartview/ExplicitValueProvider.hxx>
 
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
@@ -349,7 +351,7 @@ void AccessibleBase::BroadcastAccEvent(
     // the const cast is needed, because UNO parameters are never const
     const AccessibleEventObject aEvent(
         const_cast< uno::XWeak * >( static_cast< const uno::XWeak * >( this )),
-        nId, rNew, rOld );
+        nId, rNew, rOld, -1 );
 
     // let the notifier handle this event
     ::comphelper::AccessibleEventNotifier::addEvent( m_nEventNotifierId, aEvent );
@@ -534,7 +536,7 @@ sal_Int64 SAL_CALL AccessibleBase::getAccessibleStateSet()
 {
     if( ! m_bStateSetInitialized )
     {
-        Reference< view::XSelectionSupplier > xSelSupp( GetInfo().m_xSelectionSupplier );
+        rtl::Reference< ::chart::ChartController > xSelSupp( GetInfo().m_xChartController );
         if ( xSelSupp.is() )
         {
             ObjectIdentifier aOID( xSelSupp->getSelection() );
@@ -612,12 +614,11 @@ Reference< XAccessible > SAL_CALL AccessibleBase::getAccessibleAtPoint( const aw
 
 awt::Rectangle SAL_CALL AccessibleBase::getBounds()
 {
-    ExplicitValueProvider *pExplicitValueProvider(
-        comphelper::getFromUnoTunnel<ExplicitValueProvider>( m_aAccInfo.m_xView ));
-    if( pExplicitValueProvider )
+    rtl::Reference<ChartView> pChartView = m_aAccInfo.m_xView.get();
+    if( pChartView )
     {
         VclPtr<vcl::Window> pWindow( VCLUnoHelper::GetWindow( m_aAccInfo.m_xWindow ));
-        awt::Rectangle aLogicRect( pExplicitValueProvider->getRectangleOfObject( m_aAccInfo.m_aOID.getObjectCID() ));
+        awt::Rectangle aLogicRect( pChartView->getRectangleOfObject( m_aAccInfo.m_aOID.getObjectCID() ));
         if( pWindow )
         {
             tools::Rectangle aRect( aLogicRect.X, aLogicRect.Y,
@@ -679,7 +680,7 @@ void SAL_CALL AccessibleBase::grabFocus()
 {
     CheckDisposeState();
 
-    Reference< view::XSelectionSupplier > xSelSupp( GetInfo().m_xSelectionSupplier );
+    rtl::Reference< ::chart::ChartController > xSelSupp( GetInfo().m_xChartController );
     if ( xSelSupp.is() )
     {
         xSelSupp->select( GetId().getAny() );

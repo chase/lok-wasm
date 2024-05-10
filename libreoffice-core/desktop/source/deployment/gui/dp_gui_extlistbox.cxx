@@ -150,8 +150,8 @@ void Entry_Impl::checkDependencies()
             OUStringBuffer aMissingDep( DpResId( RID_STR_ERROR_MISSING_DEPENDENCIES ) );
             for ( const auto& i : std::as_const(depExc.UnsatisfiedDependencies) )
             {
-                aMissingDep.append("\n");
-                aMissingDep.append(dp_misc::Dependencies::getErrorText(i));
+                aMissingDep.append("\n"
+                    + dp_misc::Dependencies::getErrorText(i));
             }
             aMissingDep.append("\n");
             m_sErrorText = aMissingDep.makeStringAndClear();
@@ -220,8 +220,8 @@ void ExtensionBox_Impl::Init()
     m_xRemoveListener = new ExtensionRemovedListener( this );
 
     m_pLocale.reset( new lang::Locale( Application::GetSettings().GetLanguageTag().getLocale() ) );
-    m_pCollator.reset( new CollatorWrapper( ::comphelper::getProcessComponentContext() ) );
-    m_pCollator->loadDefaultCollator( *m_pLocale, i18n::CollatorOptions::CollatorOptions_IGNORE_CASE );
+    m_oCollator.emplace( ::comphelper::getProcessComponentContext() );
+    m_oCollator->loadDefaultCollator( *m_pLocale, i18n::CollatorOptions::CollatorOptions_IGNORE_CASE );
 }
 
 ExtensionBox_Impl::~ExtensionBox_Impl()
@@ -241,7 +241,7 @@ ExtensionBox_Impl::~ExtensionBox_Impl()
     m_xRemoveListener.clear();
 
     m_pLocale.reset();
-    m_pCollator.reset();
+    m_oCollator.reset();
 }
 
 sal_Int32 ExtensionBox_Impl::getItemCount() const
@@ -826,7 +826,7 @@ bool ExtensionBox_Impl::FindEntryPos( const TEntry_Impl& rEntry, const tools::Lo
 
     if ( nStart == nEnd )
     {
-        eCompare = rEntry->CompareTo( m_pCollator.get(), m_vEntries[ nStart ] );
+        eCompare = rEntry->CompareTo( &*m_oCollator, m_vEntries[ nStart ] );
         if ( eCompare < 0 )
             return false;
         else if ( eCompare == 0 )
@@ -847,7 +847,7 @@ bool ExtensionBox_Impl::FindEntryPos( const TEntry_Impl& rEntry, const tools::Lo
     }
 
     const tools::Long nMid = nStart + ( ( nEnd - nStart ) / 2 );
-    eCompare = rEntry->CompareTo( m_pCollator.get(), m_vEntries[ nMid ] );
+    eCompare = rEntry->CompareTo( &*m_oCollator, m_vEntries[ nMid ] );
 
     if ( eCompare < 0 )
         return FindEntryPos( rEntry, nStart, nMid-1, nPos );
@@ -868,12 +868,11 @@ bool ExtensionBox_Impl::FindEntryPos( const TEntry_Impl& rEntry, const tools::Lo
 
 void ExtensionBox_Impl::cleanVecListenerAdded()
 {
-    m_vListenerAdded.erase(std::remove_if(m_vListenerAdded.begin(), m_vListenerAdded.end(),
+    std::erase_if(m_vListenerAdded,
         [](const uno::WeakReference<deployment::XPackage>& rxListener) {
             const uno::Reference<deployment::XPackage> hardRef(rxListener);
             return !hardRef.is();
-        }),
-        m_vListenerAdded.end());
+        });
 }
 
 void ExtensionBox_Impl::addEventListenerOnce(

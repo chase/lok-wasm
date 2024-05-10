@@ -103,7 +103,7 @@ private:
     bool            bDoSyntaxHighlight;
     bool            bDelayHighlight;
 
-    virtual css::uno::Reference< css::awt::XWindowPeer > GetComponentInterface(bool bCreate = true) override;
+    virtual css::uno::Reference< css::awt::XVclWindowPeer > GetComponentInterface(bool bCreate = true) override;
     CodeCompleteDataCache aCodeCompleteCache;
     VclPtr<CodeCompleteWindow> pCodeCompleteWnd;
     OUString GetActualSubName( sal_uInt32 nLine ); // gets the actual subroutine name according to line number
@@ -387,7 +387,7 @@ public:
     virtual void Deactivating () override;
 
     virtual void OnNewDocument () override;
-    virtual OString GetHid () const override;
+    virtual OUString GetHid () const override;
     virtual ItemType GetType () const override;
     virtual bool HasActiveEditor () const override;
 
@@ -409,6 +409,10 @@ public:
 public:
     void BasicAddWatch (OUString const&);
     void BasicRemoveWatch ();
+    void ShowWatchWindow(bool bVisible);
+    void ShowStackWindow(bool bVisible);
+    bool IsWatchWindowVisible() { return aWatchWindow->IsVisible(); }
+    bool IsStackWindowVisible() { return aStackWindow->IsVisible(); }
     Color const & GetSyntaxBackgroundColor () const { return aSyntaxColors.GetBackgroundColor(); }
     Color const & GetFontColor () const { return aSyntaxColors.GetFontColor(); }
     Color const & GetSyntaxColor (TokenType eType) const { return aSyntaxColors.GetColor(eType); }

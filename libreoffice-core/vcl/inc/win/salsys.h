@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_WIN_SALSYS_H
-#define INCLUDED_VCL_INC_WIN_SALSYS_H
+#pragma once
 
 #include <salsys.hxx>
 
@@ -31,11 +30,11 @@ public:
     struct DisplayMonitor
     {
         OUString        m_aName;
-        tools::Rectangle       m_aArea;
+        AbsoluteScreenPixelRectangle       m_aArea;
 
         DisplayMonitor() {}
         DisplayMonitor( const OUString& rName,
-                        const tools::Rectangle& rArea )
+                        const AbsoluteScreenPixelRectangle& rArea )
                         : m_aName( rName ),
                           m_aArea( rArea )
         {
@@ -51,7 +50,7 @@ public:
 
     virtual unsigned int GetDisplayScreenCount() override;
     virtual unsigned int GetDisplayBuiltInScreen() override;
-    virtual tools::Rectangle GetDisplayScreenPosSizePixel( unsigned int nScreen )  override;
+    virtual AbsoluteScreenPixelRectangle GetDisplayScreenPosSizePixel( unsigned int nScreen )  override;
     virtual int ShowNativeMessageBox( const OUString& rTitle,
                                       const OUString& rMessage)  override;
     bool initMonitors();
@@ -64,7 +63,5 @@ public:
                                 sal_IntPtr /*HDC*/,
                                 sal_IntPtr /*LPRECT*/ );
 };
-
-#endif // INCLUDED_VCL_INC_WIN_SALSYS_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

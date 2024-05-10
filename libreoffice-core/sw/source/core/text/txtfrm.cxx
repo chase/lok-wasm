@@ -729,7 +729,7 @@ SwDigitModeModifier::SwDigitModeModifier( const OutputDevice& rOutp, LanguageTyp
         eLang = LANGUAGE_ENGLISH_US;
     else
     {
-        const SvtCTLOptions::TextNumerals nTextNumerals = SW_MOD()->GetCTLOptions().GetCTLTextNumerals();
+        const SvtCTLOptions::TextNumerals nTextNumerals = SvtCTLOptions::GetCTLTextNumerals();
 
         if ( SvtCTLOptions::NUMERALS_HINDI == nTextNumerals )
             eLang = LANGUAGE_ARABIC_SAUDI_ARABIA;
@@ -791,6 +791,124 @@ SwTextFrame::SwTextFrame(SwTextNode * const pNode, SwFrame* pSib,
     // note: this may call SwClientNotify if it's in a list so do it last
     // note: this may change this->pRegisteredIn to m_pMergedPara->listeners
     m_pMergedPara = CheckParaRedlineMerge(*this, *pNode, eMode);
+}
+
+void SwTextFrame::dumpAsXmlAttributes(xmlTextWriterPtr writer) const
+{
+    SwContentFrame::dumpAsXmlAttributes(writer);
+
+    const SwTextNode *pTextNode = GetTextNodeFirst();
+    (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "txtNodeIndex" ), "%" SAL_PRIdINT32, sal_Int32(pTextNode->GetIndex()) );
+
+    OString aMode = "Horizontal"_ostr;
+    if (IsVertLRBT())
+    {
+        aMode = "VertBTLR"_ostr;
+    }
+    else if (IsVertLR())
+    {
+        aMode = "VertLR"_ostr;
+    }
+    else if (IsVertical())
+    {
+        aMode = "Vertical"_ostr;
+    }
+    (void)xmlTextWriterWriteAttribute(writer, BAD_CAST("WritingMode"), BAD_CAST(aMode.getStr()));
+}
+
+void SwTextFrame::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, reinterpret_cast<const xmlChar*>("txt"));
+    dumpAsXmlAttributes( writer );
+    if ( HasFollow() )
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "follow" ), "%" SAL_PRIuUINT32, GetFollow()->GetFrameId() );
+
+    if (m_pPrecede != nullptr)
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "precede" ), "%" SAL_PRIuUINT32, static_cast<SwTextFrame*>(m_pPrecede)->GetFrameId() );
+
+    (void)xmlTextWriterWriteAttribute(writer, BAD_CAST("offset"), BAD_CAST(OString::number(static_cast<sal_Int32>(mnOffset)).getStr()));
+
+    sw::MergedPara const*const pMerged(GetMergedPara());
+    if (pMerged)
+    {
+        (void)xmlTextWriterStartElement( writer, BAD_CAST( "merged" ) );
+        (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "paraPropsNodeIndex" ), "%" SAL_PRIdINT32, sal_Int32(pMerged->pParaPropsNode->GetIndex()) );
+        for (auto const& e : pMerged->extents)
+        {
+            (void)xmlTextWriterStartElement( writer, BAD_CAST( "extent" ) );
+            (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "txtNodeIndex" ), "%" SAL_PRIdINT32, sal_Int32(e.pNode->GetIndex()) );
+            (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "start" ), "%" SAL_PRIdINT32, e.nStart );
+            (void)xmlTextWriterWriteFormatAttribute( writer, BAD_CAST( "end" ), "%" SAL_PRIdINT32, e.nEnd );
+            (void)xmlTextWriterEndElement( writer );
+        }
+        (void)xmlTextWriterEndElement( writer );
+    }
+
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("infos"));
+    dumpInfosAsXml(writer);
+    (void)xmlTextWriterEndElement(writer);
+
+    // Dump Anchored objects if any
+    const SwSortedObjs* pAnchored = GetDrawObjs();
+    if ( pAnchored && pAnchored->size() > 0 )
+    {
+        (void)xmlTextWriterStartElement( writer, BAD_CAST( "anchored" ) );
+
+        for (SwAnchoredObject* pObject : *pAnchored)
+        {
+            pObject->dumpAsXml( writer );
+        }
+
+        (void)xmlTextWriterEndElement( writer );
+    }
+
+    // Dump the children
+    OUString aText = GetText(  );
+    for ( int i = 0; i < 32; i++ )
+    {
+        aText = aText.replace( i, '*' );
+    }
+    auto nTextOffset = static_cast<sal_Int32>(GetOffset());
+    sal_Int32 nTextLength = aText.getLength() - nTextOffset;
+    if (const SwTextFrame* pTextFrameFollow = GetFollow())
+    {
+        nTextLength = static_cast<sal_Int32>(pTextFrameFollow->GetOffset() - GetOffset());
+    }
+    if (nTextLength > 0)
+    {
+        OString aText8
+            = OUStringToOString(aText.subView(nTextOffset, nTextLength), RTL_TEXTENCODING_UTF8);
+        (void)xmlTextWriterWriteString( writer,
+                reinterpret_cast<const xmlChar *>(aText8.getStr(  )) );
+    }
+    if (const SwParaPortion* pPara = GetPara())
+    {
+        (void)xmlTextWriterStartElement(writer, BAD_CAST("SwParaPortion"));
+        TextFrameIndex nOffset(0);
+        const OUString& rText = GetText();
+        (void)xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("ptr"), "%p", pPara);
+        const SwLineLayout* pLine = pPara;
+        if (IsFollow())
+        {
+            nOffset += GetOffset();
+        }
+        while (pLine)
+        {
+            (void)xmlTextWriterStartElement(writer, BAD_CAST("SwLineLayout"));
+            pLine->dumpAsXmlAttributes(writer, rText, nOffset);
+            const SwLinePortion* pPor = pLine->GetFirstPortion();
+            while (pPor)
+            {
+                pPor->dumpAsXml(writer, rText, nOffset);
+                pPor = pPor->GetNextPortion();
+            }
+            (void)xmlTextWriterEndElement(writer);
+            pLine = pLine->GetNext();
+        }
+        (void)xmlTextWriterEndElement(writer);
+    }
+
+    (void)xmlTextWriterEndElement(writer);
 }
 
 namespace sw {
@@ -1341,11 +1459,11 @@ SwDoc const& SwTextFrame::GetDoc() const
 }
 
 LanguageType SwTextFrame::GetLangOfChar(TextFrameIndex const nIndex,
-        sal_uInt16 const nScript, bool const bNoChar) const
+        sal_uInt16 const nScript, bool const bNoChar, bool const bNoneIfNoHyphenation) const
 {
     // a single character can be mapped uniquely!
     std::pair<SwTextNode const*, sal_Int32> const pos(MapViewToModel(nIndex));
-    return pos.first->GetLang(pos.second, bNoChar ? 0 : 1, nScript);
+    return pos.first->GetLang(pos.second, bNoChar ? 0 : 1, nScript, bNoneIfNoHyphenation);
 }
 
 void SwTextFrame::ResetPreps()
@@ -1366,6 +1484,9 @@ bool SwTextFrame::IsHiddenNow() const
 //        OSL_FAIL( "SwTextFrame::IsHiddenNow: thin frame" );
         return true;
     }
+
+    if (SwContentFrame::IsHiddenNow())
+        return true;
 
     bool bHiddenCharsHidePara(false);
     bool bHiddenParaField(false);
@@ -1436,22 +1557,14 @@ bool SwTextFrame::IsHiddenNow() const
             // be visible - check this for the 1st body paragraph
             if (IsInDocBody() && FindPrevCnt() == nullptr)
             {
-                bool isAllHidden(true);
                 for (SwContentFrame const* pNext = FindNextCnt(true);
                         pNext != nullptr; pNext = pNext->FindNextCnt(true))
                 {
-                    if (!pNext->IsTextFrame()
-                        || !static_cast<SwTextFrame const*>(pNext)->IsHiddenNow())
-                    {
-                        isAllHidden = false;
-                        break;
-                    }
+                    if (!pNext->IsHiddenNow())
+                        return true;
                 }
-                if (isAllHidden)
-                {
-                    SAL_INFO("sw.core", "unhiding one body paragraph");
-                    return false;
-                }
+                SAL_INFO("sw.core", "unhiding one body paragraph");
+                return false;
             }
             return true;
         }
@@ -1756,7 +1869,7 @@ void SwTextFrame::CalcLineSpace()
         return;
 
     if( GetDrawObjs() ||
-        GetTextNodeForParaProps()->GetSwAttrSet().GetLRSpace().IsAutoFirst())
+        GetTextNodeForParaProps()->GetSwAttrSet().GetFirstLineIndent().IsAutoFirst())
     {
         Init();
         return;
@@ -2023,6 +2136,29 @@ void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
     else if (rHint.GetId() == SfxHintId::SwDeleteChar)
     {
         pDeleteChar = static_cast<const sw::DeleteChar*>(&rHint);
+    }
+    else if (rHint.GetId() == SfxHintId::SwDocPosUpdateAtIndex)
+    {
+        auto pDocPosAt = static_cast<const sw::DocPosUpdateAtIndex*>(&rHint);
+        Broadcast(SfxHint()); // notify SwAccessibleParagraph
+        if(IsLocked())
+            return;
+        if(pDocPosAt->m_nDocPos > getFrameArea().Top())
+            return;
+        TextFrameIndex const nIndex(MapModelToView(
+            &pDocPosAt->m_rNode,
+            pDocPosAt->m_nIndex));
+        InvalidateRange(SwCharRange(nIndex, TextFrameIndex(1)));
+        return;
+    }
+    else if (rHint.GetId() == SfxHintId::SwVirtPageNumHint)
+    {
+        auto& rVirtPageNumHint = const_cast<sw::VirtPageNumHint&>(static_cast<const sw::VirtPageNumHint&>(rHint));
+        if(!IsInDocBody() || IsFollow() || rVirtPageNumHint.IsFound())
+            return;
+        if(const SwPageFrame* pPage = FindPageFrame())
+            pPage->UpdateVirtPageNumInfo(rVirtPageNumHint, this);
+        return;
     }
     else if (auto const pHt = dynamic_cast<sw::MoveText const*>(&rHint))
     {
@@ -2341,7 +2477,7 @@ void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
                 nPos = MapModelToView(&rNode, nNPos);
                 if (IsIdxInside(nPos, TextFrameIndex(1)))
                 {
-                    if( pNew == pOld )
+                    if (SfxPoolItem::areSame( pNew, pOld ))
                     {
                         // only repaint
                         // opt: invalidate window?
@@ -2400,7 +2536,7 @@ void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
                 {
                     const SfxPoolItem* pOldItem = pOld ?
                         &(static_cast<const SwAttrSetChg*>(pOld)->GetChgSet()->Get(RES_TXTATR_FIELD)) : nullptr;
-                    if( pItem == pOldItem )
+                    if (SfxPoolItem::areSame( pItem, pOldItem ))
                     {
                         InvalidatePage();
                         SetCompletePaint();
@@ -2613,23 +2749,6 @@ void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
 #endif
         }
         break;
-
-        // Process SwDocPosUpdate
-        case RES_DOCPOS_UPDATE:
-        {
-            if( pOld && pNew )
-            {
-                const SwDocPosUpdate *pDocPos = static_cast<const SwDocPosUpdate*>(pOld);
-                if( pDocPos->nDocPos <= getFrameArea().Top() )
-                {
-                    const SwFormatField *pField = static_cast<const SwFormatField *>(pNew);
-                    TextFrameIndex const nIndex(MapModelToView(&rNode,
-                                pField->GetTextField()->GetStart()));
-                    InvalidateRange(SwCharRange(nIndex, TextFrameIndex(1)));
-                }
-            }
-            break;
-        }
         case RES_PARATR_SPLIT:
             if ( GetPrev() )
                 CheckKeep();
@@ -2660,32 +2779,6 @@ void SwTextFrame::SwClientNotify(SwModify const& rModify, SfxHint const& rHint)
 
     if ( bRecalcFootnoteFlag )
         CalcFootnoteFlag();
-}
-
-bool SwTextFrame::GetInfo( SfxPoolItem &rHint ) const
-{
-    if ( RES_VIRTPAGENUM_INFO == rHint.Which() && IsInDocBody() && ! IsFollow() )
-    {
-        SwVirtPageNumInfo &rInfo = static_cast<SwVirtPageNumInfo&>(rHint);
-        const SwPageFrame *pPage = FindPageFrame();
-        if ( pPage )
-        {
-            if ( pPage == rInfo.GetOrigPage() && !GetPrev() )
-            {
-                // this should be the one
-                // (could only differ temporarily; is that disturbing?)
-                rInfo.SetInfo( pPage, this );
-                return false;
-            }
-            if ( pPage->GetPhyPageNum() < rInfo.GetOrigPage()->GetPhyPageNum() &&
-                 (!rInfo.GetPage() || pPage->GetPhyPageNum() > rInfo.GetPage()->GetPhyPageNum()))
-            {
-                // this could be the one
-                rInfo.SetInfo( pPage, this );
-            }
-        }
-    }
-    return true;
 }
 
 void SwTextFrame::PrepWidows( const sal_uInt16 nNeed, bool bNotify )
@@ -3006,7 +3099,7 @@ bool SwTextFrame::Prepare( const PrepareHint ePrep, const void* pVoid,
                             SwAnchoredObject* pAnchoredObj = (*GetDrawObjs())[i];
                             // i#28701 - consider all
                             // to-character anchored objects
-                            if ( pAnchoredObj->GetFrameFormat().GetAnchor().GetAnchorId()
+                            if ( pAnchoredObj->GetFrameFormat()->GetAnchor().GetAnchorId()
                                     == RndStdIds::FLY_AT_CHAR )
                             {
                                 bFormat = true;
@@ -3815,9 +3908,9 @@ sal_uInt16 SwTextFrame::FirstLineHeight() const
     return nHeight;
 }
 
-sal_uInt16 SwTextFrame::GetLineCount(TextFrameIndex const nPos)
+sal_Int32 SwTextFrame::GetLineCount(TextFrameIndex const nPos)
 {
-    sal_uInt16 nRet = 0;
+    sal_Int32 nRet = 0;
     SwTextFrame *pFrame = this;
     do
     {
@@ -3839,7 +3932,7 @@ sal_uInt16 SwTextFrame::GetLineCount(TextFrameIndex const nPos)
 void SwTextFrame::ChgThisLines()
 {
     // not necessary to format here (GetFormatted etc.), because we have to come from there!
-    sal_uInt32 nNew = 0;
+    sal_Int32 nNew = 0;
     const SwLineNumberInfo &rInf = GetDoc().GetLineNumberInfo();
     if ( !GetText().isEmpty() && HasPara() )
     {
@@ -3899,9 +3992,9 @@ void SwTextFrame::RecalcAllLines()
     if ( IsInTab() )
         return;
 
-    const sal_uLong nOld = GetAllLines();
+    const sal_Int32 nOld = GetAllLines();
     const SwFormatLineNumber &rLineNum = GetTextNodeForParaProps()->GetSwAttrSet().GetLineNumber();
-    sal_uLong nNewNum;
+    sal_Int32 nNewNum;
     const bool bRestart = GetDoc().GetLineNumberInfo().IsRestartEachPage();
 
     if ( !IsFollow() && rLineNum.GetStartValue() && rLineNum.IsCount() )

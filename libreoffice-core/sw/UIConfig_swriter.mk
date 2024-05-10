@@ -285,6 +285,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/pagestylespanel \
 	sw/uiconfig/swriter/ui/pageheaderpanel \
 	sw/uiconfig/swriter/ui/pagefooterpanel \
+	sw/uiconfig/swriter/ui/a11ycheckissuespanel \
 	sw/uiconfig/swriter/ui/poseditbox \
 	sw/uiconfig/swriter/ui/sidebarwrap \
 	sw/uiconfig/swriter/ui/sidebarstylepresets \
@@ -319,6 +320,7 @@ $(eval $(call gb_UIConfig_add_uifiles,modules/swriter,\
 	sw/uiconfig/swriter/ui/viewoptionspage \
 	sw/uiconfig/swriter/ui/warndatasourcedialog \
 	sw/uiconfig/swriter/ui/warnemaildialog \
+	sw/uiconfig/swriter/ui/warnhiddensectiondialog \
 	sw/uiconfig/swriter/ui/watermarkdialog \
 	sw/uiconfig/swriter/ui/wordcount \
 	sw/uiconfig/swriter/ui/wordcount-mobile \

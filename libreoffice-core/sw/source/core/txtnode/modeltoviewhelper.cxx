@@ -117,7 +117,7 @@ ModelToViewHelper::ModelToViewHelper(const SwTextNode &rNode,
             sw::mark::IFieldmark const* pFieldMark(nullptr);
             while (true) // loop to skip NonTextFieldmarks, those are handled later
             {
-                pFieldMark = rIDMA.getFieldmarkFor(*cursor.GetPoint());
+                pFieldMark = rIDMA.getInnerFieldmarkFor(*cursor.GetPoint());
                 if (pFieldMark == nullptr
                     || pFieldMark->GetMarkStart().GetNode().GetTextNode()->GetText()[
                             pFieldMark->GetMarkStart().GetContentIndex()]
@@ -136,7 +136,7 @@ ModelToViewHelper::ModelToViewHelper(const SwTextNode &rNode,
                 break;
             }
             assert(pFieldMark->GetMarkStart().GetNode().GetTextNode()->GetText()[pFieldMark->GetMarkStart().GetContentIndex()] != CH_TXT_ATR_FORMELEMENT);
-            // getFieldmarkFor may also return one that starts at rNode,0 -
+            // getInnerFieldmarkFor may also return one that starts at rNode,0 -
             // skip it, must be handled in loop below
             if (pFieldMark->GetMarkStart().GetNode() < rNode)
             {
@@ -187,14 +187,14 @@ ModelToViewHelper::ModelToViewHelper(const SwTextNode &rNode,
                             [](auto const& it) { return it.second; }))
                     {
 // prevent -Werror=maybe-uninitialized under gcc 11.2.0
-#if defined __GNUC__ && !defined __clang__ && __GNUC__ >= 11 && __GNUC__ <= 12
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
                         // i is still hidden but the Range end is oddly "-1"
                         aHiddenMulti.Select({*oStartHidden, i}, true);
                         oStartHidden.reset();
-#if defined __GNUC__ && !defined __clang__ && __GNUC__ >= 11 && __GNUC__ <= 12
+#if defined __GNUC__ && !defined __clang__ && __GNUC__ == 12
 #pragma GCC diagnostic pop
 #endif
                     }

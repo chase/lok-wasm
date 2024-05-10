@@ -591,7 +591,7 @@ void SwDBManager::ImportFromConnection(  SwWrtShell* pSh )
     std::optional<SwWait> oWait;
 
     {
-        sal_uLong i = 0;
+        sal_uInt32 i = 0;
         do {
 
             ImportDBEntry(pSh);
@@ -797,7 +797,7 @@ static void lcl_SaveDebugDoc( SfxObjectShell *xTargetDocShell,
         StreamMode::STD_READWRITE );
     bool bAnyError = !xTargetDocShell->DoSaveAs( *pDstMed );
     // xObjectShell->DoSaveCompleted crashes the mail merge unit tests, so skip it
-    bAnyError |= (ERRCODE_NONE != xTargetDocShell->GetError());
+    bAnyError |= (ERRCODE_NONE != xTargetDocShell->GetErrorIgnoreWarning());
     if( bAnyError )
         SAL_WARN( "sw.mailmerge", "Error saving: " << aTempFile.GetURL() );
     else
@@ -820,15 +820,12 @@ static bool lcl_SaveDoc(
 
     SfxMedium* pDstMed = new SfxMedium( url, StreamMode::STD_READWRITE );
     pDstMed->SetFilter( pStoreToFilter );
-    if( pDstMed->GetItemSet() )
-    {
-        if( pStoreToFilterOptions )
-            pDstMed->GetItemSet()->Put( SfxStringItem(SID_FILE_FILTEROPTIONS,
-                                        *pStoreToFilterOptions));
-        if( pSaveToFilterData->hasElements() )
-            pDstMed->GetItemSet()->Put( SfxUnoAnyItem(SID_FILTER_DATA,
-                                        uno::Any(*pSaveToFilterData)));
-    }
+    if( pStoreToFilterOptions )
+        pDstMed->GetItemSet().Put( SfxStringItem(SID_FILE_FILTEROPTIONS,
+                                   *pStoreToFilterOptions));
+    if( pSaveToFilterData->hasElements() )
+        pDstMed->GetItemSet().Put( SfxUnoAnyItem(SID_FILTER_DATA,
+                                   uno::Any(*pSaveToFilterData)));
 
     // convert fields to text if we are exporting to PDF.
     // this prevents a second merge while updating the fields
@@ -840,11 +837,11 @@ static bool lcl_SaveDoc(
     // Actually this should be a bool... so in case of email and individual
     // files, where this is set, we skip the recently used handling
     bAnyError |= !xObjectShell->DoSaveCompleted( pDstMed, !decodedURL );
-    bAnyError |= (ERRCODE_NONE != xObjectShell->GetError());
+    bAnyError |= (ERRCODE_NONE != xObjectShell->GetErrorIgnoreWarning());
     if( bAnyError )
     {
         // error message ??
-        ErrorHandler::HandleError( xObjectShell->GetError() );
+        ErrorHandler::HandleError( xObjectShell->GetErrorIgnoreWarning() );
     }
     return !bAnyError;
 }
@@ -1004,8 +1001,7 @@ static rtl::Reference<SwMailMessage> lcl_CreateMailFromDoc(
         OStringBuffer sLine;
         while ( pInStream->ReadLine( sLine ) )
         {
-            sBody.append(OStringToOUString( sLine, sMailEncoding ));
-            sBody.append("\n");
+            sBody.append(OStringToOUString( sLine, sMailEncoding ) + "\n");
         }
     }
     pMessage->setSubject( rMergeDescriptor.sSubject );
@@ -1674,13 +1670,13 @@ void SwDBManager::MergeCancel()
 
 // determine the column's Numberformat and transfer to the forwarded Formatter,
 // if applicable.
-sal_uLong SwDBManager::GetColumnFormat( const OUString& rDBName,
+sal_uInt32 SwDBManager::GetColumnFormat( const OUString& rDBName,
                                 const OUString& rTableName,
                                 const OUString& rColNm,
                                 SvNumberFormatter* pNFormatr,
                                 LanguageType nLanguage )
 {
-    sal_uLong nRet = 0;
+    sal_uInt32 nRet = 0;
     if(pNFormatr)
     {
         uno::Reference< sdbc::XDataSource> xSource;
@@ -1754,7 +1750,7 @@ sal_uLong SwDBManager::GetColumnFormat( const OUString& rDBName,
     return nRet;
 }
 
-sal_uLong SwDBManager::GetColumnFormat( uno::Reference< sdbc::XDataSource> const & xSource_in,
+sal_uInt32 SwDBManager::GetColumnFormat( uno::Reference< sdbc::XDataSource> const & xSource_in,
                         uno::Reference< sdbc::XConnection> const & xConnection,
                         uno::Reference< beans::XPropertySet> const & xColumn,
                         SvNumberFormatter* pNFormatr,
@@ -1763,7 +1759,7 @@ sal_uLong SwDBManager::GetColumnFormat( uno::Reference< sdbc::XDataSource> const
     auto xSource = xSource_in;
 
     // set the NumberFormat in the doc if applicable
-    sal_uLong nRet = 0;
+    sal_uInt32 nRet = 0;
 
     if(!xSource.is())
     {
@@ -1817,6 +1813,7 @@ sal_uLong SwDBManager::GetColumnFormat( uno::Reference< sdbc::XDataSource> const
                         nFormat = xDocNumberFormats->queryKey( sFormat, aLoc, false );
                         if(NUMBERFORMAT_ENTRY_NOT_FOUND == sal::static_int_cast< sal_uInt32, sal_Int32>(nFormat))
                             nFormat = xDocNumberFormats->addNew( sFormat, aLoc );
+
                         nRet = nFormat;
                         bUseDefault = false;
                     }
@@ -2964,7 +2961,7 @@ void SwDBManager::ExecuteFormLetter( SwWrtShell& rSh,
         pFound = FindDSConnection(sDataSource, true);
     }
     SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-    m_pImpl->pMergeDialog = pFact->CreateMailMergeDlg(rSh.GetView().GetViewFrame()->GetFrameWeld(), rSh,
+    m_pImpl->pMergeDialog = pFact->CreateMailMergeDlg(rSh.GetView().GetViewFrame().GetFrameWeld(), rSh,
                                                      sDataSource,
                                                      sDataTableOrQuery,
                                                      nCmdType,
@@ -2978,7 +2975,7 @@ void SwDBManager::ExecuteFormLetter( SwWrtShell& rSh,
             aDescriptor[svx::DataAccessDescriptorProperty::Cursor] <<= xResSet;
 
         // SfxObjectShellRef is ok, since there should be no control over the document lifetime here
-        SfxObjectShellRef xDocShell = rSh.GetView().GetViewFrame()->GetObjectShell();
+        SfxObjectShellRef xDocShell = rSh.GetView().GetViewFrame().GetObjectShell();
 
         lcl_emitEvent(SfxEventHintId::SwMailMerge, STR_SW_EVENT_MAIL_MERGE, xDocShell.get());
 

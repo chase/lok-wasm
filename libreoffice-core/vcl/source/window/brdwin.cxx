@@ -1372,11 +1372,11 @@ void ImplStdBorderWindowView::DrawWindow(vcl::RenderContext& rRenderContext, con
         if (pWin)
         {
             vcl::Region aClipRgn(aInRect);
-            tools::Rectangle aItemClipRect(pWin->ImplGetItemEdgeClipRect());
+            AbsoluteScreenPixelRectangle aItemClipRect(pWin->ImplGetItemEdgeClipRect());
             if (!aItemClipRect.IsEmpty())
             {
-                aItemClipRect.SetPos(pData->mpBorderWindow->AbsoluteScreenToOutputPixel(aItemClipRect.TopLeft()));
-                aClipRgn.Exclude(aItemClipRect);
+                tools::Rectangle aTmp(pData->mpBorderWindow->AbsoluteScreenToOutputPixel(aItemClipRect.TopLeft()), aItemClipRect.GetSize());
+                aClipRgn.Exclude(aTmp);
                 rRenderContext.SetClipRegion(aClipRgn);
             }
         }
@@ -1519,22 +1519,19 @@ void ImplBorderWindow::ImplInit( vcl::Window* pParent,
     mbSmallOutBorder    = false;
     if ( nTypeStyle & BorderWindowStyle::Frame )
     {
+        mpWindowImpl->mbOverlapWin = true;
+        mpWindowImpl->mbFrame = true;
+
         if( nStyle & WB_SYSTEMCHILDWINDOW )
         {
-            mpWindowImpl->mbOverlapWin  = true;
-            mpWindowImpl->mbFrame       = true;
             mbFrameBorder               = false;
         }
         else if( nStyle & (WB_OWNERDRAWDECORATION | WB_POPUP) )
         {
-            mpWindowImpl->mbOverlapWin  = true;
-            mpWindowImpl->mbFrame       = true;
             mbFrameBorder   = (nOrgStyle & WB_NOBORDER) == 0;
         }
         else
         {
-            mpWindowImpl->mbOverlapWin  = true;
-            mpWindowImpl->mbFrame       = true;
             mbFrameBorder   = false;
             // closeable windows may have a border as well, eg. system floating windows without caption
             if ( (nOrgStyle & (WB_BORDER | WB_NOBORDER | WB_MOVEABLE | WB_SIZEABLE/* | WB_CLOSEABLE*/)) == WB_BORDER )

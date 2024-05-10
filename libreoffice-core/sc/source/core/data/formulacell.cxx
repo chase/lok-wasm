@@ -2273,7 +2273,7 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
 
         if ( pCode->IsRecalcModeForced() )
         {
-            sal_uLong nValidation = rDocument.GetAttr(
+            sal_uInt32 nValidation = rDocument.GetAttr(
                     aPos.Col(), aPos.Row(), aPos.Tab(), ATTR_VALIDDATA )->GetValue();
             if ( nValidation )
             {
@@ -2337,6 +2337,8 @@ void ScFormulaCell::InterpretTail( ScInterpreterContext& rContext, ScInterpretTa
 
 void ScFormulaCell::HandleStuffAfterParallelCalculation(ScInterpreter* pInterpreter)
 {
+    aResult.HandleStuffAfterParallelCalculation();
+
     if( !pCode->GetCodeLen() )
         return;
 
@@ -4432,7 +4434,53 @@ struct ScDependantsCalculator
         return nRowLen;
     }
 
-    bool DoIt()
+    // Because Lookup will extend the Result Vector under certain circumstances listed at:
+    // https://wiki.documentfoundation.org/Documentation/Calc_Functions/LOOKUP
+    // then if the Lookup has a Result Vector only accept the Lookup for parallelization
+    // of the Result Vector has the same dimensions as the Search Vector.
+    bool LookupResultVectorMismatch(sal_Int32 nTokenIdx)
+    {
+        if (nTokenIdx >= 3)
+        {
+            FormulaToken** pRPNArray = mrCode.GetCode();
+            if (pRPNArray[nTokenIdx - 1]->GetOpCode() == ocPush &&   // <- result vector
+                pRPNArray[nTokenIdx - 2]->GetOpCode() == ocPush &&   // <- search vector
+                pRPNArray[nTokenIdx - 2]->GetType() == svDoubleRef &&
+                pRPNArray[nTokenIdx - 3]->GetOpCode() == ocPush)     // <- search criterion
+            {
+                auto res = pRPNArray[nTokenIdx - 1];
+                // If Result vector is just a single cell reference
+                // LOOKUP extends it as a column vector.
+                if (res->GetType() == svSingleRef)
+                    return true;
+
+                // If Result vector is a cell range and the match position
+                // falls outside its length, it gets automatically extended
+                // to the length of Search vector, but in the direction of
+                // Result vector.
+                if (res->GetType() == svDoubleRef)
+                {
+                    ScComplexRefData aRef1 = *res->GetDoubleRef();
+                    ScComplexRefData aRef2 = *pRPNArray[nTokenIdx - 2]->GetDoubleRef();
+                    ScRange resultRange = aRef1.toAbs(mrDoc, mrPos);
+                    ScRange sourceRange = aRef2.toAbs(mrDoc, mrPos);
+
+                    SCROW nResultRows = resultRange.aEnd.Row() - resultRange.aStart.Row();
+                    SCROW nSourceRows = sourceRange.aEnd.Row() - sourceRange.aStart.Row();
+                    if (nResultRows != nSourceRows)
+                        return true;
+
+                    SCCOL nResultCols = resultRange.aEnd.Col() - resultRange.aStart.Col();
+                    SCCOL nSourceCols = sourceRange.aEnd.Col() - sourceRange.aStart.Col();
+                    if (nResultCols != nSourceCols)
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    bool DoIt(ScRangeList* pSuccessfulDependencies, ScAddress* pDirtiedAddress)
     {
         // Partially from ScGroupTokenConverter::convert in sc/source/core/data/grouptokenconverter.cxx
 
@@ -4460,6 +4508,21 @@ struct ScDependantsCalculator
                     return false;
             }
 
+            if (p->GetOpCode() == ocLookup && LookupResultVectorMismatch(nTokenIdx))
+            {
+                SAL_INFO("sc.core.formulacell", "Lookup Result Vector size doesn't match Search Vector");
+                return false;
+            }
+
+            if (p->GetOpCode() == ocRange)
+            {
+                // We are just looking at svSingleRef/svDoubleRef, so we will miss that ocRange constructs
+                // a range from its arguments, and only examining the individual args doesn't capture the
+                // true range of dependencies
+                SAL_WARN("sc.core.formulacell", "dynamic range, dropping as candidate for parallelizing");
+                return false;
+            }
+
             switch (p->GetType())
             {
             case svSingleRef:
@@ -4469,7 +4532,7 @@ struct ScDependantsCalculator
                         return false;
                     ScAddress aRefPos = aRef.toAbs(mrDoc, mrPos);
 
-                    if (!mrDoc.TableExists(aRefPos.Tab()))
+                    if (!mrDoc.HasTable(aRefPos.Tab()))
                         return false; // or true?
 
                     if (aRef.IsRowRel())
@@ -4506,7 +4569,7 @@ struct ScDependantsCalculator
                     ScRange aAbs = aRef.toAbs(mrDoc, mrPos);
 
                     // Multiple sheet
-                    if (aRef.Ref1.Tab() != aRef.Ref2.Tab())
+                    if (aAbs.aStart.Tab() != aAbs.aEnd.Tab())
                         return false;
 
                     bool bIsRef1RowRel = aRef.Ref1.IsRowRel();
@@ -4546,10 +4609,17 @@ struct ScDependantsCalculator
                         continue;
                     }
 
+                    SCROW nFirstRefStartRow = bIsRef1RowRel ? aAbs.aStart.Row() + mnStartOffset : aAbs.aStart.Row();
+                    SCROW nLastRefEndRow =  bIsRef2RowRel ? aAbs.aEnd.Row() + mnEndOffset : aAbs.aEnd.Row();
+
+                    SCROW nFirstRefEndRow = bIsRef1RowRel ? aAbs.aStart.Row() + mnEndOffset : aAbs.aStart.Row();
+                    SCROW nLastRefStartRow =  bIsRef2RowRel ? aAbs.aEnd.Row() + mnStartOffset : aAbs.aEnd.Row();
+
                     // The first row that will be referenced through the doubleref.
-                    SCROW nFirstRefRow = bIsRef1RowRel ? aAbs.aStart.Row() + mnStartOffset : aAbs.aStart.Row();
+                    SCROW nFirstRefRow = std::min(nFirstRefStartRow, nLastRefStartRow);
                     // The last row that will be referenced through the doubleref.
-                    SCROW nLastRefRow =  bIsRef2RowRel ? aAbs.aEnd.Row() + mnEndOffset : aAbs.aEnd.Row();
+                    SCROW nLastRefRow =  std::max(nLastRefEndRow, nFirstRefEndRow);
+
                     // Number of rows to be evaluated from nFirstRefRow.
                     SCROW nArrayLength = nLastRefRow - nFirstRefRow + 1;
                     assert(nArrayLength > 0);
@@ -4583,13 +4653,16 @@ struct ScDependantsCalculator
                     nStartRow = 0;
                 }
                 if (!mrDoc.HandleRefArrayForParallelism(ScAddress(nCol, nStartRow, rRange.aStart.Tab()),
-                                                        nLength, mxGroup))
+                                                        nLength, mxGroup, pDirtiedAddress))
                     return false;
             }
         }
 
         if (bHasSelfReferences)
             mxGroup->mbPartOfCycle = true;
+
+        if (pSuccessfulDependencies && !bHasSelfReferences)
+            *pSuccessfulDependencies = aRangeList;
 
         return !bHasSelfReferences;
     }
@@ -4688,7 +4761,9 @@ bool ScFormulaCell::InterpretFormulaGroup(SCROW nStartOffset, SCROW nEndOffset)
 
 bool ScFormulaCell::CheckComputeDependencies(sc::FormulaLogger::GroupScope& rScope, bool fromFirstRow,
                                              SCROW nStartOffset, SCROW nEndOffset,
-                                             bool bCalcDependencyOnly)
+                                             bool bCalcDependencyOnly,
+                                             ScRangeList* pSuccessfulDependencies,
+                                             ScAddress* pDirtiedAddress)
 {
     ScRecursionHelper& rRecursionHelper = rDocument.GetRecursionHelper();
     // iterate over code in the formula ...
@@ -4701,7 +4776,7 @@ bool ScFormulaCell::CheckComputeDependencies(sc::FormulaLogger::GroupScope& rSco
         // (We can only reach here from a multi-group dependency evaluation attempt).
         // (These two have to be in pairs always for any given formula-group)
         ScDependantsCalculator aCalculator(rDocument, *pCode, *this, mxGroup->mpTopCell->aPos, fromFirstRow, nStartOffset, nEndOffset);
-        return aCalculator.DoIt();
+        return aCalculator.DoIt(pSuccessfulDependencies, pDirtiedAddress);
     }
 
     bool bOKToParallelize = false;
@@ -4716,7 +4791,7 @@ bool ScFormulaCell::CheckComputeDependencies(sc::FormulaLogger::GroupScope& rSco
 
         ScFormulaGroupDependencyComputeGuard aDepComputeGuard(rRecursionHelper);
         ScDependantsCalculator aCalculator(rDocument, *pCode, *this, mxGroup->mpTopCell->aPos, fromFirstRow, nStartOffset, nEndOffset);
-        bOKToParallelize = aCalculator.DoIt();
+        bOKToParallelize = aCalculator.DoIt(pSuccessfulDependencies, pDirtiedAddress);
 
     }
 
@@ -4822,7 +4897,8 @@ bool ScFormulaCell::InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope
         pCode->IsEnabledForThreading() &&
         ScCalcConfig::isThreadingEnabled())
     {
-        if(!bDependencyComputed && !CheckComputeDependencies(aScope, false, nStartOffset, nEndOffset))
+        ScRangeList aOrigDependencies;
+        if(!bDependencyComputed && !CheckComputeDependencies(aScope, false, nStartOffset, nEndOffset, false, &aOrigDependencies))
         {
             bDependencyComputed = true;
             bDependencyCheckFailed = true;
@@ -4899,6 +4975,8 @@ bool ScFormulaCell::InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope
             nColEnd = lcl_probeLeftOrRightFGs(mxGroup, rDocument, aFGSet, aFGMap, false);
         }
 
+        bool bFGOK = true;
+        ScAddress aDirtiedAddress(ScAddress::INITIALIZE_INVALID);
         if (nColStart != nColEnd)
         {
             ScCheckIndependentFGGuard aGuard(rRecursionHelper, &aFGSet);
@@ -4907,7 +4985,8 @@ bool ScFormulaCell::InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope
                 if (nCurrCol == aPos.Col())
                     continue;
 
-                bool bFGOK = aFGMap[nCurrCol]->CheckComputeDependencies(aScope, false, nStartOffset, nEndOffset, true);
+                bFGOK = aFGMap[nCurrCol]->CheckComputeDependencies(aScope, false, nStartOffset, nEndOffset,
+                                                                   true, nullptr, &aDirtiedAddress);
                 if (!bFGOK || !aGuard.AreGroupsIndependent())
                 {
                     nColEnd = nColStart = aPos.Col();
@@ -4916,12 +4995,30 @@ bool ScFormulaCell::InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope
             }
         }
 
+        // tdf#156677 it is possible that if a check of a column in the new range fails that the check has
+        // now left a cell that the original range depended on in a Dirty state. So if the dirtied cell
+        // was part of the original dependencies re-run the initial CheckComputeDependencies to fix it.
+        if (!bFGOK && aDirtiedAddress.IsValid() && aOrigDependencies.Find(aDirtiedAddress))
+        {
+            SAL_WARN("sc.core.formulacell", "rechecking dependencies due to a dirtied cell during speculative probe");
+            const bool bRedoEntryCheckSucceeded = CheckComputeDependencies(aScope, false, nStartOffset, nEndOffset);
+            assert(bRedoEntryCheckSucceeded && "if it worked on the original range it should work again on that range");
+            (void)bRedoEntryCheckSucceeded;
+        }
+
         std::vector<std::unique_ptr<ScInterpreter>> aInterpreters(nThreadCount);
         {
             assert(!rDocument.IsThreadedGroupCalcInProgress());
             rDocument.SetThreadedGroupCalcInProgress(true);
 
             ScMutationDisable aGuard(rDocument, ScMutationGuardFlags::CORE);
+
+            // Here we turn off ref-counting for the contents of pCode on the basis
+            // that pCode is not modified by interpreting and when interpreting is
+            // complete all token refcounts will be back to their initial ref count
+            FormulaToken** pArray = pCode->GetArray();
+            for (sal_uInt16 i = 0, n = pCode->GetLen(); i < n; ++i)
+                pArray[i]->SetRefCntPolicy(RefCntPolicy::None);
 
             // Start nThreadCount new threads
             std::shared_ptr<comphelper::ThreadTaskTag> aTag = comphelper::ThreadPool::createThreadTaskTag();
@@ -4943,6 +5040,13 @@ bool ScFormulaCell::InterpretFormulaGroupThreading(sc::FormulaLogger::GroupScope
             // Do not join the threads here. They will get joined in ScDocument destructor
             // if they don't get joined from elsewhere before (via ThreadPool::waitUntilDone).
             rThreadPool.waitUntilDone(aTag, false);
+
+            // Drop any caches that reference Tokens before restoring ref counting policy
+            for (int i = 0; i < nThreadCount; ++i)
+                aInterpreters[i]->DropTokenCaches();
+
+            for (sal_uInt16 i = 0, n = pCode->GetLen(); i < n; ++i)
+                pArray[i]->SetRefCntPolicy(RefCntPolicy::ThreadSafe);
 
             rDocument.SetThreadedGroupCalcInProgress(false);
 

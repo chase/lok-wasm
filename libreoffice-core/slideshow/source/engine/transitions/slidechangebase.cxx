@@ -92,9 +92,9 @@ SlideBitmapSharedPtr SlideChangeBase::createBitmap( const UnoViewSharedPtr&     
         // sprite to black.
 
         // create empty, black-filled bitmap
-        const basegfx::B2ISize slideSizePixel(
-            getSlideSizePixel( basegfx::B2DVector( mpEnteringSlide->getSlideSize() ),
-                               rView ));
+        auto aSlideSize = mpEnteringSlide->getSlideSize();
+        auto aVector = getSlideSizePixel(basegfx::B2DVector(aSlideSize.getWidth(), aSlideSize.getHeight()), rView);
+        const basegfx::B2ISize slideSizePixel(aVector.getX(), aVector.getY());
 
         cppcanvas::CanvasSharedPtr pCanvas( rView->getCanvas() );
 
@@ -121,8 +121,8 @@ SlideBitmapSharedPtr SlideChangeBase::createBitmap( const UnoViewSharedPtr&     
         // clear bitmap to black
         fillRect( pBitmapCanvas,
                   ::basegfx::B2DRectangle( 0.0, 0.0,
-                                           slideSizePixel.getX(),
-                                           slideSizePixel.getY() ),
+                                           slideSizePixel.getWidth(),
+                                           slideSizePixel.getHeight() ),
                   0x000000FFU );
 
         pRet = std::make_shared<SlideBitmap>( pBitmap );
@@ -137,8 +137,9 @@ SlideBitmapSharedPtr SlideChangeBase::createBitmap( const UnoViewSharedPtr&     
 
 ::basegfx::B2ISize SlideChangeBase::getEnteringSlideSizePixel( const UnoViewSharedPtr& pView ) const
 {
-    return getSlideSizePixel( basegfx::B2DVector(mpEnteringSlide->getSlideSize().getX(), mpEnteringSlide->getSlideSize().getY()),
-                              pView );
+    auto aSlideSize = mpEnteringSlide->getSlideSize();
+    auto aSlideSizePixel = getSlideSizePixel( basegfx::B2DVector(aSlideSize.getWidth(), aSlideSize.getHeight()), pView);
+    return {aSlideSizePixel.getX(), aSlideSizePixel.getY() };
 }
 
 void SlideChangeBase::renderBitmap(
@@ -403,13 +404,9 @@ void SlideChangeBase::viewRemoved( const UnoViewSharedPtr& rView )
         return;
 
     // erase corresponding entry from maViewData
-    maViewData.erase(
-        std::remove_if(
-            maViewData.begin(),
-            maViewData.end(),
+    std::erase_if(maViewData,
             [rView]( const ViewEntry& rViewEntry )
-            { return rView == rViewEntry.getView(); } ),
-        maViewData.end() );
+            { return rView == rViewEntry.getView(); } );
 }
 
 void SlideChangeBase::viewChanged( const UnoViewSharedPtr& rView )
@@ -486,9 +483,8 @@ void SlideChangeBase::addSprites( ViewEntry& rEntry )
     if( mbCreateEnteringSprites )
     {
         // create entering sprite:
-        const basegfx::B2ISize enteringSlideSizePixel(
-            getSlideSizePixel( basegfx::B2DVector( mpEnteringSlide->getSlideSize() ),
-                               rEntry.mpView ));
+        auto aSlideSizePixel = getSlideSizePixel(basegfx::B2DVector(mpEnteringSlide->getSlideSize().getWidth(), mpEnteringSlide->getSlideSize().getHeight()), rEntry.mpView);
+        const basegfx::B2ISize enteringSlideSizePixel(aSlideSizePixel.getX(), aSlideSizePixel.getY());
 
         rEntry.mpInSprite = createSprite( rEntry.mpView,
                                           basegfx::B2DSize( enteringSlideSizePixel ),

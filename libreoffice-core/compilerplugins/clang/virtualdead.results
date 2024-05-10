@@ -28,10 +28,13 @@ canvas/inc/base/graphicdevicebase.hxx:318
 include/basegfx/utils/unopolypolygon.hxx:93
     void basegfx::unotools::UnoPolyPolygon::modifying()const
     empty
+include/comphelper/propmultiplex2.hxx:54
+    void comphelper::OPropertyChangeListener2::_disposing(const struct com::sun::star::lang::EventObject &,)
+    empty
 include/connectivity/sdbcx/IRefreshable.hxx:29
     void connectivity::sdbcx::IRefreshableGroups::refreshGroups()
     empty
-include/filter/msfilter/msdffimp.hxx:545
+include/filter/msfilter/msdffimp.hxx:547
     _Bool SvxMSDffManager::ShapeHasText(unsigned long,unsigned long,)const
     1
 include/svl/svdde.hxx:236
@@ -51,7 +54,7 @@ include/svl/svdde.hxx:243
     0
 include/svtools/unoevent.hxx:198
     unsigned short SvEventDescriptor::getMacroItemWhich()const
-    108
+    114
 include/svx/GenericCheckDialog.hxx:32
     _Bool svx::CheckData::canMarkObject()
     1
@@ -67,12 +70,12 @@ include/unotools/desktopterminationobserver.hxx:36
 include/vbahelper/vbahelperinterface.hxx:75
     int InheritedHelperInterfaceImpl::getCreator()
     1400204879
-sc/source/core/opencl/formulagroupcl.cxx:1075
-    void sc::opencl::(anonymous namespace)::DynamicKernelSlidingArgument::GenSlidingWindowFunction(class sc::opencl::outputstream &,)
-    empty
-sc/source/core/opencl/opbase.hxx:212
+sc/source/core/opencl/opbase.hxx:333
     _Bool sc::opencl::OpBase::takeNumeric()const
     1
+sc/source/core/opencl/opbase.hxx:447
+    void sc::opencl::DynamicKernelSlidingArgument::GenSlidingWindowFunction(class sc::opencl::outputstream &,)
+    empty
 sc/source/ui/vba/vbasheetobject.hxx:116
     class rtl::OUString ScVbaSheetObjectBase::implGetBaseName()const
     "Button"
@@ -82,15 +85,27 @@ sc/source/ui/vba/vbasheetobjects.cxx:145
 slideshow/source/engine/animationfactory.cxx:617
     void slideshow::internal::(anonymous namespace)::GenericAnimation::prefetch()
     empty
+unoxml/inc/node.hxx:137
+    _Bool DOM::CNode::IsChildTypeAllowed(const enum com::sun::star::xml::dom::NodeType,const enum com::sun::star::xml::dom::NodeType *const,)
+    0
+vcl/inc/font/LogicalFontInstance.hxx:126
+    void LogicalFontInstance::ImplInitHbFont(struct hb_font_t *,)
+    empty
 vcl/inc/qt5/QtFilePicker.hxx:182
     void QtFilePicker::updateAutomaticFileExtension()
     empty
+vcl/inc/salbmp.hxx:71
+    _Bool SalBitmap::Create(const class com::sun::star::uno::Reference<class com::sun::star::rendering::XBitmapCanvas> &,class Size &,_Bool,)
+    0
 vcl/inc/salframe.hxx:145
     void SalFrame::SetRepresentedURL(const class rtl::OUString &,)
     empty
 vcl/inc/salframe.hxx:204
     _Bool SalFrame::MapUnicodeToKeyCode(char16_t,struct o3tl::strong_int<unsigned short, struct LanguageTypeTag>,class vcl::KeyCode &,)
     0
+vcl/inc/salgdiimpl.hxx:79
+    void SalGraphicsImpl::freeResources()
+    empty
 vcl/inc/salinst.hxx:95
     _Bool SalInstance::SVMainHook(int *,)
     0
@@ -100,7 +115,7 @@ vcl/inc/salinst.hxx:204
 vcl/inc/salinst.hxx:213
     void SalInstance::BeforeAbort(const class rtl::OUString &,_Bool,)
     empty
-vcl/inc/salmenu.hxx:85
+vcl/inc/salmenu.hxx:76
     void SalMenu::GetSystemMenuData(struct SystemMenuData *,)
     empty
 vcl/inc/salobj.hxx:49

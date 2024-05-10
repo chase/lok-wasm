@@ -108,19 +108,15 @@ namespace accessibility
         return aRect;
     }
 
-    tools::Rectangle AccessibleIconChoiceCtrlEntry::GetBoundingBoxOnScreen_Impl() const
+    AbsoluteScreenPixelRectangle AccessibleIconChoiceCtrlEntry::GetBoundingBoxOnScreen_Impl() const
     {
-        tools::Rectangle aRect;
         SvxIconChoiceCtrlEntry* pEntry = m_pIconCtrl->GetEntry( m_nIndex );
-        if ( pEntry )
-        {
-            aRect = m_pIconCtrl->GetBoundingBox( pEntry );
-            Point aTopLeft = aRect.TopLeft();
-            aTopLeft += m_pIconCtrl->GetWindowExtentsRelative( nullptr ).TopLeft();
-            aRect = tools::Rectangle( aTopLeft, aRect.GetSize() );
-        }
-
-        return aRect;
+        if ( !pEntry )
+            return AbsoluteScreenPixelRectangle();
+        tools::Rectangle aRect = m_pIconCtrl->GetBoundingBox( pEntry );
+        AbsoluteScreenPixelPoint aTopLeft = m_pIconCtrl->GetWindowExtentsAbsolute().TopLeft();
+        aTopLeft += AbsoluteScreenPixelPoint(aRect.TopLeft());
+        return AbsoluteScreenPixelRectangle( aTopLeft, aRect.GetSize() );
     }
 
     bool AccessibleIconChoiceCtrlEntry::IsAlive_Impl() const
@@ -152,7 +148,7 @@ namespace accessibility
         return GetBoundingBox_Impl();
     }
 
-    tools::Rectangle AccessibleIconChoiceCtrlEntry::GetBoundingBoxOnScreen()
+    AbsoluteScreenPixelRectangle AccessibleIconChoiceCtrlEntry::GetBoundingBoxOnScreen()
     {
         SolarMutexGuard aSolarGuard;
         ::osl::MutexGuard aGuard( m_aMutex );
@@ -265,8 +261,6 @@ namespace accessibility
 
     sal_Int64 SAL_CALL AccessibleIconChoiceCtrlEntry::getAccessibleIndexInParent(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         return m_nIndex;
     }
 
@@ -626,8 +620,6 @@ namespace accessibility
 
     sal_Int32 SAL_CALL AccessibleIconChoiceCtrlEntry::getAccessibleActionCount(  )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         // three actions supported
         return ACCESSIBLE_ACTION_COUNT;
     }
@@ -665,8 +657,6 @@ namespace accessibility
 
     Reference< XAccessibleKeyBinding > AccessibleIconChoiceCtrlEntry::getAccessibleActionKeyBinding( sal_Int32 nIndex )
     {
-        ::osl::MutexGuard aGuard( m_aMutex );
-
         Reference< XAccessibleKeyBinding > xRet;
         checkActionIndex_Impl( nIndex );
         // ... which key?

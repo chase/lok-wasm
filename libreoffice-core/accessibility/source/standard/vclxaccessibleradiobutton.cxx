@@ -22,7 +22,9 @@
 #include <toolkit/awt/vclxwindows.hxx>
 
 #include <unotools/accessiblerelationsethelper.hxx>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessiblekeybindinghelper.hxx>
+#include <comphelper/sequence.hxx>
 #include <com/sun/star/awt/KeyModifier.hpp>
 #include <com/sun/star/accessibility/AccessibleRelationType.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
@@ -97,23 +99,12 @@ void VCLXAccessibleRadioButton::FillAccessibleStateSet( sal_Int64& rStateSet )
     VCLXRadioButton* pVCLXRadioButton = static_cast< VCLXRadioButton* >( GetVCLXWindow() );
     if ( pVCLXRadioButton )
     {
+        rStateSet |= AccessibleStateType::CHECKABLE;
         rStateSet |= AccessibleStateType::FOCUSABLE;
         if ( pVCLXRadioButton->getState() )
             rStateSet |= AccessibleStateType::CHECKED;
     }
 }
-
-
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( VCLXAccessibleRadioButton, VCLXAccessibleTextComponent, VCLXAccessibleRadioButton_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( VCLXAccessibleRadioButton, VCLXAccessibleTextComponent, VCLXAccessibleRadioButton_BASE )
 
 
 // XServiceInfo

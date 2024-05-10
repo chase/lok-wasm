@@ -133,7 +133,7 @@ public:
 
     static rtl::Reference< SdXImpressDocument > GetModel( SdDrawDocument const & rDoc );
 
-    // intern
+    // internal
     bool operator==( const SdXImpressDocument& rModel ) const { return mpDoc == rModel.mpDoc; }
     bool operator!=( const SdXImpressDocument& rModel ) const { return mpDoc != rModel.mpDoc; }
 
@@ -254,8 +254,6 @@ public:
     virtual void postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons, int nModifier) override;
     /// @see vcl::ITiledRenderable::setTextSelection().
     virtual void setTextSelection(int nType, int nX, int nY) override;
-    /// @see vcl::ITiledRenderable::hyperlinkInfoAtPosition().
-    virtual OUString hyperlinkInfoAtPosition(int x, int y) override;
     /// @see vcl::ITiledRenderable::getSelection().
     virtual css::uno::Reference<css::datatransfer::XTransferable> getSelection() override;
     /// @see vcl::ITiledRenderable::setGraphicSelection().
@@ -399,7 +397,7 @@ private:
     OUString aNames[SdLinkTargetType::Count];
 
 public:
-    SdDocLinkTargets( SdXImpressDocument&   rMyModel ) noexcept;
+    SdDocLinkTargets(SdXImpressDocument& rMyModel);
     virtual ~SdDocLinkTargets() noexcept override;
 
     // XNameAccess
@@ -431,7 +429,7 @@ class SdDocLinkTargetType final : public ::cppu::WeakImplHelper< css::document::
     OUString maName;
 
 public:
-    SdDocLinkTargetType(SdXImpressDocument* pModel, sal_uInt16 nT) noexcept;
+    SdDocLinkTargetType(SdXImpressDocument* pModel, sal_uInt16 nT);
 
     // css::document::XLinkTargetSupplier
     virtual css::uno::Reference< css::container::XNameAccess > SAL_CALL getLinks() override;
@@ -480,7 +478,7 @@ public:
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
     virtual css::uno::Sequence< OUString> SAL_CALL getSupportedServiceNames() override;
 
-    // intern
+    // internal
     /// @throws std::exception
     SdPage* FindPage( std::u16string_view rName ) const;
 };

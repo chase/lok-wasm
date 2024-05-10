@@ -32,7 +32,6 @@
 #include <tools/debug.hxx>
 
 #include <svl/itempool.hxx>
-#include <itemdel.hxx>
 
 #include <comphelper/processfactory.hxx>
 
@@ -59,7 +58,7 @@ struct SfxRequest_Impl: public SfxListener
     SfxRequest*     pAnti;       // Owner because of dying pool
     OUString        aTarget;     // if possible from target object set by App
     SfxItemPool*    pPool;       // ItemSet build with this pool
-    std::unique_ptr<SfxPoolItem> pRetVal; // Return value belongs to itself
+    SfxPoolItemHolder aRetVal; // Return value belongs to itself
     SfxShell*       pShell;      // run from this shell
     const SfxSlot*  pSlot;       // executed Slot
     sal_uInt16      nModifier;   // which Modifier was pressed?
@@ -125,8 +124,6 @@ SfxRequest::~SfxRequest()
 
     // Clear object
     pArgs.reset();
-    if ( pImpl->pRetVal )
-        DeleteItemOnIdle(std::move(pImpl->pRetVal));
 }
 
 
@@ -134,8 +131,7 @@ SfxRequest::SfxRequest
 (
     const SfxRequest& rOrig
 )
-:   SfxHint( rOrig ),
-    nSlot(rOrig.nSlot),
+:   nSlot(rOrig.nSlot),
     pArgs(rOrig.pArgs? new SfxAllItemSet(*rOrig.pArgs): nullptr),
     pImpl( new SfxRequest_Impl(this) )
 {
@@ -165,7 +161,7 @@ SfxRequest::SfxRequest
     if (pImpl->pViewFrame->GetDispatcher()->GetShellAndSlot_Impl(nSlot, &pImpl->pShell, &pImpl->pSlot, true, true))
     {
         pImpl->SetPool( &pImpl->pShell->GetPool() );
-        pImpl->xRecorder = SfxRequest::GetMacroRecorder(pImpl->pViewFrame);
+        pImpl->xRecorder = SfxRequest::GetMacroRecorder(*pImpl->pViewFrame);
         if (pImpl->xRecorder)
             pImpl->xTransform = util::URLTransformer::create(comphelper::getProcessComponentContext());
         pImpl->aTarget = pImpl->pShell->GetName();
@@ -177,13 +173,6 @@ SfxRequest::SfxRequest
 }
 
 
-SfxRequest::SfxRequest
-(
-    SfxViewFrame*   pViewFrame,
-    sal_uInt16          nSlotId
-
-)
-
 /*  [Description]
 
     With this constructor events can subsequently be recorded that are not run
@@ -193,20 +182,21 @@ SfxRequest::SfxRequest
     parameter.
 */
 
-:   nSlot(nSlotId),
-    pImpl( new SfxRequest_Impl(this) )
+SfxRequest::SfxRequest(SfxViewFrame& rViewFrame, sal_uInt16 nSlotId)
+    : nSlot(nSlotId)
+    , pImpl(new SfxRequest_Impl(this))
 {
     pImpl->bDone = false;
     pImpl->bIgnored = false;
-    pImpl->SetPool( &pViewFrame->GetPool() );
+    pImpl->SetPool( &rViewFrame.GetPool() );
     pImpl->pShell = nullptr;
     pImpl->pSlot = nullptr;
     pImpl->nCallMode = SfxCallMode::SYNCHRON;
-    pImpl->pViewFrame = pViewFrame;
+    pImpl->pViewFrame = &rViewFrame;
     if( pImpl->pViewFrame->GetDispatcher()->GetShellAndSlot_Impl( nSlotId, &pImpl->pShell, &pImpl->pSlot, true, true ) )
     {
         pImpl->SetPool( &pImpl->pShell->GetPool() );
-        pImpl->xRecorder = SfxRequest::GetMacroRecorder( pViewFrame );
+        pImpl->xRecorder = SfxRequest::GetMacroRecorder(rViewFrame);
         if (pImpl->xRecorder)
             pImpl->xTransform = util::URLTransformer::create(comphelper::getProcessComponentContext());
         pImpl->aTarget = pImpl->pShell->GetName();
@@ -339,7 +329,7 @@ void SfxRequest_Impl::Record
     if(!xRecorder.is())
         return;
 
-    OUString aCmd = ".uno:" + OUString::createFromAscii( pSlot->GetUnoName() );
+    OUString aCmd = pSlot->GetCommand();
 
     uno::Reference< container::XIndexReplace > xReplace( xRecorder, uno::UNO_QUERY );
     if ( xReplace.is() && aCmd == ".uno:InsertText" )
@@ -428,14 +418,16 @@ void SfxRequest::RemoveItem( sal_uInt16 nID )
 
 void SfxRequest::SetReturnValue(const SfxPoolItem &rItem)
 {
-    DBG_ASSERT(!pImpl->pRetVal, "Set Return value multiple times?");
-    pImpl->pRetVal.reset(rItem.Clone());
+    DBG_ASSERT(nullptr == pImpl->aRetVal.getItem(), "Set Return value multiple times?");
+    DBG_ASSERT(nullptr != pImpl->pPool, "Missing SfxItemPool (!)");
+    if (nullptr != pImpl->pPool)
+        pImpl->aRetVal = SfxPoolItemHolder(*pImpl->pPool, &rItem);
 }
 
 
-const SfxPoolItem* SfxRequest::GetReturnValue() const
+const SfxPoolItemHolder& SfxRequest::GetReturnValue() const
 {
-    return pImpl->pRetVal.get();
+    return pImpl->aRetVal;
 }
 
 
@@ -580,10 +572,10 @@ void SfxRequest::Done_Impl
 
     // recordable?
     // new Recording uses UnoName!
-    SAL_WARN_IF( !pImpl->pSlot->pUnoName, "sfx", "Recording not exported slot: "
+    SAL_WARN_IF( pImpl->pSlot->pUnoName.isEmpty(), "sfx", "Recording not exported slot: "
                     << pImpl->pSlot->GetSlotId() );
 
-    if ( !pImpl->pSlot->pUnoName ) // playing it safe
+    if ( pImpl->pSlot->pUnoName.isEmpty() ) // playing it safe
         return;
 
     // often required values
@@ -637,7 +629,7 @@ void SfxRequest::Done_Impl
                 }
 
                 // Record a Sub-Request
-                SfxRequest aReq( pImpl->pViewFrame, nSlotId );
+                SfxRequest aReq( *pImpl->pViewFrame, nSlotId );
                 if ( aReq.pImpl->pSlot )
                     aReq.AppendItem( *pItem );
                 aReq.Done();
@@ -674,7 +666,7 @@ bool SfxRequest::IsDone() const
 }
 
 
-css::uno::Reference< css::frame::XDispatchRecorder > SfxRequest::GetMacroRecorder( SfxViewFrame const * pView )
+css::uno::Reference< css::frame::XDispatchRecorder > SfxRequest::GetMacroRecorder(const SfxViewFrame& rView)
 
 /*  [Description]
 
@@ -688,14 +680,8 @@ css::uno::Reference< css::frame::XDispatchRecorder > SfxRequest::GetMacroRecorde
 {
     css::uno::Reference< css::frame::XDispatchRecorder > xRecorder;
 
-    if (!pView)
-        pView = SfxViewFrame::Current();
-
-    if (!pView)
-        return xRecorder;
-
     css::uno::Reference< css::beans::XPropertySet > xSet(
-        pView->GetFrame().GetFrameInterface(),
+        rView.GetFrame().GetFrameInterface(),
         css::uno::UNO_QUERY);
 
     if(xSet.is())
@@ -710,11 +696,10 @@ css::uno::Reference< css::frame::XDispatchRecorder > SfxRequest::GetMacroRecorde
     return xRecorder;
 }
 
-bool SfxRequest::HasMacroRecorder( SfxViewFrame const * pView )
+bool SfxRequest::HasMacroRecorder(const SfxViewFrame& rView)
 {
-    return GetMacroRecorder( pView ).is();
+    return GetMacroRecorder(rView).is();
 }
-
 
 bool SfxRequest::IsAPI() const
 

@@ -61,7 +61,7 @@ class SfxAbstractTabDialog : virtual public SfxAbstractDialog
 protected:
     virtual ~SfxAbstractTabDialog() override = default;
 public:
-    virtual void                SetCurPageId( const OString &rName ) = 0;
+    virtual void                SetCurPageId( const OUString &rName ) = 0;
     virtual WhichRangesContainer GetInputRanges( const SfxItemPool& ) = 0;
     virtual void                SetInputSet( const SfxItemSet* pInSet ) = 0;
 };
@@ -119,7 +119,7 @@ class SFX2_DLLPUBLIC SfxAbstractDialogFactory : virtual public VclAbstractDialog
 public:
                                         virtual ~SfxAbstractDialogFactory() override;    // needed for export of vtable
     static SfxAbstractDialogFactory*    Create();
-    virtual VclPtr<VclAbstractDialog>          CreateFrameDialog(weld::Window* pParent, const css::uno::Reference< css::frame::XFrame >& rFrame, sal_uInt32 nResId, const OUString& rParameter) = 0;
+    virtual VclPtr<VclAbstractDialog>          CreateFrameDialog(weld::Window* pParent, const css::uno::Reference< css::frame::XFrame >& rFrame, sal_uInt32 nResId, sal_uInt16 nPageId, const OUString& rParameter) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateAutoCorrTabDialog(weld::Window* pParent, const SfxItemSet* pAttrSet) = 0;
     virtual VclPtr<SfxAbstractTabDialog>       CreateCustomizeTabDialog(weld::Window* pParent,
                                             const SfxItemSet* pAttrSet,
@@ -134,6 +134,8 @@ public:
     virtual VclPtr<SfxAbstractPasteDialog>    CreatePasteDialog(weld::Window* pParent) = 0;
     virtual VclPtr<SfxAbstractLinksDialog>    CreateLinksDialog(weld::Window* pParent, sfx2::LinkManager* pMgr, bool bHTML=false, sfx2::SvBaseLink* p=nullptr) = 0;
     virtual VclPtr<VclAbstractDialog>         CreateSvxScriptOrgDialog(weld::Window* pParent,  const OUString& rLanguage) = 0;
+
+    virtual VclPtr<AbstractSecurityOptionsDialog> CreateSvxSecurityOptionsDialog(weld::Window* pParent) = 0;
 
     virtual VclPtr<AbstractScriptSelectorDialog> CreateScriptSelectorDialog(weld::Window* pParent,
             const css::uno::Reference< css::frame::XFrame >& rxFrame) = 0;

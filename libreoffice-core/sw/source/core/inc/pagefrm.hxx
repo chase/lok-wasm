@@ -36,6 +36,9 @@ class SwAttrSetChg;
 namespace vcl { class Font; }
 class SwSortedObjs;
 class SwAnchoredObject;
+namespace sw {
+    class VirtPageNumHint;
+}
 
 enum class SwPageFrameInvFlags : sal_uInt8
 {
@@ -178,9 +181,6 @@ public:
 
     virtual bool GetModelPositionForViewPoint( SwPosition *, Point&,
                               SwCursorMoveState* = nullptr, bool bTestBackground = false ) const override;
-    /// Get info from Client
-    virtual bool GetInfo( SfxPoolItem& ) const override;
-
     virtual void Cut() override;
     virtual void Paste( SwFrame* pParent, SwFrame* pSibling = nullptr ) override;
     virtual void CheckDirection( bool bVert ) override;
@@ -349,6 +349,10 @@ public:
 
     const SwHeaderFrame* GetHeaderFrame() const;
     const SwFooterFrame* GetFooterFrame() const;
+
+    void UpdateVirtPageNumInfo(sw::VirtPageNumHint& rHint, const SwFrame* pFrame) const;
+
+    void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
 };
 
 inline SwContentFrame *SwPageFrame::FindFirstBodyContent()

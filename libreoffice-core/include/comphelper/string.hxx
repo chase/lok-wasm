@@ -300,7 +300,7 @@ COMPHELPER_DLLPUBLIC OString join(std::string_view rSeparator, const std::vector
     @return     The value of the string as an int32.
  */
 COMPHELPER_DLLPUBLIC sal_uInt32 decimalStringToNumber(
-    OUString const & str );
+    std::u16string_view str );
 
 COMPHELPER_DLLPUBLIC std::vector<OUString>
     split(std::u16string_view rString, const sal_Unicode cSeparator);
@@ -375,7 +375,7 @@ COMPHELPER_DLLPUBLIC bool isdigitAsciiString(std::string_view rString);
  */
 COMPHELPER_DLLPUBLIC bool isdigitAsciiString(std::u16string_view rString);
 
-/** Santitize an OUString to not have invalid surrogates
+/** Sanitize an OUString to not have invalid surrogates
 
     @param rString  An OUString
 

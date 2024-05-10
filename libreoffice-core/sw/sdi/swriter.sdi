@@ -16,6 +16,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+// See svx/sdi/svx.sdi for hints on how to define these
+
 SfxVoidItem CreateSWDrawView SID_CREATE_SW_DRAWVIEW
 ()
 [
@@ -377,8 +379,8 @@ SfxVoidItem AutoSum FN_TABLE_AUTOSUM
     GroupId = SfxGroupId::Table;
 ]
 
-SvxColorItem BackColor SID_ATTR_CHAR_COLOR_BACKGROUND
-(SfxStringItem Color SID_ATTR_COLOR_STR, SvxColorItem BackColor SID_ATTR_CHAR_COLOR_BACKGROUND)
+SvxColorItem BackColor SID_ATTR_CHAR_COLOR_BACKGROUND // deprecated - use CHAR_BACK_COLOR
+(SvxColorItem BackColor SID_ATTR_CHAR_COLOR_BACKGROUND)
 
 [
     AutoUpdate = TRUE,
@@ -556,7 +558,7 @@ SfxVoidItem ChapterNumberingDialog FN_NUMBERING_OUTLINE_DLG
 ]
 
 SfxBoolItem CharBackgroundExt SID_ATTR_CHAR_COLOR_BACKGROUND_EXT
-(SvxColorItem BackColor SID_ATTR_CHAR_COLOR_BACKGROUND_EXT)
+()
 [
     AutoUpdate = TRUE,
     FastCall = FALSE,
@@ -1244,6 +1246,24 @@ SfxVoidItem FieldDialog FN_EDIT_FIELD
     GroupId = SfxGroupId::Edit;
 ]
 
+SfxVoidItem UpdateSelectedField FN_UPDATE_SEL_FIELD
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+    Asynchron;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Edit;
+]
+
 SfxBoolItem Fieldnames FN_VIEW_FIELDNAME
 
 [
@@ -1281,7 +1301,7 @@ SfxBoolItem Fields FN_VIEW_FIELDS
 ]
 
 SvxColorItem FontColor SID_ATTR_CHAR_COLOR2
-(SfxStringItem Color SID_ATTR_COLOR_STR, SvxColorItem FontColor SID_ATTR_CHAR_COLOR2)
+(SvxColorItem FontColor SID_ATTR_CHAR_COLOR2)
 
 [
     AutoUpdate = TRUE,
@@ -2603,7 +2623,7 @@ SfxVoidItem UpdateBookmarks FN_UPDATE_BOOKMARKS
 SfxVoidItem DeleteBookmarks FN_DELETE_BOOKMARKS
 (SfxStringItem BookmarkNamePrefix FN_PARAM_1)
 [
-    AutoUpdate = TRUE,
+    AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,
@@ -2631,7 +2651,7 @@ SfxVoidItem DeleteSections FN_DELETE_SECTIONS
 SfxVoidItem DeleteFields FN_DELETE_FIELDS
 (SfxStringItem TypeName FN_PARAM_1, SfxStringItem NamePrefix FN_PARAM_2)
 [
-    AutoUpdate = TRUE,
+    AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,
@@ -2905,6 +2925,23 @@ SfxVoidItem InsertCtrl FN_INSERT_CTRL
 ]
 
 SfxVoidItem InsertDateField FN_INSERT_FLD_DATE
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Insert;
+]
+
+SfxVoidItem InsertDateFieldVar FN_INSERT_FLD_DATE_VAR
 ()
 [
     AutoUpdate = FALSE,
@@ -3656,6 +3693,23 @@ SfxVoidItem InsertTimeField FN_INSERT_FLD_TIME
     GroupId = SfxGroupId::Insert;
 ]
 
+SfxVoidItem InsertTimeFieldVar FN_INSERT_FLD_TIME_VAR
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Insert;
+]
+
 SfxVoidItem InsertTitleField FN_INSERT_FLD_TITLE
 ()
 [
@@ -4083,6 +4137,55 @@ SfxBoolItem Marks FN_VIEW_MARKS
     MenuConfig = TRUE,
     ToolBoxConfig = TRUE,
     GroupId = SfxGroupId::View;
+]
+
+SfxBoolItem HighlightCharDF FN_HIGHLIGHT_CHAR_DF
+
+[
+    AutoUpdate = TRUE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = TRUE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Format;
+]
+
+SfxBoolItem SpotlightParaStyles SID_SPOTLIGHT_PARASTYLES
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = TRUE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Format;
+]
+
+SfxBoolItem SpotlightCharStyles SID_SPOTLIGHT_CHARSTYLES
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = TRUE,
+    Toggle = TRUE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = TRUE,
+    MenuConfig = TRUE,
+    ToolBoxConfig = TRUE,
+    GroupId = SfxGroupId::Format;
 ]
 
 SfxVoidItem MergeCells FN_TABLE_MERGE_CELLS
@@ -4877,6 +4980,24 @@ SfxVoidItem PageSettingDialog FN_FORMAT_PAGE_SETTING_DLG
     GroupId = SfxGroupId::Format;
 ]
 
+SfxVoidItem PageAreaDialog FN_FORMAT_PAGE_AREA_DLG
+()
+[
+    AutoUpdate = FALSE,
+    FastCall = FALSE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+    Asynchron;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Format;
+]
+
 SfxVoidItem TitlePageDialog FN_FORMAT_TITLEPAGE_DLG
 ()
 [
@@ -4991,9 +5112,9 @@ SfxUInt16Item PageOffsetDialog FN_CHANGE_PAGENUM
     RecordPerSet;
     Asynchron;
 
-    AccelConfig = TRUE,
-    MenuConfig = TRUE,
-    ToolBoxConfig = TRUE,
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
     GroupId = SfxGroupId::Options;
 ]
 
@@ -8006,7 +8127,7 @@ SfxInt16Item PageColumnType SID_ATTR_PAGE_COLUMN
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -8405,7 +8526,7 @@ SfxBoolItem ShowInlineTooltips FN_SHOW_INLINETOOLTIPS
 SfxVoidItem TextFormField FN_INSERT_TEXT_FORMFIELD
 (SfxStringItem FieldType FN_PARAM_1, SfxStringItem FieldCommand FN_PARAM_2, SfxStringItem FieldResult FN_PARAM_3, SfxStringItem Wrapper FN_PARAM_4)
 [
-    AutoUpdate = TRUE,
+    AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,
@@ -8423,7 +8544,7 @@ SfxVoidItem TextFormField FN_INSERT_TEXT_FORMFIELD
 SfxVoidItem TextFormFields FN_UPDATE_TEXT_FORMFIELDS
 (SfxStringItem FieldType FN_PARAM_1, SfxStringItem FieldCommandPrefix FN_PARAM_2, SfxUnoAnyItem Fields FN_PARAM_3)
 [
-    AutoUpdate = TRUE,
+    AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,
@@ -8438,7 +8559,7 @@ SfxVoidItem TextFormFields FN_UPDATE_TEXT_FORMFIELDS
 SfxVoidItem DeleteTextFormFields FN_DELETE_TEXT_FORMFIELDS
 (SfxStringItem FieldType FN_PARAM_1, SfxStringItem FieldCommandPrefix FN_PARAM_2)
 [
-    AutoUpdate = TRUE,
+    AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,
@@ -8452,7 +8573,7 @@ SfxVoidItem DeleteTextFormFields FN_DELETE_TEXT_FORMFIELDS
 SfxVoidItem UpdateTextFormField FN_UPDATE_TEXT_FORMFIELD
 (SfxStringItem FieldType FN_PARAM_1, SfxStringItem FieldCommandPrefix FN_PARAM_2, SfxUnoAnyItem Field FN_PARAM_3)
 [
-    AutoUpdate = TRUE,
+    AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = FALSE,
     Toggle = FALSE,

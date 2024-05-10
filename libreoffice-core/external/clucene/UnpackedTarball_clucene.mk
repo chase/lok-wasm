@@ -42,7 +42,6 @@ $(eval $(call gb_UnpackedTarball_add_patches,clucene,\
 	external/clucene/patches/clucene-narrowing-conversions.patch \
 	external/clucene/patches/clucene-nullptr.patch \
 	external/clucene/patches/clucene-warnings.patch \
-	external/clucene/patches/clucene-aix.patch \
 	external/clucene/patches/clucene-git1-win64.patch \
 	external/clucene/patches/clucene-ub.patch \
 	external/clucene/patches/clucene-mutex.patch \
@@ -54,6 +53,8 @@ $(eval $(call gb_UnpackedTarball_add_patches,clucene,\
 	external/clucene/patches/write-strings.patch \
 	external/clucene/patches/nullstring.patch \
 	external/clucene/patches/binary_function.patch \
+	external/clucene/patches/clucene-pure-virtual.patch \
+	external/clucene/patches/clucene-reprobuild.patch.1 \
 ))
 
 ifneq ($(OS),WNT)

@@ -66,7 +66,7 @@ namespace sdr::properties
             return std::unique_ptr<BaseProperties>(new CircleProperties(*this, rObj));
         }
 
-        void CircleProperties::ItemSetChanged(o3tl::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
+        void CircleProperties::ItemSetChanged(std::span< const SfxPoolItem* const > aChangedItems, sal_uInt16 nDeletedWhich)
         {
             SdrCircObj& rObj = static_cast<SdrCircObj&>(GetSdrObject());
 
@@ -98,19 +98,16 @@ namespace sdr::properties
 
             if(eKind != SdrCircKind::Full)
             {
-                // force ItemSet
-                GetObjectItemSet();
-
-                mxItemSet->Put(SdrCircKindItem(eKind));
+                moItemSet->Put(SdrCircKindItem(eKind));
 
                 if(rObj.GetStartAngle())
                 {
-                    mxItemSet->Put(makeSdrCircStartAngleItem(rObj.GetStartAngle()));
+                    moItemSet->Put(makeSdrCircStartAngleItem(rObj.GetStartAngle()));
                 }
 
                 if(rObj.GetEndAngle() != 36000_deg100)
                 {
-                    mxItemSet->Put(makeSdrCircEndAngleItem(rObj.GetEndAngle()));
+                    moItemSet->Put(makeSdrCircEndAngleItem(rObj.GetEndAngle()));
                 }
             }
 

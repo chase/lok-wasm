@@ -118,6 +118,7 @@
 #include <svl/eitem.hxx>
 #include <basic/sbstar.hxx>
 #include <desktop/crashreport.hxx>
+#include <tools/time.hxx>
 #include <tools/urlobj.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <svtools/fontsubstconfig.hxx>
@@ -477,30 +478,27 @@ void Desktop::Init()
     // the UserConfiguration directory
     comphelper::BackupFileHelper::reactOnSafeMode(Application::IsSafeModeEnabled());
 
-    if ( m_aBootstrapError == BE_OK )
+    try
     {
-        try
+        if (!langselect::prepareLocale())
         {
-            if (!langselect::prepareLocale())
-            {
-                SetBootstrapError( BE_LANGUAGE_MISSING, OUString() );
-            }
+            SetBootstrapError( BE_LANGUAGE_MISSING, OUString() );
         }
-        catch (css::uno::Exception & e)
-        {
-            SetBootstrapError( BE_OFFICECONFIG_BROKEN, e.Message );
-        }
+    }
+    catch (css::uno::Exception & e)
+    {
+        SetBootstrapError( BE_OFFICECONFIG_BROKEN, e.Message );
+    }
 
-        // test code for ProfileSafeMode to allow testing the fail
-        // of loading the office configuration initially. To use,
-        // either set to true and compile, or set a breakpoint
-        // in debugger and change the local bool
-        static bool bTryHardOfficeconfigBroken(false); // loplugin:constvars:ignore
+    // test code for ProfileSafeMode to allow testing the fail
+    // of loading the office configuration initially. To use,
+    // either set to true and compile, or set a breakpoint
+    // in debugger and change the local bool
+    static bool bTryHardOfficeconfigBroken(false); // loplugin:constvars:ignore
 
-        if (bTryHardOfficeconfigBroken)
-        {
-            SetBootstrapError(BE_OFFICECONFIG_BROKEN, OUString());
-        }
+    if (bTryHardOfficeconfigBroken)
+    {
+        SetBootstrapError(BE_OFFICECONFIG_BROKEN, OUString());
     }
 
     // start ipc thread only for non-remote offices
@@ -526,6 +524,10 @@ void Desktop::Init()
     else if ( aStatus == RequestHandler::IPC_STATUS_2ND_OFFICE )
     {
         // 2nd office startup should terminate after sending cmdlineargs through pipe
+        if (rCmdLineArgs.IsTextCat() || rCmdLineArgs.IsScriptCat())
+        {
+            HandleBootstrapErrors( BE_2NDOFFICE_WITHCAT, OUString() );
+        }
         SetBootstrapStatus(BS_TERMINATE);
     }
     else if ( !rCmdLineArgs.GetUnknown().isEmpty()
@@ -580,7 +582,7 @@ bool Desktop::QueryExit()
     {
     }
 
-    static constexpr OUStringLiteral SUSPEND_QUICKSTARTVETO = u"SuspendQuickstartVeto";
+    static constexpr OUString SUSPEND_QUICKSTARTVETO = u"SuspendQuickstartVeto"_ustr;
 
     Reference< XDesktop2 > xDesktop = css::frame::Desktop::create( ::comphelper::getProcessComponentContext() );
     Reference< XPropertySet > xPropertySet(xDesktop, UNO_QUERY_THROW);
@@ -592,7 +594,7 @@ bool Desktop::QueryExit()
     {
         xPropertySet->setPropertyValue( SUSPEND_QUICKSTARTVETO, Any(false) );
     }
-    else if (!Application::IsEventTestingModeEnabled())
+    else
     {
         FlushConfiguration();
         try
@@ -883,6 +885,11 @@ void Desktop::HandleBootstrapErrors(
 
         FatalError(MakeStartupErrorMessage(aDiagnosticMessage));
     }
+    else if ( aBootstrapError == BE_2NDOFFICE_WITHCAT )
+    {
+        OUString aDiagnosticMessage = DpResId(STR_BOOTSTRAP_ERR_2NDOFFICE_WITHCAT);
+        FatalError(MakeStartupErrorMessage(aDiagnosticMessage));
+    }
 }
 
 
@@ -1114,7 +1121,7 @@ bool isTimeForUpdateCheck()
     sal_uInt64 nLastUpdate = officecfg::Office::Update::Update::LastUpdateTime::get();
     sal_uInt64 nNow = tools::Time::GetSystemTicks();
 
-    sal_uInt64 n7DayInMS = 1000 * 60 * 60 * 12 * 1; // 12 hours in ms
+    sal_uInt64 n7DayInMS = 1000 * 60 * 60 * 24 * 7; // 7 days in ms
     if (nNow - n7DayInMS >= nLastUpdate)
         return true;
 
@@ -1230,14 +1237,12 @@ struct ExecuteGlobals
 {
     Reference < css::document::XDocumentEventListener > xGlobalBroadcaster;
     bool bRestartRequested;
-    bool bUseSystemFileDialog;
     std::unique_ptr<SvtCTLOptions> pCTLLanguageOptions;
     std::unique_ptr<SvtPathOptions> pPathOptions;
     rtl::Reference< JVMloadThread > xJVMloadThread;
 
     ExecuteGlobals()
     : bRestartRequested( false )
-    , bUseSystemFileDialog( true )
     {}
 };
 
@@ -1346,6 +1351,22 @@ int Desktop::Main()
     if ( !InitializeConfiguration() )
         return EXIT_FAILURE;
 
+    SetSplashScreenProgress(30);
+
+    // create title string
+    OUString aTitle(ReplaceStringHookProc(RID_APPTITLE));
+#ifdef DBG_UTIL
+    //include buildid in non product builds
+    aTitle += " [" + utl::Bootstrap::getBuildIdData("development") + "]";
+#endif
+
+    SetDisplayName( aTitle );
+    SetSplashScreenProgress(35);
+    pExecGlobals->pPathOptions.reset( new SvtPathOptions);
+    SetSplashScreenProgress(40);
+
+    xDesktop = css::frame::Desktop::create( xContext );
+
 #if HAVE_FEATURE_UPDATE_MAR
     const char* pUpdaterTestEnable = std::getenv("LIBO_UPDATER_TEST_ENABLE");
     if (pUpdaterTestEnable || officecfg::Office::Update::Update::Enabled::get())
@@ -1409,7 +1430,10 @@ int Desktop::Main()
             CloseSplashScreen();
             bool bSuccess = update();
             if (bSuccess)
+            {
+                xDesktop->terminate();
                 return EXIT_SUCCESS;
+            }
         }
         else if (isTimeForUpdateCheck() || pForcedUpdateCheck)
         {
@@ -1423,22 +1447,6 @@ int Desktop::Main()
         }
     }
 #endif
-
-    SetSplashScreenProgress(30);
-
-    // create title string
-    OUString aTitle(ReplaceStringHookProc(RID_APPTITLE));
-#ifdef DBG_UTIL
-    //include buildid in non product builds
-    aTitle += " [" + utl::Bootstrap::getBuildIdData("development") + "]";
-#endif
-
-    SetDisplayName( aTitle );
-    SetSplashScreenProgress(35);
-    pExecGlobals->pPathOptions.reset( new SvtPathOptions);
-    SetSplashScreenProgress(40);
-
-    xDesktop = css::frame::Desktop::create( xContext );
 
     // create service for loading SFX (still needed in startup)
     pExecGlobals->xGlobalBroadcaster = Reference < css::document::XDocumentEventListener >
@@ -1514,18 +1522,6 @@ int Desktop::Main()
         }
     }
 
-    if ( rCmdLineArgs.IsHeadless() || rCmdLineArgs.IsEventTesting() )
-    {
-        // Ensure that we use not the system file dialogs as
-        // headless mode relies on Application::EnableHeadlessMode()
-        // which does only work for VCL dialogs!!
-        pExecGlobals->bUseSystemFileDialog = officecfg::Office::Common::Misc::UseSystemFileDialog::get();
-        std::shared_ptr< comphelper::ConfigurationChanges > xChanges(
-                comphelper::ConfigurationChanges::create());
-        officecfg::Office::Common::Misc::UseSystemFileDialog::set( false, xChanges );
-        xChanges->commit();
-    }
-
     pExecGlobals->bRestartRequested = xRestartManager->isRestartRequested(true);
     if ( !pExecGlobals->bRestartRequested )
     {
@@ -1543,11 +1539,9 @@ int Desktop::Main()
 
     svtools::ApplyFontSubstitutionsToVcl();
 
-    SvtTabAppearanceCfg aAppearanceCfg;
     SvtTabAppearanceCfg::SetInitialized();
-    aAppearanceCfg.SetApplicationDefaults( this );
-    SvtAccessibilityOptions aOptions;
-    aOptions.SetVCLSettings();
+    SvtTabAppearanceCfg::SetApplicationDefaults( this );
+    SvtAccessibilityOptions::SetVCLSettings();
     SetSplashScreenProgress(60);
 
     if ( !pExecGlobals->bRestartRequested )
@@ -1575,12 +1569,14 @@ int Desktop::Main()
         CheckOpenCLCompute(xDesktop);
 #endif
 
+#if !defined(EMSCRIPTEN)
         //Running the VCL graphics rendering tests
         const char * pDisplay = std::getenv("DISPLAY");
         if (!pDisplay || pDisplay[0] == ':')
         {
             runGraphicsRenderTests();
         }
+#endif
 
         // Post user event to startup first application component window
         // We have to send this OpenClients message short before execute() to
@@ -1639,16 +1635,7 @@ int Desktop::doShutdown()
     if ( pExecGlobals->bRestartRequested )
         SetRestartState();
 
-    // Restore old value
     const CommandLineArgs& rCmdLineArgs = GetCommandLineArgs();
-    if ( rCmdLineArgs.IsHeadless() || rCmdLineArgs.IsEventTesting() )
-    {
-        std::shared_ptr< comphelper::ConfigurationChanges > xChanges(
-                comphelper::ConfigurationChanges::create());
-        officecfg::Office::Common::Misc::UseSystemFileDialog::set( pExecGlobals->bUseSystemFileDialog, xChanges );
-        xChanges->commit();
-    }
-
     OUString pidfileName = rCmdLineArgs.GetPidfileName();
     if ( !pidfileName.isEmpty() )
     {
@@ -1853,23 +1840,23 @@ void Desktop::OverrideSystemSettings( AllSettings& rSettings )
 
     DragFullOptions nDragFullOptions = hStyleSettings.GetDragFullOptions();
 
-    SvtTabAppearanceCfg aAppearanceCfg;
-    DragMode nDragMode = aAppearanceCfg.GetDragMode();
+    sal_uInt16 nDragMode = officecfg::Office::Common::View::Window::Drag::get();
     switch ( nDragMode )
     {
-    case DragMode::FullWindow:
+    case 0: //FullWindow:
         nDragFullOptions |= DragFullOptions::All;
         break;
-    case DragMode::Frame:
+    case 1: // Frame:
         nDragFullOptions &= ~DragFullOptions::All;
         break;
-    case DragMode::SystemDep:
+    case 2: // SystemDep
     default:
         break;
     }
 
     MouseFollowFlags nFollow = hMouseSettings.GetFollow();
-    hMouseSettings.SetFollow( aAppearanceCfg.IsMenuMouseFollow() ? (nFollow|MouseFollowFlags::Menu) : (nFollow&~MouseFollowFlags::Menu));
+    bool bMenuFollowMouse = officecfg::Office::Common::View::Menu::FollowMouse::get();
+    hMouseSettings.SetFollow( bMenuFollowMouse ? (nFollow|MouseFollowFlags::Menu) : (nFollow&~MouseFollowFlags::Menu));
     rSettings.SetMouseSettings(hMouseSettings);
 
     bool bMenuIcons = officecfg::Office::Common::View::Menu::ShowIconsInMenues::get();

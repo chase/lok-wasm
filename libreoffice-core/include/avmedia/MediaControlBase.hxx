@@ -16,8 +16,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-#ifndef INCLUDED_AVMEDIA_MEDIACONTROLBASE_HXX
-#define INCLUDED_AVMEDIA_MEDIACONTROLBASE_HXX
+#pragma once
 
 #include <config_options.h>
 #include <vcl/weld.hxx>
@@ -64,11 +63,10 @@ protected:
     void UpdateTimeSlider( MediaItem const & aMediaItem );
     void UpdateTimeField( MediaItem const & aMediaItem, double fTime );
     void UpdatePlayState(const MediaItem& rMediaItem);
-    void SelectPlayToolBoxItem( MediaItem& aExecItem, MediaItem const & aItem, std::string_view rId);
+    void SelectPlayToolBoxItem( MediaItem& aExecItem, MediaItem const & aItem, std::u16string_view rId);
     void disposeWidgets();
 };
 
 }
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

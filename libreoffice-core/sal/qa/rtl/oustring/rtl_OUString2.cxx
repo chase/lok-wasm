@@ -23,12 +23,8 @@
 #include <math.h>
 #include <stdio.h>
 
-#include <algorithm>
-#include <limits>
-
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <cppunit/plugin/TestPlugIn.h>
 
 #include <config_options.h>
 #include <o3tl/cppunittraitshelper.hxx>
@@ -42,23 +38,8 @@ namespace rtl_OUString
 
 namespace {
 
-// Avoid -fsanitize=undefined warning e.g. "runtime error: value 1e+99 is
-// outside the range of representable values of type 'float'" with Clang prior to
-// <https://github.com/llvm/llvm-project/commit/9e52c43090f8cd980167bbd2719878ae36bcf6b5> "Treat the
-// range of representable values of floating-point types as [-inf, +inf] not as [-max, +max]"
-// (ENABLE_RUNTIME_OPTIMIZATIONS is an approximation for checking whether building is done without
-// -fsanitize=undefined):
 float doubleToFloat(double x) {
-#if !defined __clang__ || __clang_major__ >= 9 || ENABLE_RUNTIME_OPTIMIZATIONS
     return static_cast<float>(x);
-#else
-    return
-        x < -std::numeric_limits<float>::max()
-        ? -std::numeric_limits<float>::infinity()
-        : x > std::numeric_limits<float>::max()
-        ? std::numeric_limits<float>::infinity()
-        : static_cast<float>(x);
-#endif
 }
 
 }
@@ -276,7 +257,7 @@ public:
                 toDouble_test_impl(_sValue);
 
                 // test also the negative part.
-                OString sNegativValue("-");
+                OString sNegativValue("-"_ostr);
                 sNegativValue += _sValue;
                 toDouble_test_impl(sNegativValue);
             }
@@ -306,53 +287,53 @@ public:
 
         void toDouble_test_3()
             {
-                toDouble_test("3");
+                toDouble_test("3"_ostr);
             }
         void toDouble_test_3_5()
             {
-                toDouble_test("3.5");
+                toDouble_test("3.5"_ostr);
             }
         void toDouble_test_3_0625()
             {
-                toDouble_test("3.0625");
+                toDouble_test("3.0625"_ostr);
             }
         void toDouble_test_pi()
             {
                 // value from http://www.angio.net/pi/digits/50.txt
-                toDouble_test("3.141592653589793238462643383279502884197169399375");
+                toDouble_test("3.141592653589793238462643383279502884197169399375"_ostr);
             }
 
         void toDouble_test_1()
             {
-                toDouble_test("1");
+                toDouble_test("1"_ostr);
             }
         void toDouble_test_10()
             {
-                toDouble_test("10");
+                toDouble_test("10"_ostr);
             }
         void toDouble_test_100()
             {
-                toDouble_test("100");
+                toDouble_test("100"_ostr);
             }
         void toDouble_test_1000()
             {
-                toDouble_test("1000");
+                toDouble_test("1000"_ostr);
             }
         void toDouble_test_10000()
             {
-                toDouble_test("10000");
+                toDouble_test("10000"_ostr);
             }
         void toDouble_test_1e99()
             {
-                toDouble_test("1e99");
+                toDouble_test("1e99"_ostr);
             }
         void toDouble_test_1e_n99()
             {
-                toDouble_test("1e-99");
+                toDouble_test("1e-99"_ostr);
             }
         void toDouble_test_1e308()
             {
-                toDouble_test("1e308");
+                toDouble_test("1e308"_ostr);
             }
 
         // Change the following lines only, if you add, remove or rename
@@ -399,7 +380,7 @@ public:
                 toFloat_test_impl(_sValue);
 
                 // test also the negative part.
-                OString sNegativValue("-");
+                OString sNegativValue("-"_ostr);
                 sNegativValue += _sValue;
                 toFloat_test_impl(sNegativValue);
             }
@@ -422,61 +403,61 @@ public:
 
         void toFloat_test_3()
             {
-                toFloat_test("3");
+                toFloat_test("3"_ostr);
             }
         void toFloat_test_3_5()
             {
-                toFloat_test("3.5");
+                toFloat_test("3.5"_ostr);
             }
         void toFloat_test_3_0625()
             {
-                toFloat_test("3.0625");
+                toFloat_test("3.0625"_ostr);
             }
         void toFloat_test_3_0625_e()
             {
-                toFloat_test("3.0625e-4");
+                toFloat_test("3.0625e-4"_ostr);
             }
         void toFloat_test_pi()
             {
                 // value from http://www.angio.net/pi/digits/50.txt
-                toFloat_test("3.141592653589793238462643383279502884197169399375");
+                toFloat_test("3.141592653589793238462643383279502884197169399375"_ostr);
             }
 
         void toFloat_test_1()
             {
-                toFloat_test("1");
+                toFloat_test("1"_ostr);
             }
         void toFloat_test_10()
             {
-                toFloat_test("10");
+                toFloat_test("10"_ostr);
             }
         void toFloat_test_100()
             {
-                toFloat_test("100");
+                toFloat_test("100"_ostr);
             }
         void toFloat_test_1000()
             {
-                toFloat_test("1000");
+                toFloat_test("1000"_ostr);
             }
         void toFloat_test_10000()
             {
-                toFloat_test("10000");
+                toFloat_test("10000"_ostr);
             }
         void toFloat_test_mix()
             {
-                toFloat_test("456789321455.123456789012");
+                toFloat_test("456789321455.123456789012"_ostr);
             }
         void toFloat_test_1e99()
             {
-                toFloat_test("1e99");
+                toFloat_test("1e99"_ostr);
             }
         void toFloat_test_1e_n99()
             {
-                toFloat_test("1e-9");
+                toFloat_test("1e-9"_ostr);
             }
         void toFloat_test_1e308()
             {
-                toFloat_test("1e308");
+                toFloat_test("1e308"_ostr);
             }
 
         // Change the following lines only, if you add, remove or rename
@@ -866,11 +847,11 @@ public:
         std::unique_ptr<OUString[]> pStrs(new OUString[nSequence]);
         for (i = 0; i < nSequence; i++)
         {
-            pStrs[i] = OUString( OUString::number( sqrt( static_cast<double>(i) ) ) ).intern();
+            pStrs[i] = OUString::number( sqrt( static_cast<double>(i) ) ).intern();
         }
         for (i = 0; i < nSequence; i++)
         {
-            OUString aNew = OUString( OUString::number( sqrt( static_cast<double>(i) ) ) ).intern();
+            OUString aNew = OUString::number( sqrt( static_cast<double>(i) ) ).intern();
             CPPUNIT_ASSERT_EQUAL_MESSAGE("double intern failed",
                                    pStrs[i].pData, aNew.pData);
         }

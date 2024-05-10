@@ -211,8 +211,6 @@ class VCL_DLLPUBLIC SvTreeListBox
     sal_uInt16      nLastSelTab;
     tools::Long mnCheckboxItemWidth;
     bool mbContextBmpExpanded;
-    bool mbAlternatingRowColors;
-    bool mbUpdateAlternatingRows;
     bool mbQuickSearch; // Enables type-ahead search in the check list box.
     bool mbActivateOnSingleClick; // Make single click "activate" a row like a double-click normally does
     bool mbHoverSelection; // Make mouse over a row "select" a row like a single-click normally does
@@ -231,7 +229,7 @@ class VCL_DLLPUBLIC SvTreeListBox
     sal_Int8        mnDragAction;
 
     SvTreeListEntry*        pEdEntry;
-    SvLBoxItem*             pEdItem;
+    SvLBoxString*           pEdItem;
 
     rtl::Reference<TransferDataContainer> m_xTransferHelper;
 
@@ -470,7 +468,7 @@ public:
 
     void set_min_width_in_chars(sal_Int32 nChars);
 
-    virtual bool set_property(const OString &rKey, const OUString &rValue) override;
+    virtual bool set_property(const OUString &rKey, const OUString &rValue) override;
 
     VCL_DLLPRIVATE void SetCollapsedNodeBmp( const Image& );
     VCL_DLLPRIVATE void SetExpandedNodeBmp( const Image& );
@@ -639,9 +637,7 @@ public:
     void SetCurEntry( SvTreeListEntry* _pEntry );
     SvTreeListEntry* GetCurEntry() const;
 
-    using Window::Invalidate;
-    virtual void    Invalidate( InvalidateFlags nFlags = InvalidateFlags::NONE) override;
-    virtual void    Invalidate( const tools::Rectangle&, InvalidateFlags nFlags = InvalidateFlags::NONE ) override;
+    virtual void    ImplInvalidate( const vcl::Region* rRegion, InvalidateFlags nFlags ) override;
 
     void            SetHighlightRange(sal_uInt16 nFirstTab=0, sal_uInt16 nLastTab=0xffff);
 
@@ -658,8 +654,6 @@ public:
     tools::Long            getPreferredDimensions(std::vector<tools::Long> &rWidths) const;
 
     virtual Size    GetOptimalSize() const override;
-
-    void            SetAlternatingRowColors( const bool bEnable );
 
     // Enables type-ahead search in the check list box.
     void            SetQuickSearch(bool bEnable) { mbQuickSearch = bEnable; }

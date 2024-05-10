@@ -113,12 +113,16 @@ struct TableReference
     /// If paragraph sdt got opened in this table cell.
     bool m_bTableCellParaSdtOpen;
 
+    /// Remember if we are in a deleted/inserted cell, or not.
+    bool m_bTableCellChanged;
+
     /// Remember the current table depth.
     sal_uInt32 m_nTableDepth;
 
     TableReference()
         : m_bTableCellOpen(false),
         m_bTableCellParaSdtOpen(false),
+        m_bTableCellChanged(false),
         m_nTableDepth(0)
     {
     }
@@ -130,18 +134,28 @@ struct TableReference
 class FramePrHelper
 {
     ww8::Frame* m_pFrame;
+    sal_Int32 m_nTableDepth;
+    bool m_bUseFrameBorders;
     bool m_bUseFrameBackground;
+    bool m_bUseFrameTextDirection;
 
 public:
     FramePrHelper()
         : m_pFrame(nullptr)
+        , m_nTableDepth(0)
+        , m_bUseFrameBorders(true)
         , m_bUseFrameBackground(true)
+        , m_bUseFrameTextDirection(true)
     {}
 
     ww8::Frame* Frame() { return m_pFrame; }
-    void SetFrame(ww8::Frame* pSet);
+    void SetFrame(ww8::Frame* pSet, sal_Int32 nTableDepth = -1);
+    bool UseFrameBorders(sal_Int32 nTableDepth);
+    void SetUseFrameBorders(bool bSet) { m_bUseFrameBorders = bSet; }
     bool UseFrameBackground();
     void SetUseFrameBackground(bool bSet) { m_bUseFrameBackground = bSet; }
+    bool UseFrameTextDirection(sal_Int32 nTableDepth);
+    void SetUseFrameTextDirection(bool bSet) { m_bUseFrameTextDirection = bSet; }
 };
 
 class SdtBlockHelper
@@ -424,6 +438,10 @@ public:
             OUString const* pBookmarkName = nullptr);
     void WriteFormData_Impl( const ::sw::mark::IFieldmark& rFieldmark );
 
+    // MACRO: MACRO-1786: remove unncessary vector allocation {
+    //
+    void WriteBookmark_Impl( const OUString& rName, const bool bIsEnd, const bool bIsFinal, const SwRedlineData* pRedlineData = nullptr );
+    // MACRO: }
     void WriteBookmarks_Impl( std::vector< OUString >& rStarts, std::vector< OUString >& rEnds, const SwRedlineData* pRedlineData = nullptr );
     void WriteFinalBookmarks_Impl( std::vector< OUString >& rStarts, std::vector< OUString >& rEnds );
     void WriteAnnotationMarks_Impl( std::vector< OUString >& rStarts, std::vector< OUString >& rEnds );
@@ -474,7 +492,7 @@ private:
     void PostponeOLE( SwOLENode& rNode, const Size& rSize, const SwFlyFrameFormat* pFlyFrameFormat );
     void WriteOLE( SwOLENode& rNode, const Size& rSize, const SwFlyFrameFormat* rFlyFrameFormat );
     void WriteOLEShape(const SwFlyFrameFormat& rFrameFormat, const Size& rSize,
-                       const OString& rShapeId, const OUString& rImageId);
+                       std::string_view rShapeId, const OUString& rImageId);
     static OString GetOLEStyle(const SwFlyFrameFormat& rFormat, const Size& rSize);
     void ExportOLESurround(const SwFormatSurround& rWrap);
 
@@ -502,7 +520,7 @@ private:
         FontPitch pitch );
 
     /**
-     * Translate an ico value to the corresponding HighlightColorValues enumaration item
+     * Translate an ico value to the corresponding HighlightColorValues enumeration item
      *
      * @param[in]   nIco      ico value [0..16]
      * @return      color name (e.g. "red"), if color is inside [1..16] range
@@ -676,6 +694,13 @@ protected:
     /// Sfx item RES_PAPER_BIN
     virtual void FormatPaperBin( const SvxPaperBinItem& ) override;
 
+    /// Sfx item RES_MARGIN_FIRSTLINE
+    virtual void FormatFirstLineIndent(const SvxFirstLineIndentItem & rFirstLine) override;
+    /// Sfx item RES_MARGIN_TEXTLEFT
+    virtual void FormatTextLeftMargin(const SvxTextLeftMarginItem & rTextLeftMargin) override;
+    /// Sfx item RES_MARGIN_RIGHT
+    virtual void FormatRightMargin(const SvxRightMarginItem & rRightMargin) override;
+
     /// Sfx item RES_LR_SPACE
     virtual void FormatLRSpace( const SvxLRSpaceItem& rLRSpace ) override;
 
@@ -755,7 +780,7 @@ private:
 
     void DoWriteBookmarkTagStart(const OUString& bookmarkName);
     void DoWriteBookmarkTagEnd(sal_Int32 nId);
-    void DoWriteMoveRangeTagStart(const OString & bookmarkName,
+    void DoWriteMoveRangeTagStart(std::u16string_view bookmarkName,
             bool bFrom, const SwRedlineData* pRedlineData);
     void DoWriteMoveRangeTagEnd(sal_Int32 nId, bool bFrom);
     void DoWriteBookmarksStart(std::vector<OUString>& rStarts, const SwRedlineData* pRedlineData = nullptr);
@@ -782,7 +807,7 @@ private:
 
     void WriteFormDateStart(const OUString& sFullDate, const OUString& sDateFormat, const OUString& sLang, const uno::Sequence<beans::PropertyValue>& aGrabBagSdt);
     void WriteSdtPlainText(const OUString& sValue, const uno::Sequence<beans::PropertyValue>& aGrabBagSdt);
-    void WriteSdtDropDownStart(std::u16string_view rName, OUString const& rSelected, uno::Sequence<OUString> const& rListItems);
+    void WriteSdtDropDownStart(const OUString& rName, OUString const& rSelected, uno::Sequence<OUString> const& rListItems);
     void WriteSdtDropDownEnd(OUString const& rSelected, uno::Sequence<OUString> const& rListItems);
     void WriteContentControlStart();
     void WriteContentControlEnd();
@@ -807,6 +832,7 @@ private:
     rtl::Reference<sax_fastparser::FastAttributeList> m_pEastAsianLayoutAttrList;
     rtl::Reference<sax_fastparser::FastAttributeList> m_pCharLangAttrList;
     rtl::Reference<sax_fastparser::FastAttributeList> m_pSectionSpacingAttrList;
+    rtl::Reference<sax_fastparser::FastAttributeList> m_pLRSpaceAttrList;
     rtl::Reference<sax_fastparser::FastAttributeList> m_pParagraphSpacingAttrList;
     rtl::Reference<sax_fastparser::FastAttributeList> m_pHyperlinkAttrList;
     std::shared_ptr<SwContentControl> m_pContentControl;
@@ -885,27 +911,27 @@ private:
     std::vector<OUString> m_rPermissionsEnd;
 
     /// Annotation marks to output
-    std::vector<OString> m_rAnnotationMarksStart;
-    std::vector<OString> m_rAnnotationMarksEnd;
+    std::vector<OUString> m_rAnnotationMarksStart;
+    std::vector<OUString> m_rAnnotationMarksEnd;
 
     /// Maps of the bookmarks ids
     std::map<OUString, sal_Int32> m_rOpenedBookmarksIds;
 
     /// Name of the last opened bookmark.
-    OString m_sLastOpenedBookmark;
+    OUString m_sLastOpenedBookmark;
 
     /// Set of ids of the saved bookmarks (used only for moveRange, yet)
     std::unordered_set<sal_Int32> m_rSavedBookmarksIds;
 
     /// Maps of the annotation marks ids
-    std::map<OString, sal_Int32> m_rOpenedAnnotationMarksIds;
+    std::map<OUString, sal_Int32> m_rOpenedAnnotationMarksIds;
 
     /// Name of the last opened annotation mark.
-    OString m_sLastOpenedAnnotationMark;
+    OUString m_sLastOpenedAnnotationMark;
 
     /// If there are bookmarks around sequence fields, this map contains the
     /// names of these bookmarks for each sequence.
-    std::map<OUString, std::vector<OString> > m_aSeqBookmarksNames;
+    std::map<OUString, std::vector<OUString> > m_aSeqBookmarksNames;
 
     /// GrabBag for text effects like glow, shadow, ...
     std::vector<css::beans::PropertyValue> m_aTextEffectsGrabBag;
@@ -939,9 +965,8 @@ private:
     // close of hyperlink needed
     bool m_closeHyperlinkInThisRun;
     bool m_closeHyperlinkInPreviousRun;
-    bool m_startedHyperlink;
     // Count nested HyperLinks
-    std::stack<sal_Int32> m_nHyperLinkCount;
+    std::vector<sal_Int32> m_nHyperLinkCount;
     sal_Int16 m_nFieldsInHyperlink;
 
     // If the exported numbering rule defines the outlines
@@ -1003,6 +1028,7 @@ private:
     std::vector<PostponedDrawing> m_aPostponedActiveXControls;
     const SwField* m_PendingPlaceholder;
 
+    /// Used to store the parent status of a PostIt (parent/child/neither)
     enum class ParentStatus
     {
         None,
@@ -1027,7 +1053,7 @@ private:
         OString fontKey;
     };
 
-    std::unique_ptr<TableReference> m_tableReference;
+    TableReference m_tableReference;
 
     std::map< OUString, EmbeddedFontRef > m_FontFilesMap; // font file url to data
 
@@ -1123,8 +1149,13 @@ public:
     static OString convertToOOXMLVertOrientRel(sal_Int16 nOrientRel);
     static OString convertToOOXMLHoriOrientRel(sal_Int16 nOrientRel);
     static void ImplCellMargins( sax_fastparser::FSHelperPtr const & pSerializer, const SvxBoxItem& rBox, sal_Int32 tag, bool bUseStartEnd, const SvxBoxItem* pDefaultMargins = nullptr);
-    static void AddToAttrList(rtl::Reference<sax_fastparser::FastAttributeList>& pAttrList, sal_Int32 nAttrs, ...);
-    static void AddToAttrList(rtl::Reference<sax_fastparser::FastAttributeList>& pAttrList, sal_Int32 nAttrName, const char* sAttrValue);
+    template <class... Args>
+    static void AddToAttrList(rtl::Reference<sax_fastparser::FastAttributeList>& pAttrList, Args&&... args)
+    {
+        if (!pAttrList)
+            pAttrList = sax_fastparser::FastSerializerHelper::createAttrList();
+        pAttrList->add(std::forward<Args>(args)...);
+    }
 
     static const sal_Int32 Tag_StartParagraph_1 = 1;
     static const sal_Int32 Tag_StartParagraph_2 = 2;

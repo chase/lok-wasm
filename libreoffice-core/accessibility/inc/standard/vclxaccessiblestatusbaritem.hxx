@@ -23,7 +23,7 @@
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <comphelper/accessibletexthelper.hxx>
-#include <cppuhelper/implbase2.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <vcl/status.hxx>
 #include <vcl/vclptr.hxx>
 
@@ -32,12 +32,10 @@
 
 typedef ::comphelper::OAccessibleTextHelper AccessibleTextHelper_BASE;
 
-typedef ::cppu::ImplHelper2<
-    css::accessibility::XAccessible,
-    css::lang::XServiceInfo > VCLXAccessibleStatusBarItem_BASE;
-
-class VCLXAccessibleStatusBarItem final : public AccessibleTextHelper_BASE,
-                                          public VCLXAccessibleStatusBarItem_BASE
+class VCLXAccessibleStatusBarItem final : public cppu::ImplInheritanceHelper<
+                                              AccessibleTextHelper_BASE,
+                                              css::accessibility::XAccessible,
+                                              css::lang::XServiceInfo>
 {
     friend class VCLXAccessibleStatusBar;
 
@@ -54,7 +52,6 @@ private:
     OUString                GetItemName();
     void                    SetItemText( const OUString& sItemText );
     OUString                GetItemText();
-    sal_uInt16              GetItemId() const { return m_nItemId; }
 
     void            FillAccessibleStateSet( sal_Int64& rStateSet );
 
@@ -71,12 +68,6 @@ private:
 
 public:
     VCLXAccessibleStatusBarItem( StatusBar* pStatusBar, sal_uInt16 nItemId );
-
-    // XInterface
-    DECLARE_XINTERFACE()
-
-    // XTypeProvider
-    DECLARE_XTYPEPROVIDER()
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

@@ -43,13 +43,13 @@ namespace svgio::svgreader
 
         const SvgStyleAttributes* SvgMarkerNode::getSvgStyleAttributes() const
         {
-            return checkForCssStyle("marker", maSvgStyleAttributes);
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgMarkerNode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgMarkerNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);

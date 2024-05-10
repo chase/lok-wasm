@@ -92,7 +92,7 @@ void OutputDevice::SetFont( const vcl::Font& rNewFont )
     // with COL_BLACK)
     if( aFont.GetColor() != COL_TRANSPARENT )
     {
-        mpAlphaVDev->SetTextColor( COL_BLACK );
+        mpAlphaVDev->SetTextColor( COL_ALPHA_OPAQUE  );
         aFont.SetColor( COL_TRANSPARENT );
     }
 
@@ -178,7 +178,7 @@ FontMetric OutputDevice::GetFontMetric() const
         return aMetric;
 
     LogicalFontInstance* pFontInstance = mpFontInstance.get();
-    ImplFontMetricDataRef xFontMetric = pFontInstance->mxFontMetric;
+    FontMetricDataRef xFontMetric = pFontInstance->mxFontMetric;
 
     // prepare metric
     aMetric = maFont;
@@ -950,8 +950,8 @@ void OutputDevice::ImplDrawEmphasisMarks( SalLayout& rSalLayout )
     tools::Long nEmphasisHeight2 = nEmphasisHeight / 2;
     aOffset += Point( nEmphasisWidth2, nEmphasisHeight2 );
 
-    DevicePoint aOutPoint;
-    tools::Rectangle aRectangle;
+    basegfx::B2DPoint aOutPoint;
+    basegfx::B2DRectangle aRectangle;
     const GlyphItem* pGlyph;
     const LogicalFontInstance* pGlyphFont;
     int nStart = 0;
@@ -971,7 +971,7 @@ void OutputDevice::ImplDrawEmphasisMarks( SalLayout& rSalLayout )
             else
             {
                 aAdjPoint = aOffset;
-                aAdjPoint.AdjustX(aRectangle.Left() + (aRectangle.GetWidth() - aEmphasisMark.GetWidth()) / 2 );
+                aAdjPoint.AdjustX(aRectangle.getMinX() + (aRectangle.getWidth() - aEmphasisMark.GetWidth()) / 2 );
             }
 
             if ( mpFontInstance->mnOrientation )
@@ -1020,6 +1020,24 @@ std::unique_ptr<SalLayout> OutputDevice::getFallbackLayout(
     return pFallback;
 }
 
+bool OutputDevice::ForceFallbackFont(vcl::Font const& rFallbackFont)
+{
+    vcl::Font aOldFont = GetFont();
+    SetFont(rFallbackFont);
+    if (!InitFont())
+        return false;
+
+    mpForcedFallbackInstance = mpFontInstance;
+    SetFont(aOldFont);
+    if (!InitFont())
+        return false;
+
+    if (mpForcedFallbackInstance)
+        return true;
+
+    return false;
+}
+
 std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_ptr<SalLayout> pSalLayout,
     vcl::text::ImplLayoutArgs& rLayoutArgs, const SalLayoutGlyphs* pGlyphs ) const
 {
@@ -1051,12 +1069,22 @@ std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_pt
     vcl::font::FontSelectPattern aFontSelData(mpFontInstance->GetFontSelectPattern());
     SalLayoutGlyphsImpl* pGlyphsImpl = pGlyphs ? pGlyphs->Impl(1) : nullptr;
 
+    bool bHasUsedFallback = false;
+
     // try if fallback fonts support the missing code units
     for( int nFallbackLevel = 1; nFallbackLevel < MAX_FALLBACK; ++nFallbackLevel )
     {
         rtl::Reference<LogicalFontInstance> pFallbackFont;
-        if(pGlyphsImpl != nullptr)
+        if (!bHasUsedFallback && mpForcedFallbackInstance)
+        {
+            pFallbackFont = mpForcedFallbackInstance;
+            bHasUsedFallback = true;
+        }
+        else if(pGlyphsImpl != nullptr)
+        {
             pFallbackFont = pGlyphsImpl->GetFont();
+        }
+
         // find a font family suited for glyph fallback
         // GetGlyphFallbackFont() needs a valid FontInstance
         // if the system-specific glyph fallback is active
@@ -1066,6 +1094,9 @@ std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_pt
                 aFontSelData, mpFontInstance.get(), nFallbackLevel, aMissingCodes );
         if( !pFallbackFont )
             break;
+
+        SAL_INFO("vcl", "Fallback font (level " << nFallbackLevel << "): family: " << pFallbackFont->GetFontFace()->GetFamilyName()
+                << ", style: " << pFallbackFont->GetFontFace()->GetStyleName());
 
         if( nFallbackLevel < MAX_FALLBACK-1)
         {
@@ -1080,7 +1111,7 @@ std::unique_ptr<SalLayout> OutputDevice::ImplGlyphFallbackLayout( std::unique_pt
             {
                 if(aMissingCodes != oldMissingCodes)
                 {
-                    SAL_WARN("vcl.gdi", "Font fallback to the same font, but has missing codes");
+                    SAL_INFO("vcl.gdi", "Font fallback to the same font, but has missing codes");
                     // Restore the missing codes if we're not going to use this font.
                     aMissingCodes = oldMissingCodes;
                 }
@@ -1133,7 +1164,11 @@ tools::Long OutputDevice::GetMinKashida() const
     if (!ImplNewFont())
         return 0;
 
-    return ImplDevicePixelToLogicWidth( mpFontInstance->mxFontMetric->GetMinKashida() );
+    auto nKashidaWidth = mpFontInstance->mxFontMetric->GetMinKashida();
+    if (!mbMap)
+        nKashidaWidth = std::ceil(nKashidaWidth);
+
+    return ImplDevicePixelToLogicWidth(nKashidaWidth);
 }
 
 sal_Int32 OutputDevice::ValidateKashidas ( const OUString& rTxt,
@@ -1251,6 +1286,7 @@ void OutputDevice::ImplReleaseFonts()
     mbInitFont = true;
 
     mpFontInstance.clear();
+    mpForcedFallbackInstance.clear();
     mpFontFaceCollection.reset();
 }
 

@@ -46,6 +46,7 @@ struct SpellErrorDescription;
 class SentenceEditWindow_Impl : public WeldEditView
 {
 private:
+    std::unique_ptr<weld::ScrolledWindow> m_xScrolledWindow;
     std::set<sal_Int32> m_aIgnoreErrorsAt;
     SpellDialog*        m_pSpellDialog;
     weld::Toolbar*      m_pToolbar;
@@ -61,14 +62,21 @@ private:
 
     bool GetErrorDescription(SpellErrorDescription& rSpellErrorDescription, sal_Int32 nPosition);
 
-    DECL_LINK(ToolbarHdl, const OString&, void);
+    DECL_LINK(ScrollHdl, weld::ScrolledWindow&, void);
+    DECL_LINK(EditStatusHdl, EditStatus&, void);
+    DECL_LINK(ToolbarHdl, const OUString&, void);
+
+    void DoScroll();
+    void SetScrollBarRange();
 
 protected:
     virtual bool    KeyInput( const KeyEvent& rKEvt ) override;
+    virtual void    StyleUpdated() override;
 
 public:
-    SentenceEditWindow_Impl();
+    SentenceEditWindow_Impl(std::unique_ptr<weld::ScrolledWindow> xScrolledWindow);
     virtual void SetDrawingArea(weld::DrawingArea* pDrawingArea) override;
+    virtual void EditViewScrollStateChange() override;
     void SetSpellDialog(SpellDialog* pDialog) { m_pSpellDialog = pDialog; }
     virtual ~SentenceEditWindow_Impl() override;
 
@@ -113,6 +121,8 @@ public:
     void            MoveErrorEnd(tools::Long nOffset);
 
     void            ResetIgnoreErrorsAt()   { m_aIgnoreErrorsAt.clear(); }
+
+    void            SetDocumentColor(weld::DrawingArea* pDrawingArea);
 };
 
 // class SvxSpellDialog ---------------------------------------------
@@ -177,14 +187,14 @@ private:
     DECL_LINK(CancelHdl, weld::Button&, void);
     DECL_LINK(ModifyHdl, LinkParamNone*, void);
     DECL_LINK(UndoHdl, weld::Button&, void);
-    DECL_LINK(AddToDictSelectHdl, const OString&, void);
+    DECL_LINK(AddToDictSelectHdl, const OUString&, void);
     DECL_LINK(AddToDictClickHdl, weld::Button&, void);
     DECL_LINK(LanguageSelectHdl, weld::ComboBox&, void);
     DECL_LINK(DialogUndoHdl, SpellUndoAction_Impl&, void);
 
     DECL_LINK(InitHdl, void*, void);
 
-    void            AddToDictionaryExecute(const OString& rItemId);
+    void            AddToDictionaryExecute(const OUString& rItemId);
     void            StartSpellOptDlg_Impl();
     int             InitUserDicts();
     void            UpdateBoxes_Impl(bool bCallFromSelectHdl = false);

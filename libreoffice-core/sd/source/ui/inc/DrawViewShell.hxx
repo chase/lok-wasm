@@ -252,7 +252,6 @@ public:
      */
     bool            SelectPage(sal_uInt16 nPage, sal_uInt16 nSelect);
     bool            IsSelected(sal_uInt16 nPage);
-    bool            IsVisible(sal_uInt16 nPage);
 
     void            GotoBookmark(std::u16string_view rBookmark);
     //Realize multi-selection of objects, If object is marked, the
@@ -403,6 +402,8 @@ private:
 
     void Construct (DrawDocShell* pDocSh, PageKind ePageKind);
 
+    void ImplDestroy();
+
     /** Depending on the given request create a new page or duplicate an
         existing one.  See ViewShell::CreateOrDuplicatePage() for more
         information.
@@ -446,9 +447,6 @@ private:
 
     /// return true if "Edit Hyperlink" in context menu should be disabled
     bool ShouldDisableEditHyperlink() const;
-    /// force "Edit Hyperlink" to true, with the expectation that SID_EDIT_HYPERLINK is
-    /// later Invalidated to reset it back to its natural value
-    void EnableEditHyperlink();
 
 private:
     std::unique_ptr<DrawView> mpDrawView;
@@ -458,11 +456,6 @@ private:
     VclPtr<TabControl>  maTabControl;
     EditMode            meEditMode;
     PageKind            mePageKind;
-    // tdf#137445 at context menu popup time set if the EditHyperlink entry
-    // should be disabled and use that state if queried about it if
-    // EditHyperlink is dispatched from the menu. So ignoring where the mouse
-    // currently happens to be when the menu was dismissed.
-    std::optional<bool> moAtContextMenu_DisableEditHyperlink;
     bool                mbZoomOnPage;
     bool                mbIsRulerDrag;
     sal_uLong           mnLockCount;

@@ -72,7 +72,7 @@ SwAsciiFilterDlg::SwAsciiFilterDlg( weld::Window* pParent, SwDocShell& rDocSh,
 
     SwAsciiOptions aOpt;
     {
-        SvtViewOptions aDlgOpt(EViewType::Dialog, OStringToOUString(m_xDialog->get_help_id(), RTL_TEXTENCODING_UTF8));
+        SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
         if (aDlgOpt.Exists())
         {
             css::uno::Any aUserItem = aDlgOpt.GetUserItem("UserItem");
@@ -82,8 +82,7 @@ SwAsciiFilterDlg::SwAsciiFilterDlg( weld::Window* pParent, SwDocShell& rDocSh,
         const SfxStringItem* pItem;
         OUString sAsciiOptions;
         if( rDocSh.GetMedium() != nullptr &&
-            rDocSh.GetMedium()->GetItemSet() != nullptr &&
-            (pItem = rDocSh.GetMedium()->GetItemSet()->GetItemIfSet( SID_FILE_FILTEROPTIONS )))
+            (pItem = rDocSh.GetMedium()->GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS )))
         {
             sAsciiOptions = pItem->GetValue();
         }
@@ -163,9 +162,9 @@ SwAsciiFilterDlg::SwAsciiFilterDlg( weld::Window* pParent, SwDocShell& rDocSh,
             {
                 if(pDoc)
                 {
-                    const sal_uInt16 nWhich = GetWhichOfScript( RES_CHRATR_LANGUAGE, nAppScriptType);
-                    aOpt.SetLanguage( static_cast<const SvxLanguageItem&>(pDoc->
-                                GetDefault( nWhich )).GetLanguage());
+                    const TypedWhichId<SvxLanguageItem> nWhich = GetWhichOfScript( RES_CHRATR_LANGUAGE, nAppScriptType);
+                    const SvxLanguageItem& rLangItem = pDoc->GetDefault( nWhich );
+                    aOpt.SetLanguage(  rLangItem.GetLanguage() );
                 }
                 else
                 {
@@ -266,7 +265,7 @@ SwAsciiFilterDlg::SwAsciiFilterDlg( weld::Window* pParent, SwDocShell& rDocSh,
 
 SwAsciiFilterDlg::~SwAsciiFilterDlg()
 {
-    SvtViewOptions aDlgOpt(EViewType::Dialog, OStringToOUString(m_xDialog->get_help_id(), RTL_TEXTENCODING_UTF8));
+    SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
     aDlgOpt.SetUserItem("UserItem", uno::Any(m_sExtraData));
 }
 

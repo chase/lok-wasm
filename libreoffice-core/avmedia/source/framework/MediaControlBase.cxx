@@ -20,6 +20,7 @@
 #include <avmedia/mediaplayer.hxx>
 #include <avmedia/mediaitem.hxx>
 #include <tools/time.hxx>
+#include <tools/duration.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <strings.hrc>
 #include <helpids.h>
@@ -46,9 +47,11 @@ void MediaControlBase::UpdateTimeField( MediaItem const & aMediaItem, double fTi
     SvtSysLocale aSysLocale;
     const LocaleDataWrapper& rLocaleData = aSysLocale.GetLocaleData();
 
-    aTimeString += rLocaleData.getDuration( tools::Time( 0, 0, static_cast< sal_uInt32 >( floor( fTime ) ) ) ) +
+    aTimeString += rLocaleData.getDuration(
+            tools::Duration( 0, 0, 0, static_cast<sal_uInt32>( floor( fTime )), 0)) +
         " / " +
-        rLocaleData.getDuration( tools::Time( 0, 0, static_cast< sal_uInt32 >( floor( aMediaItem.getDuration() ) )) );
+        rLocaleData.getDuration(
+                tools::Duration( 0, 0, 0, static_cast<sal_uInt32>( floor( aMediaItem.getDuration())), 0));
 
     if( mxTimeEdit->get_text() != aTimeString )
         mxTimeEdit->set_text( aTimeString );
@@ -209,16 +212,16 @@ void MediaControlBase::UpdateToolBoxes(const MediaItem& rMediaItem)
     }
 }
 
-void MediaControlBase::SelectPlayToolBoxItem( MediaItem& aExecItem, MediaItem const & aItem, std::string_view rId)
+void MediaControlBase::SelectPlayToolBoxItem( MediaItem& aExecItem, MediaItem const & aItem, std::u16string_view rId)
 {
-    if (rId == "apply")
+    if (rId == u"apply")
     {
         MediaFloater* pFloater = avmedia::getMediaFloater();
 
         if( pFloater )
             pFloater->dispatchCurrentURL();
     }
-    else if (rId == "play")
+    else if (rId == u"play")
     {
         aExecItem.setState( MediaState::Play );
 
@@ -229,24 +232,24 @@ void MediaControlBase::SelectPlayToolBoxItem( MediaItem& aExecItem, MediaItem co
 
         UpdatePlayState(aExecItem);
     }
-    else if (rId == "pause")
+    else if (rId == u"pause")
     {
         aExecItem.setState( MediaState::Pause );
 
         UpdatePlayState(aExecItem);
     }
-    else if (rId == "stop")
+    else if (rId == u"stop")
     {
         aExecItem.setState( MediaState::Stop );
         aExecItem.setTime( 0.0 );
 
         UpdatePlayState(aExecItem);
     }
-    else if (rId == "mute")
+    else if (rId == u"mute")
     {
         aExecItem.setMute( mxMuteToolBox->get_item_active("mute") );
     }
-    else if (rId == "loop")
+    else if (rId == u"loop")
     {
         aExecItem.setLoop( mxPlayToolBox->get_item_active("loop") );
     }

@@ -23,6 +23,7 @@
 
 #include "plugin.hxx"
 #include "check.hxx"
+#include "compat.hxx"
 
 #include "clang/AST/ParentMapContext.h"
 
@@ -161,7 +162,7 @@ private:
     bool checkForWriteWhenUsingCollectionType(const CXXMethodDecl* calleeMethodDecl);
     bool IsPassedByNonConst(const VarDecl* varDecl, const Stmt* child, CallerWrapper callExpr,
                             CalleeWrapper calleeFunctionDecl);
-    llvm::Optional<CalleeWrapper> getCallee(CallExpr const*);
+    compat::optional<CalleeWrapper> getCallee(CallExpr const*);
 
     // For reasons I do not understand, parentFunctionDecl() is not reliable, so
     // we store the parent function on the way down the AST.
@@ -413,8 +414,6 @@ void WriteOnlyVars::run()
         if (loplugin::isSamePathname(fn, SRCDIR "/sd/source/ui/view/drviewsf.cxx"))
             return;
         if (loplugin::isSamePathname(fn, SRCDIR "/sd/source/filter/xml/sdxmlwrp.cxx"))
-            return;
-        if (loplugin::isSamePathname(fn, SRCDIR "/sd/source/filter/html/pubdlg.cxx"))
             return;
         if (loplugin::isSamePathname(fn, SRCDIR "/sw/source/core/txtnode/thints.cxx"))
             return;
@@ -1110,7 +1109,7 @@ bool WriteOnlyVars::VisitDeclRefExpr(const DeclRefExpr* declRefExpr)
     return true;
 }
 
-llvm::Optional<CalleeWrapper> WriteOnlyVars::getCallee(CallExpr const* callExpr)
+compat::optional<CalleeWrapper> WriteOnlyVars::getCallee(CallExpr const* callExpr)
 {
     FunctionDecl const* functionDecl = callExpr->getDirectCallee();
     if (functionDecl)
@@ -1128,7 +1127,7 @@ llvm::Optional<CalleeWrapper> WriteOnlyVars::getCallee(CallExpr const* callExpr)
         }
     }
 
-    return llvm::Optional<CalleeWrapper>();
+    return compat::optional<CalleeWrapper>();
 }
 
 loplugin::Plugin::Registration<WriteOnlyVars> X("writeonlyvars", false);

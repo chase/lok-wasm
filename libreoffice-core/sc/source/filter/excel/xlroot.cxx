@@ -48,6 +48,7 @@
 #include <document.hxx>
 #include <docpool.hxx>
 #include <docuno.hxx>
+#include <docsh.hxx>
 #include <editutil.hxx>
 #include <drwlayer.hxx>
 #include <scextopt.hxx>
@@ -136,9 +137,8 @@ XclRootData::XclRootData( XclBiff eBiff, SfxMedium& rMedium,
     maMaxPos.SetTab( ::std::min( maScMaxPos.Tab(), maXclMaxPos.Tab() ) );
 
     // document URL and path
-    if( const SfxItemSet* pItemSet = mrMedium.GetItemSet() )
-        if( const SfxStringItem* pItem = pItemSet->GetItem<SfxStringItem>( SID_FILE_NAME ) )
-            maDocUrl = pItem->GetValue();
+    if( const SfxStringItem* pItem = mrMedium.GetItemSet().GetItem( SID_FILE_NAME ) )
+        maDocUrl = pItem->GetValue();
     maBasePath = maDocUrl.copy( 0, maDocUrl.lastIndexOf( '/' ) + 1 );
 
     // extended document options - always own object, try to copy existing data from document
@@ -291,15 +291,15 @@ ScDocument& XclRoot::GetDoc() const
     return mrData.mrDoc;
 }
 
-SfxObjectShell* XclRoot::GetDocShell() const
+ScDocShell* XclRoot::GetDocShell() const
 {
     return GetDoc().GetDocumentShell();
 }
 
 ScModelObj* XclRoot::GetDocModelObj() const
 {
-    SfxObjectShell* pDocShell = GetDocShell();
-    return pDocShell ? comphelper::getFromUnoTunnel<ScModelObj>( pDocShell->GetModel() ) : nullptr;
+    ScDocShell* pDocShell = GetDocShell();
+    return pDocShell ? pDocShell->GetModel() : nullptr;
 }
 
 OutputDevice* XclRoot::GetPrinter(bool bForceVirtDev) const
@@ -344,7 +344,7 @@ const DateTime theExcelCutOverDate( Date( 1, 3, 1900 ));
 
 double XclRoot::GetDoubleFromDateTime( const DateTime& rDateTime ) const
 {
-    double fValue = rDateTime - GetNullDate();
+    double fValue = DateTime::Sub( rDateTime, GetNullDate());
     // adjust dates before 1900-03-01 to get correct time values in the range [0.0,1.0)
     /* XXX: this is only used when reading BIFF, otherwise we'd have to check
      * for dateCompatibility==true as mentioned below. */
@@ -411,6 +411,7 @@ EditEngine& XclRoot::GetDrawEditEngine() const
     {
         mrData.mxDrawEditEng = std::make_shared<EditEngine>( &GetDoc().GetDrawLayer()->GetItemPool() );
         EditEngine& rEE = *mrData.mxDrawEditEng;
+        rEE.SetStyleSheetPool(static_cast<SfxStyleSheetPool*>(GetDoc().GetDrawLayer()->GetStyleSheetPool()));
         rEE.SetRefMapMode(MapMode(MapUnit::Map100thMM));
         rEE.SetUpdateLayout( false );
         rEE.EnableUndo( false );

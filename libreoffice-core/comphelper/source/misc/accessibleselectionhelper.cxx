@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessibleselectionhelper.hxx>
 
 
@@ -104,11 +105,6 @@ namespace comphelper
     OAccessibleSelectionHelper::OAccessibleSelectionHelper()
     {
     }
-
-
-    IMPLEMENT_FORWARD_XINTERFACE2( OAccessibleSelectionHelper, OAccessibleComponentHelper, OAccessibleSelectionHelper_Base )
-    IMPLEMENT_FORWARD_XTYPEPROVIDER2( OAccessibleSelectionHelper, OAccessibleComponentHelper, OAccessibleSelectionHelper_Base )
-    // (order matters: the first is the class name, the second is the class doing the ref counting)
 
 
     Reference< XAccessibleContext > OAccessibleSelectionHelper::implGetAccessibleContext()

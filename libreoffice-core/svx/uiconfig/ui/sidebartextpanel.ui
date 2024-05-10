@@ -41,6 +41,11 @@
                         <property name="truncate-multiline">True</property>
                       </object>
                     </child>
+                    <child internal-child="accessible">
+                      <object class="AtkObject" id="fontnamecombobox-atkobject">
+                        <property name="AtkObject::accessible-name" translatable="yes" context="font|fontnamecombobox">Font</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
@@ -78,6 +83,11 @@
                         <property name="truncate-multiline">True</property>
                       </object>
                     </child>
+                    <child internal-child="accessible">
+                      <object class="AtkObject" id="fontsizecombobox-atkobject">
+                        <property name="AtkObject::accessible-name" translatable="yes" context="font|fontsizecombobox">Font size</property>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
@@ -102,7 +112,6 @@
             <child>
               <object class="GtkToggleToolButton" id=".uno:Bold">
                 <property name="visible">True</property>
-                <property name="can-focus">False</property>
                 <property name="use-underline">True</property>
               </object>
               <packing>
@@ -113,7 +122,6 @@
             <child>
               <object class="GtkToggleToolButton" id=".uno:Italic">
                 <property name="visible">True</property>
-                <property name="can-focus">False</property>
                 <property name="use-underline">True</property>
               </object>
               <packing>
@@ -124,7 +132,6 @@
             <child>
               <object class="GtkMenuToolButton" id=".uno:Underline">
                 <property name="visible">True</property>
-                <property name="can-focus">False</property>
                 <property name="use-underline">True</property>
               </object>
               <packing>
@@ -135,7 +142,6 @@
             <child>
               <object class="GtkToggleToolButton" id=".uno:Strikeout">
                 <property name="visible">True</property>
-                <property name="can-focus">False</property>
                 <property name="use-underline">True</property>
               </object>
               <packing>
@@ -146,7 +152,6 @@
             <child>
               <object class="GtkToggleToolButton" id=".uno:Shadowed">
                 <property name="visible">True</property>
-                <property name="can-focus">False</property>
                 <property name="use-underline">True</property>
               </object>
               <packing>
@@ -166,27 +171,15 @@
             <property name="can-focus">False</property>
             <property name="spacing">6</property>
             <child>
-              <object class="GtkToolbar" id="colorbar_writer">
+              <object class="GtkToolbar" id="colorbar">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
                 <property name="toolbar-style">icons</property>
                 <property name="show-arrow">False</property>
                 <property name="icon_size">2</property>
                 <child>
-                  <object class="GtkMenuToolButton" id=".uno:FontColor">
+                  <object class="GtkMenuToolButton" id=".uno:Color">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="use-underline">True</property>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="homogeneous">False</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkMenuToolButton" id=".uno:BackColor">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -202,16 +195,14 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolbar" id="colorbar_others">
+              <object class="GtkToolbar" id="colorbar_background">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
                 <property name="toolbar-style">icons</property>
-                <property name="show-arrow">False</property>
                 <property name="icon_size">2</property>
                 <child>
-                  <object class="GtkMenuToolButton" id=".uno:Color">
+                  <object class="GtkMenuToolButton" id=".uno:CharBackColor">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -227,15 +218,14 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolbar" id="colorbar_background">
-                <property name="visible">True</property>
+              <object class="GtkToolbar" id="spacingbar">
                 <property name="can-focus">True</property>
                 <property name="toolbar-style">icons</property>
+                <property name="show-arrow">False</property>
                 <property name="icon_size">2</property>
                 <child>
-                  <object class="GtkMenuToolButton" id=".uno:CharBackColor">
+                  <object class="GtkMenuToolButton" id=".uno:Spacing">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -248,30 +238,6 @@
                 <property name="expand">False</property>
                 <property name="fill">True</property>
                 <property name="position">2</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkToolbar" id="spacingbar">
-                <property name="can-focus">True</property>
-                <property name="toolbar-style">icons</property>
-                <property name="show-arrow">False</property>
-                <property name="icon_size">2</property>
-                <child>
-                  <object class="GtkMenuToolButton" id=".uno:Spacing">
-                    <property name="visible">True</property>
-                    <property name="can-focus">False</property>
-                    <property name="use-underline">True</property>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="homogeneous">False</property>
-                  </packing>
-                </child>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">3</property>
               </packing>
             </child>
           </object>
@@ -296,7 +262,6 @@
                 <child>
                   <object class="GtkToggleToolButton" id=".uno:SuperScript">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -307,7 +272,6 @@
                 <child>
                   <object class="GtkToggleToolButton" id=".uno:SubScript">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -345,7 +309,6 @@
                 <child>
                   <object class="GtkToolButton" id=".uno:SetDefault">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -370,7 +333,6 @@
                 <child>
                   <object class="GtkToolButton" id=".uno:ResetAttributes">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -396,7 +358,6 @@
                 <child>
                   <object class="GtkToolButton" id=".uno:Grow">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>
@@ -407,7 +368,6 @@
                 <child>
                   <object class="GtkToolButton" id=".uno:Shrink">
                     <property name="visible">True</property>
-                    <property name="can-focus">False</property>
                     <property name="use-underline">True</property>
                   </object>
                   <packing>

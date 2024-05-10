@@ -289,8 +289,8 @@ void SdTPAction::Reset( const SfxItemSet* rAttrs )
     // m_xLbAction
     if( rAttrs->GetItemState( ATTR_ACTION ) != SfxItemState::DONTCARE )
     {
-        eCA = static_cast<presentation::ClickAction>(static_cast<const SfxUInt16Item&>( rAttrs->
-                    Get( ATTR_ACTION ) ).GetValue());
+        eCA = static_cast<presentation::ClickAction>( rAttrs->
+                    Get( ATTR_ACTION ).GetValue());
         SetActualClickAction( eCA );
     }
     else
@@ -299,7 +299,7 @@ void SdTPAction::Reset( const SfxItemSet* rAttrs )
     // m_xEdtSound
     if( rAttrs->GetItemState( ATTR_ACTION_FILENAME ) != SfxItemState::DONTCARE )
     {
-            aFileName = static_cast<const SfxStringItem&>( rAttrs->Get( ATTR_ACTION_FILENAME ) ).GetValue();
+            aFileName = rAttrs->Get( ATTR_ACTION_FILENAME ).GetValue();
             SetEditText( aFileName );
     }
 

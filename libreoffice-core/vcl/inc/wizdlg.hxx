@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_WIZDLG_HXX
-#define INCLUDED_VCL_WIZDLG_HXX
+#pragma once
 
 #include <memory>
 #include <vcl/toolkit/button.hxx>
@@ -134,7 +133,7 @@ namespace vcl
         void                SetPageSizePixel( const Size& rSize ) { maPageSize = rSize; }
         const Size&         GetPageSizePixel() const { return maPageSize; }
 
-        void            SetRoadmapHelpId( const OString& _rId );
+        void            SetRoadmapHelpId( const OUString& _rId );
         void            SetRoadmapBitmap( const BitmapEx& maBitmap );
 
         void            InsertRoadmapItem(int nIndex, const OUString& rLabel, int nId, bool bEnabled);
@@ -282,7 +281,4 @@ namespace vcl
     };
 
 } // namespace vcl
-
-#endif
-
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

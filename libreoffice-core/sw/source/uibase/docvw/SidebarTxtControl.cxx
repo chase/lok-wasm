@@ -284,7 +284,9 @@ void SidebarTextControl::MakeVisible()
 
 bool SidebarTextControl::KeyInput( const KeyEvent& rKeyEvt )
 {
-    if (getenv("SW_DEBUG") && rKeyEvt.GetKeyCode().GetCode() == KEY_F12)
+    const vcl::KeyCode& rKeyCode = rKeyEvt.GetKeyCode();
+    const sal_uInt16 nKey = rKeyCode.GetCode();
+    if (nKey == KEY_F12 && getenv("SW_DEBUG"))
     {
         if (rKeyEvt.GetKeyCode().IsShift())
         {
@@ -295,8 +297,6 @@ bool SidebarTextControl::KeyInput( const KeyEvent& rKeyEvt )
 
     bool bDone = false;
 
-    const vcl::KeyCode& rKeyCode = rKeyEvt.GetKeyCode();
-    sal_uInt16 nKey = rKeyCode.GetCode();
     if ( ( rKeyCode.IsMod1() && rKeyCode.IsMod2() ) &&
          ( (nKey == KEY_PAGEUP) || (nKey == KEY_PAGEDOWN) ) )
     {
@@ -325,14 +325,14 @@ bool SidebarTextControl::KeyInput( const KeyEvent& rKeyEvt )
         /// HACK: need to switch off processing of Undo/Redo in Outliner
         if ( !( (nKey == KEY_Z || nKey == KEY_Y) && rKeyCode.IsMod1()) )
         {
-            bool bIsProtected = mrSidebarWin.IsProtected();
+            bool bIsProtected = mrSidebarWin.IsReadOnlyOrProtected();
             if ( !bIsProtected || !EditEngine::DoesKeyChangeText(rKeyEvt) )
             {
                 EditView* pEditView = GetEditView();
                 bDone = pEditView && pEditView->PostKeyEvent(rKeyEvt);
             }
             else
-                mrDocView.GetWrtShell().InfoReadOnlyDialog();
+                mrDocView.GetWrtShell().InfoReadOnlyDialog(false);
         }
         if (bDone)
             mrSidebarWin.ResizeIfNecessary( aOldHeight, mrSidebarWin.GetPostItTextHeight() );
@@ -345,7 +345,7 @@ bool SidebarTextControl::KeyInput( const KeyEvent& rKeyEvt )
         }
     }
 
-    mrDocView.GetViewFrame()->GetBindings().InvalidateAll(false);
+    mrDocView.GetViewFrame().GetBindings().InvalidateAll(false);
 
     return bDone;
 }
@@ -382,7 +382,7 @@ bool SidebarTextControl::MouseButtonDown(const MouseEvent& rMEvt)
 
     bool bRet = WeldEditView::MouseButtonDown(rMEvt);
 
-    mrDocView.GetViewFrame()->GetBindings().InvalidateAll(false);
+    mrDocView.GetViewFrame().GetBindings().InvalidateAll(false);
 
     return bRet;
 }
@@ -411,7 +411,7 @@ IMPL_LINK( SidebarTextControl, OnlineSpellCallback, SpellCallbackInfo&, rInfo, v
 {
     if ( rInfo.nCommand == SpellCallbackCommand::STARTSPELLDLG )
     {
-        mrDocView.GetViewFrame()->GetDispatcher()->Execute( FN_SPELL_GRAMMAR_DIALOG, SfxCallMode::ASYNCHRON);
+        mrDocView.GetViewFrame().GetDispatcher()->Execute( FN_SPELL_GRAMMAR_DIALOG, SfxCallMode::ASYNCHRON);
     }
 }
 
@@ -423,7 +423,7 @@ bool SidebarTextControl::Command( const CommandEvent& rCEvt )
     {
         if (IsMouseCaptured())
             ReleaseMouse();
-        if ( !mrSidebarWin.IsProtected() &&
+        if ( !mrSidebarWin.IsReadOnlyOrProtected() &&
              pEditView &&
              pEditView->IsWrongSpelledWordAtPos( rCEvt.GetMousePosPixel(), true ))
         {

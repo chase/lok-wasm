@@ -42,8 +42,6 @@
  */
 #define DECLARE_SW_ROUNDTRIP_TEST(TestName, filename, password, BaseClass) \
     class TestName : public BaseClass { \
-        protected:\
-    virtual OUString getTestName() override { return #TestName; } \
         public:\
     CPPUNIT_TEST_SUITE(TestName); \
     CPPUNIT_TEST(Load_Verify_Reload_Verify); \
@@ -65,8 +63,6 @@
 
 #define DECLARE_SW_EXPORT_TEST(TestName, filename, password, BaseClass) \
     class TestName : public BaseClass { \
-        protected:\
-    virtual OUString getTestName() override { return #TestName; } \
         public:\
     CPPUNIT_TEST_SUITE(TestName); \
     CPPUNIT_TEST(Import_Export); \
@@ -97,17 +93,15 @@ private:
 
 protected:
     xmlBufferPtr mpXmlBuffer;
-    const char* mpFilter;
+    OUString mpFilter;
 
     sal_uInt32 mnStartTime;
 
-    virtual OUString getTestName() { return OUString(); }
-
     /// Copy&paste helper.
-    void paste(std::u16string_view aFilename, css::uno::Reference<css::text::XTextRange> const& xTextRange);
+    void paste(std::u16string_view aFilename, OUString aInstance, css::uno::Reference<css::text::XTextRange> const& xTextRange);
 
 public:
-    SwModelTestBase(const OUString& pTestDocumentPath = OUString(), const char* pFilter = "");
+    SwModelTestBase(const OUString& pTestDocumentPath = OUString(), const OUString& pFilter = {});
 
 protected:
     /**
@@ -146,33 +140,9 @@ protected:
         CPPUNIT_FAIL( "verify method must be overridden" );
     }
 
-    /**
-     * Override this function if some special filename-specific setup is needed
-     */
-    virtual std::unique_ptr<Resetter> preTest(const char* /*filename*/)
-    {
-        return nullptr;
-    }
-
     /// Override this function if some special file-specific setup is needed during export test: after load, but before save.
     virtual void postLoad(const char* /*pFilename*/)
     {
-    }
-
-    /**
-     * Override this function if calc layout is not needed
-     */
-    virtual bool mustCalcLayoutOf(const char* /*filename*/)
-    {
-        return true;
-    }
-
-    /**
-     * Override this function if validation is wanted
-     */
-    virtual bool mustValidate(const char* /*filename*/) const
-    {
-        return false;
     }
 
     void dumpLayout(const css::uno::Reference< css::lang::XComponent > & rComponent);
@@ -286,15 +256,12 @@ protected:
 
     void header();
 
-    void reload(const char* pFilter, const char* pName, const char* pPassword = nullptr);
-
-    /// Save the loaded document to a tempfile. Can be used to check the resulting docx/odt directly as a ZIP file.
-    void save(const OUString& aFilterName, const char* pName = nullptr, const char* pPassword = nullptr);
+    void saveAndReload(const OUString& pFilter, const char* pPassword = nullptr);
 
     /// Combines load() and save().
-    void loadAndSave(const char* pName);
+    void loadAndSave(const char* pName, const char* pPassword = nullptr);
 
-    /// Combines load() and reload().
+    /// Combines load() and saveAndReload().
     void loadAndReload(const char* pName);
 
     void finish();
@@ -304,18 +271,6 @@ protected:
 
     /// Get shape count.
     int getShapes() const;
-
-    /**
-     * Returns an xml stream of an exported file.
-     * To be used when the exporter doesn't create zip archives, but single files
-     * (like Flat ODF Export)
-     */
-    xmlDocUniquePtr parseExportedFile();
-
-    /**
-     * Helper method to return nodes represented by rXPath.
-     */
-    void registerNamespaces(xmlXPathContextPtr& pXmlXpathCtx) override;
 
     /**
      * Creates a new document to be used with the internal sw/ API.
@@ -348,23 +303,18 @@ protected:
     SwDocShell* getSwDocShell();
 
     /**
-     * Wraps a reqif-xhtml fragment into an XHTML file, so an XML parser can
-     * parse it.
+     * Wraps a reqif-xhtml fragment into an XHTML file, and XML-parses it.
      */
-    void WrapReqifFromTempFile(SvMemoryStream& rStream);
+    xmlDocUniquePtr WrapReqifFromTempFile();
 
     void WrapFromTempFile(SvMemoryStream& rStream);
 
     bool isExported(){ return mbExported; }
 
+    void emulateTyping(SwXTextDocument& rTextDoc, const std::u16string_view& rStr);
+
 private:
-    void loadURL(OUString const& rURL, const char* pName, const char* pPassword);
-
-    void load(const char* pName, const char* pPassword = nullptr)
-    {
-        return loadURL(createFileURL(OUString::createFromAscii(pName)), pName, pPassword);
-
-    }
+    void loadURL(OUString const& rURL, const char* pPassword = nullptr);
 };
 
 /**
@@ -381,12 +331,12 @@ inline void assertBorderEqual(
     const css::table::BorderLine2& rExpected, const css::table::BorderLine2& rActual,
     const CppUnit::SourceLine& rSourceLine )
 {
-    CPPUNIT_NS::assertEquals<css::util::Color>( rExpected.Color, rActual.Color, rSourceLine, "different Color" );
-    CPPUNIT_NS::assertEquals<sal_Int16>( rExpected.InnerLineWidth, rActual.InnerLineWidth, rSourceLine, "different InnerLineWidth" );
-    CPPUNIT_NS::assertEquals<sal_Int16>( rExpected.OuterLineWidth, rActual.OuterLineWidth, rSourceLine, "different OuterLineWidth" );
-    CPPUNIT_NS::assertEquals<sal_Int16>( rExpected.LineDistance, rActual.LineDistance, rSourceLine, "different LineDistance" );
-    CPPUNIT_NS::assertEquals<sal_Int16>( rExpected.LineStyle, rActual.LineStyle, rSourceLine, "different LineStyle" );
-    CPPUNIT_NS::assertEquals<sal_Int32>( rExpected.LineWidth, rActual.LineWidth, rSourceLine, "different LineWidth" );
+    CPPUNIT_NS::assertEquals( rExpected.Color, rActual.Color, rSourceLine, "different Color" );
+    CPPUNIT_NS::assertEquals( rExpected.InnerLineWidth, rActual.InnerLineWidth, rSourceLine, "different InnerLineWidth" );
+    CPPUNIT_NS::assertEquals( rExpected.OuterLineWidth, rActual.OuterLineWidth, rSourceLine, "different OuterLineWidth" );
+    CPPUNIT_NS::assertEquals( rExpected.LineDistance, rActual.LineDistance, rSourceLine, "different LineDistance" );
+    CPPUNIT_NS::assertEquals( rExpected.LineStyle, rActual.LineStyle, rSourceLine, "different LineStyle" );
+    CPPUNIT_NS::assertEquals( rExpected.LineWidth, rActual.LineWidth, rSourceLine, "different LineWidth" );
 }
 
 #define CPPUNIT_ASSERT_BORDER_EQUAL(aExpected, aActual) \

@@ -161,11 +161,10 @@ void f5(char const* s1, sal_Int32 n1, char16_t const* s2, sal_Int32 n2, OString 
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OString' constructed from a 'const char *', pass a 'std::string_view' [loplugin:stringview]}}
     call_view(OString(s1, n1));
     constexpr OStringLiteral l1("foo");
-    // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OString' constructed from a 'const {{(rtl::)?}}OStringLiteral<4>'{{( \(aka 'const rtl::OStringLiteral<4>'\))?}}, pass a 'std::string_view' [loplugin:stringview]}}
     call_view(OString(l1));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OString' constructed from a 'std::string_view' (aka 'basic_string_view<char>'), pass a 'std::string_view' [loplugin:stringview]}}
     call_view(OString(std::string_view("foo")));
-    // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OString' constructed from a 'OStringNumber<int>', pass a 'std::string_view' [loplugin:stringview]}}
+    // expected-error-re@+1 {{instead of an {{'(rtl::)?}}OString' constructed from a {{'(rtl::)?StringNumber<char, 33>'|'OStringNumber<33>' \(aka 'StringNumber<char, 33ULL?>'\)}}, pass a 'std::string_view' [loplugin:stringview]}}
     call_view(OString(OString::number(0)));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OString' constructed from a 'OStringConcat<{{(rtl::)?}}OString, {{(rtl::)?}}OString>' (aka 'StringConcat<char, rtl::OString, rtl::OString>'), pass a 'std::string_view' via 'rtl::Concat2View' [loplugin:stringview]}}
     call_view(OString(s3 + s3));
@@ -174,7 +173,7 @@ void f5(char const* s1, sal_Int32 n1, char16_t const* s2, sal_Int32 n2, OString 
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'const char{{ ?}}[4]', pass a 'std::u16string_view' [loplugin:stringview]}}
     call_view(OUString("foo"));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'const char16_t{{ ?}}[4]', pass a 'std::u16string_view' [loplugin:stringview]}}
-    call_view(OUString(u"foo"));
+    call_view(OUString(u"foo", 3));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'const char', pass a 'std::u16string_view' (or an 'rtl::OUStringChar') [loplugin:stringview]}}
     call_view(OUString(*s1));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'const char16_t', pass a 'std::u16string_view' (or an 'rtl::OUStringChar') [loplugin:stringview]}}
@@ -186,11 +185,10 @@ void f5(char const* s1, sal_Int32 n1, char16_t const* s2, sal_Int32 n2, OString 
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'const char16_t *', pass a 'std::u16string_view' (or an 'rtl::OUStringChar') [loplugin:stringview]}}
     call_view(OUString(s2, 1));
     constexpr OUStringLiteral l2(u"foo");
-    // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'const {{(rtl::)?}}OUStringLiteral<4>'{{( \(aka 'const rtl::OUStringLiteral<4>'\))?}}, pass a 'std::u16string_view' [loplugin:stringview]}}
     call_view(OUString(l2));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'std::u16string_view' (aka 'basic_string_view<char16_t>'), pass a 'std::u16string_view' [loplugin:stringview]}}
     call_view(OUString(std::u16string_view(u"foo")));
-    // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'OUStringNumber<int>', pass a 'std::u16string_view' [loplugin:stringview]}}
+    // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a {{'(rtl::)?StringNumber<char16_t, 33>'|'OUStringNumber<33>' \(aka 'StringNumber<char16_t, 33ULL?>'\)}}, pass a 'std::u16string_view' [loplugin:stringview]}}
     call_view(OUString(OUString::number(0)));
     // expected-error-re@+1 {{instead of an '{{(rtl::)?}}OUString' constructed from a 'OUStringConcat<{{(rtl::)?}}OUString, {{(rtl::)?}}OUString>' (aka 'StringConcat<char16_t, rtl::OUString, rtl::OUString>'), pass a 'std::u16string_view' via 'rtl::Concat2View' [loplugin:stringview]}}
     call_view(OUString(s4 + s4));

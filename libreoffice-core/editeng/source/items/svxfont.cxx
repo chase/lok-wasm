@@ -29,6 +29,7 @@
 #include <unotools/charclass.hxx>
 #include <com/sun/star/i18n/KCharacterType.hpp>
 #include <editeng/escapementitem.hxx>
+#include <editeng/smallcaps.hxx>
 #include <sal/log.hxx>
 #include <limits>
 
@@ -220,40 +221,6 @@ OUString SvxFont::CalcCaseMap(const OUString &rTxt) const
     return aTxt;
 }
 
-/*************************************************************************
- *                      class SvxDoCapitals
- * The virtual Method Do si called by SvxFont::DoOnCapitals alternately
- * the uppercase and lowercase parts. The derivate of SvxDoCapitals fills
- * this method with life.
- *************************************************************************/
-
-class SvxDoCapitals
-{
-protected:
-    VclPtr<OutputDevice> pOut;
-    const OUString &rTxt;
-    const sal_Int32 nIdx;
-    const sal_Int32 nLen;
-
-public:
-    SvxDoCapitals( OutputDevice *_pOut, const OUString &_rTxt,
-                   const sal_Int32 _nIdx, const sal_Int32 _nLen )
-        : pOut(_pOut), rTxt(_rTxt), nIdx(_nIdx), nLen(_nLen)
-        { }
-
-    virtual ~SvxDoCapitals() {}
-
-    virtual void DoSpace( const bool bDraw );
-    virtual void SetSpace();
-    virtual void Do( const OUString &rTxt,
-                     const sal_Int32 nIdx, const sal_Int32 nLen,
-                     const bool bUpper ) = 0;
-
-    const OUString &GetTxt() const { return rTxt; }
-    sal_Int32 GetIdx() const { return nIdx; }
-    sal_Int32 GetLen() const { return nLen; }
-};
-
 void SvxDoCapitals::DoSpace( const bool /*bDraw*/ ) { }
 
 void SvxDoCapitals::SetSpace() { }
@@ -441,7 +408,7 @@ Size SvxFont::GetPhysTxtSize( const OutputDevice *pOut, const OUString &rTxt,
     if( IsFixKerning() && ( nLen > 1 ) )
     {
         auto nKern = GetFixKerning();
-        KernArray aDXArray(nLen);
+        KernArray aDXArray;
         GetTextArray(pOut, rTxt, &aDXArray, nIdx, nLen);
         tools::Long nOldValue = aDXArray[0];
         sal_Int32 nSpaceCount = 0;
@@ -478,8 +445,13 @@ Size SvxFont::QuickGetTextSize( const OutputDevice *pOut, const OUString &rTxt,
                          const sal_Int32 nIdx, const sal_Int32 nLen, KernArray* pDXArray ) const
 {
     if ( !IsCaseMap() && !IsFixKerning() )
-        return Size( GetTextArray( pOut, rTxt, pDXArray, nIdx, nLen ),
+    {
+        SAL_INFO( "editeng.quicktextsize", "SvxFont::QuickGetTextSize before GetTextArray(): Case map: " << IsCaseMap() << " Fix kerning: " << IsFixKerning());
+        Size aTxtSize( GetTextArray( pOut, rTxt, pDXArray, nIdx, nLen ),
                      pOut->GetTextHeight() );
+        SAL_INFO( "editeng.quicktextsize", "SvxFont::QuickGetTextSize after GetTextArray(): Text length: " << nLen << " Text size: " << aTxtSize.Width() << "x" << aTxtSize.Height());
+        return aTxtSize;
+    }
 
     KernArray aDXArray;
 
@@ -492,11 +464,18 @@ Size SvxFont::QuickGetTextSize( const OutputDevice *pOut, const OUString &rTxt,
 
     Size aTxtSize;
     aTxtSize.setHeight( pOut->GetTextHeight() );
+    SAL_INFO( "editeng.quicktextsize", "SvxFont::QuickGetTextSize before GetTextArray(): Case map: " << IsCaseMap() << " Fix kerning: " << IsFixKerning());
     if ( !IsCaseMap() )
         aTxtSize.setWidth( GetTextArray( pOut, rTxt, pDXArray, nIdx, nLen ) );
     else
-        aTxtSize.setWidth( GetTextArray( pOut, CalcCaseMap( rTxt ),
-                           pDXArray, nIdx, nLen ) );
+    {
+        if (IsCapital() && !rTxt.isEmpty())
+            aTxtSize = GetCapitalSize(pOut, rTxt, pDXArray, nIdx, nLen);
+        else
+            aTxtSize.setWidth( GetTextArray( pOut, CalcCaseMap( rTxt ),
+                               pDXArray, nIdx, nLen ) );
+    }
+    SAL_INFO( "editeng.quicktextsize", "SvxFont::QuickGetTextSize after GetTextArray(): Text length: " << nLen << " Text size: " << aTxtSize.Width() << "x" << aTxtSize.Height());
 
     if( IsFixKerning() && ( nLen > 1 ) )
     {
@@ -537,7 +516,7 @@ Size SvxFont::GetTextSize(const OutputDevice& rOut, const OUString &rTxt,
     Size aTxtSize;
     if( IsCapital() && !rTxt.isEmpty() )
     {
-        aTxtSize = GetCapitalSize(&rOut, rTxt, nIdx, nTmp);
+        aTxtSize = GetCapitalSize(&rOut, rTxt, nullptr, nIdx, nTmp);
     }
     else aTxtSize = GetPhysTxtSize(&rOut,rTxt,nIdx,nTmp);
     const_cast<OutputDevice&>(rOut).SetFont(aOldFont);
@@ -545,8 +524,8 @@ Size SvxFont::GetTextSize(const OutputDevice& rOut, const OUString &rTxt,
 }
 
 static void DrawTextArray( OutputDevice* pOut, const Point& rStartPt, const OUString& rStr,
-                           o3tl::span<const sal_Int32> pDXAry,
-                           o3tl::span<const sal_Bool> pKashidaAry,
+                           std::span<const sal_Int32> pDXAry,
+                           std::span<const sal_Bool> pKashidaAry,
                            sal_Int32 nIndex, sal_Int32 nLen )
 {
     const SalLayoutGlyphs* layoutGlyphs = SalLayoutGlyphsCache::self()->GetLayoutGlyphs(pOut, rStr, nIndex, nLen);
@@ -556,8 +535,8 @@ static void DrawTextArray( OutputDevice* pOut, const Point& rStartPt, const OUSt
 void SvxFont::QuickDrawText( OutputDevice *pOut,
     const Point &rPos, const OUString &rTxt,
     const sal_Int32 nIdx, const sal_Int32 nLen,
-    o3tl::span<const sal_Int32> pDXArray,
-    o3tl::span<const sal_Bool> pKashidaArray) const
+    std::span<const sal_Int32> pDXArray,
+    std::span<const sal_Bool> pKashidaArray) const
 {
 
     // Font has to be selected in OutputDevice...
@@ -583,8 +562,7 @@ void SvxFont::QuickDrawText( OutputDevice *pOut,
 
     if( IsCapital() )
     {
-        DBG_ASSERT( pDXArray.empty(), "DrawCapital not for TextArray!" );
-        DrawCapital( pOut, aPos, rTxt, nIdx, nLen );
+        DrawCapital( pOut, aPos, rTxt, pDXArray, pKashidaArray, nIdx, nLen );
     }
     else
     {
@@ -644,7 +622,7 @@ void SvxFont::DrawPrev( OutputDevice *pOut, Printer* pPrinter,
     Font aOldPrnFont( ChgPhysFont(*pPrinter) );
 
     if ( IsCapital() )
-        DrawCapital( pOut, aPos, rTxt, nIdx, nTmp );
+        DrawCapital( pOut, aPos, rTxt, {}, {}, nIdx, nTmp );
     else
     {
         Size aSize = GetPhysTxtSize( pPrinter, rTxt, nIdx, nTmp );
@@ -696,17 +674,27 @@ namespace {
 class SvxDoGetCapitalSize : public SvxDoCapitals
 {
 protected:
+    VclPtr<OutputDevice> pOut;
     SvxFont*    pFont;
     Size        aTxtSize;
     short       nKern;
+    KernArray*  pDXAry;
 public:
       SvxDoGetCapitalSize( SvxFont *_pFnt, const OutputDevice *_pOut,
-                           const OUString &_rTxt, const sal_Int32 _nIdx,
+                           const OUString &_rTxt, KernArray* _pDXAry, const sal_Int32 _nIdx,
                            const sal_Int32 _nLen, const short _nKrn )
-            : SvxDoCapitals( const_cast<OutputDevice*>(_pOut), _rTxt, _nIdx, _nLen ),
+            : SvxDoCapitals( _rTxt, _nIdx, _nLen ),
+              pOut( const_cast<OutputDevice*>(_pOut) ),
               pFont( _pFnt ),
-              nKern( _nKrn )
-            { }
+              nKern( _nKrn ),
+              pDXAry( _pDXAry )
+    {
+        if (pDXAry)
+        {
+            pDXAry->clear();
+            pDXAry->reserve(_nLen);
+        }
+    }
 
     virtual void Do( const OUString &rTxt, const sal_Int32 nIdx,
                      const sal_Int32 nLen, const bool bUpper ) override;
@@ -720,31 +708,50 @@ void SvxDoGetCapitalSize::Do( const OUString &_rTxt, const sal_Int32 _nIdx,
                               const sal_Int32 _nLen, const bool bUpper )
 {
     Size aPartSize;
+    sal_uInt8 nProp(0);
     if ( !bUpper )
     {
-        sal_uInt8 nProp = pFont->GetPropr();
+        nProp = pFont->GetPropr();
         pFont->SetProprRel( SMALL_CAPS_PERCENTAGE );
         pFont->SetPhysFont( *pOut );
-        aPartSize.setWidth( pOut->GetTextWidth( _rTxt, _nIdx, _nLen ) );
-        aPartSize.setHeight( pOut->GetTextHeight() );
-        aTxtSize.setHeight( aPartSize.Height() );
-        pFont->SetPropr( nProp );
-        pFont->SetPhysFont( *pOut );
+    }
+
+    if (pDXAry)
+    {
+        KernArray aKernArray;
+        aPartSize.setWidth(pOut->GetTextArray(_rTxt, &aKernArray, _nIdx, _nLen));
+        assert(pDXAry->get_factor() == aKernArray.get_factor());
+        auto& dest = pDXAry->get_subunit_array();
+        sal_Int32 nStart = dest.empty() ? 0 : dest.back();
+        size_t nSrcLen = aKernArray.size();
+        dest.reserve(dest.size() + nSrcLen);
+        const auto& src = aKernArray.get_subunit_array();
+        for (size_t i = 0; i < nSrcLen; ++i)
+            dest.push_back(src[i] + nStart);
     }
     else
     {
         aPartSize.setWidth( pOut->GetTextWidth( _rTxt, _nIdx, _nLen ) );
-        aPartSize.setHeight( pOut->GetTextHeight() );
     }
+
+    aPartSize.setHeight( pOut->GetTextHeight() );
+
+    if ( !bUpper )
+    {
+        aTxtSize.setHeight( aPartSize.Height() );
+        pFont->SetPropr( nProp );
+        pFont->SetPhysFont( *pOut );
+    }
+
     aTxtSize.AdjustWidth(aPartSize.Width() );
     aTxtSize.AdjustWidth( _nLen * tools::Long( nKern ) );
 }
 
-Size SvxFont::GetCapitalSize( const OutputDevice *pOut, const OUString &rTxt,
+Size SvxFont::GetCapitalSize( const OutputDevice *pOut, const OUString &rTxt, KernArray* pDXAry,
                              const sal_Int32 nIdx, const sal_Int32 nLen) const
 {
     // Start:
-    SvxDoGetCapitalSize aDo( const_cast<SvxFont *>(this), pOut, rTxt, nIdx, nLen, GetFixKerning() );
+    SvxDoGetCapitalSize aDo( const_cast<SvxFont *>(this), pOut, rTxt, pDXAry, nIdx, nLen, GetFixKerning() );
     DoOnCapitals( aDo );
     Size aTxtSize( aDo.GetSize() );
 
@@ -762,19 +769,27 @@ namespace {
 class SvxDoDrawCapital : public SvxDoCapitals
 {
 protected:
+    VclPtr<OutputDevice> pOut;
     SvxFont *pFont;
     Point aPos;
     Point aSpacePos;
     short nKern;
+    std::span<const sal_Int32> pDXArray;
+    std::span<const sal_Bool> pKashidaArray;
 public:
     SvxDoDrawCapital( SvxFont *pFnt, OutputDevice *_pOut, const OUString &_rTxt,
+                      std::span<const sal_Int32> _pDXArray,
+                      std::span<const sal_Bool> _pKashidaArray,
                       const sal_Int32 _nIdx, const sal_Int32 _nLen,
                       const Point &rPos, const short nKrn )
-        : SvxDoCapitals( _pOut, _rTxt, _nIdx, _nLen ),
+        : SvxDoCapitals( _rTxt, _nIdx, _nLen ),
+          pOut( _pOut ),
           pFont( pFnt ),
           aPos( rPos ),
           aSpacePos( rPos ),
-          nKern( nKrn )
+          nKern( nKrn ),
+          pDXArray(_pDXArray),
+          pKashidaArray(_pKashidaArray)
         { }
     virtual void DoSpace( const bool bDraw ) override;
     virtual void SetSpace() override;
@@ -789,7 +804,7 @@ void SvxDoDrawCapital::DoSpace( const bool bDraw )
     if ( !(bDraw || pFont->IsWordLineMode()) )
         return;
 
-    sal_uLong nDiff = static_cast<sal_uLong>(aPos.X() - aSpacePos.X());
+    sal_Int32 nDiff = static_cast<sal_Int32>(aPos.X() - aSpacePos.X());
     if ( nDiff )
     {
         bool bWordWise = pFont->IsWordLineMode();
@@ -810,11 +825,10 @@ void SvxDoDrawCapital::SetSpace()
         aSpacePos.setX( aPos.X() );
 }
 
-void SvxDoDrawCapital::Do( const OUString &_rTxt, const sal_Int32 _nIdx,
-                           const sal_Int32 _nLen, const bool bUpper)
+void SvxDoDrawCapital::Do( const OUString &_rTxt, const sal_Int32 nSpanIdx,
+                           const sal_Int32 nSpanLen, const bool bUpper)
 {
     sal_uInt8 nProp = 0;
-    Size aPartSize;
 
     // Set the desired font
     FontLineStyle eUnder = pFont->GetUnderline();
@@ -830,15 +844,39 @@ void SvxDoDrawCapital::Do( const OUString &_rTxt, const sal_Int32 _nIdx,
     }
     pFont->SetPhysFont(*pOut);
 
-    aPartSize.setWidth( pOut->GetTextWidth( _rTxt, _nIdx, _nLen ) );
-    aPartSize.setHeight( pOut->GetTextHeight() );
-    tools::Long nWidth = aPartSize.Width();
-    if ( nKern )
+    if (pDXArray.empty())
     {
-        aPos.AdjustX(nKern/2);
-        if ( _nLen ) nWidth += (_nLen*tools::Long(nKern));
+        auto nWidth = pOut->GetTextWidth(_rTxt, nSpanIdx, nSpanLen);
+        if (nKern)
+        {
+            aPos.AdjustX(nKern/2);
+            if (nSpanLen)
+                nWidth += (nSpanLen * nKern);
+        }
+        pOut->DrawStretchText(aPos, nWidth-nKern, _rTxt, nSpanIdx, nSpanLen);
+        // in this case we move aPos along to be the start of each subspan
+        aPos.AdjustX(nWidth-(nKern/2) );
     }
-    pOut->DrawStretchText(aPos,nWidth-nKern,_rTxt,_nIdx,_nLen);
+    else
+    {
+        const sal_Int32 nStartOffset = nSpanIdx - nIdx;
+        sal_Int32 nStartX = nStartOffset ? pDXArray[nStartOffset - 1] : 0;
+
+        Point aStartPos(aPos.X() + nStartX, aPos.Y());
+
+        std::vector<sal_Int32> aDXArray;
+        aDXArray.reserve(nSpanLen);
+        for (sal_Int32 i = 0; i < nSpanLen; ++i)
+            aDXArray.push_back(pDXArray[nStartOffset + i] - nStartX);
+
+        auto aKashidaArray = !pKashidaArray.empty() ?
+            std::span<const sal_Bool>(pKashidaArray.data() + nStartOffset, nSpanLen) :
+            std::span<const sal_Bool>();
+
+        DrawTextArray(pOut, aStartPos, _rTxt, aDXArray, aKashidaArray, nSpanIdx, nSpanLen);
+        // in this case we leave aPos at the start and use the DXArray to find the start
+        // of each subspan
+    }
 
     // Restore Font
     pFont->SetUnderline( eUnder );
@@ -847,8 +885,6 @@ void SvxDoDrawCapital::Do( const OUString &_rTxt, const sal_Int32 _nIdx,
     if ( !bUpper )
         pFont->SetPropr( nProp );
     pFont->SetPhysFont(*pOut);
-
-    aPos.AdjustX(nWidth-(nKern/2) );
 }
 
 /*************************************************************************
@@ -857,9 +893,13 @@ void SvxDoDrawCapital::Do( const OUString &_rTxt, const sal_Int32 _nIdx,
 
 void SvxFont::DrawCapital( OutputDevice *pOut,
                const Point &rPos, const OUString &rTxt,
+               std::span<const sal_Int32> pDXArray,
+               std::span<const sal_Bool> pKashidaArray,
                const sal_Int32 nIdx, const sal_Int32 nLen ) const
 {
-    SvxDoDrawCapital aDo( const_cast<SvxFont *>(this),pOut,rTxt,nIdx,nLen,rPos,GetFixKerning() );
+    SvxDoDrawCapital aDo(const_cast<SvxFont *>(this), pOut,
+                         rTxt, pDXArray, pKashidaArray,
+                         nIdx, nLen, rPos, GetFixKerning());
     DoOnCapitals( aDo );
 }
 

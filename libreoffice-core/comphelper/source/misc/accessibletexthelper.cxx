@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessibletexthelper.hxx>
 #include <com/sun/star/accessibility/AccessibleTextType.hpp>
 #include <com/sun/star/i18n/BreakIterator.hpp>
@@ -296,9 +297,12 @@ namespace comphelper
             {
                 if ( implIsValidIndex( nIndex, nLength ) )
                 {
-                    aResult.SegmentText = sText.copy( nIndex, 1 );
+                    auto nIndexEnd = nIndex;
+                    sText.iterateCodePoints(&nIndexEnd);
+
+                    aResult.SegmentText = sText.copy( nIndex, nIndexEnd - nIndex );
                     aResult.SegmentStart = nIndex;
-                    aResult.SegmentEnd = nIndex+1;
+                    aResult.SegmentEnd = nIndexEnd;
                 }
             }
             break;
@@ -400,9 +404,12 @@ namespace comphelper
             {
                 if ( implIsValidIndex( nIndex - 1, nLength ) )
                 {
-                    aResult.SegmentText = sText.copy( nIndex - 1, 1 );
-                    aResult.SegmentStart = nIndex-1;
-                    aResult.SegmentEnd = nIndex;
+                    sText.iterateCodePoints(&nIndex, -1);
+                    auto nIndexEnd = nIndex;
+                    sText.iterateCodePoints(&nIndexEnd);
+                    aResult.SegmentText = sText.copy(nIndex, nIndexEnd - nIndex);
+                    aResult.SegmentStart = nIndex;
+                    aResult.SegmentEnd = nIndexEnd;
                 }
             }
             break;
@@ -524,9 +531,12 @@ namespace comphelper
             {
                 if ( implIsValidIndex( nIndex + 1, nLength ) )
                 {
-                    aResult.SegmentText = sText.copy( nIndex + 1, 1 );
-                    aResult.SegmentStart = nIndex+1;
-                    aResult.SegmentEnd = nIndex+2;
+                    sText.iterateCodePoints(&nIndex);
+                    auto nIndexEnd = nIndex;
+                    sText.iterateCodePoints(&nIndexEnd);
+                    aResult.SegmentText = sText.copy(nIndex, nIndexEnd - nIndex);
+                    aResult.SegmentStart = nIndex;
+                    aResult.SegmentEnd = nIndexEnd;
                 }
             }
             break;
@@ -729,18 +739,6 @@ namespace comphelper
     OAccessibleTextHelper::OAccessibleTextHelper( )
     {
     }
-
-
-    // XInterface
-
-
-    IMPLEMENT_FORWARD_XINTERFACE2( OAccessibleTextHelper, OAccessibleExtendedComponentHelper, OAccessibleTextHelper_Base )
-
-
-    // XTypeProvider
-
-
-    IMPLEMENT_FORWARD_XTYPEPROVIDER2( OAccessibleTextHelper, OAccessibleExtendedComponentHelper, OAccessibleTextHelper_Base )
 
 
     // XAccessibleText

@@ -150,7 +150,7 @@ class XMLFontAutoStylePool_Impl : public o3tl::sorted_vector<std::unique_ptr<XML
 };
 
 XMLFontAutoStylePool::XMLFontAutoStylePool(SvXMLExport& rExp, bool bTryToEmbedFonts) :
-    rExport( rExp ),
+    m_rExport( rExp ),
     m_pFontAutoStylePool( new XMLFontAutoStylePool_Impl ),
     m_bTryToEmbedFonts( bTryToEmbedFonts ),
     m_bEmbedUsedOnly(false),
@@ -573,7 +573,7 @@ static OString convertToHashString(std::vector<unsigned char> const & rHash)
         aStringStream << std::setw(2) << std::setfill('0') << std::hex << int(rByte);
     }
 
-    return aStringStream.str().c_str();
+    return OString(aStringStream.str());
 }
 
 static OString getFileHash(OUString const & rFileUrl)

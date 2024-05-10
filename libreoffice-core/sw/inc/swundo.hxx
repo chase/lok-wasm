@@ -167,7 +167,19 @@ enum class SwUndoId
     INSERT_FORM_FIELD,                 // 135
     OUTLINE_EDIT,                      // 136
     INSERT_PAGE_NUMBER,                // 137
+    UPDATE_FORM_FIELD,                 // 138
+    UPDATE_FORM_FIELDS,                // 139
+    DELETE_FORM_FIELDS,                // 140
+    UPDATE_BOOKMARK,                   // 141
+    UPDATE_BOOKMARKS,                  // 142
+    DELETE_BOOKMARKS,                  // 143
+    UPDATE_FIELD,                      // 144
+    UPDATE_FIELDS,                     // 145
+    DELETE_FIELDS,                     // 146
+    UPDATE_SECTIONS,                   // 147
     CHANGE_THEME = 148,
+    DELETE_SECTIONS = 149,
+    FLYFRMFMT_DECORATIVE = 150,
 };
 
 OUString GetUndoComment(SwUndoId eId);

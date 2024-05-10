@@ -34,11 +34,11 @@
 #include <svx/svdoashp.hxx>
 #include <svx/sdrpaintwindow.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
-#include <svtools/optionsdrawinglayer.hxx>
 #include <svx/sdr/overlay/overlaymanager.hxx>
 #include <svx/sdrpagewindow.hxx>
 #include <unotools/configmgr.hxx>
 #include <comphelper/lok.hxx>
+#include <officecfg/Office/Common.hxx>
 
 using namespace sdr;
 
@@ -47,12 +47,13 @@ SdrDragView::SdrDragView(SdrModel& rSdrModel, OutputDevice* pOut)
     , mpDragHdl(nullptr)
     , mpInsPointUndo(nullptr)
     , meDragHdl(SdrHdlKind::Move)
+    , mnDragThresholdPixels(6)
     , mbFramDrag(false)
     , mbMarkedHitMovesAlways(false)
     , mbDragLimit(false)
     , mbDragHdl(false)
     , mbDragStripes(false)
-    , mbSolidDragging(utl::ConfigManager::IsFuzzing() || SvtOptionsDrawinglayer::IsSolidDragCreate())
+    , mbSolidDragging(utl::ConfigManager::IsFuzzing() || officecfg::Office::Common::Drawinglayer::SolidDragCreate::get())
     , mbResizeAtCenter(false)
     , mbCrookAtCenter(false)
     , mbDragWithCopy(false)
@@ -641,7 +642,7 @@ bool SdrDragView::ImpBegInsObjPoint(bool bIdxZwang, const Point& rPnt, bool bNew
     if(auto pMarkedPath = dynamic_cast<SdrPathObj*>( mpMarkedObj))
     {
         BrkAction();
-        mpInsPointUndo = dynamic_cast< SdrUndoGeoObj* >( GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*mpMarkedObj).release() );
+        mpInsPointUndo = dynamic_cast<SdrUndoGeoObj*>(GetModel().GetSdrUndoFactory().CreateUndoGeoObject(*mpMarkedObj).release());
         DBG_ASSERT( mpInsPointUndo, "svx::SdrDragView::BegInsObjPoint(), could not create correct undo object!" );
 
         OUString aStr(SvxResId(STR_DragInsertPoint));
@@ -739,7 +740,7 @@ bool SdrDragView::BegInsGluePoint(const Point& rPnt)
     {
         BrkAction();
         UnmarkAllGluePoints();
-        mpInsPointUndo= dynamic_cast< SdrUndoGeoObj* >( GetModel()->GetSdrUndoFactory().CreateUndoGeoObject(*pObj).release() );
+        mpInsPointUndo = dynamic_cast<SdrUndoGeoObj*>(GetModel().GetSdrUndoFactory().CreateUndoGeoObject(*pObj).release());
         DBG_ASSERT( mpInsPointUndo, "svx::SdrDragView::BegInsObjPoint(), could not create correct undo object!" );
         OUString aStr(SvxResId(STR_DragInsertGluePoint));
 
@@ -913,7 +914,7 @@ bool SdrDragView::IsSolidDragging() const
 {
     // allow each user to disable by having a local setting, but using AND for
     // checking allowance
-    return mbSolidDragging && SvtOptionsDrawinglayer::IsSolidDragCreate();
+    return mbSolidDragging && officecfg::Office::Common::Drawinglayer::SolidDragCreate::get();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -23,14 +23,13 @@
 
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <cppunit/plugin/TestPlugIn.h>
 
 namespace rtl_locale
 {
     // default locale for test purpose
     static void setDefaultLocale()
     {
-        rtl_locale_setDefault(OUString("de").getStr(), OUString("DE").getStr(), /* OUString() */ OUString("hochdeutsch").getStr() );
+        rtl_locale_setDefault(u"de", u"DE", /* OUString() */ u"hochdeutsch" );
     }
 
 class getDefault : public CppUnit::TestFixture
@@ -76,7 +75,7 @@ public:
     // insert your test code here.
     void setDefault_001()
     {
-        rtl_locale_setDefault(OUString("en").getStr(), OUString("US").getStr(), OUString().getStr());
+        rtl_locale_setDefault(u"en", u"US", u"");
         rtl_Locale* pData = rtl_locale_getDefault();
         CPPUNIT_ASSERT_MESSAGE("locale must not null", pData != nullptr);
 
@@ -241,8 +240,8 @@ public:
     // insert your test code here.
     void equals_001()
     {
-        rtl_Locale* pData1 = rtl_locale_register(OUString("en").getStr(), OUString("US").getStr(), OUString().getStr());
-        rtl_Locale* pData2 = rtl_locale_register(OUString("en").getStr(), OUString("US").getStr(), OUString().getStr());
+        rtl_Locale* pData1 = rtl_locale_register(u"en", u"US", u"");
+        rtl_Locale* pData2 = rtl_locale_register(u"en", u"US", u"");
 
         bool bLocaleAreEqual = (pData1 == pData2);
 
@@ -251,8 +250,8 @@ public:
 
     void equals_002()
     {
-        rtl_Locale* pData1 = rtl_locale_register(OUString("en").getStr(), OUString("US").getStr(), OUString().getStr());
-        rtl_Locale* pData2 = rtl_locale_register(OUString("en").getStr(), OUString("US").getStr(), OUString().getStr());
+        rtl_Locale* pData1 = rtl_locale_register(u"en", u"US", u"");
+        rtl_Locale* pData2 = rtl_locale_register(u"en", u"US", u"");
 
         sal_Int32 nEqual = rtl_locale_equals(pData1, pData2);
         CPPUNIT_ASSERT(nEqual != 0);

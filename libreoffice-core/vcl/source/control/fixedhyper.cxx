@@ -34,7 +34,7 @@
 using namespace css;
 
 FixedHyperlink::FixedHyperlink(vcl::Window* pParent, WinBits nWinStyle)
-    : FixedText(pParent, nWinStyle)
+    : FixedText(pParent, nWinStyle, WindowType::LINK_BUTTON)
     , m_nTextLen(0)
     , m_aOldPointer(PointerStyle::Arrow)
 {
@@ -150,7 +150,7 @@ void FixedHyperlink::SetText(const OUString& rNewDescription)
     m_nTextLen = GetOutDev()->GetCtrlTextWidth(GetText());
 }
 
-bool FixedHyperlink::set_property(const OString &rKey, const OUString &rValue)
+bool FixedHyperlink::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "uri")
         SetURL(rValue);

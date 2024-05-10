@@ -452,7 +452,7 @@ namespace svxform
                         xContextMenu->set_active("controlfocus", pFormModel->GetAutoControlFocus());
                     }
 
-                    OString sIdent = xContextMenu->popup_at_rect(m_xTreeView.get(), tools::Rectangle(ptWhere, ::Size(1, 1)));
+                    OUString sIdent = xContextMenu->popup_at_rect(m_xTreeView.get(), tools::Rectangle(ptWhere, ::Size(1, 1)));
                     if (sIdent == "form")
                     {
                         OUString aStr(SvxResId(RID_STR_FORM));
@@ -510,12 +510,12 @@ namespace svxform
                     else if (sIdent == "designmode")
                     {
                         pFormModel->SetOpenInDesignMode( !pFormModel->GetOpenInDesignMode() );
-                        pFormShell->GetViewShell()->GetViewFrame()->GetBindings().Invalidate(SID_FM_OPEN_READONLY);
+                        pFormShell->GetViewShell()->GetViewFrame().GetBindings().Invalidate(SID_FM_OPEN_READONLY);
                     }
                     else if (sIdent == "controlfocus")
                     {
                         pFormModel->SetAutoControlFocus( !pFormModel->GetAutoControlFocus() );
-                        pFormShell->GetViewShell()->GetViewFrame()->GetBindings().Invalidate(SID_FM_AUTOCONTROLFOCUS);
+                        pFormShell->GetViewShell()->GetViewFrame().GetBindings().Invalidate(SID_FM_AUTOCONTROLFOCUS);
                     }
                     else if (FmXFormShell::isControlConversionSlot(sIdent))
                     {
@@ -1315,7 +1315,7 @@ namespace svxform
             aSelection.insert( Reference<XInterface>( xNewForm, UNO_QUERY ) );
             pFormShell->GetImpl()->setCurrentSelection_Lock(std::move(aSelection));
 
-            pFormShell->GetViewShell()->GetViewFrame()->GetBindings().Invalidate(SID_FM_PROPERTIES, true, true);
+            pFormShell->GetViewShell()->GetViewFrame().GetBindings().Invalidate(SID_FM_PROPERTIES, true, true);
         }
         GetNavModel()->SetModified();
 
@@ -1546,7 +1546,7 @@ namespace svxform
         if (pFormShell->GetImpl()->IsPropBrwOpen_Lock() || bForce)
         {
             // and now deliver all to the PropertyBrowser
-            pFormShell->GetViewShell()->GetViewFrame()->GetDispatcher()->Execute( SID_FM_SHOW_PROPERTY_BROWSER, SfxCallMode::ASYNCHRON );
+            pFormShell->GetViewShell()->GetViewFrame().GetDispatcher()->Execute( SID_FM_SHOW_PROPERTY_BROWSER, SfxCallMode::ASYNCHRON );
         }
     }
 
@@ -1677,7 +1677,7 @@ namespace svxform
             if ( pCurrent->GetChildList()->size() )
                 continue;
 
-            // one remaining subtile problem, before deleting it : if it's a form and the shell
+            // one remaining subtle problem, before deleting it : if it's a form and the shell
             // knows it as CurrentObject, I have to tell it something else
             if (auto pFormData = dynamic_cast<FmFormData*>( pCurrent))
             {

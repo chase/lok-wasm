@@ -69,7 +69,6 @@ GalleryBrowser1::GalleryBrowser1(
     mxThemes->connect_key_press(LINK(this, GalleryBrowser1, KeyInputHdl));
     mxThemes->set_size_request(-1, mxThemes->get_height_rows(6));
 
-    mxMoreGalleries->set_from_icon_name("cmd/sc_additionsdialog.png");
     mxMoreGalleries->connect_clicked(LINK(this, GalleryBrowser1, OnMoreGalleriesClick));
 
     // disable creation of new themes if a writable directory is not available
@@ -130,7 +129,7 @@ void GalleryBrowser1::ImplFillExchangeData( const GalleryTheme* pThm, ExchangeDa
     }
 }
 
-void GalleryBrowser1::ImplGetExecuteVector(std::vector<OString>& o_aExec)
+void GalleryBrowser1::ImplGetExecuteVector(std::vector<OUString>& o_aExec)
 {
     GalleryTheme*           pTheme = mpGallery->AcquireTheme( GetSelectedTheme(), *this );
 
@@ -239,9 +238,9 @@ void GalleryBrowser1::EndThemePropertiesDlgHdl(sal_Int32 nResult)
     ImplEndGalleryThemeProperties(false, nResult);
 }
 
-void GalleryBrowser1::ImplExecute(std::string_view rIdent)
+void GalleryBrowser1::ImplExecute(std::u16string_view rIdent)
 {
-    if (rIdent == "update")
+    if (rIdent == u"update")
     {
         GalleryTheme*       pTheme = mpGallery->AcquireTheme( GetSelectedTheme(), *this );
 
@@ -251,14 +250,14 @@ void GalleryBrowser1::ImplExecute(std::string_view rIdent)
         aActualizeProgress->Execute();
         mpGallery->ReleaseTheme( pTheme, *this );
     }
-    else if (rIdent == "delete")
+    else if (rIdent == u"delete")
     {
         std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(mxThemes.get(), "svx/ui/querydeletethemedialog.ui"));
         std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("QueryDeleteThemeDialog"));
         if (xQuery->run() == RET_YES)
             mpGallery->RemoveTheme( mxThemes->get_selected_text() );
     }
-    else if (rIdent == "rename")
+    else if (rIdent == u"rename")
     {
         GalleryTheme*   pTheme = mpGallery->AcquireTheme( GetSelectedTheme(), *this );
         const OUString  aOldName( pTheme->GetName() );
@@ -285,7 +284,7 @@ void GalleryBrowser1::ImplExecute(std::string_view rIdent)
         }
         mpGallery->ReleaseTheme( pTheme, *this );
     }
-    else if (rIdent == "assign")
+    else if (rIdent == u"assign")
     {
         GalleryTheme* pTheme = mpGallery->AcquireTheme( GetSelectedTheme(), *this );
 
@@ -300,7 +299,7 @@ void GalleryBrowser1::ImplExecute(std::string_view rIdent)
 
         mpGallery->ReleaseTheme( pTheme, *this );
     }
-    else if (rIdent == "properties")
+    else if (rIdent == u"properties")
     {
         ImplGalleryThemeProperties( GetSelectedTheme(), false );
     }
@@ -374,9 +373,9 @@ IMPL_LINK(GalleryBrowser1, KeyInputHdl, const KeyEvent&, rKEvt, bool)
 {
     bool bRet = false;
 
-    std::vector<OString> aExecVector;
+    std::vector<OUString> aExecVector;
     ImplGetExecuteVector(aExecVector);
-    OString sExecuteIdent;
+    OUString sExecuteIdent;
     bool bMod1 = rKEvt.GetKeyCode().IsMod1();
 
     switch( rKEvt.GetKeyCode().GetCode() )
@@ -439,7 +438,7 @@ IMPL_LINK(GalleryBrowser1, PopupMenuHdl, const CommandEvent&, rCEvt, bool)
     if (rCEvt.GetCommand() != CommandEventId::ContextMenu)
         return false;
 
-    std::vector<OString> aExecVector;
+    std::vector<OUString> aExecVector;
     ImplGetExecuteVector(aExecVector);
 
     if (aExecVector.empty())
@@ -454,7 +453,7 @@ IMPL_LINK(GalleryBrowser1, PopupMenuHdl, const CommandEvent&, rCEvt, bool)
     xMenu->set_visible("assign", std::find( aExecVector.begin(), aExecVector.end(), "assign" ) != aExecVector.end());
     xMenu->set_visible("properties", std::find( aExecVector.begin(), aExecVector.end(), "properties" ) != aExecVector.end());
 
-    OString sCommand(xMenu->popup_at_rect(mxThemes.get(), tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1))));
+    OUString sCommand(xMenu->popup_at_rect(mxThemes.get(), tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1))));
     ImplExecute(sCommand);
 
     return true;

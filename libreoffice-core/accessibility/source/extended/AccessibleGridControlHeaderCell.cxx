@@ -35,9 +35,13 @@ AccessibleGridControlHeaderCell::AccessibleGridControlHeaderCell(sal_Int32 _nCol
                                   const Reference< XAccessible >& rxParent,
                                   IAccessibleTable& rTable,
                                   AccessibleTableControlObjType  eObjType)
-: AccessibleGridControlCell( rxParent, rTable, _nColumnRowId, 0, eObjType)
+: AccessibleGridControlCell(rxParent, rTable,
+                            (eObjType == AccessibleTableControlObjType::ROWHEADERCELL) ? _nColumnRowId : 0,
+                            (eObjType == AccessibleTableControlObjType::ROWHEADERCELL) ? 0 : _nColumnRowId,
+                            eObjType)
 , m_nColumnRowId(_nColumnRowId)
 {
+    assert(eObjType == AccessibleTableControlObjType::ROWHEADERCELL || eObjType == AccessibleTableControlObjType::COLUMNHEADERCELL);
 }
 /** Return a bitset of states of the current object.
 */
@@ -125,10 +129,10 @@ OUString SAL_CALL AccessibleGridControlHeaderCell::getImplementationName()
 tools::Rectangle AccessibleGridControlHeaderCell::implGetBoundingBox()
 {
     vcl::Window* pParent = m_aTable.GetAccessibleParentWindow();
-    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsRelative( pParent ) );
+    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsRelative( *pParent ) );
     sal_Int32 nIndex = getAccessibleIndexInParent();
     tools::Rectangle aCellRect;
-    if(m_eObjType == TCTYPE_COLUMNHEADERCELL)
+    if (m_eObjType == AccessibleTableControlObjType::COLUMNHEADERCELL)
         aCellRect = m_aTable.calcHeaderCellRect(true, nIndex);
     else
         aCellRect = m_aTable.calcHeaderCellRect(false, nIndex);
@@ -136,16 +140,16 @@ tools::Rectangle AccessibleGridControlHeaderCell::implGetBoundingBox()
 }
 
 
-tools::Rectangle AccessibleGridControlHeaderCell::implGetBoundingBoxOnScreen()
+AbsoluteScreenPixelRectangle AccessibleGridControlHeaderCell::implGetBoundingBoxOnScreen()
 {
-    tools::Rectangle aGridRect( m_aTable.GetWindowExtentsRelative( nullptr ) );
+    AbsoluteScreenPixelRectangle aGridRect( m_aTable.GetWindowExtentsAbsolute() );
     sal_Int32 nIndex = getAccessibleIndexInParent();
     tools::Rectangle aCellRect;
-    if(m_eObjType == TCTYPE_COLUMNHEADERCELL)
+    if (m_eObjType == AccessibleTableControlObjType::COLUMNHEADERCELL)
         aCellRect = m_aTable.calcHeaderCellRect(true, nIndex);
     else
         aCellRect = m_aTable.calcHeaderCellRect(false, nIndex);
-    return tools::Rectangle(Point(aGridRect.Left()+aCellRect.Left(),aGridRect.Top()+aCellRect.Top()), aCellRect.GetSize());
+    return AbsoluteScreenPixelRectangle(AbsoluteScreenPixelPoint(aGridRect.Left()+aCellRect.Left(),aGridRect.Top()+aCellRect.Top()), aCellRect.GetSize());
 }
 
 sal_Int64 SAL_CALL AccessibleGridControlHeaderCell::getAccessibleIndexInParent()

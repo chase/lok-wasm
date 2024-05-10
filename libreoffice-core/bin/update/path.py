@@ -11,7 +11,6 @@ import os
 import subprocess
 from sys import platform
 
-
 def convert_to_unix(path):
     if platform == "cygwin":
         return subprocess.check_output(["cygpath", "-u", path]).decode("utf-8", "strict").rstrip()

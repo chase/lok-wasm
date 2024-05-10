@@ -22,6 +22,7 @@
 #include <string_view>
 
 #include <ChartController.hxx>
+#include <ChartView.hxx>
 #include <PositionAndSizeHelper.hxx>
 #include <ObjectIdentifier.hxx>
 #include <ChartWindow.hxx>
@@ -47,6 +48,7 @@
 #include <StatisticsHelper.hxx>
 #include <DataSeries.hxx>
 #include <DataSeriesHelper.hxx>
+#include <DataSeriesProperties.hxx>
 #include <Axis.hxx>
 #include <AxisHelper.hxx>
 #include <LegendHelper.hxx>
@@ -96,6 +98,7 @@
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
+using namespace ::chart::DataSeriesProperties;
 using ::com::sun::star::uno::Reference;
 
 namespace chart
@@ -266,8 +269,7 @@ void SAL_CALL ChartController::setPosSize(
     pChartWindow->setPosSizePixel( X, Y, Width, Height, static_cast<PosSizeFlags>(Flags) );
 
     //#i75867# poor quality of ole's alternative view with 3D scenes and zoomfactors besides 100%
-    uno::Reference< beans::XPropertySet > xProp( m_xChartView, uno::UNO_QUERY );
-    if( xProp.is() )
+    if( m_xChartView.is() )
     {
         auto aZoomFactors(::comphelper::InitPropertySequence({
             { "ScaleXNumerator", uno::Any( nScaleXNumerator ) },
@@ -275,7 +277,7 @@ void SAL_CALL ChartController::setPosSize(
             { "ScaleYNumerator", uno::Any( nScaleYNumerator ) },
             { "ScaleYDenominator", uno::Any( nScaleYDenominator ) }
         }));
-        xProp->setPropertyValue( "ZoomFactors", uno::Any( aZoomFactors ));
+        m_xChartView->setPropertyValue( "ZoomFactors", uno::Any( aZoomFactors ));
     }
 
     //a correct work area is at least necessary for correct values in the position and  size dialog and for dragging area
@@ -468,8 +470,7 @@ void ChartController::execute_Paint(vcl::RenderContext& rRenderContext, const to
             return;
 
         //better performance for big data
-        uno::Reference<beans::XPropertySet> xProp(m_xChartView, uno::UNO_QUERY);
-        if (xProp.is())
+        if (m_xChartView.is())
         {
             awt::Size aResolution(1000, 1000);
             {
@@ -481,12 +482,11 @@ void ChartController::execute_Paint(vcl::RenderContext& rRenderContext, const to
                     aResolution.Height = pChartWindow->GetSizePixel().Height();
                 }
             }
-            xProp->setPropertyValue( "Resolution", uno::Any( aResolution ));
+            m_xChartView->setPropertyValue( "Resolution", uno::Any( aResolution ));
         }
 
-        uno::Reference< util::XUpdatable > xUpdatable( m_xChartView, uno::UNO_QUERY );
-        if (xUpdatable.is())
-            xUpdatable->update();
+        if (m_xChartView.is())
+            m_xChartView->update();
 
         {
             SolarMutexGuard aGuard;
@@ -937,8 +937,8 @@ void ChartController::execute_MouseButtonUp( const MouseEvent& rMEvt )
 void ChartController::execute_DoubleClick( const Point* pMousePixel )
 {
     const SfxViewShell* pViewShell = SfxViewShell::Current();
-    bool isMobilePhone = pViewShell && pViewShell->isLOKMobilePhone();
-    if (isMobilePhone)
+    bool notAllowed = pViewShell && (pViewShell->isLOKMobilePhone() || pViewShell->IsLokReadOnlyView());
+    if (notAllowed)
         return;
 
     bool bEditText = false;
@@ -1063,7 +1063,8 @@ void ChartController::execute_Command( const CommandEvent& rCEvt )
                 if( xSeries.is() )
                 {
                     uno::Sequence< sal_Int32 > aAttributedDataPointIndexList;
-                    if( xSeries->getPropertyValue( "AttributedDataPoints" ) >>= aAttributedDataPointIndexList )
+                    // "AttributedDataPoints"
+                    if( xSeries->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS ) >>= aAttributedDataPointIndexList )
                     {
                         if( aAttributedDataPointIndexList.hasElements() )
                         {
@@ -1097,7 +1098,7 @@ void ChartController::execute_Command( const CommandEvent& rCEvt )
                     lcl_insertMenuCommand( xPopupMenu, nUniqueId++, ".uno:FormatDataSeries" );
                 }
 
-                rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeOfSeries( xDiagram, xSeries ) );
+                rtl::Reference< ChartType > xChartType( xDiagram->getChartTypeOfSeries( xSeries ) );
                 if( xChartType->getChartType() == CHART2_SERVICE_NAME_CHARTTYPE_CANDLESTICK )
                 {
                     try
@@ -1197,7 +1198,7 @@ void ChartController::execute_Command( const CommandEvent& rCEvt )
                     bool bIsAxisVisible = AxisHelper::isAxisVisible( xAxis );
                     bool bIsMajorGridVisible = AxisHelper::isGridShown( nDimensionIndex, nCooSysIndex, true /*bMainGrid*/, xDiagram );
                     bool bIsMinorGridVisible = AxisHelper::isGridShown( nDimensionIndex, nCooSysIndex, false /*bMainGrid*/, xDiagram );
-                    bool bHasTitle = !TitleHelper::getCompleteString( xAxis->getTitleObject() ).isEmpty();
+                    bool bHasTitle = !TitleHelper::getCompleteString( xAxis->getTitleObject2() ).isEmpty();
 
                     if( eObjectType  != OBJECTTYPE_AXIS && bIsAxisVisible )
                         lcl_insertMenuCommand( xPopupMenu, nUniqueId++, ".uno:FormatAxis" );
@@ -1299,7 +1300,7 @@ void ChartController::execute_Command( const CommandEvent& rCEvt )
 
                 std::stringstream aStream;
                 boost::property_tree::write_json(aStream, aRoot, true);
-                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU, aStream.str().c_str());
+                pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CONTEXT_MENU, OString(aStream.str()));
             }
         }
         else
@@ -1372,7 +1373,7 @@ bool ChartController::execute_KeyInput( const KeyEvent& rKEvt )
     {
         // Navigation (Tab/F3/Home/End)
         rtl::Reference<::chart::ChartModel> xChartDoc( getChartModel() );
-        ObjectKeyNavigation aObjNav( m_aSelection.getSelectedOID(), xChartDoc, comphelper::getFromUnoTunnel<ExplicitValueProvider>( m_xChartView ));
+        ObjectKeyNavigation aObjNav( m_aSelection.getSelectedOID(), xChartDoc, m_xChartView.get() );
         awt::KeyEvent aKeyEvent( ::svt::AcceleratorExecute::st_VCLKey2AWTKey( aKeyCode ));
         bReturn = aObjNav.handleKeyEvent( aKeyEvent );
         if( bReturn )
@@ -1563,7 +1564,7 @@ bool ChartController::execute_KeyInput( const KeyEvent& rKEvt )
         rtl::Reference< ChartModel > xChartModel = getChartModel();
         if(xChartModel.is())
         {
-            OUString aDump = xChartModel->dump("");
+            OUString aDump = xChartModel->dump("shapes");
             SAL_WARN("chart2", aDump);
         }
     }
@@ -1638,10 +1639,8 @@ bool ChartController::requestQuickHelp(
         rOutQuickHelpText = ObjectNameProvider::getHelpText( aCID, xChartModel, bIsBalloonHelp /* bVerbose */ );
 
         // set rectangle
-        ExplicitValueProvider * pValueProvider(
-            comphelper::getFromUnoTunnel<ExplicitValueProvider>( m_xChartView ));
-        if( pValueProvider )
-            rOutEqualRect = pValueProvider->getRectangleOfObject( aCID, true );
+        if( m_xChartView )
+            rOutEqualRect = m_xChartView->getRectangleOfObject( aCID, true );
     }
 
     return bResult;
@@ -1726,7 +1725,8 @@ void SAL_CALL ChartController::addSelectionChangeListener( const uno::Reference<
         return; //behave passive if already disposed or suspended
 
     //--add listener
-    m_aLifeTimeManager.m_aListenerContainer.addInterface( cppu::UnoType<view::XSelectionChangeListener>::get(), xListener );
+    std::unique_lock aGuard2(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aSelectionChangeListeners.addInterface( aGuard2, xListener );
 }
 
 void SAL_CALL ChartController::removeSelectionChangeListener( const uno::Reference<view::XSelectionChangeListener> & xListener )
@@ -1736,22 +1736,18 @@ void SAL_CALL ChartController::removeSelectionChangeListener( const uno::Referen
         return; //behave passive if already disposed or suspended
 
     //--remove listener
-    m_aLifeTimeManager.m_aListenerContainer.removeInterface( cppu::UnoType<view::XSelectionChangeListener>::get(), xListener );
+    std::unique_lock aGuard2(m_aLifeTimeManager.m_aAccessMutex);
+    m_aLifeTimeManager.m_aSelectionChangeListeners.removeInterface( aGuard2, xListener );
 }
 
 void ChartController::impl_notifySelectionChangeListeners()
 {
-    ::comphelper::OInterfaceContainerHelper2* pIC = m_aLifeTimeManager.m_aListenerContainer
-        .getContainer( cppu::UnoType<view::XSelectionChangeListener>::get() );
-    if( pIC )
+    std::unique_lock aGuard(m_aLifeTimeManager.m_aAccessMutex);
+    if( m_aLifeTimeManager.m_aSelectionChangeListeners.getLength(aGuard) )
     {
         uno::Reference< view::XSelectionSupplier > xSelectionSupplier(this);
         lang::EventObject aEvent( xSelectionSupplier );
-        ::comphelper::OInterfaceIteratorHelper2 aIt( *pIC );
-        while( aIt.hasMoreElements() )
-        {
-            static_cast< view::XSelectionChangeListener* >( aIt.next() )->selectionChanged( aEvent );
-        }
+        m_aLifeTimeManager.m_aSelectionChangeListeners.notifyEach(aGuard, &view::XSelectionChangeListener::selectionChanged, aEvent);
     }
 }
 
@@ -1793,8 +1789,7 @@ bool ChartController::impl_moveOrResizeObject(
         if( ( bDeterminePos || bDetermineSize ) &&
             ( aRefSize.Width > 0 && aRefSize.Height > 0 ) )
         {
-            ExplicitValueProvider * pValueProvider(
-                comphelper::getFromUnoTunnel<ExplicitValueProvider>( m_xChartView ));
+            ExplicitValueProvider * pValueProvider( m_xChartView.get() );
             if( pValueProvider )
             {
                 awt::Rectangle aRect( pValueProvider->getRectangleOfObject( rCID ));
@@ -2059,11 +2054,6 @@ void ChartController::impl_SetMousePointer( const MouseEvent & rEvent )
     }
     else
         pChartWindow->SetPointer( PointerStyle::Arrow );
-}
-
-css::uno::Reference<css::uno::XInterface> const & ChartController::getChartView() const
-{
-    return m_xChartView;
 }
 
 void ChartController::sendPopupRequest(std::u16string_view rCID, tools::Rectangle aRectangle)

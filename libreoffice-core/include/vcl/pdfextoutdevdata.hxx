@@ -31,6 +31,7 @@
 class Graphic;
 class GDIMetaFile;
 class SdrObject;
+struct SwEnhancedPDFState;
 
 namespace vcl
 {
@@ -96,13 +97,15 @@ class VCL_DLLPUBLIC PDFExtOutDevData final : public ExtOutDevData
     // map from annotation SdrObject to annotation index
     ::std::map<SdrObject const*, ::std::vector<sal_Int32>> m_ScreenAnnotations;
 
+    SwEnhancedPDFState * m_pSwPDFState = nullptr;
+
 public:
 
     PDFExtOutDevData( const OutputDevice& rOutDev );
     virtual ~PDFExtOutDevData() override;
 
     bool PlaySyncPageAct( PDFWriter& rWriter, sal_uInt32& rCurGDIMtfAction, const GDIMetaFile& rMtf );
-    void ResetSyncData();
+    void ResetSyncData(PDFWriter * pWriterIfRemoveTransparencies);
 
     void PlayGlobalActions( PDFWriter& rWriter );
 
@@ -152,6 +155,9 @@ public:
 
     std::vector< PDFExtOutDevBookmarkEntry >& GetBookmarks() { return maBookmarks;}
     const std::vector<OUString>& GetChapterNames() const { return maChapterNames; }
+
+    SwEnhancedPDFState * GetSwPDFState() { return m_pSwPDFState; }
+    void SetSwPDFState(SwEnhancedPDFState *const pSwPDFState) { m_pSwPDFState = pSwPDFState; }
 
     const Graphic& GetCurrentGraphic() const;
 
@@ -270,7 +276,7 @@ public:
     sal_Int32 CreateLink(const tools::Rectangle& rRect, OUString const& rAltText, sal_Int32 nPageNr = -1);
 
     /// Create a Screen annotation.
-    sal_Int32 CreateScreen(const tools::Rectangle& rRect, OUString const& rAltText, sal_Int32 nPageNr, SdrObject const* pObj);
+    sal_Int32 CreateScreen(const tools::Rectangle& rRect, OUString const& rAltText, OUString const& rMimeType, sal_Int32 nPageNr, SdrObject const* pObj);
 
     /// Get back the annotations created for one SdrObject.
     ::std::vector<sal_Int32> const& GetScreenAnnotIds(SdrObject const* pObj) const;
@@ -293,7 +299,7 @@ public:
         @param rURL
         the URL the link shall point to.
         there will be no error checking or any kind of
-        conversion done to this parameter execept this:
+        conversion done to this parameter except this:
         it will be output as 7bit Ascii. The URL
         will appear literally in the PDF file produced
     */
@@ -345,6 +351,11 @@ public:
     (e.g. a section can contain a heading and a paragraph). The structure hierarchy
     is build automatically from the Begin/EndStructureElement calls.
 
+    The easy way is to call WrapBeginStructureElement, but it's also possible
+    to call EnsureStructureElement/InitStructureElement/BeginStructureElement
+    (its 3 parts) manually for more control; this way a placeholder SE can be
+    inserted and initialised later.
+
     A structural element need not be contained on one page; e.g. paragraphs often
     run from one page to the next. In this case the corresponding EndStructureElement
     must be called while drawing the next page.
@@ -372,7 +383,11 @@ public:
     @returns
     the id of the newly created structural element
      */
-     sal_Int32 BeginStructureElement( PDFWriter::StructElement eType, const OUString& rAlias = OUString() );
+    sal_Int32 WrapBeginStructureElement(PDFWriter::StructElement eType, const OUString& rAlias = OUString());
+    sal_Int32 EnsureStructureElement(void const* key);
+    void InitStructureElement(sal_Int32 id, PDFWriter::StructElement eType, const OUString& rAlias);
+    void BeginStructureElement(sal_Int32 id);
+
     /** end a logical structure element
 
     @see BeginStructureElement
@@ -390,14 +405,9 @@ public:
     </p>
 
     @param nElement
-    the id of the new current structure element
-
-    @returns
-    True if the current structure element could be set successfully
-    False if the current structure element could not be changed
-    (e.g. if the passed element id is invalid)
+    the id of the new current structure element, which must be valid
      */
-    bool SetCurrentStructureElement( sal_Int32 nElement );
+    void SetCurrentStructureElement( sal_Int32 nElement );
     /** get the current structure element id
 
     @returns
@@ -462,7 +472,7 @@ public:
      */
     void SetActualText( const OUString& rText );
 
-    /** set the Alt attribute of a strutural element
+    /** set the Alt attribute of a structural element
 
     Alt is s replacement text describing the contents of a structural element. This
     is mainly used by accessibility applications; e.g. a screen reader would read

@@ -129,7 +129,7 @@ bool SwDocShell::InsertGeneratedStream(SfxMedium & rMedium,
     Reader *const pRead = StartConvertFrom(rMedium, pReader, nullptr, &aPam);
     if (!pRead)
         return false;
-    ErrCode const nError = pReader->Read(*pRead);
+    ErrCodeMsg const nError = pReader->Read(*pRead);
     return ERRCODE_NONE == nError;
 }
 
@@ -139,10 +139,7 @@ Reader* SwDocShell::StartConvertFrom(SfxMedium& rMedium, SwReaderPtr& rpRdr,
                                     SwPaM* pPaM )
 {
     bool bAPICall = false;
-    const SfxBoolItem* pApiItem;
-    const SfxItemSet* pMedSet = rMedium.GetItemSet();
-    if( pMedSet &&
-        (pApiItem = pMedSet->GetItemIfSet( FN_API_CALL )) )
+    if( const SfxBoolItem* pApiItem = rMedium.GetItemSet().GetItemIfSet( FN_API_CALL ) )
         bAPICall = pApiItem->GetValue();
 
     std::shared_ptr<const SfxFilter> pFlt = rMedium.GetFilter();
@@ -177,7 +174,7 @@ Reader* SwDocShell::StartConvertFrom(SfxMedium& rMedium, SwReaderPtr& rpRdr,
         return nullptr;
 
     // #i30171# set the UpdateDocMode at the SwDocShell
-    const SfxUInt16Item* pUpdateDocItem = SfxItemSet::GetItem<SfxUInt16Item>(rMedium.GetItemSet(), SID_UPDATEDOCMODE, false);
+    const SfxUInt16Item* pUpdateDocItem = rMedium.GetItemSet().GetItem(SID_UPDATEDOCMODE, false);
     m_nUpdateDocMode = pUpdateDocItem ? pUpdateDocItem->GetValue() : document::UpdateDocMode::NO_UPDATE;
 
     if (!pFlt->GetDefaultTemplate().isEmpty())
@@ -187,10 +184,7 @@ Reader* SwDocShell::StartConvertFrom(SfxMedium& rMedium, SwReaderPtr& rpRdr,
         pFlt->GetUserData() == FILTER_TEXT_DLG )
     {
         SwAsciiOptions aOpt;
-        const SfxItemSet* pSet = rMedium.GetItemSet();
-        const SfxStringItem* pItem;
-        if( pSet &&
-            (pItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+        if( const SfxStringItem* pItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
             aOpt.ReadUserData( pItem->GetValue() );
 
         pRead->GetReaderOpt().SetASCIIOpts( aOpt );
@@ -227,7 +221,7 @@ bool SwDocShell::ConvertFrom( SfxMedium& rMedium )
     // Restore the pool default if reading a saved document.
     m_xDoc->RemoveAllFormatLanguageDependencies();
 
-    ErrCode nErr = pRdr->Read( *pRead );
+    ErrCodeMsg nErr = pRdr->Read( *pRead );
 
     // Maybe put away one old Doc
     if (m_xDoc.get() != &pRdr->GetDoc())
@@ -279,7 +273,8 @@ bool SwDocShell::Save()
         m_xDoc->getIDocumentSettingAccess().set(DocumentSettingId::DO_NOT_CAPTURE_DRAW_OBJS_ON_PAGE, false);
     }
 
-    ErrCode nErr = ERR_SWG_WRITE_ERROR, nVBWarning = ERRCODE_NONE;
+    ErrCodeMsg nErr = ERR_SWG_WRITE_ERROR;
+    ErrCode nVBWarning = ERRCODE_NONE;
     if( SfxObjectShell::Save() )
     {
         switch( GetCreateMode() )
@@ -341,7 +336,7 @@ bool SwDocShell::Save()
     SetError(nErr ? nErr : nVBWarning);
 
     SfxViewFrame *const pFrame =
-        m_pWrtShell ? m_pWrtShell->GetView().GetViewFrame() : nullptr;
+        m_pWrtShell ? &m_pWrtShell->GetView().GetViewFrame() : nullptr;
     if( pFrame )
     {
         pFrame->GetBindings().SetState(SfxBoolItem(SID_DOC_MODIFIED, false));
@@ -425,7 +420,7 @@ bool SwDocShell::SaveAs( SfxMedium& rMedium )
     {
         // Don't save data source in case a temporary is being saved for preview in MM wizard
         if (const SfxBoolItem* pNoEmbDS
-            = SfxItemSet::GetItem(rMedium.GetItemSet(), SID_NO_EMBEDDED_DS, false))
+            = rMedium.GetItemSet().GetItem(SID_NO_EMBEDDED_DS, false))
             bSaveDS = !pNoEmbDS->GetValue();
     }
     if (bSaveDS)
@@ -462,7 +457,7 @@ bool SwDocShell::SaveAs( SfxMedium& rMedium )
             if (!bCopyTo)
             {
                 if (const SfxBoolItem* pSaveToItem
-                    = SfxItemSet::GetItem(rMedium.GetItemSet(), SID_SAVETO, false))
+                    = rMedium.GetItemSet().GetItem(SID_SAVETO, false))
                     bCopyTo = pSaveToItem->GetValue();
             }
 
@@ -489,7 +484,8 @@ bool SwDocShell::SaveAs( SfxMedium& rMedium )
         m_xDoc->getIDocumentSettingAccess().set(DocumentSettingId::DO_NOT_CAPTURE_DRAW_OBJS_ON_PAGE, false);
     }
 
-    ErrCode nErr = ERR_SWG_WRITE_ERROR, nVBWarning = ERRCODE_NONE;
+    ErrCodeMsg nErr = ERR_SWG_WRITE_ERROR;
+    ErrCode nVBWarning = ERRCODE_NONE;
     uno::Reference < embed::XStorage > xStor = rMedium.GetOutputStorage();
     if( SfxObjectShell::SaveAs( rMedium ) )
     {
@@ -745,12 +741,8 @@ bool SwDocShell::ConvertTo( SfxMedium& rMedium )
     {
         SwAsciiOptions aOpt;
         OUString sItemOpt;
-        const SfxItemSet* pSet = rMedium.GetItemSet();
-        if( nullptr != pSet )
-        {
-            if( const SfxStringItem* pItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
-                sItemOpt = pItem->GetValue();
-        }
+        if( const SfxStringItem* pItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
+            sItemOpt = pItem->GetValue();
         if(!sItemOpt.isEmpty())
             aOpt.ReadUserData( sItemOpt );
 
@@ -762,19 +754,27 @@ bool SwDocShell::ConvertTo( SfxMedium& rMedium )
                             SfxObjectCreateMode::EMBEDDED == GetCreateMode());
 
     // Span Context in order to suppress the Selection's View
-    ErrCode nErrno;
+    ErrCodeMsg nErrno;
     const OUString aFileName( rMedium.GetName() );
 
-    // No View, so the whole Document!
-    if (m_pWrtShell && !Application::IsHeadlessModeEnabled())
+    bool bSelection = false;
+    if (m_pWrtShell)
     {
+        const SfxBoolItem* pSelectionItem = rMedium.GetItemSet().GetItemIfSet(SID_SELECTION);
+        bSelection = pSelectionItem && pSelectionItem->GetValue();
+    }
+
+    // No View, so the whole Document! (unless SID_SELECTION explicitly set)
+    if (m_pWrtShell && (!Application::IsHeadlessModeEnabled() || bSelection))
+    {
+
         SwWait aWait( *this, true );
         // #i106906#
         const bool bFormerLockView = m_pWrtShell->IsViewLocked();
         m_pWrtShell->LockView( true );
         m_pWrtShell->StartAllAction();
         m_pWrtShell->Push();
-        SwWriter aWrt( rMedium, *m_pWrtShell, true );
+        SwWriter aWrt( rMedium, *m_pWrtShell, !bSelection );
         nErrno = aWrt.Write( xWriter, &aFileName );
         //JP 16.05.97: In case the SFX revokes the View while saving
         if (m_pWrtShell)
@@ -1106,7 +1106,7 @@ void SwDocShell::GetState(SfxItemSet& rSet)
         case SID_NOTEBOOKBAR:
         {
             SfxViewShell* pViewShell = GetView()? GetView(): SfxViewShell::Current();
-            bool bVisible = sfx2::SfxNotebookBar::StateMethod(pViewShell->GetViewFrame()->GetBindings(),
+            bool bVisible = sfx2::SfxNotebookBar::StateMethod(pViewShell->GetViewFrame().GetBindings(),
                                                               u"modules/swriter/ui/");
             rSet.Put( SfxBoolItem( SID_NOTEBOOKBAR, bVisible ) );
         }

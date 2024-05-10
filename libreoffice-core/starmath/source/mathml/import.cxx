@@ -90,19 +90,11 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         return ERRCODE_SFX_DOLOADFAILED;
     }
 
-    // Make a model component from our SmModel
-    uno::Reference<lang::XComponent> xModelComp = m_xModel;
-    if (!xModelComp.is())
-    {
-        SAL_WARN("starmath", "Failed to make model while file input");
-        return ERRCODE_SFX_DOLOADFAILED;
-    }
-
     // Try to get an XStatusIndicator from the Medium
     uno::Reference<task::XStatusIndicator> xStatusIndicator;
 
     // Get model via uno
-    SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(m_xModel);
+    SmModel* pModel = m_xModel.get();
     if (pModel == nullptr)
     {
         SAL_WARN("starmath", "Failed to fetch sm model while file input");
@@ -130,24 +122,20 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         }
 
         // Fetch the item set
-        SfxItemSet* pSet = rMedium.GetItemSet();
-        if (pSet)
-        {
-            const SfxUnoAnyItem* pItem = pSet->GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
-            if (pItem != nullptr)
-                pItem->GetValue() >>= xStatusIndicator;
-        }
+        const SfxUnoAnyItem* pItem = rMedium.GetItemSet().GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
+        if (pItem != nullptr)
+            pItem->GetValue() >>= xStatusIndicator;
     }
 
     // Create property list
     static const comphelper::PropertyMapEntry aInfoMap[]
-        = { { u"PrivateData", 0, cppu::UnoType<XInterface>::get(),
+        = { { u"PrivateData"_ustr, 0, cppu::UnoType<XInterface>::get(),
               beans::PropertyAttribute::MAYBEVOID, 0 },
-            { u"BaseURI", 0, ::cppu::UnoType<OUString>::get(), beans::PropertyAttribute::MAYBEVOID,
-              0 },
-            { u"StreamRelPath", 0, ::cppu::UnoType<OUString>::get(),
+            { u"BaseURI"_ustr, 0, ::cppu::UnoType<OUString>::get(),
               beans::PropertyAttribute::MAYBEVOID, 0 },
-            { u"StreamName", 0, ::cppu::UnoType<OUString>::get(),
+            { u"StreamRelPath"_ustr, 0, ::cppu::UnoType<OUString>::get(),
+              beans::PropertyAttribute::MAYBEVOID, 0 },
+            { u"StreamName"_ustr, 0, ::cppu::UnoType<OUString>::get(),
               beans::PropertyAttribute::MAYBEVOID, 0 } };
     uno::Reference<beans::XPropertySet> xInfoSet(
         comphelper::GenericPropertySet_CreateInstance(new comphelper::PropertySetInfo(aInfoMap)));
@@ -171,14 +159,11 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         // TODO/LATER: handle the case of embedded links gracefully
         if (bEmbedded) // && !rMedium.GetStorage()->IsRoot() )
         {
-            OUString aName(u"dummyObjName");
-            if (rMedium.GetItemSet())
-            {
-                const SfxStringItem* pDocHierarchItem
-                    = rMedium.GetItemSet()->GetItem(SID_DOC_HIERARCHICALNAME);
-                if (pDocHierarchItem != nullptr)
-                    aName = pDocHierarchItem->GetValue();
-            }
+            OUString aName(u"dummyObjName"_ustr);
+            const SfxStringItem* pDocHierarchItem
+                = rMedium.GetItemSet().GetItem(SID_DOC_HIERARCHICALNAME);
+            if (pDocHierarchItem != nullptr)
+                aName = pDocHierarchItem->GetValue();
 
             if (!aName.isEmpty())
                 xInfoSet->setPropertyValue("StreamRelPath", Any(aName));
@@ -197,12 +182,12 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         if (!bEmbedded)
         {
             if (bOASIS)
-                nWarn = ReadThroughComponentS(rMedium.GetStorage(), xModelComp, u"meta.xml",
-                                              xContext, xInfoSet,
+                nWarn = ReadThroughComponentS(rMedium.GetStorage(), m_xModel, u"meta.xml", xContext,
+                                              xInfoSet,
                                               u"com.sun.star.comp.Math.MLOasisMetaImporter", 6);
             else
                 nWarn
-                    = ReadThroughComponentS(rMedium.GetStorage(), xModelComp, u"meta.xml", xContext,
+                    = ReadThroughComponentS(rMedium.GetStorage(), m_xModel, u"meta.xml", xContext,
                                             xInfoSet, u"com.sun.star.comp.Math.XMLMetaImporter", 5);
         }
 
@@ -222,12 +207,12 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         // Read settings
         // read a component from storage
         if (bOASIS)
-            nWarn = ReadThroughComponentS(rMedium.GetStorage(), xModelComp, u"settings.xml",
-                                          xContext, xInfoSet,
+            nWarn = ReadThroughComponentS(rMedium.GetStorage(), m_xModel, u"settings.xml", xContext,
+                                          xInfoSet,
                                           u"com.sun.star.comp.Math.MLOasisSettingsImporter", 6);
         else
             nWarn
-                = ReadThroughComponentS(rMedium.GetStorage(), xModelComp, u"settings.xml", xContext,
+                = ReadThroughComponentS(rMedium.GetStorage(), m_xModel, u"settings.xml", xContext,
                                         xInfoSet, u"com.sun.star.comp.Math.XMLSettingsImporter", 5);
 
         // Check if successful
@@ -246,13 +231,11 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         // Read document
         // read a component from storage
         if (m_pDocShell->GetSmSyntaxVersion() == 5)
-            nWarn
-                = ReadThroughComponentS(rMedium.GetStorage(), xModelComp, u"content.xml", xContext,
-                                        xInfoSet, u"com.sun.star.comp.Math.XMLImporter", 5);
+            nWarn = ReadThroughComponentS(rMedium.GetStorage(), m_xModel, u"content.xml", xContext,
+                                          xInfoSet, u"com.sun.star.comp.Math.XMLImporter", 5);
         else
-            nWarn
-                = ReadThroughComponentS(rMedium.GetStorage(), xModelComp, u"content.xml", xContext,
-                                        xInfoSet, u"com.sun.star.comp.Math.MLImporter", 6);
+            nWarn = ReadThroughComponentS(rMedium.GetStorage(), m_xModel, u"content.xml", xContext,
+                                          xInfoSet, u"com.sun.star.comp.Math.MLImporter", 6);
         // Check if successful
         if (nWarn != ERRCODE_NONE)
         {
@@ -281,10 +264,10 @@ ErrCode SmMLImportWrapper::Import(SfxMedium& rMedium)
         // read a component from input stream
         ErrCode nError = ERRCODE_NONE;
         if (m_pDocShell->GetSmSyntaxVersion() == 5)
-            nError = ReadThroughComponentIS(xInputStream, xModelComp, xContext, xInfoSet,
+            nError = ReadThroughComponentIS(xInputStream, m_xModel, xContext, xInfoSet,
                                             u"com.sun.star.comp.Math.XMLImporter", false, 5);
         else
-            nError = ReadThroughComponentIS(xInputStream, xModelComp, xContext, xInfoSet,
+            nError = ReadThroughComponentIS(xInputStream, m_xModel, xContext, xInfoSet,
                                             u"com.sun.star.comp.Math.MLImporter", false, 6);
 
         // Finish
@@ -325,7 +308,7 @@ ErrCode SmMLImportWrapper::Import(std::u16string_view aSource)
     }
 
     // Get model via uno
-    SmModel* pModel = comphelper::getFromUnoTunnel<SmModel>(m_xModel);
+    SmModel* pModel = m_xModel.get();
     if (pModel == nullptr)
     {
         SAL_WARN("starmath", "Failed to fetch sm model while file input");
@@ -342,13 +325,13 @@ ErrCode SmMLImportWrapper::Import(std::u16string_view aSource)
 
     // Create property list
     static const comphelper::PropertyMapEntry aInfoMap[]
-        = { { u"PrivateData", 0, cppu::UnoType<XInterface>::get(),
+        = { { u"PrivateData"_ustr, 0, cppu::UnoType<XInterface>::get(),
               beans::PropertyAttribute::MAYBEVOID, 0 },
-            { u"BaseURI", 0, ::cppu::UnoType<OUString>::get(), beans::PropertyAttribute::MAYBEVOID,
-              0 },
-            { u"StreamRelPath", 0, ::cppu::UnoType<OUString>::get(),
+            { u"BaseURI"_ustr, 0, ::cppu::UnoType<OUString>::get(),
               beans::PropertyAttribute::MAYBEVOID, 0 },
-            { u"StreamName", 0, ::cppu::UnoType<OUString>::get(),
+            { u"StreamRelPath"_ustr, 0, ::cppu::UnoType<OUString>::get(),
+              beans::PropertyAttribute::MAYBEVOID, 0 },
+            { u"StreamName"_ustr, 0, ::cppu::UnoType<OUString>::get(),
               beans::PropertyAttribute::MAYBEVOID, 0 } };
     uno::Reference<beans::XPropertySet> xInfoSet(
         comphelper::GenericPropertySet_CreateInstance(new comphelper::PropertySetInfo(aInfoMap)));
@@ -429,7 +412,7 @@ ErrCode SmMLImportWrapper::ReadThroughComponentIS(
 
         if (nSyntaxVersion == 5)
         {
-            SmXMLImport* pXMlImport = comphelper::getFromUnoTunnel<SmXMLImport>(xFilter);
+            SmXMLImport* pXMlImport = dynamic_cast<SmXMLImport*>(xFilter.get());
             if (pXMlImport != nullptr && pXMlImport->GetSuccess())
                 return ERRCODE_NONE;
             else
@@ -442,7 +425,7 @@ ErrCode SmMLImportWrapper::ReadThroughComponentIS(
             }
         }
 
-        m_pMlImport = comphelper::getFromUnoTunnel<SmMLImport>(xFilter);
+        m_pMlImport = dynamic_cast<SmMLImport*>(xFilter.get());
         if (m_pMlImport != nullptr && m_pMlImport->getSuccess())
             return ERRCODE_NONE;
         else
@@ -1048,7 +1031,8 @@ void SmMLImportContext::handleAttributes(const Reference<XFastAttributeList>& aA
                 if (IsXMLToken(aIter, XML_INFINITY))
                 {
                     aMaxsize.m_aMaxsize = SmMlAttributeValueMaxsize::MlInfinity;
-                    aMaxsize.m_aLengthValue = { SmLengthUnit::MlP, 10000, new OUString(u"10000%") };
+                    aMaxsize.m_aLengthValue
+                        = { SmLengthUnit::MlP, 10000, new OUString(u"10000%"_ustr) };
                 }
                 else
                 {
@@ -1202,18 +1186,6 @@ void SmMLImportContext::endFastElement(sal_Int32) { inheritStyleEnd(); }
 
 // SmMLImport
 /*************************************************************************************************/
-
-const uno::Sequence<sal_Int8>& SmMLImport::getUnoTunnelId() noexcept
-{
-    static const comphelper::UnoIdInit theSmMLImportUnoTunnelId;
-    return theSmMLImportUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL SmMLImport::getSomething(const uno::Sequence<sal_Int8>& rId)
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<SvXMLImport>{});
-}
 
 SvXMLImportContext*
 SmMLImport::CreateFastContext(sal_Int32 nElement,
@@ -1388,9 +1360,9 @@ void SmMLImport::SetConfigurationSettings(const Sequence<PropertyValue>& aConfPr
         return;
     }
 
-    static const OUStringLiteral sFormula(u"Formula");
-    static const OUStringLiteral sBasicLibraries(u"BasicLibraries");
-    static const OUStringLiteral sDialogLibraries(u"DialogLibraries");
+    static constexpr OUStringLiteral sFormula(u"Formula");
+    static constexpr OUStringLiteral sBasicLibraries(u"BasicLibraries");
+    static constexpr OUStringLiteral sDialogLibraries(u"DialogLibraries");
     for (const PropertyValue& rValue : aConfProps)
     {
         if (rValue.Name != sFormula && rValue.Name != sBasicLibraries

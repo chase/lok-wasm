@@ -18,6 +18,7 @@
  */
 
 #include <config_features.h>
+#include <config_version.h>
 
 #include <osl/file.hxx>
 #include <osl/thread.hxx>
@@ -74,6 +75,12 @@
 #include <comphelper/threadpool.hxx>
 #include <comphelper/solarmutex.hxx>
 #include <osl/process.h>
+
+#ifdef DBG_UTIL
+#include <svl/poolitem.hxx>
+#include <svl/itemset.hxx>
+#include <svl/itempool.hxx>
+#endif
 
 #include <cassert>
 #include <limits>
@@ -175,6 +182,37 @@ Application::~Application()
 {
     ImplDeInitSVData();
     ImplGetSVData()->mpApp = nullptr;
+#ifdef DBG_UTIL
+    // Due to
+    //   svx/source/dialog/framelinkarray.cxx
+    //   class Cell final : public SfxPoolItem
+    //   const Cell OBJ_CELL_NONE;
+    // being a static held SfxPoolItem which is not yet de-initialized here
+    // number often is (1), even higher with other modules loaded (like 5).
+    // These get de-allocated reliably in module-deinitializations, so this
+    // is no memory loss. These counters are more to be able to have an eye
+    // on amounts of SfxPoolItems used during office usage and to be able to
+    // detect if an error in future changes may lead to memory losses - these
+    // would show in dramatically higher numbers then immediately
+    SAL_INFO("vcl.items", "ITEM: " << getAllocatedSfxPoolItemCount() << " SfxPoolItems still allocated at shutdown");
+    SAL_INFO("vcl.items", "ITEM: " << getUsedSfxPoolItemCount() << " SfxPoolItems were incarnated during runtime");
+
+    // Same mechanism for SfxItemSet(s)
+    SAL_INFO("vcl.items", "ITEM: " << getAllocatedSfxItemSetCount() << " SfxItemSets still allocated at shutdown");
+    SAL_INFO("vcl.items", "ITEM: " << getUsedSfxItemSetCount() << " SfxItemSets were incarnated during runtime");
+
+    // Same mechanism for PoolItemHolder(s)
+    SAL_INFO("vcl.items", "ITEM: " << getAllocatedSfxPoolItemHolderCount() << " SfxPoolItemHolders still allocated at shutdown");
+    SAL_INFO("vcl.items", "ITEM: " << getUsedSfxPoolItemHolderCount() << " SfxPoolItemHolders were incarnated during runtime");
+
+    // Same mechanism for SfxPoolItem(s)directly put to a Pool
+    SAL_INFO("vcl.items", "ITEM: " << getRemainingDirectlyPooledSfxPoolItemCount() << " SfxPoolItems still directly put in Pool at shutdown (deleted @Pool destruction)");
+    SAL_INFO("vcl.items", "ITEM: " << getAllDirectlyPooledSfxPoolItemCount() << " SfxPoolItems directly put in Pool");
+
+    // Additional call to list still incarnated SfxPoolItems (under 'svl.items')
+    listAllocatedSfxPoolItems();
+
+#endif
 }
 
 int Application::Main()
@@ -291,33 +329,6 @@ const vcl::KeyCode* Application::GetReservedKeyCode( size_t i )
         return &ReservedKeys[i];
 }
 
-IMPL_STATIC_LINK_NOARG( ImplSVAppData, ImplEndAllPopupsMsg, void*, void )
-{
-    ImplSVData* pSVData = ImplGetSVData();
-    while (pSVData->mpWinData->mpFirstFloat)
-        pSVData->mpWinData->mpFirstFloat->EndPopupMode(FloatWinPopupEndFlags::Cancel);
-}
-
-IMPL_STATIC_LINK_NOARG( ImplSVAppData, ImplEndAllDialogsMsg, void*, void )
-{
-    vcl::Window* pAppWindow = Application::GetFirstTopLevelWindow();
-    while (pAppWindow)
-    {
-        vcl::EndAllDialogs(pAppWindow);
-        pAppWindow = Application::GetNextTopLevelWindow(pAppWindow);
-    }
-}
-
-void Application::EndAllDialogs()
-{
-    Application::PostUserEvent( LINK( nullptr, ImplSVAppData, ImplEndAllDialogsMsg ) );
-}
-
-void Application::EndAllPopups()
-{
-    Application::PostUserEvent( LINK( nullptr, ImplSVAppData, ImplEndAllPopupsMsg ) );
-}
-
 void Application::notifyWindow(vcl::LOKWindowId /*nLOKWindowId*/,
                                const OUString& /*rAction*/,
                                const std::vector<vcl::LOKPayloadItem>& /*rPayload = std::vector<LOKPayloadItem>()*/) const
@@ -325,14 +336,14 @@ void Application::notifyWindow(vcl::LOKWindowId /*nLOKWindowId*/,
     SAL_WARN("vcl", "Invoked not implemented method: Application::notifyWindow");
 }
 
-void Application::libreOfficeKitViewCallback(int nType, const char* pPayload) const
+void Application::libreOfficeKitViewCallback(int nType, const OString& pPayload) const
 {
     if (!comphelper::LibreOfficeKit::isActive())
         return;
 
     if (m_pCallback)
     {
-        m_pCallback(nType, pPayload, m_pCallbackData);
+        m_pCallback(nType, pPayload.getStr(), m_pCallbackData);
     }
 }
 
@@ -340,113 +351,11 @@ void Application::notifyInvalidation(tools::Rectangle const* /*pRect*/) const
 {
 }
 
-namespace
-{
-    VclPtr<vcl::Window> GetEventWindow()
-    {
-        VclPtr<vcl::Window> xWin(Application::GetFirstTopLevelWindow());
-        while (xWin)
-        {
-            if (xWin->IsVisible())
-                break;
-            xWin.reset(Application::GetNextTopLevelWindow(xWin));
-        }
-        return xWin;
-    }
-
-    bool InjectKeyEvent(SvStream& rStream)
-    {
-        VclPtr<vcl::Window> xWin(GetEventWindow());
-        if (!xWin)
-            return false;
-
-        // skip the first available cycle and insert on the next one when we
-        // are trying the initial event, flagged by a triggered but undeleted
-        // mpEventTestingIdle
-        ImplSVData* pSVData = ImplGetSVData();
-        if (pSVData->maAppData.mpEventTestingIdle)
-        {
-            delete pSVData->maAppData.mpEventTestingIdle;
-            pSVData->maAppData.mpEventTestingIdle = nullptr;
-            return false;
-        }
-
-        sal_uInt16 nCode, nCharCode;
-        rStream.ReadUInt16(nCode);
-        rStream.ReadUInt16(nCharCode);
-        if (!rStream.good())
-            return false;
-
-        KeyEvent aVCLKeyEvt(nCharCode, nCode);
-        Application::PostKeyEvent(VclEventId::WindowKeyInput, xWin.get(), &aVCLKeyEvt);
-        Application::PostKeyEvent(VclEventId::WindowKeyUp, xWin.get(), &aVCLKeyEvt);
-        return true;
-    }
-
-    void CloseDialogsAndQuit()
-    {
-        Application::EndAllPopups();
-        Application::EndAllDialogs();
-        Application::PostUserEvent( LINK( nullptr, ImplSVAppData, ImplPrepareExitMsg ) );
-    }
-}
-
-IMPL_LINK_NOARG(ImplSVAppData, VclEventTestingHdl, Timer *, void)
-{
-    if (Application::AnyInput())
-    {
-        mpEventTestingIdle->Start();
-    }
-    else
-    {
-        Application::PostUserEvent( LINK( nullptr, ImplSVAppData, ImplVclEventTestingHdl ) );
-    }
-}
-
-IMPL_STATIC_LINK_NOARG( ImplSVAppData, ImplVclEventTestingHdl, void*, void )
-{
-    ImplSVData* pSVData = ImplGetSVData();
-    SAL_INFO("vcl.eventtesting", "EventTestLimit is " << pSVData->maAppData.mnEventTestLimit);
-    if (pSVData->maAppData.mnEventTestLimit == 0)
-    {
-        delete pSVData->maAppData.mpEventTestInput;
-        SAL_INFO("vcl.eventtesting", "Event Limit reached, exiting" << pSVData->maAppData.mnEventTestLimit);
-        CloseDialogsAndQuit();
-    }
-    else
-    {
-        if (InjectKeyEvent(*pSVData->maAppData.mpEventTestInput))
-            --pSVData->maAppData.mnEventTestLimit;
-        if (!pSVData->maAppData.mpEventTestInput->good())
-        {
-            SAL_INFO("vcl.eventtesting", "Event Input exhausted, exit next cycle");
-            pSVData->maAppData.mnEventTestLimit = 0;
-        }
-        Application::PostUserEvent( LINK( nullptr, ImplSVAppData, ImplVclEventTestingHdl ) );
-    }
-}
-
-IMPL_STATIC_LINK_NOARG( ImplSVAppData, ImplPrepareExitMsg, void*, void )
-{
-    //now close top level frames
-    (void)GetpApp()->QueryExit();
-}
-
 void Application::Execute()
 {
     ImplSVData* pSVData = ImplGetSVData();
     pSVData->maAppData.mbInAppExecute = true;
     pSVData->maAppData.mbAppQuit = false;
-
-    if (Application::IsEventTestingModeEnabled())
-    {
-        pSVData->maAppData.mnEventTestLimit = 50;
-        pSVData->maAppData.mpEventTestingIdle = new Idle("eventtesting");
-        pSVData->maAppData.mpEventTestingIdle->SetInvokeHandler(LINK(&(pSVData->maAppData), ImplSVAppData, VclEventTestingHdl));
-        pSVData->maAppData.mpEventTestingIdle->SetPriority(TaskPriority::HIGH_IDLE);
-        pSVData->maAppData.mpEventTestInput = new SvFileStream("eventtesting", StreamMode::READ);
-        pSVData->maAppData.mpEventTestingIdle->Start();
-    }
 
     int nExitCode = 0;
     if (!pSVData->mpDefInst->DoExecute(nExitCode))
@@ -847,7 +756,7 @@ void Application::RemoveKeyListener( const Link<VclWindowEvent&,bool>& rKeyListe
 {
     ImplSVData* pSVData = ImplGetSVData();
     auto & rVec = pSVData->maAppData.maKeyListeners;
-    rVec.erase( std::remove(rVec.begin(), rVec.end(), rKeyListener ), rVec.end() );
+    std::erase(rVec, rKeyListener);
 }
 
 bool Application::HandleKey( VclEventId nEvent, vcl::Window *pWin, KeyEvent* pKeyEvent )
@@ -1352,12 +1261,6 @@ unsigned int Application::GetScreenCount()
     return pSys ? pSys->GetDisplayScreenCount() : 0;
 }
 
-bool Application::IsUnifiedDisplay()
-{
-    SalSystem* pSys = ImplGetSalSystem();
-    return pSys == nullptr || pSys->IsUnifiedDisplay();
-}
-
 unsigned int Application::GetDisplayBuiltInScreen()
 {
     SalSystem* pSys = ImplGetSalSystem();
@@ -1387,25 +1290,25 @@ unsigned int Application::GetDisplayExternalScreen()
     return nExternal;
 }
 
-tools::Rectangle Application::GetScreenPosSizePixel( unsigned int nScreen )
+AbsoluteScreenPixelRectangle Application::GetScreenPosSizePixel( unsigned int nScreen )
 {
     SalSystem* pSys = ImplGetSalSystem();
     if (!pSys)
     {
         SAL_WARN("vcl", "Requesting screen size/pos for screen #" << nScreen << " failed");
         assert(false);
-        return tools::Rectangle();
+        return AbsoluteScreenPixelRectangle();
     }
-    tools::Rectangle aRect = pSys->GetDisplayScreenPosSizePixel(nScreen);
+    AbsoluteScreenPixelRectangle aRect = pSys->GetDisplayScreenPosSizePixel(nScreen);
     if (aRect.GetHeight() == 0)
         SAL_WARN("vcl", "Requesting screen size/pos for screen #" << nScreen << " returned 0 height.");
     return aRect;
 }
 
 namespace {
-tools::Long calcDistSquare( const Point& i_rPoint, const tools::Rectangle& i_rRect )
+tools::Long calcDistSquare( const AbsoluteScreenPixelPoint& i_rPoint, const AbsoluteScreenPixelRectangle& i_rRect )
 {
-    const Point aRectCenter( (i_rRect.Left() + i_rRect.Right())/2,
+    const AbsoluteScreenPixelPoint aRectCenter( (i_rRect.Left() + i_rRect.Right())/2,
                        (i_rRect.Top() + i_rRect.Bottom())/ 2 );
     const tools::Long nDX = aRectCenter.X() - i_rPoint.X();
     const tools::Long nDY = aRectCenter.Y() - i_rPoint.Y();
@@ -1413,22 +1316,19 @@ tools::Long calcDistSquare( const Point& i_rPoint, const tools::Rectangle& i_rRe
 }
 }
 
-unsigned int Application::GetBestScreen( const tools::Rectangle& i_rRect )
+unsigned int Application::GetBestScreen( const AbsoluteScreenPixelRectangle& i_rRect )
 {
-    if( !IsUnifiedDisplay() )
-        return GetDisplayBuiltInScreen();
-
     const unsigned int nScreens = GetScreenCount();
     unsigned int nBestMatchScreen = 0;
     unsigned long nOverlap = 0;
     for( unsigned int i = 0; i < nScreens; i++ )
     {
-        const tools::Rectangle aCurScreenRect( GetScreenPosSizePixel( i ) );
+        const AbsoluteScreenPixelRectangle aCurScreenRect( GetScreenPosSizePixel( i ) );
         // if a screen contains the rectangle completely it is obviously the best screen
         if( aCurScreenRect.Contains( i_rRect ) )
             return i;
         // next the screen which contains most of the area of the rect is the best
-        tools::Rectangle aIntersection( aCurScreenRect.GetIntersection( i_rRect ) );
+        AbsoluteScreenPixelRectangle aIntersection( aCurScreenRect.GetIntersection( i_rRect ) );
         if( ! aIntersection.IsEmpty() )
         {
             const unsigned long nCurOverlap( aIntersection.GetWidth() * aIntersection.GetHeight() );
@@ -1443,12 +1343,12 @@ unsigned int Application::GetBestScreen( const tools::Rectangle& i_rRect )
         return nBestMatchScreen;
 
     // finally the screen which center is nearest to the rect is the best
-    const Point aCenter( (i_rRect.Left() + i_rRect.Right())/2,
+    const AbsoluteScreenPixelPoint aCenter( (i_rRect.Left() + i_rRect.Right())/2,
                          (i_rRect.Top() + i_rRect.Bottom())/2 );
     tools::Long nDist = std::numeric_limits<tools::Long>::max();
     for( unsigned int i = 0; i < nScreens; i++ )
     {
-        const tools::Rectangle aCurScreenRect( GetScreenPosSizePixel( i ) );
+        const AbsoluteScreenPixelRectangle aCurScreenRect( GetScreenPosSizePixel( i ) );
         const tools::Long nCurDist( calcDistSquare( aCenter, aCurScreenRect ) );
         if( nCurDist < nDist )
         {
@@ -1696,18 +1596,6 @@ void Application::EnableConsoleOnly()
     EnableBitmapRendering();
 }
 
-static bool bEventTestingMode = false;
-
-bool Application::IsEventTestingModeEnabled()
-{
-    return bEventTestingMode;
-}
-
-void Application::EnableEventTestingMode()
-{
-    bEventTestingMode = true;
-}
-
 static bool bSafeMode = false;
 
 bool Application::IsSafeModeEnabled()
@@ -1735,7 +1623,7 @@ const OUString& Application::GetDesktopEnvironment()
 {
     if (IsHeadlessModeEnabled())
     {
-        static const OUString aNone("none");
+        static constexpr OUString aNone(u"none"_ustr);
         return aNone;
     }
     else
@@ -1875,7 +1763,7 @@ void dumpState(rtl::OStringBuffer &rState)
         pWin->DumpAsPropertyTree(props);
 
         rState.append("\n\tWindow: ");
-        rState.append(props.extractAsOString());
+        rState.append(props.finishAndGetAsOString());
 
         pWin = Application::GetNextTopLevelWindow( pWin );
     }

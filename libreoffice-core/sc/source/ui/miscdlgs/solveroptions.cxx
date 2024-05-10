@@ -69,7 +69,7 @@ ScSolverOptionsDialog::ScSolverOptionsDialog(weld::Window* pParent,
     , m_xBtnEdit(m_xBuilder->weld_button("edit"))
 {
     m_xLbSettings->set_size_request(m_xLbSettings->get_approximate_digit_width() * 32,
-                                    m_xLbSettings->get_height_rows(6));
+                                    m_xLbSettings->get_height_rows(12));
 
     m_xLbSettings->enable_toggle_buttons(weld::ColumnToggleType::Check);
 
@@ -208,10 +208,10 @@ void ScSolverOptionsDialog::FillListBox()
                 if (aValue >>= fDoubleValue)
                     m_aOptions.back()->SetDoubleValue(fDoubleValue);
 
-                OUString sTxt = aVisName + ": ";
-                sTxt += rtl::math::doubleToUString(fDoubleValue,
-                    rtl_math_StringFormat_Automatic, rtl_math_DecimalPlaces_Max,
-                    ScGlobal::getLocaleData().getNumDecimalSep()[0], true );
+                OUString sTxt = aVisName + ": " +
+                    rtl::math::doubleToUString(fDoubleValue,
+                        rtl_math_StringFormat_Automatic, rtl_math_DecimalPlaces_Max,
+                        ScGlobal::getLocaleData().getNumDecimalSep()[0], true );
 
                 m_xLbSettings->set_text(nPos, sTxt, 0);
             }
@@ -264,10 +264,10 @@ void ScSolverOptionsDialog::EditOption()
             {
                 pStringItem->SetDoubleValue(m_xValDialog->GetValue());
 
-                OUString sTxt(pStringItem->GetText() + ": ");
-                sTxt += rtl::math::doubleToUString(pStringItem->GetDoubleValue(),
-                    rtl_math_StringFormat_Automatic, rtl_math_DecimalPlaces_Max,
-                    ScGlobal::getLocaleData().getNumDecimalSep()[0], true );
+                OUString sTxt(pStringItem->GetText() + ": " +
+                    rtl::math::doubleToUString(pStringItem->GetDoubleValue(),
+                        rtl_math_StringFormat_Automatic, rtl_math_DecimalPlaces_Max,
+                        ScGlobal::getLocaleData().getNumDecimalSep()[0], true ));
 
                 m_xLbSettings->set_text(nEntry, sTxt, 0);
             }

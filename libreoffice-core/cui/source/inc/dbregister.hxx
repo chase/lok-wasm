@@ -30,7 +30,7 @@ namespace svx
     class DbRegistrationOptionsPage : public SfxTabPage
     {
     private:
-        sal_uLong               m_nOldCount;
+        size_t              m_nOldCount;
         bool                m_bModified;
 
         std::unique_ptr<weld::Button> m_xNew;
@@ -72,6 +72,8 @@ namespace svx
         virtual ~DbRegistrationOptionsPage() override;
 
         static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rSet );
+
+        virtual OUString GetAllStrings() override;
 
         virtual bool        FillItemSet( SfxItemSet* rSet ) override;
         virtual void        Reset( const SfxItemSet* rSet ) override;

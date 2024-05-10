@@ -94,8 +94,8 @@ const Color& FixedText::GetCanonicalTextColor( const StyleSettings& _rStyle ) co
     return _rStyle.GetLabelTextColor();
 }
 
-FixedText::FixedText( vcl::Window* pParent, WinBits nStyle )
-    : Control(WindowType::FIXEDTEXT)
+FixedText::FixedText(vcl::Window* pParent, WinBits nStyle, WindowType eType)
+    : Control(eType)
     , m_nMaxWidthChars(-1)
     , m_nMinWidthChars(-1)
     , m_pMnemonicWindow(nullptr)
@@ -373,7 +373,7 @@ void FixedText::setMinWidthChars(sal_Int32 nWidth)
     }
 }
 
-bool FixedText::set_property(const OString &rKey, const OUString &rValue)
+bool FixedText::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "max-width-chars")
         setMaxWidthChars(rValue.toInt32());
@@ -958,7 +958,7 @@ Image FixedImage::loadThemeImage(const OUString &rFileName)
     return Image(StockImage::Yes, rFileName);
 }
 
-bool FixedImage::set_property(const OString &rKey, const OUString &rValue)
+bool FixedImage::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "icon-size")
     {

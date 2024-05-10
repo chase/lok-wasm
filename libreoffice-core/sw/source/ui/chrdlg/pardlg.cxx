@@ -20,7 +20,6 @@
 #include <sfx2/htmlmode.hxx>
 #include <sfx2/tabdlg.hxx>
 #include <svl/style.hxx>
-#include <svtools/htmlcfg.hxx>
 #include <svl/cjkoptions.hxx>
 #include <docsh.hxx>
 #include <wrtsh.hxx>
@@ -38,6 +37,7 @@
 #include <svx/dialogs.hrc>
 #include <svx/flagsdef.hxx>
 #include <osl/diagnose.h>
+#include <officecfg/Office/Common.hxx>
 
 SwParaDlg::SwParaDlg(weld::Window *pParent,
                     SwView& rVw,
@@ -45,7 +45,7 @@ SwParaDlg::SwParaDlg(weld::Window *pParent,
                     sal_uInt8 nDialogMode,
                     const OUString *pTitle,
                     bool bDraw,
-                    const OString& sDefPage)
+                    const OUString& sDefPage)
     : SfxTabDialogController(pParent,
                  "modules/swriter/ui/paradialog.ui",
                  "ParagraphPropertiesDialog",
@@ -73,7 +73,7 @@ SwParaDlg::SwParaDlg(weld::Window *pParent,
     AddTabPage("labelTP_PARA_ALIGN", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_ALIGN_PARAGRAPH),
                                       pFact->GetTabPageRangesFunc(RID_SVXPAGE_ALIGN_PARAGRAPH));
 
-    if (!m_bDrawParaDlg && (!bHtmlMode || SvxHtmlOptions::IsPrintLayoutExtension()))
+    if (!m_bDrawParaDlg && (!bHtmlMode || officecfg::Office::Common::Filter::HTML::Export::PrintLayout::get()))
     {
         OSL_ENSURE(pFact->GetTabPageCreatorFunc(RID_SVXPAGE_EXT_PARAGRAPH), "GetTabPageCreatorFunc fail!");
         OSL_ENSURE(pFact->GetTabPageRangesFunc(RID_SVXPAGE_EXT_PARAGRAPH), "GetTabPageRangesFunc fail!");
@@ -146,7 +146,7 @@ SwParaDlg::~SwParaDlg()
 {
 }
 
-void SwParaDlg::PageCreated(const OString& rId, SfxTabPage& rPage)
+void SwParaDlg::PageCreated(const OUString& rId, SfxTabPage& rPage)
 {
     SwWrtShell& rSh = m_rView.GetWrtShell();
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));

@@ -17,14 +17,12 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_SALDATA_HXX
-#define INCLUDED_VCL_INC_UNX_SALDATA_HXX
+#pragma once
 
 #include <X11/Xlib.h>
 
 #include <unx/saldisp.hxx>
 #include <unx/gendata.hxx>
-#include <vclpluginapi.h>
 
 class SalXLib;
 class SalDisplay;
@@ -69,7 +67,5 @@ public:
 };
 
 X11SalData* GetX11SalData();
-
-#endif // INCLUDED_VCL_INC_UNX_SALDATA_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

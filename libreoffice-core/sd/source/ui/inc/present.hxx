@@ -54,6 +54,14 @@ private:
     std::unique_ptr<weld::CheckButton> m_xCbxAnimationAllowed;
     std::unique_ptr<weld::CheckButton> m_xCbxChangePage;
     std::unique_ptr<weld::CheckButton> m_xCbxAlwaysOnTop;
+    std::unique_ptr<weld::CheckButton> m_xCbxShowNavigationButton;
+    std::unique_ptr<weld::ComboBox>    m_xLbNavigationButtonsSize;
+    std::unique_ptr<weld::Label>       m_xFtNavigationButtonsSize;
+    std::unique_ptr<weld::Frame> m_xFrameEnableRemote;
+    std::unique_ptr<weld::CheckButton> m_xCbxEnableRemote;
+    std::unique_ptr<weld::CheckButton> m_xCbxEnableRemoteInsecure;
+
+    std::unique_ptr<weld::ComboBox> m_xLbConsole;
 
     std::unique_ptr<weld::Label> m_xFtMonitor;
     std::unique_ptr<weld::ComboBox> m_xLBMonitor;
@@ -63,6 +71,7 @@ private:
     std::unique_ptr<weld::Label> m_xMonitorExternal;
     std::unique_ptr<weld::Label> m_xExternal;
 
+    DECL_LINK(ChangeRemoteHdl, weld::Toggleable&, void);
     DECL_LINK(ChangeRangeHdl, weld::Toggleable&, void);
     DECL_LINK(ClickWindowPresentationHdl, weld::Toggleable&, void);
     void ChangePause();
@@ -84,6 +93,7 @@ public:
                                                const std::vector<OUString> &rPageNames,
                                                SdCustomShowList* pCSList);
     virtual             ~SdStartPresentationDlg() override;
+    virtual short run() override;
     void                GetAttr( SfxItemSet& rOutAttrs );
 };
 

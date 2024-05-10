@@ -79,9 +79,9 @@ const char CMDURL_STYLEPROT_ONLY[] = ".uno:StyleApply?";
 const char CMDURL_SPART_ONLY    [] = "Style:string=";
 const char CMDURL_FPART_ONLY    [] = "FamilyName:string=";
 
-constexpr OUStringLiteral STYLEPROP_UINAME = u"DisplayName";
-constexpr OUStringLiteral MACRO_SELECTOR_CONFIGNAME = u"MacroSelectorDialog";
-constexpr OUStringLiteral LAST_RUN_MACRO_INFO = u"LastRunMacro";
+constexpr OUString STYLEPROP_UINAME = u"DisplayName"_ustr;
+constexpr OUString MACRO_SELECTOR_CONFIGNAME = u"MacroSelectorDialog"_ustr;
+constexpr OUString LAST_RUN_MACRO_INFO = u"LastRunMacro"_ustr;
 
 OUString SfxStylesInfo_Impl::generateCommand(
     std::u16string_view sFamily, std::u16string_view sStyle)
@@ -469,21 +469,16 @@ void CuiConfigGroupListBox::ClearAll()
     m_xTreeView->clear();
 }
 
-void CuiConfigGroupListBox::InitModule()
+sal_Int32 CuiConfigGroupListBox::InitModule()
 {
     try
     {
+        // return the number of added groups
         css::uno::Reference< css::frame::XDispatchInformationProvider > xProvider(m_xFrame, css::uno::UNO_QUERY_THROW);
         css::uno::Sequence< sal_Int16 > lGroups = xProvider->getSupportedCommandGroups();
         sal_Int32                       c1      = lGroups.getLength();
         sal_Int32                       i1      = 0;
-
-        if ( c1 )
-        {
-            // Add All Commands category
-            aArr.push_back(std::make_unique<SfxGroupInfo_Impl>(SfxCfgKind::GROUP_ALLFUNCTIONS, 0));
-            m_xTreeView->append(weld::toId(aArr.back().get()), CuiResId(RID_CUISTR_ALLFUNCTIONS));
-        }
+        sal_Int32                       nAddedGroups = 0;
 
         for (i1=0; i1<c1; ++i1)
         {
@@ -502,12 +497,15 @@ void CuiConfigGroupListBox::InitModule()
 
             aArr.push_back( std::make_unique<SfxGroupInfo_Impl>( SfxCfgKind::GROUP_FUNCTION, nGroupID ) );
             m_xTreeView->append(weld::toId(aArr.back().get()), sGroupName);
+            nAddedGroups++;
         }
+        return nAddedGroups;
     }
     catch(const css::uno::RuntimeException&)
         { throw; }
     catch(const css::uno::Exception&)
         {}
+    return 0;
 }
 
 void CuiConfigGroupListBox::FillScriptList(const css::uno::Reference< css::script::browse::XBrowseNode >& xRootNode,
@@ -634,6 +632,7 @@ void CuiConfigGroupListBox::Init(const css::uno::Reference< css::uno::XComponent
 
     m_xContext = xContext;
     m_xFrame = xFrame;
+    sal_Int32 nAddedGroups = 0;
     if( bEventMode )
     {
         m_sModuleLongName = sModuleLongName;
@@ -641,7 +640,7 @@ void CuiConfigGroupListBox::Init(const css::uno::Reference< css::uno::XComponent
         m_xModuleCategoryInfo.set(m_xGlobalCategoryInfo->getByName(m_sModuleLongName), css::uno::UNO_QUERY_THROW);
         m_xUICmdDescription   = css::frame::theUICommandDescription::get( m_xContext );
 
-        InitModule();
+        nAddedGroups = InitModule();
     }
 
     SAL_INFO("cui.customize", "** ** About to initialise SF Scripts");
@@ -658,7 +657,21 @@ void CuiConfigGroupListBox::Init(const css::uno::Reference< css::uno::XComponent
         // TODO exception handling
     }
 
+    m_xTreeView->thaw();
+    m_xTreeView->make_sorted();
+    m_xTreeView->make_unsorted();
+    m_xTreeView->freeze();
 
+    // add All Commands to the top
+    if ( bEventMode && nAddedGroups )
+    {
+        aArr.insert(aArr.begin(), std::make_unique<SfxGroupInfo_Impl>(SfxCfgKind::GROUP_ALLFUNCTIONS, 0));
+        OUString sId(weld::toId(aArr.front().get()));
+        OUString s(CuiResId(RID_CUISTR_ALLFUNCTIONS));
+        m_xTreeView->insert(nullptr, 0, &s, &sId, nullptr, nullptr, false, nullptr);
+    }
+
+    // add application macros to the end
     if ( rootNode.is() )
     {
         if ( bEventMode )
@@ -681,7 +694,7 @@ void CuiConfigGroupListBox::Init(const css::uno::Reference< css::uno::XComponent
         }
     }
 
-    // add styles and sidebar decks
+    // add styles and sidebar decks to the end
     if ( bEventMode )
     {
         aArr.push_back( std::make_unique<SfxGroupInfo_Impl>( SfxCfgKind::GROUP_STYLES, 0, nullptr ) ); // TODO last parameter should contain user data
@@ -1204,7 +1217,7 @@ IMPL_LINK(SvxScriptSelectorDialog, ContextMenuHdl, const CommandEvent&, rCEvt, b
     xDropMenu->set_active("alphabetically", xTreeView.get_sort_order());
     xDropMenu->set_active("properorder", !xTreeView.get_sort_order());
 
-    OString sCommand(xPopup->popup_at_rect(&xTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1))));
+    OUString sCommand(xPopup->popup_at_rect(&xTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1))));
     if (sCommand == "alphabetically")
     {
         xTreeView.make_sorted();

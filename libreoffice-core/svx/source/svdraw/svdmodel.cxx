@@ -115,8 +115,7 @@ struct SdrModelImpl
 
 
 SdrModel::SdrModel(SfxItemPool* pPool, comphelper::IEmbeddedHelper* pEmbeddedHelper, bool bDisablePropertyFiles)
-    : m_aObjUnit(SdrEngineDefaults::GetMapFraction())
-    , m_eObjUnit(SdrEngineDefaults::GetMapUnit())
+    : m_eObjUnit(SdrEngineDefaults::GetMapUnit())
     , m_eUIUnit(FieldUnit::MM)
     , m_aUIScale(Fraction(1,1))
     , m_nUIUnitDecimalMark(0)
@@ -201,7 +200,7 @@ SdrModel::SdrModel(SfxItemPool* pPool, comphelper::IEmbeddedHelper* pEmbeddedHel
     mpImpl->initTheme();
 }
 
-SdrModel::~SdrModel()
+void SdrModel::implDtorClearModel()
 {
     mbInDestruction = true;
 
@@ -217,6 +216,11 @@ SdrModel::~SdrModel()
     m_pCurrentUndoGroup.reset();
 
     ClearModel(true);
+}
+
+SdrModel::~SdrModel()
+{
+    implDtorClearModel();
 
 #ifdef DBG_UTIL
     // SdrObjectLifetimeWatchDog:
@@ -227,7 +231,6 @@ SdrModel::~SdrModel()
         for (const auto & pObj : maAllIncarnatedObjects)
             SAL_WARN("svx", "leaked instance of " << typeid(*pObj).name());
     }
-    assert(maAllIncarnatedObjects.empty());
 #endif
 
     m_pLayerAdmin.reset();
@@ -243,7 +246,7 @@ SdrModel::~SdrModel()
     // the DrawingEngine may need it in its destructor
     if( mxStyleSheetPool.is() )
     {
-        uno::Reference<lang::XComponent> xComponent( static_cast< cppu::OWeakObject* >( mxStyleSheetPool.get() ), uno::UNO_QUERY );
+        uno::Reference<lang::XComponent> xComponent( getXWeak( mxStyleSheetPool.get() ), uno::UNO_QUERY );
         if( xComponent.is() ) try
         {
             xComponent->dispose();
@@ -603,7 +606,7 @@ void SdrModel::ClearModel(bool bCalledFromDestructor)
 SdrModel* SdrModel::AllocModel() const
 {
     SdrModel* pModel=new SdrModel();
-    pModel->SetScaleUnit(m_eObjUnit,m_aObjUnit);
+    pModel->SetScaleUnit(m_eObjUnit);
     return pModel;
 }
 
@@ -704,7 +707,7 @@ void SdrModel::ImpSetOutlinerDefaults( SdrOutliner* pOutliner, bool bInit )
 
     if ( !GetRefDevice() )
     {
-        MapMode aMapMode(m_eObjUnit, Point(0,0), m_aObjUnit, m_aObjUnit);
+        MapMode aMapMode(m_eObjUnit);
         pOutliner->SetRefMapMode(aMapMode);
     }
 }
@@ -892,35 +895,11 @@ void SdrModel::ImpSetUIUnit()
     m_aUIUnitStr = GetUnitString(m_eUIUnit);
 }
 
-void SdrModel::SetScaleUnit(MapUnit eMap, const Fraction& rFrac)
-{
-    if (m_eObjUnit!=eMap || m_aObjUnit!=rFrac) {
-        m_eObjUnit=eMap;
-        m_aObjUnit=rFrac;
-        m_pItemPool->SetDefaultMetric(m_eObjUnit);
-        ImpSetUIUnit();
-        ImpSetOutlinerDefaults( m_pDrawOutliner.get() );
-        ImpSetOutlinerDefaults( m_pHitTestOutliner.get() );
-        ImpReformatAllTextObjects();
-    }
-}
-
 void SdrModel::SetScaleUnit(MapUnit eMap)
 {
     if (m_eObjUnit!=eMap) {
         m_eObjUnit=eMap;
         m_pItemPool->SetDefaultMetric(m_eObjUnit);
-        ImpSetUIUnit();
-        ImpSetOutlinerDefaults( m_pDrawOutliner.get() );
-        ImpSetOutlinerDefaults( m_pHitTestOutliner.get() );
-        ImpReformatAllTextObjects();
-    }
-}
-
-void SdrModel::SetScaleFraction(const Fraction& rFrac)
-{
-    if (m_aObjUnit!=rFrac) {
-        m_aObjUnit=rFrac;
         ImpSetUIUnit();
         ImpSetOutlinerDefaults( m_pDrawOutliner.get() );
         ImpSetOutlinerDefaults( m_pHitTestOutliner.get() );
@@ -1029,8 +1008,7 @@ OUString SdrModel::GetMetricString(tools::Long nVal, bool bNoUnitChars, sal_Int3
         nDecimalMark = nNumDigits;
     }
 
-    OUStringBuffer aBuf;
-    aBuf.append(static_cast<sal_Int32>(fLocalValue + 0.5));
+    OUStringBuffer aBuf = OUString::number(static_cast<sal_Int32>(fLocalValue + 0.5));
 
     if(nDecimalMark < 0)
     {
@@ -1601,7 +1579,7 @@ std::shared_ptr<model::Theme> const& SdrModel::getTheme() const
     return mpImpl->mpTheme;
 }
 
-uno::Reference< uno::XInterface > const & SdrModel::getUnoModel()
+uno::Reference< frame::XModel > const & SdrModel::getUnoModel()
 {
     if( !mxUnoModel.is() )
         mxUnoModel = createUnoModel();
@@ -1609,7 +1587,7 @@ uno::Reference< uno::XInterface > const & SdrModel::getUnoModel()
     return mxUnoModel;
 }
 
-void SdrModel::setUnoModel(const uno::Reference<uno::XInterface>& xModel)
+void SdrModel::setUnoModel(const uno::Reference<frame::XModel>& xModel)
 {
     mxUnoModel = xModel;
 }
@@ -1626,11 +1604,10 @@ void SdrModel::adaptSizeAndBorderForAllPages(
     // to do this for higher-level (derived) Models (e.g. Draw/Impress)
 }
 
-uno::Reference< uno::XInterface > SdrModel::createUnoModel()
+uno::Reference< frame::XModel > SdrModel::createUnoModel()
 {
     OSL_FAIL( "SdrModel::createUnoModel() - base implementation should not be called!" );
-    uno::Reference<uno::XInterface> xInt;
-    return xInt;
+    return nullptr;
 }
 
 void SdrModel::setLock( bool bLock )
@@ -1863,23 +1840,15 @@ void SdrModel::ReadUserDataSequenceValue(const beans::PropertyValue* pValue)
     }
 }
 
-template <typename T>
-static void addPair(std::vector< std::pair< OUString, uno::Any > >& aUserData, const OUString& name, const T val)
-{
-    aUserData.push_back(std::pair< OUString, uno::Any >(name, uno::Any(val)));
-}
-
 void SdrModel::WriteUserDataSequence(uno::Sequence <beans::PropertyValue>& rValues)
 {
-    std::vector< std::pair< OUString, uno::Any > > aUserData;
-    addPair(aUserData, "AnchoredTextOverflowLegacy",
-            GetCompatibilityFlag(SdrCompatibilityFlag::AnchoredTextOverflowLegacy));
-    addPair(aUserData, "LegacySingleLineFontwork",
-            GetCompatibilityFlag(SdrCompatibilityFlag::LegacyFontwork));
-    addPair(aUserData, "ConnectorUseSnapRect",
-            GetCompatibilityFlag(SdrCompatibilityFlag::ConnectorUseSnapRect));
-    addPair(aUserData, "IgnoreBreakAfterMultilineField",
-            GetCompatibilityFlag(SdrCompatibilityFlag::IgnoreBreakAfterMultilineField));
+    std::vector< std::pair< OUString, uno::Any > > aUserData
+    {
+        { "AnchoredTextOverflowLegacy", uno::Any(GetCompatibilityFlag(SdrCompatibilityFlag::AnchoredTextOverflowLegacy)) },
+        { "LegacySingleLineFontwork", uno::Any(GetCompatibilityFlag(SdrCompatibilityFlag::LegacyFontwork)) },
+        { "ConnectorUseSnapRect", uno::Any(GetCompatibilityFlag(SdrCompatibilityFlag::ConnectorUseSnapRect)) },
+        { "IgnoreBreakAfterMultilineField", uno::Any(GetCompatibilityFlag(SdrCompatibilityFlag::IgnoreBreakAfterMultilineField)) }
+    };
 
     const sal_Int32 nOldLength = rValues.getLength();
     rValues.realloc(nOldLength + aUserData.size());

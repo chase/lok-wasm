@@ -439,22 +439,25 @@ LngSvcMgr::LngSvcMgr()
 // css::util::XModifyListener
 void LngSvcMgr::modified(const lang::EventObject&)
 {
-    {
-        osl::MutexGuard aGuard(GetLinguMutex());
-        //assume that if an extension has been added/removed that
-        //it might be a dictionary extension, so drop our cache
+    osl::MutexGuard aGuard(GetLinguMutex());
+    //assume that if an extension has been added/removed that
+    //it might be a dictionary extension, so drop our cache
 
-        pAvailSpellSvcs.reset();
-        pAvailGrammarSvcs.reset();
-        pAvailHyphSvcs.reset();
-        pAvailThesSvcs.reset();
-    }
+    pAvailSpellSvcs.reset();
+    pAvailGrammarSvcs.reset();
+    pAvailHyphSvcs.reset();
+    pAvailThesSvcs.reset();
 
-    {
-        SolarMutexGuard aGuard;
-        //schedule in an update to execute in the main thread
-        aUpdateIdle.Start();
-    }
+    //schedule in an update to execute in the main thread
+    aUpdateIdle.Start();
+}
+
+bool LngSvcMgr::joinThreads()
+{
+    if (mxGrammarDsp && !
+        mxGrammarDsp->joinThreads())
+        return false;
+    return true;
 }
 
 //run update, and inform everyone that dictionaries (may) have changed, this
@@ -620,7 +623,7 @@ void LngSvcMgr::UpdateAll()
     SvtLinguConfig aCfg;
 
     const int nNumServices = 4;
-    static constexpr rtl::OUStringConstExpr apServices[nNumServices] =  { SN_SPELLCHECKER, SN_GRAMMARCHECKER, SN_HYPHENATOR, SN_THESAURUS };
+    static constexpr OUString apServices[nNumServices] =  { SN_SPELLCHECKER, SN_GRAMMARCHECKER, SN_HYPHENATOR, SN_THESAURUS };
     const char * const apCurLists[nNumServices]       =  { "ServiceManager/SpellCheckerList",       "ServiceManager/GrammarCheckerList",       "ServiceManager/HyphenatorList",       "ServiceManager/ThesaurusList" };
     const char * const apLastFoundLists[nNumServices] =  { "ServiceManager/LastFoundSpellCheckers", "ServiceManager/LastFoundGrammarCheckers", "ServiceManager/LastFoundHyphenators", "ServiceManager/LastFoundThesauri" };
 
@@ -630,7 +633,7 @@ void LngSvcMgr::UpdateAll()
 
     for (int k = 0;  k < nNumServices;  ++k)
     {
-        OUString aService( apServices[k] );
+        OUString const & aService = apServices[k];
         OUString aActiveList( OUString::createFromAscii( apCurLists[k] ) );
         OUString aLastFoundList( OUString::createFromAscii( apLastFoundLists[k] ) );
 
@@ -715,10 +718,10 @@ void LngSvcMgr::UpdateAll()
 
 void LngSvcMgr::Notify( const uno::Sequence< OUString > &rPropertyNames )
 {
-    static const OUStringLiteral aSpellCheckerList( u"ServiceManager/SpellCheckerList" );
-    static const OUStringLiteral aGrammarCheckerList( u"ServiceManager/GrammarCheckerList" );
-    static const OUStringLiteral aHyphenatorList( u"ServiceManager/HyphenatorList" );
-    static const OUStringLiteral aThesaurusList( u"ServiceManager/ThesaurusList" );
+    static constexpr OUString aSpellCheckerList( u"ServiceManager/SpellCheckerList"_ustr );
+    static constexpr OUString aGrammarCheckerList( u"ServiceManager/GrammarCheckerList"_ustr );
+    static constexpr OUString aHyphenatorList( u"ServiceManager/HyphenatorList"_ustr );
+    static constexpr OUString aThesaurusList( u"ServiceManager/ThesaurusList"_ustr );
 
     const uno::Sequence< OUString > aSpellCheckerListEntries( GetNodeNames( aSpellCheckerList ) );
     const uno::Sequence< OUString > aGrammarCheckerListEntries( GetNodeNames( aGrammarCheckerList ) );

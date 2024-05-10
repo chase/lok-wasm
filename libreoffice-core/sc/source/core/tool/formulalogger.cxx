@@ -9,6 +9,7 @@
 #include <formulacell.hxx>
 #include <tokenarray.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <tokenstringcontext.hxx>
 #include <address.hxx>
 #include <interpre.hxx>
@@ -140,25 +141,22 @@ void FormulaLogger::GroupScope::addRefMessage(
     const ScAddress& rCellPos, const ScAddress& rRefPos, size_t nLen,
     const formula::VectorRefArray& rArray )
 {
-    OUStringBuffer aBuf;
-
     ScRange aRefRange(rRefPos);
     aRefRange.aEnd.IncRow(nLen-1);
     OUString aRangeStr = aRefRange.Format(mpImpl->mrDoc, getRefFlags(rCellPos, rRefPos));
-    aBuf.append(aRangeStr);
-    aBuf.append(": ");
 
+    std::u16string_view aMsg;
     if (rArray.mpNumericArray)
     {
         if (rArray.mpStringArray)
         {
             // mixture of numeric and string cells.
-            aBuf.append("numeric and string");
+            aMsg = u"numeric and string";
         }
         else
         {
             // numeric cells only.
-            aBuf.append("numeric only");
+            aMsg = u"numeric only";
         }
     }
     else
@@ -166,16 +164,16 @@ void FormulaLogger::GroupScope::addRefMessage(
         if (rArray.mpStringArray)
         {
             // string cells only.
-            aBuf.append("string only");
+            aMsg = u"string only";
         }
         else
         {
             // empty cells.
-            aBuf.append("empty");
+            aMsg = u"empty";
         }
     }
 
-    mpImpl->maMessages.push_back(aBuf.makeStringAndClear());
+    mpImpl->maMessages.push_back(aRangeStr + ": " + aMsg);
 }
 
 void FormulaLogger::GroupScope::addRefMessage(
@@ -194,35 +192,31 @@ void FormulaLogger::GroupScope::addRefMessage(
     const ScAddress& rCellPos, const ScAddress& rRefPos,
     const formula::FormulaToken& rToken )
 {
-    OUStringBuffer aBuf;
     OUString aPosStr = rRefPos.Format(getRefFlags(rCellPos, rRefPos), &mpImpl->mrDoc);
-    aBuf.append(aPosStr);
-    aBuf.append(": ");
-
+    std::u16string_view aMsg;
     switch (rToken.GetType())
     {
         case formula::svDouble:
-            aBuf.append("numeric value");
+            aMsg = u"numeric value";
             break;
         case formula::svString:
-            aBuf.append("string value");
+            aMsg = u"string value";
             break;
         default:
-            aBuf.append("unknown value");
+            aMsg = u"unknown value";
     }
 
-    mpImpl->maMessages.push_back(aBuf.makeStringAndClear());
+    mpImpl->maMessages.push_back(aPosStr + ": " + aMsg);
 }
 
 void FormulaLogger::GroupScope::addGroupSizeThresholdMessage( const ScFormulaCell& rCell )
 {
-    OUStringBuffer aBuf;
-    aBuf.append("group length below minimum threshold (");
-    aBuf.append(rCell.GetWeight());
-    aBuf.append(" < ");
-    aBuf.append(ScInterpreter::GetGlobalConfig().mnOpenCLMinimumFormulaGroupSize);
-    aBuf.append(")");
-    mpImpl->maMessages.push_back(aBuf.makeStringAndClear());
+    OUString aBuf = "group length below minimum threshold ("
+        + OUString::number(rCell.GetWeight())
+        + " < "
+        + OUString::number(ScInterpreter::GetGlobalConfig().mnOpenCLMinimumFormulaGroupSize)
+        + ")";
+    mpImpl->maMessages.push_back(aBuf);
 }
 
 void FormulaLogger::GroupScope::setCalcComplete()
@@ -300,7 +294,7 @@ void FormulaLogger::writeAscii( const char* s, size_t n )
 
 void FormulaLogger::write( std::u16string_view ou )
 {
-    OString s = OUStringToOString(ou, RTL_TEXTENCODING_UTF8).getStr();
+    OString s = OUStringToOString(ou, RTL_TEXTENCODING_UTF8);
     writeAscii(s.getStr(), s.getLength());
 }
 
@@ -336,7 +330,7 @@ FormulaLogger::GroupScope FormulaLogger::enterGroup(
     const ScDocument& rDoc, const ScFormulaCell& rCell )
 {
     // Get the file name if available.
-    const SfxObjectShell* pShell = rDoc.GetDocumentShell();
+    const ScDocShell* pShell = rDoc.GetDocumentShell();
     const SfxMedium* pMedium = pShell ? pShell->GetMedium() : nullptr;
     OUString aName;
     if (pMedium)

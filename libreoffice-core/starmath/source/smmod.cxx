@@ -50,7 +50,7 @@ OUString SmLocalizedSymbolData::GetUiSymbolName( std::u16string_view rExportName
 
     for (size_t i = 0; i < SAL_N_ELEMENTS(RID_UI_SYMBOL_NAMES); ++i)
     {
-        if (o3tl::equalsAscii(rExportName, RID_UI_SYMBOL_NAMES[i].mpId))
+        if (o3tl::equalsAscii(rExportName, RID_UI_SYMBOL_NAMES[i].getId()))
         {
             aRes = SmResId(RID_UI_SYMBOL_NAMES[i]);
             break;
@@ -68,7 +68,7 @@ OUString SmLocalizedSymbolData::GetExportSymbolName( std::u16string_view rUiName
     {
         if (rUiName == SmResId(RID_UI_SYMBOL_NAMES[i]))
         {
-            const char *pKey = RID_UI_SYMBOL_NAMES[i].mpId;
+            const char *pKey = RID_UI_SYMBOL_NAMES[i].getId();
             aRes = OUString(pKey, strlen(pKey), RTL_TEXTENCODING_UTF8);
             break;
         }
@@ -83,7 +83,7 @@ OUString SmLocalizedSymbolData::GetUiSymbolSetName( std::u16string_view rExportN
 
     for (size_t i = 0; i < SAL_N_ELEMENTS(RID_UI_SYMBOLSET_NAMES); ++i)
     {
-        if (o3tl::equalsAscii(rExportName, RID_UI_SYMBOLSET_NAMES[i].mpId))
+        if (o3tl::equalsAscii(rExportName, RID_UI_SYMBOLSET_NAMES[i].getId()))
         {
             aRes = SmResId(RID_UI_SYMBOLSET_NAMES[i]);
             break;
@@ -101,7 +101,7 @@ OUString SmLocalizedSymbolData::GetExportSymbolSetName( std::u16string_view rUiN
     {
         if (rUiName == SmResId(RID_UI_SYMBOLSET_NAMES[i]))
         {
-            const char *pKey = RID_UI_SYMBOLSET_NAMES[i].mpId;
+            const char *pKey = RID_UI_SYMBOLSET_NAMES[i].getId();
             aRes = OUString(pKey, strlen(pKey), RTL_TEXTENCODING_UTF8);
             break;
         }
@@ -118,7 +118,7 @@ void SmModule::InitInterface_Impl()
 }
 
 SmModule::SmModule(SfxObjectFactory* pObjFact)
-    : SfxModule("sm", {pObjFact})
+    : SfxModule("sm"_ostr, {pObjFact})
 {
     SetName("StarMath");
 
@@ -173,9 +173,9 @@ SmSymbolManager & SmModule::GetSymbolManager()
 
 const SvtSysLocale& SmModule::GetSysLocale()
 {
-    if( !mpSysLocale )
-        mpSysLocale.reset(new SvtSysLocale);
-    return *mpSysLocale;
+    if( !moSysLocale )
+        moSysLocale.emplace();
+    return *moSysLocale;
 }
 
 VirtualDevice &SmModule::GetDefaultVirtualDev()
@@ -211,7 +211,8 @@ std::optional<SfxItemSet> SmModule::CreateItemSet( sal_uInt16 nId )
             svl::Items< //TP_SMPRINT
                 SID_PRINTTITLE, SID_PRINTZOOM,
                 SID_NO_RIGHT_SPACES, SID_SAVE_ONLY_USED_SYMBOLS,
-                SID_AUTO_CLOSE_BRACKETS, SID_SMEDITWINDOWZOOM>);
+                SID_AUTO_CLOSE_BRACKETS, SID_SMEDITWINDOWZOOM,
+                SID_INLINE_EDIT_ENABLE, SID_INLINE_EDIT_ENABLE>);
 
         GetConfig()->ConfigToItemSet(*pRet);
     }

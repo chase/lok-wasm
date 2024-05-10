@@ -17,8 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_GTK_GTKGDI_HXX
-#define INCLUDED_VCL_INC_UNX_GTK_GTKGDI_HXX
+#pragma once
 
 #include <config_cairo_canvas.h>
 
@@ -201,6 +200,7 @@ private:
     static GtkStyleContext *mpRadioMenuItemRadioStyle;
     static GtkStyleContext *mpSeparatorMenuItemStyle;
     static GtkStyleContext *mpSeparatorMenuItemSeparatorStyle;
+    static gint mnVerticalSeparatorMinWidth;
 
 #if !GTK_CHECK_VERSION(4, 0, 0)
     static tools::Rectangle NWGetScrollButtonRect( ControlPart nPart, tools::Rectangle aAreaRect );
@@ -241,6 +241,5 @@ private:
     static bool style_loaded;
 };
 
-#endif // INCLUDED_VCL_INC_UNX_GTK_GTKGDI_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

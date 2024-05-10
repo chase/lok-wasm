@@ -20,6 +20,7 @@
 #include <GraphicViewShellBase.hxx>
 
 #include <GraphicDocShell.hxx>
+#include <DrawController.hxx>
 #include <app.hrc>
 #include <framework/DrawModule.hxx>
 #include <framework/FrameworkHelper.hxx>
@@ -34,9 +35,9 @@ namespace sd
 // new GraphicViewShellBase object has been constructed.
 
 SfxViewFactory* GraphicViewShellBase::s_pFactory;
-SfxViewShell* GraphicViewShellBase::CreateInstance(SfxViewFrame* pFrame, SfxViewShell* pOldView)
+SfxViewShell* GraphicViewShellBase::CreateInstance(SfxViewFrame& rFrame, SfxViewShell* pOldView)
 {
-    GraphicViewShellBase* pBase = new GraphicViewShellBase(pFrame, pOldView);
+    GraphicViewShellBase* pBase = new GraphicViewShellBase(rFrame, pOldView);
     pBase->LateInit(framework::FrameworkHelper::msDrawViewURL);
     return pBase;
 }
@@ -47,8 +48,8 @@ void GraphicViewShellBase::RegisterFactory(SfxInterfaceId nPrio)
 }
 void GraphicViewShellBase::InitFactory() { SFX_VIEW_REGISTRATION(GraphicDocShell); }
 
-GraphicViewShellBase::GraphicViewShellBase(SfxViewFrame* _pFrame, SfxViewShell* pOldShell)
-    : ViewShellBase(_pFrame, pOldShell)
+GraphicViewShellBase::GraphicViewShellBase(SfxViewFrame& _rFrame, SfxViewShell* pOldShell)
+    : ViewShellBase(_rFrame, pOldShell)
 {
 }
 
@@ -84,7 +85,7 @@ void GraphicViewShellBase::Execute(SfxRequest& rRequest)
 
 void GraphicViewShellBase::InitializeFramework()
 {
-    css::uno::Reference<css::frame::XController> xController(GetController());
+    rtl::Reference<sd::DrawController> xController(GetDrawController());
     sd::framework::DrawModule::Initialize(xController);
 }
 

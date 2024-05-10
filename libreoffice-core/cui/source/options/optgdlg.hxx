@@ -18,6 +18,7 @@
  */
 #pragma once
 #include <memory>
+#include <config_features.h>
 #include <sfx2/tabdlg.hxx>
 #include <svx/langbox.hxx>
 
@@ -33,23 +34,34 @@ private:
     OUString             m_aStrDateInfo;
 
     std::unique_ptr<weld::CheckButton> m_xExtHelpCB;
+    std::unique_ptr<weld::Widget> m_xExtHelpImg;
     std::unique_ptr<weld::CheckButton> m_xPopUpNoHelpCB;
+    std::unique_ptr<weld::Widget> m_xPopUpNoHelpImg;
     std::unique_ptr<weld::CheckButton> m_xShowTipOfTheDay;
+    std::unique_ptr<weld::Widget> m_xShowTipOfTheDayImg;
     std::unique_ptr<weld::Widget> m_xFileDlgFrame;
     std::unique_ptr<weld::Widget> m_xFileDlgROImage;
     std::unique_ptr<weld::CheckButton> m_xFileDlgCB;
     std::unique_ptr<weld::CheckButton> m_xDocStatusCB;
+    std::unique_ptr<weld::Widget> m_xDocStatusImg;
     std::unique_ptr<weld::Widget> m_xYearFrame;
+    std::unique_ptr<weld::Label> m_xYearLabel;
     std::unique_ptr<weld::SpinButton> m_xYearValueField;
     std::unique_ptr<weld::Label> m_xToYearFT;
+    std::unique_ptr<weld::Widget> m_xYearFrameImg;
+#if HAVE_FEATURE_BREAKPAD
+    std::unique_ptr<weld::Widget> m_xPrivacyFrame;
     std::unique_ptr<weld::CheckButton> m_xCrashReport;
-    std::unique_ptr<weld::Widget> m_xQuickStarterFrame;
-    std::unique_ptr<weld::Label> m_xHelpImproveLabel;
-    std::unique_ptr<weld::CheckButton> m_xQuickLaunchCB;
+    std::unique_ptr<weld::Widget> m_xCrashReportImg;
+#endif
 #if defined(_WIN32)
+    std::unique_ptr<weld::Widget> m_xQuickStarterFrame;
+    std::unique_ptr<weld::CheckButton> m_xQuickLaunchCB;
+    std::unique_ptr<weld::Widget> m_xQuickLaunchImg;
     std::unique_ptr<weld::Widget> m_xFileAssocFrame;
     std::unique_ptr<weld::Button> m_xFileAssocBtn;
     std::unique_ptr<weld::CheckButton> m_xPerformFileExtCheck;
+    std::unique_ptr<weld::Widget> m_xPerformFileExtImg;
 #endif
 
     DECL_LINK(TwoFigureHdl, weld::SpinButton&, void);
@@ -65,11 +77,11 @@ public:
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
 
+    virtual OUString GetAllStrings() override;
+
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 };
-
-class SvtTabAppearanceCfg;
 
 class OfaViewTabPage : public SfxTabPage
 {
@@ -79,39 +91,52 @@ private:
     sal_Int32      nNotebookbarSizeLB_InitialSelection;
     sal_Int32      nStyleLB_InitialSelection;
 
-    std::unique_ptr<SvtTabAppearanceCfg>    pAppearanceCfg;
     std::unique_ptr<CanvasSettings>         pCanvasSettings;
 
     std::vector<vcl::IconThemeInfo> mInstalledIconThemes;
 
+    std::unique_ptr<weld::Label> m_xIconSizeLabel;
     std::unique_ptr<weld::ComboBox> m_xIconSizeLB;
+    std::unique_ptr<weld::Widget> m_xIconSizeImg;
+    std::unique_ptr<weld::Label> m_xSidebarIconSizeLabel;
     std::unique_ptr<weld::ComboBox> m_xSidebarIconSizeLB;
+    std::unique_ptr<weld::Widget> m_xSidebarIconSizeImg;
+    std::unique_ptr<weld::Label> m_xNotebookbarIconSizeLabel;
     std::unique_ptr<weld::ComboBox> m_xNotebookbarIconSizeLB;
+    std::unique_ptr<weld::Widget> m_xNotebookbarIconSizeImg;
     std::unique_ptr<weld::Widget> m_xDarkModeFrame;
+    std::unique_ptr<weld::Label> m_xAppearanceStyleLabel;
     std::unique_ptr<weld::ComboBox> m_xAppearanceStyleLB;
+    std::unique_ptr<weld::Widget> m_xAppearanceStyleImg;
+    std::unique_ptr<weld::Label> m_xIconStyleLabel;
     std::unique_ptr<weld::ComboBox> m_xIconStyleLB;
+    std::unique_ptr<weld::Widget> m_xIconStyleImg;
 
     std::unique_ptr<weld::CheckButton> m_xFontAntiAliasing;
+    std::unique_ptr<weld::Widget> m_xFontAntiAliasingImg;
     std::unique_ptr<weld::Label> m_xAAPointLimitLabel;
+    std::unique_ptr<weld::Widget> m_xAAPointLimitLabelImg;
     std::unique_ptr<weld::MetricSpinButton> m_xAAPointLimit;
 
-    std::unique_ptr<weld::Widget> m_xMenuIconBox;
-    std::unique_ptr<weld::ComboBox> m_xMenuIconsLB;
-
-    std::unique_ptr<weld::ComboBox> m_xContextMenuShortcutsLB;
-
     std::unique_ptr<weld::CheckButton> m_xFontShowCB;
+    std::unique_ptr<weld::Widget> m_xFontShowImg;
 
     std::unique_ptr<weld::CheckButton> m_xUseHardwareAccell;
+    std::unique_ptr<weld::Widget> m_xUseHardwareAccellImg;
     std::unique_ptr<weld::CheckButton> m_xUseAntiAliase;
+    std::unique_ptr<weld::Widget> m_xUseAntiAliaseImg;
     std::unique_ptr<weld::CheckButton> m_xUseSkia;
+    std::unique_ptr<weld::Widget> m_xUseSkiaImg;
     std::unique_ptr<weld::CheckButton> m_xForceSkiaRaster;
+    std::unique_ptr<weld::Widget> m_xForceSkiaRasterImg;
 
     std::unique_ptr<weld::Label> m_xSkiaStatusEnabled;
     std::unique_ptr<weld::Label> m_xSkiaStatusDisabled;
+    std::unique_ptr<weld::Button> m_xSkiaLog;
 
-    std::unique_ptr<weld::ComboBox> m_xMousePosLB;
+    std::unique_ptr<weld::Label> m_xMouseMiddleLabel;
     std::unique_ptr<weld::ComboBox> m_xMouseMiddleLB;
+    std::unique_ptr<weld::Widget> m_xMouseMiddleImg;
     std::unique_ptr<weld::Button> m_xMoreIcons;
     std::unique_ptr<weld::Button> m_xRunGPTests;
 
@@ -119,6 +144,7 @@ private:
 
     DECL_LINK(OnAntialiasingToggled, weld::Toggleable&, void);
     DECL_LINK(OnUseSkiaToggled, weld::Toggleable&, void);
+    DECL_LINK(OnCopySkiaLog, weld::Button&, void);
     DECL_STATIC_LINK(OfaViewTabPage, OnMoreIconsClick, weld::Button&, void);
     DECL_LINK(OnRunGPTestClick, weld::Button&, void);
     void UpdateSkiaStatus();
@@ -131,6 +157,8 @@ public:
     virtual ~OfaViewTabPage() override;
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
@@ -153,20 +181,29 @@ class OfaLanguagesTabPage : public SfxTabPage
     std::unique_ptr<weld::ComboBox> m_xUserInterfaceLB;
     std::unique_ptr<weld::Label> m_xLocaleSettingFT;
     std::unique_ptr<SvxLanguageBox> m_xLocaleSettingLB;
+    std::unique_ptr<weld::Widget> m_xLocaleSettingImg;
+    std::unique_ptr<weld::Label> m_xDecimalSeparatorFT;
     std::unique_ptr<weld::CheckButton> m_xDecimalSeparatorCB;
+    std::unique_ptr<weld::Widget> m_xDecimalSeparatorImg;
     std::unique_ptr<weld::Label> m_xCurrencyFT;
     std::unique_ptr<weld::ComboBox> m_xCurrencyLB;
+    std::unique_ptr<weld::Widget> m_xCurrencyImg;
     std::unique_ptr<weld::Label> m_xDatePatternsFT;
     std::unique_ptr<weld::Entry> m_xDatePatternsED;
+    std::unique_ptr<weld::Widget> m_xDatePatternsImg;
 
     std::unique_ptr<SvxLanguageBox> m_xWesternLanguageLB;
     std::unique_ptr<weld::Label> m_xWesternLanguageFT;
+    std::unique_ptr<weld::Widget> m_xWesternLanguageImg;
     std::unique_ptr<SvxLanguageBox> m_xAsianLanguageLB;
     std::unique_ptr<SvxLanguageBox> m_xComplexLanguageLB;
     std::unique_ptr<weld::CheckButton> m_xCurrentDocCB;
     std::unique_ptr<weld::CheckButton> m_xAsianSupportCB;
+    std::unique_ptr<weld::Widget> m_xAsianSupportImg;
     std::unique_ptr<weld::CheckButton> m_xCTLSupportCB;
+    std::unique_ptr<weld::Widget> m_xCTLSupportImg;
     std::unique_ptr<weld::CheckButton> m_xIgnoreLanguageChangeCB;
+    std::unique_ptr<weld::Widget> m_xIgnoreLanguageChangeImg;
 
     DECL_LINK(SupportHdl, weld::Toggleable&, void);
     DECL_LINK(LocaleSettingHdl, weld::ComboBox&, void);
@@ -179,6 +216,8 @@ public:
     virtual ~OfaLanguagesTabPage() override;
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

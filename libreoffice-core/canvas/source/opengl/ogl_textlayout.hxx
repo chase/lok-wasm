@@ -9,8 +9,7 @@
 
 #pragma once
 
-#include <cppuhelper/compbase.hxx>
-#include <cppuhelper/basemutex.hxx>
+#include <comphelper/compbase.hxx>
 
 #include <com/sun/star/rendering/XTextLayout.hpp>
 
@@ -21,10 +20,9 @@
 
 namespace oglcanvas
 {
-    typedef ::cppu::WeakComponentImplHelper< css::rendering::XTextLayout > TextLayoutBaseT;
+    typedef ::comphelper::WeakComponentImplHelper< css::rendering::XTextLayout > TextLayoutBaseT;
 
-    class TextLayout : public ::cppu::BaseMutex,
-                       public TextLayoutBaseT
+    class TextLayout : public TextLayoutBaseT
     {
     public:
         TextLayout( css::rendering::StringContext               aText,
@@ -37,7 +35,7 @@ namespace oglcanvas
         const TextLayout& operator=(const TextLayout&) = delete;
 
         /// Dispose all internal references
-        virtual void SAL_CALL disposing() override;
+        virtual void disposing(std::unique_lock<std::mutex>& rGuard) override;
 
         // XTextLayout
         virtual css::uno::Sequence< css::uno::Reference< css::rendering::XPolyPolygon2D > > SAL_CALL queryTextShapes(  ) override;
@@ -45,6 +43,8 @@ namespace oglcanvas
         virtual css::uno::Sequence< css::geometry::RealRectangle2D > SAL_CALL queryMeasures(  ) override;
         virtual css::uno::Sequence< double > SAL_CALL queryLogicalAdvancements(  ) override;
         virtual void SAL_CALL applyLogicalAdvancements( const css::uno::Sequence< double >& aAdvancements ) override;
+        virtual css::uno::Sequence< sal_Bool > SAL_CALL queryKashidaPositions(  ) override;
+        virtual void SAL_CALL applyKashidaPositions( const css::uno::Sequence< sal_Bool >& aPositions ) override;
         virtual css::geometry::RealRectangle2D SAL_CALL queryTextBounds(  ) override;
         virtual double SAL_CALL justify( double nSize ) override;
         virtual double SAL_CALL combinedJustify( const css::uno::Sequence< css::uno::Reference< css::rendering::XTextLayout > >& aNextLayouts, double nSize ) override;
@@ -61,6 +61,7 @@ namespace oglcanvas
     private:
         css::rendering::StringContext              maText;
         css::uno::Sequence< double >               maLogicalAdvancements;
+        css::uno::Sequence< sal_Bool >             maKashidaPositions;
         CanvasFont::ImplRef                        mpFont;
         sal_Int8                                   mnTextDirection;
     };

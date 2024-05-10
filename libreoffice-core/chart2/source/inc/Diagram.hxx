@@ -33,15 +33,30 @@
 #include <vector>
 
 namespace com::sun::star::beans { struct PropertyValue; }
+namespace com::sun::star::chart2 { class XDataSeries; }
 namespace com::sun::star::chart2::data { class XDataSource; }
 namespace com::sun::star::uno { class XComponentContext; }
 
 namespace chart
 {
+class Axis;
 class BaseCoordinateSystem;
+class ChartType;
+class ChartTypeManager;
+class ChartTypeTemplate;
+class DataSeries;
 class Legend;
 class DataTable;
+class RegressionCurveModel;
+enum class StackMode;
 class Wall;
+enum class ThreeDLookScheme;
+
+enum class DiagramPositioningMode
+{
+    Auto, Excluding, Including
+};
+
 
 namespace impl
 {
@@ -57,9 +72,10 @@ typedef ::cppu::WeakImplHelper<
     Diagram_Base;
 }
 
-class OOO_DLLPUBLIC_CHARTTOOLS Diagram final :
-    public impl::Diagram_Base,
-    public ::property::OPropertySet
+class OOO_DLLPUBLIC_CHARTTOOLS Diagram
+    final
+    : public impl::Diagram_Base
+    , public ::property::OPropertySet
 {
 public:
     Diagram( css::uno::Reference< css::uno::XComponentContext > xContext );
@@ -88,7 +104,7 @@ public:
         getPropertySetInfo() override;
 
     // ____ XFastPropertySet ____
-    virtual void SAL_CALL setFastPropertyValue( sal_Int32 nHandle, const css::uno::Any& rValue ) override;
+    virtual void SAL_CALL setFastPropertyValue_NoBroadcast( sal_Int32 nHandle, const css::uno::Any& rValue ) override;
 
     /// make original interface function visible again
     using ::com::sun::star::beans::XFastPropertySet::getFastPropertyValue;
@@ -145,19 +161,190 @@ public:
         std::vector< rtl::Reference< ::chart::BaseCoordinateSystem > >
         tCoordinateSystemContainerType;
 
-    const tCoordinateSystemContainerType & getBaseCoordinateSystems() { return m_aCoordSystems; }
+    tCoordinateSystemContainerType getBaseCoordinateSystems() const;
     void setCoordinateSystems(
         const std::vector< rtl::Reference< ::chart::BaseCoordinateSystem > >& aCoordinateSystems );
 
-    const rtl::Reference< ::chart::Legend > & getLegend2() const { return m_xLegend; }
+    rtl::Reference< ::chart::Legend > getLegend2() const;
     void setLegend(const rtl::Reference< ::chart::Legend > &);
 
     void setDataTable(const rtl::Reference<::chart::DataTable>& xNewDataTable);
+    rtl::Reference<::chart::DataTable> getDataTableRef() const;
 
-    rtl::Reference<::chart::DataTable> const& getDataTableRef() const
-    {
-        return m_xDataTable;
+    DiagramPositioningMode getDiagramPositioningMode();
+
+    //returns integer from constant group css::chart::MissingValueTreatment
+    sal_Int32 getCorrectedMissingValueTreatment(
+            const rtl::Reference< ::chart::ChartType >& xChartType );
+
+    void setGeometry3D( sal_Int32 nNewGeometry );
+
+    sal_Int32 getGeometry3D( bool& rbFound, bool& rbAmbiguous );
+
+    bool isPieOrDonutChart();
+
+    bool isSupportingFloorAndWall();
+
+    /**
+    * Move a series forward or backward.
+    *
+    * @param xDiagram
+    *  Reference to the diagram that contains the series.
+    *
+    * @param xGivenDataSeries
+    *  Reference to the series that should be moved.
+    *
+    * @param bForward
+    *  Direction in which the series should be moved.
+    *
+    * @returns </sal_True> if the series was moved successfully.
+    *
+    */
+    bool moveSeries(
+                const rtl::Reference< DataSeries >& xGivenDataSeries,
+                bool bForward );
+
+    /**
+    * Test if a series can be moved.
+    *
+    * @param xDiagram
+    *  Reference to the diagram that contains the series.
+    *
+    * @param xGivenDataSeries
+    *  Reference to the series that should be tested for moving.
+    *
+    * @param bForward
+    *  Direction of the move to be checked.
+    *
+    * @returns </sal_True> if the series can be moved.
+    *
+    */
+    bool isSeriesMoveable(
+            const rtl::Reference< DataSeries >& xGivenDataSeries,
+            bool bForward );
+
+    std::vector< rtl::Reference< ChartType > > getChartTypes();
+
+    rtl::Reference< ChartType > getChartTypeByIndex( sal_Int32 nIndex );
+
+    bool isSupportingDateAxis();
+
+    css::uno::Reference< css::chart2::data::XLabeledDataSequence >
+        getCategories();
+
+    void setCategories(
+            const css::uno::Reference< css::chart2::data::XLabeledDataSequence >& xCategories,
+            bool bSetAxisType = false, // when this flag is true ...
+            bool bCategoryAxis = true);// set the AxisType to CATEGORY or back to REALNUMBER
+
+    bool isCategory();
+
+    /** return all data series in this diagram grouped by chart-types
+     */
+    std::vector<
+           std::vector<
+               rtl::Reference< ::chart::DataSeries > > >
+        getDataSeriesGroups();
+
+    std::vector< rtl::Reference< ::chart::DataSeries > >
+        getDataSeries();
+
+    rtl::Reference< ChartType >
+        getChartTypeOfSeries( const rtl::Reference< DataSeries >& xSeries );
+
+    rtl::Reference< ::chart::Axis > getAttachedAxis(
+        const rtl::Reference< ::chart::DataSeries >& xSeries );
+
+    bool attachSeriesToAxis( bool bMainAxis,
+        const rtl::Reference< DataSeries >& xSeries,
+        const css::uno::Reference< css::uno::XComponentContext > & xContext,
+        bool bAdaptAxes=true );
+
+    /** Replaces all occurrences of xCooSysToReplace in the tree with
+        xReplacement in the diagram's tree
+     */
+    SAL_DLLPRIVATE void replaceCoordinateSystem(
+        const rtl::Reference< ::chart::BaseCoordinateSystem > & xCooSysToReplace,
+        const rtl::Reference< ::chart::BaseCoordinateSystem > & xReplacement );
+
+
+    /** Returns the dimension found for all chart types in the tree.  If the
+        dimension is not unique, 0 is returned.
+     */
+    sal_Int32 getDimension();
+
+    /** Sets the dimension of the diagram given.
+
+        1. Sets the dimension of all used ChartTypes
+        2. Adapts the DataSeriesTree to reflect the new dimension
+        3. If new coordinate-systems have to be created, adapts the
+           XCoordinateSystemContainer of the diagram.
+     */
+    void setDimension( sal_Int32 nNewDimensionCount );
+
+
+    StackMode getStackMode(bool& rbFound, bool& rbAmbiguous);
+
+    /** The stacking mode is only set at the series found inside
+        the first chart type.  This is the standard for all current
+        templates (the only template that has more than one chart-type and
+        allows stacking is bar/line combi, and for this the stacking only
+        applies to the first chart type/the bars)
+     */
+    void setStackMode(StackMode eStackMode);
+
+
+    /** Sets the "SwapXAndYAxis" property at all coordinate systems found in the
+        given diagram.
+
+        "vertical==true" for bar charts, "vertical==false" for column charts
+     */
+    void setVertical( bool bVertical );
+
+    /** Gets the "SwapXAndYAxis" property at all coordinate systems found in the
+        given diagram.
+
+        "vertical==true" for bar charts, "vertical==false" for column charts
+    */
+    bool getVertical( bool& rbOutFoundResult, bool& rbOutAmbiguousResult );
+
+    struct tTemplateWithServiceName {
+        rtl::Reference< ::chart::ChartTypeTemplate > xChartTypeTemplate;
+        OUString sServiceName;
     };
+
+    /** tries to find a template in the chart-type manager that matches this
+        diagram.
+
+        @return
+            A pair containing a template with the correct properties set as
+            first entry and the service name of the templates second entry.  If
+            no template was found both elements are empty.
+     */
+    tTemplateWithServiceName
+        getTemplate(const rtl::Reference< ::chart::ChartTypeManager > & xChartTypeManager);
+
+    std::vector<rtl::Reference<::chart::RegressionCurveModel> >
+        getAllRegressionCurvesNotMeanValueLine();
+
+    double getCameraDistance();
+    void setCameraDistance( double fCameraDistance );
+
+    void getRotation(
+            sal_Int32& rnHorizontalAngleDegree, sal_Int32& rnVerticalAngleDegree );
+    void setRotation(
+            sal_Int32 nHorizontalAngleDegree, sal_Int32 nVerticalYAngleDegree );
+    void getRotationAngle(
+            double& rfXAngleRad, double& rfYAngleRad, double& rfZAngleRad );
+    void setRotationAngle(
+            double fXAngleRad, double fYAngleRad, double fZAngleRad );
+
+    ThreeDLookScheme detectScheme();
+    void setScheme( ThreeDLookScheme aScheme );
+
+    void setDefaultRotation( bool bPieOrDonut );
+
+    void switchRightAngledAxes( bool bRightAngledAxes );
 
 private:
     // ____ XModifyListener ____

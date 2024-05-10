@@ -19,6 +19,8 @@
 #ifndef INCLUDED_SW_INC_AUTHFLD_HXX
 #define INCLUDED_SW_INC_AUTHFLD_HXX
 
+#include <sal/config.h>
+
 #include "swdllapi.h"
 #include "fldbas.hxx"
 #include "toxe.hxx"
@@ -31,6 +33,7 @@
 
 class SwTOXInternational;
 class SwTextAttr;
+class SwForm;
 
 class SwAuthEntry final : public salhelper::SimpleReferenceObject
 {
@@ -143,7 +146,10 @@ public:
 
 };
 
-/** invariant for SwAuthorityField is that it is always registered at its
+/** Represents an inserted bibliography entry, created using Insert -> Table of Contents and Index
+    -> Bibliography Entry.
+
+    invariant for SwAuthorityField is that it is always registered at its
     SwAuthorityFieldType via AddField()/RemoveField() & therefore has m_nHandle
     set - but it's possible that multiple SwAuthorityField have the same
     m_nHandle & so the number of instances is an upper bound on
@@ -161,6 +167,16 @@ class SW_DLLPUBLIC SwAuthorityField final : public SwField
     virtual std::unique_ptr<SwField> Copy() const override;
 
 public:
+    enum TargetType : sal_uInt16
+    {
+        UseDisplayURL           = 0,
+        UseTargetURL            = 1,
+        None                    = 2,
+        BibliographyTableRow    = 3,
+        // BibliographyTablePage   = 4, // TODO: implement
+    };
+
+
     /// For internal use only, in general continue using ExpandField() instead.
     OUString ConditionalExpandAuthIdentifier(SwRootFrame const* pLayout) const;
 
@@ -183,11 +199,31 @@ public:
 
     virtual OUString GetDescription() const override;
 
-    /// Returns the line matching the source's default row in the ToX.
-    OUString GetAuthority(const SwTextAttr* pTextAttr, const SwRootFrame* pLayout) const;
+    /**
+     * Returns the line matching the source's default row in the ToX.
+     *
+     * \param   pLayout     layout to be used
+     * \param   pTOX        bibliography table to take the format of the string from
+     * \return              entry formatted as the appropriate authority type in the table
+     */
+    OUString GetAuthority(const SwRootFrame *pLayout,
+                          const SwForm *pTOX = nullptr) const;
 
-    bool HasURL() const;
+    /**
+     * Returns which target should be used when the entry
+     *   (the standalone field, such as '[ASDF]', not in the table) is clicked.
+     */
+    TargetType GetTargetType() const;
+    /**
+     * Returns absolute target URL in case there is one (GetTargetType() should be checked).
+     *   If there isn't one, the result is undefined.
+     */
     OUString GetAbsoluteURL() const;
+
+    /**
+     * Returns relative URI for the URL
+     */
+    OUString GetRelativeURI() const;
 
     void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 };

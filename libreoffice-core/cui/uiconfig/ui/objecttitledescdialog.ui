@@ -12,7 +12,7 @@
   <object class="GtkDialog" id="ObjectTitleDescDialog">
     <property name="can-focus">False</property>
     <property name="border-width">6</property>
-    <property name="title" translatable="yes" context="objecttitledescdialog|ObjectTitleDescDialog">Description</property>
+    <property name="title" translatable="yes" context="objecttitledescdialog|ObjectTitleDescDialog">Alt Text</property>
     <property name="modal">True</property>
     <property name="default-width">0</property>
     <property name="default-height">0</property>
@@ -90,7 +90,7 @@
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="tooltip-text" translatable="yes" context="objecttitledescdialog|object_title_label|tooltip_text">Give a short description of non-text content for users who do not see this object.</property>
-                <property name="label" translatable="yes" context="objecttitledescdialog|object_title_label">_Text Alternative:</property>
+                <property name="label" translatable="yes" context="objecttitledescdialog|object_title_label">Text:</property>
                 <property name="use-underline">True</property>
                 <property name="mnemonic-widget">object_title_entry</property>
                 <property name="xalign">0</property>
@@ -124,8 +124,8 @@
               <object class="GtkLabel" id="desc_label">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
-                <property name="tooltip-text" translatable="yes" context="objecttitledescdialog|desc_label|tooltip_text">Give longer explanation of non-text content that is too complex to be described briefly in “Text Alternative”</property>
-                <property name="label" translatable="yes" context="objecttitledescdialog|desc_label">_Description:</property>
+                <property name="tooltip-text" translatable="yes" context="objecttitledescdialog|desc_label|tooltip_text">Give longer explanation of non-text content that is too complex to be described briefly in “Text”</property>
+                <property name="label" translatable="yes" context="objecttitledescdialog|desc_label">_Alt Text:</property>
                 <property name="use-underline">True</property>
                 <property name="xalign">0</property>
               </object>
@@ -158,6 +158,26 @@
                 <property name="expand">True</property>
                 <property name="fill">True</property>
                 <property name="position">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkCheckButton" id="decorative">
+                <property name="label" translatable="yes" context="objecttitledescdialog|decorative">Decorative</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">False</property>
+                <property name="use-underline">True</property>
+                <property name="draw-indicator">True</property>
+                <child internal-child="accessible">
+                  <object class="AtkObject" id="decorative-atkobject">
+                    <property name="AtkObject::accessible-description" translatable="yes" context="objecttitledescdialog|extended_tip|decorative">The item is purely decorative, not part of the document content, and may be ignored by assistive technologies.</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">4</property>
               </packing>
             </child>
           </object>

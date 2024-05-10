@@ -111,9 +111,9 @@
 #include <iterator>
 #include <officecfg/Office/Common.hxx>
 #include <o3tl/safeint.hxx>
+#include <comphelper/scopeguard.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 
-using namespace ::std;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
@@ -129,58 +129,58 @@ using namespace ::xmloff;
 using namespace ::xmloff::token;
 
 // Implement Title/Description Elements UI (#i73249#)
-constexpr OUStringLiteral gsTitle(u"Title");
-constexpr OUStringLiteral gsDescription(u"Description");
+constexpr OUString gsTitle(u"Title"_ustr);
+constexpr OUString gsDescription(u"Description"_ustr);
 constexpr OUStringLiteral gsAnchorPageNo(u"AnchorPageNo");
 constexpr OUStringLiteral gsAnchorType(u"AnchorType");
-constexpr OUStringLiteral gsBookmark(u"Bookmark");
-constexpr OUStringLiteral gsChainNextName(u"ChainNextName");
-constexpr OUStringLiteral gsContourPolyPolygon(u"ContourPolyPolygon");
+constexpr OUString gsBookmark(u"Bookmark"_ustr);
+constexpr OUString gsChainNextName(u"ChainNextName"_ustr);
+constexpr OUString gsContourPolyPolygon(u"ContourPolyPolygon"_ustr);
 constexpr OUStringLiteral gsDocumentIndexMark(u"DocumentIndexMark");
 constexpr OUStringLiteral gsFrame(u"Frame");
 constexpr OUStringLiteral gsGraphicFilter(u"GraphicFilter");
 constexpr OUStringLiteral gsGraphicRotation(u"GraphicRotation");
-constexpr OUStringLiteral gsHeight(u"Height");
+constexpr OUString gsHeight(u"Height"_ustr);
 constexpr OUStringLiteral gsHoriOrient(u"HoriOrient");
 constexpr OUStringLiteral gsHoriOrientPosition(u"HoriOrientPosition");
-constexpr OUStringLiteral gsHyperLinkName(u"HyperLinkName");
-constexpr OUStringLiteral gsHyperLinkTarget(u"HyperLinkTarget");
-constexpr OUStringLiteral gsHyperLinkURL(u"HyperLinkURL");
-constexpr OUStringLiteral gsIsAutomaticContour(u"IsAutomaticContour");
-constexpr OUStringLiteral gsIsCollapsed(u"IsCollapsed");
-constexpr OUStringLiteral gsIsPixelContour(u"IsPixelContour");
-constexpr OUStringLiteral gsIsStart(u"IsStart");
-constexpr OUStringLiteral gsIsSyncHeightToWidth(u"IsSyncHeightToWidth");
-constexpr OUStringLiteral gsIsSyncWidthToHeight(u"IsSyncWidthToHeight");
-constexpr OUStringLiteral gsNumberingRules(u"NumberingRules");
-constexpr OUStringLiteral gsParaConditionalStyleName(u"ParaConditionalStyleName");
+constexpr OUString gsHyperLinkName(u"HyperLinkName"_ustr);
+constexpr OUString gsHyperLinkTarget(u"HyperLinkTarget"_ustr);
+constexpr OUString gsHyperLinkURL(u"HyperLinkURL"_ustr);
+constexpr OUString gsIsAutomaticContour(u"IsAutomaticContour"_ustr);
+constexpr OUString gsIsCollapsed(u"IsCollapsed"_ustr);
+constexpr OUString gsIsPixelContour(u"IsPixelContour"_ustr);
+constexpr OUString gsIsStart(u"IsStart"_ustr);
+constexpr OUString gsIsSyncHeightToWidth(u"IsSyncHeightToWidth"_ustr);
+constexpr OUString gsIsSyncWidthToHeight(u"IsSyncWidthToHeight"_ustr);
+constexpr OUString gsNumberingRules(u"NumberingRules"_ustr);
+constexpr OUString gsParaConditionalStyleName(u"ParaConditionalStyleName"_ustr);
 constexpr OUStringLiteral gsParagraphService(u"com.sun.star.text.Paragraph");
 constexpr OUStringLiteral gsRedline(u"Redline");
-constexpr OUStringLiteral gsReferenceMark(u"ReferenceMark");
-constexpr OUStringLiteral gsRelativeHeight(u"RelativeHeight");
-constexpr OUStringLiteral gsRelativeWidth(u"RelativeWidth");
+constexpr OUString gsReferenceMark(u"ReferenceMark"_ustr);
+constexpr OUString gsRelativeHeight(u"RelativeHeight"_ustr);
+constexpr OUString gsRelativeWidth(u"RelativeWidth"_ustr);
 constexpr OUStringLiteral gsRuby(u"Ruby");
 constexpr OUStringLiteral gsRubyCharStyleName(u"RubyCharStyleName");
 constexpr OUStringLiteral gsRubyText(u"RubyText");
-constexpr OUStringLiteral gsServerMap(u"ServerMap");
-constexpr OUStringLiteral gsShapeService(u"com.sun.star.drawing.Shape");
-constexpr OUStringLiteral gsSizeType(u"SizeType");
+constexpr OUString gsServerMap(u"ServerMap"_ustr);
+constexpr OUString gsShapeService(u"com.sun.star.drawing.Shape"_ustr);
+constexpr OUString gsSizeType(u"SizeType"_ustr);
 constexpr OUStringLiteral gsSoftPageBreak( u"SoftPageBreak"  );
 constexpr OUStringLiteral gsTableService(u"com.sun.star.text.TextTable");
 constexpr OUStringLiteral gsText(u"Text");
-constexpr OUStringLiteral gsTextContentService(u"com.sun.star.text.TextContent");
+constexpr OUString gsTextContentService(u"com.sun.star.text.TextContent"_ustr);
 constexpr OUStringLiteral gsTextEmbeddedService(u"com.sun.star.text.TextEmbeddedObject");
-constexpr OUStringLiteral gsTextField(u"TextField");
+constexpr OUString gsTextField(u"TextField"_ustr);
 constexpr OUStringLiteral gsTextFieldService(u"com.sun.star.text.TextField");
 constexpr OUStringLiteral gsTextFrameService(u"com.sun.star.text.TextFrame");
 constexpr OUStringLiteral gsTextGraphicService(u"com.sun.star.text.TextGraphicObject");
-constexpr OUStringLiteral gsTextPortionType(u"TextPortionType");
-constexpr OUStringLiteral gsUnvisitedCharStyleName(u"UnvisitedCharStyleName");
+constexpr OUString gsTextPortionType(u"TextPortionType"_ustr);
+constexpr OUString gsUnvisitedCharStyleName(u"UnvisitedCharStyleName"_ustr);
 constexpr OUStringLiteral gsVertOrient(u"VertOrient");
 constexpr OUStringLiteral gsVertOrientPosition(u"VertOrientPosition");
-constexpr OUStringLiteral gsVisitedCharStyleName(u"VisitedCharStyleName");
-constexpr OUStringLiteral gsWidth(u"Width");
-constexpr OUStringLiteral gsWidthType( u"WidthType"  );
+constexpr OUString gsVisitedCharStyleName(u"VisitedCharStyleName"_ustr);
+constexpr OUString gsWidth(u"Width"_ustr);
+constexpr OUString gsWidthType( u"WidthType"_ustr  );
 constexpr OUStringLiteral gsTextFieldStart( u"TextFieldStart"  );
 constexpr OUStringLiteral gsTextFieldSep(u"TextFieldSeparator");
 constexpr OUStringLiteral gsTextFieldEnd( u"TextFieldEnd"  );
@@ -191,12 +191,12 @@ namespace
     class TextContentSet
     {
         public:
-            typedef list<Reference<XTextContent>> contents_t;
-            typedef back_insert_iterator<contents_t> inserter_t;
+            typedef std::list<Reference<XTextContent>> contents_t;
+            typedef std::back_insert_iterator<contents_t> inserter_t;
             typedef contents_t::const_iterator const_iterator_t;
 
             inserter_t getInserter()
-                { return back_insert_iterator<contents_t>(m_vTextContents); };
+                { return std::back_insert_iterator<contents_t>(m_vTextContents); };
             const_iterator_t getBegin() const
                 { return m_vTextContents.begin(); };
             const_iterator_t getEnd() const
@@ -349,7 +349,7 @@ namespace
             rPropSet->getPropertyValue(gsVisitedCharStyleName) >>= vstyleName;
         }
 
-        static constexpr OUStringLiteral sHyperLinkEvents(u"HyperLinkEvents");
+        static constexpr OUString sHyperLinkEvents(u"HyperLinkEvents"_ustr);
         if (xPropSetInfo->hasPropertyByName(sHyperLinkEvents))
         {
             events.set(rPropSet->getPropertyValue(sHyperLinkEvents), uno::UNO_QUERY);
@@ -440,10 +440,10 @@ namespace xmloff
             const BoundFrames* GetShapes() const
                 { return m_pShapes.get(); };
         private:
-            unique_ptr<BoundFrames> m_pTexts;
-            unique_ptr<BoundFrames> m_pGraphics;
-            unique_ptr<BoundFrames> m_pEmbeddeds;
-            unique_ptr<BoundFrames> m_pShapes;
+            std::unique_ptr<BoundFrames> m_pTexts;
+            std::unique_ptr<BoundFrames> m_pGraphics;
+            std::unique_ptr<BoundFrames> m_pEmbeddeds;
+            std::unique_ptr<BoundFrames> m_pShapes;
     };
 }
 
@@ -525,8 +525,8 @@ void BoundFrames::Fill(const filter_t& rFilter)
     const Reference< XEnumeration > xEnum = m_xEnumAccess->createEnumeration();
     if(!xEnum.is())
         return;
-    static const OUStringLiteral our_sAnchorType(u"AnchorType");
-    static const OUStringLiteral our_sAnchorFrame(u"AnchorFrame");
+    static constexpr OUStringLiteral our_sAnchorType(u"AnchorType");
+    static constexpr OUStringLiteral our_sAnchorFrame(u"AnchorFrame");
     while(xEnum->hasMoreElements())
     {
         Reference<XPropertySet> xPropSet(xEnum->nextElement(), UNO_QUERY);
@@ -656,7 +656,7 @@ void FieldParamExporter::ExportParameter(const OUString& sKey, const OUString& s
 
 void XMLTextParagraphExport::Add( XmlStyleFamily nFamily,
                                   const Reference < XPropertySet > & rPropSet,
-                                  const o3tl::span<const XMLPropertyState> aAddStates,
+                                  const std::span<const XMLPropertyState> aAddStates,
                                   bool bDontSeek )
 {
     rtl::Reference < SvXMLExportPropertyMapper > xPropMapper;
@@ -681,7 +681,7 @@ void XMLTextParagraphExport::Add( XmlStyleFamily nFamily,
     }
     SAL_WARN_IF( !xPropMapper.is(), "xmloff", "There is the property mapper?" );
 
-    vector< XMLPropertyState > aPropStates =
+    std::vector< XMLPropertyState > aPropStates =
             xPropMapper->Filter(GetExport(), rPropSet);
 
     aPropStates.insert( aPropStates.end(), aAddStates.begin(), aAddStates.end() );
@@ -691,7 +691,6 @@ void XMLTextParagraphExport::Add( XmlStyleFamily nFamily,
 
     Reference< XPropertySetInfo > xPropSetInfo(rPropSet->getPropertySetInfo());
     OUString sParent, sCondParent;
-    sal_uInt16 nIgnoreProps = 0;
     switch( nFamily )
     {
     case XmlStyleFamily::TEXT_PARAGRAPH:
@@ -744,6 +743,7 @@ void XMLTextParagraphExport::Add( XmlStyleFamily nFamily,
         {
             // Get parent and remove hyperlinks (they aren't of interest)
             rtl::Reference< XMLPropertySetMapper > xPM(xPropMapper->getPropertySetMapper());
+            sal_uInt16 nIgnoreProps = 0;
             for( ::std::vector< XMLPropertyState >::iterator i(aPropStates.begin());
                   nIgnoreProps < 2 && i != aPropStates.end(); )
             {
@@ -780,7 +780,7 @@ void XMLTextParagraphExport::Add( XmlStyleFamily nFamily,
         break;
     default: break;
     }
-    if (aPropStates.size() - nIgnoreProps)
+    if (aPropStates.size()) // could change after the previous check
     {
         GetAutoStylePool().Add( nFamily, sParent, std::vector(aPropStates), bDontSeek );
         if( !sCondParent.isEmpty() && sParent != sCondParent )
@@ -807,7 +807,7 @@ void XMLTextParagraphExport::Add( XmlStyleFamily nFamily,
     }
     SAL_WARN_IF( !xPropMapper.is(), "xmloff", "There is the property mapper?" );
 
-    vector<XMLPropertyState> aPropStates(xPropMapper->Filter(GetExport(), rPropSet));
+    std::vector<XMLPropertyState> aPropStates(xPropMapper->Filter(GetExport(), rPropSet));
 
     if( rPropSetHelper.hasProperty( NUMBERING_RULES_AUTO ) )
     {
@@ -881,7 +881,7 @@ OUString XMLTextParagraphExport::Find(
         XmlStyleFamily nFamily,
         const Reference < XPropertySet > & rPropSet,
         const OUString& rParent,
-        const o3tl::span<const XMLPropertyState> aAddStates) const
+        const std::span<const XMLPropertyState> aAddStates) const
 {
     OUString sName( rParent );
     rtl::Reference < SvXMLExportPropertyMapper > xPropMapper;
@@ -904,7 +904,7 @@ OUString XMLTextParagraphExport::Find(
     SAL_WARN_IF( !xPropMapper.is(), "xmloff", "There is the property mapper?" );
     if( !xPropMapper.is() )
         return sName;
-    vector<XMLPropertyState> aPropStates(xPropMapper->Filter(GetExport(), rPropSet));
+    std::vector<XMLPropertyState> aPropStates(xPropMapper->Filter(GetExport(), rPropSet));
     aPropStates.insert( aPropStates.end(), aAddStates.begin(), aAddStates.end() );
     if( std::any_of( aPropStates.begin(), aPropStates.end(), lcl_validPropState ) )
         sName = GetAutoStylePool().Find( nFamily, sName, aPropStates );
@@ -919,7 +919,7 @@ OUString XMLTextParagraphExport::FindTextStyle(
         const XMLPropertyState** ppAddStates ) const
 {
     rtl::Reference < SvXMLExportPropertyMapper > xPropMapper(GetTextPropMapper());
-    vector<XMLPropertyState> aPropStates(xPropMapper->Filter(GetExport(), rPropSet));
+    std::vector<XMLPropertyState> aPropStates(xPropMapper->Filter(GetExport(), rPropSet));
 
     // Get parent and remove hyperlinks (they aren't of interest)
     OUString sName;
@@ -1104,8 +1104,7 @@ void XMLTextParagraphExport::exportListChange(
                                 mpTextListsHelper->GetListStyleOfLastProcessedList() &&
                              // Inconsistent behavior regarding lists (#i92811#)
                              sContinueListId ==
-                                mpTextListsHelper->GetLastProcessedListId() &&
-                             !rNextInfo.IsRestart() )
+                                mpTextListsHelper->GetLastProcessedListId() )
                         {
                             GetExport().AddAttribute( XML_NAMESPACE_TEXT,
                                                       XML_CONTINUE_NUMBERING,
@@ -1120,15 +1119,15 @@ void XMLTextParagraphExport::exportListChange(
                                                           XML_CONTINUE_LIST,
                                                           sContinueListId );
                             }
+                        }
 
-                            if ( rNextInfo.IsRestart() &&
-                                 ( nListLevelsToBeOpened != 1 ||
-                                   !rNextInfo.HasStartValue() ) )
-                            {
-                                bRestartNumberingAtContinuedList = true;
-                                nRestartValueForContinuedList =
-                                            rNextInfo.GetListLevelStartValue();
-                            }
+                        if ( rNextInfo.IsRestart() &&
+                             ( nListLevelsToBeOpened != 1 ||
+                               !rNextInfo.HasStartValue() ) )
+                        {
+                            bRestartNumberingAtContinuedList = true;
+                            nRestartValueForContinuedList =
+                                        rNextInfo.GetListLevelStartValue();
                         }
 
                         mpTextListsHelper->KeepListAsProcessed( sNewListId,
@@ -1189,10 +1188,9 @@ void XMLTextParagraphExport::exportListChange(
                 {
                     if ( rNextInfo.HasStartValue() )
                     {
-                        OUStringBuffer aBuffer;
-                        aBuffer.append( static_cast<sal_Int32>(rNextInfo.GetStartValue()) );
+                        OUString aTmp = OUString::number( static_cast<sal_Int32>(rNextInfo.GetStartValue()) );
                         GetExport().AddAttribute( XML_NAMESPACE_TEXT, XML_START_VALUE,
-                                      aBuffer.makeStringAndClear() );
+                                      aTmp );
                     }
                     else if (bRestartNumberingAtContinuedList)
                     {
@@ -1264,19 +1262,15 @@ void XMLTextParagraphExport::exportListChange(
     GetExport().CheckAttrList();
     if( rNextInfo.HasStartValue() )
     {
-        OUStringBuffer aBuffer;
-        aBuffer.append( static_cast<sal_Int32>(rNextInfo.GetStartValue()) );
-        GetExport().AddAttribute( XML_NAMESPACE_TEXT, XML_START_VALUE,
-                                  aBuffer.makeStringAndClear() );
+        OUString aTmp = OUString::number( static_cast<sal_Int32>(rNextInfo.GetStartValue()) );
+        GetExport().AddAttribute( XML_NAMESPACE_TEXT, XML_START_VALUE, aTmp );
     }
     // Handle restart without start value on list level 1 (#i103745#)
     else if ( rNextInfo.IsRestart() && /*!rNextInfo.HasStartValue() &&*/
               rNextInfo.GetLevel() == 1 )
     {
-        OUStringBuffer aBuffer;
-        aBuffer.append( static_cast<sal_Int32>(rNextInfo.GetListLevelStartValue()) );
-        GetExport().AddAttribute( XML_NAMESPACE_TEXT, XML_START_VALUE,
-                                  aBuffer.makeStringAndClear() );
+        OUString aTmp = OUString::number( static_cast<sal_Int32>(rNextInfo.GetListLevelStartValue()) );
+        GetExport().AddAttribute( XML_NAMESPACE_TEXT, XML_START_VALUE, aTmp );
     }
     if ( ( GetExport().getExportFlags() & SvXMLExportFlags::OASIS ) &&
         GetExport().getSaneDefaultVersion() >= SvtSaveOptions::ODFSVER_012)
@@ -1336,91 +1330,191 @@ struct XMLTextParagraphExport::Impl
     }
 };
 
+struct XMLTextParagraphExport::DocumentListNodes
+{
+    struct NodeData
+    {
+        sal_Int32 index; // see SwNode::GetIndex and SwNodeOffset
+        sal_uInt64 style_id; // actually a pointer to NumRule
+        OUString list_id;
+    };
+    std::vector<NodeData> docListNodes;
+    DocumentListNodes(const css::uno::Reference<css::frame::XModel>& xModel)
+    {
+        // Sequence of nodes, each of them represented by three-element sequence,
+        // corresponding to NodeData members
+        css::uno::Sequence<css::uno::Sequence<css::uno::Any>> nodes;
+        if (auto xPropSet = xModel.query<css::beans::XPropertySet>())
+        {
+            try
+            {
+                // See SwXTextDocument::getPropertyValue
+                xPropSet->getPropertyValue("ODFExport_ListNodes") >>= nodes;
+            }
+            catch (css::beans::UnknownPropertyException&)
+            {
+                // That's absolutely fine!
+            }
+        }
+
+        docListNodes.reserve(nodes.getLength());
+        for (const auto& node : nodes)
+        {
+            assert(node.getLength() == 3);
+            docListNodes.push_back({ node[0].get<sal_Int32>(), node[1].get<sal_uInt64>(),
+                                     node[2].get<OUString>() });
+        }
+
+        std::sort(docListNodes.begin(), docListNodes.end(),
+                  [](const NodeData& lhs, const NodeData& rhs) { return lhs.index < rhs.index; });
+    }
+    bool ShouldSkipListId(const Reference<XTextContent>& xTextContent) const
+    {
+        if (docListNodes.empty())
+            return false;
+
+        if (auto xPropSet = xTextContent.query<css::beans::XPropertySet>())
+        {
+            sal_Int32 index = 0;
+            try
+            {
+                // See SwXParagraph::Impl::GetPropertyValues_Impl
+                xPropSet->getPropertyValue("ODFExport_NodeIndex") >>= index;
+            }
+            catch (css::beans::UnknownPropertyException&)
+            {
+                // That's absolutely fine!
+                return false;
+            }
+
+            auto it = std::lower_bound(docListNodes.begin(), docListNodes.end(), index,
+                                       [](const NodeData& lhs, sal_Int32 rhs)
+                                       { return lhs.index < rhs; });
+            if (it == docListNodes.end() || it->index != index)
+                return false;
+
+            // We need to write the id, when there will be continuation of the list either with
+            // a different list style, or after another list.
+
+            for (auto next = it + 1; next != docListNodes.end(); ++next)
+            {
+                if (it->list_id != next->list_id)
+                {
+                    // List changed. We will have to refer to this id, only if there will
+                    // appear a continuation of this list
+                    return std::find_if(next + 1, docListNodes.end(),
+                                        [list_id = it->list_id](const NodeData& data)
+                                        { return data.list_id == list_id; })
+                           == docListNodes.end();
+                }
+
+                if (it->style_id != next->style_id)
+                {
+                    // Same list, new style -> this "next" will refer to the id, no skipping
+                    return false;
+                }
+                if (it->index + 1 != next->index)
+                {
+                    // we have a gap before the next node with the same list and style,
+                    // with no other lists in between. There will be a continuation with a
+                    // simple 'text:continue-numbering="true"'.
+                    return true;
+                }
+                it = next; // walk through adjacent nodes of the same list
+            }
+            // all nodes were adjacent and of the same list and style -> no continuation, skip id
+            return true;
+        }
+
+        return false;
+    }
+};
+
 XMLTextParagraphExport::XMLTextParagraphExport(
         SvXMLExport& rExp,
         SvXMLAutoStylePoolP & rASP
         ) :
     XMLStyleExport( rExp, &rASP ),
     m_xImpl(new Impl),
-    rAutoStylePool( rASP ),
-    pBoundFrameSets(new BoundFrameSets(GetExport().GetModel())),
+    m_rAutoStylePool( rASP ),
+    m_pBoundFrameSets(new BoundFrameSets(GetExport().GetModel())),
     maListAutoPool( GetExport() ),
-    bProgress( false ),
-    bBlock( false ),
-    bOpenRuby( false ),
+    m_bProgress( false ),
+    m_bBlock( false ),
+    m_bOpenRuby( false ),
     mpTextListsHelper( nullptr ),
     mbCollected(false),
-    aCharStyleNamesPropInfoCache( gsCharStyleNames )
+    m_aCharStyleNamesPropInfoCache( gsCharStyleNames )
 {
     rtl::Reference < XMLPropertySetMapper > xPropMapper(new XMLTextPropertySetMapper( TextPropMap::PARA, true ));
-    xParaPropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
+    m_xParaPropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
                                                              GetExport() );
 
     OUString sFamily( GetXMLToken(XML_PARAGRAPH) );
     OUString aPrefix(u'P');
-    rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_PARAGRAPH, sFamily,
-                              xParaPropMapper, aPrefix );
+    m_rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_PARAGRAPH, sFamily,
+                              m_xParaPropMapper, aPrefix );
 
     xPropMapper = new XMLTextPropertySetMapper( TextPropMap::TEXT, true );
-    xTextPropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
+    m_xTextPropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
                                                              GetExport() );
     sFamily = GetXMLToken(XML_TEXT);
     aPrefix = "T";
-    rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_TEXT, sFamily,
-                              xTextPropMapper, aPrefix );
+    m_rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_TEXT, sFamily,
+                              m_xTextPropMapper, aPrefix );
 
     xPropMapper = new XMLTextPropertySetMapper( TextPropMap::AUTO_FRAME, true );
-    xAutoFramePropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
+    m_xAutoFramePropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
                                                                   GetExport() );
     sFamily = XML_STYLE_FAMILY_SD_GRAPHICS_NAME;
     aPrefix = "fr";
-    rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_FRAME, sFamily,
-                              xAutoFramePropMapper, aPrefix );
+    m_rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_FRAME, sFamily,
+                              m_xAutoFramePropMapper, aPrefix );
 
     xPropMapper = new XMLTextPropertySetMapper( TextPropMap::SECTION, true );
-    xSectionPropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
+    m_xSectionPropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
                                                              GetExport() );
     sFamily = GetXMLToken( XML_SECTION );
     aPrefix = "Sect" ;
-    rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_SECTION, sFamily,
-                              xSectionPropMapper, aPrefix );
+    m_rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_SECTION, sFamily,
+                              m_xSectionPropMapper, aPrefix );
 
     xPropMapper = new XMLTextPropertySetMapper( TextPropMap::RUBY, true );
-    xRubyPropMapper = new SvXMLExportPropertyMapper( xPropMapper );
+    m_xRubyPropMapper = new SvXMLExportPropertyMapper( xPropMapper );
     sFamily = GetXMLToken( XML_RUBY );
     aPrefix = "Ru";
-    rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_RUBY, sFamily,
-                              xRubyPropMapper, aPrefix );
+    m_rAutoStylePool.AddFamily( XmlStyleFamily::TEXT_RUBY, sFamily,
+                              m_xRubyPropMapper, aPrefix );
 
     xPropMapper = new XMLTextPropertySetMapper( TextPropMap::FRAME, true );
-    xFramePropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
+    m_xFramePropMapper = new XMLTextExportPropertySetMapper( xPropMapper,
                                                               GetExport() );
 
-    pSectionExport.reset( new XMLSectionExport( rExp, *this ) );
-    pIndexMarkExport.reset( new XMLIndexMarkExport( rExp ) );
+    m_pSectionExport.reset( new XMLSectionExport( rExp, *this ) );
+    m_pIndexMarkExport.reset( new XMLIndexMarkExport( rExp ) );
 
     if( ! IsBlockMode() &&
         Reference<XRedlinesSupplier>( GetExport().GetModel(), UNO_QUERY ).is())
-        pRedlineExport.reset( new XMLRedlineExport( rExp ) );
+        m_pRedlineExport.reset( new XMLRedlineExport( rExp ) );
 
     // The text field helper needs a pre-constructed XMLPropertyState
     // to export the combined characters field. We construct that
     // here, because we need the text property mapper to do it.
 
     // construct Any value, then find index
-    sal_Int32 nIndex = xTextPropMapper->getPropertySetMapper()->FindEntryIndex(
+    sal_Int32 nIndex = m_xTextPropMapper->getPropertySetMapper()->FindEntryIndex(
                                 "", XML_NAMESPACE_STYLE,
                                 GetXMLToken(XML_TEXT_COMBINE));
-    pFieldExport.reset( new XMLTextFieldExport( rExp, std::make_unique<XMLPropertyState>( nIndex, uno::Any(true) ) ) );
+    m_pFieldExport.reset( new XMLTextFieldExport( rExp, std::make_unique<XMLPropertyState>( nIndex, uno::Any(true) ) ) );
     PushNewTextListsHelper();
 }
 
 XMLTextParagraphExport::~XMLTextParagraphExport()
 {
-    pRedlineExport.reset();
-    pIndexMarkExport.reset();
-    pSectionExport.reset();
-    pFieldExport.reset();
+    m_pRedlineExport.reset();
+    m_pIndexMarkExport.reset();
+    m_pSectionExport.reset();
+    m_pFieldExport.reset();
 #ifdef DBG_UTIL
     txtparae_bContainsIllegalCharacters = false;
 #endif
@@ -1463,10 +1557,10 @@ SvXMLExportPropertyMapper *XMLTextParagraphExport::CreateParaDefaultExtPropMappe
 
 void XMLTextParagraphExport::exportPageFrames( bool bIsProgress )
 {
-    const TextContentSet& rTexts = pBoundFrameSets->GetTexts()->GetPageBoundContents();
-    const TextContentSet& rGraphics = pBoundFrameSets->GetGraphics()->GetPageBoundContents();
-    const TextContentSet& rEmbeddeds = pBoundFrameSets->GetEmbeddeds()->GetPageBoundContents();
-    const TextContentSet& rShapes = pBoundFrameSets->GetShapes()->GetPageBoundContents();
+    const TextContentSet& rTexts = m_pBoundFrameSets->GetTexts()->GetPageBoundContents();
+    const TextContentSet& rGraphics = m_pBoundFrameSets->GetGraphics()->GetPageBoundContents();
+    const TextContentSet& rEmbeddeds = m_pBoundFrameSets->GetEmbeddeds()->GetPageBoundContents();
+    const TextContentSet& rShapes = m_pBoundFrameSets->GetShapes()->GetPageBoundContents();
     for(TextContentSet::const_iterator_t it = rTexts.getBegin();
         it != rTexts.getEnd();
         ++it)
@@ -1488,27 +1582,27 @@ void XMLTextParagraphExport::exportPageFrames( bool bIsProgress )
 void XMLTextParagraphExport::exportFrameFrames(
         bool bAutoStyles,
         bool bIsProgress,
-        const Reference < XTextFrame > *pParentTxtFrame )
+        const Reference < XTextFrame >& rParentTxtFrame )
 {
-    const TextContentSet* const pTexts = pBoundFrameSets->GetTexts()->GetFrameBoundContents(*pParentTxtFrame);
+    const TextContentSet* const pTexts = m_pBoundFrameSets->GetTexts()->GetFrameBoundContents(rParentTxtFrame);
     if(pTexts)
         for(TextContentSet::const_iterator_t it = pTexts->getBegin();
             it != pTexts->getEnd();
             ++it)
             exportTextFrame(*it, bAutoStyles, bIsProgress, true);
-    const TextContentSet* const pGraphics = pBoundFrameSets->GetGraphics()->GetFrameBoundContents(*pParentTxtFrame);
+    const TextContentSet* const pGraphics = m_pBoundFrameSets->GetGraphics()->GetFrameBoundContents(rParentTxtFrame);
     if(pGraphics)
         for(TextContentSet::const_iterator_t it = pGraphics->getBegin();
             it != pGraphics->getEnd();
             ++it)
             exportTextGraphic(*it, bAutoStyles);
-    const TextContentSet* const pEmbeddeds = pBoundFrameSets->GetEmbeddeds()->GetFrameBoundContents(*pParentTxtFrame);
+    const TextContentSet* const pEmbeddeds = m_pBoundFrameSets->GetEmbeddeds()->GetFrameBoundContents(rParentTxtFrame);
     if(pEmbeddeds)
         for(TextContentSet::const_iterator_t it = pEmbeddeds->getBegin();
             it != pEmbeddeds->getEnd();
             ++it)
             exportTextEmbedded(*it, bAutoStyles);
-    const TextContentSet* const pShapes = pBoundFrameSets->GetShapes()->GetFrameBoundContents(*pParentTxtFrame);
+    const TextContentSet* const pShapes = m_pBoundFrameSets->GetShapes()->GetFrameBoundContents(rParentTxtFrame);
     if(pShapes)
         for(TextContentSet::const_iterator_t it = pShapes->getBegin();
             it != pShapes->getEnd();
@@ -1593,7 +1687,7 @@ void XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
     }
 
     // Export text frames:
-    Reference<XEnumeration> xTextFramesEnum = pBoundFrameSets->GetTexts()->createEnumeration();
+    Reference<XEnumeration> xTextFramesEnum = m_pBoundFrameSets->GetTexts()->createEnumeration();
     if(xTextFramesEnum.is())
         while(xTextFramesEnum->hasMoreElements())
         {
@@ -1603,7 +1697,7 @@ void XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
         }
 
     // Export graphic objects:
-    Reference<XEnumeration> xGraphicsEnum = pBoundFrameSets->GetGraphics()->createEnumeration();
+    Reference<XEnumeration> xGraphicsEnum = m_pBoundFrameSets->GetGraphics()->createEnumeration();
     if(xGraphicsEnum.is())
         while(xGraphicsEnum->hasMoreElements())
         {
@@ -1613,7 +1707,7 @@ void XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
         }
 
     // Export embedded objects:
-    Reference<XEnumeration> xEmbeddedsEnum = pBoundFrameSets->GetEmbeddeds()->createEnumeration();
+    Reference<XEnumeration> xEmbeddedsEnum = m_pBoundFrameSets->GetEmbeddeds()->createEnumeration();
     if(xEmbeddedsEnum.is())
         while(xEmbeddedsEnum->hasMoreElements())
         {
@@ -1623,7 +1717,7 @@ void XMLTextParagraphExport::collectTextAutoStylesOptimized( bool bIsProgress )
         }
 
     // Export shapes:
-    Reference<XEnumeration> xShapesEnum = pBoundFrameSets->GetShapes()->createEnumeration();
+    Reference<XEnumeration> xShapesEnum = m_pBoundFrameSets->GetShapes()->createEnumeration();
     if(xShapesEnum.is())
         while(xShapesEnum->hasMoreElements())
         {
@@ -1757,12 +1851,12 @@ void XMLTextParagraphExport::exportText(
 
     // #96530# Export redlines at start & end of XText before & after
     // exporting the text content enumeration
-    if( !bAutoStyles && (pRedlineExport != nullptr) )
-        pRedlineExport->ExportStartOrEndRedline( xPropertySet, true );
+    if( !bAutoStyles && (m_pRedlineExport != nullptr) )
+        m_pRedlineExport->ExportStartOrEndRedline( xPropertySet, true );
     exportTextContentEnumeration( xParaEnum, bAutoStyles, xBaseSection,
                                   bIsProgress, bExportParagraph, nullptr, eExtensionNS );
-    if( !bAutoStyles && (pRedlineExport != nullptr) )
-        pRedlineExport->ExportStartOrEndRedline( xPropertySet, false );
+    if( !bAutoStyles && (m_pRedlineExport != nullptr) )
+        m_pRedlineExport->ExportStartOrEndRedline( xPropertySet, false );
 }
 
 void XMLTextParagraphExport::exportText(
@@ -1785,15 +1879,15 @@ void XMLTextParagraphExport::exportText(
     // #96530# Export redlines at start & end of XText before & after
     // exporting the text content enumeration
     Reference<XPropertySet> xPropertySet;
-    if( !bAutoStyles && (pRedlineExport != nullptr) )
+    if( !bAutoStyles && (m_pRedlineExport != nullptr) )
     {
         xPropertySet.set(rText, uno::UNO_QUERY );
-        pRedlineExport->ExportStartOrEndRedline( xPropertySet, true );
+        m_pRedlineExport->ExportStartOrEndRedline( xPropertySet, true );
     }
     exportTextContentEnumeration( xParaEnum, bAutoStyles, rBaseSection,
                                   bIsProgress, bExportParagraph );
-    if( !bAutoStyles && (pRedlineExport != nullptr) )
-        pRedlineExport->ExportStartOrEndRedline( xPropertySet, false );
+    if( !bAutoStyles && (m_pRedlineExport != nullptr) )
+        m_pRedlineExport->ExportStartOrEndRedline( xPropertySet, false );
 }
 
 bool XMLTextParagraphExport::ExportListId() const
@@ -1801,108 +1895,6 @@ bool XMLTextParagraphExport::ExportListId() const
     return (GetExport().getExportFlags() & SvXMLExportFlags::OASIS)
            && GetExport().getSaneDefaultVersion() >= SvtSaveOptions::ODFSVER_012;
 }
-
-struct XMLTextParagraphExport::DocumentListNodes
-{
-    struct NodeData
-    {
-        sal_Int32 index; // see SwNode::GetIndex and SwNodeOffset
-        sal_uInt64 style_id; // actually a pointer to NumRule
-        OUString list_id;
-        bool isRestart;
-    };
-    std::vector<NodeData> docListNodes;
-    DocumentListNodes(const css::uno::Reference<css::frame::XModel>& xModel)
-    {
-        // Sequence of nodes, each of them represented by four-element sequence,
-        // corresponding to NodeData members
-        css::uno::Sequence<css::uno::Sequence<css::uno::Any>> nodes;
-        if (uno::Reference<beans::XPropertySet> xPropSet{ xModel, uno::UNO_QUERY })
-        {
-            try
-            {
-                // See SwXTextDocument::getPropertyValue
-                xPropSet->getPropertyValue("ODFExport_ListNodes") >>= nodes;
-            }
-            catch (css::beans::UnknownPropertyException&)
-            {
-                // That's absolutely fine!
-            }
-        }
-
-        docListNodes.reserve(nodes.getLength());
-        for (const auto& node : nodes)
-        {
-            assert(node.getLength() == 4);
-            docListNodes.push_back({ node[0].get<sal_Int32>(), node[1].get<sal_uInt64>(),
-                                     node[2].get<OUString>(), node[3].get<bool>() });
-        }
-
-        std::sort(docListNodes.begin(), docListNodes.end(),
-                  [](const NodeData& lhs, const NodeData& rhs) { return lhs.index < rhs.index; });
-    }
-    bool ShouldSkipListId(const Reference<XTextContent>& xTextContent) const
-    {
-        if (docListNodes.empty())
-            return false;
-
-        if (uno::Reference<beans::XPropertySet> xPropSet{ xTextContent, uno::UNO_QUERY })
-        {
-            sal_Int32 index = 0;
-            try
-            {
-                // See SwXParagraph::Impl::GetPropertyValues_Impl
-                xPropSet->getPropertyValue("ODFExport_NodeIndex") >>= index;
-            }
-            catch (css::beans::UnknownPropertyException&)
-            {
-                // That's absolutely fine!
-                return false;
-            }
-
-            auto it = std::lower_bound(docListNodes.begin(), docListNodes.end(), index,
-                                       [](const NodeData& lhs, sal_Int32 rhs)
-                                       { return lhs.index < rhs; });
-            if (it == docListNodes.end() || it->index != index)
-                return false;
-
-            // We need to write the id, when there will be continuation of the list either with
-            // a different list style, or after another list.
-
-            for (auto next = it + 1; next != docListNodes.end(); ++next)
-            {
-                if (it->list_id != next->list_id)
-                {
-                    // List changed. We will have to refer to this id, only if there will
-                    // appear a continuation of this list
-                    return std::find_if(next + 1, docListNodes.end(),
-                                        [list_id = it->list_id](const NodeData& data)
-                                        { return data.list_id == list_id; })
-                           == docListNodes.end();
-                }
-
-                if (it->style_id != next->style_id)
-                {
-                    // Same list, new style -> this "next" will refer to the id, no skipping
-                    return false;
-                }
-                if (it->index + 1 != next->index)
-                {
-                    // we have a gap before the next node with the same list and style,
-                    // with no other lists in between. There will be a continuation;
-                    // in case of restart, there will be a reference to the id;
-                    // otherwise, there will be simple 'text:continue-numbering="true"'.
-                    return !next->isRestart;
-                }
-                it = next; // walk through adjacent nodes of the same list
-            }
-            // all nodes were adjacent and of the same list and style -> no continuation, skip id
-            return true;
-        }
-
-        return false;
-    }
-};
 
 bool XMLTextParagraphExport::ShouldSkipListId(const Reference<XTextContent>& xTextContent)
 {
@@ -1985,11 +1977,11 @@ void XMLTextParagraphExport::exportTextContentEnumeration(
             }
 
             // if we found a mute section: skip all section content
-            if (pSectionExport->IsMuteSection(xCurrentTextSection))
+            if (m_pSectionExport->IsMuteSection(xCurrentTextSection))
             {
                 // Make sure headings are exported anyway.
                 if( !bAutoStyles )
-                    pSectionExport->ExportMasterDocHeadingDummies();
+                    m_pSectionExport->ExportMasterDocHeadingDummies();
 
                 while (rContEnum->hasMoreElements() &&
                        XMLSectionExport::IsInSection( xCurrentTextSection,
@@ -2020,21 +2012,21 @@ void XMLTextParagraphExport::exportTextContentEnumeration(
                                         aPrevNumInfo, aNextNumInfo,
                                         bAutoStyles );
 
-            if (! pSectionExport->IsMuteSection(xCurrentTextSection))
+            if (! m_pSectionExport->IsMuteSection(xCurrentTextSection))
             {
                 // export start + end redlines (for wholly redlined tables)
-                if ((! bAutoStyles) && (nullptr != pRedlineExport))
-                    pRedlineExport->ExportStartOrEndRedline(xTxtCntnt, true);
+                if ((! bAutoStyles) && (nullptr != m_pRedlineExport))
+                    m_pRedlineExport->ExportStartOrEndRedline(xTxtCntnt, true);
 
                 exportTable( xTxtCntnt, bAutoStyles, bIsProgress  );
 
-                if ((! bAutoStyles) && (nullptr != pRedlineExport))
-                    pRedlineExport->ExportStartOrEndRedline(xTxtCntnt, false);
+                if ((! bAutoStyles) && (nullptr != m_pRedlineExport))
+                    m_pRedlineExport->ExportStartOrEndRedline(xTxtCntnt, false);
             }
             else if( !bAutoStyles )
             {
                 // Make sure headings are exported anyway.
-                pSectionExport->ExportMasterDocHeadingDummies();
+                m_pSectionExport->ExportMasterDocHeadingDummies();
             }
 
             bHasContent = true;
@@ -2306,7 +2298,7 @@ void XMLTextParagraphExport::exportParagraph(
                 // ParaMarkerAutoStyleSpan is a hidden property, just to pass the autostyle here
                 // See SwXParagraph::Impl::GetPropertyValues_Impl
                 css::uno::Any aVal = xPropSet->getPropertyValue("ParaMarkerAutoStyleSpan");
-                if (css::uno::Reference<css::beans::XPropertySet> xFakeSpan{ aVal, css::uno::UNO_QUERY })
+                if (auto xFakeSpan = aVal.query<css::beans::XPropertySet>())
                 {
                     if (bAutoStyles)
                     {
@@ -2498,12 +2490,12 @@ void XMLTextParagraphExport::exportTextRangeEnumeration(
             }
             else if (sType == gsDocumentIndexMark)
             {
-                pIndexMarkExport->ExportIndexMark(xPropSet, bAutoStyles);
+                m_pIndexMarkExport->ExportIndexMark(xPropSet, bAutoStyles);
             }
             else if (sType == gsRedline)
             {
-                if (nullptr != pRedlineExport)
-                    pRedlineExport->ExportChange(xPropSet, bAutoStyles);
+                if (nullptr != m_pRedlineExport)
+                    m_pRedlineExport->ExportChange(xPropSet, bAutoStyles);
             }
             else if (sType == gsRuby)
             {
@@ -2586,7 +2578,6 @@ void XMLTextParagraphExport::exportTextRangeEnumeration(
             }
             else if (sType == gsTextFieldSep)
             {
-                Reference<text::XFormField> const xFormField(xPropSet->getPropertyValue(gsBookmark), UNO_QUERY);
                 if (!bAutoStyles)
                 {
                     if (GetExport().getSaneDefaultVersion() & SvtSaveOptions::ODFSVER_EXTENDED)
@@ -2739,13 +2730,13 @@ void XMLTextParagraphExport::exportTextField(
 {
     if ( bAutoStyles )
     {
-        pFieldExport->ExportFieldAutoStyle( xTextField, bIsProgress,
+        m_pFieldExport->ExportFieldAutoStyle( xTextField, bIsProgress,
                 bRecursive );
     }
     else
     {
         assert(pPrevCharIsSpace);
-        pFieldExport->ExportField(xTextField, bIsProgress, *pPrevCharIsSpace);
+        m_pFieldExport->ExportField(xTextField, bIsProgress, *pPrevCharIsSpace);
     }
 }
 
@@ -3152,13 +3143,6 @@ XMLShapeExportFlags XMLTextParagraphExport::addTextFrameAttributes(
         }
     }
 
-    // TODO remove
-    if (xPropSetInfo->hasPropertyByName("Decorative")
-        && rPropSet->getPropertyValue("Decorative").get<bool>())
-    {
-        GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, XML_DECORATIVE, XML_TRUE);
-    }
-
     if (xPropSetInfo->hasPropertyByName("IsSplitAllowed")
         && rPropSet->getPropertyValue("IsSplitAllowed").get<bool>())
     {
@@ -3198,17 +3182,38 @@ void XMLTextParagraphExport::exportAnyTextFrame(
                 if ( bExportContent )
                 {
                     Reference < XTextFrame > xTxtFrame( rTxtCntnt, UNO_QUERY );
-                    Reference < XText > xTxt(xTxtFrame->getText());
-                    exportFrameFrames( true, bIsProgress, &xTxtFrame );
-                    exportText( xTxt, bAutoStyles, bIsProgress, true );
+                    bool bAlreadySeen = !maFrameRecurseGuard.insert(xTxtFrame).second;
+                    if (bAlreadySeen)
+                    {
+                        SAL_WARN("xmloff", "loop in frame export, ditching");
+                    }
+                    else
+                    {
+                        comphelper::ScopeGuard const g([this, xTxtFrame]() {
+                            maFrameRecurseGuard.erase(xTxtFrame);
+                        });
+                        Reference < XText > xTxt(xTxtFrame->getText());
+                        exportFrameFrames( true, bIsProgress, xTxtFrame );
+                        exportText( xTxt, bAutoStyles, bIsProgress, true );
+                    }
                 }
             }
             break;
         case FrameType::Shape:
             {
                 Reference < XShape > xShape( rTxtCntnt, UNO_QUERY );
-                css::uno::Sequence<OUString> aAutoStylePropNames = GetAutoStylePool().GetPropertyNames();
-                GetExport().GetShapeExport()->collectShapeAutoStyles( xShape, aAutoStylePropNames );
+                bool bAlreadySeen = !maShapeRecurseGuard.insert(xShape).second;
+                if (bAlreadySeen)
+                {
+                    SAL_WARN("xmloff", "loop in shape export, ditching");
+                }
+                else
+                {
+                    comphelper::ScopeGuard const g([this, xShape]() {
+                        maShapeRecurseGuard.erase(xShape);
+                    });
+                    GetExport().GetShapeExport()->collectShapeAutoStyles( xShape );
+                }
             }
             break;
         default:
@@ -3233,7 +3238,7 @@ void XMLTextParagraphExport::exportAnyTextFrame(
                 bIsUICharStyle = false;
 
             bool bDoSomething = bIsUICharStyle
-                && aCharStyleNamesPropInfoCache.hasProperty( *pRangePropSet );
+                && m_aCharStyleNamesPropInfoCache.hasProperty( *pRangePropSet );
             XMLTextCharStyleNamesElementExport aCharStylesExport(
                 GetExport(), bDoSomething, bHasAutoStyle,
                 bDoSomething ? *pRangePropSet : Reference<XPropertySet>(),
@@ -3329,7 +3334,7 @@ void XMLTextParagraphExport::_exportTextFrame(
                                   XML_TEXT_BOX, true, true );
 
         // frames bound to frame
-        exportFrameFrames( false, bIsProgress, &xTxtFrame );
+        exportFrameFrames( false, bIsProgress, xTxtFrame );
 
         exportText( xTxt, false, bIsProgress, true );
     }
@@ -3699,7 +3704,7 @@ void XMLTextParagraphExport::exportTextRangeSpan(
 {
     XMLTextCharStyleNamesElementExport aCharStylesExport(
             GetExport(),
-            bIsUICharStyle && aCharStyleNamesPropInfoCache.hasProperty( xPropSet, xPropSetInfo ),
+            bIsUICharStyle && m_aCharStyleNamesPropInfoCache.hasProperty( xPropSet, xPropSetInfo ),
             bHasAutoStyle,
             xPropSet,
             gsCharStyleNames );
@@ -3878,7 +3883,7 @@ void XMLTextParagraphExport::exportCharacterData(const OUString& rText,
 
 void XMLTextParagraphExport::exportTextDeclarations()
 {
-    pFieldExport->ExportFieldDeclarations();
+    m_pFieldExport->ExportFieldDeclarations();
 
     // get XPropertySet from the document and ask for AutoMarkFileURL.
     // If it exists, export the auto-mark-file element.
@@ -3908,39 +3913,39 @@ void XMLTextParagraphExport::exportTextDeclarations()
 void XMLTextParagraphExport::exportTextDeclarations(
     const Reference<XText> & rText )
 {
-    pFieldExport->ExportFieldDeclarations(rText);
+    m_pFieldExport->ExportFieldDeclarations(rText);
 }
 
 void XMLTextParagraphExport::exportUsedDeclarations()
 {
-    pFieldExport->SetExportOnlyUsedFieldDeclarations( false/*bOnlyUsed*/ );
+    m_pFieldExport->SetExportOnlyUsedFieldDeclarations( false/*bOnlyUsed*/ );
 }
 
 void XMLTextParagraphExport::exportTrackedChanges(bool bAutoStyles)
 {
-    if (nullptr != pRedlineExport)
-        pRedlineExport->ExportChangesList( bAutoStyles );
+    if (nullptr != m_pRedlineExport)
+        m_pRedlineExport->ExportChangesList( bAutoStyles );
 }
 
 void XMLTextParagraphExport::exportTrackedChanges(
     const Reference<XText> & rText,
     bool bAutoStyle)
 {
-    if (nullptr != pRedlineExport)
-        pRedlineExport->ExportChangesList(rText, bAutoStyle);
+    if (nullptr != m_pRedlineExport)
+        m_pRedlineExport->ExportChangesList(rText, bAutoStyle);
 }
 
 void XMLTextParagraphExport::recordTrackedChangesForXText(
     const Reference<XText> & rText )
 {
-    if (nullptr != pRedlineExport)
-        pRedlineExport->SetCurrentXText(rText);
+    if (nullptr != m_pRedlineExport)
+        m_pRedlineExport->SetCurrentXText(rText);
 }
 
 void XMLTextParagraphExport::recordTrackedChangesNoXText()
 {
-    if (nullptr != pRedlineExport)
-        pRedlineExport->SetCurrentXText();
+    if (nullptr != m_pRedlineExport)
+        m_pRedlineExport->SetCurrentXText();
 }
 
 void XMLTextParagraphExport::exportTableAutoStyles() {}
@@ -3988,13 +3993,13 @@ void XMLTextParagraphExport::exportRuby(
             // ruby start
 
             // we can only start a ruby if none is open
-            assert(!bOpenRuby && "Can't open a ruby inside of ruby!");
-            if( bOpenRuby )
+            assert(!m_bOpenRuby && "Can't open a ruby inside of ruby!");
+            if( m_bOpenRuby )
                 return;
 
             // save ruby text + ruby char style
-            rPropSet->getPropertyValue(gsRubyText) >>= sOpenRubyText;
-            rPropSet->getPropertyValue(gsRubyCharStyleName) >>= sOpenRubyCharStyle;
+            rPropSet->getPropertyValue(gsRubyText) >>= m_sOpenRubyText;
+            rPropSet->getPropertyValue(gsRubyCharStyleName) >>= m_sOpenRubyCharStyle;
 
             // ruby style
             GetExport().CheckAttrList();
@@ -4008,15 +4013,15 @@ void XMLTextParagraphExport::exportRuby(
             GetExport().ClearAttrList();
             GetExport().StartElement( XML_NAMESPACE_TEXT, XML_RUBY_BASE,
                                       false );
-            bOpenRuby = true;
+            m_bOpenRuby = true;
         }
         else
         {
             // ruby end
 
             // check for an open ruby
-            assert(bOpenRuby && "Can't close a ruby if none is open!");
-            if( !bOpenRuby )
+            assert(m_bOpenRuby && "Can't close a ruby if none is open!");
+            if( !m_bOpenRuby )
                 return;
 
             // close <text:ruby-base>
@@ -4025,21 +4030,21 @@ void XMLTextParagraphExport::exportRuby(
 
             // write the ruby text (with char style)
             {
-                if (!sOpenRubyCharStyle.isEmpty())
+                if (!m_sOpenRubyCharStyle.isEmpty())
                     GetExport().AddAttribute(
                         XML_NAMESPACE_TEXT, XML_STYLE_NAME,
-                        GetExport().EncodeStyleName( sOpenRubyCharStyle) );
+                        GetExport().EncodeStyleName( m_sOpenRubyCharStyle) );
 
                 SvXMLElementExport aRubyElement(
                     GetExport(), XML_NAMESPACE_TEXT, XML_RUBY_TEXT,
                     false, false);
 
-                GetExport().Characters(sOpenRubyText);
+                GetExport().Characters(m_sOpenRubyText);
             }
 
             // and finally, close the ruby
             GetExport().EndElement(XML_NAMESPACE_TEXT, XML_RUBY, false);
-            bOpenRuby = false;
+            m_bOpenRuby = false;
         }
     }
 }
@@ -4229,8 +4234,7 @@ void XMLTextParagraphExport::ExportContentControl(
         }
 
         sal_uInt32 nTabIndex = 0;
-        xPropertySet->getPropertyValue("TabIndex") >>= nTabIndex;
-        if (nTabIndex)
+        if ((xPropertySet->getPropertyValue("TabIndex") >>= nTabIndex) && nTabIndex)
         {
             GetExport().AddAttribute(XML_NAMESPACE_LO_EXT, XML_TAB_INDEX,
                                      OUString::number(nTabIndex));
@@ -4287,9 +4291,9 @@ void XMLTextParagraphExport::PreventExportOfControlsInMuteSections(
         // if we don't have shapes or a form export, there's nothing to do
         return;
     }
-    SAL_WARN_IF( pSectionExport == nullptr, "xmloff", "We need the section export." );
+    SAL_WARN_IF( m_pSectionExport == nullptr, "xmloff", "We need the section export." );
 
-    Reference<XEnumeration> xShapesEnum = pBoundFrameSets->GetShapes()->createEnumeration();
+    Reference<XEnumeration> xShapesEnum = m_pBoundFrameSets->GetShapes()->createEnumeration();
     if(!xShapesEnum.is())
         return;
     while( xShapesEnum->hasMoreElements() )
@@ -4310,7 +4314,7 @@ void XMLTextParagraphExport::PreventExportOfControlsInMuteSections(
             Reference<XTextContent> xTextContent( xControlShape, UNO_QUERY );
             if( xTextContent.is() )
             {
-                if( pSectionExport->IsMuteSection( xTextContent, false ) )
+                if( m_pSectionExport->IsMuteSection( xTextContent, false ) )
                 {
                     // Ah, we've found a shape that
                     // 1) is a control shape

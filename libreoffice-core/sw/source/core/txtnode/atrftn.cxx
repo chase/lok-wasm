@@ -205,8 +205,7 @@ OUString SwFormatFootnote::GetFootnoteText(SwRootFrame const& rLayout) const
             while ( !aIdx.GetNode().IsEndNode() ) {
                 if ( aIdx.GetNode().IsTextNode() )
                 {
-                    buf.append("  ");
-                    buf.append(aIdx.GetNode().GetTextNode()->GetExpandText(&rLayout));
+                    buf.append("  " + aIdx.GetNode().GetTextNode()->GetExpandText(&rLayout));
                 }
                 ++aIdx;
             }
@@ -267,17 +266,30 @@ OUString SwFormatFootnote::GetViewNumStr(const SwDoc& rDoc,
     return sRet;
 }
 
-uno::Reference<text::XTextRange> SwFormatFootnote::getAnchor(SwDoc& rDoc) const
+rtl::Reference<SwXTextRange> SwFormatFootnote::getAnchor(SwDoc& rDoc) const
 {
     SolarMutexGuard aGuard;
     if (!m_pTextAttr)
-        return uno::Reference<text::XTextRange>();
+        return {};
     SwPaM aPam(m_pTextAttr->GetTextNode(), m_pTextAttr->GetStart());
     aPam.SetMark();
     aPam.GetMark()->AdjustContent(+1);
-    const rtl::Reference<SwXTextRange> xRet =
+    rtl::Reference<SwXTextRange> xRet =
         SwXTextRange::CreateXTextRange(rDoc, *aPam.Start(), aPam.End());
     return xRet;
+}
+
+void SwFormatFootnote::dumpAsXml(xmlTextWriterPtr pWriter) const
+{
+    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SwFormatFootnote"));
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("text-attr"), "%p", m_pTextAttr);
+    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("endnote"),
+                                      BAD_CAST(OString::boolean(m_bEndNote).getStr()));
+
+    SfxPoolItem::dumpAsXml(pWriter);
+
+    (void)xmlTextWriterEndElement(pWriter);
 }
 
 SwTextFootnote::SwTextFootnote( SwFormatFootnote& rAttr, sal_Int32 nStartPos )

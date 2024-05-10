@@ -94,7 +94,7 @@ bool ConstRectangle::MouseButtonUp(const MouseEvent& rMEvt)
                 {
                     // Set the attributes needed for scrolling
                     SfxItemSetFixed<SDRATTR_MISC_FIRST, SDRATTR_MISC_LAST>
-                        aItemSet( pSdrView->GetModel()->GetItemPool() );
+                        aItemSet(pSdrView->GetModel().GetItemPool());
 
                     aItemSet.Put( makeSdrTextAutoGrowWidthItem( false ) );
                     aItemSet.Put( makeSdrTextAutoGrowHeightItem( false ) );
@@ -111,7 +111,7 @@ bool ConstRectangle::MouseButtonUp(const MouseEvent& rMEvt)
             {
                 if (SdrTextObj* pText = DynCastSdrTextObj(pObj))
                 {
-                    SfxItemSet aSet(pSdrView->GetModel()->GetItemPool());
+                    SfxItemSet aSet(pSdrView->GetModel().GetItemPool());
 
                     pText->SetVerticalWriting(true);
 
@@ -130,7 +130,7 @@ bool ConstRectangle::MouseButtonUp(const MouseEvent& rMEvt)
                 m_pView->BeginTextEdit( pObj, pPV, m_pWin, true );
             }
             m_pView->LeaveDrawCreate();  // Switch to selection mode
-            m_pSh->GetView().GetViewFrame()->GetBindings().Invalidate(SID_INSERT_DRAW);
+            m_pSh->GetView().GetViewFrame().GetBindings().Invalidate(SID_INSERT_DRAW);
             break;
 
         case SdrObjKind::Caption:

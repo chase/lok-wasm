@@ -252,13 +252,13 @@ void OSQLParseNode::parseNodeToPredicateStr(OUString& rString,
                                               const Reference< XConnection >& _rxConnection,
                                               const Reference< XNumberFormatter > & xFormatter,
                                               const css::lang::Locale& rIntl,
-                                              OUString _sDec,
+                                              const OUString& rDec,
                                               const IParseContext* pContext ) const
 {
     OSL_ENSURE(xFormatter.is(), "OSQLParseNode::parseNodeToPredicateStr:: no formatter!");
 
     if (xFormatter.is())
-        parseNodeToStr(rString, _rxConnection, xFormatter, nullptr, OUString(), rIntl, pContext, true, true, _sDec, true);
+        parseNodeToStr(rString, _rxConnection, xFormatter, nullptr, OUString(), rIntl, pContext, true, true, rDec, true);
 }
 
 
@@ -268,13 +268,13 @@ void OSQLParseNode::parseNodeToPredicateStr(OUString& rString,
                                               const Reference< XPropertySet > & _xField,
                                               const OUString &_sPredicateTableAlias,
                                               const css::lang::Locale& rIntl,
-                                              OUString _sDec,
+                                              const OUString& rDec,
                                               const IParseContext* pContext ) const
 {
     OSL_ENSURE(xFormatter.is(), "OSQLParseNode::parseNodeToPredicateStr:: no formatter!");
 
     if (xFormatter.is())
-        parseNodeToStr( rString, _rxConnection, xFormatter, _xField, _sPredicateTableAlias, rIntl, pContext, true, true, _sDec, true );
+        parseNodeToStr( rString, _rxConnection, xFormatter, _xField, _sPredicateTableAlias, rIntl, pContext, true, true, rDec, true );
 }
 
 
@@ -803,7 +803,7 @@ void OSQLParser::killThousandSeparator(OSQLParseNode* pLiteral)
 {
     if ( pLiteral )
     {
-        if ( s_xLocaleData->getLocaleItem( m_pData->aLocale ).decimalSeparator.toChar() == ',' )
+        if ( s_xLocaleData.get()->get()->getLocaleItem( m_pData->aLocale ).decimalSeparator.toChar() == ',' )
         {
             pLiteral->m_aNodeValue = pLiteral->m_aNodeValue.replace('.', sal_Unicode());
             // and replace decimal
@@ -1118,7 +1118,7 @@ OUString OSQLParser::stringToDouble(const OUString& _rValue,sal_Int16 _nScale)
     OUString aValue;
     if(!m_xCharClass.is())
         m_xCharClass  = CharacterClassification::create( m_xContext );
-    if( s_xLocaleData.is() )
+    if( s_xLocaleData.get() )
     {
         try
         {
@@ -1129,7 +1129,8 @@ OUString OSQLParser::stringToDouble(const OUString& _rValue,sal_Int16 _nScale)
                 sal_Int32 nPos = aValue.lastIndexOf('.');
                 if((nPos+_nScale) < aValue.getLength())
                     aValue = aValue.replaceAt(nPos+_nScale,aValue.getLength()-nPos-_nScale, u"");
-                aValue = aValue.replaceAt(aValue.lastIndexOf('.'),1,s_xLocaleData->getLocaleItem(m_pData->aLocale).decimalSeparator);
+                OUString sDecimalSeparator = s_xLocaleData.get()->get()->getLocaleItem(m_pData->aLocale).decimalSeparator;
+                aValue = aValue.replaceAt(aValue.lastIndexOf('.'), 1, sDecimalSeparator);
                 return aValue;
             }
         }
@@ -1141,9 +1142,9 @@ OUString OSQLParser::stringToDouble(const OUString& _rValue,sal_Int16 _nScale)
 }
 
 
-::osl::Mutex& OSQLParser::getMutex()
+std::mutex& OSQLParser::getMutex()
 {
-    static ::osl::Mutex aMutex;
+    static std::mutex aMutex;
     return aMutex;
 }
 
@@ -1154,7 +1155,7 @@ std::unique_ptr<OSQLParseNode> OSQLParser::predicateTree(OUString& rErrorMessage
                                          bool bUseRealName)
 {
     // Guard the parsing
-    ::osl::MutexGuard aGuard(getMutex());
+    std::unique_lock aGuard(getMutex());
     // must be reset
     setParser(this);
 
@@ -1247,7 +1248,7 @@ std::unique_ptr<OSQLParseNode> OSQLParser::predicateTree(OUString& rErrorMessage
                 s_pScanner->SetRule(OSQLScanner::GetSTRINGRule());
                 break;
             default:
-                if ( s_xLocaleData->getLocaleItem( m_pData->aLocale ).decimalSeparator.toChar() == ',' )
+                if ( s_xLocaleData.get()->get()->getLocaleItem( m_pData->aLocale ).decimalSeparator.toChar() == ',' )
                     s_pScanner->SetRule(OSQLScanner::GetGERRule());
                 else
                     s_pScanner->SetRule(OSQLScanner::GetENGRule());
@@ -1325,7 +1326,7 @@ OSQLParser::OSQLParser(css::uno::Reference< css::uno::XComponentContext > xConte
 #endif
 #endif
 
-    ::osl::MutexGuard aGuard(getMutex());
+    std::unique_lock aGuard(getMutex());
     // Do we have to initialize the data?
     if (s_nRefCount == 0)
     {
@@ -1333,8 +1334,8 @@ OSQLParser::OSQLParser(css::uno::Reference< css::uno::XComponentContext > xConte
         s_pScanner->setScanner();
         s_pGarbageCollector = new OSQLParseNodesGarbageCollector();
 
-        if(!s_xLocaleData.is())
-            s_xLocaleData = LocaleData::create(m_xContext);
+        if(!s_xLocaleData.get())
+            s_xLocaleData.set(LocaleData::create(m_xContext));
 
         // reset to UNKNOWN_RULE
         static_assert(OSQLParseNode::UNKNOWN_RULE==0, "UNKNOWN_RULE must be 0 for memset to 0 to work");
@@ -1346,107 +1347,107 @@ OSQLParser::OSQLParser(css::uno::Reference< css::uno::XComponentContext > xConte
             OString      sRuleName;  // the name of the rule ("select_statement")
         }   aRuleDescriptions[] =
         {
-            { OSQLParseNode::select_statement, "select_statement" },
-            { OSQLParseNode::table_exp, "table_exp" },
-            { OSQLParseNode::table_ref_commalist, "table_ref_commalist" },
-            { OSQLParseNode::table_ref, "table_ref" },
-            { OSQLParseNode::catalog_name, "catalog_name" },
-            { OSQLParseNode::schema_name, "schema_name" },
-            { OSQLParseNode::table_name, "table_name" },
-            { OSQLParseNode::opt_column_commalist, "opt_column_commalist" },
-            { OSQLParseNode::column_commalist, "column_commalist" },
-            { OSQLParseNode::column_ref_commalist, "column_ref_commalist" },
-            { OSQLParseNode::column_ref, "column_ref" },
-            { OSQLParseNode::opt_order_by_clause, "opt_order_by_clause" },
-            { OSQLParseNode::ordering_spec_commalist, "ordering_spec_commalist" },
-            { OSQLParseNode::ordering_spec, "ordering_spec" },
-            { OSQLParseNode::opt_asc_desc, "opt_asc_desc" },
-            { OSQLParseNode::where_clause, "where_clause" },
-            { OSQLParseNode::opt_where_clause, "opt_where_clause" },
-            { OSQLParseNode::search_condition, "search_condition" },
-            { OSQLParseNode::comparison, "comparison" },
-            { OSQLParseNode::comparison_predicate, "comparison_predicate" },
-            { OSQLParseNode::between_predicate, "between_predicate" },
-            { OSQLParseNode::like_predicate, "like_predicate" },
-            { OSQLParseNode::opt_escape, "opt_escape" },
-            { OSQLParseNode::test_for_null, "test_for_null" },
-            { OSQLParseNode::scalar_exp_commalist, "scalar_exp_commalist" },
-            { OSQLParseNode::scalar_exp, "scalar_exp" },
-            { OSQLParseNode::parameter_ref, "parameter_ref" },
-            { OSQLParseNode::parameter, "parameter" },
-            { OSQLParseNode::general_set_fct, "general_set_fct" },
-            { OSQLParseNode::range_variable, "range_variable" },
-            { OSQLParseNode::column, "column" },
-            { OSQLParseNode::delete_statement_positioned, "delete_statement_positioned" },
-            { OSQLParseNode::delete_statement_searched, "delete_statement_searched" },
-            { OSQLParseNode::update_statement_positioned, "update_statement_positioned" },
-            { OSQLParseNode::update_statement_searched, "update_statement_searched" },
-            { OSQLParseNode::assignment_commalist, "assignment_commalist" },
-            { OSQLParseNode::assignment, "assignment" },
-            { OSQLParseNode::values_or_query_spec, "values_or_query_spec" },
-            { OSQLParseNode::insert_statement, "insert_statement" },
-            { OSQLParseNode::insert_atom_commalist, "insert_atom_commalist" },
-            { OSQLParseNode::insert_atom, "insert_atom" },
-            { OSQLParseNode::from_clause, "from_clause" },
-            { OSQLParseNode::qualified_join, "qualified_join" },
-            { OSQLParseNode::cross_union, "cross_union" },
-            { OSQLParseNode::select_sublist, "select_sublist" },
-            { OSQLParseNode::derived_column, "derived_column" },
-            { OSQLParseNode::column_val, "column_val" },
-            { OSQLParseNode::set_fct_spec, "set_fct_spec" },
-            { OSQLParseNode::boolean_term, "boolean_term" },
-            { OSQLParseNode::boolean_primary, "boolean_primary" },
-            { OSQLParseNode::num_value_exp, "num_value_exp" },
-            { OSQLParseNode::join_type, "join_type" },
-            { OSQLParseNode::position_exp, "position_exp" },
-            { OSQLParseNode::extract_exp, "extract_exp" },
-            { OSQLParseNode::length_exp, "length_exp" },
-            { OSQLParseNode::char_value_fct, "char_value_fct" },
-            { OSQLParseNode::odbc_call_spec, "odbc_call_spec" },
-            { OSQLParseNode::in_predicate, "in_predicate" },
-            { OSQLParseNode::existence_test, "existence_test" },
-            { OSQLParseNode::unique_test, "unique_test" },
-            { OSQLParseNode::all_or_any_predicate, "all_or_any_predicate" },
-            { OSQLParseNode::named_columns_join, "named_columns_join" },
-            { OSQLParseNode::join_condition, "join_condition" },
-            { OSQLParseNode::joined_table, "joined_table" },
-            { OSQLParseNode::boolean_factor, "boolean_factor" },
-            { OSQLParseNode::sql_not, "sql_not" },
-            { OSQLParseNode::manipulative_statement, "manipulative_statement" },
-            { OSQLParseNode::subquery, "subquery" },
-            { OSQLParseNode::value_exp_commalist, "value_exp_commalist" },
-            { OSQLParseNode::odbc_fct_spec, "odbc_fct_spec" },
-            { OSQLParseNode::union_statement, "union_statement" },
-            { OSQLParseNode::outer_join_type, "outer_join_type" },
-            { OSQLParseNode::char_value_exp, "char_value_exp" },
-            { OSQLParseNode::term, "term" },
-            { OSQLParseNode::value_exp_primary, "value_exp_primary" },
-            { OSQLParseNode::value_exp, "value_exp" },
-            { OSQLParseNode::selection, "selection" },
-            { OSQLParseNode::fold, "fold" },
-            { OSQLParseNode::char_substring_fct, "char_substring_fct" },
-            { OSQLParseNode::factor, "factor" },
-            { OSQLParseNode::base_table_def, "base_table_def" },
-            { OSQLParseNode::base_table_element_commalist, "base_table_element_commalist" },
-            { OSQLParseNode::data_type, "data_type" },
-            { OSQLParseNode::column_def, "column_def" },
-            { OSQLParseNode::table_node, "table_node" },
-            { OSQLParseNode::as_clause, "as_clause" },
-            { OSQLParseNode::opt_as, "opt_as" },
-            { OSQLParseNode::op_column_commalist, "op_column_commalist" },
-            { OSQLParseNode::table_primary_as_range_column, "table_primary_as_range_column" },
-            { OSQLParseNode::datetime_primary, "datetime_primary" },
-            { OSQLParseNode::concatenation, "concatenation" },
-            { OSQLParseNode::char_factor, "char_factor" },
-            { OSQLParseNode::bit_value_fct, "bit_value_fct" },
-            { OSQLParseNode::comparison_predicate_part_2, "comparison_predicate_part_2" },
-            { OSQLParseNode::parenthesized_boolean_value_expression, "parenthesized_boolean_value_expression" },
-            { OSQLParseNode::character_string_type, "character_string_type" },
-            { OSQLParseNode::other_like_predicate_part_2, "other_like_predicate_part_2" },
-            { OSQLParseNode::between_predicate_part_2, "between_predicate_part_2" },
-            { OSQLParseNode::null_predicate_part_2, "null_predicate_part_2" },
-            { OSQLParseNode::cast_spec, "cast_spec" },
-            { OSQLParseNode::window_function, "window_function" }
+            { OSQLParseNode::select_statement, "select_statement"_ostr },
+            { OSQLParseNode::table_exp, "table_exp"_ostr },
+            { OSQLParseNode::table_ref_commalist, "table_ref_commalist"_ostr },
+            { OSQLParseNode::table_ref, "table_ref"_ostr },
+            { OSQLParseNode::catalog_name, "catalog_name"_ostr },
+            { OSQLParseNode::schema_name, "schema_name"_ostr },
+            { OSQLParseNode::table_name, "table_name"_ostr },
+            { OSQLParseNode::opt_column_commalist, "opt_column_commalist"_ostr },
+            { OSQLParseNode::column_commalist, "column_commalist"_ostr },
+            { OSQLParseNode::column_ref_commalist, "column_ref_commalist"_ostr },
+            { OSQLParseNode::column_ref, "column_ref"_ostr },
+            { OSQLParseNode::opt_order_by_clause, "opt_order_by_clause"_ostr },
+            { OSQLParseNode::ordering_spec_commalist, "ordering_spec_commalist"_ostr },
+            { OSQLParseNode::ordering_spec, "ordering_spec"_ostr },
+            { OSQLParseNode::opt_asc_desc, "opt_asc_desc"_ostr },
+            { OSQLParseNode::where_clause, "where_clause"_ostr },
+            { OSQLParseNode::opt_where_clause, "opt_where_clause"_ostr },
+            { OSQLParseNode::search_condition, "search_condition"_ostr },
+            { OSQLParseNode::comparison, "comparison"_ostr },
+            { OSQLParseNode::comparison_predicate, "comparison_predicate"_ostr },
+            { OSQLParseNode::between_predicate, "between_predicate"_ostr },
+            { OSQLParseNode::like_predicate, "like_predicate"_ostr },
+            { OSQLParseNode::opt_escape, "opt_escape"_ostr },
+            { OSQLParseNode::test_for_null, "test_for_null"_ostr },
+            { OSQLParseNode::scalar_exp_commalist, "scalar_exp_commalist"_ostr },
+            { OSQLParseNode::scalar_exp, "scalar_exp"_ostr },
+            { OSQLParseNode::parameter_ref, "parameter_ref"_ostr },
+            { OSQLParseNode::parameter, "parameter"_ostr },
+            { OSQLParseNode::general_set_fct, "general_set_fct"_ostr },
+            { OSQLParseNode::range_variable, "range_variable"_ostr },
+            { OSQLParseNode::column, "column"_ostr },
+            { OSQLParseNode::delete_statement_positioned, "delete_statement_positioned"_ostr },
+            { OSQLParseNode::delete_statement_searched, "delete_statement_searched"_ostr },
+            { OSQLParseNode::update_statement_positioned, "update_statement_positioned"_ostr },
+            { OSQLParseNode::update_statement_searched, "update_statement_searched"_ostr },
+            { OSQLParseNode::assignment_commalist, "assignment_commalist"_ostr },
+            { OSQLParseNode::assignment, "assignment"_ostr },
+            { OSQLParseNode::values_or_query_spec, "values_or_query_spec"_ostr },
+            { OSQLParseNode::insert_statement, "insert_statement"_ostr },
+            { OSQLParseNode::insert_atom_commalist, "insert_atom_commalist"_ostr },
+            { OSQLParseNode::insert_atom, "insert_atom"_ostr },
+            { OSQLParseNode::from_clause, "from_clause"_ostr },
+            { OSQLParseNode::qualified_join, "qualified_join"_ostr },
+            { OSQLParseNode::cross_union, "cross_union"_ostr },
+            { OSQLParseNode::select_sublist, "select_sublist"_ostr },
+            { OSQLParseNode::derived_column, "derived_column"_ostr },
+            { OSQLParseNode::column_val, "column_val"_ostr },
+            { OSQLParseNode::set_fct_spec, "set_fct_spec"_ostr },
+            { OSQLParseNode::boolean_term, "boolean_term"_ostr },
+            { OSQLParseNode::boolean_primary, "boolean_primary"_ostr },
+            { OSQLParseNode::num_value_exp, "num_value_exp"_ostr },
+            { OSQLParseNode::join_type, "join_type"_ostr },
+            { OSQLParseNode::position_exp, "position_exp"_ostr },
+            { OSQLParseNode::extract_exp, "extract_exp"_ostr },
+            { OSQLParseNode::length_exp, "length_exp"_ostr },
+            { OSQLParseNode::char_value_fct, "char_value_fct"_ostr },
+            { OSQLParseNode::odbc_call_spec, "odbc_call_spec"_ostr },
+            { OSQLParseNode::in_predicate, "in_predicate"_ostr },
+            { OSQLParseNode::existence_test, "existence_test"_ostr },
+            { OSQLParseNode::unique_test, "unique_test"_ostr },
+            { OSQLParseNode::all_or_any_predicate, "all_or_any_predicate"_ostr },
+            { OSQLParseNode::named_columns_join, "named_columns_join"_ostr },
+            { OSQLParseNode::join_condition, "join_condition"_ostr },
+            { OSQLParseNode::joined_table, "joined_table"_ostr },
+            { OSQLParseNode::boolean_factor, "boolean_factor"_ostr },
+            { OSQLParseNode::sql_not, "sql_not"_ostr },
+            { OSQLParseNode::manipulative_statement, "manipulative_statement"_ostr },
+            { OSQLParseNode::subquery, "subquery"_ostr },
+            { OSQLParseNode::value_exp_commalist, "value_exp_commalist"_ostr },
+            { OSQLParseNode::odbc_fct_spec, "odbc_fct_spec"_ostr },
+            { OSQLParseNode::union_statement, "union_statement"_ostr },
+            { OSQLParseNode::outer_join_type, "outer_join_type"_ostr },
+            { OSQLParseNode::char_value_exp, "char_value_exp"_ostr },
+            { OSQLParseNode::term, "term"_ostr },
+            { OSQLParseNode::value_exp_primary, "value_exp_primary"_ostr },
+            { OSQLParseNode::value_exp, "value_exp"_ostr },
+            { OSQLParseNode::selection, "selection"_ostr },
+            { OSQLParseNode::fold, "fold"_ostr },
+            { OSQLParseNode::char_substring_fct, "char_substring_fct"_ostr },
+            { OSQLParseNode::factor, "factor"_ostr },
+            { OSQLParseNode::base_table_def, "base_table_def"_ostr },
+            { OSQLParseNode::base_table_element_commalist, "base_table_element_commalist"_ostr },
+            { OSQLParseNode::data_type, "data_type"_ostr },
+            { OSQLParseNode::column_def, "column_def"_ostr },
+            { OSQLParseNode::table_node, "table_node"_ostr },
+            { OSQLParseNode::as_clause, "as_clause"_ostr },
+            { OSQLParseNode::opt_as, "opt_as"_ostr },
+            { OSQLParseNode::op_column_commalist, "op_column_commalist"_ostr },
+            { OSQLParseNode::table_primary_as_range_column, "table_primary_as_range_column"_ostr },
+            { OSQLParseNode::datetime_primary, "datetime_primary"_ostr },
+            { OSQLParseNode::concatenation, "concatenation"_ostr },
+            { OSQLParseNode::char_factor, "char_factor"_ostr },
+            { OSQLParseNode::bit_value_fct, "bit_value_fct"_ostr },
+            { OSQLParseNode::comparison_predicate_part_2, "comparison_predicate_part_2"_ostr },
+            { OSQLParseNode::parenthesized_boolean_value_expression, "parenthesized_boolean_value_expression"_ostr },
+            { OSQLParseNode::character_string_type, "character_string_type"_ostr },
+            { OSQLParseNode::other_like_predicate_part_2, "other_like_predicate_part_2"_ostr },
+            { OSQLParseNode::between_predicate_part_2, "between_predicate_part_2"_ostr },
+            { OSQLParseNode::null_predicate_part_2, "null_predicate_part_2"_ostr },
+            { OSQLParseNode::cast_spec, "cast_spec"_ostr },
+            { OSQLParseNode::window_function, "window_function"_ostr }
         };
         const size_t nRuleMapCount = std::size( aRuleDescriptions );
         // added a new rule? Adjust this map!
@@ -1475,7 +1476,7 @@ OSQLParser::OSQLParser(css::uno::Reference< css::uno::XComponentContext > xConte
 
 OSQLParser::~OSQLParser()
 {
-    ::osl::MutexGuard aGuard(getMutex());
+    std::unique_lock aGuard(getMutex());
     OSL_ENSURE(s_nRefCount > 0, "OSQLParser::~OSQLParser() : suspicious call : has a refcount of 0 !");
     if (!--s_nRefCount)
     {
@@ -1485,8 +1486,6 @@ OSQLParser::~OSQLParser()
 
         delete s_pGarbageCollector;
         s_pGarbageCollector = nullptr;
-        // Is only set the first time, so we should delete it only when there are no more instances
-        s_xLocaleData = nullptr;
 
         RuleIDMap().swap(s_aReverseRuleIDLookup);
     }
@@ -2459,7 +2458,7 @@ void OSQLParseNode::parseLeaf(OUStringBuffer& rString, const SQLParseNodeParamet
         case SQLNodeType::ApproxNum:
             {
                 OUString aTmp = m_aNodeValue;
-                static constexpr OUStringLiteral strPoint(u".");
+                static constexpr OUString strPoint(u"."_ustr);
                 if (rParam.bInternational && rParam.bPredicate && rParam.sDecSep != strPoint)
                     aTmp = aTmp.replaceAll(strPoint, rParam.sDecSep);
 
@@ -2734,13 +2733,13 @@ OSQLParseNodesContainer::~OSQLParseNodesContainer()
 
 void OSQLParseNodesContainer::push_back(OSQLParseNode* _pNode)
 {
-    ::osl::MutexGuard aGuard(m_aMutex);
+    std::unique_lock aGuard(m_aMutex);
     m_aNodes.push_back(_pNode);
 }
 
 void OSQLParseNodesContainer::erase(OSQLParseNode* _pNode)
 {
-    ::osl::MutexGuard aGuard(m_aMutex);
+    std::unique_lock aGuard(m_aMutex);
     if ( !m_aNodes.empty() )
     {
         std::vector< OSQLParseNode* >::iterator aFind = std::find(m_aNodes.begin(), m_aNodes.end(),_pNode);
@@ -2751,13 +2750,13 @@ void OSQLParseNodesContainer::erase(OSQLParseNode* _pNode)
 
 void OSQLParseNodesContainer::clear()
 {
-    ::osl::MutexGuard aGuard(m_aMutex);
+    std::unique_lock aGuard(m_aMutex);
     m_aNodes.clear();
 }
 
 void OSQLParseNodesContainer::clearAndDelete()
 {
-    ::osl::MutexGuard aGuard(m_aMutex);
+    std::unique_lock aGuard(m_aMutex);
     // clear the garbage collector
     while ( !m_aNodes.empty() )
     {
@@ -2766,7 +2765,9 @@ void OSQLParseNodesContainer::clearAndDelete()
         {
             pNode = pNode->getParent();
         }
+        aGuard.unlock(); // can call back into this object during destruction
         delete pNode;
+        aGuard.lock();
     }
 }
 }   // namespace connectivity

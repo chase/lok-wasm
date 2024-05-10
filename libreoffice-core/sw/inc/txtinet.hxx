@@ -25,6 +25,7 @@
 class SwTextNode;
 class SwCharFormat;
 
+/// SwTextAttr subclass that tracks the location of the wrapped SwFormatINetFormat.
 class SW_DLLPUBLIC SwTextINetFormat final: public SwTextAttrNesting, public SwClient
 {
     private:
@@ -36,8 +37,6 @@ class SW_DLLPUBLIC SwTextINetFormat final: public SwTextAttrNesting, public SwCl
     public:
         SwTextINetFormat( SwFormatINetFormat& rAttr, sal_Int32 nStart, sal_Int32 nEnd );
         virtual ~SwTextINetFormat() override;
-
-        virtual bool GetInfo( SfxPoolItem& rInfo ) const override;
 
         SAL_DLLPRIVATE void InitINetFormat(SwTextNode & rNode);
 

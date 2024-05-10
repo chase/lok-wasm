@@ -109,6 +109,8 @@ class SW_DLLPUBLIC SwAnchoredObject
         // page frame starts.
         bool mbTmpConsiderWrapInfluence;
 
+        bool mbForceNotifyNewBackground = false;
+
         mutable SwRect maObjRectWithSpaces;
         mutable bool mbObjRectWithSpacesValid;
         mutable SwRect maLastObjRect;
@@ -316,8 +318,8 @@ class SW_DLLPUBLIC SwAnchoredObject
         void SetCurrRelPos( Point _aRelPos );
 
         // accessors to the format
-        virtual SwFrameFormat& GetFrameFormat() = 0;
-        virtual const SwFrameFormat& GetFrameFormat() const = 0;
+        virtual SwFrameFormat* GetFrameFormat() = 0;
+        virtual const SwFrameFormat* GetFrameFormat() const = 0;
 
         // accessors to the object area and its position
         virtual SwRect GetObjRect() const = 0;
@@ -423,6 +425,9 @@ class SW_DLLPUBLIC SwAnchoredObject
         bool IsTmpConsiderWrapInfluence() const { return mbTmpConsiderWrapInfluence;}
         void ClearTmpConsiderWrapInfluence();
 
+        bool IsForceNotifyNewBackground() { return mbForceNotifyNewBackground; }
+        void SetForceNotifyNewBackground(bool const b) { mbForceNotifyNewBackground = b; }
+
         /** method to determine, if the anchored object is overlapping with a
             previous column
 
@@ -485,7 +490,7 @@ class SW_DLLPUBLIC SwAnchoredObject
         /** Dump a bunch of useful data to an XML representation to ease
             layout understanding, debugging and testing.
           */
-        virtual void dumpAsXml( xmlTextWriterPtr pWriter ) const;
+        virtual void dumpAsXml( xmlTextWriterPtr pWriter = nullptr ) const;
 
         /** The element name to show in the XML dump. */
         virtual const char* getElementName( ) const { return "SwAnchoredObject"; }

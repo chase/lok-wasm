@@ -32,6 +32,7 @@
 
 namespace com::sun::star::accessibility { class XAccessibleRelationSet; }
 namespace com::sun::star::accessibility { struct AccessibleEventObject; }
+namespace utl { class AccessibleRelationSetHelper; }
 
 namespace accessibility {
 
@@ -82,7 +83,8 @@ public:
     */
     void CommitChange (sal_Int16 aEventId,
         const css::uno::Any& rNewValue,
-        const css::uno::Any& rOldValue);
+        const css::uno::Any& rOldValue,
+        sal_Int32 nValueIndex);
 
     /** Set a new description and, provided that the new name differs from
         the old one, broadcast an accessibility event.
@@ -157,7 +159,7 @@ public:
         @throws css::uno::RuntimeException
     */
     void SetRelationSet (
-        const css::uno::Reference< css::accessibility::XAccessibleRelationSet>& rxRelationSet);
+        const rtl::Reference< utl::AccessibleRelationSetHelper>& rxRelationSet);
 
 
     //=====  XAccessible  =====================================================
@@ -263,7 +265,7 @@ protected:
     /** The relation set.  Relations can be set or removed by calling the
         <member>AddRelation</member> and <member>RemoveRelation</member> methods.
     */
-    css::uno::Reference< css::accessibility::XAccessibleRelationSet> mxRelationSet;
+    rtl::Reference<utl::AccessibleRelationSetHelper> mxRelationSet;
 
     // This method is called from the component helper base class while disposing.
     virtual void SAL_CALL disposing() override;

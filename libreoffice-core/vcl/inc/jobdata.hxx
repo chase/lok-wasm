@@ -39,9 +39,7 @@ struct VCL_DLLPUBLIC JobData
     int                     m_nBottomMarginAdjust;
     // user overrides for PPD
     int                     m_nColorDepth;
-    int                     m_nPSLevel;     // 0: no override, else languagelevel to use
     int                     m_nColorDevice; // 0: no override, -1 grey scale, +1 color
-    int                     m_nPDFDevice;   // 0: no override, -1 PostScript, +1: Automatically PDF, +2: Explicitly PDF
     orientation             m_eOrientation;
     OUString                m_aPrinterName;
     bool                    m_bPapersizeFromSetup;
@@ -56,9 +54,7 @@ struct VCL_DLLPUBLIC JobData
             m_nTopMarginAdjust( 0 ),
             m_nBottomMarginAdjust( 0 ),
             m_nColorDepth( 24 ),
-            m_nPSLevel( 0 ),
             m_nColorDevice( 0 ),
-            m_nPDFDevice( 0 ),
             m_eOrientation( orientation::Portrait ),
             m_bPapersizeFromSetup( false ),
             m_pParser( nullptr ) {}
@@ -70,12 +66,10 @@ struct VCL_DLLPUBLIC JobData
     void setCollate( bool bCollate );
     void setPaper( int nWidth, int nHeight ); // dimensions in pt
     void setPaperBin( int nPaperBin );
-    void resolveDefaultBackend();
-    void setDefaultBackend(bool bUsePDF);
 
     // creates a new buffer using new
     // it is up to the user to delete it again
-    bool getStreamBuffer( void*& pData, sal_uInt32& bytes );
+    bool getStreamBuffer( std::unique_ptr<sal_uInt8[]>& pData, sal_uInt32& bytes );
     static bool constructFromStreamBuffer( const void* pData, sal_uInt32 bytes, JobData& rJobData );
 };
 

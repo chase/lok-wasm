@@ -967,8 +967,8 @@ typedef enum
     LOK_CALLBACK_COLOR_PALETTES = 65,
 
     /**
-     * Informs that the document password has been succesfully changed.
-     * The payload contains the the new password and the type.
+     * Informs that the document password has been successfully changed.
+     * The payload contains the new password and the type.
     */
     LOK_CALLBACK_DOCUMENT_PASSWORD_RESET = 66,
 
@@ -1044,6 +1044,13 @@ typedef enum
      *  }
      */
     LOK_CALLBACK_TOOLTIP = 71,
+
+    /**
+     * Used for sending the rectangle for text inside a shape/textbox
+     *
+     *  Payload contains the rectangle details
+     */
+    LOK_CALLBACK_SHAPE_INNER_TEXT = 72,
 
 }
 LibreOfficeKitCallbackType;
@@ -1217,9 +1224,15 @@ static inline const char* lokCallbackTypeToString(int nType)
         return "LOK_CALLBACK_CORE_LOG";
     case LOK_CALLBACK_TOOLTIP:
         return "LOK_CALLBACK_TOOLTIP";
+    case LOK_CALLBACK_SHAPE_INNER_TEXT:
+        return "LOK_CALLBACK_SHAPE_INNER_TEXT";
+
+    // MACRO: Prevent crash on unsupported callback {
+    default:
+        return "LOK_CALLBACK_UNKOWN";
+    // MACRO: }
     }
 
-    assert(!"Unknown LibreOfficeKitCallbackType type.");
     return nullptr;
 }
 

@@ -46,6 +46,7 @@
 SwLayVout     *SwRootFrame::s_pVout = nullptr;
 bool           SwRootFrame::s_isInPaint = false;
 bool           SwRootFrame::s_isNoVirDev = false;
+SwRootFrame* SwRootFrame::s_pLast = nullptr;
 
 SwCache *SwFrame::spCache = nullptr;
 
@@ -297,7 +298,7 @@ void FrameInit()
     SwRootFrame::s_pVout = new SwLayVout();
     SwCache *pNew = new SwCache( 100
 #ifdef DBG_UTIL
-    , "static SwBorderAttrs::pCache"
+    , "static SwBorderAttrs::pCache"_ostr
 #endif
     );
     SwFrame::SetCache( pNew );
@@ -432,6 +433,8 @@ SwRootFrame::SwRootFrame( SwFrameFormat *pFormat, SwViewShell * pSh ) :
 {
     mnFrameType = SwFrameType::Root;
     setRootFrame( this );
+
+    s_pLast = this;
 }
 
 void SwRootFrame::Init( SwFrameFormat* pFormat )
@@ -516,8 +519,7 @@ void SwRootFrame::Init( SwFrameFormat* pFormat )
     //b6433357: Update page fields after loading
     if ( !mpCurrShell || !mpCurrShell->Imp()->IsUpdateExpFields() )
     {
-        SwDocPosUpdate aMsgHint( pPage->getFrameArea().Top() );
-        rFieldsAccess.UpdatePageFields( &aMsgHint );
+        rFieldsAccess.UpdatePageFields(pPage->getFrameArea().Top());
     }
 
     rTimerAccess.StartIdling();
@@ -570,6 +572,7 @@ void SwRootFrame::DestroyImpl()
 
 SwRootFrame::~SwRootFrame()
 {
+    s_pLast = nullptr;
 }
 
 void SwRootFrame::RemoveMasterObjs( SdrPage *pPg )

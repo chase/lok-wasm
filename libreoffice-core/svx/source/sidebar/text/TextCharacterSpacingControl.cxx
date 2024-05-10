@@ -26,6 +26,7 @@
 #include <sfx2/viewfrm.hxx>
 #include <TextCharacterSpacingPopup.hxx>
 #include <svl/itempool.hxx>
+#include <svl/itemset.hxx>
 #include <helpids.h>
 
 #include <com/sun/star/beans/NamedValue.hpp>
@@ -106,13 +107,13 @@ TextCharacterSpacingControl::~TextCharacterSpacingControl()
 
 void TextCharacterSpacingControl::Initialize()
 {
-    const SvxKerningItem* pKerningItem(nullptr);
+    SfxPoolItemHolder aResult;
     SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-    SfxItemState eState = pViewFrm ? pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_CHAR_KERNING, pKerningItem) : SfxItemState::UNKNOWN;
-
+    const SfxItemState eState(pViewFrm ? pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_CHAR_KERNING, aResult) : SfxItemState::UNKNOWN);
+    const SvxKerningItem* pKerningItem(static_cast<const SvxKerningItem*>(aResult.getItem()));
     tools::Long nKerning = 0;
 
-    if(pKerningItem)
+    if (pKerningItem)
         nKerning = pKerningItem->GetValue();
 
     SvtViewOptions aWinOpt(EViewType::Window, SIDEBAR_SPACING_GLOBAL_VALUE);

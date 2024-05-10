@@ -866,6 +866,24 @@ const FunctionData saFuncTable2016[] =
 };
 
 
+
+/** Functions new in Excel 2021.
+
+
+    @See sc/source/filter/excel/xlformula.cxx saFuncTable_2021
+ */
+/* FIXME: BIFF?? function identifiers available? Where to obtain? */
+const FunctionData saFuncTable2021[] =
+{
+    { "COM.MICROSOFT.XLOOKUP",             "XLOOKUP",             NOID,   NOID,   3,  6,  R, { VR, VA, VR }, FuncFlags::MACROCALL_NEW },
+    { "COM.MICROSOFT.XMATCH",              "XMATCH",              NOID,   NOID,   2,  4,  V, { VR, VA }, FuncFlags::MACROCALL_NEW },
+    { "COM.MICROSOFT.FILTER",              "FILTER",              NOID,   NOID,   2,  3,  A, { VR, VA }, FuncFlags::MACROCALL_NEW },
+    { "COM.MICROSOFT.SORT",                "SORT",                NOID,   NOID,   1,  4,  A, { VO }, FuncFlags::MACROCALL_NEW },
+    { "COM.MICROSOFT.SORTBY",              "SORTBY",              NOID,   NOID,   2,  MX, V, { RO, RO, VR }, FuncFlags::MACROCALL_NEW | FuncFlags::PARAMPAIRS }
+};
+
+
+
 /** Functions defined by OpenFormula, but not supported by Calc or by Excel. */
 const FunctionData saFuncTableOdf[] =
 {
@@ -999,17 +1017,18 @@ FunctionProviderImpl::FunctionProviderImpl( bool bImportFilter )
     /*  Add functions supported in the current BIFF version only. Function
         tables from later BIFF versions may overwrite single functions from
         earlier tables. */
-    initFuncs(saFuncTableBiff2, saFuncTableBiff2 + SAL_N_ELEMENTS(saFuncTableBiff2), bImportFilter);
-    initFuncs(saFuncTableBiff3, saFuncTableBiff3 + SAL_N_ELEMENTS(saFuncTableBiff3), bImportFilter);
-    initFuncs(saFuncTableBiff4, saFuncTableBiff4 + SAL_N_ELEMENTS(saFuncTableBiff4), bImportFilter);
-    initFuncs(saFuncTableBiff5, saFuncTableBiff5 + SAL_N_ELEMENTS(saFuncTableBiff5), bImportFilter);
-    initFuncs(saFuncTableBiff8, saFuncTableBiff8 + SAL_N_ELEMENTS(saFuncTableBiff8), bImportFilter);
-    initFuncs(saFuncTableOox  , saFuncTableOox   + SAL_N_ELEMENTS(saFuncTableOox  ), bImportFilter);
-    initFuncs(saFuncTable2010 , saFuncTable2010  + SAL_N_ELEMENTS(saFuncTable2010 ), bImportFilter);
-    initFuncs(saFuncTable2013 , saFuncTable2013  + SAL_N_ELEMENTS(saFuncTable2013 ), bImportFilter);
-    initFuncs(saFuncTable2016 , saFuncTable2016  + SAL_N_ELEMENTS(saFuncTable2016 ), bImportFilter);
-    initFuncs(saFuncTableOdf  , saFuncTableOdf   + SAL_N_ELEMENTS(saFuncTableOdf  ), bImportFilter);
-    initFuncs(saFuncTableOOoLO, saFuncTableOOoLO + SAL_N_ELEMENTS(saFuncTableOOoLO), bImportFilter);
+    initFuncs(saFuncTableBiff2, std::end(saFuncTableBiff2), bImportFilter);
+    initFuncs(saFuncTableBiff3, std::end(saFuncTableBiff3), bImportFilter);
+    initFuncs(saFuncTableBiff4, std::end(saFuncTableBiff4), bImportFilter);
+    initFuncs(saFuncTableBiff5, std::end(saFuncTableBiff5), bImportFilter);
+    initFuncs(saFuncTableBiff8, std::end(saFuncTableBiff8), bImportFilter);
+    initFuncs(saFuncTableOox  , std::end(saFuncTableOox)  , bImportFilter);
+    initFuncs(saFuncTable2010 , std::end(saFuncTable2010) , bImportFilter);
+    initFuncs(saFuncTable2013 , std::end(saFuncTable2013) , bImportFilter);
+    initFuncs(saFuncTable2016 , std::end(saFuncTable2016) , bImportFilter);
+    initFuncs(saFuncTable2021 , std::end(saFuncTable2021 ), bImportFilter);
+    initFuncs(saFuncTableOdf  , std::end(saFuncTableOdf)  , bImportFilter);
+    initFuncs(saFuncTableOOoLO, std::end(saFuncTableOOoLO), bImportFilter);
 }
 
 void FunctionProviderImpl::initFunc(const FunctionData& rFuncData)
@@ -1328,17 +1347,17 @@ bool OpCodeProviderImpl::initFuncOpCode( FunctionInfo& orFuncInfo, const ApiToke
                 (orFuncInfo.mnApiOpCode != OPCODE_UNKNOWN) &&
                 (orFuncInfo.mnApiOpCode != OPCODE_NONAME);
             OSL_ENSURE( bIsValid,
-                OStringBuffer( "OpCodeProviderImpl::initFuncOpCode - no valid opcode for ODF function \"" ).
-                append( OUStringToOString( orFuncInfo.maOdfFuncName, RTL_TEXTENCODING_ASCII_US ) ).
-                append( '"' ).getStr() );
+                OStringBuffer( "OpCodeProviderImpl::initFuncOpCode - no valid opcode for ODF function \""
+                    + OUStringToOString( orFuncInfo.maOdfFuncName, RTL_TEXTENCODING_ASCII_US )
+                    + "\"" ).getStr() );
 
             if( bIsValid && (orFuncInfo.mnApiOpCode == OPCODE_EXTERNAL) )
             {
                 bIsValid = (aIt->second.Data >>= orFuncInfo.maExtProgName) && !orFuncInfo.maExtProgName.isEmpty();
                 OSL_ENSURE( bIsValid,
-                    OStringBuffer( "OpCodeProviderImpl::initFuncOpCode - no programmatical name for external function \"" ).
-                    append( OUStringToOString( orFuncInfo.maOdfFuncName, RTL_TEXTENCODING_ASCII_US ) ).
-                    append( '"' ).getStr() );
+                    OStringBuffer( "OpCodeProviderImpl::initFuncOpCode - no programmatical name for external function \""
+                        + OUStringToOString( orFuncInfo.maOdfFuncName, RTL_TEXTENCODING_ASCII_US )
+                        + "\"" ).getStr() );
             }
 
             // add to parser map, if OOXML function name exists
@@ -1565,8 +1584,7 @@ OUString FormulaProcessorBase::generateAddress2dString( const BinAddress& rAddre
 OUString FormulaProcessorBase::generateApiArray( const Matrix< Any >& rMatrix )
 {
     OSL_ENSURE( !rMatrix.empty(), "FormulaProcessorBase::generateApiArray - missing matrix values" );
-    OUStringBuffer aBuffer;
-    aBuffer.append( API_TOKEN_ARRAY_OPEN );
+    OUStringBuffer aBuffer(( OUStringChar(API_TOKEN_ARRAY_OPEN) ));
     for( size_t nRow = 0, nHeight = rMatrix.height(); nRow < nHeight; ++nRow )
     {
         if( nRow > 0 )

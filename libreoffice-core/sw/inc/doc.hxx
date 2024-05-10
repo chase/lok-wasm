@@ -34,6 +34,7 @@
 #include <editeng/numitem.hxx>
 #include "tox.hxx"
 #include "frmfmt.hxx"
+#include "frameformats.hxx"
 #include "charfmt.hxx"
 #include "docary.hxx"
 #include "charformats.hxx"
@@ -163,6 +164,7 @@ namespace sw {
     class DocumentLayoutManager;
     class DocumentStylePoolManager;
     class DocumentExternalDataManager;
+    template<class T> class FrameFormats;
     class GrammarContact;
     class OnlineAccessibilityCheck;
 }
@@ -244,11 +246,11 @@ class SW_DLLPUBLIC SwDoc final
     std::unique_ptr<SwTextFormatColl>  mpDfltTextFormatColl;  //< Defaultformatcollections
     std::unique_ptr<SwGrfFormatColl>   mpDfltGrfFormatColl;
 
-    std::unique_ptr<SwFrameFormats>    mpFrameFormatTable;    //< Format table
+    std::unique_ptr<sw::FrameFormats<SwFrameFormat*>>    mpFrameFormatTable;    //< Format table
     std::unique_ptr<SwCharFormats>     mpCharFormatTable;
-    std::unique_ptr<SwFrameFormats>    mpSpzFrameFormatTable;
+    std::unique_ptr<sw::FrameFormats<sw::SpzFrameFormat*>>    mpSpzFrameFormatTable;
     std::unique_ptr<SwSectionFormats>  mpSectionFormatTable;
-    std::unique_ptr<SwFrameFormats>    mpTableFrameFormatTable; //< For tables
+    std::unique_ptr<sw::TableFrameFormats>    mpTableFrameFormatTable; //< For tables
     std::unique_ptr<SwTextFormatColls> mpTextFormatCollTable;   //< FormatCollections
     std::unique_ptr<SwGrfFormatColls>  mpGrfFormatCollTable;
 
@@ -337,6 +339,8 @@ private:
     bool mbContainsAtPageObjWithContentAnchor : 1;
 
     static SwAutoCompleteWord *s_pAutoCompleteWords;  //< List of all words for AutoComplete
+    /// The last, still alive SwDoc instance, for debugging.
+    static SwDoc* s_pLast;
 
     // private methods
     SwFlyFrameFormat* MakeFlySection_( const SwPosition& rAnchPos,
@@ -633,6 +637,8 @@ public:
                          const OUString& sNewTitle );
     void SetFlyFrameDescription( SwFlyFrameFormat& rFlyFrameFormat,
                                const OUString& sNewDescription );
+    void SetFlyFrameDecorative(SwFlyFrameFormat& rFlyFrameFormat,
+                               bool isDecorative);
 
     // Footnotes
     // Footnote information
@@ -725,7 +731,7 @@ public:
     void SetAttr( const SfxItemSet&, SwFormat& );
 
     // method to reset a certain attribute at the given format
-    void ResetAttrAtFormat( const sal_uInt16 nWhichId,
+    void ResetAttrAtFormat( const std::vector<sal_uInt16>& rIds,
                             SwFormat& rChangedFormat );
 
     /** Set attribute as new default attribute in current document.
@@ -744,14 +750,14 @@ public:
     bool DontExpandFormat( const SwPosition& rPos, bool bFlag = true );
 
     // Formats
-    const SwFrameFormats* GetFrameFormats() const     { return mpFrameFormatTable.get(); }
-          SwFrameFormats* GetFrameFormats()           { return mpFrameFormatTable.get(); }
+    const sw::FrameFormats<SwFrameFormat*>* GetFrameFormats() const     { return mpFrameFormatTable.get(); }
+          sw::FrameFormats<SwFrameFormat*>* GetFrameFormats()           { return mpFrameFormatTable.get(); }
     const SwCharFormats* GetCharFormats() const   { return mpCharFormatTable.get();}
           SwCharFormats* GetCharFormats()         { return mpCharFormatTable.get();}
 
     // LayoutFormats (frames, DrawObjects), sometimes const sometimes not
-    const SwFrameFormats* GetSpzFrameFormats() const   { return mpSpzFrameFormatTable.get(); }
-          SwFrameFormats* GetSpzFrameFormats()         { return mpSpzFrameFormatTable.get(); }
+    const sw::FrameFormats<sw::SpzFrameFormat*>* GetSpzFrameFormats() const   { return mpSpzFrameFormatTable.get(); }
+          sw::FrameFormats<sw::SpzFrameFormat*>* GetSpzFrameFormats()         { return mpSpzFrameFormatTable.get(); }
 
     const SwFrameFormat *GetDfltFrameFormat() const   { return mpDfltFrameFormat.get(); }
           SwFrameFormat *GetDfltFrameFormat()         { return mpDfltFrameFormat.get(); }
@@ -817,10 +823,10 @@ public:
                                     SwGrfFormatColl *pDerivedFrom);
 
     // Table formatting
-    const SwFrameFormats* GetTableFrameFormats() const  { return mpTableFrameFormatTable.get(); }
-          SwFrameFormats* GetTableFrameFormats()        { return mpTableFrameFormatTable.get(); }
+    const sw::TableFrameFormats* GetTableFrameFormats() const  { return mpTableFrameFormatTable.get(); }
+          sw::TableFrameFormats* GetTableFrameFormats()        { return mpTableFrameFormatTable.get(); }
     size_t GetTableFrameFormatCount( bool bUsed ) const;
-    SwFrameFormat& GetTableFrameFormat(size_t nFormat, bool bUsed ) const;
+    SwTableFormat& GetTableFrameFormat(size_t nFormat, bool bUsed ) const;
     SwTableFormat* MakeTableFrameFormat(const OUString &rFormatName, SwFrameFormat *pDerivedFrom);
     void        DelTableFrameFormat( SwTableFormat* pFormat );
     SwTableFormat* FindTableFormatByName( const OUString& rName, bool bAll = false ) const;
@@ -832,6 +838,7 @@ public:
     std::vector<SwFrameFormat const*> GetFlyFrameFormats(
             FlyCntType eType,
             bool bIgnoreTextBoxes);
+    SwFrameFormat* GetFlyFrameFormatByName( const OUString& sFrameFormatName );
 
     // Copy formats in own arrays and return them.
     SwFrameFormat  *CopyFrameFormat ( const SwFrameFormat& );
@@ -1198,11 +1205,11 @@ public:
     void InsertCol( const SwCursor& rCursor,
                     sal_uInt16 nCnt = 1, bool bBehind = true );
     bool InsertCol( const SwSelBoxes& rBoxes,
-                    sal_uInt16 nCnt = 1, bool bBehind = true );
+                    sal_uInt16 nCnt = 1, bool bBehind = true, bool bInsertDummy = true );
     void InsertRow( const SwCursor& rCursor,
                     sal_uInt16 nCnt = 1, bool bBehind = true );
     bool InsertRow( const SwSelBoxes& rBoxes,
-                    sal_uInt16 nCnt = 1, bool bBehind = true );
+                    sal_uInt16 nCnt = 1, bool bBehind = true, bool bInsertDummy = true );
 
     // Delete Columns/Rows in table.
     enum class RowColMode { DeleteRow = 0, DeleteColumn = 1, DeleteProtected = 2 };
@@ -1270,7 +1277,7 @@ public:
     SwTableLineFormat* MakeTableLineFormat();
 
     // helper function: cleanup before checking number value
-    bool IsNumberFormat( std::u16string_view aString, sal_uInt32& F_Index, double& fOutNumber);
+    bool IsNumberFormat( const OUString& aString, sal_uInt32& F_Index, double& fOutNumber);
     // Check if box has numerical value. Change format of box if required.
     void ChkBoxNumFormat( SwTableBox& rCurrentBox, bool bCallUpdate );
     void SetTableBoxFormulaAttrs( SwTableBox& rBox, const SfxItemSet& rSet );
@@ -1439,7 +1446,8 @@ public:
     // restore the invisible content if it's available on the undo stack
     bool RestoreInvisibleContent();
 
-    bool ConvertFieldsToText(SwRootFrame const& rLayout);
+    // Replace fields by text - mailmerge support
+    SAL_DLLPRIVATE bool ConvertFieldsToText(SwRootFrame const& rLayout);
 
     // Create sub-documents according to given collection.
     // If no collection is given, use chapter styles for 1st level.
@@ -1668,10 +1676,7 @@ public:
     {
         auto & rTable = const_cast<SwDoc*>(this)->mvUnoCursorTable;
         // In most cases we'll remove most of the elements.
-        rTable.erase( std::remove_if(rTable.begin(),
-                                     rTable.end(),
-                                     [] (std::weak_ptr<SwUnoCursor> const & x) { return x.expired(); }),
-                      rTable.end());
+        std::erase_if(rTable, [] (std::weak_ptr<SwUnoCursor> const & x) { return x.expired(); });
     }
 
     /**
@@ -1686,6 +1691,8 @@ public:
     bool IsDictionaryMissing() const { return meDictionaryMissing == MissingDictionary::True; }
 
     void SetLanguage(const LanguageType eLang, const sal_uInt16 nId);
+
+    static bool HasParagraphDirectFormatting(const SwPosition& rPos);
 
 private:
     // Copies master header to left / first one, if necessary - used by ChgPageDesc().

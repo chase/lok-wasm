@@ -34,7 +34,6 @@
 using namespace ::com::sun::star;
 
 using ::com::sun::star::uno::Reference;
-using ::com::sun::star::uno::Sequence;
 
 namespace chart
 {
@@ -101,7 +100,7 @@ bool NetChartTypeTemplate::matchesTemplate2(
         bool bLineFound = false;
 
         std::vector< rtl::Reference< DataSeries > > aSeriesVec =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
 
         for (auto const& series : aSeriesVec)
         {

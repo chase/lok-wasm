@@ -180,6 +180,7 @@ private:
     tools::Long                nPrevDragPos;
 
     BlockMode           meBlockMode;           // Marks block
+    BlockMode           meHighlightBlockMode;  // Highlight row/col
 
     SCCOL               nBlockStartX;
     SCCOL               nBlockStartXOrig;
@@ -217,6 +218,8 @@ private:
 
     double              mfLastZoomScale = 0;
     double              mfAccumulatedZoom = 0;
+    tools::Long         mnPendingaHScrollLeftDelta = 0;
+    tools::Long         mnPendingaHScrollRightDelta = 0;
 
     void            Init();
 
@@ -239,7 +242,7 @@ private:
     void            UpdateVarZoom();
 
     static void     SetScrollBar( ScrollAdaptor& rScroll, tools::Long nRangeMax, tools::Long nVisible, tools::Long nPos, bool bLayoutRTL );
-    static tools::Long     GetScrollBarPos( const ScrollAdaptor& rScroll );
+    static tools::Long     GetScrollBarPos( const ScrollAdaptor& rScroll, bool bLayoutRTL );
 
     void            GetAreaMoveEndPosition(SCCOL nMovX, SCROW nMovY, ScFollowMode eMode,
                                            SCCOL& rAreaX, SCROW& rAreaY, ScFollowMode& rMode,
@@ -264,6 +267,7 @@ private:
 
     DECL_STATIC_LINK(ScTabView, InstallLOKNotifierHdl, void*, vcl::ILibreOfficeKitNotifier*);
 
+    void            UpdateHighlightOverlay();
     void            ImplTabChanged(bool bSameTabButMoved);
 
 protected:
@@ -543,6 +547,8 @@ public:
                                    bool bCols = false, bool bRows = false, bool bForceNeg = false );
     void            InitOwnBlockMode( const ScRange& rMarkRange );
     void            DoneBlockMode( bool bContinue = false );
+    void            InitBlockModeHighlight( SCCOL nCurX, SCROW nCurY, SCTAB nCurZ, bool bCols, bool bRows );
+    void            DoneBlockModeHighlight( bool bContinue );
 
     bool            IsBlockMode() const;
 
@@ -568,6 +574,7 @@ public:
      * @param nModifier: 0, KEY_SHIFT, KEY_MOD1, KEY_SHIFT | KEY_MOD1
      */
     void            MarkRows(SCROW nRow, sal_Int16 nModifier);
+    void            HighlightOverlay();
 
     void            MarkDataArea( bool bIncludeCursor = true );
     void            MarkMatrixFormula();
@@ -610,6 +617,7 @@ public:
     void            SetDrawBrushSet( std::unique_ptr<SfxItemSet> pNew, bool bLock );
     void            ResetBrushDocument();
 
+    SC_DLLPUBLIC bool IsAutoSpell() const;
     void EnableAutoSpell( bool bEnable );
     void ResetAutoSpell();
     void ResetAutoSpellForContentChange();

@@ -48,6 +48,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <memory>
+#include <thread>
 
 #if ENABLE_DBUS
 #include <dbus/dbus.h>
@@ -75,7 +76,7 @@ OString readStringFromPipe(osl::StreamPipe const & pipe) {
         sal_Int32 n = pipe.recv(buf, std::size(buf));
         if (n <= 0) {
             SAL_INFO("desktop.app", "read empty string");
-            return "";
+            return ""_ostr;
         }
         bool end = false;
         if (buf[n - 1] == '\0') {
@@ -792,10 +793,7 @@ RequestHandler::Status PipeIpcThread::enable(rtl::Reference<IpcThread> * thread)
             else
             {
                 // Pipe connection failed (other office exited or crashed)
-                TimeValue tval;
-                tval.Seconds = 0;
-                tval.Nanosec = 500000000;
-                salhelper::Thread::wait( tval );
+                std::this_thread::sleep_for( std::chrono::milliseconds(500) );
             }
         }
         else
@@ -805,10 +803,7 @@ RequestHandler::Status PipeIpcThread::enable(rtl::Reference<IpcThread> * thread)
                 return RequestHandler::IPC_STATUS_PIPE_ERROR;
 
             // Wait for second office to be ready
-            TimeValue aTimeValue;
-            aTimeValue.Seconds = 0;
-            aTimeValue.Nanosec = 10000000; // 10ms
-            salhelper::Thread::wait( aTimeValue );
+            std::this_thread::sleep_for( std::chrono::milliseconds(10) );
         }
 
     } while ( nPipeMode == PIPEMODE_DONTKNOW );
@@ -1071,12 +1066,12 @@ bool IpcThread::process(OString const & arguments, bool * waitProcessed) {
                 aHelpURLBuffer.append("vnd.sun.star.help://smath/start");
             }
             if (bShowHelp) {
-                aHelpURLBuffer.append("?Language=");
-                aHelpURLBuffer.append(utl::ConfigManager::getUILocale());
+                aHelpURLBuffer.append("?Language="
+                    + utl::ConfigManager::getUILocale()
 #if defined UNX
-                aHelpURLBuffer.append("&System=UNX");
+                    + "&System=UNX");
 #elif defined _WIN32
-                aHelpURLBuffer.append("&System=WIN");
+                    + "&System=WIN");
 #endif
                 ApplicationEvent* pAppEvent = new ApplicationEvent(
                     ApplicationEvent::Type::OpenHelpUrl,
@@ -1206,10 +1201,7 @@ void PipeIpcThread::execute()
             }
 
             SAL_WARN( "desktop.app", "Error on accept: " << static_cast<int>(nError));
-            TimeValue tval;
-            tval.Seconds = 1;
-            tval.Nanosec = 0;
-            salhelper::Thread::wait( tval );
+            std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
     } while( schedule() );
 }

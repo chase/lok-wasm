@@ -179,7 +179,7 @@ public class NumericalHelper
         {
             case TypeClass.CHAR_value:
                 aTypeObject.iType = CHAR_TYPE;
-                aTypeObject.aValue = new Character(AnyConverter.toChar(aValue));
+                aTypeObject.aValue = Character.valueOf(AnyConverter.toChar(aValue));
                 break;
             case TypeClass.BYTE_value:
                 aTypeObject.iType = BYTE_TYPE;
@@ -199,11 +199,11 @@ public class NumericalHelper
                 break;
             case TypeClass.FLOAT_value:
                 aTypeObject.iType = FLOAT_TYPE;
-                aTypeObject.aValue = new Float(AnyConverter.toFloat(aValue));
+                aTypeObject.aValue = Float.valueOf(AnyConverter.toFloat(aValue));
                 break;
             case TypeClass.DOUBLE_value:
                 aTypeObject.iType = DOUBLE_TYPE;
-                aTypeObject.aValue = new Double(AnyConverter.toDouble(aValue));
+                aTypeObject.aValue = Double.valueOf(AnyConverter.toDouble(aValue));
                 break;
             case TypeClass.STRING_value:
                 aTypeObject.iType = STRING_TYPE;

@@ -264,12 +264,10 @@ void typeConvert(const css::util::DateTime& _rDateTime, DateTime& _rOut)
 OUString toISO8601(const css::util::DateTime& rDateTime)
 {
     OUStringBuffer rBuffer(32);
-    rBuffer.append(static_cast<sal_Int32>(rDateTime.Year));
-    rBuffer.append('-');
+    rBuffer.append(OUString::number(static_cast<sal_Int32>(rDateTime.Year)) + "-");
     if( rDateTime.Month < 10 )
         rBuffer.append('0');
-    rBuffer.append(static_cast<sal_Int32>(rDateTime.Month));
-    rBuffer.append('-');
+    rBuffer.append(OUString::number(static_cast<sal_Int32>(rDateTime.Month)) + "-");
     if( rDateTime.Day < 10 )
         rBuffer.append('0');
     rBuffer.append(static_cast<sal_Int32>(rDateTime.Day));
@@ -282,12 +280,10 @@ OUString toISO8601(const css::util::DateTime& rDateTime)
         rBuffer.append('T');
         if( rDateTime.Hours < 10 )
             rBuffer.append('0');
-        rBuffer.append(static_cast<sal_Int32>(rDateTime.Hours));
-        rBuffer.append(':');
+        rBuffer.append(OUString::number(static_cast<sal_Int32>(rDateTime.Hours)) + ":");
         if( rDateTime.Minutes < 10 )
             rBuffer.append('0');
-        rBuffer.append(static_cast<sal_Int32>(rDateTime.Minutes));
-        rBuffer.append(':');
+        rBuffer.append(OUString::number(static_cast<sal_Int32>(rDateTime.Minutes)) + ":");
         if( rDateTime.Seconds < 10 )
             rBuffer.append('0');
         rBuffer.append(static_cast<sal_Int32>(rDateTime.Seconds));
@@ -299,7 +295,7 @@ OUString toISO8601(const css::util::DateTime& rDateTime)
             ostr.fill('0');
             ostr.width(9);
             ostr << rDateTime.NanoSeconds;
-            rBuffer.append(OUString::createFromAscii(ostr.str().c_str()));
+            rBuffer.appendAscii(ostr.str().c_str());
         }
     }
     return rBuffer.makeStringAndClear();
@@ -354,14 +350,25 @@ bool ISO8601parseDate(std::u16string_view aDateStr, css::util::Date& rDate)
     sal_Int32 nDay     = 30;
 
     sal_Int32 nIdx {0};
-    if ( !convertNumber32( nYear, o3tl::getToken(aDateStr, 0, '-', nIdx ), 0, 9999 ) )
+    auto strCurrentToken = o3tl::getToken(aDateStr, 0, '-', nIdx );
+    if ( !convertNumber32( nYear, strCurrentToken, 0, 9999 ) )
         return false;
     if ( nDateTokens >= 2 )
-        if ( !convertNumber32( nMonth, o3tl::getToken(aDateStr, 0, '-', nIdx ), 0, 12 ) )
+    {
+        strCurrentToken = o3tl::getToken(aDateStr, 0, '-', nIdx );
+        if (strCurrentToken.size() > 2)
             return false;
+        if ( !convertNumber32( nMonth, strCurrentToken, 0, 12 ) )
+            return false;
+    }
     if ( nDateTokens >= 3 )
-        if ( !convertNumber32( nDay, o3tl::getToken(aDateStr, 0, '-', nIdx ), 0, 31 ) )
+    {
+        strCurrentToken = o3tl::getToken(aDateStr, 0, '-', nIdx );
+        if (strCurrentToken.size() > 2)
             return false;
+        if ( !convertNumber32( nDay, strCurrentToken, 0, 31 ) )
+            return false;
+    }
 
     rDate.Year = static_cast<sal_uInt16>(nYear);
     rDate.Month = static_cast<sal_uInt16>(nMonth);

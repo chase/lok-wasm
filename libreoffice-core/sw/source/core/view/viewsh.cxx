@@ -66,6 +66,7 @@
 #include <anchoredobject.hxx>
 #include <DocumentSettingManager.hxx>
 #include <DocumentRedlineManager.hxx>
+#include <DocumentLayoutManager.hxx>
 
 #include <unotxdoc.hxx>
 #include <view.hxx>
@@ -351,100 +352,37 @@ void SwViewShell::ImplEndAction( const bool bIdleEnd )
                 oRegion->LimitToOrigin();
                 oRegion->Compress( SwRegionRects::CompressFuzzy );
 
-                ScopedVclPtr<VirtualDevice> pVout;
                 while ( !oRegion->empty() )
                 {
                     SwRect aRect( oRegion->back() );
                     oRegion->pop_back();
 
-                    bool bPaint = true;
-                    if ( IsEndActionByVirDev() )
+                    if (GetWin()->SupportsDoubleBuffering())
+                        InvalidateWindows(aRect);
+                    else
                     {
-                        //create virtual device and set.
-                        if ( !pVout )
-                            pVout = VclPtr<VirtualDevice>::Create( *GetOut() );
-                        MapMode aMapMode( GetOut()->GetMapMode() );
-                        pVout->SetMapMode( aMapMode );
-
-                        bool bSizeOK = true;
-
-                        tools::Rectangle aTmp1( aRect.SVRect() );
-                        aTmp1 = GetOut()->LogicToPixel( aTmp1 );
-                        tools::Rectangle aTmp2( GetOut()->PixelToLogic( aTmp1 ) );
-                        if ( aTmp2.Left() > aRect.Left() )
-                            aTmp1.SetLeft( std::max( tools::Long(0), aTmp1.Left() - 1 ) );
-                        if ( aTmp2.Top() > aRect.Top() )
-                            aTmp1.SetTop( std::max<tools::Long>( 0, aTmp1.Top() - 1 ) );
-                        aTmp1.AdjustRight(1 );
-                        aTmp1.AdjustBottom(1 );
-                        aTmp1 = GetOut()->PixelToLogic( aTmp1 );
-                        aRect = SwRect( aTmp1 );
-
-                        const Size aTmp( pVout->GetOutputSize() );
-                        if ( aTmp.Height() < aRect.Height() ||
-                             aTmp.Width()  < aRect.Width() )
+                        // #i75172# begin DrawingLayer paint
+                        // need to do begin/end DrawingLayer preparation for each single rectangle of the
+                        // repaint region. I already tried to prepare only once for the whole Region. This
+                        // seems to work (and does technically) but fails with transparent objects. Since the
+                        // region given to BeginDrawLayers() defines the clip region for DrawingLayer paint,
+                        // transparent objects in the single rectangles will indeed be painted multiple times.
+                        if (!comphelper::LibreOfficeKit::isActive())
                         {
-                            bSizeOK = pVout->SetOutputSize( aRect.SSize() );
+                            DLPrePaint2(vcl::Region(aRect.SVRect()));
                         }
-                        if ( bSizeOK )
-                        {
-                            bPaint = false;
 
-                            // --> OD 2007-07-26 #i79947#
-                            // #i72754# start Pre/PostPaint encapsulation before mpOut is changed to the buffering VDev
-                            const vcl::Region aRepaintRegion(aRect.SVRect());
-                            DLPrePaint2(aRepaintRegion);
-                            // <--
-
-                            OutputDevice  *pOld = GetOut();
-                            pVout->SetLineColor( pOld->GetLineColor() );
-                            pVout->SetFillColor( pOld->GetFillColor() );
-                            Point aOrigin( aRect.Pos() );
-                            aOrigin.setX( -aOrigin.X() ); aOrigin.setY( -aOrigin.Y() );
-                            aMapMode.SetOrigin( aOrigin );
-                            pVout->SetMapMode( aMapMode );
-
-                            mpOut = pVout.get();
-                            if ( bPaintsFromSystem )
-                                PaintDesktop(*mpOut, aRect);
+                        if ( bPaintsFromSystem )
+                            PaintDesktop(*GetOut(), aRect);
+                        if (!comphelper::LibreOfficeKit::isActive())
                             pCurrentLayout->PaintSwFrame( *mpOut, aRect );
-                            pOld->DrawOutDev( aRect.Pos(), aRect.SSize(),
-                                              aRect.Pos(), aRect.SSize(), *pVout );
-                            mpOut = pOld;
-
-                            // #i72754# end Pre/PostPaint encapsulation when mpOut is back and content is painted
-                            DLPostPaint2(true);
-                        }
-                    }
-                    if ( bPaint )
-                    {
-                        if (GetWin()->SupportsDoubleBuffering())
-                            InvalidateWindows(aRect);
                         else
+                            pCurrentLayout->GetCurrShell()->InvalidateWindows(aRect);
+
+                        // #i75172# end DrawingLayer paint
+                        if (!comphelper::LibreOfficeKit::isActive())
                         {
-                            // #i75172# begin DrawingLayer paint
-                            // need to do begin/end DrawingLayer preparation for each single rectangle of the
-                            // repaint region. I already tried to prepare only once for the whole Region. This
-                            // seems to work (and does technically) but fails with transparent objects. Since the
-                            // region given to BeginDrawLayers() defines the clip region for DrawingLayer paint,
-                            // transparent objects in the single rectangles will indeed be painted multiple times.
-                            if (!comphelper::LibreOfficeKit::isActive())
-                            {
-                                DLPrePaint2(vcl::Region(aRect.SVRect()));
-                            }
-
-                            if ( bPaintsFromSystem )
-                                PaintDesktop(*GetOut(), aRect);
-                            if (!comphelper::LibreOfficeKit::isActive())
-                                pCurrentLayout->PaintSwFrame( *mpOut, aRect );
-                            else
-                                pCurrentLayout->GetCurrShell()->InvalidateWindows(aRect);
-
-                            // #i75172# end DrawingLayer paint
-                            if (!comphelper::LibreOfficeKit::isActive())
-                            {
-                                DLPostPaint2(true);
-                            }
+                            DLPostPaint2(true);
                         }
                     }
 
@@ -603,7 +541,7 @@ void SwViewShell::InvalidateAll(std::vector<LockPaintReason>& rReasons)
     {
         // https://github.com/CollaboraOnline/online/issues/6379
         // ditch OuterResize as a reason to invalidate all in the online case
-        rReasons.erase(std::remove(rReasons.begin(), rReasons.end(), LockPaintReason::OuterResize), rReasons.end());
+        std::erase(rReasons, LockPaintReason::OuterResize);
     }
 
     if (!rReasons.empty())
@@ -744,8 +682,8 @@ weld::Window* SwViewShell::CareChildWin(SwViewShell const & rVSh)
         return nullptr;
 #if HAVE_FEATURE_DESKTOP
     const sal_uInt16 nId = SvxSearchDialogWrapper::GetChildWindowId();
-    SfxViewFrame* pVFrame = rVSh.mpSfxViewShell->GetViewFrame();
-    SfxChildWindow* pChWin = pVFrame->GetChildWindow( nId );
+    SfxViewFrame& rVFrame = rVSh.mpSfxViewShell->GetViewFrame();
+    SfxChildWindow* pChWin = rVFrame.GetChildWindow( nId );
     if (!pChWin)
         return nullptr;
     weld::DialogController* pController = pChWin->GetController().get();
@@ -802,15 +740,8 @@ void SwViewShell::UpdateFields(bool bCloseDB)
 void SwViewShell::UpdateOleObjectPreviews()
 {
     SwDoc* pDoc = GetDoc();
-    const SwFrameFormats* const pFormats = pDoc->GetSpzFrameFormats();
-    if (pFormats->empty())
+    for(sw::SpzFrameFormat* pFormat: *pDoc->GetSpzFrameFormats())
     {
-        return;
-    }
-
-    for (size_t i = 0; i < pFormats->size(); ++i)
-    {
-        SwFrameFormat* pFormat = (*pFormats)[i];
         if (pFormat->Which() != RES_FLYFRMFMT)
         {
             continue;
@@ -1180,8 +1111,7 @@ void SwViewShell::CalcLayout()
         aAction.SetStatBar( true );
         aAction.SetReschedule( true );
 
-        SwDocPosUpdate aMsgHint( 0 );
-        GetDoc()->getIDocumentFieldsAccess().UpdatePageFields( &aMsgHint );
+        GetDoc()->getIDocumentFieldsAccess().UpdatePageFields(0);
         GetDoc()->getIDocumentFieldsAccess().UpdateExpFields(nullptr, true);
 
         aAction.Action(GetOut());
@@ -1217,12 +1147,11 @@ void SwViewShell::SizeChgNotify()
             if (comphelper::LibreOfficeKit::isActive())
             {
                 Size aDocSize = GetDocSize();
-                std::stringstream ss;
-                ss << aDocSize.Width() + 2 * DOCUMENTBORDER << ", " << aDocSize.Height() + 2 * DOCUMENTBORDER;
-                OString sSize = ss.str().c_str();
+                OString sPayload = OString::number(aDocSize.Width() + 2 * DOCUMENTBORDER) +
+                    ", " + OString::number(aDocSize.Height() + 2 * DOCUMENTBORDER);
 
                 SwXTextDocument* pModel = comphelper::getFromUnoTunnel<SwXTextDocument>(GetSfxViewShell()->GetCurrentDocument());
-                SfxLokHelper::notifyDocumentSizeChanged(GetSfxViewShell(), sSize, pModel);
+                SfxLokHelper::notifyDocumentSizeChanged(GetSfxViewShell(), sPayload, pModel);
             }
         }
     }
@@ -2511,6 +2440,8 @@ void SwViewShell::ImplApplyViewOptions( const SwViewOption &rOpt )
                 }
             }
         }
+        // the layout changes but SetModified() wasn't called so do it here:
+        mxDoc->GetDocumentLayoutManager().ClearSwLayouterEntries();
     }
 
     if( !bOnlineSpellChgd )
@@ -2562,11 +2493,11 @@ void SwViewShell::SetReadonlyOption(bool bSet)
     {
         StartAction();
         Reformat();
-        if ( GetWin() )
+        if ( GetWin() && !comphelper::LibreOfficeKit::isActive() )
             GetWin()->Invalidate();
         EndAction();
     }
-    else if ( GetWin() )
+    else if ( GetWin() && !comphelper::LibreOfficeKit::isActive() )
         GetWin()->Invalidate();
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
     if( Imp()->IsAccessible() )
@@ -2709,7 +2640,7 @@ SwAccessibleMap* SwViewShell::GetAccessibleMap()
     return nullptr;
 }
 
-void SwViewShell::ApplyAccessibilityOptions(SvtAccessibilityOptions const & rAccessibilityOptions)
+void SwViewShell::ApplyAccessibilityOptions()
 {
     if (utl::ConfigManager::IsFuzzing())
         return;
@@ -2720,12 +2651,12 @@ void SwViewShell::ApplyAccessibilityOptions(SvtAccessibilityOptions const & rAcc
     }
     else
     {
-        mpAccOptions->SetAlwaysAutoColor(rAccessibilityOptions.GetIsAutomaticFontColor());
-        mpAccOptions->SetStopAnimatedGraphics(! rAccessibilityOptions.GetIsAllowAnimatedGraphics());
+        mpAccOptions->SetAlwaysAutoColor(SvtAccessibilityOptions::GetIsAutomaticFontColor());
+        mpAccOptions->SetStopAnimatedGraphics(! SvtAccessibilityOptions::GetIsAllowAnimatedGraphics());
 
         // Form view
         // Always set this option, not only if document is read-only:
-        mpOpt->SetSelectionInReadonly(rAccessibilityOptions.IsSelectionInReadonly());
+        mpOpt->SetSelectionInReadonly(SvtAccessibilityOptions::IsSelectionInReadonly());
     }
 }
 #endif // ENABLE_WASM_STRIP_ACCESSIBILITY

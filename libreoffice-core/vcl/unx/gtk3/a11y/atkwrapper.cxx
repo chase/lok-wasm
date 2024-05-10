@@ -125,6 +125,7 @@ AtkStateType mapAtkState( sal_Int64 nState )
         MAP_DIRECT( ACTIVE );
         MAP_DIRECT( ARMED );
         MAP_DIRECT( BUSY );
+        MAP_DIRECT( CHECKABLE );
         MAP_DIRECT( CHECKED );
         MAP_DIRECT( EDITABLE );
         MAP_DIRECT( ENABLED );
@@ -166,7 +167,7 @@ AtkStateType mapAtkState( sal_Int64 nState )
     return type;
 }
 
-static AtkRole mapToAtkRole( sal_Int16 nRole )
+static AtkRole mapToAtkRole(sal_Int16 nRole, sal_Int64 nStates)
 {
     switch (nRole)
     {
@@ -174,6 +175,8 @@ static AtkRole mapToAtkRole( sal_Int16 nRole )
             return ATK_ROLE_UNKNOWN;
         case accessibility::AccessibleRole::ALERT:
             return ATK_ROLE_ALERT;
+        case accessibility::AccessibleRole::BLOCK_QUOTE:
+            return ATK_ROLE_BLOCK_QUOTE;
         case accessibility::AccessibleRole::COLUMN_HEADER:
             return ATK_ROLE_COLUMN_HEADER;
         case accessibility::AccessibleRole::CANVAS:
@@ -307,9 +310,17 @@ static AtkRole mapToAtkRole( sal_Int16 nRole )
         case accessibility::AccessibleRole::WINDOW:
             return ATK_ROLE_WINDOW;
         case accessibility::AccessibleRole::BUTTON_DROPDOWN:
+        {
+            if (nStates & css::accessibility::AccessibleStateType::CHECKABLE)
+                return ATK_ROLE_TOGGLE_BUTTON;
             return ATK_ROLE_PUSH_BUTTON;
+        }
         case accessibility::AccessibleRole::BUTTON_MENU:
+#if ATK_CHECK_VERSION(2, 46, 0)
+            return ATK_ROLE_PUSH_BUTTON_MENU;
+#else
             return ATK_ROLE_PUSH_BUTTON;
+#endif
         case accessibility::AccessibleRole::CAPTION:
             return ATK_ROLE_CAPTION;
         case accessibility::AccessibleRole::CHART:
@@ -377,6 +388,8 @@ wrapper_get_name( AtkObject *atk_obj )
                 if( atk_obj->name )
                     g_free(atk_obj->name);
                 atk_obj->name = g_strdup(aName.getStr());
+
+                return atk_obj->name;
             }
         }
         catch(const uno::Exception&) {
@@ -404,6 +417,8 @@ wrapper_get_description( AtkObject *atk_obj )
 
             g_free(atk_obj->description);
             atk_obj->description = g_strdup(aDescription.getStr());
+
+            return atk_obj->description;
         }
         catch(const uno::Exception&) {
             g_warning( "Exception in getAccessibleDescription()" );
@@ -694,6 +709,8 @@ atk_object_wrapper_class_init (AtkObjectWrapperClass *klass)
   // but we want the original behaviour we got from atk_object_real_get_parent when we inherited
   // from AtkObject
   atk_class->get_parent = orig_atk_klass->get_parent;
+  // and likewise for focus_event
+  atk_class->focus_event = orig_atk_klass->focus_event;
   g_type_class_unref(orig_atk_klass);
 }
 
@@ -959,7 +976,7 @@ atk_object_wrapper_new( const css::uno::Reference< css::accessibility::XAccessib
         pWrap->mpOrig = orig;
 
         AtkObject* atk_obj = ATK_OBJECT(pWrap);
-        atk_obj->role = mapToAtkRole( xContext->getAccessibleRole() );
+        atk_obj->role = mapToAtkRole(xContext->getAccessibleRole(), xContext->getAccessibleStateSet());
         atk_obj->accessible_parent = parent;
 
         ooo_wrapper_registry_add( rxAccessible, atk_obj );
@@ -1057,10 +1074,10 @@ void atk_object_wrapper_remove_child(AtkObjectWrapper* wrapper, AtkObject *child
 
 /*****************************************************************************/
 
-void atk_object_wrapper_set_role(AtkObjectWrapper* wrapper, sal_Int16 role)
+void atk_object_wrapper_set_role(AtkObjectWrapper* wrapper, sal_Int16 role, sal_Int64 nStates)
 {
     AtkObject *atk_obj = ATK_OBJECT( wrapper );
-    atk_object_set_role( atk_obj, mapToAtkRole( role ) );
+    atk_object_set_role(atk_obj, mapToAtkRole(role, nStates));
 }
 
 /*****************************************************************************/

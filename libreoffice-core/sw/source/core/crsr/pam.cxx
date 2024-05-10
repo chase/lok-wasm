@@ -22,6 +22,7 @@
 #include <tools/gen.hxx>
 #include <editeng/protitem.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <unotools/configmgr.hxx>
 
 #include <cntfrm.hxx>
 #include <pagefrm.hxx>
@@ -652,18 +653,6 @@ void SwPaM::SetMark()
     (*m_pMark) = *m_pPoint;
 }
 
-#ifdef DBG_UTIL
-void SwPaM::Exchange()
-{
-    if (m_pPoint != m_pMark)
-    {
-        SwPosition *pTmp = m_pPoint;
-        m_pPoint = m_pMark;
-        m_pMark = pTmp;
-    }
-}
-#endif
-
 /// movement of cursor
 bool SwPaM::Move( SwMoveFnCollection const & fnMove, SwGoInDoc fnGo )
 {
@@ -880,13 +869,13 @@ bool SwPaM::HasReadonlySel(bool bFormView, bool const isReplace) const
     const SwDoc& rDoc = GetDoc();
     // Legacy text/combo/checkbox: never return read-only when inside these form fields.
     const IDocumentMarkAccess* pMarksAccess = rDoc.getIDocumentMarkAccess();
-    sw::mark::IFieldmark* pA = GetPoint() ? pMarksAccess->getFieldmarkFor( *GetPoint( ) ) : nullptr;
-    sw::mark::IFieldmark* pB = GetMark()  ? pMarksAccess->getFieldmarkFor( *GetMark( ) ) : pA;
+    sw::mark::IFieldmark* pA = GetPoint() ? pMarksAccess->getInnerFieldmarkFor(*GetPoint()) : nullptr;
+    sw::mark::IFieldmark* pB = GetMark()  ? pMarksAccess->getInnerFieldmarkFor(*GetMark()) : pA;
     // prevent the user from accidentally deleting the field itself when modifying the text.
     const bool bAtStartA = (pA != nullptr) && (pA->GetMarkStart() == *GetPoint());
     const bool bAtStartB = (pB != nullptr) && (pB->GetMarkStart() == *GetMark());
 
-    if (officecfg::Office::Common::Filter::Microsoft::Import::ForceImportWWFieldsAsGenericFields::get())
+    if (!utl::ConfigManager::IsFuzzing() && officecfg::Office::Common::Filter::Microsoft::Import::ForceImportWWFieldsAsGenericFields::get())
     {
         ; // allow editing all fields in generic mode
     }
@@ -1013,6 +1002,40 @@ bool SwPaM::HasReadonlySel(bool bFormView, bool const isReplace) const
     return bRet;
 }
 
+bool SwPaM::HasHiddenSections() const
+{
+    bool bRet = false;
+
+    if (HasMark() && GetPoint()->nNode != GetMark()->nNode)
+    {
+        // check for hidden section inside the selection
+        SwNodeOffset nSttIdx = Start()->GetNodeIndex(), nEndIdx = End()->GetNodeIndex();
+
+        if (nSttIdx + SwNodeOffset(3) < nEndIdx)
+        {
+            const SwSectionFormats& rFormats = GetDoc().GetSections();
+            for (SwSectionFormats::size_type n = rFormats.size(); n;)
+            {
+                const SwSectionFormat* pFormat = rFormats[--n];
+                if (pFormat->GetSection()->IsHidden())
+                {
+                    const SwFormatContent& rContent = pFormat->GetContent(false);
+                    OSL_ENSURE(rContent.GetContentIdx(), "where is the SectionNode?");
+                    SwNodeOffset nIdx = rContent.GetContentIdx()->GetIndex();
+                    if (nSttIdx <= nIdx && nEndIdx >= nIdx
+                        && rContent.GetContentIdx()->GetNode().GetNodes().IsDocNodes())
+                    {
+                        bRet = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return bRet;
+}
+
 /// This function returns the next node in direction of search. If there is no
 /// left or the next is out of the area, then a null-pointer is returned.
 /// @param rbFirst If <true> then first time request. If so than the position of
@@ -1037,7 +1060,7 @@ SwContentNode* GetNode( SwPaM & rPam, bool& rbFirst, SwMoveFnCollection const & 
                     (
                         nullptr == pFrame ||
                         ( !bInReadOnly && pFrame->IsProtected() ) ||
-                        (pFrame->IsTextFrame() && static_cast<SwTextFrame const*>(pFrame)->IsHiddenNow())
+                        pFrame->IsHiddenNow()
                     ) ||
                     ( !bInReadOnly && pNd->FindSectionNode() &&
                         pNd->FindSectionNode()->GetSection().IsProtect()
@@ -1078,8 +1101,7 @@ SwContentNode* GetNode( SwPaM & rPam, bool& rbFirst, SwMoveFnCollection const & 
                         SwContentFrame const*const pFrame(pNd->getLayoutFrame(pLayout));
                         if (nullptr == pFrame ||
                             ( !bInReadOnly && pFrame->IsProtected() ) ||
-                            ( pFrame->IsTextFrame() &&
-                                static_cast<SwTextFrame const*>(pFrame)->IsHiddenNow()))
+                            pFrame->IsHiddenNow())
                         {
                             pNd = nullptr;
                             continue;

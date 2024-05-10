@@ -25,6 +25,7 @@
 #include <com/sun/star/uno/RuntimeException.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <comphelper/sequence.hxx>
+#include <o3tl/string_view.hxx>
 #include <rtl/math.h>
 #include <rtl/string.h>
 #include <rtl/string.hxx>
@@ -33,6 +34,7 @@
 #include <xmlreader/span.hxx>
 #include <xmlreader/xmlreader.hxx>
 
+#include "data.hxx"
 #include "localizedvaluenode.hxx"
 #include "node.hxx"
 #include "nodemap.hxx"
@@ -98,16 +100,22 @@ bool parseValue(xmlreader::Span const & text, sal_Int16 * value) {
 bool parseValue(xmlreader::Span const & text, sal_Int32 * value) {
     assert(text.is() && value != nullptr);
     // For backwards compatibility, support hexadecimal values:
-    *value =
-        rtl_str_shortenedCompareIgnoreAsciiCase_WithLength(
+    bool bStartWithHexPrefix = rtl_str_shortenedCompareIgnoreAsciiCase_WithLength(
             text.begin, text.length, RTL_CONSTASCII_STRINGPARAM("0X"),
-            RTL_CONSTASCII_LENGTH("0X")) == 0 ?
-        static_cast< sal_Int32 >(
-            OString(
-                text.begin + RTL_CONSTASCII_LENGTH("0X"),
-                text.length - RTL_CONSTASCII_LENGTH("0X")).toUInt32(16)) :
-        OString(text.begin, text.length).toInt32();
-        //TODO: check valid lexical representation
+            RTL_CONSTASCII_LENGTH("0X")) == 0;
+
+    if (bStartWithHexPrefix)
+    {
+        std::string_view sView(text.begin + RTL_CONSTASCII_LENGTH("0X"),
+                text.length - RTL_CONSTASCII_LENGTH("0X"));
+        *value = static_cast< sal_Int32 >(o3tl::toUInt32(sView, 16));
+    }
+    else
+    {
+        std::string_view sView(text.begin, text.length);
+        *value = o3tl::toInt32(sView);
+    }
+    //TODO: check valid lexical representation
     return true;
 }
 
@@ -347,21 +355,20 @@ bool ValueParser::endElement() {
 
             switch (node_->kind()) {
             case Node::KIND_PROPERTY:
-                pValue = static_cast< PropertyNode * >(node_.get())->getValuePtr(layer_);
+                pValue = static_cast< PropertyNode * >(node_.get())->getValuePtr(layer_, layer_ == Data::NO_LAYER);
                 break;
             case Node::KIND_LOCALIZED_PROPERTY:
                 {
                     NodeMap & members = node_->getMembers();
-                    NodeMap::iterator i(members.find(localizedName_));
+                    auto [i, bInserted] = members.insert(NodeMap::value_type(localizedName_, nullptr));
                     LocalizedValueNode *pLVNode;
-                    if (i == members.end()) {
+                    if (bInserted) {
                         pLVNode = new LocalizedValueNode(layer_);
-                        members.insert(
-                            NodeMap::value_type(localizedName_, pLVNode ));
+                        i->second = pLVNode;
                     } else {
                         pLVNode = static_cast< LocalizedValueNode * >(i->second.get());
                     }
-                    pValue = pLVNode->getValuePtr(layer_);
+                    pValue = pLVNode->getValuePtr(layer_, layer_ == Data::NO_LAYER);
                 }
                 break;
             default:

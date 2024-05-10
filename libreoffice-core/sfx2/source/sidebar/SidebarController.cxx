@@ -69,7 +69,7 @@ using namespace css::uno;
 
 namespace
 {
-    constexpr OUStringLiteral gsReadOnlyCommandName = u".uno:EditDoc";
+    constexpr OUString gsReadOnlyCommandName = u".uno:EditDoc"_ustr;
     const sal_Int32 gnWidthCloseThreshold (70);
     const sal_Int32 gnWidthOpenThreshold (40);
 
@@ -107,7 +107,7 @@ namespace {
 
     /** When in doubt, show this deck.
     */
-    constexpr OUStringLiteral gsDefaultDeckId(u"PropertyDeck");
+    constexpr OUString gsDefaultDeckId(u"PropertyDeck"_ustr);
 }
 
 SidebarController::SidebarController (
@@ -229,8 +229,16 @@ void SidebarController::disposeDecks()
         {
             const std::string hide = UnoNameFromDeckId(msCurrentDeckId, GetCurrentContext());
             if (!hide.empty())
+            {
+                // Be consistent with SwitchToDeck(), so both places emit JSON.
+                boost::property_tree::ptree aTree;
+                aTree.put("commandName", hide);
+                aTree.put("state", "false");
+                std::stringstream aStream;
+                boost::property_tree::write_json(aStream, aTree);
                 pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                       (hide + "=false").c_str());
+                                                       OString(aStream.str()));
+            }
         }
 
         if (mpParentWindow)
@@ -505,7 +513,7 @@ void SidebarController::NotifyResize()
 
 void SidebarController::ProcessNewWidth (const sal_Int32 nNewWidth)
 {
-    if ( ! mbIsDeckRequestedOpen)
+    if ( ! mbIsDeckRequestedOpen.has_value())
         return;
 
     if (*mbIsDeckRequestedOpen)
@@ -661,7 +669,12 @@ void SidebarController::OpenThenToggleDeck (
         if(mnWidthOnSplitterButtonDown > 0 && mnWidthOnSplitterButtonDown > nRequestedWidth){
             SetChildWindowWidth(mnWidthOnSplitterButtonDown);
         }else{
-            SetChildWindowWidth(nRequestedWidth);
+            // tdf#150639 The mnWidthOnSplitterButtonDown is initialized to 0 at program start.
+            // This makes every call to take the else case until the user manually changes the
+            // width, but some decks such as Master Slides have the mnMinimalWidth too low which
+            // makes them too narrow for the content they should display to the user.
+            SetChildWindowWidth(nRequestedWidth > mnSavedSidebarWidth ? nRequestedWidth
+                                                                      : mnSavedSidebarWidth);
         }
     }
 }
@@ -683,7 +696,7 @@ void SidebarController::SwitchToDeck (
     std::u16string_view rsDeckId)
 {
     if (  msCurrentDeckId != rsDeckId
-        || ! mbIsDeckOpen
+        || ! mbIsDeckOpen.has_value()
         || mnRequestedForceFlags!=SwitchFlag_NoForce)
     {
         std::shared_ptr<DeckDescriptor> xDeckDescriptor = mpResourceManager->GetDeckDescriptor(rsDeckId);
@@ -803,34 +816,32 @@ void SidebarController::SwitchToDeck (
     {
         if (const SfxViewShell* pViewShell = mpViewFrame->GetViewShell())
         {
-            boost::property_tree::ptree aTree;
-            aTree.put("locale", comphelper::LibreOfficeKit::getLocale().getBcp47());
-            bool bStateChanged = false;
+            std::vector<std::pair<std::string, std::string>> aStateChanges;
             if (msCurrentDeckId != rDeckDescriptor.msId)
             {
                 const std::string hide = UnoNameFromDeckId(msCurrentDeckId, GetCurrentContext());
                 if (!hide.empty())
                 {
-                    aTree.put("commandName", hide);
-                    aTree.put("state", "false");
-                    bStateChanged = true;
+                    aStateChanges.push_back({hide, std::string("false")});
                 }
             }
 
             const std::string show = UnoNameFromDeckId(rDeckDescriptor.msId, GetCurrentContext());
             if (!show.empty())
             {
-                aTree.put("commandName", show);
-                aTree.put("state", "true");
-                bStateChanged = true;
+                aStateChanges.push_back({show, std::string("true")});
             }
 
-            if (bStateChanged)
+            for (const auto& rStateChange : aStateChanges)
             {
+                boost::property_tree::ptree aTree;
+                aTree.put("locale", comphelper::LibreOfficeKit::getLocale().getBcp47());
+                aTree.put("commandName", rStateChange.first);
+                aTree.put("state", rStateChange.second);
                 std::stringstream aStream;
                 boost::property_tree::write_json(aStream, aTree);
                 pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                       aStream.str().c_str());
+                                                       OString(aStream.str()));
             }
         }
     }
@@ -1115,8 +1126,8 @@ void SidebarController::PopulatePopupMenus(weld::Menu& rMenu, weld::Menu& rCusto
     sal_Int32 nIndex (0);
     for (const auto& rItem : rMenuData)
     {
-        OString sIdent("select" + OString::number(nIndex));
-        rMenu.insert(nIndex, OUString::fromUtf8(sIdent), rItem.msDisplayName,
+        OUString sIdent("select" + OUString::number(nIndex));
+        rMenu.insert(nIndex, sIdent, rItem.msDisplayName,
                      nullptr, nullptr, nullptr, TRISTATE_FALSE);
         rMenu.set_active(sIdent, rItem.mbIsCurrentDeck);
         rMenu.set_sensitive(sIdent, rItem.mbIsEnabled && rItem.mbIsActive);
@@ -1126,15 +1137,15 @@ void SidebarController::PopulatePopupMenus(weld::Menu& rMenu, weld::Menu& rCusto
             if (rItem.mbIsCurrentDeck)
             {
                 // Don't allow the currently visible deck to be disabled.
-                OString sSubIdent("nocustomize" + OString::number(nIndex));
-                rCustomizationMenu.insert(nIndex, OUString::fromUtf8(sSubIdent), rItem.msDisplayName,
+                OUString sSubIdent("nocustomize" + OUString::number(nIndex));
+                rCustomizationMenu.insert(nIndex, sSubIdent, rItem.msDisplayName,
                                           nullptr, nullptr, nullptr, TRISTATE_FALSE);
                 rCustomizationMenu.set_active(sSubIdent, true);
             }
             else
             {
-                OString sSubIdent("customize" + OString::number(nIndex));
-                rCustomizationMenu.insert(nIndex, OUString::fromUtf8(sSubIdent), rItem.msDisplayName,
+                OUString sSubIdent("customize" + OUString::number(nIndex));
+                rCustomizationMenu.insert(nIndex, sSubIdent, rItem.msDisplayName,
                                           nullptr, nullptr, nullptr, TRISTATE_TRUE);
                 rCustomizationMenu.set_active(sSubIdent, rItem.mbIsEnabled && rItem.mbIsActive);
             }
@@ -1161,7 +1172,7 @@ void SidebarController::PopulatePopupMenus(weld::Menu& rMenu, weld::Menu& rCusto
     rMenu.set_visible("customization", !comphelper::LibreOfficeKit::isActive());
 }
 
-IMPL_LINK(SidebarController, OnMenuItemSelected, const OString&, rCurItemId, void)
+IMPL_LINK(SidebarController, OnMenuItemSelected, const OUString&, rCurItemId, void)
 {
     if (rCurItemId == "unlocktaskpanel")
     {
@@ -1194,7 +1205,7 @@ IMPL_LINK(SidebarController, OnMenuItemSelected, const OString&, rCurItemId, voi
     {
         try
         {
-            OString sNumber;
+            OUString sNumber;
             if (rCurItemId.startsWith("select", &sNumber))
             {
                 RequestOpenDeck();
@@ -1208,7 +1219,7 @@ IMPL_LINK(SidebarController, OnMenuItemSelected, const OString&, rCurItemId, voi
     }
 }
 
-IMPL_LINK(SidebarController, OnSubMenuItemSelected, const OString&, rCurItemId, void)
+IMPL_LINK(SidebarController, OnSubMenuItemSelected, const OUString&, rCurItemId, void)
 {
     if (rCurItemId == "restoredefault")
         mpTabBar->RestoreHideFlags();
@@ -1216,7 +1227,7 @@ IMPL_LINK(SidebarController, OnSubMenuItemSelected, const OString&, rCurItemId, 
     {
         try
         {
-            OString sNumber;
+            OUString sNumber;
             if (rCurItemId.startsWith("customize", &sNumber))
             {
                 mpTabBar->ToggleHideFlag(sNumber.toInt32());
@@ -1256,8 +1267,7 @@ void SidebarController::RequestCloseDeck()
             aJsonWriter.put("type", "dockingwindow");
             aJsonWriter.put("text", mpParentWindow->GetText());
             aJsonWriter.put("enabled", false);
-            const std::string message = aJsonWriter.extractAsStdString();
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_JSDIALOG, message.c_str());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_JSDIALOG, aJsonWriter.finishAndGetAsOString());
         }
         else if (pViewShell)
         {
@@ -1265,8 +1275,7 @@ void SidebarController::RequestCloseDeck()
             aJsonWriter.put("id", mpParentWindow->get_id());
             aJsonWriter.put("action", "close");
             aJsonWriter.put("jsontype", "sidebar");
-            const std::string message = aJsonWriter.extractAsStdString();
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_JSDIALOG, message.c_str());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_JSDIALOG, aJsonWriter.finishAndGetAsOString());
         }
     }
 
@@ -1294,17 +1303,17 @@ bool SidebarController::IsDeckOpen(const sal_Int32 nIndex)
         OUString asDeckId(mpTabBar->GetDeckIdForIndex(nIndex));
         return IsDeckVisible(asDeckId);
     }
-    return mbIsDeckOpen && *mbIsDeckOpen;
+    return mbIsDeckOpen.has_value() && *mbIsDeckOpen;
 }
 
 bool SidebarController::IsDeckVisible(std::u16string_view rsDeckId)
 {
-    return mbIsDeckOpen && *mbIsDeckOpen && msCurrentDeckId == rsDeckId;
+    return mbIsDeckOpen.has_value() && *mbIsDeckOpen && msCurrentDeckId == rsDeckId;
 }
 
 void SidebarController::UpdateDeckOpenState()
 {
-    if ( ! mbIsDeckRequestedOpen)
+    if ( ! mbIsDeckRequestedOpen.has_value() )
         // No state requested.
         return;
 
@@ -1312,7 +1321,7 @@ void SidebarController::UpdateDeckOpenState()
 
     // Update (change) the open state when it either has not yet been initialized
     // or when its value differs from the requested state.
-    if ( mbIsDeckOpen && *mbIsDeckOpen == *mbIsDeckRequestedOpen )
+    if ( mbIsDeckOpen.has_value() && *mbIsDeckOpen == *mbIsDeckRequestedOpen )
         return;
 
     if (*mbIsDeckRequestedOpen)
@@ -1345,7 +1354,7 @@ void SidebarController::UpdateDeckOpenState()
                     const std::string uno = UnoNameFromDeckId(msCurrentDeckId, GetCurrentContext());
                     if (!uno.empty())
                         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                                (uno + "=true").c_str());
+                                                                OString(uno + "=true"));
                 }
             }
         }
@@ -1383,7 +1392,7 @@ void SidebarController::UpdateDeckOpenState()
                     const std::string uno = UnoNameFromDeckId(msCurrentDeckId, GetCurrentContext());
                     if (!uno.empty())
                         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                                (uno + "=false").c_str());
+                                                                OString(uno + "=false"));
                 }
             }
         }

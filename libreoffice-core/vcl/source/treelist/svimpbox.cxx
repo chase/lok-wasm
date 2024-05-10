@@ -387,6 +387,7 @@ void SvImpLBox::PageDown( sal_uInt16 nDelta )
     ShowCursor( false );
 
     m_nFlags &= ~LBoxFlags::Filling;
+    m_pView->PaintImmediately();
     m_pStartEntry = pNext;
 
     if( nRealDelta >= m_nVisibleCount )
@@ -424,6 +425,7 @@ void SvImpLBox::PageUp( sal_uInt16 nDelta )
     m_nFlags &= ~LBoxFlags::Filling;
     ShowCursor( false );
 
+    m_pView->PaintImmediately();
     m_pStartEntry = pPrev;
     if( nRealDelta >= m_nVisibleCount )
     {
@@ -667,7 +669,7 @@ void SvImpLBox::ShowCursor( bool bShow )
 }
 
 
-void SvImpLBox::UpdateAll( bool bInvalidateCompleteView )
+void SvImpLBox::UpdateAll()
 {
     FindMostRight();
     m_aVerSBar->SetRange( Range(0, m_pView->GetVisibleCount()-1 ) );
@@ -677,10 +679,7 @@ void SvImpLBox::UpdateAll( bool bInvalidateCompleteView )
     if( m_bSimpleTravel && m_pCursor && m_pView->HasFocus() )
         m_pView->Select( m_pCursor );
     ShowCursor( true );
-    if( bInvalidateCompleteView )
-        m_pView->Invalidate();
-    else
-        m_pView->Invalidate( GetVisibleArea() );
+    m_pView->Invalidate( GetVisibleArea() );
 }
 
 IMPL_LINK( SvImpLBox, ScrollLeftRightHdl, ScrollBar *, pScrollBar, void )
@@ -1238,7 +1237,7 @@ void SvImpLBox::Resize()
     if( m_pView->GetEntryHeight())
     {
         AdjustScrollBars( m_aOutputSize );
-        UpdateAll(false);
+        UpdateAll();
     }
     // HACK, as in floating and docked windows the scrollbars might not be drawn
     // correctly/not be drawn at all after resizing!
@@ -1852,7 +1851,12 @@ bool SvImpLBox::ButtonUpCheckCtrl( const MouseEvent& rMEvt )
         m_pActiveButton->SetStateHilighted( false );
         tools::Long nMouseX = rMEvt.GetPosPixel().X();
         if (pEntry == m_pActiveEntry && m_pView->GetItem(m_pActiveEntry, nMouseX) == m_pActiveButton)
+        {
+            const bool bChecked = m_pActiveButton->IsStateChecked();
             m_pActiveButton->ClickHdl(m_pActiveEntry);
+            if (m_pActiveButton->IsStateChecked() != bChecked)
+                CallEventListeners(VclEventId::CheckboxToggle, m_pActiveEntry);
+        }
         InvalidateEntry(m_pActiveEntry);
         if (m_pCursor == m_pActiveEntry)
             ShowCursor(true);
@@ -2329,13 +2333,27 @@ bool SvImpLBox::KeyInput( const KeyEvent& rKEvt)
                         // toggle selection
                         m_pView->Select( m_pCursor, !m_pView->IsSelected( m_pCursor ) );
                     }
-                    else if ( !m_pView->IsSelected( m_pCursor ) )
+                    else if (m_pView->IsSelected(m_pCursor))
+                    {
+                        // trigger button
+                        SvLBoxItem* pButtonItem = m_pCursor->GetFirstItem(SvLBoxItemType::Button);
+                        if (pButtonItem)
+                        {
+                            SvLBoxButton* pButton = static_cast<SvLBoxButton*>(pButtonItem);
+                            const bool bChecked = pButton->IsStateChecked();
+                            pButton->ClickHdl(m_pCursor);
+                            InvalidateEntry(m_pCursor);
+                            if (pButton->IsStateChecked() != bChecked)
+                                CallEventListeners(VclEventId::CheckboxToggle, m_pActiveEntry);
+                        }
+                        else
+                            bKeyUsed = false;
+                    }
+                    else
                     {
                         SelAllDestrAnch( false );
                         m_pView->Select( m_pCursor );
                     }
-                    else
-                        bKeyUsed = false;
                 }
                 else
                     bKeyUsed = false;
@@ -2975,7 +2993,7 @@ void SvImpLBox::SetUpdateMode( bool bMode )
     {
         m_bUpdateMode = bMode;
         if( m_bUpdateMode )
-            UpdateAll( false );
+            UpdateAll();
     }
 }
 

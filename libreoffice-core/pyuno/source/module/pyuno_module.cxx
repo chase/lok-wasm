@@ -110,8 +110,7 @@ public:
     {
         if (initialised[key])
         {
-            OUStringBuffer buf;
-            buf.append( "pyuno._createUnoStructHelper: member '" + key + "'");
+            OUStringBuffer buf( "pyuno._createUnoStructHelper: member '" + key + "'");
             if ( pos >= 0 )
             {
                 buf.append( " at position " + OUString::number(pos));
@@ -442,10 +441,9 @@ static PyObject *createUnoStructHelper(
                     }
                     else
                     {
-                        OStringBuffer buf;
-                        buf.append( "UNO struct " );
-                        buf.append( PyUnicode_AsUTF8(structName) );
-                        buf.append( " is unknown" );
+                        OString buf = OString::Concat("UNO struct ")
+                            + PyUnicode_AsUTF8(structName)
+                            + " is unknown";
                         PyErr_SetString (PyExc_RuntimeError, buf.getStr());
                     }
                 }
@@ -563,7 +561,7 @@ static PyObject *checkType( SAL_UNUSED_PARAMETER PyObject *, PyObject *args )
 {
     if( !PyTuple_Check( args ) || PyTuple_Size( args) != 1 )
     {
-        OString buf = "pyuno.checkType : expecting one uno.Type argument";
+        OString buf = "pyuno.checkType : expecting one uno.Type argument"_ostr;
         PyErr_SetString( PyExc_RuntimeError, buf.getStr() );
         return nullptr;
     }
@@ -586,7 +584,7 @@ static PyObject *checkEnum( SAL_UNUSED_PARAMETER PyObject *, PyObject *args )
 {
     if( !PyTuple_Check( args ) || PyTuple_Size( args) != 1 )
     {
-        OString buf = "pyuno.checkType : expecting one uno.Type argument";
+        OString buf = "pyuno.checkType : expecting one uno.Type argument"_ostr;
         PyErr_SetString( PyExc_RuntimeError, buf.getStr() );
         return nullptr;
     }
@@ -750,25 +748,23 @@ static PyObject * invoke(SAL_UNUSED_PARAMETER PyObject *, PyObject *args)
             }
             else
             {
-                OStringBuffer buf;
-                buf.append("uno.invoke expects a tuple as 3rd argument, got ");
-                buf.append(PyUnicode_AsUTF8(PyObject_Str(item2)));
+                OString buf = OString::Concat("uno.invoke expects a tuple as 3rd argument, got ")
+                    + PyUnicode_AsUTF8(PyObject_Str(item2));
                 PyErr_SetString(
-                    PyExc_RuntimeError, buf.makeStringAndClear().getStr());
+                    PyExc_RuntimeError, buf.getStr());
             }
         }
         else
         {
-            OStringBuffer buf;
-            buf.append("uno.invoke expected a string as 2nd argument, got ");
-            buf.append(PyUnicode_AsUTF8(PyObject_Str(item1)));
+            OString buf = OString::Concat("uno.invoke expected a string as 2nd argument, got ")
+                + PyUnicode_AsUTF8(PyObject_Str(item1));
             PyErr_SetString(
-                PyExc_RuntimeError, buf.makeStringAndClear().getStr());
+                PyExc_RuntimeError, buf.getStr());
         }
     }
     else
     {
-        OString buf = "uno.invoke expects object, name, (arg1, arg2, ... )\n";
+        OString buf = "uno.invoke expects object, name, (arg1, arg2, ... )\n"_ostr;
         PyErr_SetString(PyExc_RuntimeError, buf.getStr());
     }
     return ret;
@@ -811,17 +807,16 @@ static PyObject *setCurrentContext(
             }
             else
             {
-                OStringBuffer buf;
-                buf.append( "uno.setCurrentContext expects an XComponentContext implementation, got " );
-                buf.append(
-                    PyUnicode_AsUTF8(PyObject_Str(PyTuple_GetItem(args, 0))));
+                OString buf =
+                    OString::Concat("uno.setCurrentContext expects an XComponentContext implementation, got ")
+                    + PyUnicode_AsUTF8(PyObject_Str(PyTuple_GetItem(args, 0)));
                 PyErr_SetString(
-                    PyExc_RuntimeError, buf.makeStringAndClear().getStr() );
+                    PyExc_RuntimeError, buf.getStr() );
             }
         }
         else
         {
-            OString buf = "uno.setCurrentContext expects exactly one argument (the current Context)\n";
+            OString buf = "uno.setCurrentContext expects exactly one argument (the current Context)\n"_ostr;
             PyErr_SetString(
                 PyExc_RuntimeError, buf.getStr() );
         }

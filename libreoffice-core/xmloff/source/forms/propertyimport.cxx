@@ -50,7 +50,6 @@ namespace xmloff
     using namespace ::com::sun::star::uno;
     using namespace ::com::sun::star::beans;
     using namespace ::com::sun::star::xml;
-    using ::com::sun::star::xml::sax::XAttributeList;
     using ::com::sun::star::xml::sax::XFastAttributeList;
 
     // NO using namespace ...util !!!
@@ -303,7 +302,7 @@ bool OPropertyImport::encounteredAttribute(sal_Int32 nAttributeToken) const
 void OPropertyImport::characters(const OUString& _rChars )
 {
     // ignore them (should be whitespace only)
-    OSL_ENSURE(_rChars.trim().isEmpty(), "OPropertyImport::Characters: non-whitespace characters!");
+    OSL_ENSURE(o3tl::trim(_rChars).empty(), "OPropertyImport::Characters: non-whitespace characters!");
 }
 
 bool OPropertyImport::handleAttribute(sal_Int32 nAttributeToken, const OUString& _rValue)
@@ -370,7 +369,7 @@ css::uno::Reference< css::xml::sax::XFastContextHandler > OPropertyElementsConte
 
     void OPropertyElementsContext::characters(const OUString& _rChars)
     {
-        OSL_ENSURE(_rChars.trim().isEmpty(), "OPropertyElementsContext::Characters: non-whitespace characters detected!");
+        OSL_ENSURE(o3tl::trim(_rChars).empty(), "OPropertyElementsContext::Characters: non-whitespace characters detected!");
     }
 #endif
 

@@ -95,6 +95,7 @@
 #include <fuformatpaintbrush.hxx>
 #include <fuzoom.hxx>
 #include <sdmod.hxx>
+#include <basegfx/utils/zoomtools.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -116,7 +117,7 @@ static void ImpAddPrintableCharactersToTextEdit(SfxRequest const & rReq, ::sd::V
     OUString aInputString;
 
     if(SfxItemState::SET == pSet->GetItemState(SID_ATTR_CHAR))
-        aInputString = static_cast<const SfxStringItem&>(pSet->Get(SID_ATTR_CHAR)).GetValue();
+        aInputString = pSet->Get(SID_ATTR_CHAR).GetValue();
 
     if(aInputString.isEmpty())
         return;
@@ -613,10 +614,6 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
     if(!(HasCurrentFunction() && ((rReq.GetModifier() & KEY_MOD1) || bCreateDirectly)))
         return;
 
-    // disable interactive drawing for LOK
-    if (bCreateDirectly)
-            GetViewFrame()->GetDispatcher()->Execute(SID_OBJECT_SELECT, SfxCallMode::ASYNCHRON);
-
     // get SdOptions
     SdOptions* pOptions = SD_MOD()->GetSdOptions(GetDoc()->GetDocumentType());
     sal_uInt32 nDefaultObjectSizeWidth(pOptions->GetDefaultObjectSizeWidth());
@@ -655,6 +652,10 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
     {
         case SID_DRAW_CAPTION:
         case SID_DRAW_CAPTION_VERTICAL:
+        case SID_ATTR_CHAR:
+        case SID_ATTR_CHAR_VERTICAL:
+        case SID_TEXT_FITTOSIZE:
+        case SID_TEXT_FITTOSIZE_VERTICAL:
         {
             // Make FuText the current function.
             SfxUInt16Item aItem (SID_TEXTEDIT, 1);
@@ -1034,7 +1035,7 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
         {
             if (comphelper::LibreOfficeKit::isActive())
                 GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                           ".uno:SlideMasterPage=true");
+                                                           ".uno:SlideMasterPage=true"_ostr);
 
             // AutoLayouts needs to be finished
             GetDoc()->StopWorkStartupDelay();
@@ -1073,7 +1074,7 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
             // Notify of disabling master view, which is enabled in DrawViewShell::ChangeEditMode.
             if (comphelper::LibreOfficeKit::isActive())
                 GetViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_STATE_CHANGED,
-                                                           ".uno:SlideMasterPage=false");
+                                                           ".uno:SlideMasterPage=false"_ostr);
 
             Broadcast (
                 ViewShellHint(ViewShellHint::HINT_CHANGE_EDIT_MODE_START));
@@ -1189,8 +1190,11 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
 
         case SID_ZOOM_OUT:  // BASIC
         {
+            const sal_uInt16 nOldZoom = GetActiveWindow()->GetZoom();
+            const sal_uInt16 nNewZoom = basegfx::zoomtools::zoomOut(nOldZoom);
+            SetZoom(nNewZoom);
+
             mbZoomOnPage = false;
-            SetZoom( std::max<::tools::Long>( GetActiveWindow()->GetZoom() / 2, GetActiveWindow()->GetMinZoom() ) );
             ::tools::Rectangle aVisAreaWin = GetActiveWindow()->PixelToLogic( ::tools::Rectangle( Point(0,0),
                                               GetActiveWindow()->GetOutputSizePixel()) );
             mpZoomList->InsertZoomRect(aVisAreaWin);
@@ -1203,8 +1207,11 @@ void DrawViewShell::FuSupport(SfxRequest& rReq)
 
         case SID_ZOOM_IN:
         {
+            const sal_uInt16 nOldZoom = GetActiveWindow()->GetZoom();
+            const sal_uInt16 nNewZoom = basegfx::zoomtools::zoomIn(nOldZoom);
+            SetZoom(nNewZoom);
+
             mbZoomOnPage = false;
-            SetZoom( std::min<::tools::Long>( GetActiveWindow()->GetZoom() * 2, GetActiveWindow()->GetMaxZoom() ) );
             ::tools::Rectangle aVisAreaWin = GetActiveWindow()->PixelToLogic( ::tools::Rectangle( Point(0,0),
                                               GetActiveWindow()->GetOutputSizePixel()) );
             mpZoomList->InsertZoomRect(aVisAreaWin);
@@ -1540,30 +1547,41 @@ void DrawViewShell::InsertURLButton(const OUString& rURL, const OUString& rText,
         if( pMarkedObj ) try
         {
             // change first marked object
-            if( SdrInventor::FmForm == pMarkedObj->GetObjInventor() && pMarkedObj->GetObjIdentifier() == SdrObjKind::FormButton )
+            if (SdrInventor::FmForm == pMarkedObj->GetObjInventor())
             {
-                bNewObj = false;
-
                 SdrUnoObj* pUnoCtrl = static_cast< SdrUnoObj* >( pMarkedObj );
 
                 Reference< awt::XControlModel > xControlModel( pUnoCtrl->GetUnoControlModel(), UNO_SET_THROW );
                 Reference< beans::XPropertySet > xPropSet( xControlModel, UNO_QUERY_THROW );
 
-                xPropSet->setPropertyValue("Label" , Any( rText ) );
-                xPropSet->setPropertyValue("TargetURL" , Any( sTargetURL ) );
-
-                if( !rTarget.isEmpty() )
-                    xPropSet->setPropertyValue("TargetFrame" , Any( rTarget ) );
-
-                xPropSet->setPropertyValue( "ButtonType" , Any( form::FormButtonType_URL ) );
-#if HAVE_FEATURE_AVMEDIA
-                if ( ::avmedia::MediaWindow::isMediaURL( rURL, ""/*TODO?*/ ) )
+                bool bIsButton = pMarkedObj->GetObjIdentifier() == SdrObjKind::FormButton;
+                if (!bIsButton && pMarkedObj->GetObjIdentifier() == SdrObjKind::UNO)
                 {
-                    xPropSet->setPropertyValue( "DispatchURLInternal" , Any( true ) );
+                    const Reference<beans::XPropertySetInfo> xInfo(xPropSet->getPropertySetInfo());
+                    bIsButton = xInfo.is() && xInfo->hasPropertyByName("ButtonType")
+                                && xInfo->hasPropertyByName("Label")
+                                && xInfo->hasPropertyByName("TargetURL");
                 }
+                if (bIsButton)
+                {
+                    bNewObj = false;
+
+                    xPropSet->setPropertyValue("Label", Any(rText));
+                    xPropSet->setPropertyValue("TargetURL", Any(sTargetURL));
+
+                    if (!rTarget.isEmpty())
+                        xPropSet->setPropertyValue("TargetFrame", Any(rTarget));
+
+                    xPropSet->setPropertyValue("ButtonType", Any(form::FormButtonType_URL));
+#if HAVE_FEATURE_AVMEDIA
+                    if (::avmedia::MediaWindow::isMediaURL(rURL, ""/*TODO?*/))
+                    {
+                        xPropSet->setPropertyValue("DispatchURLInternal", Any(true));
+                    }
 #endif
+                }
             }
-            else
+            if (bNewObj)
             {
                 // add url as interaction for first selected shape
                 bNewObj = false;

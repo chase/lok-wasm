@@ -40,37 +40,27 @@ public class AboutDialogFragment extends DialogFragment {
         int defaultColor = textView.getTextColors().getDefaultColor();
         textView.setTextColor(defaultColor);
 
-        // Take care of placeholders in the version and vendor text views.
-        TextView versionView = messageView.findViewById(R.id.about_version);
-        TextView vendorView = messageView.findViewById(R.id.about_vendor);
+        // Take care of placeholders and set text in version and vendor text views.
         try
         {
             String versionName = getActivity().getPackageManager()
                     .getPackageInfo(getActivity().getPackageName(), 0).versionName;
-            String[] tokens = versionName.split("/");
-            if (tokens.length == 3)
-            {
-                String version = String.format(versionView.getText().toString().replace("\n", "<br/>"),
-                        tokens[0], "<a href=\"https://hub.libreoffice.org/git-core/" + tokens[1] + "\">" + tokens[1] + "</a>");
-                @SuppressWarnings("deprecation") // since 24 with additional option parameter
-                Spanned versionString = Html.fromHtml(version);
-                versionView.setText(versionString);
-                versionView.setMovementMethod(LinkMovementMethod.getInstance());
-                String vendor = vendorView.getText().toString();
-                vendor = vendor.replace("$VENDOR", tokens[2]);
-                vendorView.setText(vendor);
-            }
-            else
-                throw new PackageManager.NameNotFoundException();
+            String version = String.format(getString(R.string.app_version), versionName, BuildConfig.BUILD_ID_SHORT);
+            @SuppressWarnings("deprecation") // since 24 with additional option parameter
+            Spanned versionString = Html.fromHtml(version);
+            TextView versionView = messageView.findViewById(R.id.about_version);
+            versionView.setText(versionString);
+            versionView.setMovementMethod(LinkMovementMethod.getInstance());
+            TextView vendorView = messageView.findViewById(R.id.about_vendor);
+            String vendor = getString(R.string.app_vendor).replace("$VENDOR", BuildConfig.VENDOR);
+            vendorView.setText(vendor);
         }
         catch (PackageManager.NameNotFoundException e)
         {
-            versionView.setText("");
-            vendorView.setText("");
         }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-        builder .setIcon(R.drawable.lo_icon)
+        builder .setIcon(R.mipmap.ic_launcher)
                 .setTitle(R.string.app_name)
                 .setView(messageView)
                 .setNegativeButton(R.string.about_license, new DialogInterface.OnClickListener() {
@@ -86,14 +76,18 @@ public class AboutDialogFragment extends DialogFragment {
                         loadFromAbout(R.raw.notice);
                         dialog.dismiss();
                     }
-                })
-                .setNeutralButton(R.string.about_moreinfo, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {
-                        loadFromAbout(R.raw.example);
-                        dialog.dismiss();
-                    }
                 });
+
+        // when privacy policy URL is set (via '--with-privacy-policy-url=<url>' autogen option),
+        // add button to open that URL
+        final String privacyUrl = BuildConfig.PRIVACY_POLICY_URL;
+        if (!privacyUrl.isEmpty() && privacyUrl != "undefined") {
+            builder.setNeutralButton(R.string.about_privacy_policy, (DialogInterface dialog, int id) -> {
+                Intent openPrivacyUrlIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(privacyUrl));
+                startActivity(openPrivacyUrlIntent);
+                dialog.dismiss();
+            });
+        }
 
         return builder.create();
     }

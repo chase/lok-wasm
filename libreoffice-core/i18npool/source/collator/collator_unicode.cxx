@@ -38,7 +38,7 @@ using namespace ::com::sun::star::uno;
 
 namespace i18npool {
 
-constexpr OUStringLiteral implementationName = u"com.sun.star.i18n.Collator_Unicode";
+constexpr OUString implementationName = u"com.sun.star.i18n.Collator_Unicode"_ustr;
 
 Collator_Unicode::Collator_Unicode()
 {
@@ -252,16 +252,6 @@ Collator_Unicode::loadCollatorAlgorithm(const OUString& rAlgorithm, const lang::
                     funclen = get_collator_data_ja_phonetic_alphanumeric_last_length;
                 }
 #endif
-#if WITH_LOCALE_ALL || WITH_LOCALE_ko
-#if (U_ICU_VERSION_MAJOR_NUM < 53)
-            } else if ( rLocale.Language == "ko" ) {
-                if ( rAlgorithm == "charset" )
-                {
-                    func = get_collator_data_ko_charset;
-                    funclen = get_collator_data_ko_charset_length;
-                }
-#endif
-#endif
 #if WITH_LOCALE_ALL || WITH_LOCALE_ku
             } else if ( rLocale.Language == "ku" ) {
                 if ( rAlgorithm == "alphanumeric" )
@@ -442,7 +432,7 @@ Collator_Unicode::supportsService(const OUString& rServiceName)
 Sequence< OUString > SAL_CALL
 Collator_Unicode::getSupportedServiceNames()
 {
-    Sequence< OUString > aRet { OUString(implementationName) };
+    Sequence< OUString > aRet { implementationName };
     return aRet;
 }
 

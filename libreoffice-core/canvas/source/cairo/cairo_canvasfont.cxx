@@ -27,6 +27,8 @@
 #include <utility>
 #include <vcl/metric.hxx>
 
+#include <canvas/canvastools.hxx>
+
 #include "cairo_canvasfont.hxx"
 #include "cairo_textlayout.hxx"
 
@@ -36,16 +38,18 @@ namespace cairocanvas
 {
 
     CanvasFont::CanvasFont( const rendering::FontRequest&                   rFontRequest,
-                            const uno::Sequence< beans::PropertyValue >&    /*rExtraFontProperties*/,
+                            const uno::Sequence< beans::PropertyValue >&    rExtraFontProperties,
                             const geometry::Matrix2D&                       rFontMatrix,
                             SurfaceProviderRef                              rDevice ) :
-        CanvasFont_Base( m_aMutex ),
         maFont( vcl::Font( rFontRequest.FontDescription.FamilyName,
                       rFontRequest.FontDescription.StyleName,
                       Size( 0, ::basegfx::fround(rFontRequest.CellSize) ) ) ),
         maFontRequest( rFontRequest ),
-        mpRefDevice(std::move( rDevice ))
+        mpRefDevice(std::move( rDevice )),
+        mnEmphasisMark(0)
     {
+        ::canvas::tools::extractExtraFontProperties(rExtraFontProperties, mnEmphasisMark);
+
         maFont->SetAlignment( ALIGN_BASELINE );
         maFont->SetCharSet( (rFontRequest.FontDescription.IsSymbolFont==css::util::TriState_YES) ? RTL_TEXTENCODING_SYMBOL : RTL_TEXTENCODING_UNICODE );
         maFont->SetVertical( rFontRequest.FontDescription.IsVertical==css::util::TriState_YES );
@@ -86,11 +90,14 @@ namespace cairocanvas
         pOutDev->EnableMapMode(bOldMapState);
     }
 
-    void SAL_CALL CanvasFont::disposing()
+    void CanvasFont::disposing(std::unique_lock<std::mutex>& rGuard)
     {
-        SolarMutexGuard aGuard;
-
-        mpRefDevice.clear();
+        rGuard.unlock();
+        {
+            SolarMutexGuard aGuard;
+            mpRefDevice.clear();
+        }
+        rGuard.lock();
     }
 
     uno::Reference< rendering::XTextLayout > SAL_CALL  CanvasFont::createTextLayout( const rendering::StringContext& aText, sal_Int8 nDirection, sal_Int64 nRandomSeed )
@@ -109,8 +116,6 @@ namespace cairocanvas
 
     rendering::FontRequest SAL_CALL  CanvasFont::getFontRequest(  )
     {
-        SolarMutexGuard aGuard;
-
         return maFontRequest;
     }
 

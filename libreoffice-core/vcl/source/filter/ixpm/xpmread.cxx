@@ -22,7 +22,7 @@
 #include <vcl/graph.hxx>
 #include <tools/stream.hxx>
 
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <graphic/GraphicReader.hxx>
 
 #include "rgbtable.hxx"
@@ -197,19 +197,17 @@ ReadState XPMReader::ReadXPM( Graphic& rGraphic )
                     auto ePixelFormat = vcl::PixelFormat::INVALID;
                     if ( mnColors > 256 )
                         ePixelFormat = vcl::PixelFormat::N24_BPP;
-                    else if ( mnColors > 2 )
-                        ePixelFormat = vcl::PixelFormat::N8_BPP;
                     else
-                        ePixelFormat = vcl::PixelFormat::N1_BPP;
+                        ePixelFormat = vcl::PixelFormat::N8_BPP;
 
                     maBmp = Bitmap(Size(mnWidth, mnHeight), ePixelFormat);
-                    mpAcc = BitmapScopedWriteAccess(maBmp);
+                    mpAcc = maBmp;
 
                     // mbTransparent is TRUE if at least one colour is transparent
                     if ( mbTransparent )
                     {
-                        maMaskBmp = Bitmap(Size(mnWidth, mnHeight), vcl::PixelFormat::N1_BPP);
-                        mpMaskAcc = BitmapScopedWriteAccess(maMaskBmp);
+                        maMaskBmp = Bitmap(Size(mnWidth, mnHeight), vcl::PixelFormat::N8_BPP, &Bitmap::GetGreyPalette(256));
+                        mpMaskAcc = maMaskBmp;
                         if ( !mpMaskAcc )
                             mbStatus = false;
                     }

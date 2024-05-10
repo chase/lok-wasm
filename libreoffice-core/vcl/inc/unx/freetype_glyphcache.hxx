@@ -61,6 +61,7 @@ public:
     FT_FaceRec_*          GetFaceFT();
     void                  ReleaseFaceFT();
 
+    FreetypeFontFile*     GetFontFile() const       { return mpFontFile; }
     const OString&        GetFontFileName() const   { return mpFontFile->GetFileName(); }
     int                   GetFontFaceIndex() const  { return mnFaceNum; }
     int                   GetFontFaceVariation() const  { return mnFaceVariation; }
@@ -84,7 +85,7 @@ private:
 
 };
 
-class FreetypeFontFace : public vcl::font::PhysicalFontFace
+class FreetypeFontFace final : public vcl::font::PhysicalFontFace
 {
 private:
     FreetypeFontInfo*             mpFreetypeFontInfo;
@@ -106,8 +107,6 @@ class SAL_DLLPUBLIC_RTTI FreetypeFontInstance final : public LogicalFontInstance
     friend rtl::Reference<LogicalFontInstance> FreetypeFontFace::CreateFontInstance(const vcl::font::FontSelectPattern&) const;
 
     std::unique_ptr<FreetypeFont> mxFreetypeFont;
-
-    virtual bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const override;
 
     explicit FreetypeFontInstance(const vcl::font::PhysicalFontFace& rPFF, const vcl::font::FontSelectPattern& rFSP);
 

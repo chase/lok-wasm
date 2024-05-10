@@ -23,7 +23,7 @@
 #include <com/sun/star/awt/TextAlign.hpp>
 #include <com/sun/star/style/ParagraphAdjust.hpp>
 #include <osl/diagnose.h>
-#include <cppuhelper/implbase1.hxx>
+#include <cppuhelper/implbase.hxx>
 
 #include <algorithm>
 
@@ -111,7 +111,7 @@ namespace xmloff
         }
 
         //= OMergedPropertySetInfo
-        typedef ::cppu::WeakAggImplHelper1  <   XPropertySetInfo
+        typedef ::cppu::WeakImplHelper  <   XPropertySetInfo
                                             >   OMergedPropertySetInfo_Base;
         class OMergedPropertySetInfo : public OMergedPropertySetInfo_Base
         {
@@ -256,7 +256,7 @@ namespace xmloff
         {
             if (aTranslatedNames.getLength() != aTranslatedValues.getLength())
                     throw css::lang::IllegalArgumentException(
-                        "lengths do not match", static_cast<cppu::OWeakObject*>(this), -1);
+                        "lengths do not match", getXWeak(), -1);
             aTranslatedNames.getArray()[ nParaAlignPos ] = getAlignProperty();
             valueParaAdjustToAlign( aTranslatedValues.getArray()[ nParaAlignPos ] );
         }

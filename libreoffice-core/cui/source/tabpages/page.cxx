@@ -191,9 +191,8 @@ SvxPageDescPage::SvxPageDescPage(weld::Container* pPage, weld::DialogController*
     // this page needs ExchangeSupport
     SetExchangeSupport();
 
-    SvtCTLOptions aCTLLanguageOptions;
     bool bCJK = SvtCJKOptions::IsAsianTypographyEnabled();
-    bool bCTL = aCTLLanguageOptions.IsCTLFontEnabled();
+    bool bCTL = SvtCTLOptions::IsCTLFontEnabled();
     bool bWeb = false;
 
     const SfxUInt16Item* pHtmlModeItem = rAttr.GetItemIfSet(SID_HTML_MODE, false);
@@ -723,14 +722,14 @@ bool SvxPageDescPage::FillItemSet( SfxItemSet* rSet )
     }
 
     // paper tray
-    nWhich = GetWhich( SID_ATTR_PAGE_PAPERBIN );
+    TypedWhichId<SvxPaperBinItem> nPaperWhich = GetWhich( SID_ATTR_PAGE_PAPERBIN );
     sal_Int32 nPos = m_xPaperTrayBox->get_active();
     sal_uInt16 nBin = m_xPaperTrayBox->get_id(nPos).toInt32();
     pOld = GetOldItem( *rSet, SID_ATTR_PAGE_PAPERBIN );
 
     if ( !pOld || static_cast<const SvxPaperBinItem*>(pOld)->GetValue() != nBin )
     {
-        rSet->Put( SvxPaperBinItem( nWhich, static_cast<sal_uInt8>(nBin) ) );
+        rSet->Put( SvxPaperBinItem( nPaperWhich, static_cast<sal_uInt8>(nBin) ) );
         bModified = true;
     }
 
@@ -921,8 +920,8 @@ IMPL_LINK_NOARG(SvxPageDescPage, PaperBinHdl_Impl, weld::Widget&, void)
         }
         m_xPaperTrayBox->append(OUString::number(i), aName);
     }
-    m_xPaperTrayBox->set_active_text(aOldName);
     m_xPaperTrayBox->thaw();
+    m_xPaperTrayBox->set_active_text(aOldName);
 
     // tdf#123650 explicitly grab-focus after the modification otherwise gtk loses track
     // of there the focus should be
@@ -1249,13 +1248,13 @@ void SvxPageDescPage::InitHeadFoot_Impl( const SfxItemSet& rSet )
         {
             const SvxSizeItem& rSize =
                 rHeaderSet.Get( GetWhich( SID_ATTR_PAGE_SIZE ) );
-            const SvxULSpaceItem& rUL = static_cast<const SvxULSpaceItem&>(
-                rHeaderSet.Get( GetWhich( SID_ATTR_ULSPACE ) ));
+            const SvxULSpaceItem& rUL =
+                rHeaderSet.Get( GetWhich( SID_ATTR_ULSPACE ) );
             tools::Long nDist = rUL.GetLower();
             m_aBspWin.SetHdHeight( rSize.GetSize().Height() - nDist );
             m_aBspWin.SetHdDist( nDist );
-            const SvxLRSpaceItem& rLR = static_cast<const SvxLRSpaceItem&>(
-                rHeaderSet.Get( GetWhich( SID_ATTR_LRSPACE ) ));
+            const SvxLRSpaceItem& rLR =
+                rHeaderSet.Get( GetWhich( SID_ATTR_LRSPACE ) );
             m_aBspWin.SetHdLeft( rLR.GetLeft() );
             m_aBspWin.SetHdRight( rLR.GetRight() );
             m_aBspWin.SetHeader( true );
@@ -1304,13 +1303,13 @@ void SvxPageDescPage::InitHeadFoot_Impl( const SfxItemSet& rSet )
     {
         const SvxSizeItem& rSize =
             rFooterSet.Get( GetWhich( SID_ATTR_PAGE_SIZE ) );
-        const SvxULSpaceItem& rUL = static_cast<const SvxULSpaceItem&>(
-            rFooterSet.Get( GetWhich( SID_ATTR_ULSPACE ) ));
+        const SvxULSpaceItem& rUL =
+            rFooterSet.Get( GetWhich( SID_ATTR_ULSPACE ) );
         tools::Long nDist = rUL.GetUpper();
         m_aBspWin.SetFtHeight( rSize.GetSize().Height() - nDist );
         m_aBspWin.SetFtDist( nDist );
-        const SvxLRSpaceItem& rLR = static_cast<const SvxLRSpaceItem&>(
-            rFooterSet.Get( GetWhich( SID_ATTR_LRSPACE ) ));
+        const SvxLRSpaceItem& rLR =
+            rFooterSet.Get( GetWhich( SID_ATTR_LRSPACE ) );
         m_aBspWin.SetFtLeft( rLR.GetLeft() );
         m_aBspWin.SetFtRight( rLR.GetRight() );
         m_aBspWin.SetFooter( true );
@@ -1435,8 +1434,8 @@ void SvxPageDescPage::RangeHdl_Impl()
             SfxItemState::DEFAULT )
     {
         aBorder = GetMinBorderSpace_Impl(
-            static_cast<const SvxShadowItem&>(_pSet->Get(GetWhich(SID_ATTR_BORDER_SHADOW))),
-            static_cast<const SvxBoxItem&>(_pSet->Get(GetWhich(SID_ATTR_BORDER_OUTER))));
+            _pSet->Get(GetWhich(SID_ATTR_BORDER_SHADOW)),
+            _pSet->Get(GetWhich(SID_ATTR_BORDER_OUTER)));
     }
 
     // limits paper

@@ -71,7 +71,7 @@ namespace {
 
 constexpr size_t RECENTLY_USED_LIMIT = 5;
 
-constexpr OUStringLiteral constRecentlyUsedFileName(u"recentlyUsed.xml");
+constexpr OUString constRecentlyUsedFileName(u"recentlyUsed.xml"_ustr);
 
 OUString lcl_getClassificationUserPath()
 {
@@ -335,7 +335,7 @@ void ClassificationDialog::readRecentlyUsed()
 
                     // Convert string to classification type, but continue only if
                     // conversion was successful.
-                    if (stringToClassificationType(aWalker.attribute("type"), eType))
+                    if (stringToClassificationType(aWalker.attribute("type"_ostr), eType))
                     {
                         aWalker.children();
 

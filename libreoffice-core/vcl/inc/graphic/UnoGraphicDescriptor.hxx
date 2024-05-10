@@ -23,36 +23,35 @@
 #include <comphelper/propertysethelper.hxx>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 
-#include <cppuhelper/weakagg.hxx>
 #include <comphelper/propertysetinfo.hxx>
 #include <vcl/graph.hxx>
 
-#define MIMETYPE_BMP        "image/x-MS-bmp"
-#define MIMETYPE_GIF        "image/gif"
-#define MIMETYPE_JPG        "image/jpeg"
-#define MIMETYPE_PCD        "image/x-photo-cd"
-#define MIMETYPE_PCX        "image/x-pcx"
-#define MIMETYPE_PNG        "image/png"
-#define MIMETYPE_TIF        "image/tiff"
-#define MIMETYPE_XBM        "image/x-xbitmap"
-#define MIMETYPE_XPM        "image/x-xpixmap"
-#define MIMETYPE_PBM        "image/x-portable-bitmap"
-#define MIMETYPE_PGM        "image/x-portable-graymap"
-#define MIMETYPE_PPM        "image/x-portable-pixmap"
-#define MIMETYPE_RAS        "image/x-cmu-raster"
-#define MIMETYPE_TGA        "image/x-targa"
-#define MIMETYPE_PSD        "image/vnd.adobe.photoshop"
-#define MIMETYPE_EPS        "image/x-eps"
-#define MIMETYPE_DXF        "image/vnd.dxf"
-#define MIMETYPE_MET        "image/x-met"
-#define MIMETYPE_PCT        "image/x-pict"
-#define MIMETYPE_SVM        "image/x-svm"
-#define MIMETYPE_WMF        "image/x-wmf"
-#define MIMETYPE_EMF        "image/x-emf"
-#define MIMETYPE_SVG        "image/svg+xml"
-#define MIMETYPE_PDF        "application/pdf"
-#define MIMETYPE_WEBP       "image/webp"
-inline constexpr OUStringLiteral MIMETYPE_VCLGRAPHIC = u"image/x-vclgraphic";
+inline constexpr OUString MIMETYPE_BMP = u"image/x-MS-bmp"_ustr;
+inline constexpr OUString MIMETYPE_GIF = u"image/gif"_ustr;
+inline constexpr OUString MIMETYPE_JPG = u"image/jpeg"_ustr;
+inline constexpr OUString MIMETYPE_PCD = u"image/x-photo-cd"_ustr;
+inline constexpr OUString MIMETYPE_PCX = u"image/x-pcx"_ustr;
+inline constexpr OUString MIMETYPE_PNG = u"image/png"_ustr;
+inline constexpr OUString MIMETYPE_TIF = u"image/tiff"_ustr;
+inline constexpr OUString MIMETYPE_XBM = u"image/x-xbitmap"_ustr;
+inline constexpr OUString MIMETYPE_XPM = u"image/x-xpixmap"_ustr;
+inline constexpr OUString MIMETYPE_PBM = u"image/x-portable-bitmap"_ustr;
+inline constexpr OUString MIMETYPE_PGM = u"image/x-portable-graymap"_ustr;
+inline constexpr OUString MIMETYPE_PPM = u"image/x-portable-pixmap"_ustr;
+inline constexpr OUString MIMETYPE_RAS = u"image/x-cmu-raster"_ustr;
+inline constexpr OUString MIMETYPE_TGA = u"image/x-targa"_ustr;
+inline constexpr OUString MIMETYPE_PSD = u"image/vnd.adobe.photoshop"_ustr;
+inline constexpr OUString MIMETYPE_EPS = u"image/x-eps"_ustr;
+inline constexpr OUString MIMETYPE_DXF = u"image/vnd.dxf"_ustr;
+inline constexpr OUString MIMETYPE_MET = u"image/x-met"_ustr;
+inline constexpr OUString MIMETYPE_PCT = u"image/x-pict"_ustr;
+inline constexpr OUString MIMETYPE_SVM = u"image/x-svm"_ustr;
+inline constexpr OUString MIMETYPE_WMF = u"image/x-wmf"_ustr;
+inline constexpr OUString MIMETYPE_EMF = u"image/x-emf"_ustr;
+inline constexpr OUString MIMETYPE_SVG = u"image/svg+xml"_ustr;
+inline constexpr OUString MIMETYPE_PDF = u"application/pdf"_ustr;
+inline constexpr OUString MIMETYPE_WEBP = u"image/webp"_ustr;
+inline constexpr OUString MIMETYPE_VCLGRAPHIC = u"image/x-vclgraphic"_ustr;
 
 namespace comphelper { class PropertySetInfo; }
 namespace com::sun::star::io { class XInputStream; }
@@ -61,7 +60,7 @@ class Graphic;
 
 namespace unographic {
 
-class GraphicDescriptor : public ::cppu::OWeakAggObject,
+class GraphicDescriptor : public ::cppu::OWeakObject,
                           public css::lang::XServiceInfo,
                           public css::lang::XTypeProvider,
                           public ::comphelper::PropertySetHelper
@@ -78,7 +77,6 @@ public:
     static rtl::Reference<::comphelper::PropertySetInfo> createPropertySetInfo();
 
     // XInterface
-    virtual css::uno::Any SAL_CALL queryAggregation( const css::uno::Type & rType ) override;
     virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type & rType ) override;
     virtual void SAL_CALL acquire() noexcept override;
     virtual void SAL_CALL release() noexcept override;

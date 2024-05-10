@@ -127,6 +127,11 @@ SwTextFormatColl::~SwTextFormatColl()
 }
 void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rHint)
 {
+    if (rHint.GetId() == SfxHintId::SwAutoFormatUsedHint)
+    {
+        CallSwClientNotify(rHint);
+        return;
+    }
     if (rHint.GetId() != SfxHintId::SwLegacyModify)
         return;
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
@@ -137,7 +142,9 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
     }
     bool bNewParent( false ); // #i66431# - adjust type of <bNewParent>
     const SvxULSpaceItem *pNewULSpace = nullptr, *pOldULSpace = nullptr;
-    const SvxLRSpaceItem *pNewLRSpace = nullptr, *pOldLRSpace = nullptr;
+    const SvxFirstLineIndentItem *pNewFirstLineIndent = nullptr;
+    const SvxTextLeftMarginItem *pNewTextLeftMargin = nullptr;
+    const SvxRightMarginItem *pNewRightMargin = nullptr;
     const SvxFontHeightItem* aFontSizeArr[3] = {nullptr,nullptr,nullptr};
     // #i70223#
     const bool bAssignedToListLevelOfOutlineStyle(IsAssignedToListLevelOfOutlineStyle());
@@ -152,7 +159,9 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
         // Only recalculate if we're not the sender!
         pNewChgSet = &pNew->StaticWhichCast(RES_ATTRSET_CHG);
         pOldChgSet = &pOld->StaticWhichCast(RES_ATTRSET_CHG);
-        pNewLRSpace = pNewChgSet->GetChgSet()->GetItemIfSet( RES_LR_SPACE, false );
+        pNewFirstLineIndent = pNewChgSet->GetChgSet()->GetItemIfSet(RES_MARGIN_FIRSTLINE, false);
+        pNewTextLeftMargin = pNewChgSet->GetChgSet()->GetItemIfSet(RES_MARGIN_TEXTLEFT, false);
+        pNewRightMargin = pNewChgSet->GetChgSet()->GetItemIfSet(RES_MARGIN_RIGHT, false);
         pNewULSpace = pNewChgSet->GetChgSet()->GetItemIfSet( RES_UL_SPACE, false );
         aFontSizeArr[0] = pNewChgSet->GetChgSet()->GetItemIfSet( RES_CHRATR_FONTSIZE, false );
         aFontSizeArr[1] = pNewChgSet->GetChgSet()->GetItemIfSet( RES_CHRATR_CJK_FONTSIZE, false );
@@ -171,7 +180,9 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
         if( GetAttrSet().GetParent() )
         {
             const SfxItemSet* pParent = GetAttrSet().GetParent();
-            pNewLRSpace = &pParent->Get( RES_LR_SPACE );
+            pNewFirstLineIndent = &pParent->Get(RES_MARGIN_FIRSTLINE);
+            pNewTextLeftMargin = &pParent->Get(RES_MARGIN_TEXTLEFT);
+            pNewRightMargin = &pParent->Get(RES_MARGIN_RIGHT);
             pNewULSpace = &pParent->Get( RES_UL_SPACE );
             aFontSizeArr[0] = &pParent->Get( RES_CHRATR_FONTSIZE );
             aFontSizeArr[1] = &pParent->Get( RES_CHRATR_CJK_FONTSIZE );
@@ -181,8 +192,14 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
         }
         break;
 
-    case RES_LR_SPACE:
-        pNewLRSpace = &pNew->StaticWhichCast(RES_LR_SPACE);
+    case RES_MARGIN_FIRSTLINE:
+        pNewFirstLineIndent = &pNew->StaticWhichCast(RES_MARGIN_FIRSTLINE);
+        break;
+    case RES_MARGIN_TEXTLEFT:
+        pNewTextLeftMargin = &pNew->StaticWhichCast(RES_MARGIN_TEXTLEFT);
+        break;
+    case RES_MARGIN_RIGHT:
+        pNewRightMargin = &pNew->StaticWhichCast(RES_MARGIN_RIGHT);
         break;
     case RES_UL_SPACE:
         pNewULSpace = &pNew->StaticWhichCast(RES_UL_SPACE);
@@ -217,31 +234,18 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
     bool bContinue = true;
 
     // Check against the own attributes
-    if( pNewLRSpace && (pOldLRSpace = GetItemIfSet( RES_LR_SPACE, false)) )
+    const SvxFirstLineIndentItem *pOldFirstLineIndent(GetItemIfSet(RES_MARGIN_FIRSTLINE, false));
+    if (pNewFirstLineIndent && pOldFirstLineIndent)
     {
-        if( pOldLRSpace != pNewLRSpace )    // Avoid recursion (SetAttr!)
+        if (!SfxPoolItem::areSame(pOldFirstLineIndent, pNewFirstLineIndent)) // Avoid recursion (SetAttr!)
         {
             bool bChg = false;
-            SvxLRSpaceItem aNew( *pOldLRSpace );
-            // We had a relative value -> recalculate
-            if( 100 != aNew.GetPropLeft() )
-            {
-                tools::Long nTmp = aNew.GetLeft();     // keep so that we can compare
-                aNew.SetLeft( pNewLRSpace->GetLeft(), aNew.GetPropLeft() );
-                bChg |= nTmp != aNew.GetLeft();
-            }
-            // We had a relative value -> recalculate
-            if( 100 != aNew.GetPropRight() )
-            {
-                tools::Long nTmp = aNew.GetRight();    // keep so that we can compare
-                aNew.SetRight( pNewLRSpace->GetRight(), aNew.GetPropRight() );
-                bChg |= nTmp != aNew.GetRight();
-            }
+            SvxFirstLineIndentItem aNew(*pOldFirstLineIndent);
             // We had a relative value -> recalculate
             if( 100 != aNew.GetPropTextFirstLineOffset() )
             {
                 short nTmp = aNew.GetTextFirstLineOffset();    // keep so that we can compare
-                aNew.SetTextFirstLineOffset( pNewLRSpace->GetTextFirstLineOffset(),
+                aNew.SetTextFirstLineOffset(pNewFirstLineIndent->GetTextFirstLineOffset(),
                                             aNew.GetPropTextFirstLineOffset() );
                 bChg |= nTmp != aNew.GetTextFirstLineOffset();
             }
@@ -256,9 +260,60 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
                 bContinue = pNewChgSet->GetTheChgdSet() == &GetAttrSet();
         }
     }
+    const SvxTextLeftMarginItem *pOldTextLeftMargin(GetItemIfSet(RES_MARGIN_TEXTLEFT, false));
+    if (pNewTextLeftMargin && pOldTextLeftMargin)
+    {
+        if (!SfxPoolItem::areSame(pOldTextLeftMargin, pNewTextLeftMargin)) // Avoid recursion (SetAttr!)
+        {
+            bool bChg = false;
+            SvxTextLeftMarginItem aNew(*pOldTextLeftMargin);
+            // We had a relative value -> recalculate
+            if( 100 != aNew.GetPropLeft() )
+            {
+                // note: changing from Left to TextLeft - looked wrong with Left
+                tools::Long nTmp = aNew.GetTextLeft(); // keep so that we can compare
+                aNew.SetTextLeft(pNewTextLeftMargin->GetTextLeft(), aNew.GetPropLeft());
+                bChg |= nTmp != aNew.GetTextLeft();
+            }
+            if( bChg )
+            {
+                SetFormatAttr( aNew );
+                bContinue = nullptr != pOldChgSet || bNewParent;
+            }
+            // We set it to absolute -> do not propagate it further, unless
+            // we set it!
+            else if( pNewChgSet )
+                bContinue = pNewChgSet->GetTheChgdSet() == &GetAttrSet();
+        }
+    }
+    const SvxRightMarginItem *pOldRightMargin(GetItemIfSet(RES_MARGIN_RIGHT, false));
+    if (pNewRightMargin && pOldRightMargin)
+    {
+        if (!SfxPoolItem::areSame(pOldRightMargin, pNewRightMargin)) // Avoid recursion (SetAttr!)
+        {
+            bool bChg = false;
+            SvxRightMarginItem aNew(*pOldRightMargin);
+            // We had a relative value -> recalculate
+            if( 100 != aNew.GetPropRight() )
+            {
+                tools::Long nTmp = aNew.GetRight();    // keep so that we can compare
+                aNew.SetRight(pNewRightMargin->GetRight(), aNew.GetPropRight());
+                bChg |= nTmp != aNew.GetRight();
+            }
+            if( bChg )
+            {
+                SetFormatAttr( aNew );
+                bContinue = nullptr != pOldChgSet || bNewParent;
+            }
+            // We set it to absolute -> do not propagate it further, unless
+            // we set it!
+            else if( pNewChgSet )
+                bContinue = pNewChgSet->GetTheChgdSet() == &GetAttrSet();
+        }
+    }
 
     if( pNewULSpace && (pOldULSpace = GetItemIfSet(RES_UL_SPACE, false)) &&
-        pOldULSpace != pNewULSpace )    // Avoid recursion (SetAttr!)
+        !SfxPoolItem::areSame(pOldULSpace, pNewULSpace) )    // Avoid recursion (SetAttr!)
     {
         SvxULSpaceItem aNew( *pOldULSpace );
         bool bChg = false;
@@ -293,7 +348,7 @@ void SwTextFormatColl::SwClientNotify(const SwModify& rModify, const SfxHint& rH
         if( pFSize && (SfxItemState::SET == GetItemState(
             pFSize->Which(), false, reinterpret_cast<const SfxPoolItem**>(&pOldFSize) )) &&
             // Avoid recursion (SetAttr!)
-            pFSize != pOldFSize )
+            !SfxPoolItem::areSame(pFSize, pOldFSize) )
         {
             if( 100 == pOldFSize->GetProp() &&
                 MapUnit::MapRelative == pOldFSize->GetPropUnit() )
@@ -422,7 +477,21 @@ sal_uInt16 SwTextFormatColl::ResetAllFormatAttr()
     return nRet;
 }
 
-bool SwTextFormatColl::AreListLevelIndentsApplicable() const
+::sw::ListLevelIndents SwTextFormatColl::AreListLevelIndentsApplicable() const
+{
+    ::sw::ListLevelIndents ret(::sw::ListLevelIndents::No);
+    if (AreListLevelIndentsApplicableImpl(RES_MARGIN_FIRSTLINE))
+    {
+        ret |= ::sw::ListLevelIndents::FirstLine;
+    }
+    if (AreListLevelIndentsApplicableImpl(RES_MARGIN_TEXTLEFT))
+    {
+        ret |= ::sw::ListLevelIndents::LeftMargin;
+    }
+    return ret;
+}
+
+bool SwTextFormatColl::AreListLevelIndentsApplicableImpl(sal_uInt16 const nWhich) const
 {
     bool bAreListLevelIndentsApplicable( true );
 
@@ -431,7 +500,7 @@ bool SwTextFormatColl::AreListLevelIndentsApplicable() const
         // no list style applied to paragraph style
         bAreListLevelIndentsApplicable = false;
     }
-    else if ( GetItemState( RES_LR_SPACE, false ) == SfxItemState::SET )
+    else if (GetItemState(nWhich, false ) == SfxItemState::SET)
     {
         // paragraph style has hard-set indent attributes
         bAreListLevelIndentsApplicable = false;
@@ -451,7 +520,7 @@ bool SwTextFormatColl::AreListLevelIndentsApplicable() const
         const SwTextFormatColl* pColl = dynamic_cast<const SwTextFormatColl*>(DerivedFrom());
         while ( pColl )
         {
-            if ( pColl->GetAttrSet().GetItemState( RES_LR_SPACE, false ) == SfxItemState::SET )
+            if (pColl->GetAttrSet().GetItemState(nWhich, false) == SfxItemState::SET)
             {
                 // indent attributes found in the paragraph style hierarchy.
                 bAreListLevelIndentsApplicable = false;

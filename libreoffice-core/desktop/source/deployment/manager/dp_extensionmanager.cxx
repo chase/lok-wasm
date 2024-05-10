@@ -104,7 +104,7 @@ void writeLastModified(OUString & url, Reference<ucb::XCommandEnvironment> const
         ::rtl::Bootstrap::expandMacros(url);
         ::ucbhelper::Content ucbStamp(url, xCmdEnv, xContext);
         dp_misc::erase_path( url, xCmdEnv );
-        OString stamp("1" );
+        OString stamp("1"_ostr );
         Reference<css::io::XInputStream> xData(
             ::xmlscript::createInputStream(
                     reinterpret_cast<sal_Int8 const *>(stamp.getStr()),
@@ -627,7 +627,7 @@ Reference<css::deployment::XPackage> ExtensionManager::addExtension(
             static_cast<cppu::OWeakObject*>(this), 0);
     //We must make sure that the xTmpExtension is not create twice, because this
     //would remove the first one.
-    ::osl::MutexGuard addGuard(m_addMutex);
+    std::unique_lock addGuard(m_addMutex);
 
     Reference<css::deployment::XPackageManager> xTmpRepository(getTmpRepository());
         // make sure xTmpRepository is alive as long as xTmpExtension is; as

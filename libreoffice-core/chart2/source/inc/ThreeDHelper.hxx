@@ -59,23 +59,6 @@ public:
      */
     static css::drawing::CameraGeometry getDefaultCameraGeometry( bool bPie=false );
 
-    static void getRotationAngleFromDiagram(
-        const css::uno::Reference< css::beans::XPropertySet >& xSceneProperties
-            , double& rfXAngleRad, double& rfYAngleRad, double& rfZAngleRad );
-    static void setRotationAngleToDiagram(
-        const rtl::Reference< ::chart::Diagram >& xSceneProperties
-            , double fXAngleRad, double fYAngleRad, double fZAngleRad );
-
-    static void getRotationFromDiagram(
-        const rtl::Reference< ::chart::Diagram >& xSceneProperties
-            , sal_Int32& rnHorizontalAngleDegree, sal_Int32& rnVerticalAngleDegree );
-    static void setRotationToDiagram(
-        const rtl::Reference< ::chart::Diagram >& xSceneProperties
-            , sal_Int32 nHorizontalAngleDegree, sal_Int32 nVerticalYAngleDegree );
-
-    static void switchRightAngledAxes( const css::uno::Reference< css::beans::XPropertySet >& xSceneProperties
-            , bool bRightAngledAxes );
-
     static void adaptRadAnglesForRightAngledAxes( double& rfXAngleRad, double& rfYAngleRad );
     static double getXDegreeAngleLimitForRightAngledAxes() { return 90.0; }
     static double getYDegreeAngleLimitForRightAngledAxes() { return 45.0; }
@@ -90,22 +73,11 @@ public:
         sal_Int32& rnElevationDeg, sal_Int32& rnRotationDeg
         , double fXRad, double fYRad, double fZRad );
 
-    static double getCameraDistance(
-        const css::uno::Reference< css::beans::XPropertySet >& xSceneProperties );
-    static void setCameraDistance(
-        const css::uno::Reference< css::beans::XPropertySet >& xSceneProperties
-            , double fCameraDistance );
     SAL_DLLPRIVATE static void ensureCameraDistanceRange( double& rfCameraDistance );
     SAL_DLLPRIVATE static void getCameraDistanceRange( double& rfMinimumDistance, double& rfMaximumDistance );
 
     static double CameraDistanceToPerspective( double fCameraDistance );
     static double PerspectiveToCameraDistance( double fPerspective );
-
-    static void set3DSettingsToDefault( const rtl::Reference< ::chart::Diagram >& xSceneProperties );
-    static void setDefaultRotation( const rtl::Reference< ::chart::Diagram >& xDiagram );
-    static void setDefaultIllumination( const rtl::Reference< ::chart::Diagram >& xDiagram );
-
-    static void setDefaultRotation( const css::uno::Reference< css::beans::XPropertySet >& xSceneProperties, bool bPieOrDonut );
 
     static CuboidPlanePosition getAutomaticCuboidPlanePositionForStandardLeftWall( const rtl::Reference<
             ::chart::Diagram >& xDiagram );
@@ -113,10 +85,6 @@ public:
             ::chart::Diagram >& xDiagram );
     static CuboidPlanePosition getAutomaticCuboidPlanePositionForStandardBottom(const rtl::Reference<
             ::chart::Diagram >& xDiagram );
-
-    static ThreeDLookScheme detectScheme( const rtl::Reference< ::chart::Diagram >& xDiagram );
-    static void setScheme( const rtl::Reference< ::chart::Diagram >& xDiagram
-            , ThreeDLookScheme aScheme );
 
     //sal_Int32 nRoundedEdges:  <0 or >100 -> mixed state
     //sal_Int32 nObjectLines:  0->no lines; 1->all lines on; other->mixed state

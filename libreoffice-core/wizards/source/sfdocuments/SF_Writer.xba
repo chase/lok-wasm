@@ -47,7 +47,7 @@ Option Explicit
 &apos;&apos;&apos;			TBD
 &apos;&apos;&apos;
 &apos;&apos;&apos;		Detailed user documentation:
-&apos;&apos;&apos;			https://help.libreoffice.org/latest/en-US/text/sbasic/shared/03/SF_Writer.html?DbPAR=BASIC
+&apos;&apos;&apos;			https://help.libreoffice.org/latest/en-US/text/sbasic/shared/03/sf_writer.html?DbPAR=BASIC
 &apos;&apos;&apos;
 &apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;&apos;
 
@@ -67,6 +67,8 @@ Private ServiceName				As String
 Private _Component				As Object		&apos;	com.sun.star.lang.XComponent
 
 REM ============================================================ MODULE CONSTANTS
+
+Const ISDOCFORM = 1				&apos;	Form is stored in a Writer document
 
 REM ====================================================== CONSTRUCTOR/DESTRUCTOR
 
@@ -308,18 +310,22 @@ Public Function Properties() As Variant
 					, &quot;DocumentProperties&quot; _
 					, &quot;DocumentType&quot; _
 					, &quot;ExportFilters&quot; _
+					, &quot;FileSystem&quot; _
 					, &quot;ImportFilters&quot; _
 					, &quot;IsBase&quot; _
 					, &quot;IsCalc&quot; _
 					, &quot;IsDraw&quot; _
+					, &quot;IsFormDocument&quot; _
 					, &quot;IsImpress&quot; _
 					, &quot;IsMath&quot; _
 					, &quot;IsWriter&quot; _
 					, &quot;Keywords&quot; _
 					, &quot;Readonly&quot; _
+					, &quot;StyleFamilies&quot; _
 					, &quot;Subject&quot; _
 					, &quot;Title&quot; _
 					, &quot;XComponent&quot; _
+					, &quot;XDocumentSettings&quot; _
 					)
 
 End Function	&apos;	SFDocuments.SF_Writer.Properties
@@ -410,6 +416,11 @@ Property Get ExportFilters() As Variant
 End Property	&apos;	SFDocuments.SF_Writer.ExportFilters
 
 REM -----------------------------------------------------------------------------
+Property Get FileSystem() As String
+	FileSystem = [_Super].GetProperty(&quot;FileSystem&quot;)
+End Property	&apos;	SFDocuments.SF_Writer.FileSystem
+
+REM -----------------------------------------------------------------------------
 Property Get ImportFilters() As Variant
 	ImportFilters = [_Super].GetProperty(&quot;ImportFilters&quot;)
 End Property	&apos;	SFDocuments.SF_Writer.ImportFilters
@@ -428,6 +439,11 @@ REM ----------------------------------------------------------------------------
 Property Get IsDraw() As Boolean
 	IsDraw = [_Super].GetProperty(&quot;IsDraw&quot;)
 End Property	&apos;	SFDocuments.SF_Writer.IsDraw
+
+REM -----------------------------------------------------------------------------
+Property Get IsFormDocument() As Boolean
+	IsFormDocument = [_Super].GetProperty(&quot;IsFormDocument&quot;)
+End Property	&apos;	SFDocuments.SF_Writer.IsFormDocument
 
 REM -----------------------------------------------------------------------------
 Property Get IsImpress() As Boolean
@@ -460,6 +476,11 @@ Property Get Readonly() As Variant
 End Property	&apos;	SFDocuments.SF_Writer.Readonly
 
 REM -----------------------------------------------------------------------------
+Property Get StyleFamilies() As Variant
+	StyleFamilies = [_Super].GetProperty(&quot;StyleFamilies&quot;)
+End Property	&apos;	SFDocuments.SF_Writer.StyleFamilies
+
+REM -----------------------------------------------------------------------------
 Property Get Subject() As Variant
 	Subject = [_Super].GetProperty(&quot;Subject&quot;)
 End Property	&apos;	SFDocuments.SF_Writer.Subject
@@ -484,6 +505,11 @@ Property Get XComponent() As Variant
 	XComponent = [_Super].GetProperty(&quot;XComponent&quot;)
 End Property	&apos;	SFDocuments.SF_Writer.XComponent
 
+REM -----------------------------------------------------------------------------
+Property Get XDocumentSettings() As Variant
+	XDocumentSettings = [_Super].GetProperty(&quot;XDocumentSettings&quot;)
+End Property	&apos;	SFDocuments.SF_Writer.XDocumentSettings
+
 REM ========================================================== SUPERCLASS METHODS
 
 REM -----------------------------------------------------------------------------
@@ -505,6 +531,20 @@ Public Function CreateMenu(Optional ByVal MenuHeader As Variant _
 End Function	&apos;	SFDocuments.SF_Writer.CreateMenu
 
 REM -----------------------------------------------------------------------------
+Public Sub DeleteStyles(Optional ByVal Family As Variant _
+								, Optional ByRef StylesList As Variant _
+								)
+	[_Super].DeleteStyles(Family, StylesList)
+End Sub			&apos;	SFDocuments.SF_Writer.DeleteStyles
+
+REM -----------------------------------------------------------------------------
+Public Sub Echo(Optional ByVal EchoOn As Variant _
+						, Optional ByVal Hourglass As Variant _
+						)
+	[_Super].Echo(EchoOn, Hourglass)
+End Sub		   &apos;   SFDocuments.SF_Writer.Echo
+
+REM -----------------------------------------------------------------------------
 Public Function ExportAsPDF(Optional ByVal FileName As Variant _
 							, Optional ByVal Overwrite As Variant _
 							, Optional ByVal Pages As Variant _
@@ -513,6 +553,14 @@ Public Function ExportAsPDF(Optional ByVal FileName As Variant _
 							) As Boolean
 	ExportAsPDF = [_Super].ExportAsPDF(FileName, Overwrite, Pages, Password, Watermark)
 End Function   &apos;   SFDocuments.SF_Writer.ExportAsPDF
+
+REM -----------------------------------------------------------------------------
+Public Sub ImportStylesFromFile(Optional FileName As Variant _
+								, Optional ByRef Families As Variant _
+								, Optional ByVal Overwrite As variant _
+								) As Variant
+	[_Super]._ImportStylesFromFile(FileName, Families, Overwrite)
+End Sub	&apos;	SFDocuments.SF_Writer.ImportStylesFromFile
 
 REM -----------------------------------------------------------------------------
 Public Function RemoveMenu(Optional ByVal MenuHeader As Variant) As Boolean
@@ -558,6 +606,29 @@ Public Function SetPrinter(Optional ByVal Printer As Variant _
 							) As Boolean
 	SetPrinter = [_Super].SetPrinter(Printer, Orientation, PaperFormat)
 End Function	&apos;   SFDocuments.SF_Writer.SetPrinter
+
+REM -----------------------------------------------------------------------------
+Public Function Styles(Optional ByVal Family As Variant _
+							, Optional ByVal NamePattern As variant _
+							, Optional ByVal Used As variant _
+							, Optional ByVal UserDefined As Variant _
+							, Optional ByVal ParentStyle As Variant _
+							, Optional ByVal Category As Variant _
+							) As Variant
+	Styles = [_Super].Styles(Family, NamePattern, Used, UserDefined, ParentStyle, Category)
+End Function	&apos;   SFDocuments.SF_Writer.Styles
+
+REM -----------------------------------------------------------------------------
+Public Function Toolbars(Optional ByVal ToolbarName As Variant) As Variant
+	Toolbars = [_Super].Toolbars(ToolbarName)
+End Function	&apos;	SFDocuments.SF_Writer.Toolbars
+
+REM -----------------------------------------------------------------------------
+Public Function XStyle(Optional ByVal Family As Variant _
+							, Optional ByVal StyleName As variant _
+							) As Object
+	Set XStyle = [_Super].XStyle(Family, StyleName)
+End Function	&apos;	SFDocuments.SF_Writer.XStyle
 
 REM =========================================================== PRIVATE FUNCTIONS
 

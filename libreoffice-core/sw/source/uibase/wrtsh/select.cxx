@@ -41,6 +41,14 @@
 #include <vcl/uitest/logger.hxx>
 #include <vcl/uitest/eventdescription.hxx>
 
+#include <vcl/weld.hxx>
+#include <vcl/builder.hxx>
+#include <officecfg/Office/Common.hxx>
+#include <unotools/configmgr.hxx>
+#include <bitmaps.hlst>
+
+#include <svx/svdview.hxx>
+
 namespace com::sun::star::util {
     struct SearchOptions2;
 }
@@ -54,8 +62,9 @@ void SwWrtShell::Invalidate()
 {
     // to avoid making the slot volatile, invalidate it every time if something could have been changed
     // this is still much cheaper than asking for the state every 200 ms (and avoid background processing)
-    GetView().GetViewFrame()->GetBindings().Invalidate( FN_STAT_SELMODE );
-    SwWordCountWrapper *pWrdCnt = static_cast<SwWordCountWrapper*>(GetView().GetViewFrame()->GetChildWindow(SwWordCountWrapper::GetChildWindowId()));
+    GetView().GetViewFrame().GetBindings().Invalidate( FN_STAT_SELMODE );
+    GetView().GetViewFrame().GetBindings().Update(FN_STAT_SELMODE); // make selection mode control icon update immediately
+    SwWordCountWrapper *pWrdCnt = static_cast<SwWordCountWrapper*>(GetView().GetViewFrame().GetChildWindow(SwWordCountWrapper::GetChildWindowId()));
     if (pWrdCnt)
         pWrdCnt->UpdateCounts();
 }
@@ -446,7 +455,7 @@ void SwWrtShell::EndSelect()
             m_fnKillSel = &SwWrtShell::ResetSelect;
         }
     }
-    SwWordCountWrapper *pWrdCnt = static_cast<SwWordCountWrapper*>(GetView().GetViewFrame()->GetChildWindow(SwWordCountWrapper::GetChildWindowId()));
+    SwWordCountWrapper *pWrdCnt = static_cast<SwWordCountWrapper*>(GetView().GetViewFrame().GetChildWindow(SwWordCountWrapper::GetChildWindowId()));
     if (pWrdCnt)
         pWrdCnt->UpdateCounts();
 
@@ -587,6 +596,35 @@ void SwWrtShell::EnterStdMode()
     SwTransferable::ClearSelection( *this );
 }
 
+void SwWrtShell::AssureStdMode()
+{
+    // deselect any drawing or frame and leave editing mode
+    if (SdrView* pSdrView = GetDrawView())
+    {
+        if (pSdrView->IsTextEdit())
+        {
+            bool bLockView = IsViewLocked();
+            LockView(true);
+            EndTextEdit();
+            LockView(bLockView);
+        }
+        // go out of the frame
+        Point aPt(LONG_MIN, LONG_MIN);
+        SelectObj(aPt, SW_LEAVE_FRAME);
+    }
+    if (IsSelFrameMode() || IsObjSelected())
+    {
+        UnSelectFrame();
+        LeaveSelFrameMode();
+        GetView().LeaveDrawCreate();
+        EnterStdMode();
+        DrawSelChanged();
+        GetView().StopShellTimer();
+    }
+    else
+        EnterStdMode();
+}
+
 // Extended Mode
 
 void SwWrtShell::EnterExtMode()
@@ -677,10 +715,29 @@ void SwWrtShell::LeaveBlockMode()
 
 void SwWrtShell::SetInsMode( bool bOn )
 {
+    const bool bDoAsk = officecfg::Office::Common::Misc::QuerySetInsMode::get();
+    if (!bOn && bDoAsk) {
+        std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(GetView().GetFrameWeld(), "cui/ui/querysetinsmodedialog.ui"));
+        std::unique_ptr<weld::Dialog> xQuery(xBuilder->weld_dialog("SetInsModeDialog"));
+        std::unique_ptr<weld::Image> xImage(xBuilder->weld_image("imSetInsMode"));
+        std::unique_ptr<weld::CheckButton> xCheckBox(xBuilder->weld_check_button("cbDontShowAgain"));
+
+        xImage->set_from_icon_name(RID_BMP_QUERYINSMODE);
+
+        const int nResult = xQuery->run();
+
+        std::shared_ptr<comphelper::ConfigurationChanges> xChanges(
+            comphelper::ConfigurationChanges::create());
+        officecfg::Office::Common::Misc::QuerySetInsMode::set(!xCheckBox->get_active(), xChanges);
+        xChanges->commit();
+
+        if ( nResult == static_cast<int>(RET_NO) )
+            return;
+    }
     m_bIns = bOn;
     SwCursorShell::SetOverwriteCursor( !m_bIns );
     const SfxBoolItem aTmp( SID_ATTR_INSERT, m_bIns );
-    GetView().GetViewFrame()->GetBindings().SetState( aTmp );
+    GetView().GetViewFrame().GetBindings().SetState( aTmp );
     StartAction();
     EndAction();
     Invalidate();

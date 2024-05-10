@@ -17,22 +17,19 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_SALFRAME_H
-#define INCLUDED_VCL_INC_UNX_SALFRAME_H
+#pragma once
 
 #include <X11/Xlib.h>
 
 #include <unx/saltype.h>
 #include <unx/saldisp.hxx>
-#include <unx/screensaverinhibitor.hxx>
+#include <unx/sessioninhibitor.hxx>
 #include <salframe.hxx>
 #include <salwtype.hxx>
-#include <salinst.hxx>
 
 #include <vcl/ptrstyle.hxx>
 #include <vcl/sysdata.hxx>
 #include <vcl/timer.hxx>
-#include <vclpluginapi.h>
 
 #include <list>
 
@@ -74,6 +71,7 @@ class X11SalFrame final : public SalFrame
     SalDisplay     *pDisplay_;
     SalX11Screen    m_nXScreen;
     ::Window        mhWindow;
+    cairo_surface_t* mpSurface;
     ::Window        mhShellWindow;
     ::Window        mhForeignParent;
     // window to fall back to when no longer in fullscreen mode
@@ -92,7 +90,7 @@ class X11SalFrame final : public SalFrame
     X11ShowState    nShowState_;        // show state
     int             nWidth_;            // client width
     int             nHeight_;           // client height
-    tools::Rectangle       maRestorePosSize;
+    AbsoluteScreenPixelRectangle maRestorePosSize;
     SalFrameStyleFlags nStyle_;
     SalExtStyle     mnExtStyle;
     bool            bAlwaysOnTop_;
@@ -104,7 +102,7 @@ class X11SalFrame final : public SalFrame
     int             m_nWorkArea;
     bool            m_bSetFocusOnMap;
 
-    ScreenSaverInhibitor maScreenSaverInhibitor;
+    SessionManagerInhibitor maSessionManagerInhibitor;
     tools::Rectangle       maPaintRegion;
 
     Timer           maAlwaysOnTopRaiseTimer;
@@ -132,10 +130,10 @@ class X11SalFrame final : public SalFrame
 
     bool mPendingSizeEvent;
 
-    void            GetPosSize( tools::Rectangle &rPosSize );
+    void            GetPosSize( AbsoluteScreenPixelRectangle &rPosSize );
     void            SetSize   ( const Size      &rSize );
     void            Center();
-    void            SetPosSize( const tools::Rectangle &rPosSize );
+    void            SetPosSize( const AbsoluteScreenPixelRectangle &rPosSize );
     void            Minimize();
     void            Maximize();
     void            Restore();
@@ -179,6 +177,7 @@ public:
     }
     const SalX11Screen&     GetScreenNumber() const { return m_nXScreen; }
     ::Window                GetWindow() const { return mhWindow; }
+    cairo_surface_t*        GetSurface() const { return mpSurface; }
     ::Window                GetShellWindow() const { return mhShellWindow; }
     ::Window                GetForeignParent() const { return mhForeignParent; }
     ::Window                GetStackingWindow() const { return mhStackingWindow; }
@@ -220,7 +219,7 @@ public:
     virtual void                SetMaxClientSize( tools::Long nWidth, tools::Long nHeight ) override;
     virtual void                SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight, sal_uInt16 nFlags ) override;
     virtual void                GetClientSize( tools::Long& rWidth, tools::Long& rHeight ) override;
-    virtual void                GetWorkArea( tools::Rectangle& rRect ) override;
+    virtual void                GetWorkArea( AbsoluteScreenPixelRectangle& rRect ) override;
     virtual SalFrame*           GetParent() const override;
     virtual void SetWindowState(const vcl::WindowData*) override;
     virtual bool GetWindowState(vcl::WindowData*) override;
@@ -263,7 +262,5 @@ public:
     /// @internal
     void setPendingSizeEvent();
 };
-
-#endif // INCLUDED_VCL_INC_UNX_SALFRAME_H
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

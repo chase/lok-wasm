@@ -26,7 +26,7 @@ namespace sd
 /** This class exists to be able to register another factory that
     creates the view shell for the Draw application.
 */
-class GraphicViewShellBase : public ViewShellBase
+class GraphicViewShellBase final : public ViewShellBase
 {
 public:
     SFX_DECL_VIEWFACTORY(GraphicViewShellBase);
@@ -34,7 +34,7 @@ public:
     /** This constructor is used by the view factory of the SFX
         macros.
     */
-    GraphicViewShellBase(SfxViewFrame* pFrame, SfxViewShell* pOldShell);
+    GraphicViewShellBase(SfxViewFrame& rFrame, SfxViewShell* pOldShell);
     virtual ~GraphicViewShellBase() override;
 
     /** Callback function for general slot calls.

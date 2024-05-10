@@ -332,18 +332,6 @@ SECKEYPrivateKey* X509Certificate_NssImpl::getPrivateKey()
     return nullptr;
 }
 
-/* XUnoTunnel */
-sal_Int64 SAL_CALL X509Certificate_NssImpl::getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) {
-    return comphelper::getSomethingImpl(aIdentifier, this);
-}
-
-/* XUnoTunnel extension */
-
-const css::uno::Sequence< sal_Int8>& X509Certificate_NssImpl::getUnoTunnelId() {
-    static const comphelper::UnoIdInit theX509Certificate_NssImplUnoTunnelId;
-    return theX509Certificate_NssImplUnoTunnelId.getSeq();
-}
-
 static OUString getAlgorithmDescription(SECAlgorithmID const *aid)
 {
     SECOidTag tag;
@@ -555,8 +543,7 @@ static OUString CompatDNCryptoAPI(std::u16string_view rDN)
             {
                 if (rDN.size() != i+1 && rDN[i+1] == '"')
                 {
-                    buf.append('\\');
-                    buf.append(rDN[i+1]);
+                    buf.append(OUString::Concat("\\") + OUStringChar(rDN[i+1]));
                     ++i;
                 }
                 else

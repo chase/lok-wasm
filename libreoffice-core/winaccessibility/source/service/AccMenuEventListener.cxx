@@ -26,14 +26,14 @@
 #include <vcl/svapp.hxx>
 
 #include <AccMenuEventListener.hxx>
-#include <AccObjectManagerAgent.hxx>
+#include <AccObjectWinManager.hxx>
 #include <unomsaaevent.hxx>
 
 using namespace com::sun::star::uno;
 using namespace com::sun::star::accessibility;
 
-AccMenuEventListener::AccMenuEventListener(css::accessibility::XAccessible* pAcc, AccObjectManagerAgent* Agent)
-        :AccComponentEventListener(pAcc, Agent)
+AccMenuEventListener::AccMenuEventListener(css::accessibility::XAccessible* pAcc, AccObjectWinManager* pManager)
+        :AccComponentEventListener(pAcc, pManager)
 {}
 AccMenuEventListener::~AccMenuEventListener()
 {
@@ -49,9 +49,6 @@ void  AccMenuEventListener::notifyEvent( const css::accessibility::AccessibleEve
 
     switch (aEvent.EventId)
     {
-    case AccessibleEventId::CHILD:
-        HandleChildChangedEvent(aEvent.OldValue, aEvent.NewValue);
-        break;
     case AccessibleEventId::SELECTION_CHANGED:
         //don't need to process anything,just same as word behavior
         //handleSelectionChangedEvent();
@@ -63,49 +60,11 @@ void  AccMenuEventListener::notifyEvent( const css::accessibility::AccessibleEve
 }
 
 /**
- *  handle the CHILD event
- *  @param  oldValue    the child to be deleted
- *  @param  newValue    the child to be added
- */
-void AccMenuEventListener::HandleChildChangedEvent(Any oldValue, Any newValue)
-{
-
-    Reference< XAccessible > xChild;
-    if( newValue >>= xChild)
-    {
-        //create a new child
-        if(xChild.is())
-        {
-            XAccessible* pAcc = xChild.get();
-            //add this child
-            pAgent->InsertAccObj(pAcc, m_xAccessible.get());
-            //add all oldValue's existing children
-            pAgent->InsertChildrenAccObj(pAcc);
-            pAgent->NotifyAccEvent(UnoMSAAEvent::CHILD_ADDED, pAcc);
-        }
-    }
-    else if (oldValue >>= xChild)
-    {
-        //delete an existing child
-        if(xChild.is())
-        {
-            XAccessible* pAcc = xChild.get();
-            pAgent->NotifyAccEvent(UnoMSAAEvent::CHILD_REMOVED, pAcc);
-            //delete all oldValue's existing children
-            pAgent->DeleteChildrenAccObj( pAcc );
-            //delete this child
-            pAgent->DeleteAccObj( pAcc );
-        }
-    }
-
-}
-
-/**
  *  handle the SELECTION_CHANGED event
  */
 void AccMenuEventListener::HandleSelectionChangedEventNoArgs()
 {
-    pAgent->NotifyAccEvent(UnoMSAAEvent::SELECTION_CHANGED, m_xAccessible.get());
+    m_pObjManager->NotifyAccEvent(m_xAccessible.get(), UnoMSAAEvent::SELECTION_CHANGED);
 }
 
 /**
@@ -120,8 +79,8 @@ void AccMenuEventListener::FireStatePropertyChange(sal_Int64 state, bool set)
         {
             //for sub menu is popup, there is a menu selected event.
         case AccessibleStateType::SELECTED:
-            pAgent->IncreaseState(m_xAccessible.get(), state);
-            pAgent->UpdateChildState(m_xAccessible.get());
+            m_pObjManager->IncreaseState(m_xAccessible.get(), state);
+            m_pObjManager->UpdateChildState(m_xAccessible.get());
             break;
         default:
             AccComponentEventListener::FireStatePropertyChange(state, set);
@@ -134,7 +93,7 @@ void AccMenuEventListener::FireStatePropertyChange(sal_Int64 state, bool set)
         {
             //for sub menu is popup, there is a menu selected event.
         case AccessibleStateType::SELECTED:
-            pAgent->DecreaseState(m_xAccessible.get(), state);
+            m_pObjManager->DecreaseState(m_xAccessible.get(), state);
 
             break;
         default:

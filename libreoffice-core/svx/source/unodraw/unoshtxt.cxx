@@ -236,7 +236,7 @@ void SvxTextEditSourceImpl::addRange( SvxUnoTextRangeBase* pNewRange )
 void SvxTextEditSourceImpl::removeRange( SvxUnoTextRangeBase* pOldRange )
 {
     if( pOldRange )
-        mvTextRanges.erase( std::remove(mvTextRanges.begin(), mvTextRanges.end(), pOldRange), mvTextRanges.end() );
+        std::erase(mvTextRanges, pOldRange);
 }
 
 
@@ -539,26 +539,22 @@ SvxTextForwarder* SvxTextEditSourceImpl::GetBackgroundTextForwarder()
         SdrTextObj* pTextObj = DynCastSdrTextObj( mpObject  );
         if( pTextObj && pTextObj->getActiveText() == mpText )
             pOutlinerParaObject = pTextObj->CreateEditOutlinerParaObject(); // Get the OutlinerParaObject if text edit is active
-        bool bOwnParaObj(false);
+        bool bTextEditActive(false);
 
         if( pOutlinerParaObject )
-            bOwnParaObj = true; // text edit active
+            bTextEditActive = true; // text edit active
         else if (mpText->GetOutlinerParaObject())
             pOutlinerParaObject = *mpText->GetOutlinerParaObject();
 
-        if( pOutlinerParaObject && ( bOwnParaObj || !mpObject->IsEmptyPresObj() || mpObject->getSdrPageFromSdrObject()->IsMasterPage() ) )
+        if( pOutlinerParaObject && ( bTextEditActive || !mpObject->IsEmptyPresObj() || mpObject->getSdrPageFromSdrObject()->IsMasterPage() ) )
         {
             mpOutliner->SetText( *pOutlinerParaObject );
 
             // put text to object and set EmptyPresObj to FALSE
-            if (mpText && bOwnParaObj && mpObject->IsEmptyPresObj() && pTextObj && pTextObj->IsReallyEdited())
+            if (mpText && bTextEditActive && mpObject->IsEmptyPresObj() && pTextObj && pTextObj->IsReallyEdited())
             {
                 mpObject->SetEmptyPresObj( false );
                 static_cast< SdrTextObj* >( mpObject)->NbcSetOutlinerParaObjectForText( pOutlinerParaObject, mpText );
-
-                // #i103982# Here, due to mpObject->NbcSetOutlinerParaObjectForText, we LOSE ownership of the
-                // OPO, so do NOT delete it when leaving this method (!)
-                bOwnParaObj = false;
             }
         }
         else

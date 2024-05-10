@@ -18,6 +18,7 @@
  */
 
 #include <sal/log.hxx>
+#include <o3tl/string_view.hxx>
 #include <rtl/ustring.hxx>
 #include <rtl/string.hxx>
 
@@ -87,7 +88,7 @@ struct IsoLanguageScriptCountryEntry
 
         We don't have OUString::startsWithIgnoreAsciiCaseAscii()
      */
-    bool startsInIgnoreAsciiCase( const OUString & rStr ) const;
+    bool startsInIgnoreAsciiCase( std::u16string_view aStr ) const;
 };
 
 struct Bcp47CountryEntry
@@ -679,11 +680,12 @@ IsoLanguageCountryEntry const aImplIsoLangEntries[] =
     { LANGUAGE_USER_SPANISH_EQUATORIAL_GUINEA, "es", "GQ", k0    },
     { LANGUAGE_USER_SPANISH_PHILIPPINES,    "es", "PH", k0    },
     { LANGUAGE_USER_ENGLISH_ANTIGUA_BARBUDA,"en", "AG", k0    },
+    { LANGUAGE_USER_SARAIKI,               "skr", "PK", k0    },
+    { LANGUAGE_USER_MORISYEN,              "mfe", "MU", k0    },
     // Add new languages ^^^ there.
     { LANGUAGE_MULTIPLE,                   "mul", ""  , k0    },    // multiple languages, many languages are used
     { LANGUAGE_UNDETERMINED,               "und", ""  , k0    },    // undetermined language, language cannot be identified
     { LANGUAGE_NONE,                       "zxx", ""  , k0    },    // added to ISO 639-2 on 2006-01-11: Used to declare the absence of linguistic information
-    { LANGUAGE_DONTKNOW,                    "",   ""  , k0    }     // marks end of table
 };
 
 IsoLanguageScriptCountryEntry const aImplIsoLangScriptEntries[] =
@@ -778,7 +780,7 @@ IsoLanguageScriptCountryEntry const aImplIsoLangScriptEntries[] =
     { LANGUAGE_KAZAKH_CYRILLIC_LSO,                 "kk-Cyrl", ""  , k0    },   // MS reserved
     { LANGUAGE_KANURI_NIGERIA,                      "kr-Latn", "NG", k0    },   // macrolanguage code; MS since rev.15
     { LANGUAGE_TAMAZIGHT_ARABIC_MOROCCO,           "tzm-Arab", "MA", k0    },   // MS since rev.15, was reserved
-    { LANGUAGE_DONTKNOW,                            "",        ""  , k0    }    // marks end of table
+    { LANGUAGE_USER_ROHINGYA_HANIFI,               "rhg-Rhog", "MM", k0    },
 };
 
 Bcp47CountryEntry const aImplBcp47CountryEntries[] =
@@ -799,7 +801,6 @@ Bcp47CountryEntry const aImplBcp47CountryEntries[] =
     { LANGUAGE_OBSOLETE_USER_SPANISH_LATIN_AMERICA, "es-419", "", "", LANGUAGE_SPANISH_LATIN_AMERICA },
     { LANGUAGE_USER_INTERSLAVIC_LATIN, "art-Latn-x-interslv", "", "", k0 },  // see discussion in tdf#145853
     { LANGUAGE_USER_INTERSLAVIC_CYRILLIC, "art-Cyrl-x-interslv", "", "", k0 },
-    { LANGUAGE_DONTKNOW,                    "", "", "", k0 }    // marks end of table
 };
 
 const IsoLanguageCountryEntry aLastResortFallbackEntry =
@@ -831,9 +832,9 @@ css::lang::Locale IsoLanguageScriptCountryEntry::getLocale() const
     return lang::Locale( I18NLANGTAG_QLT, OUString::createFromAscii( maCountry), getTagString());
 }
 
-bool IsoLanguageScriptCountryEntry::startsInIgnoreAsciiCase( const OUString & rStr ) const
+bool IsoLanguageScriptCountryEntry::startsInIgnoreAsciiCase( std::u16string_view aStr ) const
 {
-    return rStr.matchIgnoreAsciiCaseAsciiL( maLanguageScript, strlen( maLanguageScript) );
+    return o3tl::matchIgnoreAsciiCase(aStr, std::string_view(maLanguageScript) );
 }
 
 OUString Bcp47CountryEntry::getTagString() const
@@ -984,66 +985,63 @@ void MsLangId::Conversion::convertLanguageToLocaleImpl( LanguageType nLang,
 Label_Override_Lang_Locale:
 
     // Search for LangID in BCP47
-    for (const Bcp47CountryEntry* pBcp47Entry = aImplBcp47CountryEntries;
-            pBcp47Entry->mnLang != LANGUAGE_DONTKNOW; ++pBcp47Entry)
+    for (const auto& rBcp47Entry : aImplBcp47CountryEntries)
     {
-        if (pBcp47Entry->mnLang == nLang)
+        if (rBcp47Entry.mnLang == nLang)
         {
-            if (bIgnoreOverride || !pBcp47Entry->mnOverride)
+            if (bIgnoreOverride || !rBcp47Entry.mnOverride)
             {
                 rLocale.Language = I18NLANGTAG_QLT;
-                rLocale.Country  = OUString::createFromAscii( pBcp47Entry->maCountry);
-                rLocale.Variant  = pBcp47Entry->getTagString();
+                rLocale.Country  = OUString::createFromAscii(rBcp47Entry.maCountry);
+                rLocale.Variant  = rBcp47Entry.getTagString();
                 return;
             }
-            else if (pBcp47Entry->mnOverride && pBcp47EntryOverride != pBcp47Entry)
+            else if (rBcp47Entry.mnOverride && pBcp47EntryOverride != &rBcp47Entry)
             {
-                pBcp47EntryOverride = pBcp47Entry;
-                nLang = getOverrideLang( pBcp47Entry->mnLang, pBcp47Entry->mnOverride);
+                pBcp47EntryOverride = &rBcp47Entry;
+                nLang = getOverrideLang(rBcp47Entry.mnLang, rBcp47Entry.mnOverride);
                 goto Label_Override_Lang_Locale;
             }
         }
     }
 
     // Search for LangID in ISO lll-Ssss-CC
-    for (const IsoLanguageScriptCountryEntry* pScriptEntry = aImplIsoLangScriptEntries;
-            pScriptEntry->mnLang != LANGUAGE_DONTKNOW; ++pScriptEntry)
+    for (const auto& rScriptEntry : aImplIsoLangScriptEntries)
     {
-        if (pScriptEntry->mnLang == nLang)
+        if (rScriptEntry.mnLang == nLang)
         {
-            if (bIgnoreOverride || !pScriptEntry->mnOverride)
+            if (bIgnoreOverride || !rScriptEntry.mnOverride)
             {
                 rLocale.Language = I18NLANGTAG_QLT;
-                rLocale.Country  = OUString::createFromAscii( pScriptEntry->maCountry);
-                rLocale.Variant  = pScriptEntry->getTagString();
+                rLocale.Country  = OUString::createFromAscii(rScriptEntry.maCountry);
+                rLocale.Variant  = rScriptEntry.getTagString();
                 return;
             }
-            else if (pScriptEntry->mnOverride && pScriptEntryOverride != pScriptEntry)
+            else if (rScriptEntry.mnOverride && pScriptEntryOverride != &rScriptEntry)
             {
-                pScriptEntryOverride = pScriptEntry;
-                nLang = getOverrideLang( pScriptEntry->mnLang, pScriptEntry->mnOverride);
+                pScriptEntryOverride = &rScriptEntry;
+                nLang = getOverrideLang(rScriptEntry.mnLang, rScriptEntry.mnOverride);
                 goto Label_Override_Lang_Locale;
             }
         }
     }
 
     // Search for LangID in ISO lll-CC
-    for (const IsoLanguageCountryEntry* pEntry = aImplIsoLangEntries;
-            pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
+    for (const auto& rEntry : aImplIsoLangEntries)
     {
-        if (pEntry->mnLang == nLang)
+        if (rEntry.mnLang == nLang)
         {
-            if (bIgnoreOverride || !pEntry->mnOverride)
+            if (bIgnoreOverride || !rEntry.mnOverride)
             {
-                rLocale.Language = OUString::createFromAscii( pEntry->maLanguage );
-                rLocale.Country  = OUString::createFromAscii( pEntry->maCountry );
+                rLocale.Language = OUString::createFromAscii(rEntry.maLanguage);
+                rLocale.Country  = OUString::createFromAscii(rEntry.maCountry);
                 rLocale.Variant.clear();
                 return;
             }
-            else if (pEntry->mnOverride && pEntryOverride != pEntry)
+            else if (rEntry.mnOverride && pEntryOverride != &rEntry)
             {
-                pEntryOverride = pEntry;
-                nLang = getOverrideLang( pEntry->mnLang, pEntry->mnOverride);
+                pEntryOverride = &rEntry;
+                nLang = getOverrideLang(rEntry.mnLang, rEntry.mnOverride);
                 goto Label_Override_Lang_Locale;
             }
         }
@@ -1119,25 +1117,23 @@ css::lang::Locale MsLangId::Conversion::lookupFallbackLocale(
     {
         // Search in BCP47, only full match and one fallback, for other
         // fallbacks only LanguageTag can decide.
-        for (const Bcp47CountryEntry* pBcp47Entry = aImplBcp47CountryEntries;
-                pBcp47Entry->mnLang != LANGUAGE_DONTKNOW; ++pBcp47Entry)
+        for (const auto& rBcp47Entry : aImplBcp47CountryEntries)
         {
-            if (    rLocale.Variant.equalsIgnoreAsciiCase( pBcp47Entry->getTagString()) ||
-                    rLocale.Variant.equalsIgnoreAsciiCaseAscii( pBcp47Entry->mpFallback))
-                return getLocale( pBcp47Entry);     // may override
+            if (    rLocale.Variant.equalsIgnoreAsciiCase(rBcp47Entry.getTagString()) ||
+                    rLocale.Variant.equalsIgnoreAsciiCaseAscii(rBcp47Entry.mpFallback))
+                return getLocale(&rBcp47Entry);     // may override
         }
 
         // Search in ISO lll-Ssss-CC
         const IsoLanguageScriptCountryEntry* pFirstScript = nullptr;
-        for (const IsoLanguageScriptCountryEntry* pScriptEntry = aImplIsoLangScriptEntries;
-                pScriptEntry->mnLang != LANGUAGE_DONTKNOW; ++pScriptEntry)
+        for (const auto& rScriptEntry : aImplIsoLangScriptEntries)
         {
-            if (pScriptEntry->startsInIgnoreAsciiCase( rLocale.Variant))
+            if (rScriptEntry.startsInIgnoreAsciiCase(rLocale.Variant))
             {
-                if (rLocale.Variant.equalsIgnoreAsciiCase( pScriptEntry->getTagString()))
-                    return getLocale( pScriptEntry);    // may override
+                if (rLocale.Variant.equalsIgnoreAsciiCase(rScriptEntry.getTagString()))
+                    return getLocale(&rScriptEntry);    // may override
                 if (!pFirstScript)
-                    pFirstScript = pScriptEntry;
+                    pFirstScript = &rScriptEntry;
             }
         }
         // If at least a lll-Ssss matched, try that with country or use it as
@@ -1149,7 +1145,7 @@ css::lang::Locale MsLangId::Conversion::lookupFallbackLocale(
             if (!aUpperCountry.isEmpty() && rLocale.Variant.getLength() > 11)
             {
                 for (const IsoLanguageScriptCountryEntry* pScriptEntry = pFirstScript;
-                        pScriptEntry->mnLang != LANGUAGE_DONTKNOW; ++pScriptEntry)
+                        pScriptEntry != std::end(aImplIsoLangScriptEntries); ++pScriptEntry)
                 {
                     if (aUpperCountry.equalsAscii( pScriptEntry->maCountry) &&
                             pScriptEntry->startsInIgnoreAsciiCase( rLocale.Variant))
@@ -1172,19 +1168,18 @@ css::lang::Locale MsLangId::Conversion::lookupFallbackLocale(
 
     // Search for locale and remember first lang-only.
     const IsoLanguageCountryEntry* pFirstLang = nullptr;
-    const IsoLanguageCountryEntry* pEntry = aImplIsoLangEntries;
-    for ( ; pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
+    for (const auto& rEntry : aImplIsoLangEntries)
     {
-        if (aLowerLang.equalsAscii( pEntry->maLanguage))
+        if (aLowerLang.equalsAscii(rEntry.maLanguage))
         {
-            if (*pEntry->maCountry)
+            if (*rEntry.maCountry)
             {
-                if (nCountryLen && aUpperCountry.equalsAscii( pEntry->maCountry))
-                    return getLocale( pEntry);  // may override
+                if (nCountryLen && aUpperCountry.equalsAscii(rEntry.maCountry))
+                    return getLocale(&rEntry);  // may override
             }
             else
             {
-                if (pEntry->mnLang.anyOf(
+                if (rEntry.mnLang.anyOf(
                     // These are known to have no country assigned.
                     LANGUAGE_USER_ESPERANTO,
                     LANGUAGE_USER_INTERLINGUA,
@@ -1198,40 +1193,29 @@ css::lang::Locale MsLangId::Conversion::lookupFallbackLocale(
                     LANGUAGE_UNDETERMINED,
                     LANGUAGE_NONE))
                 {
-                    return getLocale( pEntry);  // may override
+                    return getLocale(&rEntry);  // may override
                 }
             }
-            if (!pFirstLang)
-                pFirstLang = pEntry;
+            // Search for first entry of language with any country.
+            if (!pFirstLang && *rEntry.maCountry)
+                pFirstLang = &rEntry;
         }
     }
 
-    // Language not found at all => use default.
-    if (!pFirstLang)
-        return aLastResortFallbackEntry.getLocale();
-
-    // Search for first entry of language with any country.
-    pEntry = pFirstLang;
-    for ( ; pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
-    {
-        if (aLowerLang.equalsAscii( pEntry->maLanguage))
-        {
-            if (*pEntry->maCountry)
-                return getLocale( pEntry);  // may override
-        }
-    }
+    if (pFirstLang)
+        return getLocale(pFirstLang);  // may override
 
     return aLastResortFallbackEntry.getLocale();
 }
 
 
 // static
-LanguageType MsLangId::Conversion::convertPrivateUseToLanguage( const OUString& rPriv )
+LanguageType MsLangId::Conversion::convertPrivateUseToLanguage( std::u16string_view rPriv )
 {
     for (const IsoLangOtherEntry* pPrivateEntry = aImplPrivateUseEntries;
             pPrivateEntry->mnLang != LANGUAGE_DONTKNOW; ++pPrivateEntry)
     {
-        if ( rPriv.equalsIgnoreAsciiCaseAscii( pPrivateEntry->mpLanguage ) )
+        if ( o3tl::equalsIgnoreAsciiCase(rPriv, pPrivateEntry->mpLanguage ) )
             return pPrivateEntry->mnLang;
     }
     return LANGUAGE_DONTKNOW;
@@ -1249,21 +1233,19 @@ LanguageType MsLangId::Conversion::convertLocaleToLanguageImpl(
             return convertPrivateUseToLanguage( rLocale.Variant);
 
         // Search in BCP47
-        for (const Bcp47CountryEntry* pBcp47Entry = aImplBcp47CountryEntries;
-                pBcp47Entry->mnLang != LANGUAGE_DONTKNOW; ++pBcp47Entry)
+        for (const auto& rBcp47Entry : aImplBcp47CountryEntries)
         {
-            if (rLocale.Variant.equalsIgnoreAsciiCase( pBcp47Entry->getTagString()))
-                return getOverrideLang( pBcp47Entry->mnLang, pBcp47Entry->mnOverride);
+            if (rLocale.Variant.equalsIgnoreAsciiCase(rBcp47Entry.getTagString()))
+                return getOverrideLang(rBcp47Entry.mnLang, rBcp47Entry.mnOverride);
         }
 
         // Search in ISO lll-Ssss-CC
-        for (const IsoLanguageScriptCountryEntry* pScriptEntry = aImplIsoLangScriptEntries;
-                pScriptEntry->mnLang != LANGUAGE_DONTKNOW; ++pScriptEntry)
+        for (const auto& rScriptEntry : aImplIsoLangScriptEntries)
         {
-            if (pScriptEntry->startsInIgnoreAsciiCase( rLocale.Variant))
+            if (rScriptEntry.startsInIgnoreAsciiCase(rLocale.Variant))
             {
-                if (rLocale.Variant.equalsIgnoreAsciiCase( pScriptEntry->getTagString()))
-                    return getOverrideLang( pScriptEntry->mnLang, pScriptEntry->mnOverride);
+                if (rLocale.Variant.equalsIgnoreAsciiCase(rScriptEntry.getTagString()))
+                    return getOverrideLang(rScriptEntry.mnLang, rScriptEntry.mnOverride);
             }
         }
     }
@@ -1275,11 +1257,10 @@ LanguageType MsLangId::Conversion::convertLocaleToLanguageImpl(
         OUString aUpperCountry = rLocale.Country.toAsciiUpperCase();
 
         // Search in ISO lll-CC
-        for (const IsoLanguageCountryEntry* pEntry = aImplIsoLangEntries;
-                pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
+        for (const auto& rEntry : aImplIsoLangEntries)
         {
-            if (aLowerLang.equalsAscii( pEntry->maLanguage) && aUpperCountry.equalsAscii( pEntry->maCountry))
-                return getOverrideLang( pEntry->mnLang, pEntry->mnOverride);
+            if (aLowerLang.equalsAscii(rEntry.maLanguage) && aUpperCountry.equalsAscii(rEntry.maCountry))
+                return getOverrideLang(rEntry.mnLang, rEntry.mnOverride);
         }
     }
     return LANGUAGE_DONTKNOW;
@@ -1296,21 +1277,19 @@ css::lang::Locale MsLangId::Conversion::getOverride( const css::lang::Locale& rL
             return rLocale;     // no overrides
 
         // Search in BCP47
-        for (const Bcp47CountryEntry* pBcp47Entry = aImplBcp47CountryEntries;
-                pBcp47Entry->mnLang != LANGUAGE_DONTKNOW; ++pBcp47Entry)
+        for (const auto& rBcp47Entry : aImplBcp47CountryEntries)
         {
-            if (rLocale.Variant.equalsIgnoreAsciiCase( pBcp47Entry->getTagString()))
-                return getLocale( pBcp47Entry);     // may override
+            if (rLocale.Variant.equalsIgnoreAsciiCase(rBcp47Entry.getTagString()))
+                return getLocale(&rBcp47Entry);     // may override
         }
 
         // Search in ISO lll-Ssss-CC
-        for (const IsoLanguageScriptCountryEntry* pScriptEntry = aImplIsoLangScriptEntries;
-                pScriptEntry->mnLang != LANGUAGE_DONTKNOW; ++pScriptEntry)
+        for (const auto& rScriptEntry : aImplIsoLangScriptEntries)
         {
-            if (pScriptEntry->startsInIgnoreAsciiCase( rLocale.Variant))
+            if (rScriptEntry.startsInIgnoreAsciiCase(rLocale.Variant))
             {
-                if (rLocale.Variant.equalsIgnoreAsciiCase( pScriptEntry->getTagString()))
-                    return getLocale( pScriptEntry);    // may override
+                if (rLocale.Variant.equalsIgnoreAsciiCase(rScriptEntry.getTagString()))
+                    return getLocale(&rScriptEntry);    // may override
             }
         }
     }
@@ -1322,11 +1301,10 @@ css::lang::Locale MsLangId::Conversion::getOverride( const css::lang::Locale& rL
         OUString aUpperCountry = rLocale.Country.toAsciiUpperCase();
 
         // Search in ISO lll-CC
-        for (const IsoLanguageCountryEntry* pEntry = aImplIsoLangEntries;
-                pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
+        for (const auto& rEntry : aImplIsoLangEntries)
         {
-            if (aLowerLang.equalsAscii( pEntry->maLanguage) && aUpperCountry.equalsAscii( pEntry->maCountry))
-                return getLocale( pEntry);  // may override
+            if (aLowerLang.equalsAscii(rEntry.maLanguage) && aUpperCountry.equalsAscii(rEntry.maCountry))
+                return getLocale(&rEntry);  // may override
         }
     }
     return lang::Locale();
@@ -1345,14 +1323,13 @@ LanguageType MsLangId::Conversion::convertIsoNamesToLanguage( const OUString& rL
     if (!bSkipIsoTable)
     {
         //  first look for exact match
-        for (const IsoLanguageCountryEntry* pEntry = aImplIsoLangEntries;
-                pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
+        for (const auto& rEntry : aImplIsoLangEntries)
         {
-            if ( aLowerLang.equalsAscii( pEntry->maLanguage ) )
+            if ( aLowerLang.equalsAscii(rEntry.maLanguage) )
             {
                 if ( aUpperCountry.isEmpty() ||
-                        aUpperCountry.equalsAscii( pEntry->maCountry ) )
-                    return pEntry->mnLang;
+                        aUpperCountry.equalsAscii(rEntry.maCountry) )
+                    return rEntry.mnLang;
             }
         }
 
@@ -1396,11 +1373,10 @@ LanguageType MsLangId::Conversion::convertIsoNamesToLanguage( const OUString& rL
         //  (to allow reading country and language in separate steps, in any order)
         if ( !rCountry.isEmpty() && rLang.isEmpty() )
         {
-            for (const IsoLanguageCountryEntry* pEntry2 = aImplIsoLangEntries;
-                    pEntry2->mnLang != LANGUAGE_DONTKNOW; ++pEntry2)
+            for (const auto& rEntry2 : aImplIsoLangEntries)
             {
-                if ( aUpperCountry.equalsAscii( pEntry2->maCountry ) )
-                    return pEntry2->mnLang;
+                if ( aUpperCountry.equalsAscii(rEntry2.maCountry) )
+                    return rEntry2.mnLang;
             }
 
             aLowerLang = aUpperCountry.toAsciiLowerCase();
@@ -1540,21 +1516,18 @@ LanguageType MsLangId::convertUnxByteStringToLanguage(
 ::std::vector< MsLangId::LanguagetagMapping > MsLangId::getDefinedLanguagetags()
 {
     ::std::vector< LanguagetagMapping > aVec;
-    for (const Bcp47CountryEntry* pEntry = aImplBcp47CountryEntries;
-            pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
-    {
-        aVec.emplace_back( pEntry->getTagString(), pEntry->mnLang);
-    }
-    for (const IsoLanguageScriptCountryEntry* pEntry = aImplIsoLangScriptEntries;
-            pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
-    {
-        aVec.emplace_back( pEntry->getTagString(), pEntry->mnLang);
-    }
-    for (const IsoLanguageCountryEntry* pEntry = aImplIsoLangEntries;
-            pEntry->mnLang != LANGUAGE_DONTKNOW; ++pEntry)
-    {
-        aVec.emplace_back( pEntry->getTagString(), pEntry->mnLang);
-    }
+    aVec.reserve(std::size(aImplBcp47CountryEntries) + std::size(aImplIsoLangScriptEntries)
+                 + std::size(aImplIsoLangEntries));
+
+    for (const auto& rEntry : aImplBcp47CountryEntries)
+        aVec.emplace_back(rEntry.getTagString(), rEntry.mnLang);
+
+    for (const auto& rEntry : aImplIsoLangScriptEntries)
+        aVec.emplace_back(rEntry.getTagString(), rEntry.mnLang);
+
+    for (const auto& rEntry : aImplIsoLangEntries)
+        aVec.emplace_back(rEntry.getTagString(), rEntry.mnLang);
+
     return aVec;
 }
 

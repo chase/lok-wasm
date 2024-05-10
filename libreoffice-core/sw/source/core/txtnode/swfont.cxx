@@ -339,6 +339,22 @@ sal_uInt16 SwFont::CalcShadowSpace(const SvxShadowItemSide nShadow, const bool b
     return nSpace;
 }
 
+void SwFont::dumpAsXml(xmlTextWriterPtr writer) const
+{
+    (void)xmlTextWriterStartElement(writer, BAD_CAST("SwFont"));
+    (void)xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("ptr"), "%p", this);
+    // do not use Color::AsRGBHexString() as that omits the transparency
+    (void)xmlTextWriterWriteFormatAttribute(writer, BAD_CAST("color"), "%08" SAL_PRIxUINT32, sal_uInt32(GetColor()));
+    (void)xmlTextWriterWriteAttribute(writer, BAD_CAST("height"), BAD_CAST(OString::number(GetSize(GetActual()).Height()).getStr()));
+    (void)xmlTextWriterWriteAttribute(writer, BAD_CAST("width"), BAD_CAST(OString::number(GetSize(GetActual()).Width()).getStr()));
+    {
+        std::stringstream ss;
+        ss << GetWeight();
+        (void)xmlTextWriterWriteAttribute(writer, BAD_CAST("weight"), BAD_CAST(ss.str().c_str()));
+    }
+    (void)xmlTextWriterEndElement(writer);
+}
+
 // maps directions for vertical layout
 static Degree10 MapDirection(Degree10 nDir, const bool bVertFormat, const bool bVertFormatLRBT)
 {
@@ -1061,30 +1077,26 @@ Size SwSubFont::GetTextSize_( SwDrawTextInfo& rInf )
     if (TextFrameIndex(1) == rInf.GetLen()
         && CH_TXT_ATR_FIELDSTART == rInf.GetText()[sal_Int32(rInf.GetIdx())])
     {
-        assert(!"this is presumably dead code");
+        SAL_WARN("sw", "this is meant to be dead code");
         TextFrameIndex const nOldIdx(rInf.GetIdx());
         TextFrameIndex const nOldLen(rInf.GetLen());
+        OUString aOldText(rInf.GetText());
         const OUString aNewText(CH_TXT_ATR_SUBST_FIELDSTART);
-        rInf.SetText( aNewText );
-        rInf.SetIdx( TextFrameIndex(0) );
-        rInf.SetLen( TextFrameIndex(aNewText.getLength()) );
+        rInf.SetTextIdxLen(aNewText, TextFrameIndex(0), TextFrameIndex(aNewText.getLength()));
         aTextSize = pLastFont->GetTextSize( rInf );
-        rInf.SetIdx( nOldIdx );
-        rInf.SetLen( nOldLen );
+        rInf.SetTextIdxLen(aOldText, nOldIdx, nOldLen);
     }
     else if (TextFrameIndex(1) == rInf.GetLen()
             && CH_TXT_ATR_FIELDEND == rInf.GetText()[sal_Int32(rInf.GetIdx())])
     {
-        assert(!"this is presumably dead code");
+        SAL_WARN("sw", "this is meant to be dead code");
         TextFrameIndex const nOldIdx(rInf.GetIdx());
         TextFrameIndex const nOldLen(rInf.GetLen());
+        OUString aOldText(rInf.GetText());
         const OUString aNewText(CH_TXT_ATR_SUBST_FIELDEND);
-        rInf.SetText( aNewText );
-        rInf.SetIdx( TextFrameIndex(0) );
-        rInf.SetLen( TextFrameIndex(aNewText.getLength()) );
+        rInf.SetTextIdxLen(aNewText, TextFrameIndex(0), TextFrameIndex(aNewText.getLength()));
         aTextSize = pLastFont->GetTextSize( rInf );
-        rInf.SetIdx( nOldIdx );
-        rInf.SetLen( nOldLen );
+        rInf.SetTextIdxLen(aOldText, nOldIdx, nOldLen);
     }
 
     return aTextSize;

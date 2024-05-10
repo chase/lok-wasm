@@ -27,6 +27,7 @@
 #include <chart2uno.hxx>
 #include <miscuno.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <formulacell.hxx>
 #include <unonames.hxx>
 #include <globstr.hrc>
@@ -79,7 +80,7 @@ using ::std::shared_ptr;
 
 namespace
 {
-o3tl::span<const SfxItemPropertyMapEntry> lcl_GetDataProviderPropertyMap()
+std::span<const SfxItemPropertyMapEntry> lcl_GetDataProviderPropertyMap()
 {
     static const SfxItemPropertyMapEntry aDataProviderPropertyMap_Impl[] =
     {
@@ -89,7 +90,7 @@ o3tl::span<const SfxItemPropertyMapEntry> lcl_GetDataProviderPropertyMap()
     return aDataProviderPropertyMap_Impl;
 }
 
-o3tl::span<const SfxItemPropertyMapEntry> lcl_GetDataSequencePropertyMap()
+std::span<const SfxItemPropertyMapEntry> lcl_GetDataSequencePropertyMap()
 {
     static const SfxItemPropertyMapEntry aDataSequencePropertyMap_Impl[] =
     {
@@ -128,7 +129,7 @@ OUString lcl_createTableNumberList( const ::std::vector< SCTAB > & rTableVector 
 uno::Reference< frame::XModel > lcl_GetXModel( const ScDocument * pDoc )
 {
     uno::Reference< frame::XModel > xModel;
-    SfxObjectShell * pObjSh( pDoc ? pDoc->GetDocumentShell() : nullptr );
+    ScDocShell * pObjSh( pDoc ? pDoc->GetDocumentShell() : nullptr );
     if( pObjSh )
         xModel.set( pObjSh->GetModel());
     return xModel;
@@ -2583,14 +2584,14 @@ void ScChart2DataSequence::BuildDataCache()
                             // Excel behavior: if the last row is the totals row, the data
                             // is not added to the chart. If it's not the last row, the data
                             // is added like normal.
-                            const auto* rData = m_pDocument->GetDBAtCursor(
+                            const auto* pData = m_pDocument->GetDBAtCursor(
                                 nCol, nRow, nTab,
                                 ScDBDataPortion::AREA
                             );
-                            if (rData && rData->HasTotals())
+                            if (pData && pData->HasTotals())
                             {
                                 ScRange aTempRange;
-                                rData->GetArea(aTempRange);
+                                pData->GetArea(aTempRange);
                                 if (aTempRange.aEnd.Row() == nRow)
                                 {
                                     // Current row is totals row, skip
@@ -2892,7 +2893,7 @@ void ScChart2DataSequence::Notify( SfxBroadcaster& /*rBC*/, const SfxHint& rHint
             {
                 m_xDataArray.reset(new std::vector<Item>);
                 lang::EventObject aEvent;
-                aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
+                aEvent.Source = getXWeak();
 
                 if( m_pDocument )
                 {

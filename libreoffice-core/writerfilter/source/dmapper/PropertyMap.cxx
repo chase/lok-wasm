@@ -40,6 +40,7 @@
 #include <com/sun/star/container/XEnumeration.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/container/XNameContainer.hpp>
+#include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/style/BreakType.hpp>
 #include <com/sun/star/style/PageStyleLayout.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
@@ -429,6 +430,8 @@ SectionPropertyMap::SectionPropertyMap( bool bIsFirstSection )
     , m_nLnc(NS_ooxml::LN_Value_ST_LineNumberRestart_newPage)
     , m_ndxaLnn( 0 )
     , m_nLnnMin( 0 )
+    , m_nPaperSourceFirst( 0 )
+    , m_nPaperSourceOther( 0 )
     , m_bDynamicHeightTop( true )
     , m_bDynamicHeightBottom( true )
 {
@@ -512,7 +515,7 @@ void SectionPropertyMap::removeXTextContent(uno::Reference<text::XText> const& r
     xParagraph->dispose();
 }
 
-/** Set the header/footer sharing as defined by titlePage and eveoAndOdd flags
+/** Set the header/footer sharing as defined by titlePage and evenAndOdd flags
  *  in the document and clear the content of anything not written during the import.
  */
 void SectionPropertyMap::setHeaderFooterProperties(DomainMapper_Impl& rDM_Impl)
@@ -566,6 +569,12 @@ void SectionPropertyMap::setHeaderFooterProperties(DomainMapper_Impl& rDM_Impl)
     m_aPageStyle->setPropertyValue(getPropertyName(PROP_HEADER_IS_SHARED), uno::Any(!bEvenAndOdd));
     m_aPageStyle->setPropertyValue(getPropertyName(PROP_FOOTER_IS_SHARED), uno::Any(!bEvenAndOdd));
     m_aPageStyle->setPropertyValue(getPropertyName(PROP_FIRST_IS_SHARED), uno::Any(!m_bTitlePage));
+
+    bool bHadFirstHeader = m_bHadFirstHeader && m_bTitlePage;
+    if (bHasHeader && !bHadFirstHeader && !m_bHadLeftHeader && !m_bHadRightHeader && rDM_Impl.IsNewDoc())
+    {
+        m_aPageStyle->setPropertyValue(sHeaderIsOn, uno::Any(false));
+    }
 }
 
 void SectionPropertyMap::SetBorder( BorderPosition ePos, sal_Int32 nLineDistance, const table::BorderLine2& rBorderLine, bool bShadow )
@@ -573,6 +582,27 @@ void SectionPropertyMap::SetBorder( BorderPosition ePos, sal_Int32 nLineDistance
     m_oBorderLines[ePos]     = rBorderLine;
     m_nBorderDistances[ePos] = nLineDistance;
     m_bBorderShadows[ePos]   = bShadow;
+}
+
+void SectionPropertyMap::ApplyPaperSource(DomainMapper_Impl& rDM_Impl)
+{
+    uno::Reference<beans::XPropertySet> xFirst;
+    // todo: negative spacing (from ww8par6.cxx)
+    if (!m_sPageStyleName.isEmpty())
+    {
+        xFirst = GetPageStyle(rDM_Impl);
+        if ( xFirst.is() )
+            try
+            {
+                //TODO: which of the two tray values needs to be set? first/other - the interfaces requires the name of the tray!
+                xFirst->setPropertyValue(getPropertyName(PROP_PAPER_TRAY),
+                                         uno::Any(m_nPaperSourceFirst));
+            }
+            catch (const uno::Exception&)
+            {
+                TOOLS_WARN_EXCEPTION("writerfilter", "Paper source not found");
+            }
+    }
 }
 
 void SectionPropertyMap::ApplyBorderToPageStyles( DomainMapper_Impl& rDM_Impl,
@@ -885,7 +915,9 @@ void copyHeaderFooterTextProperty(const uno::Reference<beans::XPropertySet>& xSo
 }
 
 // Copies all the header and footer content and relevant flags from the source style to the target.
-void completeCopyHeaderFooter(const uno::Reference<beans::XPropertySet>& xSourceStyle, const uno::Reference<beans::XPropertySet>& xTargetStyle)
+void completeCopyHeaderFooter(const uno::Reference<beans::XPropertySet>& xSourceStyle,
+        const uno::Reference<beans::XPropertySet>& xTargetStyle,
+        bool const bMissingHeader, bool const bMissingFooter)
 {
     if (!xSourceStyle.is() || !xTargetStyle.is())
         return;
@@ -930,6 +962,25 @@ void completeCopyHeaderFooter(const uno::Reference<beans::XPropertySet>& xSource
         if (!bSourceFooterIsShared)
             copyHeaderFooterTextProperty(xSourceStyle, xTargetStyle, PROP_FOOTER_TEXT_LEFT);
         copyHeaderFooterTextProperty(xSourceStyle, xTargetStyle, PROP_FOOTER_TEXT);
+    }
+    // tdf#153196 the copy is used for the first page, the source will be used
+    // on subsequent pages, so clear source's first page header/footer
+    if (!bSourceFirstIsShared)
+    {
+        xSourceStyle->setPropertyValue(sFirstIsShared, uno::Any(true));
+    }
+    // if there is *only* a first-footer, and no previous section from which
+    // to inherit a footer, the import process has created an empty footer
+    // that didn't exist in the file; remove it
+    if (bSourceHasHeader && bMissingHeader)
+    {
+        xSourceStyle->setPropertyValue(sHeaderIsOn, uno::Any(false));
+    }
+    if (bSourceHasFooter && bMissingFooter)
+    {
+        // setting "FooterIsShared" to true here does nothing, because it causes
+        // left footer to be stashed, which means it will be exported anyway
+        xSourceStyle->setPropertyValue(sFooterIsOn, uno::Any(false));
     }
 }
 
@@ -1105,7 +1156,37 @@ void SectionPropertyMap::HandleMarginsHeaderFooter(DomainMapper_Impl& rDM_Impl)
     Insert( PROP_RIGHT_MARGIN, uno::Any( m_nRightMargin ) );
     Insert(PROP_GUTTER_MARGIN, uno::Any(m_nGutterMargin));
 
-    if ( rDM_Impl.m_oBackgroundColor )
+    // w:background is applied to every page in the document
+    if (!rDM_Impl.m_oBackgroundColor.has_value() && !rDM_Impl.IsRTFImport())
+    {
+        // DOCX has an interesting quirk, where if the fallback background color is not defined,
+        // then the fill is not applied either.
+
+        // Disable the imported fill from the default style
+        if (rDM_Impl.m_bCopyStandardPageStyleFill && m_sPageStyleName == "Standard")
+        {
+            rDM_Impl.m_bCopyStandardPageStyleFill = false;
+            m_aPageStyle->setPropertyValue("FillStyle", uno::Any(drawing::FillStyle_NONE));
+        }
+    }
+    else if (rDM_Impl.m_bCopyStandardPageStyleFill) // complex fill: graphics/gradients/patterns
+    {
+        uno::Reference<beans::XPropertySet> xDefaultPageStyle(
+                    rDM_Impl.GetPageStyles()->getByName("Standard"), uno::UNO_QUERY_THROW);
+        for (const beans::Property& rProp : m_aPageStyle->getPropertySetInfo()->getProperties())
+        {
+            try
+            {
+                const uno::Any aFillValue = xDefaultPageStyle->getPropertyValue(rProp.Name);
+                m_aPageStyle->setPropertyValue(rProp.Name, aFillValue);
+            }
+            catch (uno::Exception&)
+            {
+                DBG_UNHANDLED_EXCEPTION("writerfilter", "Exception setting page background fill");
+            }
+        }
+    }
+    else if (rDM_Impl.m_oBackgroundColor) // simple, solid color
         Insert( PROP_BACK_COLOR, uno::Any( *rDM_Impl.m_oBackgroundColor ) );
 
     // Check for missing footnote separator only in case there is at least
@@ -1400,7 +1481,14 @@ void SectionPropertyMap::CreateEvenOddPageStyleCopy(DomainMapper_Impl& rDM_Impl,
     rDM_Impl.GetPageStyles()->insertByName(evenOddStyleName, uno::Any(evenOddStyle));
 
     if (rDM_Impl.IsNewDoc())
-        completeCopyHeaderFooter(pageProperties, evenOddStyle);
+    {
+        bool const bEvenAndOdd(rDM_Impl.GetSettingsTable()->GetEvenAndOddHeaders());
+        completeCopyHeaderFooter(pageProperties, evenOddStyle,
+            !rDM_Impl.SeenHeaderFooter(PagePartType::Header, PageType::RIGHT)
+                && (!bEvenAndOdd || !rDM_Impl.SeenHeaderFooter(PagePartType::Header, PageType::LEFT)),
+            !rDM_Impl.SeenHeaderFooter(PagePartType::Footer, PageType::RIGHT)
+                && (!bEvenAndOdd || !rDM_Impl.SeenHeaderFooter(PagePartType::Footer, PageType::LEFT)));
+    }
 
     if (eBreakType == PageBreakType::Even)
         evenOddStyle->setPropertyValue(getPropertyName(PROP_PAGE_STYLE_LAYOUT), uno::Any(style::PageStyleLayout_LEFT));
@@ -1751,6 +1839,7 @@ void SectionPropertyMap::CloseSectionGroup( DomainMapper_Impl& rDM_Impl )
             ApplyProperties_(xPageStyle);
 
         ApplyBorderToPageStyles( rDM_Impl, m_eBorderApply, m_eBorderOffsetFrom );
+        ApplyPaperSource(rDM_Impl);
 
         try
         {
@@ -1996,27 +2085,6 @@ ParagraphProperties::ParagraphProperties()
     , m_yAlign( -1 )
     , m_nDropCapLength( 0 )
 {
-}
-
-bool ParagraphProperties::operator==( const ParagraphProperties& rCompare ) const
-{
-    return ( m_bFrameMode  == rCompare.m_bFrameMode &&
-             m_nDropCap    == rCompare.m_nDropCap &&
-             m_nLines      == rCompare.m_nLines &&
-             m_w           == rCompare.m_w &&
-             m_h           == rCompare.m_h &&
-             m_nWrap       == rCompare.m_nWrap &&
-             m_hAnchor     == rCompare.m_hAnchor &&
-             m_vAnchor     == rCompare.m_vAnchor &&
-             m_x           == rCompare.m_x &&
-             m_bxValid     == rCompare.m_bxValid &&
-             m_y           == rCompare.m_y &&
-             m_byValid     == rCompare.m_byValid &&
-             m_hSpace      == rCompare.m_hSpace &&
-             m_vSpace      == rCompare.m_vSpace &&
-             m_hRule       == rCompare.m_hRule &&
-             m_xAlign      == rCompare.m_xAlign &&
-             m_yAlign      == rCompare.m_yAlign );
 }
 
 void ParagraphProperties::ResetFrameProperties()

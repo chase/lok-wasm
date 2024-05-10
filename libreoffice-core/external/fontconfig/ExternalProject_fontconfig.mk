@@ -24,6 +24,7 @@ fontconfig_add_fonts=/usr/share/X11/fonts/Type1,/usr/share/X11/fonts/TTF,/usr/lo
 $(call gb_ExternalProject_get_state_target,fontconfig,build) :
 	$(call gb_Trace_StartRange,fontconfig,EXTERNAL)
 	$(call gb_ExternalProject_run,build,\
+		$(if $(filter -fsanitize=undefined,$(CC)),CC='$(CC) -fno-sanitize=function') \
 		CFLAGS="$(CFLAGS) \
 			$(call gb_ExternalProject_get_build_flags,fontconfig) \
 			$(gb_VISIBILITY_FLAGS) \
@@ -48,11 +49,14 @@ $(call gb_ExternalProject_get_state_target,fontconfig,build) :
 			    --enable-libxml2 \
 			    ac_cv_func_fstatfs=no ac_cv_func_fstatvfs=no \
 			) \
-			$(if $(filter LINUX,$(OS)), \
-				--disable-static \
-				--prefix=/ \
-				--with-add-fonts=$(fontconfig_add_fonts) \
-				--with-cache-dir=/usr/lib/fontconfig/cache \
+			$(if $(filter FUZZERS,$(BUILD_TYPE)), \
+				--disable-shared, \
+				$(if $(filter LINUX,$(OS)), \
+					--disable-static \
+					--prefix=/ \
+					--with-add-fonts=$(fontconfig_add_fonts) \
+					--with-cache-dir=/usr/lib/fontconfig/cache \
+				) \
 			) \
 		&& $(MAKE) -C src && $(MAKE) fonts.conf \
 	)

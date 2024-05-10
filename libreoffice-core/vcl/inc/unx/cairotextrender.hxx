@@ -17,31 +17,29 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_CAIROTEXTRENDER_HXX
-#define INCLUDED_VCL_INC_UNX_CAIROTEXTRENDER_HXX
+#pragma once
 
 #include <unx/freetypetextrender.hxx>
 
 class GenericSalLayout;
 class SalGraphics;
+struct CairoCommon;
 typedef struct _cairo cairo_t;
 typedef struct _cairo_font_options cairo_font_options_t;
 
-class VCL_DLLPUBLIC CairoTextRender : public FreeTypeTextRenderImpl
+class VCL_DLLPUBLIC CairoTextRender final : public FreeTypeTextRenderImpl
 {
+private:
+    CairoCommon& mrCairoCommon;
 protected:
-    virtual cairo_t*            getCairoContext() = 0;
-    virtual void                getSurfaceOffset(double& nDX, double& nDY) = 0;
-    virtual void                releaseCairoContext(cairo_t* cr) = 0;
-
-    virtual void                clipRegion(cairo_t* cr) = 0;
+    cairo_t*                getCairoContext();
+    void                    releaseCairoContext(cairo_t* cr);
+    void                    clipRegion(cairo_t* cr);
 
 public:
-    virtual void                DrawTextLayout(const GenericSalLayout&, const SalGraphics&) override;
-    CairoTextRender();
+    virtual void            DrawTextLayout(const GenericSalLayout&, const SalGraphics&) override;
+    CairoTextRender(CairoCommon& rCairoCommon);
     virtual ~CairoTextRender();
 };
-
-#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

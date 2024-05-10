@@ -19,167 +19,225 @@
 
 #include "X11CairoSalGraphicsImpl.hxx"
 
-#if ENABLE_CAIRO_CANVAS
-
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <basegfx/curve/b2dcubicbezier.hxx>
+#include <salframe.hxx>
 
-X11CairoSalGraphicsImpl::X11CairoSalGraphicsImpl(X11SalGraphics& rParent, X11Common& rX11Common)
-    : X11SalGraphicsImpl(rParent)
-    , mrX11Common(rX11Common)
-    , mnPenColor(SALCOLOR_NONE)
-    , mnFillColor(SALCOLOR_NONE)
+X11CairoSalGraphicsImpl::X11CairoSalGraphicsImpl(X11SalGraphics& rParent, CairoCommon& rCairoCommon)
+    : mrParent(rParent)
+    , mrCairoCommon(rCairoCommon)
 {
 }
 
-bool X11CairoSalGraphicsImpl::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+tools::Long X11CairoSalGraphicsImpl::GetGraphicsWidth() const
+{
+    if (mrParent.m_pFrame)
+        return mrParent.m_pFrame->maGeometry.width();
+    return mrCairoCommon.m_pSurface ? mrCairoCommon.m_aFrameSize.getX() : 0;
+}
+
+void X11CairoSalGraphicsImpl::drawRect(tools::Long nX, tools::Long nY, tools::Long nWidth,
+                                       tools::Long nHeight)
+{
+    mrCairoCommon.drawRect(nX, nY, nWidth, nHeight, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::drawPolygon(sal_uInt32 nPoints, const Point* pPtAry)
+{
+    mrCairoCommon.drawPolygon(nPoints, pPtAry, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::drawPolyPolygon(sal_uInt32 nPoly, const sal_uInt32* pPointCounts,
+                                              const Point** pPtAry)
+{
+    mrCairoCommon.drawPolyPolygon(nPoly, pPointCounts, pPtAry, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
                                               const basegfx::B2DPolyPolygon& rPolyPolygon,
                                               double fTransparency)
 {
-    if (fTransparency >= 1.0)
-    {
-        return true;
-    }
+    mrCairoCommon.drawPolyPolygon(rObjectToDevice, rPolyPolygon, fTransparency, getAntiAlias());
+}
 
-    if (rPolyPolygon.count() == 0)
-    {
-        return true;
-    }
+void X11CairoSalGraphicsImpl::drawPixel(tools::Long nX, tools::Long nY)
+{
+    mrCairoCommon.drawPixel(mrCairoCommon.m_oLineColor, nX, nY, getAntiAlias());
+}
 
-    // Fallback: Transform to DeviceCoordinates
-    basegfx::B2DPolyPolygon aPolyPolygon(rPolyPolygon);
-    aPolyPolygon.transform(rObjectToDevice);
+void X11CairoSalGraphicsImpl::drawPixel(tools::Long nX, tools::Long nY, Color aColor)
+{
+    mrCairoCommon.drawPixel(aColor, nX, nY, getAntiAlias());
+}
 
-    if (SALCOLOR_NONE == mnFillColor && SALCOLOR_NONE == mnPenColor)
-    {
-        return true;
-    }
+Color X11CairoSalGraphicsImpl::getPixel(tools::Long nX, tools::Long nY)
+{
+    return CairoCommon::getPixel(mrCairoCommon.m_pSurface, nX, nY);
+}
 
-    // enable by setting to something
-    static const char* pUseCairoForPolygons(getenv("SAL_ENABLE_USE_CAIRO_FOR_POLYGONS"));
+void X11CairoSalGraphicsImpl::drawLine(tools::Long nX1, tools::Long nY1, tools::Long nX2,
+                                       tools::Long nY2)
+{
+    mrCairoCommon.drawLine(nX1, nY1, nX2, nY2, getAntiAlias());
+}
 
-    if (nullptr != pUseCairoForPolygons && mrX11Common.SupportsCairo())
-    {
-        // snap to raster if requested
-        const bool bSnapPoints(!getAntiAlias());
-
-        if (bSnapPoints)
-        {
-            aPolyPolygon = basegfx::utils::snapPointsOfHorizontalOrVerticalEdges(aPolyPolygon);
-        }
-
-        cairo_t* cr = mrX11Common.getCairoContext();
-        clipRegion(cr);
-
-        for (auto const& rPolygon : std::as_const(aPolyPolygon))
-        {
-            const sal_uInt32 nPointCount(rPolygon.count());
-
-            if (nPointCount)
-            {
-                const sal_uInt32 nEdgeCount(rPolygon.isClosed() ? nPointCount : nPointCount - 1);
-
-                if (nEdgeCount)
-                {
-                    basegfx::B2DCubicBezier aEdge;
-
-                    for (sal_uInt32 b = 0; b < nEdgeCount; ++b)
-                    {
-                        rPolygon.getBezierSegment(b, aEdge);
-
-                        if (!b)
-                        {
-                            const basegfx::B2DPoint aStart(aEdge.getStartPoint());
-                            cairo_move_to(cr, aStart.getX(), aStart.getY());
-                        }
-
-                        const basegfx::B2DPoint aEnd(aEdge.getEndPoint());
-
-                        if (aEdge.isBezier())
-                        {
-                            const basegfx::B2DPoint aCP1(aEdge.getControlPointA());
-                            const basegfx::B2DPoint aCP2(aEdge.getControlPointB());
-                            cairo_curve_to(cr, aCP1.getX(), aCP1.getY(), aCP2.getX(), aCP2.getY(),
-                                           aEnd.getX(), aEnd.getY());
-                        }
-                        else
-                        {
-                            cairo_line_to(cr, aEnd.getX(), aEnd.getY());
-                        }
-                    }
-
-                    cairo_close_path(cr);
-                }
-            }
-        }
-
-        if (SALCOLOR_NONE != mnFillColor)
-        {
-            cairo_set_source_rgba(cr, mnFillColor.GetRed() / 255.0, mnFillColor.GetGreen() / 255.0,
-                                  mnFillColor.GetBlue() / 255.0, 1.0 - fTransparency);
-            cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
-            cairo_fill_preserve(cr);
-        }
-
-        if (SALCOLOR_NONE != mnPenColor)
-        {
-            cairo_set_source_rgba(cr, mnPenColor.GetRed() / 255.0, mnPenColor.GetGreen() / 255.0,
-                                  mnPenColor.GetBlue() / 255.0, 1.0 - fTransparency);
-            cairo_stroke_preserve(cr);
-        }
-
-        X11Common::releaseCairoContext(cr);
-        return true;
-    }
-
-    return X11SalGraphicsImpl::drawPolyPolygon(rObjectToDevice, rPolyPolygon, fTransparency);
+void X11CairoSalGraphicsImpl::drawPolyLine(sal_uInt32 nPoints, const Point* pPtAry)
+{
+    mrCairoCommon.drawPolyLine(nPoints, pPtAry, getAntiAlias());
 }
 
 bool X11CairoSalGraphicsImpl::drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDevice,
-                                           const basegfx::B2DPolygon& rPolygon,
+                                           const basegfx::B2DPolygon& rPolyLine,
                                            double fTransparency, double fLineWidth,
                                            const std::vector<double>* pStroke,
                                            basegfx::B2DLineJoin eLineJoin,
                                            css::drawing::LineCap eLineCap,
                                            double fMiterMinimumAngle, bool bPixelSnapHairline)
 {
-    if (0 == rPolygon.count())
-    {
-        return true;
-    }
-
-    if (fTransparency >= 1.0)
-    {
-        return true;
-    }
-
-    // disable by setting to something
-    static const char* pUseCairoForFatLines(getenv("SAL_DISABLE_USE_CAIRO_FOR_FATLINES"));
-
-    if (nullptr == pUseCairoForFatLines && mrX11Common.SupportsCairo())
-    {
-        cairo_t* cr = mrX11Common.getCairoContext();
-        clipRegion(cr);
-
-        // Use the now available static drawPolyLine from the Cairo-Headless-Fallback
-        // that will take care of all needed stuff
-        const bool bRetval(CairoCommon::drawPolyLine(
-            cr, nullptr, mnPenColor, getAntiAlias(), rObjectToDevice, rPolygon, fTransparency,
-            fLineWidth, pStroke, eLineJoin, eLineCap, fMiterMinimumAngle, bPixelSnapHairline));
-
-        X11Common::releaseCairoContext(cr);
-
-        if (bRetval)
-        {
-            return true;
-        }
-    }
-
-    return X11SalGraphicsImpl::drawPolyLine(rObjectToDevice, rPolygon, fTransparency, fLineWidth,
-                                            pStroke, eLineJoin, eLineCap, fMiterMinimumAngle,
-                                            bPixelSnapHairline);
+    return mrCairoCommon.drawPolyLine(rObjectToDevice, rPolyLine, fTransparency, fLineWidth,
+                                      pStroke, eLineJoin, eLineCap, fMiterMinimumAngle,
+                                      bPixelSnapHairline, getAntiAlias());
 }
 
-#endif
+bool X11CairoSalGraphicsImpl::drawAlphaRect(tools::Long nX, tools::Long nY, tools::Long nWidth,
+                                            tools::Long nHeight, sal_uInt8 nTransparency)
+{
+    return mrCairoCommon.drawAlphaRect(nX, nY, nWidth, nHeight, nTransparency, getAntiAlias());
+}
+
+bool X11CairoSalGraphicsImpl::drawGradient(const tools::PolyPolygon& rPolyPolygon,
+                                           const Gradient& rGradient)
+{
+    return mrCairoCommon.drawGradient(rPolyPolygon, rGradient, getAntiAlias());
+}
+
+bool X11CairoSalGraphicsImpl::implDrawGradient(basegfx::B2DPolyPolygon const& rPolyPolygon,
+                                               SalGradient const& rGradient)
+{
+    return mrCairoCommon.implDrawGradient(rPolyPolygon, rGradient, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::invert(tools::Long nX, tools::Long nY, tools::Long nWidth,
+                                     tools::Long nHeight, SalInvert nFlags)
+{
+    mrCairoCommon.invert(nX, nY, nWidth, nHeight, nFlags, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::invert(sal_uInt32 nPoints, const Point* pPtAry, SalInvert nFlags)
+{
+    mrCairoCommon.invert(nPoints, pPtAry, nFlags, getAntiAlias());
+}
+
+bool X11CairoSalGraphicsImpl::hasFastDrawTransformedBitmap() const
+{
+    return CairoCommon::hasFastDrawTransformedBitmap();
+}
+
+bool X11CairoSalGraphicsImpl::supportsOperation(OutDevSupportType eType) const
+{
+    return CairoCommon::supportsOperation(eType);
+}
+
+void X11CairoSalGraphicsImpl::copyArea(tools::Long nDestX, tools::Long nDestY, tools::Long nSrcX,
+                                       tools::Long nSrcY, tools::Long nSrcWidth,
+                                       tools::Long nSrcHeight, bool /*bWindowInvalidate*/)
+{
+    SalTwoRect aTR(nSrcX, nSrcY, nSrcWidth, nSrcHeight, nDestX, nDestY, nSrcWidth, nSrcHeight);
+
+    cairo_surface_t* source = mrCairoCommon.m_pSurface;
+    mrCairoCommon.copyBitsCairo(aTR, source, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::copyBits(const SalTwoRect& rTR, SalGraphics* pSrcGraphics)
+{
+    cairo_surface_t* source = nullptr;
+
+    if (pSrcGraphics)
+    {
+        X11CairoSalGraphicsImpl* pSrc
+            = static_cast<X11CairoSalGraphicsImpl*>(pSrcGraphics->GetImpl());
+        source = pSrc->mrCairoCommon.m_pSurface;
+    }
+    else
+    {
+        source = mrCairoCommon.m_pSurface;
+    }
+
+    mrCairoCommon.copyBitsCairo(rTR, source, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::drawBitmap(const SalTwoRect& rPosAry, const SalBitmap& rSalBitmap)
+{
+    mrCairoCommon.drawBitmap(rPosAry, rSalBitmap, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::drawBitmap(const SalTwoRect& rPosAry, const SalBitmap& rSalBitmap,
+                                         const SalBitmap& rTransparentBitmap)
+{
+    drawAlphaBitmap(rPosAry, rSalBitmap, rTransparentBitmap);
+}
+
+bool X11CairoSalGraphicsImpl::drawAlphaBitmap(const SalTwoRect& rTR, const SalBitmap& rSrcBitmap,
+                                              const SalBitmap& rAlphaBmp)
+{
+    return mrCairoCommon.drawAlphaBitmap(rTR, rSrcBitmap, rAlphaBmp, getAntiAlias());
+}
+
+void X11CairoSalGraphicsImpl::drawMask(const SalTwoRect& rTR, const SalBitmap& rSalBitmap,
+                                       Color nMaskColor)
+{
+    mrCairoCommon.drawMask(rTR, rSalBitmap, nMaskColor, getAntiAlias());
+}
+
+std::shared_ptr<SalBitmap> X11CairoSalGraphicsImpl::getBitmap(tools::Long nX, tools::Long nY,
+                                                              tools::Long nWidth,
+                                                              tools::Long nHeight)
+{
+    return mrCairoCommon.getBitmap(nX, nY, nWidth, nHeight);
+}
+
+void X11CairoSalGraphicsImpl::Init() {}
+
+void X11CairoSalGraphicsImpl::freeResources() {}
+
+bool X11CairoSalGraphicsImpl::drawPolyLineBezier(sal_uInt32, const Point*, const PolyFlags*)
+{
+    return false;
+}
+
+bool X11CairoSalGraphicsImpl::drawPolygonBezier(sal_uInt32, const Point*, const PolyFlags*)
+{
+    return false;
+}
+
+bool X11CairoSalGraphicsImpl::drawPolyPolygonBezier(sal_uInt32, const sal_uInt32*,
+                                                    const Point* const*, const PolyFlags* const*)
+{
+    return false;
+}
+
+bool X11CairoSalGraphicsImpl::drawEPS(tools::Long, tools::Long, tools::Long, tools::Long, void*,
+                                      sal_uInt32)
+{
+    return false;
+}
+
+bool X11CairoSalGraphicsImpl::blendBitmap(const SalTwoRect&, const SalBitmap&) { return false; }
+
+bool X11CairoSalGraphicsImpl::blendAlphaBitmap(const SalTwoRect&, const SalBitmap&,
+                                               const SalBitmap&, const SalBitmap&)
+{
+    return false;
+}
+
+bool X11CairoSalGraphicsImpl::drawTransformedBitmap(const basegfx::B2DPoint& rNull,
+                                                    const basegfx::B2DPoint& rX,
+                                                    const basegfx::B2DPoint& rY,
+                                                    const SalBitmap& rSourceBitmap,
+                                                    const SalBitmap* pAlphaBitmap, double fAlpha)
+{
+    return mrCairoCommon.drawTransformedBitmap(rNull, rX, rY, rSourceBitmap, pAlphaBitmap, fAlpha,
+                                               getAntiAlias());
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

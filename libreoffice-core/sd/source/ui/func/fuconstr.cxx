@@ -87,7 +87,7 @@ bool FuConstruct::MouseButtonDown(const MouseEvent& rMEvt)
 
         if ( pHdl != nullptr || mpView->IsMarkedHit(aMDPos, nHitLog) )
         {
-            sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
+            sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
             mpView->BegDragObj(aMDPos, nullptr, pHdl, nDrgLog);
             bReturn = true;
         }
@@ -164,7 +164,7 @@ bool FuConstruct::MouseButtonUp(const MouseEvent& rMEvt)
     if ( mpView &&  !mpView->IsAction() )
     {
         mpWindow->ReleaseMouse();
-        sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(DRGPIX,0)).Width() );
+        sal_uInt16 nDrgLog = sal_uInt16 ( mpWindow->PixelToLogic(Size(mpView->GetDragThresholdPixels(),0)).Width() );
 
         if ( !mpView->AreObjectsMarked() )
         {
@@ -228,6 +228,19 @@ void FuConstruct::Deactivate()
 {
     FuDraw::Deactivate();
     mpView->SetEditMode(SdrViewEditMode::Edit);
+}
+
+bool FuConstruct::IsIgnoreUnexpectedMouseButtonUp()
+{
+    // tdf#153446 if there is a MouseButtonUp without a previous MouseButtonDown event,
+    // the MouseButtonDown was probably swallowed by a gain-focus action,
+    // and then this MouseButtonUp should be ignored
+
+    if (bMBDown || bIsInDragMode)
+        return false;
+
+    // Don't ignore if there are pending mouse-initiated tasks to complete.
+    return !mpView->IsDragObj() && !mpWindow->IsMouseCaptured() && !mpView->IsAction();
 }
 
 /**

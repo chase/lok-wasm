@@ -65,8 +65,6 @@ core_constructor_list = [
     "com_sun_star_comp_chart2_Axis_get_implementation",
     "com_sun_star_comp_chart2_CartesianCoordinateSystem2d_get_implementation",
     "com_sun_star_comp_chart2_CartesianCoordinateSystem3d_get_implementation",
-    "com_sun_star_comp_chart2_ChartController_get_implementation",
-    "com_sun_star_comp_chart2_ChartDocumentWrapper_get_implementation",
     "com_sun_star_comp_chart2_ChartModel_get_implementation",
     "com_sun_star_comp_chart2_ChartView_get_implementation",
     "com_sun_star_comp_chart2_ConfigDefaultColorScheme_get_implementation",
@@ -308,7 +306,7 @@ core_constructor_list = [
     ("lingucomponent_MacSpellChecker_get_implementation", "#ifdef IOS"),
 # lingucomponent/source/spellcheck/languagetool/LanguageTool.component
     ("lingucomponent_LanguageToolGrammarChecker_get_implementation", "#if !ENABLE_FUZZERS"),
-    "lingucomponent_NumberText_get_implementation",
+    ("lingucomponent_NumberText_get_implementation", "#if !ENABLE_FUZZERS"),
 # lingucomponent/source/thesaurus/libnth/lnth.component
     "lingucomponent_Thesaurus_get_implementation",
     "lingucomponent_SpellChecker_get_implementation",
@@ -652,8 +650,6 @@ calc_constructor_list = [
     "scaddins_ScaDateAddIn_get_implementation",
 # scaddins/source/pricing/pricing.component
     "scaddins_ScaPricingAddIn_get_implementation",
-# scripting/source/vbaevents/vbaevents.component
-    ("ooo_vba_VBAToOOEventDesc_get_implementation", "#if HAVE_FEATURE_SCRIPTING"),
 # svl/util/svl.component
     "com_sun_star_uno_util_numbers_SvNumberFormatsSupplierServiceObject_get_implementation",
     "com_sun_star_uno_util_numbers_SvNumberFormatterServiceObject_get_implementation",
@@ -700,22 +696,12 @@ draw_constructor_list = [
     "sd_PresentationDocument_get_implementation",
     "com_sun_star_comp_Draw_PresenterHelper_get_implementation",
     "com_sun_star_comp_Draw_PresenterPreviewCache_get_implementation",
-    "com_sun_star_comp_Draw_PresenterTextView_get_implementation",
     "com_sun_star_comp_Draw_SlideRenderer_get_implementation",
-    "com_sun_star_comp_Draw_SlideSorter_get_implementation",
-    "com_sun_star_comp_Draw_framework_configuration_Configuration_get_implementation",
-    "com_sun_star_comp_draw_SdHtmlOptionsDialog_get_implementation",
     "com_sun_star_comp_sd_InsertSlideController_get_implementation",
     "com_sun_star_comp_sd_SlideLayoutController_get_implementation",
     "com_sun_star_comp_sd_DisplayModeController_get_implementation",
     "RandomAnimationNode_get_implementation",
-    "com_sun_star_comp_Draw_framework_BasicPaneFactory_get_implementation",
-    "com_sun_star_comp_Draw_framework_BasicToolBarFactory_get_implementation",
-    "com_sun_star_comp_Draw_framework_BasicViewFactory_get_implementation",
-    "com_sun_star_comp_Draw_framework_PresentationFactoryProvider_get_implementation",
     "com_sun_star_comp_Draw_framework_ResourceID_get_implementation",
-    "com_sun_star_comp_Draw_framework_configuration_ConfigurationController_get_implementation",
-    "com_sun_star_comp_Draw_framework_module_ModuleController_get_implementation",
     "org_openoffice_comp_Draw_framework_PanelFactory_get_implementation",
     "css_comp_Impress_oox_PowerPointExport",
 # sd/util/sdd.component

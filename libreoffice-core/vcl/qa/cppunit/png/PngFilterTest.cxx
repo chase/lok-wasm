@@ -26,7 +26,8 @@
 #include <vcl/filter/PngImageReader.hxx>
 #include <vcl/filter/PngImageWriter.hxx>
 #include <vcl/BitmapReadAccess.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapMonochromeFilter.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 #include <vcl/alpha.hxx>
 #include <vcl/graphicfilter.hxx>
 #include <unotools/tempfile.hxx>
@@ -63,7 +64,7 @@ void checkImportExportPng(const OUString& sFilePath, const Case& aCase)
         CPPUNIT_ASSERT_MESSAGE(OString("Failed to read png from: " + sFilePath.toUtf8()).getStr(),
                                bReadOk);
         Bitmap aImportedBitmap = aImportedBitmapEx.GetBitmap();
-        Bitmap::ScopedInfoAccess pAccess(aImportedBitmap);
+        BitmapScopedInfoAccess pAccess(aImportedBitmap);
         auto nActualWidth = aImportedBitmapEx.GetSizePixel().Width();
         auto nActualHeight = aImportedBitmapEx.GetSizePixel().Height();
         auto nActualBpp = vcl::pixelFormatBitCount(aImportedBitmapEx.GetBitmap().getPixelFormat());
@@ -102,7 +103,7 @@ void checkImportExportPng(const OUString& sFilePath, const Case& aCase)
         CPPUNIT_ASSERT_MESSAGE(
             OString("Failed to read exported png: " + sFilePath.toUtf8()).getStr(), bReadOk);
         Bitmap aExportedImportedBitmap = aExportedImportedBitmapEx.GetBitmap();
-        Bitmap::ScopedInfoAccess pAccess(aExportedImportedBitmap);
+        BitmapScopedInfoAccess pAccess(aExportedImportedBitmap);
         auto nActualWidth = aExportedImportedBitmapEx.GetSizePixel().Width();
         auto nActualHeight = aExportedImportedBitmapEx.GetSizePixel().Height();
         auto nActualBpp
@@ -169,25 +170,29 @@ public:
     }
 
     void testPng();
+    void testApng();
     void testPngSuite();
     void testMsGifInPng();
     void testPngRoundtrip8BitGrey();
     void testPngRoundtrip24();
     void testPngRoundtrip24_8();
     void testPngRoundtrip32();
-    void testPngWrite1BitRGBPalette();
     void testPngWrite8BitRGBPalette();
+    void testTdf153180MonochromeFilterPngExport();
+    void testDump();
 
     CPPUNIT_TEST_SUITE(PngFilterTest);
     CPPUNIT_TEST(testPng);
+    CPPUNIT_TEST(testApng);
     CPPUNIT_TEST(testPngSuite);
     CPPUNIT_TEST(testMsGifInPng);
     CPPUNIT_TEST(testPngRoundtrip8BitGrey);
     CPPUNIT_TEST(testPngRoundtrip24);
     CPPUNIT_TEST(testPngRoundtrip24_8);
     CPPUNIT_TEST(testPngRoundtrip32);
-    CPPUNIT_TEST(testPngWrite1BitRGBPalette);
     CPPUNIT_TEST(testPngWrite8BitRGBPalette);
+    CPPUNIT_TEST(testDump);
+    CPPUNIT_TEST(testTdf153180MonochromeFilterPngExport);
     CPPUNIT_TEST_SUITE_END();
 };
 
@@ -203,7 +208,7 @@ void PngFilterTest::testPng()
 
         Bitmap aBitmap = aBitmapEx.GetBitmap();
         {
-            Bitmap::ScopedReadAccess pAccess(aBitmap);
+            BitmapScopedReadAccess pAccess(aBitmap);
             CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAccess->Width());
             CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAccess->Height());
 
@@ -250,7 +255,7 @@ void PngFilterTest::testPng()
 
         Bitmap aBitmap = aBitmapEx.GetBitmap();
         {
-            Bitmap::ScopedReadAccess pAccess(aBitmap);
+            BitmapScopedReadAccess pAccess(aBitmap);
             CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAccess->Width());
             CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAccess->Height());
             if (pAccess->GetBitCount() == 24 || pAccess->GetBitCount() == 32)
@@ -289,7 +294,7 @@ void PngFilterTest::testPng()
 
         Bitmap aBitmap = aBitmapEx.GetBitmap();
         {
-            Bitmap::ScopedReadAccess pAccess(aBitmap);
+            BitmapScopedReadAccess pAccess(aBitmap);
             CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAccess->Width());
             CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAccess->Height());
 
@@ -313,29 +318,29 @@ void PngFilterTest::testPng()
                 CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0xFF, 0xFF, 0x00, 0x00),
                                      pAccess->GetPixel(2, 2));
 
-                AlphaMask aAlpha = aBitmapEx.GetAlpha();
+                AlphaMask aAlpha = aBitmapEx.GetAlphaMask();
                 {
-                    AlphaMask::ScopedReadAccess pAlphaAccess(aAlpha);
+                    BitmapScopedReadAccess pAlphaAccess(aAlpha);
                     CPPUNIT_ASSERT_EQUAL(sal_uInt16(8), pAlphaAccess->GetBitCount());
                     CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAlphaAccess->Width());
                     CPPUNIT_ASSERT_EQUAL(tools::Long(4), pAlphaAccess->Height());
 
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x80, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x7F, 0x00),
                                          pAlphaAccess->GetPixel(0, 0));
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x80, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x7F, 0x00),
                                          pAlphaAccess->GetPixel(3, 3));
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x80, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x7F, 0x00),
                                          pAlphaAccess->GetPixel(3, 0));
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x80, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x7F, 0x00),
                                          pAlphaAccess->GetPixel(0, 3));
 
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x40, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0xBF, 0x00),
                                          pAlphaAccess->GetPixel(1, 1));
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0xC0, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x3F, 0x00),
                                          pAlphaAccess->GetPixel(1, 2));
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0xC0, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x3F, 0x00),
                                          pAlphaAccess->GetPixel(2, 1));
-                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0x40, 0x00),
+                    CPPUNIT_ASSERT_EQUAL(BitmapColor(ColorTransparency, 0x00, 0x00, 0xBF, 0x00),
                                          pAlphaAccess->GetPixel(2, 2));
                 }
             }
@@ -365,6 +370,58 @@ void PngFilterTest::testPng()
             }
         }
     }
+}
+
+void PngFilterTest::testApng()
+{
+    SvFileStream aFileStream(getFullUrl(u"apng_simple.apng"), StreamMode::READ);
+    vcl::PngImageReader aPngReader(aFileStream);
+    Graphic aGraphic;
+    bool bSuccess = aPngReader.read(aGraphic);
+    CPPUNIT_ASSERT(bSuccess);
+    CPPUNIT_ASSERT(aGraphic.IsAnimated());
+    CPPUNIT_ASSERT_EQUAL(size_t(2), aGraphic.GetAnimation().GetAnimationFrames().size());
+
+    AnimationFrame aFrame1 = *aGraphic.GetAnimation().GetAnimationFrames()[0];
+    AnimationFrame aFrame2 = *aGraphic.GetAnimation().GetAnimationFrames()[1];
+
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, aFrame1.maBitmapEx.GetPixelColor(0, 0));
+    CPPUNIT_ASSERT_EQUAL(Color(0x72d1c8), aFrame1.maBitmapEx.GetPixelColor(2, 2));
+    CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, aFrame2.maBitmapEx.GetPixelColor(0, 0));
+
+    // Roundtrip the APNG
+    SvMemoryStream aOutStream;
+    vcl::PngImageWriter aPngWriter(aOutStream);
+    bSuccess = aPngWriter.write(aGraphic);
+    CPPUNIT_ASSERT(bSuccess);
+
+    aOutStream.Seek(STREAM_SEEK_TO_BEGIN);
+    vcl::PngImageReader aPngReader2(aOutStream);
+    Graphic aGraphic2;
+    bSuccess = aPngReader2.read(aGraphic2);
+    CPPUNIT_ASSERT(bSuccess);
+    CPPUNIT_ASSERT(aGraphic2.IsAnimated());
+    CPPUNIT_ASSERT_EQUAL(size_t(2), aGraphic2.GetAnimation().GetAnimationFrames().size());
+
+    AnimationFrame aFrame1Roundtripped = *aGraphic2.GetAnimation().GetAnimationFrames()[0];
+    AnimationFrame aFrame2Roundtripped = *aGraphic2.GetAnimation().GetAnimationFrames()[1];
+
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, aFrame1Roundtripped.maBitmapEx.GetPixelColor(0, 0));
+    CPPUNIT_ASSERT_EQUAL(Color(0x72d1c8), aFrame1Roundtripped.maBitmapEx.GetPixelColor(2, 2));
+    CPPUNIT_ASSERT_EQUAL(COL_LIGHTRED, aFrame2Roundtripped.maBitmapEx.GetPixelColor(0, 0));
+
+    // Make sure the two frames have the same properties
+    CPPUNIT_ASSERT_EQUAL(aFrame1.maPositionPixel, aFrame1Roundtripped.maPositionPixel);
+    CPPUNIT_ASSERT_EQUAL(aFrame1.maSizePixel, aFrame1Roundtripped.maSizePixel);
+    CPPUNIT_ASSERT_EQUAL(aFrame1.mnWait, aFrame1Roundtripped.mnWait);
+    CPPUNIT_ASSERT_EQUAL(aFrame1.meDisposal, aFrame1Roundtripped.meDisposal);
+    CPPUNIT_ASSERT_EQUAL(aFrame1.meBlend, aFrame1Roundtripped.meBlend);
+
+    CPPUNIT_ASSERT_EQUAL(aFrame2.maPositionPixel, aFrame2Roundtripped.maPositionPixel);
+    CPPUNIT_ASSERT_EQUAL(aFrame2.maSizePixel, aFrame2Roundtripped.maSizePixel);
+    CPPUNIT_ASSERT_EQUAL(aFrame2.mnWait, aFrame2Roundtripped.mnWait);
+    CPPUNIT_ASSERT_EQUAL(aFrame2.meDisposal, aFrame2Roundtripped.meDisposal);
+    CPPUNIT_ASSERT_EQUAL(aFrame2.meBlend, aFrame2Roundtripped.meBlend);
 }
 
 void PngFilterTest::testPngSuite()
@@ -1863,16 +1920,15 @@ void PngFilterTest::testPngRoundtrip24_8()
         AlphaMask aAlpha(Size(16, 16));
         {
             BitmapScopedWriteAccess pWriteAccessBitmap(aBitmap);
-            AlphaScopedWriteAccess pWriteAccessAlpha(aAlpha);
-            pWriteAccessAlpha->Erase(Color(ColorTransparency, 0x00, 0xAA, 0xAA, 0xAA));
+            BitmapScopedWriteAccess pWriteAccessAlpha(aAlpha);
+            pWriteAccessAlpha->Erase(Color(0xAA, 0xAA, 0xAA));
             pWriteAccessBitmap->Erase(COL_BLACK);
             for (int i = 0; i < 8; ++i)
             {
                 for (int j = 0; j < 8; ++j)
                 {
                     pWriteAccessBitmap->SetPixel(i, j, COL_LIGHTRED);
-                    pWriteAccessAlpha->SetPixel(i, j,
-                                                Color(ColorTransparency, 0x00, 0xBB, 0xBB, 0xBB));
+                    pWriteAccessAlpha->SetPixel(i, j, Color(0xBB, 0xBB, 0xBB));
                 }
             }
             for (int i = 8; i < 16; ++i)
@@ -1880,8 +1936,7 @@ void PngFilterTest::testPngRoundtrip24_8()
                 for (int j = 8; j < 16; ++j)
                 {
                     pWriteAccessBitmap->SetPixel(i, j, COL_LIGHTBLUE);
-                    pWriteAccessAlpha->SetPixel(i, j,
-                                                Color(ColorTransparency, 0x00, 0xCC, 0xCC, 0xCC));
+                    pWriteAccessAlpha->SetPixel(i, j, Color(0xCC, 0xCC, 0xCC));
                 }
             }
         }
@@ -1899,81 +1954,18 @@ void PngFilterTest::testPngRoundtrip24_8()
 
         CPPUNIT_ASSERT_EQUAL(Size(16, 16), aBitmapEx.GetSizePixel());
 
-        CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0xBB, 0xFF, 0x00, 0x00),
+        CPPUNIT_ASSERT_EQUAL(Color(ColorAlpha, 0xBB, 0xFF, 0x00, 0x00),
                              aBitmapEx.GetPixelColor(0, 0));
-        CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0xCC, 0x00, 0x00, 0xFF),
+        CPPUNIT_ASSERT_EQUAL(Color(ColorAlpha, 0xCC, 0x00, 0x00, 0xFF),
                              aBitmapEx.GetPixelColor(15, 15));
-        CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0xAA, 0x00, 0x00, 0x00),
+        CPPUNIT_ASSERT_EQUAL(Color(ColorAlpha, 0xAA, 0x00, 0x00, 0x00),
                              aBitmapEx.GetPixelColor(15, 0));
-        CPPUNIT_ASSERT_EQUAL(Color(ColorTransparency, 0xAA, 0x00, 0x00, 0x00),
+        CPPUNIT_ASSERT_EQUAL(Color(ColorAlpha, 0xAA, 0x00, 0x00, 0x00),
                              aBitmapEx.GetPixelColor(0, 15));
     }
 }
 
 void PngFilterTest::testPngRoundtrip32() {}
-
-void PngFilterTest::testPngWrite1BitRGBPalette()
-{
-    SvMemoryStream aExportStream;
-    {
-        BitmapPalette aPal;
-        aPal.SetEntryCount(2);
-        aPal[0] = COL_RED;
-        aPal[1] = COL_GREEN;
-        Bitmap aBitmap(Size(16, 16), vcl::PixelFormat::N1_BPP, &aPal);
-        {
-            BitmapScopedWriteAccess pWriteAccessBitmap(aBitmap);
-            // Top left
-            for (int i = 0; i < 8; i++)
-            {
-                for (int j = 0; j < 8; j++)
-                {
-                    pWriteAccessBitmap->SetPixelIndex(i, j, 0);
-                }
-            }
-            // Top right
-            for (int i = 0; i < 8; i++)
-            {
-                for (int j = 8; j < 16; j++)
-                {
-                    pWriteAccessBitmap->SetPixelIndex(i, j, 1);
-                }
-            }
-            // Bottom left
-            for (int i = 8; i < 16; i++)
-            {
-                for (int j = 0; j < 8; j++)
-                {
-                    pWriteAccessBitmap->SetPixelIndex(i, j, 1);
-                }
-            }
-            // Bottom right
-            for (int i = 8; i < 16; i++)
-            {
-                for (int j = 8; j < 16; j++)
-                {
-                    pWriteAccessBitmap->SetPixelIndex(i, j, 0);
-                }
-            }
-        }
-        BitmapEx aBitmapEx(aBitmap);
-        vcl::PngImageWriter aPngWriter(aExportStream);
-        CPPUNIT_ASSERT_EQUAL(true, aPngWriter.write(aBitmapEx));
-    }
-    aExportStream.Seek(0);
-    {
-        vcl::PngImageReader aPngReader(aExportStream);
-        BitmapEx aBitmapEx;
-        CPPUNIT_ASSERT_EQUAL(true, aPngReader.read(aBitmapEx));
-
-        CPPUNIT_ASSERT_EQUAL(Size(16, 16), aBitmapEx.GetSizePixel());
-
-        CPPUNIT_ASSERT_EQUAL(COL_RED, aBitmapEx.GetPixelColor(0, 0));
-        CPPUNIT_ASSERT_EQUAL(COL_RED, aBitmapEx.GetPixelColor(15, 15));
-        CPPUNIT_ASSERT_EQUAL(COL_GREEN, aBitmapEx.GetPixelColor(15, 0));
-        CPPUNIT_ASSERT_EQUAL(COL_GREEN, aBitmapEx.GetPixelColor(0, 15));
-    }
-}
 
 void PngFilterTest::testPngWrite8BitRGBPalette()
 {
@@ -2019,6 +2011,70 @@ void PngFilterTest::testPngWrite8BitRGBPalette()
             }
         }
     }
+}
+
+void PngFilterTest::testTdf153180MonochromeFilterPngExport()
+{
+    GraphicFilter& rFilter = GraphicFilter::GetGraphicFilter();
+
+    Graphic aGraphicOriginal;
+    {
+        // 3 * 16 bits rgb color alpha, no background chunk
+        const OUString aURL(getFullUrl(u"bgan6a16.png"));
+        SvFileStream aFileStream(aURL, StreamMode::READ);
+        ErrCode aResult = rFilter.ImportGraphic(aGraphicOriginal, aURL, aFileStream);
+        CPPUNIT_ASSERT_EQUAL(ERRCODE_NONE, aResult);
+        CPPUNIT_ASSERT(aGraphicOriginal.IsAlpha());
+    }
+
+    // Apply the monochrome filter to the graphic but keep the alpha.
+    BitmapEx aBitmapEx(aGraphicOriginal.GetBitmapEx());
+    AlphaMask aAlphaMask(aBitmapEx.GetAlphaMask());
+
+    BitmapEx aTmpBmpEx(aBitmapEx.GetBitmap());
+    BitmapFilter::Filter(aTmpBmpEx, BitmapMonochromeFilter{ sal_uInt8{ 127 } });
+
+    Graphic aGraphicAfterFilter{ BitmapEx(aTmpBmpEx.GetBitmap(), aAlphaMask) };
+    CPPUNIT_ASSERT(aGraphicAfterFilter.IsAlpha());
+
+    // export the resulting graphic
+    utl::TempFileNamed aTempFile(u"testPngExportTdf153180", true, u".png");
+    if (!bKeepTemp)
+        aTempFile.EnableKillingFile();
+    {
+        SvStream& rStream = *aTempFile.GetStream(StreamMode::WRITE);
+        vcl::PngImageWriter aPngWriter(rStream);
+        bool bWriteSuccess = aPngWriter.write(aGraphicAfterFilter.GetBitmapEx());
+        CPPUNIT_ASSERT_EQUAL(true, bWriteSuccess);
+        aTempFile.CloseStream();
+    }
+    {
+        SvStream& rStream = *aTempFile.GetStream(StreamMode::READ);
+        rStream.Seek(0);
+        // Import the png and check that it still has alpha
+        Graphic aGraphic;
+        ErrCode aResult = rFilter.ImportGraphic(aGraphic, aTempFile.GetURL(), rStream);
+        CPPUNIT_ASSERT_EQUAL(ERRCODE_NONE, aResult);
+
+        // Without the accompanying patch would fail with:
+        // assertion failed
+        // -Expression : aGraphic.IsAlpha()
+        CPPUNIT_ASSERT(aGraphic.IsAlpha());
+    }
+}
+
+void PngFilterTest::testDump()
+{
+    utl::TempFileNamed aTempFile;
+    Bitmap aBitmap(Size(1, 1), vcl::PixelFormat::N24_BPP);
+    {
+        BitmapScopedWriteAccess pWriteAccessBitmap(aBitmap);
+        pWriteAccessBitmap->SetPixel(0, 0, BitmapColor());
+    }
+    BitmapEx aBitmapEx(aBitmap);
+    aBitmapEx.DumpAsPng(aTempFile.GetURL().toUtf8().getStr());
+    SvStream* pStream = aTempFile.GetStream(StreamMode::READ);
+    CPPUNIT_ASSERT_GREATER(static_cast<sal_uInt64>(0), pStream->remainingSize());
 }
 
 CPPUNIT_TEST_SUITE_REGISTRATION(PngFilterTest);

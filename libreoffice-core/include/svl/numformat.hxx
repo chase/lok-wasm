@@ -53,7 +53,7 @@ public:
      */
     static const sal_uInt16 INPUTSTRING_PRECISION;
 
-    /// Preferred ctor with service manager and language/country enum
+    /// ctor with service manager and language/country enum
     SvNumberFormatter(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
                       LanguageType eLang);
 
@@ -238,6 +238,9 @@ public:
     /// Whether format index nFIndex is of type text or not
     bool IsTextFormat(sal_uInt32 nFIndex) const;
 
+    /// Whether format index nFIndex has NatNum12 modifier
+    bool IsNatNum12(sal_uInt32 nFIndex) const;
+
     /// Get additional info of a format index, e.g. for dialog box
     void GetFormatSpecialInfo(sal_uInt32 nFormat, bool& bThousand, bool& IsRed,
                               sal_uInt16& nPrecision, sal_uInt16& nLeadingCnt);
@@ -356,7 +359,7 @@ public:
         NF_INDEX_TABLE_ENTRIES if it's not a builtin format.
         @see NfIndexTableOffset
      */
-    NfIndexTableOffset GetIndexTableOffset(sal_uInt32 nFormat) const;
+    static NfIndexTableOffset GetIndexTableOffset(sal_uInt32 nFormat);
 
     /** Set evaluation type and order of input date strings
         @see NfEvalDateFormat
@@ -570,6 +573,8 @@ public:
 private:
     mutable ::osl::Mutex m_aMutex;
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
+    const LanguageType IniLnge; // Initialized setting language/country
+    LanguageType ActLnge; // Current setting language/country
     LanguageTag maLanguageTag;
     std::map<sal_uInt32, std::unique_ptr<SvNumberformat>>
         aFTable; // Table of format keys to format entries
@@ -588,8 +593,6 @@ private:
     Link<sal_uInt16, Color*> aColorLink; // User defined color table CallBack
     sal_uInt32 MaxCLOffset; // Max language/country offset used
     sal_uInt32 nDefaultSystemCurrencyFormat; // NewCurrency matching SYSTEM locale
-    LanguageType IniLnge; // Initialized setting language/country
-    LanguageType ActLnge; // Current setting language/country
     NfEvalDateFormat eEvalDateFormat; // DateFormat evaluation
     bool bNoZero; // Zero value suppression
 
@@ -605,9 +608,6 @@ private:
 
     // get the registry, create one if none exists
     SVL_DLLPRIVATE static SvNumberFormatterRegistry_Impl& GetFormatterRegistry();
-
-    // called by ctors
-    SVL_DLLPRIVATE void ImpConstruct(LanguageType eLang);
 
     // Generate builtin formats provided by i18n behind CLOffset,
     // if bNoAdditionalFormats==false also generate additional i18n formats.
@@ -675,10 +675,6 @@ private:
 
     // link to be set at <method>SvtSysLocaleOptions::SetCurrencyChangeLink()</method>
     DECL_DLLPRIVATE_STATIC_LINK(SvNumberFormatter, CurrencyChangeLink, LinkParamNone*, void);
-
-    // return position of a special character
-    sal_Int32 ImpPosToken(const OUStringBuffer& sFormat, sal_Unicode token,
-                          sal_Int32 nStartPos = 0) const;
 
     // Substitute a format during GetFormatEntry(), i.e. system formats.
     SvNumberformat* ImpSubstituteEntry(SvNumberformat* pFormat, sal_uInt32* o_pRealKey = nullptr);

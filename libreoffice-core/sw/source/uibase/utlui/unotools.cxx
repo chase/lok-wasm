@@ -26,6 +26,7 @@
 #include <strings.hrc>
 #include <unotools.hxx>
 #include <unoprnms.hxx>
+#include <unotextcursor.hxx>
 #include <i18nutil/unicode.hxx>
 #include <o3tl/string_view.hxx>
 #include <rtl/string.h>
@@ -87,15 +88,6 @@ static void disableScrollBars(uno::Reference< beans::XPropertySet > const & xVie
     }
 }
 
-const sal_Int16 nZoomValues[] =
-{
-    20,
-    40,
-    50,
-    75,
-    100
-};
-
 SwOneExampleFrame::SwOneExampleFrame(sal_uInt32 nFlags,
                                  const Link<SwOneExampleFrame&,void>* pInitializedLink,
                                  const OUString* pURL)
@@ -152,8 +144,7 @@ void SwOneExampleFrame::Paint(vcl::RenderContext& rRenderContext, const tools::R
     Color aBgColor = SW_MOD()->GetColorConfig().GetColorValue(::svtools::DOCCOLOR).nColor;
     m_xVirDev->DrawWallpaper(tools::Rectangle(Point(), aSize), aBgColor);
 
-    auto pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(m_xCursor);
-    if (pCursor)
+    if (m_xCursor)
     {
         uno::Reference<view::XViewSettingsSupplier> xSettings(m_xController, uno::UNO_QUERY);
         uno::Reference<beans::XPropertySet>  xViewProps = xSettings->getViewSettings();
@@ -165,7 +156,7 @@ void SwOneExampleFrame::Paint(vcl::RenderContext& rRenderContext, const tools::R
 
         m_xVirDev->Push(vcl::PushFlags::ALL);
         m_xVirDev->SetMapMode(MapMode(MapUnit::MapTwip));
-        SwDoc *pDoc = pCursor->GetDoc();
+        SwDoc *pDoc = m_xCursor->GetDoc();
         SwDocShell* pShell = pDoc->GetDocShell();
         tools::Rectangle aRect(Point(), m_xVirDev->PixelToLogic(aSize));
         pShell->SetVisArea(tools::Rectangle(Point(), Size(aRect.GetWidth() * fZoom,
@@ -294,14 +285,14 @@ IMPL_LINK( SwOneExampleFrame, TimeoutHdl, Timer*, pTimer, void )
 
         uno::Reference< text::XTextDocument >  xDoc(m_xModel, uno::UNO_QUERY);
         uno::Reference< text::XText >  xText = xDoc->getText();
-        m_xCursor = xText->createTextCursor();
+        uno::Reference< text::XTextCursor > xTextCursor = xText->createTextCursor();
+        m_xCursor = dynamic_cast<SwXTextCursor*>(xTextCursor.get());
+        assert(bool(xTextCursor) == bool(m_xCursor) && "expect to get SwXTextCursor type here");
 
         //From here, a cursor is defined, which goes through the template,
         //and overwrites the template words where it is necessary.
 
-        auto pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(m_xCursor);
-
-        SwDoc *pDoc = pCursor ? pCursor->GetDoc() : nullptr;
+        SwDoc *pDoc = m_xCursor ? m_xCursor->GetDoc() : nullptr;
         if (pDoc && (m_nStyleFlags & EX_LOCALIZE_TOC_STRINGS))
         {
             SwEditShell* pSh = pDoc->GetEditShell();
@@ -371,8 +362,7 @@ IMPL_LINK( SwOneExampleFrame, TimeoutHdl, Timer*, pTimer, void )
             }
         }
 
-        uno::Reference< beans::XPropertySet >  xCursorProp(m_xCursor, uno::UNO_QUERY);
-        uno::Any aPageStyle = xCursorProp->getPropertyValue(UNO_NAME_PAGE_STYLE_NAME);
+        uno::Any aPageStyle = m_xCursor->getPropertyValue(UNO_NAME_PAGE_STYLE_NAME);
         OUString sPageStyle;
         aPageStyle >>= sPageStyle;
 
@@ -435,35 +425,24 @@ IMPL_LINK( SwOneExampleFrame, TimeoutHdl, Timer*, pTimer, void )
 
 void SwOneExampleFrame::ClearDocument()
 {
-    uno::Reference< lang::XUnoTunnel> xTunnel( m_xCursor, uno::UNO_QUERY);
-    if( !xTunnel.is() )
+    if( !m_xCursor )
         return;
 
-    OTextCursorHelper* pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xTunnel);
-    if( pCursor )
-    {
-        SwDoc* pDoc = pCursor->GetDoc();
-        SwEditShell* pSh = pDoc->GetEditShell();
-        pSh->LockPaint(LockPaintReason::ExampleFrame);
-        pSh->StartAllAction();
-        pSh->KillPams();
-        pSh->ClearMark();
-        pDoc->ClearDoc();
-        pSh->ClearUpCursors();
+    SwDoc* pDoc = m_xCursor->GetDoc();
+    SwEditShell* pSh = pDoc->GetEditShell();
+    pSh->LockPaint(LockPaintReason::ExampleFrame);
+    pSh->StartAllAction();
+    pSh->KillPams();
+    pSh->ClearMark();
+    pDoc->ClearDoc();
+    pSh->ClearUpCursors();
 
-        if( m_aLoadedIdle.IsActive())
-        {
-            pSh->EndAllAction();
-            pSh->UnlockPaint();
-        }
-        m_aLoadedIdle.Start();
-    }
-    else
+    if( m_aLoadedIdle.IsActive())
     {
-        m_xCursor->gotoStart(false);
-        m_xCursor->gotoEnd(true);
-        m_xCursor->setString(OUString());
+        pSh->EndAllAction();
+        pSh->UnlockPaint();
     }
+    m_aLoadedIdle.Start();
 }
 
 bool SwOneExampleFrame::CreatePopup(const Point& rPt)
@@ -481,13 +460,13 @@ bool SwOneExampleFrame::CreatePopup(const Point& rPt)
     sal_Int16 nZoom = 0;
     aZoom >>= nZoom;
 
-    for (size_t i = 0; i < SAL_N_ELEMENTS(nZoomValues); ++i)
+    for (auto const nZoomPreset : { 20, 40, 50, 75, 100 })
     {
-        OUString sTemp = unicode::formatPercent(nZoomValues[i],
+        OUString sTemp = unicode::formatPercent(nZoomPreset,
             Application::GetSettings().GetUILanguageTag());
-        OString sIdent = "zoom" + OString::number(nZoomValues[i]);
+        OUString sIdent = "zoom" + OUString::number(nZoomPreset);
         xPop->set_label(sIdent, sTemp);
-        if (nZoom == nZoomValues[i])
+        if (nZoom == nZoomPreset)
             xPop->set_active(sIdent, true);
     }
 
@@ -496,10 +475,10 @@ bool SwOneExampleFrame::CreatePopup(const Point& rPt)
     return true;
 }
 
-void SwOneExampleFrame::PopupHdl(std::string_view rId)
+void SwOneExampleFrame::PopupHdl(std::u16string_view rId)
 {
-    std::string_view sZoomValue;
-    if (o3tl::starts_with(rId, "zoom", &sZoomValue))
+    std::u16string_view sZoomValue;
+    if (o3tl::starts_with(rId, u"zoom", &sZoomValue))
     {
         sal_Int16 nZoom = o3tl::toInt32(sZoomValue);
         uno::Reference< view::XViewSettingsSupplier >  xSettings(m_xController, uno::UNO_QUERY);

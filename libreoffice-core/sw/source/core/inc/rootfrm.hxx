@@ -20,6 +20,7 @@
 #define INCLUDED_SW_SOURCE_CORE_INC_ROOTFRM_HXX
 
 #include "layfrm.hxx"
+#include <swregion.hxx>
 #include <viewsh.hxx>
 #include <doc.hxx>
 #include <IDocumentTimerAccess.hxx>
@@ -107,6 +108,8 @@ class SW_DLLPUBLIC SwRootFrame final : public SwLayoutFrame
     static SwLayVout     *s_pVout;
     static bool           s_isInPaint; // Protection against double Paints
     static bool           s_isNoVirDev;// No virt. Device for SystemPaints
+    /// The last, still alive SwRootFrame instance, for debugging.
+    static SwRootFrame* s_pLast;
 
     /// Width of the HTML / Web document if not defined otherwise: 20cm.
     static constexpr sal_Int64 MIN_BROWSE_WIDTH = o3tl::toTwips(20000, o3tl::Length::mm100);
@@ -221,7 +224,7 @@ public:
      * automatically in the EndAllAction.
      */
     void StartAllAction();
-    void EndAllAction( bool bVirDev = false );
+    void EndAllAction();
 
     /**
      * Certain UNO Actions (e.g. table cursor) require that all Actions are reset temporarily
@@ -341,7 +344,8 @@ public:
     */
     bool IsBetweenPages(const Point& rPt) const;
 
-    void CalcFrameRects( SwShellCursor& );
+    enum class RectsMode { Default, NoAnchoredFlys };
+    void CalcFrameRects(SwShellCursor const&, SwRects &, RectsMode eMode = RectsMode::Default);
 
     /**
      * Calculates the cells included from the current selection
@@ -436,6 +440,8 @@ public:
     void SetFieldmarkMode(sw::FieldmarkMode, sw::ParagraphBreakMode);
     sw::ParagraphBreakMode GetParagraphBreakMode() const { return m_ParagraphBreakMode; }
     bool HasMergedParas() const;
+
+    void dumpAsXml(xmlTextWriterPtr writer = nullptr) const override;
 };
 
 inline tools::Long SwRootFrame::GetBrowseWidth() const

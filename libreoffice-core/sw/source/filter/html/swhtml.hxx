@@ -88,7 +88,9 @@ struct HTMLAttrTable
     HTMLAttr* pBreak;
     HTMLAttr* pPageDesc;
 
-    HTMLAttr* pLRSpace; // paragraph attributes
+    HTMLAttr* pFirstLineIndent; // paragraph attributes
+    HTMLAttr* pTextLeftMargin;
+    HTMLAttr* pRightMargin;
     HTMLAttr* pULSpace;
     HTMLAttr* pLineSpacing;
     HTMLAttr* pAdjust;
@@ -401,7 +403,7 @@ class SwHTMLParser : public SfxHTMLParser, public SvtListener
     std::vector<HTMLTable*> m_aTables;
     std::shared_ptr<HTMLTable> m_xTable; // current "outermost" table
     SwHTMLForm_Impl* m_pFormImpl;   // current form
-    rtl::Reference<SdrObject> m_pMarquee;    // current marquee
+    rtl::Reference<SdrTextObj> m_pMarquee;    // current marquee
     std::unique_ptr<SwField> m_xField; // current field
     ImageMap        *m_pImageMap;   // current image map
     std::unique_ptr<ImageMaps> m_pImageMaps;  ///< all Image-Maps that have been read
@@ -473,7 +475,6 @@ class SwHTMLParser : public SfxHTMLParser, public SvtListener
     bool m_bBodySeen : 1;
     bool m_bReadingHeaderOrFooter : 1;
     bool m_bNotifyMacroEventRead : 1;
-    bool m_bFuzzing;
     bool m_isInTableStructure;
 
     int m_nTableDepth;
@@ -666,7 +667,7 @@ class SwHTMLParser : public SfxHTMLParser, public SvtListener
 
     // <SDFIELD>
 public:
-    static SvxNumType GetNumType( const OUString& rStr, SvxNumType eDfltType );
+    static SvxNumType GetNumType( std::u16string_view rStr, SvxNumType eDfltType );
 private:
     void NewField();
     void EndField();
@@ -745,8 +746,8 @@ private:
     // insert bookmark
     void InsertBookmark( const OUString& rName );
 
-    void InsertCommentText( const char *pTag );
-    void InsertComment( const OUString& rName, const char *pTag = nullptr );
+    void InsertCommentText( std::string_view pTag );
+    void InsertComment( const OUString& rName, std::string_view pTag = {} );
 
     // Has the current paragraph bookmarks?
     bool HasCurrentParaBookmarks( bool bIgnoreStack=false ) const;
@@ -952,7 +953,7 @@ public:
     void NotifyMacroEventRead();
 
     /// Strips query and fragment from a URL path if base URL is a file:// one.
-    static OUString StripQueryFromPath(const OUString& rBase, const OUString& rPath);
+    static OUString StripQueryFromPath(std::u16string_view rBase, const OUString& rPath);
 };
 
 struct SwPendingData
@@ -1031,25 +1032,25 @@ class SwTextFootnote;
 class SwHTMLTextFootnote
 {
 private:
-    OUString sName;
-    SwTextFootnote* pTextFootnote;
-    std::unique_ptr<SvtDeleteListener> xDeleteListener;
+    OUString m_sName;
+    SwTextFootnote* m_pTextFootnote;
+    std::unique_ptr<SvtDeleteListener> m_xDeleteListener;
 public:
     SwHTMLTextFootnote(OUString rName, SwTextFootnote* pInTextFootnote)
-        : sName(std::move(rName))
-        , pTextFootnote(pInTextFootnote)
-        , xDeleteListener(new SvtDeleteListener(static_cast<SwFormatFootnote&>(pInTextFootnote->GetAttr()).GetNotifier()))
+        : m_sName(std::move(rName))
+        , m_pTextFootnote(pInTextFootnote)
+        , m_xDeleteListener(new SvtDeleteListener(static_cast<SwFormatFootnote&>(pInTextFootnote->GetAttr()).GetNotifier()))
     {
     }
     const OUString& GetName() const
     {
-        return sName;
+        return m_sName;
     }
     const SwNodeIndex* GetStartNode() const
     {
-        if (xDeleteListener->WasDeleted())
+        if (m_xDeleteListener->WasDeleted())
             return nullptr;
-        return pTextFootnote->GetStartNode();
+        return m_pTextFootnote->GetStartNode();
     }
 };
 

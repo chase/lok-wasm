@@ -294,7 +294,7 @@ void TextLayouterDevice::addTextRectActions(const ::tools::Rectangle& rRectangle
 }
 
 std::vector<double> TextLayouterDevice::getTextArray(const OUString& rText, sal_uInt32 nIndex,
-                                                     sal_uInt32 nLength) const
+                                                     sal_uInt32 nLength, bool bCaret) const
 {
     std::vector<double> aRetval;
     sal_uInt32 nTextLength(nLength);
@@ -308,33 +308,10 @@ std::vector<double> TextLayouterDevice::getTextArray(const OUString& rText, sal_
     if (nTextLength)
     {
         KernArray aArray;
-        mrDevice.GetTextArray(rText, &aArray, nIndex, nTextLength);
+        mrDevice.GetTextArray(rText, &aArray, nIndex, nTextLength, bCaret);
         aRetval.reserve(aArray.size());
         for (size_t i = 0, nEnd = aArray.size(); i < nEnd; ++i)
             aRetval.push_back(aArray[i]);
-    }
-
-    return aRetval;
-}
-
-std::vector<double> TextLayouterDevice::getCaretPositions(const OUString& rText, sal_uInt32 nIndex,
-                                                          sal_uInt32 nLength) const
-{
-    std::vector<double> aRetval;
-    sal_uInt32 nTextLength(nLength);
-    const sal_uInt32 nStringLength(rText.getLength());
-
-    if (nTextLength + nIndex > nStringLength)
-    {
-        nTextLength = nStringLength - nIndex;
-    }
-
-    if (nTextLength)
-    {
-        aRetval.reserve(2 * nTextLength);
-        std::vector<sal_Int32> aArray(2 * nTextLength);
-        mrDevice.GetCaretPositions(rText, aArray.data(), nIndex, nTextLength);
-        aRetval.assign(aArray.begin(), aArray.end());
     }
 
     return aRetval;

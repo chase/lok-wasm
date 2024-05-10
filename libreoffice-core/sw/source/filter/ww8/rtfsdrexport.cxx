@@ -301,7 +301,7 @@ void RtfSdrExport::Commit(EscherPropertyContainer& rProps, const tools::Rectangl
                         unsigned char nSegmentType = (nSeg & 0xE000) >> 13;
                         unsigned short nSegmentCount = nSeg & 0x03FF;
 
-                        aSegmentInfo.append(';').append(static_cast<sal_Int32>(nSeg));
+                        aSegmentInfo.append(";" + OString::number(static_cast<sal_Int32>(nSeg)));
                         switch (nSegmentType)
                         {
                             case msopathLineTo:
@@ -509,7 +509,7 @@ void RtfSdrExport::impl_writeGraphic()
     // Export it to a stream.
     SvMemoryStream aStream;
     (void)GraphicConverter::Export(aStream, aGraphic, ConvertDataFormat::PNG);
-    sal_uInt32 nSize = aStream.TellEnd();
+    sal_uInt64 nSize = aStream.TellEnd();
     auto pGraphicAry = static_cast<sal_uInt8 const*>(aStream.GetData());
 
     Size aMapped(aGraphic.GetPrefSize());
@@ -534,7 +534,7 @@ sal_Int32 RtfSdrExport::StartShape()
     if (ESCHER_ShpInst_PictureFrame == m_nShapeType)
         impl_writeGraphic();
 
-    m_rAttrOutput.RunText().append('{').append(OOO_STRING_SVTOOLS_RTF_SHP);
+    m_rAttrOutput.RunText().append("{" OOO_STRING_SVTOOLS_RTF_SHP);
     m_rAttrOutput.RunText().append(
         "{" OOO_STRING_SVTOOLS_RTF_IGNORE OOO_STRING_SVTOOLS_RTF_SHPINST);
 
@@ -632,8 +632,7 @@ sal_Int32 RtfSdrExport::StartShape()
                                                               m_rExport.GetCurrentEncoding()));
                 }
 
-                auto pFontHeight = static_cast<const SvxFontHeightItem*>(
-                    rItemSet.GetItem(SID_ATTR_CHAR_FONTHEIGHT));
+                auto pFontHeight = rItemSet.GetItem(SID_ATTR_CHAR_FONTHEIGHT);
                 if (pFontHeight)
                 {
                     tools::Long nFontHeight = TransformMetric(pFontHeight->GetHeight(),
@@ -647,7 +646,7 @@ sal_Int32 RtfSdrExport::StartShape()
                 // RTF angle: 0-360 * 2^16  clockwise
                 // LO  angle: 0-360 * 100   counter-clockwise
                 sal_Int32 nRotation
-                    = -1 * pTextObj->GetGeoStat().nRotationAngle.get() * RTF_MULTIPLIER / 100;
+                    = -1 * pTextObj->GetGeoStat().m_nRotationAngle.get() * RTF_MULTIPLIER / 100;
                 lcl_AppendSP(m_rAttrOutput.RunText(), "rotation",
                              msfilter::rtfutil::OutString(OUString::number(nRotation),
                                                           m_rExport.GetCurrentEncoding()));
@@ -669,7 +668,7 @@ void RtfSdrExport::WriteOutliner(const OutlinerParaObject& rParaObj, TextTypes e
 
     bool bShape = eType == TXT_HFTXTBOX;
     if (bShape)
-        m_rAttrOutput.RunText().append('{').append(OOO_STRING_SVTOOLS_RTF_SHPTXT).append(' ');
+        m_rAttrOutput.RunText().append("{" OOO_STRING_SVTOOLS_RTF_SHPTXT " ");
     for (sal_Int32 n = 0; n < nPara; ++n)
     {
         if (n)
@@ -720,7 +719,7 @@ void RtfSdrExport::EndShape(sal_Int32 nShapeElement)
     if (nShapeElement >= 0)
     {
         // end of the shape
-        m_rAttrOutput.RunText().append('}').append('}');
+        m_rAttrOutput.RunText().append("}}");
     }
 }
 

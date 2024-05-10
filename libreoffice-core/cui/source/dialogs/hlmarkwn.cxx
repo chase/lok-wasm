@@ -79,11 +79,19 @@ SvxHlinkDlgMarkWnd::SvxHlinkDlgMarkWnd(weld::Window* pParentDialog, SvxHyperlink
     mxBtApply->connect_clicked( LINK ( this, SvxHlinkDlgMarkWnd, ClickApplyHdl_Impl ) );
     mxBtClose->connect_clicked( LINK ( this, SvxHlinkDlgMarkWnd, ClickCloseHdl_Impl ) );
     mxLbTree->connect_row_activated( LINK ( this, SvxHlinkDlgMarkWnd, DoubleClickApplyHdl_Impl ) );
+
+    // tdf#149935 - remember last used position and size
+    SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
+    if (aDlgOpt.Exists())
+        m_xDialog->set_window_state(aDlgOpt.GetWindowState());
 }
 
 SvxHlinkDlgMarkWnd::~SvxHlinkDlgMarkWnd()
 {
     ClearTree();
+    // tdf#149935 - remember last used position and size
+    SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
+    aDlgOpt.SetWindowState(m_xDialog->get_window_state(vcl::WindowDataMask::PosSize));
 }
 
 void SvxHlinkDlgMarkWnd::ErrorChanged()
@@ -126,7 +134,12 @@ sal_uInt16 SvxHlinkDlgMarkWnd::SetError( sal_uInt16 nError)
 // Move window
 void SvxHlinkDlgMarkWnd::MoveTo(const Point& rNewPos)
 {
-    m_xDialog->window_move(rNewPos.X(), rNewPos.Y());
+    // tdf#149935 - remember last used position and size
+    SvtViewOptions aDlgOpt(EViewType::Dialog, m_xDialog->get_help_id());
+    if (aDlgOpt.Exists())
+        m_xDialog->set_window_state(aDlgOpt.GetWindowState());
+    else
+        m_xDialog->window_move(rNewPos.X(), rNewPos.Y());
 }
 
 namespace
@@ -159,9 +172,9 @@ namespace
     }
 }
 
-constexpr OUStringLiteral TG_SETTING_MANAGER = u"TargetInDocument";
-constexpr OUStringLiteral TG_SETTING_LASTMARK = u"LastSelectedMark";
-constexpr OUStringLiteral TG_SETTING_LASTPATH = u"LastSelectedPath";
+constexpr OUString TG_SETTING_MANAGER = u"TargetInDocument"_ustr;
+constexpr OUString TG_SETTING_LASTMARK = u"LastSelectedMark"_ustr;
+constexpr OUString TG_SETTING_LASTPATH = u"LastSelectedPath"_ustr;
 
 void SvxHlinkDlgMarkWnd::RestoreLastSelection()
 {
@@ -293,9 +306,9 @@ int SvxHlinkDlgMarkWnd::FillTree( const uno::Reference< container::XNameAccess >
     const sal_Int32 nLinks = aNames.getLength();
     const OUString* pNames = aNames.getConstArray();
 
-    static const OUStringLiteral aProp_LinkDisplayName( u"LinkDisplayName" );
-    static const OUStringLiteral aProp_LinkTarget( u"com.sun.star.document.LinkTarget" );
-    static const OUStringLiteral aProp_LinkDisplayBitmap( u"LinkDisplayBitmap" );
+    static constexpr OUStringLiteral aProp_LinkDisplayName( u"LinkDisplayName" );
+    static constexpr OUStringLiteral aProp_LinkTarget( u"com.sun.star.document.LinkTarget" );
+    static constexpr OUStringLiteral aProp_LinkDisplayBitmap( u"LinkDisplayBitmap" );
     for( sal_Int32 i = 0; i < nLinks; i++ )
     {
         uno::Any aAny;

@@ -26,7 +26,7 @@
 class UnoControlTabPageModel final : public ControlModelContainerBase
 {
     css::uno::Any          ImplGetDefaultValue( sal_uInt16 nPropId ) const override;
-    ::cppu::IPropertyArrayHelper&       SAL_CALL getInfoHelper() override;
+    ::cppu::IPropertyArrayHelper& getInfoHelper() override;
 public:
     UnoControlTabPageModel( css::uno::Reference< css::uno::XComponentContext > const & i_factory);
 
@@ -62,7 +62,6 @@ public:
 
     void SAL_CALL createPeer( const css::uno::Reference< css::awt::XToolkit >& Toolkit, const css::uno::Reference< css::awt::XWindowPeer >& Parent ) override;
     void SAL_CALL disposing( const css::lang::EventObject& Source ) override;
-    void SAL_CALL dispose() override;
 
      // css::awt::XWindowListener
     virtual void SAL_CALL windowResized( const css::awt::WindowEvent& e ) override;

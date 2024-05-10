@@ -28,7 +28,6 @@
 #include <com/sun/star/packages/XDataSinkEncrSupport.hpp>
 #include <com/sun/star/lang/XEventListener.hpp>
 #include <com/sun/star/lang/XSingleServiceFactory.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/embed/XEncryptionProtectedSource2.hpp>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/embed/XRelationshipAccess.hpp>
@@ -39,6 +38,8 @@
 #include <com/sun/star/beans/StringPair.hpp>
 
 #include <cppuhelper/weak.hxx>
+#include <cppuhelper/typeprovider.hxx>
+#include <comphelper/multicontainer2.hxx>
 
 #include <comphelper/bytereader.hxx>
 #include <comphelper/refcountedmutex.hxx>
@@ -59,8 +60,6 @@ namespace package {
     // all data in aHash1 is contained in aHash2
     bool PackageEncryptionDataLessOrEqual( const ::comphelper::SequenceAsHashMap& aHash1, const ::comphelper::SequenceAsHashMap& aHash2 );
 }
-
-struct WSInternalData_Impl;
 
 struct OStorage_Impl;
 class OWriteStream;
@@ -232,7 +231,6 @@ class OWriteStream : public css::lang::XTypeProvider
             , public css::embed::XTransactedObject
             , public css::embed::XTransactionBroadcaster
             , public css::beans::XPropertySet
-            , public css::lang::XUnoTunnel
             , public ::cppu::OWeakObject
             , public comphelper::ByteWriter
 {
@@ -244,7 +242,10 @@ protected:
     css::uno::Reference < css::io::XSeekable > m_xSeekable;
 
     OWriteStream_Impl* m_pImpl;
-    std::unique_ptr<WSInternalData_Impl> m_pData;
+    rtl::Reference<comphelper::RefCountedMutex> m_xSharedMutex;
+    ::std::optional< ::cppu::OTypeCollection> m_oTypeCollection;
+    comphelper::OMultiTypeInterfaceContainerHelper2 m_aListenersContainer; // list of listeners
+    sal_Int32 m_nStorageType;
 
     bool m_bInStreamDisconnected;
     bool m_bInitOnDemand;
@@ -252,8 +253,8 @@ protected:
 
     bool m_bTransacted;
 
-    OWriteStream( OWriteStream_Impl* pImpl, bool bTransacted );
-    OWriteStream( OWriteStream_Impl* pImpl, css::uno::Reference< css::io::XStream > const & xStream, bool bTransacted );
+    OWriteStream( OWriteStream_Impl& rImpl, bool bTransacted );
+    OWriteStream( OWriteStream_Impl& rImpl, css::uno::Reference< css::io::XStream > const & xStream, bool bTransacted );
 
     void CloseOutput_Impl();
 
@@ -346,9 +347,6 @@ public:
             const css::uno::Reference< css::embed::XTransactionListener >& aListener ) override;
     virtual void SAL_CALL removeTransactionListener(
             const css::uno::Reference< css::embed::XTransactionListener >& aListener ) override;
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     // comphelper::ByteWriter
     virtual void writeBytes(const sal_Int8* aData, sal_Int32 nBytesToWrite) override;

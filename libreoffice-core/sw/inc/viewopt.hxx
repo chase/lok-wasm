@@ -208,7 +208,6 @@ struct SwViewColors
             && m_aIndexShadingsColor == rOther.m_aIndexShadingsColor
             && m_aLinksColor == rOther.m_aLinksColor
             && m_aVisitedLinksColor == rOther.m_aVisitedLinksColor
-            && m_aDirectCursorColor == rOther.m_aDirectCursorColor
             && m_aTextGridColor == rOther.m_aTextGridColor
             && m_aSpellColor == rOther.m_aSpellColor
             && m_aGrammarColor == rOther.m_aGrammarColor
@@ -230,7 +229,6 @@ struct SwViewColors
     Color m_aIndexShadingsColor; // background color of indexes
     Color m_aLinksColor;
     Color m_aVisitedLinksColor;
-    Color m_aDirectCursorColor;
     Color m_aTextGridColor;
     Color m_aSpellColor;     // mark color of online spell checking
     Color m_aGrammarColor;
@@ -276,6 +274,9 @@ class SW_DLLPUBLIC SwViewOption
     bool            m_bShowPlaceHolderFields : 1; // Only used in printing!
     mutable bool    m_bIdle;
     sal_Int32       m_nDefaultAnchor;     // GetDefaultAnchorType() to convert int to RndStdIds
+    // tdf#135266 - tox dialog: remember last used entry level depending on the index type
+    sal_uInt8 m_nTocEntryLvl;
+    sal_uInt8 m_nIdxEntryLvl;
 
     // Scale
     sal_uInt16          m_nZoom;          // In percent.
@@ -815,7 +816,6 @@ public:
     const Color& GetIndexShadingsColor() const;
     const Color& GetLinksColor() const;
     const Color& GetVisitedLinksColor() const;
-    const Color& GetDirectCursorColor() const;
     const Color& GetTextGridColor() const;
     const Color& GetSpellColor() const;
     const Color& GetGrammarColor() const;
@@ -850,6 +850,12 @@ public:
         { m_nDefaultAnchor = aFlag; }
 
     RndStdIds GetDefaultAnchorType() const;
+
+    // tdf#135266 - tox dialog: remember last used entry level depending on the index type
+    sal_uInt8 GetTocEntryLvl() const { return m_nTocEntryLvl; }
+    void SetTocEntryLvl(sal_uInt8 n) { m_nTocEntryLvl = n; }
+    sal_uInt8 GetIdxEntryLvl() const { return m_nIdxEntryLvl; }
+    void SetIdxEntryLvl(sal_uInt8 n) { m_nIdxEntryLvl = n; }
 
     // Useful for when getting the current view SwViewOption is not possible otherwise
     static const SwViewOption& GetCurrentViewOptions();

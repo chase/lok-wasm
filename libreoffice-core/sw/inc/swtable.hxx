@@ -167,16 +167,18 @@ private:
     bool NewSplitRow( SwDoc&, const SwSelBoxes&, sal_uInt16, bool );
     std::optional<SwBoxSelection> CollectBoxSelection( const SwPaM& rPam ) const;
     void InsertSpannedRow( SwDoc& rDoc, sal_uInt16 nIdx, sal_uInt16 nCnt );
-    bool InsertRow_( SwDoc*, const SwSelBoxes&, sal_uInt16 nCnt, bool bBehind );
-    bool NewInsertCol( SwDoc&, const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool );
+    bool InsertRow_( SwDoc*, const SwSelBoxes&, sal_uInt16 nCnt, bool bBehind, bool bInsertDummy );
+    bool NewInsertCol( SwDoc&, const SwSelBoxes& rBoxes, sal_uInt16 nCnt, bool, bool bInsertDummy );
     void FindSuperfluousRows_( SwSelBoxes& rBoxes, SwTableLine*, SwTableLine* );
     void AdjustWidths( const tools::Long nOld, const tools::Long nNew );
     void NewSetTabCols( Parm &rP, const SwTabCols &rNew, const SwTabCols &rOld,
                         const SwTableBox *pStart, bool bCurRowOnly );
     void ConvertSubtableBox(sal_uInt16 const nRow, sal_uInt16 const nBox);
+    // Only used for TBL_BOXNAME and TBL_RELBOXNAME for now
+    void UpdateFields(TableFormulaUpdateFlags eFlags);
+    void GatherFormulas(std::vector<SwTableBoxFormula*>& rvFormulas);
 
 public:
-
     SwHTMLTableLayout *GetHTMLTableLayout() { return m_xHTMLLayout.get(); }
     const SwHTMLTableLayout *GetHTMLTableLayout() const { return m_xHTMLLayout.get(); }
     void SetHTMLTableLayout(std::shared_ptr<SwHTMLTableLayout> const& r);    //Change of property!
@@ -250,9 +252,9 @@ public:
     void PrepareDeleteCol( tools::Long nMin, tools::Long nMax );
 
     bool InsertCol( SwDoc&, const SwSelBoxes& rBoxes,
-                    sal_uInt16 nCnt, bool bBehind );
+                    sal_uInt16 nCnt, bool bBehind, bool bInsertDummy );
     bool InsertRow( SwDoc*, const SwSelBoxes& rBoxes,
-                    sal_uInt16 nCnt, bool bBehind );
+                    sal_uInt16 nCnt, bool bBehind, bool bInsertDummy = true );
     void PrepareDelBoxes( const SwSelBoxes& rBoxes );
     bool DeleteSel( SwDoc*, const SwSelBoxes& rBoxes, const SwSelBoxes* pMerged,
         SwUndo* pUndo, const bool bDelMakeFrames, const bool bCorrBorder );
@@ -352,11 +354,21 @@ public:
 
     // is it a table deleted completely with change tracking
     bool IsDeleted() const;
-    // is it a table with deleted row(s)
-    bool HasDeletedRow() const;
+    // is it a table with a deleted row or cell
+    bool HasDeletedRowOrCell() const;
     // it doesn't contain box content (except single empty nested tables of the boxes
     // which could remain after deletion of text content of the selected table)
     bool IsEmpty() const;
+    void SwitchFormulasToExternalRepresentation()
+        { UpdateFields(TBL_BOXNAME); };
+    void SwitchFormulasToRelativeRepresentation()
+        { UpdateFields(TBL_RELBOXNAME); };
+    void SwitchFormulasToInternalRepresentation()
+        { UpdateFields(TBL_BOXPTR); }
+    void Merge(SwTable& rTable, SwHistory* pHistory);
+    void Split(OUString sNewTableName, sal_uInt16 nSplitLine, SwHistory* pHistory);
+
+    void dumpAsXml(xmlTextWriterPtr pWriter) const;
 };
 
 /// SwTableLine is one table row in the document model.
@@ -414,6 +426,9 @@ public:
     // Cache also the type of the redline associated to the changed table row.
     SwRedlineTable::size_type UpdateTextChangesOnly(
         SwRedlineTable::size_type& rRedlinePos, bool bUpdateProperty = true) const;
+    // tracked text changes, i.e. a single redline can contain tables
+    // get that redline for the table row, if it exists
+    SwRedlineTable::size_type GetTableRedline() const;
     // is it a tracked row
     bool IsTracked(SwRedlineTable::size_type& rRedlinePos, bool bOnlyDeleted = false) const;
     // is it a tracked deleted row
@@ -537,6 +552,10 @@ public:
         sal_uInt16 nMaxStep ) const
         { return const_cast<SwTableBox*>(this)->FindEndOfRowSpan( rTable, nMaxStep ); }
     void RegisterToFormat( SwFormat& rFormat ) ;
+    // get redline for the table cell, if it exists
+    SwRedlineTable::size_type GetRedline() const;
+    // get redline type
+    RedlineType GetRedlineType() const;
 };
 
 class SwCellFrame;

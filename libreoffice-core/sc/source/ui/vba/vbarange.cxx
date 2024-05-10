@@ -19,6 +19,7 @@
 
 #include "vbarange.hxx"
 
+#include <comphelper/servicehelper.hxx>
 #include <comphelper/types.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <o3tl/any.hxx>
@@ -229,9 +230,9 @@ static uno::Reference< excel::XRange > lcl_makeXRangeFromSheetCellRanges( const 
 ScCellRangesBase* ScVbaRange::getCellRangesBase()
 {
     if( mxRanges.is() )
-        return comphelper::getFromUnoTunnel<ScCellRangesBase>( mxRanges );
+        return dynamic_cast<ScCellRangesBase*>( mxRanges.get() );
     if( mxRange.is() )
-        return comphelper::getFromUnoTunnel<ScCellRangesBase>( mxRange );
+        return dynamic_cast<ScCellRangesBase*>( mxRange.get() );
     throw uno::RuntimeException("General Error creating range - Unknown" );
 }
 
@@ -365,7 +366,7 @@ ScVbaRangeAreas::createCollectionObject( const uno::Any& aSource )
 static ScDocShell*
 getDocShellFromIf( const uno::Reference< uno::XInterface >& xIf )
 {
-    ScCellRangesBase* pUno = comphelper::getFromUnoTunnel<ScCellRangesBase>( xIf );
+    ScCellRangesBase* pUno = dynamic_cast<ScCellRangesBase*>( xIf.get() );
     if ( !pUno )
             throw uno::RuntimeException("Failed to access underlying uno range object"  );
     return pUno->GetDocShell();
@@ -512,7 +513,7 @@ public:
     OUString getNumberFormatString()
     {
         uno::Reference< uno::XInterface > xIf( mxRangeProps, uno::UNO_QUERY_THROW );
-        ScCellRangesBase* pUnoCellRange = comphelper::getFromUnoTunnel<ScCellRangesBase>( xIf );
+        ScCellRangesBase* pUnoCellRange = dynamic_cast<ScCellRangesBase*>( xIf.get() );
         if ( pUnoCellRange )
         {
 
@@ -669,15 +670,15 @@ public:
 
 }
 
-constexpr OUStringLiteral ISVISIBLE = u"IsVisible";
+constexpr OUString ISVISIBLE = u"IsVisible"_ustr;
 const char EQUALS[] = "=";
 const char NOTEQUALS[] = "<>";
 const char GREATERTHAN[] = ">";
 const char GREATERTHANEQUALS[] = ">=";
 const char LESSTHAN[] = "<";
 const char LESSTHANEQUALS[] = "<=";
-constexpr OUStringLiteral STR_ERRORMESSAGE_APPLIESTOSINGLERANGEONLY(u"The command you chose cannot be performed with multiple selections.\nSelect a single range and click the command again");
-constexpr OUStringLiteral CELLSTYLE = u"CellStyle";
+constexpr OUString STR_ERRORMESSAGE_APPLIESTOSINGLERANGEONLY(u"The command you chose cannot be performed with multiple selections.\nSelect a single range and click the command again"_ustr);
+constexpr OUString CELLSTYLE = u"CellStyle"_ustr;
 
 namespace {
 
@@ -872,7 +873,8 @@ protected:
             if ( m_eGrammar != formula::FormulaGrammar::GRAM_API && ( o3tl::starts_with(o3tl::trim(sFormula), u"=") ) )
             {
                 uno::Reference< uno::XInterface > xIf( xCell, uno::UNO_QUERY_THROW );
-                ScCellRangesBase* pUnoRangesBase = dynamic_cast< ScCellRangesBase* >( xIf.get() );
+                ScCellRangesBase* pUnoRangesBase
+                    = dynamic_cast< ScCellRangesBase* >( xIf.get() );
                 if ( pUnoRangesBase )
                 {
                     const ScRangeList& rCellRanges = pUnoRangesBase->GetRangeList();
@@ -920,7 +922,8 @@ public:
                 && m_eGrammar != formula::FormulaGrammar::GRAM_API)
         {
             uno::Reference< uno::XInterface > xIf( xCell, uno::UNO_QUERY_THROW );
-            ScCellRangesBase* pUnoRangesBase = dynamic_cast< ScCellRangesBase* >( xIf.get() );
+            ScCellRangesBase* pUnoRangesBase
+                = dynamic_cast< ScCellRangesBase* >( xIf.get() );
             if (pUnoRangesBase)
             {
                 OUString sVal;
@@ -979,7 +982,7 @@ public:
 
 }
 
-constexpr OUStringLiteral sNA = u"#N/A";
+constexpr OUString sNA = u"#N/A"_ustr;
 
 namespace {
 
@@ -999,7 +1002,7 @@ public:
         if ( y < nColCount )
             mCellValueSetter.processValue( aMatrix[ y ], xCell );
         else
-            mCellValueSetter.processValue( uno::Any( OUString(sNA) ), xCell );
+            mCellValueSetter.processValue( uno::Any( sNA ), xCell );
     }
 };
 
@@ -1022,7 +1025,7 @@ public:
         if ( x < nRowCount && y < nColCount )
             mCellValueSetter.processValue( aMatrix[ x ][ y ], xCell );
         else
-            mCellValueSetter.processValue( uno::Any( OUString(sNA) ), xCell );
+            mCellValueSetter.processValue( uno::Any( sNA ), xCell );
 
     }
 };
@@ -1170,8 +1173,7 @@ ScVbaRange::getCellRangesForAddress( ScRefFlags& rResFlags, std::u16string_view 
 bool getScRangeListForAddress( const OUString& sName, ScDocShell* pDocSh, const ScRange& refRange, ScRangeList& aCellRanges, formula::FormulaGrammar::AddressConvention aConv )
 {
     // see if there is a match with a named range
-    uno::Reference< beans::XPropertySet > xProps( pDocSh->GetModel(), uno::UNO_QUERY_THROW );
-    uno::Reference< container::XNameAccess > xNameAccess( xProps->getPropertyValue( "NamedRanges" ), uno::UNO_QUERY_THROW );
+    uno::Reference< container::XNameAccess > xNameAccess( pDocSh->GetModel()->getPropertyValue( "NamedRanges" ), uno::UNO_QUERY_THROW );
     // Strange enough you can have Range( "namedRange1, namedRange2, etc," )
     // loop around each ',' separated name
     std::vector< OUString > vNames;
@@ -1831,11 +1833,12 @@ ScVbaRange::HasFormula()
         return aResult;
     }
     uno::Reference< uno::XInterface > xIf( mxRange, uno::UNO_QUERY_THROW );
-    ScCellRangesBase* pThisRanges = dynamic_cast< ScCellRangesBase * > ( xIf.get() );
+    ScCellRangesBase* pThisRanges = dynamic_cast< ScCellRangesBase* > ( xIf.get() );
     if ( pThisRanges )
     {
         uno::Reference<uno::XInterface>  xRanges( pThisRanges->queryFormulaCells( sheet::FormulaResult::ERROR | sheet::FormulaResult::VALUE | sheet::FormulaResult::STRING ), uno::UNO_QUERY_THROW );
-        ScCellRangesBase* pFormulaRanges = dynamic_cast< ScCellRangesBase * > ( xRanges.get() );
+        ScCellRangesBase* pFormulaRanges
+            = dynamic_cast< ScCellRangesBase* > ( xRanges.get() );
         assert(pFormulaRanges);
         // check if there are no formula cell, return false
         if ( pFormulaRanges->GetRangeList().empty() )
@@ -3105,7 +3108,6 @@ ScVbaRange::Replace( const OUString& What, const OUString& Replacement, const un
     // sanity check required params
     if ( What.isEmpty()  )
         throw uno::RuntimeException("Range::Replace, missing params" );
-    OUString sWhat = VBAToRegexp( What);
     // #TODO #FIXME SearchFormat & ReplacesFormat are not processed
     // What do we do about MatchByte... we don't seem to support that
     const SvxSearchItem& globalSearchOptions = ScGlobal::GetSearchItem();
@@ -3117,8 +3119,9 @@ ScVbaRange::Replace( const OUString& What, const OUString& Replacement, const un
         uno::Reference< util::XReplaceDescriptor > xDescriptor =
             xReplace->createReplaceDescriptor();
 
-        xDescriptor->setSearchString( sWhat);
-        xDescriptor->setPropertyValue( SC_UNO_SRCHREGEXP, uno::Any( true ) );
+        xDescriptor->setSearchString(What);
+        xDescriptor->setPropertyValue(SC_UNO_SRCHWILDCARD, uno::Any(true));
+        xDescriptor->setPropertyValue(SC_UNO_SRCHWCESCCHAR, uno::Any(sal_Int32('~')));
         xDescriptor->setReplaceString( Replacement);
         if ( LookAt.hasValue() )
         {
@@ -3212,8 +3215,6 @@ ScVbaRange::Find( const uno::Any& What, const uno::Any& After, const uno::Any& L
     else
         throw uno::RuntimeException("Range::Find, missing search-for-what param" );
 
-    OUString sSearch = VBAToRegexp( sWhat );
-
     const SvxSearchItem& globalSearchOptions = ScGlobal::GetSearchItem();
     SvxSearchItem newOptions( globalSearchOptions );
 
@@ -3221,8 +3222,9 @@ ScVbaRange::Find( const uno::Any& What, const uno::Any& After, const uno::Any& L
     if( xSearch.is() )
     {
         uno::Reference< util::XSearchDescriptor > xDescriptor = xSearch->createSearchDescriptor();
-        xDescriptor->setSearchString( sSearch );
-        xDescriptor->setPropertyValue( SC_UNO_SRCHREGEXP, uno::Any( true ) );
+        xDescriptor->setSearchString(sWhat);
+        xDescriptor->setPropertyValue(SC_UNO_SRCHWILDCARD, uno::Any(true));
+        xDescriptor->setPropertyValue(SC_UNO_SRCHWCESCCHAR, uno::Any(sal_Int32('~')));
 
         uno::Reference< excel::XRange > xAfterRange;
         uno::Reference< table::XCellRange > xStartCell;
@@ -5209,7 +5211,6 @@ ScVbaRange::GoalSeek( const uno::Any& Goal, const uno::Reference< excel::XRange 
     ScVbaRange* pRange = static_cast< ScVbaRange* >( ChangingCell.get() );
     if ( pDocShell && pRange )
     {
-        uno::Reference< sheet::XGoalSeek > xGoalSeek(  pDocShell->GetModel(), uno::UNO_QUERY_THROW );
         RangeHelper thisRange( mxRange );
         table::CellRangeAddress thisAddress = thisRange.getCellRangeAddressable()->getRangeAddress();
         RangeHelper changingCellRange( pRange->mxRange );
@@ -5217,7 +5218,7 @@ ScVbaRange::GoalSeek( const uno::Any& Goal, const uno::Reference< excel::XRange 
         OUString sGoal = getAnyAsString( Goal );
         table::CellAddress thisCell( thisAddress.Sheet, thisAddress.StartColumn, thisAddress.StartRow );
         table::CellAddress changingCell( changingCellAddr.Sheet, changingCellAddr.StartColumn, changingCellAddr.StartRow );
-        sheet::GoalResult res = xGoalSeek->seekGoal( thisCell, changingCell, sGoal );
+        sheet::GoalResult res = pDocShell->GetModel()->seekGoal( thisCell, changingCell, sGoal );
         ChangingCell->setValue( uno::Any( res.Result ) );
 
         // openoffice behaves differently, result is 0 if the divergence is too great
@@ -5717,6 +5718,25 @@ ScVbaRange::Subtotal( ::sal_Int32 _nGroupBy, ::sal_Int32 _nFunction, const uno::
     {
         DebugHelper::basicexception(ERRCODE_BASIC_METHOD_FAILED, {});
     }
+}
+
+void SAL_CALL
+ScVbaRange::ExportAsFixedFormat(const css::uno::Any& Type, const css::uno::Any& FileName, const css::uno::Any& Quality,
+    const css::uno::Any& IncludeDocProperties, const css::uno::Any& /*IgnorePrintAreas*/, const css::uno::Any& From,
+    const css::uno::Any& To, const css::uno::Any& OpenAfterPublish, const css::uno::Any& /*FixedFormatExtClassPtr*/)
+{
+    ScCellRangesBase* pUnoRangesBase = getCellRangesBase();
+    if (!pUnoRangesBase)
+        throw uno::RuntimeException("Failed to access underlying uno range object");
+    ScDocShell* pShell = pUnoRangesBase->GetDocShell();
+    if (!pShell)
+        return;
+
+    uno::Reference< frame::XModel > xModel(pShell->GetModel(), uno::UNO_SET_THROW);
+    uno::Reference< excel::XApplication > xApplication(Application(), uno::UNO_QUERY_THROW);
+
+    excel::ExportAsFixedFormatHelper(xModel, xApplication, Type, FileName, Quality,
+        IncludeDocProperties, From, To, OpenAfterPublish);
 }
 
 OUString

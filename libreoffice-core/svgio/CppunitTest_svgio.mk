@@ -34,6 +34,7 @@ $(eval $(call gb_CppunitTest_use_libraries,svgio,\
     cppu \
     cppuhelper \
     comphelper \
+    i18nlangtag \
     sal \
     salhelper \
     sax \
@@ -42,6 +43,7 @@ $(eval $(call gb_CppunitTest_use_libraries,svgio,\
     unotest \
     tk \
     tl \
+    utl \
     vcl \
 ))
 
@@ -68,5 +70,10 @@ $(eval $(call gb_CppunitTest_use_components,svgio,\
 ))
 
 $(eval $(call gb_CppunitTest_use_configuration,svgio))
+
+# assert if font/glyph fallback occurs
+$(eval $(call gb_CppunitTest_set_non_application_font_use,svgio,abort))
+
+$(eval $(call gb_CppunitTest_use_more_fonts,svgio))
 
 # vim: set noet sw=4 ts=4:

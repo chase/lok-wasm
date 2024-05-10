@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
-#include <cppuhelper/implbase2.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <drawinglayer/primitive2d/bitmapprimitive2d.hxx>
 #include <drawinglayer/primitive2d/Primitive2DContainer.hxx>
@@ -32,8 +32,7 @@ using namespace css;
 namespace
 {
 /// Class to convert the PDF data into a XPrimitive2D (containing only a bitmap).
-class XPdfDecomposer
-    : public ::cppu::WeakAggImplHelper2<graphic::XPdfDecomposer, lang::XServiceInfo>
+class XPdfDecomposer : public ::cppu::WeakImplHelper<graphic::XPdfDecomposer, lang::XServiceInfo>
 {
 public:
     explicit XPdfDecomposer(uno::Reference<uno::XComponentContext> const& context);

@@ -255,15 +255,15 @@ final class Unmarshal {
     }
 
     private Float readFloatValue() throws IOException {
-        return new Float(input.readFloat());
+        return Float.valueOf(input.readFloat());
     }
 
     private Double readDoubleValue() throws IOException {
-        return new Double(input.readDouble());
+        return Double.valueOf(input.readDouble());
     }
 
     private Character readCharValue() throws IOException {
-        return new Character(input.readChar());
+        return Character.valueOf(input.readChar());
     }
 
     private String readStringValue() throws IOException {

@@ -21,7 +21,7 @@ Option Explicit
 &apos;&apos;&apos;		In the context of ScriptForge, a datasheet may be opened automatically by script code :
 &apos;&apos;&apos;			- either by reproducing the behaviour of the user interface
 &apos;&apos;&apos;			- or at any moment. In this case the Base document may or may not be opened.
-&apos;&apos;&apos;			  Additionally, any SELECT SQL statement may trigger the datasheet display.
+&apos;&apos;&apos;			  Additionally, any SELECT SQL statement may define the datasheet display.
 &apos;&apos;&apos;
 &apos;&apos;&apos;		The proposed API allows for either datasheets (opened manually of by code) in particular
 &apos;&apos;&apos;		to know which cell is selected and its content.
@@ -30,8 +30,8 @@ Option Explicit
 &apos;&apos;&apos;			1) From an open Base document
 &apos;&apos;&apos;				Set ui = CreateScriptService(&quot;UI&quot;)
 &apos;&apos;&apos;				Set oBase = ui.getDocument(&quot;/home/user/Documents/myDb.odb&quot;)
-&apos;&apos;&apos;				Set oSheet1 = oBase.OpenTable(&quot;Customers&quot;)	&apos;	or OpenQuery(...)
-&apos;&apos;&apos;				Set oSheet2 = oBase.Datasheets(&quot;Products&quot;)	&apos;	when the datasheet has been opened manually
+&apos;&apos;&apos;				Set oSheet = oBase.OpenTable(&quot;Customers&quot;)	&apos;	or OpenQuery(...)
+&apos;&apos;&apos;						&apos;	May be executed also when the given table is already open
 &apos;&apos;&apos;			2) Independently from a Base document
 &apos;&apos;&apos;				Set oDatabase = CreateScriptService(&quot;Database&quot;, &quot;/home/user/Documents/myDb.odb&quot;)
 &apos;&apos;&apos;				Set oSheet = oDatabase.OpenTable(&quot;Customers&quot;)
@@ -66,6 +66,9 @@ Private _ControlModel		As Object		&apos; com.sun.star.awt.XControlModel - com.su
 Private _ControlView		As Object		&apos; com.sun.star.awt.XControl - org.openoffice.comp.dbu.ODatasourceBrowser
 Private _ColumnHeaders		As Variant		&apos; List of column headers as an array of strings
 
+&apos;	Cache for static toolbar descriptions
+Private _Toolbars				As Object	&apos; SF_Dictionary instance to hold toolbars stored in application or in document
+
 REM ============================================================ MODULE CONSTANTS
 
 REM ====================================================== CONSTRUCTOR/DESTRUCTOR
@@ -89,6 +92,7 @@ Private Sub Class_Initialize()
 	Set _ControlModel = Nothing
 	Set _ControlView = Nothing
 	_ColumnHeaders = Array()
+	Set _Toolbars = Nothing
 End Sub		&apos;	SFDatabases.SF_Datasheet Constructor
 
 REM -----------------------------------------------------------------------------
@@ -258,7 +262,11 @@ Check:
 	If Not _IsStillAlive() Then GoTo Finally
 
 Try:
-	_TabControllerModel.close()
+	With _TabControllerModel
+		.ApplyFilter = False
+		.Filter = &quot;&quot;
+		.close()
+	End With
 	_Frame.close(True)
 	_Frame.dispose()
 	Dispose()
@@ -398,6 +406,8 @@ Try:
 			If Column &gt;= 1 Then
 				lMaxCol = .Count - 1
 				If Column &gt; lMaxCol + 1 Then lCol = lMaxCol Else lCol = Column - 1
+			Else
+				lCol = .getCurrentColumnPosition()
 			End If
 		End If
 
@@ -452,11 +462,15 @@ Try:
 	If VarType(Column) = V_STRING Then
 		lCol = ScriptForge.SF_Array.IndexOf(_ColumnHeaders, Column, CaseSensitive := False) + 1
 	Else
-		lCol = 0
-		If Column &gt;= 1 Then
-			lMaxCol = _ControlView.Count
-			If Column &gt; lMaxCol Then lCol = lMaxCol Else lCol = Column
-		End If
+		With _ControlView
+			lCol = 0
+			If Column &gt;= 1 Then
+				lMaxCol = .Count
+				If Column &gt; lMaxCol Then lCol = lMaxCol Else lCol = Column
+			Else
+				lCol = .getCurrentColumnPosition() + 1
+			End If
+		End With
 	End If
 
 	&apos;	The _TabControllerModel acts exactly as a result set, from which the generic _GetColumnValue can extract the searched value
@@ -654,23 +668,67 @@ Public Function SetProperty(Optional ByVal PropertyName As Variant _
 Const cstThisSub = &quot;SFDatabases.Datasheet.SetProperty&quot;
 Const cstSubArgs = &quot;PropertyName, Value&quot;
 
-	If SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
+	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
 	SetProperty = False
 
 Check:
-	If SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
-		If Not SF_Utils._Validate(PropertyName, &quot;PropertyName&quot;, V_STRING, Properties()) Then GoTo Catch
+	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
+		If Not ScriptForge.SF_Utils._Validate(PropertyName, &quot;PropertyName&quot;, V_STRING, Properties()) Then GoTo Catch
 	End If
 
 Try:
 	SetProperty = _PropertySet(PropertyName, Value)
 
 Finally:
-	SF_Utils._ExitFunction(cstThisSub)
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
 	Exit Function
 Catch:
 	GoTo Finally
 End Function	&apos;	SFDatabases.SF_Datasheet.SetProperty
+
+REM -----------------------------------------------------------------------------
+Public Function Toolbars(Optional ByVal ToolbarName As Variant) As Variant
+&apos;&apos;&apos;	Returns either a list of the available toolbar names in the actual document
+&apos;&apos;&apos;	or a Toolbar object instance.
+&apos;&apos;&apos;	[Function identical with SFDocuments.SF_Document.Toolbars()]
+&apos;&apos;&apos;	Args:
+&apos;&apos;&apos;		ToolbarName: the usual name of one of the available toolbars
+&apos;&apos;&apos;	Returns:
+&apos;&apos;&apos;		A zero-based array of toolbar names when the argument is absent,
+&apos;&apos;&apos;		or a new Toolbar object instance from the SF_Widgets library.
+
+Const cstThisSub = &quot;SFDatabases.Datasheet.Toolbars&quot;
+Const cstSubArgs = &quot;[ToolbarName=&quot;&quot;&quot;&quot;]&quot;
+
+	If ScriptForge.SF_Utils._ErrorHandling() Then On Local Error GoTo Catch
+
+Check:
+	If IsMissing(ToolbarName) Or IsEmpty(ToolbarName) Then ToolbarName = &quot;&quot;
+	If IsNull(_Toolbars) Then _Toolbars = ScriptForge.SF_UI._ListToolbars(_Component)
+	If ScriptForge.SF_Utils._EnterFunction(cstThisSub, cstSubArgs) Then
+		If Not _IsStillAlive() Then GoTo Finally
+		If VarType(ToolbarName) = V_STRING Then
+			If Len(ToolbarName) &gt; 0 Then
+				If Not ScriptForge.SF_Utils._Validate(ToolbarName, &quot;ToolbarName&quot;, V_STRING, _Toolbars.Keys()) Then GoTo Finally
+			End If
+		Else
+			If Not ScriptForge.SF_Utils._Validate(ToolbarName, &quot;ToolbarName&quot;, V_STRING) Then GoTo Finally	&apos;	Manage here the VarType error
+		End If
+	End If
+
+Try:
+	If Len(ToolbarName) = 0 Then
+		Toolbars = _Toolbars.Keys()
+	Else
+		Toolbars = CreateScriptService(&quot;SFWidgets.Toolbar&quot;, _Toolbars.Item(ToolbarName))
+	End If
+
+Finally:
+	ScriptForge.SF_Utils._ExitFunction(cstThisSub)
+	Exit Function
+Catch:
+	GoTo Finally
+End Function	&apos;	SF_Databases.SF_Datasheet.Toolbars
 
 REM =========================================================== PRIVATE FUNCTIONS
 
@@ -709,8 +767,8 @@ Try:
 		Set _ControlModel = _ControlView.getModel()
 	End With
 
-		&apos;	Retrieve the parent database instance
 	With _TabControllerModel
+		&apos;	Retrieve the parent database instance
 		Select Case _ParentType
 			Case &quot;BASE&quot;
 				Set _ParentDatabase = [_Parent].GetDatabase(.User, .Password)

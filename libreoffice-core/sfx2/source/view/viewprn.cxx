@@ -358,7 +358,7 @@ void SfxPrinterController::jobFinished( css::view::PrintableState nState )
         case view::PrintableState_JOB_SPOOLED :
         case view::PrintableState_JOB_COMPLETED :
         {
-            SfxBindings& rBind = mpViewShell->GetViewFrame()->GetBindings();
+            SfxBindings& rBind = mpViewShell->GetViewFrame().GetBindings();
             rBind.Invalidate( SID_PRINTDOC );
             rBind.Invalidate( SID_PRINTDOCDIRECT );
             rBind.Invalidate( SID_SETUPPRINTER );
@@ -658,7 +658,7 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
     // no help button in dialogs if called from the help window
     // (pressing help button would exchange the current page inside the help
     // document that is going to be printed!)
-    SfxMedium* pMedium = GetViewFrame()->GetObjectShell()->GetMedium();
+    SfxMedium* pMedium = GetViewFrame().GetObjectShell()->GetMedium();
     std::shared_ptr<const SfxFilter> pFilter = pMedium ? pMedium->GetFilter() : nullptr;
     bool bPrintOnHelp = ( pFilter && pFilter->GetFilterName() == "writer_web_HTML_help" );
 
@@ -677,8 +677,7 @@ void SfxViewShell::ExecPrint_Impl( SfxRequest &rReq )
                 return;
             }
 
-            if ( !bSilent && pDoc->QueryHiddenInformation( HiddenWarningFact::WhenPrinting, nullptr ) != RET_YES )
-                return;
+            pDoc->QueryHiddenInformation(HiddenWarningFact::WhenPrinting);
 
             // should we print only the selection or the whole document
             const SfxBoolItem* pSelectItem = rReq.GetArg<SfxBoolItem>(SID_SELECTION);

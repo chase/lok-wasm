@@ -50,7 +50,7 @@ else
     echo "type argument $2 is not equal to 'release', 'dev', or 'collabora'" >&2
     exit 1
 fi
-    
+
 IN=$(cd "$1" && /bin/pwd)
 INAPP=$(basename "$IN")
 INDIR=$(dirname "$IN")

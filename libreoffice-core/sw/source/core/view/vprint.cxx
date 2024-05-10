@@ -47,7 +47,7 @@
 #include <viscrs.hxx>
 #include <fmtpdsc.hxx>
 #include <PostItMgr.hxx>
-#include "vprint.hxx"
+#include <vprint.hxx>
 
 using namespace ::com::sun::star;
 
@@ -429,6 +429,17 @@ sw_getPage(SwRootFrame const& rLayout, sal_Int32 const nPage)
     return nullptr;
 }
 
+namespace sw
+{
+    // tdf#91680 Reserve space in margin for comments only if there are comments
+    bool IsShrinkPageForPostIts(SwViewShell const& rShell, SwPrintData const& rPrintData)
+    {
+        SwPostItMode const nPostItMode(rPrintData.GetPrintPostIts());
+        return nPostItMode == SwPostItMode::InMargins
+            && sw_GetPostIts(rShell.GetDoc()->getIDocumentFieldsAccess(), nullptr);
+    }
+}
+
 bool SwViewShell::PrintOrPDFExport(
     OutputDevice *pOutDev,
     SwPrintData const& rPrintData,
@@ -446,32 +457,9 @@ bool SwViewShell::PrintOrPDFExport(
     // output device is now provided by a call from outside the Writer)
     pOutDev->Push();
 
-    // fdo#36815 for comments in margins print to a metafile
-    // and then scale that metafile down so that the comments
-    // will fit on the real page, and replay that scaled
-    // output to the real outputdevice
-    GDIMetaFile *pOrigRecorder(nullptr);
-    std::unique_ptr<GDIMetaFile> pMetaFile;
-    SwPostItMode nPostItMode = rPrintData.GetPrintPostIts();
 
-    // tdf#91680 Reserve space in margin for comments only if there are comments
-    const bool bHasPostItsToPrintInMargins = ( nPostItMode == SwPostItMode::InMargins ) &&
-                                sw_GetPostIts( GetDoc()->getIDocumentFieldsAccess(), nullptr );
-
-    if ( bHasPostItsToPrintInMargins )
-    {
-        //get and disable the existing recorder
-        pOrigRecorder = pOutDev->GetConnectMetaFile();
-        pOutDev->SetConnectMetaFile(nullptr);
-        // turn off output to the device
-        pOutDev->EnableOutput(false);
-        // just record the rendering commands to the metafile
-        // instead
-        pMetaFile.reset(new GDIMetaFile);
-        pMetaFile->SetPrefSize(pOutDev->GetOutputSize());
-        pMetaFile->SetPrefMapMode(pOutDev->GetMapMode());
-        pMetaFile->Record(pOutDev);
-    }
+    const bool bHasPostItsToPrintInMargins(::sw::IsShrinkPageForPostIts(*this, rPrintData));
+    ::std::optional<tools::Long> oOrigHeight;
 
     // Print/PDF export for (multi-)selection has already generated a
     // temporary document with the selected text.
@@ -535,32 +523,7 @@ bool SwViewShell::PrintOrPDFExport(
             pPostItManager->CalcRects();
             pPostItManager->LayoutPostIts();
             pPostItManager->DrawNotesForPage(pOutDev, nPage-1);
-
-            //Stop recording now
-            pMetaFile->Stop();
-            pMetaFile->WindStart();
-            //Enable output to the device again
-            pOutDev->EnableOutput();
-            //Restore the original recorder
-            pOutDev->SetConnectMetaFile(pOrigRecorder);
-
-            //Now scale the recorded page down so the notes
-            //will fit in the final page
-            double fScale = 0.75;
-            tools::Long nOrigHeight = pStPage->getFrameArea().Height();
-            tools::Long nNewHeight = nOrigHeight*fScale;
-            tools::Long nShiftY = (nOrigHeight-nNewHeight)/2;
-            pMetaFile->Scale( fScale, fScale );
-            pMetaFile->WindStart();
-            //Move the scaled page down to center it
-            //the other variant of Move does not map pixels
-            //back to the logical units correctly
-            pMetaFile->Move(0, convertTwipToMm100(nShiftY), pOutDev->GetDPIX(), pOutDev->GetDPIY());
-            pMetaFile->WindStart();
-
-            //play back the scaled page
-            pMetaFile->Play(*pOutDev);
-            pMetaFile.reset();
+            oOrigHeight.emplace(pStPage->getFrameArea().Height());
         }
     }
 
@@ -569,6 +532,22 @@ bool SwViewShell::PrintOrPDFExport(
     // restore settings of OutputDevice (should be done always now since the
     // output device is now provided by a call from outside the Writer)
     pOutDev->Pop();
+
+    // avoid a warning about unbalanced Push/Pop by doing this last:
+    if (oOrigHeight)
+    {
+        // fdo#36815 Now scale the recorded page down so the comments in
+        // margins will fit in the final page
+        double fScale = 0.75;
+        tools::Long nNewHeight = *oOrigHeight*fScale;
+        tools::Long nShiftY = (*oOrigHeight-nNewHeight)/2;
+        GDIMetaFile *const pMetaFile = pOutDev->GetConnectMetaFile();
+        pMetaFile->ScaleActions(fScale, fScale);
+        //Move the scaled page down to center it
+        //the other variant of Move does not map pixels
+        //back to the logical units correctly
+        pMetaFile->Move(0, convertTwipToMm100(nShiftY), pOutDev->GetDPIX(), pOutDev->GetDPIY());
+    }
 
     return true;
 }

@@ -119,7 +119,7 @@ public:
     SAL_DLLPRIVATE bool isDeferredInit() const { return mbIsDeferredInit; }
 
 private:
-    SAL_DLLPRIVATE void ImplMoveToScreen( tools::Long& io_rX, tools::Long& io_rY, tools::Long i_nWidth, tools::Long i_nHeight, vcl::Window const * i_pConfigureWin );
+    static SAL_DLLPRIVATE void ImplMoveToScreen( tools::Long& io_rX, tools::Long& io_rY, tools::Long i_nWidth, tools::Long i_nHeight, vcl::Window const * i_pConfigureWin );
     SAL_DLLPRIVATE void setPosSizeOnContainee(Size aSize, Window &rBox);
     DECL_DLLPRIVATE_LINK( ImplHandleLayoutTimerHdl, Timer*, void );
 
@@ -137,7 +137,7 @@ private:
 protected:
     // Single argument ctors shall be explicit.
     explicit SystemWindow(WindowType nType, const char* pIdleDebugName);
-    void loadUI(vcl::Window* pParent, const OString& rID, const OUString& rUIXMLDescription, const css::uno::Reference<css::frame::XFrame> &rFrame = css::uno::Reference<css::frame::XFrame>());
+    void loadUI(vcl::Window* pParent, const OUString& rID, const OUString& rUIXMLDescription, const css::uno::Reference<css::frame::XFrame> &rFrame = css::uno::Reference<css::frame::XFrame>());
 
     void SetWindowState(const vcl::WindowData& rData);
 
@@ -176,8 +176,8 @@ public:
     void            SetMaxOutputSizePixel( const Size& rSize );
     const Size&     GetMaxOutputSizePixel() const;
 
-    void            SetWindowState(std::string_view rStr);
-    OString GetWindowState(vcl::WindowDataMask nMask = vcl::WindowDataMask::All) const;
+    void            SetWindowState(std::u16string_view rStr);
+    OUString GetWindowState(vcl::WindowDataMask nMask = vcl::WindowDataMask::All) const;
 
     void            SetMenuBar(MenuBar* pMenuBar);
     MenuBar*        GetMenuBar() const { return mpMenuBar; }

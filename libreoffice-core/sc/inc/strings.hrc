@@ -19,7 +19,7 @@
 
 #pragma once
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 #define NNC_(Context, StringSingular, StringPlural) TranslateNId(Context, reinterpret_cast<char const *>(u8##StringSingular), reinterpret_cast<char const *>(u8##StringPlural))
 
 // Strings for interface names -------------------------------------------
@@ -43,6 +43,7 @@
 #define SCSTR_FILTER_BACKGROUND_COLOR_COND          NC_("STANDARDFILTERDIALOG_COND", "Background color")
 #define SCSTR_FILTER_NO_FILL                        NC_("SCSTR_FILTER_NO_FILL", "No Fill")
 #define SCSTR_FILTER_AUTOMATIC_COLOR                NC_("SCSTR_FILTER_AUTOMATIC_COLOR", "Automatic")
+#define SCSTR_SORT_COLOR                            NC_("SCSTR_SORT_COLOR", "Sort by Color")
 #define SCSTR_NONAME                                NC_("SCSTR_NONAME", "unnamed")
 #define SCSTR_INSERT_RTL                            NC_("SCSTR_INSERT_RTL", "Shift cells left")
 // "%1 is replaced to column letter, such as 'Column A'"
@@ -129,6 +130,10 @@
 #define SCSTR_FORMULA_SYNTAX_XL_R1C1                NC_("SCSTR_FORMULA_SYNTAX_XL_R1C1", "Excel R1C1")
 #define SCSTR_COL_LABEL                             NC_("SCSTR_COL_LABEL", "Range contains column la~bels" )
 #define SCSTR_ROW_LABEL                             NC_("SCSTR_ROW_LABEL", "Range contains ~row labels" )
+#define SCSTR_NOTES_COL_LABEL                       NC_("SCSTR_INCLUDE_NOTES_COL_LABEL","Include boundary column(s) containing only comments")
+#define SCSTR_NOTES_ROW_LABEL                       NC_("SCSTR_INCLUDE_NOTES_ROW_LABEL","Include boundary row(s) containing only comments")
+#define SCSTR_IMAGES_COL_LABEL                      NC_("SCSTR_INCLUDE_IMAGES_COL_LABEL","Include boundary column(s) containing only images")
+#define SCSTR_IMAGES_ROW_LABEL                      NC_("SCSTR_INCLUDE_IMAGES_ROW_LABEL","Include boundary row(s) containing only images")
 #define SCSTR_VALERR                                NC_("SCSTR_VALERR", "Invalid value" )
 #define STR_NOFORMULASPECIFIED                      NC_("STR_NOFORMULASPECIFIED", "No formula specified." )
 #define STR_NOCOLROW                                NC_("STR_NOCOLROW", "Neither row or column specified." )
@@ -165,7 +170,6 @@
 #define SCSTR_CONTENT_DRAWING                       NC_("SCSTR_CONTENT_DRAWING", "Drawing objects")
 #define SCSTR_ACTIVE                                NC_("SCSTR_ACTIVE", "active" )
 #define SCSTR_NOTACTIVE                             NC_("SCSTR_NOTACTIVE", "inactive" )
-#define SCSTR_HIDDEN                                NC_("SCSTR_HIDDEN", "hidden" )
 #define SCSTR_ACTIVEWIN                             NC_("SCSTR_ACTIVEWIN", "Active Window" )
 #define SCSTR_QHLP_SCEN_LISTBOX                     NC_("SCSTR_QHLP_SCEN_LISTBOX", "Scenario Name")
 #define SCSTR_QHLP_SCEN_COMMENT                     NC_("SCSTR_QHLP_SCEN_COMMENT", "Comment")
@@ -202,6 +206,7 @@
 #define STR_CHG_REJECTED                            NC_("STR_CHG_REJECTED", "Rejected")
 #define STR_CHG_NO_ENTRY                            NC_("STR_CHG_NO_ENTRY", "No Entry")
 #define STR_CHG_EMPTY                               NC_("STR_CHG_EMPTY", "<empty>")
+#define STR_CHG_UNKNOWN_AUTHOR                      NC_("STR_CHG_UNKNOWN_AUTHOR", "Unknown Author")
 
 #define STR_NOT_PROTECTED                           NC_("STR_NOT_PROTECTED", "Not protected")
 #define STR_NOT_PASS_PROTECTED                      NC_("STR_NOT_PASS_PROTECTED", "Not password-protected")
@@ -254,16 +259,17 @@
 #define STRID_CALC_FIRST_QUARTILE                   NC_("STRID_CALC_FIRST_QUARTILE", "First Quartile")
 #define STRID_CALC_THIRD_QUARTILE                   NC_("STRID_CALC_THIRD_QUARTILE", "Third Quartile")
 /* RandomNumberGeneratorDialog */
-#define STR_UNDO_DISTRIBUTION_TEMPLATE              NC_("STR_UNDO_DISTRIBUTION_TEMPLATE", "Random ($(DISTRIBUTION))")
+#define STR_UNDO_DISTRIBUTION_TEMPLATE              NC_("STR_UNDO_DISTRIBUTION_TEMPLATE", "Random (%1)")
 #define STR_DISTRIBUTION_UNIFORM_REAL               NC_("STR_DISTRIBUTION_UNIFORM_REAL", "Uniform")
 #define STR_DISTRIBUTION_UNIFORM_INTEGER            NC_("STR_DISTRIBUTION_UNIFORM_INTEGER", "Uniform Integer")
 #define STR_DISTRIBUTION_NORMAL                     NC_("STR_DISTRIBUTION_NORMAL", "Normal")
 #define STR_DISTRIBUTION_CAUCHY                     NC_("STR_DISTRIBUTION_CAUCHY", "Cauchy")
 #define STR_DISTRIBUTION_BERNOULLI                  NC_("STR_DISTRIBUTION_BERNOULLI", "Bernoulli")
 #define STR_DISTRIBUTION_BINOMIAL                   NC_("STR_DISTRIBUTION_BINOMIAL", "Binomial")
-#define STR_DISTRIBUTION_NEGATIVE_BINOMIAL          NC_("STR_DISTRIBUTION_NEGATIVE_BINOMIAL", "Negative Binomial")
 #define STR_DISTRIBUTION_CHI_SQUARED                NC_("STR_DISTRIBUTION_CHI_SQUARED", "Chi Squared")
 #define STR_DISTRIBUTION_GEOMETRIC                  NC_("STR_DISTRIBUTION_GEOMETRIC", "Geometric")
+#define STR_DISTRIBUTION_NEGATIVE_BINOMIAL          NC_("STR_DISTRIBUTION_NEGATIVE_BINOMIAL", "Negative Binomial")
+#define STR_DISTRIBUTION_POISSON                    NC_("STR_DISTRIBUTION_POISSON", "Poisson")
 #define STR_RNG_PARAMETER_MINIMUM                   NC_("STR_RNG_PARAMETER_MINIMUM", "Minimum")
 #define STR_RNG_PARAMETER_MAXIMUM                   NC_("STR_RNG_PARAMETER_MAXIMUM", "Maximum")
 #define STR_RNG_PARAMETER_MEAN                      NC_("STR_RNG_PARAMETER_MEAN", "Mean")
@@ -365,6 +371,7 @@
 #define STR_ENABLE_CONTENT                          NC_("STR_ENABLE_CONTENT", "Allow updating")
 /*tooltip for the "Allow updating" infobar button*/
 #define STR_ENABLE_CONTENT_TOOLTIP                  NC_("STR_ENABLE_CONTENT_TOOLTIP", "Only allow updating if you trust this document.")
+#define STR_ENABLE_CONTENT_TOOLTIP_DISABLED         NC_("STR_ENABLE_CONTENT_TOOLTIP_DISABLED", "Active content is disabled in the security settings. It is not possible to allow updating.")
 /*Insert image dialog*/
 #define STR_ANCHOR_TO_CELL                          NC_("STR_ANCHOR_TO_CELL", "To cell")
 #define STR_ANCHOR_TO_CELL_RESIZE                   NC_("STR_ANCHOR_TO_CELL_RESIZE", "To cell (resize with cell)")
@@ -399,9 +406,21 @@
 #define STR_CONDITION_NOT_EQUAL                     NC_("STR_CONDITION_NOT_EQUAL", "not equal to")
 
 #define STR_CONDITION_BETWEEN                       NC_("STR_CONDITION_BETWEEN", "between")
-
+#define STR_CONDITION_NOT_BETWEEN                   NC_("STR_CONDITION_NOT_BETWEEN", "not between")
+#define STR_CONDITION_DUPLICATE                     NC_("STR_CONDITION_DUPLICATE", "duplicate")
+#define STR_CONDITION_NOT_DUPLICATE                 NC_("STR_CONDITION_NOT_DUPLICATE", "not duplicate")
+#define STR_CONDITION_TOP_N_ELEMENTS                NC_("STR_CONDITION_TOP_N_ELEMENTS", "in top N elements")
+#define STR_CONDITION_BOTTOM_N_ELEMENTS             NC_("STR_CONDITION_BOTTOM_N_ELEMENTS", "in bottom N elements")
+#define STR_CONDITION_TOP_N_PERCENT                 NC_("STR_CONDITION_TOP_N_PERCENT", "in top N percent")
+#define STR_CONDITION_BOTTOM_N_PERCENT              NC_("STR_CONDITION_BOTTOM_N_PERCENT", "in bottom N percent")
+#define STR_CONDITION_ABOVE_AVERAGE                 NC_("STR_CONDITION_ABOVE_AVERAGE", "above average")
+#define STR_CONDITION_BELOW_AVERAGE                 NC_("STR_CONDITION_BELOW_AVERAGE", "below average")
+#define STR_CONDITION_ABOVE_OR_EQUAL_AVERAGE        NC_("STR_CONDITION_ABOVE_OR_EQUAL_AVERAGE", "above or equal average")
+#define STR_CONDITION_BELOW_OR_EQUAL_AVERAGE        NC_("STR_CONDITION_BELOW_OR_EQUAL_AVERAGE", "below or equal average")
 #define STR_CONDITION_ERROR                         NC_("STR_CONDITION_ERROR", "with error ")
 #define STR_CONDITION_NOERROR                       NC_("STR_CONDITION_NOERROR", "without error ")
+#define STR_CONDITION_BEGINS_WITH                   NC_("STR_CONDITION_BEGINS_WITH", "begins with")
+#define STR_CONDITION_ENDS_WITH                     NC_("STR_CONDITION_ENDS_WITH", "ends with")
 #define STR_CONDITION_CONTAINS_TEXT                 NC_("STR_CONDITION_CONTAINS_TEXT", "containing text")
 #define STR_CONDITION_NOT_CONTAINS_TEXT             NC_("STR_CONDITION_NOT_CONTAINS_TEXT", "not containing text")
 

@@ -26,7 +26,6 @@
 #include <com/sun/star/io/XSeekable.hpp>
 #include <com/sun/star/io/XTruncate.hpp>
 #include <com/sun/star/io/XStream.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <comphelper/bytereader.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <cppuhelper/implbase1.hxx>
@@ -39,7 +38,7 @@ namespace utl
 {
 
 // workaround for incremental linking bugs in MSVC2015
-class SAL_DLLPUBLIC_TEMPLATE OInputStreamWrapper_Base : public cppu::WeakImplHelper< css::io::XInputStream, css::lang::XUnoTunnel > {};
+class SAL_DLLPUBLIC_TEMPLATE OInputStreamWrapper_Base : public cppu::WeakImplHelper< css::io::XInputStream > {};
 
 /// helper class for wrapping an SvStream into a com.sun.star.io::XInputStream
 class UNOTOOLS_DLLPUBLIC OInputStreamWrapper : public OInputStreamWrapper_Base, public comphelper::ByteReader
@@ -65,9 +64,6 @@ public:
     virtual void        SAL_CALL    skipBytes(sal_Int32 nBytesToSkip) override;
     virtual sal_Int32   SAL_CALL    available() override;
     virtual void        SAL_CALL    closeInput() override;
-
-// css::lang::XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& _rIdentifier ) override;
 
 // utl::ByteReader
     virtual sal_Int32 readSomeBytes( sal_Int8* aData, sal_Int32 nMaxBytesToRead ) final override;

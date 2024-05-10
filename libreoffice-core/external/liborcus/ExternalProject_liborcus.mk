@@ -99,6 +99,8 @@ $(call gb_ExternalProject_get_state_target,liborcus,build) :
                        $(if $(ENABLE_DEBUG),--enable-debug,--disable-debug) \
                        --disable-spreadsheet-model \
                        --without-tools \
+                       --without-benchmark \
+                       --without-doc-example \
                        --disable-python \
                        --disable-werror \
                        $(if $(filter MACOSX,$(OS)),--prefix=/@.__________________________________________________OOO) \
@@ -113,8 +115,8 @@ $(call gb_ExternalProject_get_state_target,liborcus,build) :
 		   $(MAKE) \
 		$(if $(filter MACOSX,$(OS)),\
 			&& $(PERL) $(SRCDIR)/solenv/bin/macosx-change-install-names.pl shl OOO \
-				$(EXTERNAL_WORKDIR)/src/liborcus/.libs/liborcus-0.17.0.dylib \
-				$(EXTERNAL_WORKDIR)/src/parser/.libs/liborcus-parser-0.17.0.dylib \
+				$(EXTERNAL_WORKDIR)/src/liborcus/.libs/liborcus-0.18.0.dylib \
+				$(EXTERNAL_WORKDIR)/src/parser/.libs/liborcus-parser-0.18.0.dylib \
 		) \
 	)
 	$(call gb_Trace_EndRange,liborcus,EXTERNAL)

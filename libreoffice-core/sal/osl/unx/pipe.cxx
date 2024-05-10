@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "system.hxx"
-
 #include <o3tl/safeint.hxx>
 #include <osl/pipe.h>
 #include <osl/diagnose.h>
@@ -36,9 +34,12 @@
 
 #include <cassert>
 #include <cstring>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-constexpr OStringLiteral PIPEDEFAULTPATH = "/tmp";
-constexpr OStringLiteral PIPEALTERNATEPATH = "/var/tmp";
+constexpr OString PIPEDEFAULTPATH = "/tmp"_ostr;
+constexpr OString PIPEALTERNATEPATH = "/var/tmp"_ostr;
 
 static oslPipe osl_psz_createPipe(const char *pszPipeName, oslPipeOptions Options, oslSecurity Security);
 
@@ -136,7 +137,7 @@ getBootstrapSocketPath()
     {
         return OUStringToOString(pValue, RTL_TEXTENCODING_UTF8);
     }
-    return "";
+    return ""_ostr;
 }
 
 static oslPipe osl_psz_createPipe(const char *pszPipeName, oslPipeOptions Options,
@@ -209,7 +210,7 @@ static oslPipe osl_psz_createPipe(const char *pszPipeName, oslPipeOptions Option
 
     SAL_INFO("sal.osl.pipe", "new pipe on fd " << pPipe->m_Socket << " '" << name << "'");
 
-    if (isForbidden(name.getStr(), osl_File_OpenFlag_Create))
+    if (isForbidden(name, osl_File_OpenFlag_Create))
         return nullptr;
 
     addr.sun_family = AF_UNIX;

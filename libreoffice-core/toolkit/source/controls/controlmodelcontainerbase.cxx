@@ -22,7 +22,7 @@
 #include <vcl/svapp.hxx>
 #include <o3tl/safeint.hxx>
 #include <osl/mutex.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <helper/servicenames.hxx>
 #include <controls/geometrycontrolmodel.hxx>
 #include <toolkit/controls/unocontrols.hxx>
@@ -65,7 +65,7 @@ using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::util;
 using namespace toolkit;
 
-constexpr OUStringLiteral PROPERTY_RESOURCERESOLVER = u"ResourceResolver";
+constexpr OUString PROPERTY_RESOURCERESOLVER = u"ResourceResolver"_ustr;
 
 
 namespace
@@ -133,42 +133,11 @@ public:
     }
 };
 
-
-static void lcl_throwIllegalArgumentException( )
-{   // throwing is expensive (in terms of code size), thus we hope the compiler does not inline this...
-    throw IllegalArgumentException();
-}
-
-
-static void lcl_throwNoSuchElementException( )
-{   // throwing is expensive (in terms of code size), thus we hope the compiler does not inline this...
-    throw NoSuchElementException();
-}
-
-
-static void lcl_throwElementExistException( )
-{   // throwing is expensive (in terms of code size), thus we hope the compiler does not inline this...
-    throw ElementExistException();
-}
-
-
-static OUString getTabIndexPropertyName( )
-{
-    return "TabIndex";
-}
-
-
-static OUString getStepPropertyName( )
-{
-    return "Step";
-}
-
-
+constexpr OUString aTabIndexPropertyNameStr( u"TabIndex"_ustr );
 
 ControlModelContainerBase::ControlModelContainerBase( const Reference< XComponentContext >& rxContext )
     :ControlModelContainer_IBase( rxContext )
     ,maContainerListeners( *this )
-    ,maChangeListeners ( GetMutex() )
     ,mbGroupsUpToDate( false )
     ,m_nTabPageId(0)
 {
@@ -178,7 +147,6 @@ ControlModelContainerBase::ControlModelContainerBase( const Reference< XComponen
 ControlModelContainerBase::ControlModelContainerBase( const ControlModelContainerBase& rModel )
     : ControlModelContainer_IBase( rModel )
     , maContainerListeners( *this )
-    , maChangeListeners ( GetMutex() )
     , mbGroupsUpToDate( false )
     , m_nTabPageId( rModel.m_nTabPageId )
 {
@@ -217,13 +185,13 @@ void SAL_CALL ControlModelContainerBase::dispose(  )
 
     // tell our listeners
     {
-        ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
+        std::unique_lock aGuard( m_aMutex );
 
         EventObject aDisposeEvent;
         aDisposeEvent.Source = static_cast< XAggregation* >( static_cast< ::cppu::OWeakAggObject* >( this ) );
 
-        maContainerListeners.disposeAndClear( aDisposeEvent );
-        maChangeListeners.disposeAndClear( aDisposeEvent );
+        maContainerListeners.disposeAndClear( aGuard, aDisposeEvent );
+        maChangeListeners.disposeAndClear( aGuard, aDisposeEvent );
     }
 
 
@@ -361,8 +329,7 @@ Reference< XInterface > ControlModelContainerBase::createInstance( const OUStrin
         }
     }
 
-    Reference< XInterface > xNewModel = static_cast<cppu::OWeakObject*>(pNewModel.get());
-    return xNewModel;
+    return cppu::getXWeak(pNewModel.get());
 }
 
 Reference< XInterface > ControlModelContainerBase::createInstanceWithArguments( const OUString& ServiceSpecifier, const Sequence< Any >& i_arguments )
@@ -437,11 +404,11 @@ void ControlModelContainerBase::replaceByName( const OUString& aName, const Any&
     Reference< XControlModel > xNewModel;
     aElement >>= xNewModel;
     if ( !xNewModel.is() )
-        lcl_throwIllegalArgumentException();
+        throw IllegalArgumentException();
 
     UnoControlModelHolderVector::iterator aElementPos = ImplFindElement( aName );
     if ( maModels.end() == aElementPos )
-        lcl_throwNoSuchElementException();
+        throw NoSuchElementException();
     // Dialog behaviour is to have all containee names unique (MSO Userform is the same)
     // With container controls you could have constructed an existing hierarchy and are now
     // add this to an existing container, in this case a name nested in the containment
@@ -480,7 +447,7 @@ Any ControlModelContainerBase::getByName( const OUString& aName )
 {
     UnoControlModelHolderVector::iterator aElementPos = ImplFindElement( aName );
     if ( maModels.end() == aElementPos )
-        lcl_throwNoSuchElementException();
+        throw NoSuchElementException();
 
     return Any( aElementPos->first );
 }
@@ -536,11 +503,11 @@ void ControlModelContainerBase::insertByName( const OUString& aName, const Any& 
 
 
     if ( aName.isEmpty() || !xM.is() )
-        lcl_throwIllegalArgumentException();
+        throw IllegalArgumentException();
 
     UnoControlModelHolderVector::iterator aElementPos = ImplFindElement( aName );
     if ( maModels.end() != aElementPos )
-        lcl_throwElementExistException();
+        throw ElementExistException();
 
     // Dialog behaviour is to have all containee names unique (MSO Userform is the same)
     // With container controls you could have constructed an existing hierarchy and are now
@@ -573,7 +540,7 @@ void ControlModelContainerBase::removeByName( const OUString& aName )
 
     UnoControlModelHolderVector::iterator aElementPos = ImplFindElement( aName );
     if ( maModels.end() == aElementPos )
-        lcl_throwNoSuchElementException();
+        throw NoSuchElementException();
 
     // Dialog behaviour is to have all containee names unique (MSO Userform is the same)
     // With container controls you could have constructed an existing hierarchy and are now
@@ -648,8 +615,8 @@ void SAL_CALL ControlModelContainerBase::setControlModels( const Sequence< Refer
             Reference< XPropertySetInfo > xPSI;
             if ( xProps.is() )
                 xPSI = xProps->getPropertySetInfo();
-            if ( xPSI.is() && xPSI->hasPropertyByName( getTabIndexPropertyName() ) )
-                xProps->setPropertyValue( getTabIndexPropertyName(), Any( nTabIndex++ ) );
+            if ( xPSI.is() && xPSI->hasPropertyByName( aTabIndexPropertyNameStr ) )
+                xProps->setPropertyValue( aTabIndexPropertyNameStr, Any( nTabIndex++ ) );
         }
         mbGroupsUpToDate = false;
     }
@@ -680,10 +647,10 @@ Sequence< Reference< XControlModel > > SAL_CALL ControlModelContainerBase::getCo
         DBG_ASSERT( xPSI.is(), "ControlModelContainerBase::getControlModels: invalid child model!" );
 
         // has it?
-        if ( xPSI.is() && xPSI->hasPropertyByName( getTabIndexPropertyName() ) )
+        if ( xPSI.is() && xPSI->hasPropertyByName( aTabIndexPropertyNameStr ) )
         {   // yes
             sal_Int32 nTabIndex = -1;
-            xControlProps->getPropertyValue( getTabIndexPropertyName() ) >>= nTabIndex;
+            xControlProps->getPropertyValue( aTabIndexPropertyNameStr ) >>= nTabIndex;
 
             aSortedModels.emplace( nTabIndex, xModel );
         }
@@ -792,7 +759,7 @@ namespace
         try
         {
             Reference< XPropertySet > xModelProps( _rxModel, UNO_QUERY );
-            xModelProps->getPropertyValue( getStepPropertyName() ) >>= nStep;
+            xModelProps->getPropertyValue( u"Step"_ustr ) >>= nStep;
         }
         catch (const Exception&)
         {
@@ -848,13 +815,15 @@ void SAL_CALL ControlModelContainerBase::getGroupByName( const OUString& _rName,
 
 void SAL_CALL ControlModelContainerBase::addChangesListener( const Reference< XChangesListener >& _rxListener )
 {
-    maChangeListeners.addInterface( _rxListener );
+    std::unique_lock g(m_aMutex);
+    maChangeListeners.addInterface( g, _rxListener );
 }
 
 
 void SAL_CALL ControlModelContainerBase::removeChangesListener( const Reference< XChangesListener >& _rxListener )
 {
-    maChangeListeners.removeInterface( _rxListener );
+    std::unique_lock g(m_aMutex);
+    maChangeListeners.removeInterface( g, _rxListener );
 }
 
 
@@ -869,7 +838,9 @@ void ControlModelContainerBase::implNotifyTabModelChange( const OUString& _rAcce
     aEvent.Changes.getArray()[ 0 ].Accessor <<= _rAccessor;
 
 
-    std::vector< Reference< css::util::XChangesListener > > aChangeListeners( maChangeListeners.getElements() );
+    std::unique_lock g(m_aMutex);
+    std::vector< Reference< css::util::XChangesListener > > aChangeListeners( maChangeListeners.getElements(g) );
+    g.unlock();
     for ( const auto& rListener : aChangeListeners )
         rListener->changesOccurred( aEvent );
 }
@@ -1017,8 +988,8 @@ void ControlModelContainerBase::startControlListening( const Reference< XControl
     if ( xModelProps.is() )
         xPSI = xModelProps->getPropertySetInfo();
 
-    if ( xPSI.is() && xPSI->hasPropertyByName( getTabIndexPropertyName() ) )
-        xModelProps->addPropertyChangeListener( getTabIndexPropertyName(), this );
+    if ( xPSI.is() && xPSI->hasPropertyByName( aTabIndexPropertyNameStr ) )
+        xModelProps->addPropertyChangeListener( aTabIndexPropertyNameStr, this );
 }
 
 
@@ -1031,8 +1002,8 @@ void ControlModelContainerBase::stopControlListening( const Reference< XControlM
     if ( xModelProps.is() )
         xPSI = xModelProps->getPropertySetInfo();
 
-    if ( xPSI.is() && xPSI->hasPropertyByName( getTabIndexPropertyName() ) )
-        xModelProps->removePropertyChangeListener( getTabIndexPropertyName(), this );
+    if ( xPSI.is() && xPSI->hasPropertyByName( aTabIndexPropertyNameStr ) )
+        xModelProps->removePropertyChangeListener( aTabIndexPropertyNameStr, this );
 }
 
 
@@ -1370,7 +1341,7 @@ void ControlContainerBase::ImplSetPosSize( Reference< XControl >& rxCtrl )
 void ControlContainerBase::dispose()
 {
     EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >( this );
+    aEvt.Source = getXWeak();
     // Notify our listener helper about dispose
     // --- SAFE ---
 

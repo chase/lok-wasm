@@ -33,10 +33,12 @@ ScAsciiOptions::ScAsciiOptions() :
     bRemoveSpace    ( false ),
     bQuotedFieldAsText(false),
     bDetectSpecialNumber(false),
+    bDetectScientificNumber(true),
     bEvaluateFormulas(true),
     bSkipEmptyCells(false),
     bSaveAsShown(true),
     bSaveFormulas(false),
+    bIncludeBOM(false),
     cTextSep        ( cDefaultTextSep ),
     eCharSet        ( osl_getThreadTextEncoding() ),
     eLang           ( LANGUAGE_SYSTEM ),
@@ -192,6 +194,18 @@ void ScAsciiOptions::ReadFromString( std::u16string_view rString )
     }
     else
         bEvaluateFormulas = true;   // default of versions that didn't add the parameter
+
+    // Token 13: include BOM.
+    bIncludeBOM = nPos >= 0 && o3tl::getToken(rString, 0, ',', nPos) == u"true";
+
+    // Token 14: Detect scientific numbers.
+    if (nPos >= 0)
+    {
+        bDetectScientificNumber = o3tl::getToken(rString, 0, ',', nPos) == u"true";
+    }
+    else
+        bDetectScientificNumber = true;    // default of versions that didn't add the parameter
+
 }
 
 OUString ScAsciiOptions::WriteToString() const
@@ -214,8 +228,7 @@ OUString ScAsciiOptions::WriteToString() const
         }
         if ( bMergeFieldSeps )
         {
-            aOutStr.append("/");
-            aOutStr.append(pStrMrg);
+            aOutStr.append(OUString::Concat("/") + pStrMrg);
         }
     }
 
@@ -261,7 +274,11 @@ OUString ScAsciiOptions::WriteToString() const
                // Token 11: sheet to export, always 0 for current sheet
                ",0," +
                // Token 12: evaluate formulas in import
-               OUString::boolean( bEvaluateFormulas )
+               OUString::boolean( bEvaluateFormulas ) + "," +
+               // Token 13: include BOM
+               OUString::boolean(bIncludeBOM) + "," +
+               // Token 14: Detect scientific numbers.
+               OUString::boolean( bDetectScientificNumber )
             );
     return aOutStr.makeStringAndClear();
 }

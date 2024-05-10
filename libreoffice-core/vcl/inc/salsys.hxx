@@ -39,13 +39,6 @@ public:
         @returns the number of active screens
     */
     virtual unsigned int GetDisplayScreenCount() = 0;
-    /*  Queries whether multiple screens are part of one bigger display
-
-        @returns true if screens form one big display
-                 false if screens are distinct and windows cannot
-                 be moved between, or span multiple screens
-    */
-    virtual bool IsUnifiedDisplay() { return true; }
     /*  Queries the default screen number. The default screen is the
         screen on which windows will appear if no special positioning
         is made.
@@ -62,7 +55,7 @@ public:
                            else position relative to whole display
                  size: size of the screen
     */
-    virtual tools::Rectangle GetDisplayScreenPosSizePixel(unsigned int nScreen) = 0;
+    virtual AbsoluteScreenPixelRectangle GetDisplayScreenPosSizePixel(unsigned int nScreen) = 0;
 
     /*  Shows a native message box with the specified title, message and button
         combination.

@@ -20,7 +20,7 @@
 #ifndef INCLUDED_SW_INC_STRINGS_HRC
 #define INCLUDED_SW_INC_STRINGS_HRC
 
-#define NC_(Context, String) TranslateId(Context, reinterpret_cast<char const *>(u8##String))
+#define NC_(Context, String) TranslateId(Context, u8##String)
 #define NNC_(Context, StringSingular, StringPlural) TranslateNId(Context, reinterpret_cast<char const *>(u8##StringSingular), reinterpret_cast<char const *>(u8##StringPlural))
 
 // Dialog buttons
@@ -73,10 +73,10 @@
 #define STR_POOLFRM_LABEL                       NC_("STR_POOLFRM_LABEL", "Labels")
 // Template names
 #define STR_POOLCOLL_STANDARD                   NC_("STR_POOLCOLL_STANDARD", "Default Paragraph Style")
-#define STR_POOLCOLL_TEXT                       NC_("STR_POOLCOLL_TEXT", "Text Body")
+#define STR_POOLCOLL_TEXT                       NC_("STR_POOLCOLL_TEXT", "Body Text")
 #define STR_POOLCOLL_TEXT_IDENT                 NC_("STR_POOLCOLL_TEXT_IDENT", "First Line Indent")
 #define STR_POOLCOLL_TEXT_NEGIDENT              NC_("STR_POOLCOLL_TEXT_NEGIDENT", "Hanging Indent")
-#define STR_POOLCOLL_TEXT_MOVE                  NC_("STR_POOLCOLL_TEXT_MOVE", "Text Body Indent")
+#define STR_POOLCOLL_TEXT_MOVE                  NC_("STR_POOLCOLL_TEXT_MOVE", "Body Text, Indented")
 #define STR_POOLCOLL_GREETING                   NC_("STR_POOLCOLL_GREETING", "Complimentary Close")
 #define STR_POOLCOLL_SIGNATURE                  NC_("STR_POOLCOLL_SIGNATURE", "Signature")
 #define STR_POOLCOLL_HEADLINE_BASE              NC_("STR_POOLCOLL_HEADLINE_BASE", "Heading")
@@ -152,6 +152,7 @@
 #define STR_POOLCOLL_LABEL_FRAME                NC_("STR_POOLCOLL_LABEL_FRAME", "Text")
 #define STR_POOLCOLL_LABEL_DRAWING              NC_("STR_POOLCOLL_LABEL_DRAWING", "Drawing")
 #define STR_POOLCOLL_LABEL_FIGURE               NC_("STR_POOLCOLL_LABEL_FIGURE", "Figure")
+#define STR_POOLCOLL_COMMENT                    NC_("STR_POOLCOLL_COMMENT", "Comment")
 #define STR_POOLCOLL_ENVELOPE_ADDRESS           NC_("STR_POOLCOLL_ENVELOPE_ADDRESS", "Addressee")
 #define STR_POOLCOLL_SEND_ADDRESS               NC_("STR_POOLCOLL_SEND_ADDRESS", "Sender")
 #define STR_POOLCOLL_TOX_IDXH                   NC_("STR_POOLCOLL_TOX_IDXH", "Index Heading")
@@ -194,7 +195,7 @@
 #define STR_POOLCOLL_DOC_TITLE                  NC_("STR_POOLCOLL_DOC_TITEL", "Title")
 #define STR_POOLCOLL_DOC_SUBTITLE               NC_("STR_POOLCOLL_DOC_SUBTITEL", "Subtitle")
 #define STR_POOLCOLL_DOC_APPENDIX               NC_("STR_POOLCOLL_DOC_APPENDIX", "Appendix")
-#define STR_POOLCOLL_HTML_BLOCKQUOTE            NC_("STR_POOLCOLL_HTML_BLOCKQUOTE", "Quotations")
+#define STR_POOLCOLL_HTML_BLOCKQUOTE            NC_("STR_POOLCOLL_HTML_BLOCKQUOTE", "Block Quotation")
 #define STR_POOLCOLL_HTML_PRE                   NC_("STR_POOLCOLL_HTML_PRE", "Preformatted Text")
 #define STR_POOLCOLL_HTML_HR                    NC_("STR_POOLCOLL_HTML_HR", "Horizontal Line")
 #define STR_POOLCOLL_HTML_DD                    NC_("STR_POOLCOLL_HTML_DD", "List Contents")
@@ -221,12 +222,12 @@
 #define STR_POOLNUMRULE_BUL1                    NC_("STR_POOLNUMRULE_BUL1", "Bullet •")
 //Bullet \u2013
 #define STR_POOLNUMRULE_BUL2                    NC_("STR_POOLNUMRULE_BUL2", "Bullet –")
-//Bullet \uE4C4
-#define STR_POOLNUMRULE_BUL3                    NC_("STR_POOLNUMRULE_BUL3", "Bullet ")
-//Bullet \uE49E
-#define STR_POOLNUMRULE_BUL4                    NC_("STR_POOLNUMRULE_BUL4", "Bullet ")
-//Bullet \uE20B
-#define STR_POOLNUMRULE_BUL5                    NC_("STR_POOLNUMRULE_BUL5", "Bullet ")
+//Bullet \u2611
+#define STR_POOLNUMRULE_BUL3                    NC_("STR_POOLNUMRULE_BUL3", "Bullet ☑")
+//Bullet \u27A2
+#define STR_POOLNUMRULE_BUL4                    NC_("STR_POOLNUMRULE_BUL4", "Bullet ➢")
+//Bullet \u2717
+#define STR_POOLNUMRULE_BUL5                    NC_("STR_POOLNUMRULE_BUL5", "Bullet ✗")
 #define STR_COLUMN_VALUESET_ITEM0               NC_("STR_COLUMN_VALUESET_ITEM0", "1 column")
 #define STR_COLUMN_VALUESET_ITEM1               NC_("STR_COLUMN_VALUESET_ITEM1", "2 columns with equal size")
 #define STR_COLUMN_VALUESET_ITEM2               NC_("STR_COLUMN_VALUESET_ITEM2", "3 columns with equal size")
@@ -263,7 +264,7 @@
 #define SW_STR_READONLY                         NC_("SW_STR_READONLY", "read-only")
 #define STR_READONLY_PATH                       NC_("STR_READONLY_PATH", "The 'AutoText' directories are read-only. Do you want to call the path settings dialog?")
 #define STR_DOC_STAT                            NC_("STR_DOC_STAT", "Statistics")
-#define STR_OUTLINENUMBERING_DISABLED           NC_("STR_OUTLINENUMBERING_DISABLED","This option is disabled when chapter numbering is assigned to a paragraph style")
+#define STR_OUTLINENUMBERING_DISABLED           NC_("STR_OUTLINENUMBERING_DISABLED","This option is disabled when heading numbering is assigned to a paragraph style")
 // Statusbar-titles
 #define STR_STATSTR_W4WREAD                     NC_("STR_STATSTR_W4WREAD", "Importing document...")
 #define STR_STATSTR_W4WWRITE                    NC_("STR_STATSTR_W4WWRITE", "Exporting document...")
@@ -298,7 +299,7 @@
 #define STR_REDLINE_UNKNOWN_AUTHOR              NC_("STR_REDLINE_UNKNOWN_AUTHOR", "Unknown Author")
 #define STR_DELETE_NOTE_AUTHOR                  NC_("STR_DELETE_NOTE_AUTHOR", "Delete ~All Comments by $1")
 #define STR_HIDE_NOTE_AUTHOR                    NC_("STR_HIDE_NOTE_AUTHOR", "H~ide All Comments by $1")
-#define STR_OUTLINE_NUMBERING                   NC_("STR_OUTLINE_NUMBERING", "Chapter Numbering")
+#define STR_OUTLINE_NUMBERING                   NC_("STR_OUTLINE_NUMBERING", "Heading Numbering")
 #define STR_STATSTR_SWTRANSLATE                 NC_("STR_STATSTR_SWTRANSLATE", "Translating document...")
 /* To translators: $1 == will be replaced by STR_WORDCOUNT_WORDARG, and $2 by STR_WORDCOUNT_COLARG
    e.g. Selected: 1 word, 2 characters */
@@ -408,7 +409,6 @@
 #define STR_CONTENT_TYPE_SINGLE_ENDNOTE         NC_("STR_CONTENT_TYPE_SINGLE_ENDNOTE", "Endnote")
 #define STR_CONTENT_FOOTNOTE                    NC_("STR_CONTENT_FOOTNOTE", "Footnote")
 #define STR_CONTENT_ENDNOTE                     NC_("STR_CONTENT_ENDNOTE", "Endnote")
-#define STR_FOOTNOTE_ENDNOTE_SEPARATOR_TIP      NC_("STR_FOOTNOTE_ENDNOTE_SEPARATOR_TIP", "Footnotes are listed above this line and Endnotes are listed below")
 #define STR_DEFINE_NUMBERFORMAT                 NC_("STR_DEFINE_NUMBERFORMAT", "Additional formats...")
 #define RID_STR_SYSTEM                          NC_("RID_STR_SYSTEM", "[System]")
 #define STR_MULT_INTERACT_HYPH_WARN             NC_("STR_MULT_INTERACT_HYPH_WARN", "The interactive hyphenation is already active\nin a different document")
@@ -419,7 +419,6 @@
 #define STR_HIDDEN_CHANGES_DETAIL               NC_("STR_HIDDEN_CHANGES_DETAIL", "Document contains tracked changes and recording is enabled.")
 #define STR_HIDDEN_CHANGES_DETAIL2              NC_("STR_HIDDEN_CHANGES_DETAIL2", "Recording of changes is enabled.")
 #define STR_HIDDEN_CHANGES_DETAIL3              NC_("STR_HIDDEN_CHANGES_DETAIL3", "Document contains tracked changes.")
-#define STR_HEADER_FOOTER                       NC_("STR_HEADER_FOOTER", "Header/Footer")
 #define STR_FLDREF_FOOTNOTE                     NC_("STR_FLDREF_FOOTNOTE", "Footnote")
 #define STR_FLDREF_ENDNOTE                      NC_("STR_FLDREF_ENDNOTE", "Endnote")
 
@@ -437,7 +436,15 @@
 #define STR_INSERT_DOC_UNDO                     NC_("STR_INSERT_DOC_UNDO", "Insert file")
 #define STR_INSERT_GLOSSARY                     NC_("STR_INSERT_GLOSSARY", "Insert AutoText")
 #define STR_DELBOOKMARK                         NC_("STR_DELBOOKMARK", "Delete bookmark: $1")
+#define STR_DELETE_BOOKMARKS                    NC_("STR_DELETE_BOOKMARKS", "Delete bookmarks")
 #define STR_INSBOOKMARK                         NC_("STR_INSBOOKMARK", "Insert bookmark: $1")
+#define STR_UPDATE_BOOKMARK                     NC_("STR_UPDATE_BOOKMARK", "Update bookmark: $1")
+#define STR_UPDATE_BOOKMARKS                    NC_("STR_UPDATE_BOOKMARKS", "Update bookmarks")
+#define STR_UPDATE_FIELD                        NC_("STR_UPDATE_FIELD", "Update field: $1")
+#define STR_UPDATE_FIELDS                       NC_("STR_UPDATE_FIELDS", "Update fields")
+#define STR_DELETE_FIELDS                       NC_("STR_DELETE_FIELDS", "Delete fields")
+#define STR_UPDATE_SECTIONS                     NC_("STR_UPDATE_SECTIONS", "Update sections")
+#define STR_DELETE_SECTIONS                     NC_("STR_DELETE_SECTIONS", "Delete sections")
 #define STR_SORT_TBL                            NC_("STR_SORT_TBL", "Sort table")
 #define STR_SORT_TXT                            NC_("STR_SORT_TXT", "Sort text")
 #define STR_INSTABLE_UNDO                       NC_("STR_INSTABLE_UNDO", "Insert table: $1$2$3")
@@ -582,12 +589,16 @@
 #define STR_PARAGRAPH_UNDO                      NC_("STR_PARAGRAPH_UNDO", "paragraph")
 #define STR_PARAGRAPH_SIGN_UNDO                 NC_("STR_PARAGRAPH_SIGN_UNDO", "Paragraph sign")
 #define STR_UNDO_FLYFRMFMT_TITLE                NC_("STR_UNDO_FLYFRMFMT_TITLE", "Change object title of $1")
-#define STR_UNDO_FLYFRMFMT_DESCRIPTION         NC_("STR_UNDO_FLYFRMFMT_DESCRIPTION", "Change object description of $1")
+#define STR_UNDO_FLYFRMFMT_DESCRIPTION          NC_("STR_UNDO_FLYFRMFMT_DESCRIPTION", "Change object description of $1")
+#define STR_UNDO_FLYFRMFMT_DECORATIVE           NC_("STR_UNDO_FLYFRMFMT_DECORATIVE", "Change decorative of $1")
 #define STR_UNDO_TBLSTYLE_CREATE                NC_("STR_UNDO_TBLSTYLE_CREATE", "Create table style: $1")
 #define STR_UNDO_TBLSTYLE_DELETE                NC_("STR_UNDO_TBLSTYLE_DELETE", "Delete table style: $1")
 #define STR_UNDO_TBLSTYLE_UPDATE                NC_("STR_UNDO_TBLSTYLE_UPDATE", "Update table style: $1")
 #define STR_UNDO_TABLE_DELETE                   NC_("STR_UNDO_TABLE_DELETE", "Delete table")
 #define STR_UNDO_INSERT_FORM_FIELD              NC_("STR_UNDO_INSERT_FORM_FIELD", "Insert form field")
+#define STR_UNDO_UPDATE_FORM_FIELD              NC_("STR_UNDO_UPDATE_FORM_FIELD", "Update form field")
+#define STR_UNDO_UPDATE_FORM_FIELDS             NC_("STR_UNDO_UPDATE_FORM_FIELDS", "Update form fields")
+#define STR_UNDO_DELETE_FORM_FIELDS             NC_("STR_UNDO_DELETE_FORM_FIELDS", "Delete form fields")
 #define STR_UNDO_INSERT_PAGE_NUMBER             NC_("STR_UNDO_INSERT_PAGE_NUMBER", "Insert page number")
 #define STR_UNDO_CHANGE_THEME_COLORS            NC_("STR_UNDO_CHANGE_THEME_COLORS", "Change document theme color")
 
@@ -680,11 +691,11 @@
 #define STR_CLICK_OUTLINE_CONTENT_TOGGLE_VISIBILITY NC_("STR_CLICK_OUTLINE_CONTENT_TOGGLE_VISIBILITY", "Click to toggle outline folding")
 #define STR_CLICK_OUTLINE_CONTENT_TOGGLE_VISIBILITY_EXT NC_("STR_CLICK_OUTLINE_CONTENT_TOGGLE_VISIBILITY_EXT", "right-click to include sub levels")
 #define STR_OUTLINE_CONTENT_VISIBILITY_TOGGLE   NC_("STR_OUTLINE_CONTENT_VISIBILITY_TOGGLE", "Toggle")
-#define STR_OUTLINE_CONTENT_VISIBILITY_SHOW_ALL NC_("STR_OUTLINE_CONTENT_VISIBILITY_SHOW_ALL", "Unfold All")
-#define STR_OUTLINE_CONTENT_VISIBILITY_HIDE_ALL NC_("STR_OUTLINE_CONTENT_VISIBILITY_HIDE_ALL", "Fold All")
-#define STR_OUTLINE_LEVELS_SHOWN_TITLE          NC_("STR_OUTLINE_LEVELS_SHOWN_TITLE", "Show Outline Content to Level")
-#define STR_OUTLINE_LEVELS_SHOWN_SPIN_LABEL     NC_("STR_OUTLINE_LEVELS_SHOWN_SPIN_LABEL", "Level (1 - 10)")
-#define STR_OUTLINE_LEVELS_SHOWN_HELP_LABEL     NC_("STR_OUTLINE_LEVELS_SHOWN_HELP_LABEL", "Enter the maximum outline level to show content for.")
+#define STR_OUTLINE_CONTENT_VISIBILITY_SHOW_ALL NC_("STR_OUTLINE_CONTENT_VISIBILITY_SHOW_ALL", "Unfold Including Sub Levels")
+#define STR_OUTLINE_CONTENT_VISIBILITY_HIDE_ALL NC_("STR_OUTLINE_CONTENT_VISIBILITY_HIDE_ALL", "Fold Including Sub Levels")
+#define STR_OUTLINE_LEVELS_SHOWN_TITLE          NC_("STR_OUTLINE_LEVELS_SHOWN_TITLE", "Show Up to Outline Level")
+#define STR_OUTLINE_LEVELS_SHOWN_SPIN_LABEL     NC_("STR_OUTLINE_LEVELS_SHOWN_SPIN_LABEL", "Level (1–10):")
+#define STR_OUTLINE_LEVELS_SHOWN_HELP_LABEL     NC_("STR_OUTLINE_LEVELS_SHOWN_HELP_LABEL", "Enter maximum outline level allowed for a displayed heading.")
 
 #define STR_EXPANDALL                           NC_("STR_EXPANDALL", "Expand All")
 #define STR_COLLAPSEALL                         NC_("STR_COLLAPSEALL", "Collapse All")
@@ -814,6 +825,8 @@
 #define STR_AUTH_FIELD_CUSTOM5                  NC_("STR_AUTH_FIELD_CUSTOM5", "User-defined5")
 #define STR_AUTH_FIELD_ISBN                     NC_("STR_AUTH_FIELD_ISBN", "ISBN")
 #define STR_AUTH_FIELD_LOCAL_URL                NC_("STR_AUTH_FIELD_LOCAL_URL", "Local copy")
+#define STR_AUTH_FIELD_TARGET_TYPE              NC_("STR_AUTH_FIELD_TARGET_TYPE", "Mark link target")
+#define STR_AUTH_FIELD_TARGET_URL               NC_("STR_AUTH_FIELD_TARGET_URL", "Target URL")
 
 #define STR_IDXMRK_EDIT                         NC_("STR_IDXMRK_EDIT", "Edit Index Entry")
 #define STR_IDXMRK_INSERT                       NC_("STR_IDXMRK_INSERT", "Insert Index Entry")
@@ -908,7 +921,7 @@
 #define STR_TIMEFLD                             NC_("STR_TIMEFLD", "Time")
 #define STR_FILENAMEFLD                         NC_("STR_FILENAMEFLD", "File name")
 #define STR_DBNAMEFLD                           NC_("STR_DBNAMEFLD", "Database Name")
-#define STR_CHAPTERFLD                          NC_("STR_CHAPTERFLD", "Chapter")
+#define STR_CHAPTERFLD                          NC_("STR_CHAPTERFLD", "~Heading")
 #define STR_PAGENUMBERFLD                       NC_("STR_PAGENUMBERFLD", "Page number")
 #define STR_DOCSTATFLD                          NC_("STR_DOCSTATFLD", "Statistics")
 #define STR_AUTHORFLD                           NC_("STR_AUTHORFLD", "Author")
@@ -1003,10 +1016,10 @@
 /*--------------------------------------------------------------------
     Description: format chapter
  --------------------------------------------------------------------*/
-#define FMT_CHAPTER_NAME                        NC_("FMT_CHAPTER_NAME", "Chapter name")
-#define FMT_CHAPTER_NO                          NC_("FMT_CHAPTER_NO", "Chapter number")
-#define FMT_CHAPTER_NO_NOSEPARATOR              NC_("FMT_CHAPTER_NO_NOSEPARATOR", "Chapter number without separator")
-#define FMT_CHAPTER_NAMENO                      NC_("FMT_CHAPTER_NAMENO", "Chapter number and name")
+#define FMT_CHAPTER_NAME                        NC_("FMT_CHAPTER_NAME", "Heading contents")
+#define FMT_CHAPTER_NO                          NC_("FMT_CHAPTER_NO", "Heading number")
+#define FMT_CHAPTER_NO_NOSEPARATOR              NC_("FMT_CHAPTER_NO_NOSEPARATOR", "Heading number without separator")
+#define FMT_CHAPTER_NAMENO                      NC_("FMT_CHAPTER_NAMENO", "Heading number and contents")
 /*--------------------------------------------------------------------
     Description: formats
  --------------------------------------------------------------------*/
@@ -1051,7 +1064,7 @@
 #define FMT_REF_PAGE_PGDSC                      NC_("FMT_REF_PAGE_PGDSC", "Page number (styled)")
 #define FMT_REF_ONLYNUMBER                      NC_("FMT_REF_ONLYNUMBER", "Category and Number")
 #define FMT_REF_ONLYCAPTION                     NC_("FMT_REF_ONLYCAPTION", "Caption Text")
-#define FMT_REF_ONLYSEQNO                       NC_("FMT_REF_ONLYSEQNO", "Numbering")
+#define FMT_REF_ONLYSEQNO                       NC_("FMT_REF_ONLYSEQNO", "Number")
 #define FMT_REF_NUMBER                          NC_("FMT_REF_NUMBER", "Number")
 #define FMT_REF_NUMBER_NO_CONTEXT               NC_("FMT_REF_NUMBER_NO_CONTEXT", "Number (no context)")
 #define FMT_REF_NUMBER_FULL_CONTEXT             NC_("FMT_REF_NUMBER_FULL_CONTEXT", "Number (full context)")
@@ -1182,26 +1195,14 @@
 #define STR_CONNECT_BORDER_ON                   NC_("STR_CONNECT_BORDER_ON", "Merge borders")
 #define STR_CONNECT_BORDER_OFF                  NC_("STR_CONNECT_BORDER_OFF", "Do not merge borders")
 
-#define ST_TBL                                  NC_("ST_TBL", "Table")
-#define ST_FRM                                  NC_("ST_FRM", "Frame")
 #define ST_PGE                                  NC_("ST_PGE", "Page")
-#define ST_DRW                                  NC_("ST_DRW", "Drawing")
 #define ST_CTRL                                 NC_("ST_CTRL", "Control")
-#define ST_REG                                  NC_("ST_REG", "Section")
-#define ST_BKM                                  NC_("ST_BKM", "Bookmark")
-#define ST_GRF                                  NC_("ST_GRF", "Graphics")
-#define ST_OLE                                  NC_("ST_OLE", "OLE object")
-#define ST_OUTL                                 NC_("ST_OUTL", "Headings")
 #define ST_SEL                                  NC_("ST_SEL", "Selection")
-#define ST_FTN                                  NC_("ST_FTN", "Footnote")
 #define ST_MARK                                 NC_("ST_MARK", "Reminder")
-#define ST_POSTIT                               NC_("ST_POSTIT", "Comment")
 #define ST_SRCH_REP                             NC_("ST_SRCH_REP", "Repeat search")
-#define ST_INDEX_ENTRY                          NC_("ST_INDEX_ENTRY", "Index entry")
 #define ST_TABLE_FORMULA                        NC_("ST_TABLE_FORMULA", "Table formula")
 #define ST_TABLE_FORMULA_ERROR                  NC_("ST_TABLE_FORMULA_ERROR", "Wrong table formula")
 #define ST_RECENCY                              NC_("ST_RECENCY", "Recency")
-#define ST_FIELD                                NC_("ST_FIELD", "Field")
 #define ST_FIELD_BYTYPE                         NC_("ST_FIELD_BYTYPE", "Field by type")
 // Strings for the quickhelp of the View-PgUp/Down-Buttons
 #define STR_IMGBTN_TBL_DOWN                     NC_("STR_IMGBTN_TBL_DOWN", "Next table")
@@ -1255,6 +1256,8 @@
 #define STR_REDLINE_PARAGRAPH_FORMAT            NC_("STR_REDLINE_PARAGRAPH_FORMAT", "Paragraph formatting changed")
 #define STR_REDLINE_TABLE_ROW_INSERT            NC_("STR_REDLINE_TABLE_ROW_INSERT", "Row Inserted")
 #define STR_REDLINE_TABLE_ROW_DELETE            NC_("STR_REDLINE_TABLE_ROW_DELETE", "Row Deleted")
+#define STR_REDLINE_TABLE_COLUMN_INSERT         NC_("STR_REDLINE_TABLE_COLUMN_INSERT", "Column Inserted")
+#define STR_REDLINE_TABLE_COLUMN_DELETE         NC_("STR_REDLINE_TABLE_COLUMN_DELETE", "Column Deleted")
 #define STR_REDLINE_TABLE_CELL_INSERT           NC_("STR_REDLINE_TABLE_CELL_INSERT", "Cell Inserted")
 #define STR_REDLINE_TABLE_CELL_DELETE           NC_("STR_REDLINE_TABLE_CELL_DELETE", "Cell Deleted")
 #define STR_REDLINE_INSERT_MOVED                NC_("STR_REDLINE_INSERT_MOVED", "Moved (insertion)")
@@ -1329,20 +1332,20 @@
 #define STR_NOSORTKEY                           NC_("STR_NOSORTKEY", "<None>")
 #define STR_NO_CHAR_STYLE                       NC_("STR_NO_CHAR_STYLE", "<None>")
 #define STR_DELIM                               NC_("STR_DELIM", "S")
-#define STR_TOKEN_ENTRY_NO                      NC_("STR_TOKEN_ENTRY_NO", "E#")
+#define STR_TOKEN_ENTRY_NO                      NC_("STR_TOKEN_ENTRY_NO", "N#")
 #define STR_TOKEN_ENTRY                         NC_("STR_TOKEN_ENTRY", "E")
 #define STR_TOKEN_TAB_STOP                      NC_("STR_TOKEN_TAB_STOP", "T")
 #define STR_TOKEN_PAGE_NUMS                     NC_("STR_TOKEN_PAGE_NUMS", "#")
-#define STR_TOKEN_CHAPTER_INFO                  NC_("STR_TOKEN_CHAPTER_INFO", "CI")
+#define STR_TOKEN_CHAPTER_INFO                  NC_("STR_TOKEN_CHAPTER_INFO", "HI")
 #define STR_TOKEN_LINK_START                    NC_("STR_TOKEN_LINK_START", "LS")
 #define STR_TOKEN_LINK_END                      NC_("STR_TOKEN_LINK_END", "LE")
 #define STR_TOKEN_AUTHORITY                     NC_("STR_TOKEN_AUTHORITY", "A")
-#define STR_TOKEN_HELP_ENTRY_NO                 NC_("STR_TOKEN_HELP_ENTRY_NO", "Chapter number")
+#define STR_TOKEN_HELP_ENTRY_NO                 NC_("STR_TOKEN_HELP_ENTRY_NO", "Numbering")
 #define STR_TOKEN_HELP_ENTRY                    NC_("STR_TOKEN_HELP_ENTRY", "Entry")
 #define STR_TOKEN_HELP_TAB_STOP                 NC_("STR_TOKEN_HELP_TAB_STOP", "Tab stop")
 #define STR_TOKEN_HELP_TEXT                     NC_("STR_TOKEN_HELP_TEXT", "Text")
 #define STR_TOKEN_HELP_PAGE_NUMS                NC_("STR_TOKEN_HELP_PAGE_NUMS", "Page number")
-#define STR_TOKEN_HELP_CHAPTER_INFO             NC_("STR_TOKEN_HELP_CHAPTER_INFO", "Chapter info")
+#define STR_TOKEN_HELP_CHAPTER_INFO             NC_("STR_TOKEN_HELP_CHAPTER_INFO", "Heading info")
 #define STR_TOKEN_HELP_LINK_START               NC_("STR_TOKEN_HELP_LINK_START", "Hyperlink start")
 #define STR_TOKEN_HELP_LINK_END                 NC_("STR_TOKEN_HELP_LINK_END", "Hyperlink end")
 #define STR_TOKEN_HELP_AUTHORITY                NC_("STR_TOKEN_HELP_AUTHORITY", "Bibliography entry: ")
@@ -1454,10 +1457,18 @@
 // in order to change %PRODUCTNAME at runtime is expensive, so limit doing that as much as possible.
 #define STR_A11Y_DESC_AUTO                  NC_("insertcaption|extended_tip|auto", "Opens the Caption dialog. It has the same information as the dialog you get by menu %PRODUCTNAME Writer - AutoCaption in the Options dialog box.")
 
+#define STR_A11Y_DESIGN_MODE_TITLE              NC_("STR_A11Y_DESIGN_MODE_TITLE", "The forms are not editable")
+#define STR_A11Y_DESIGN_MODE_PRIMARY            NC_("STR_A11Y_DESIGN_MODE_PRIMARY", "Would you like to switch to design mode?")
+#define STR_A11Y_DESIGN_MODE_SECONDARY          NC_("STR_A11Y_DESIGN_MODE_SECONDARY", "You need to switch to design mode to edit forms.")
+
 #define STR_MARK_COPY NC_("STR_MARK_COPY", "%1 Copy ")
 
 #define STR_INFORODLG_FOLDED_PRIMARY            NC_("STR_INFORODLG_FOLDED_PRIMARY", "You are trying to delete folded (hidden) content.")
 #define STR_INFORODLG_FOLDED_SECONDARY          NC_("STR_INFORODLG_FOLDED_SECONDARY", "To delete this content, first unfold it so you can see what you intend to delete.")
+
+#define STR_PARAGRAPH_DIRECT_FORMATTING         NC_("STR_PARAGRAPH_DIRECT_FORMATTING", "Paragraph Direct Formatting")
+#define STR_CHARACTER_DIRECT_FORMATTING         NC_("STR_CHARACTER_DIRECT_FORMATTING", "Character Direct Formatting")
+#define STR_CHARACTER_DIRECT_FORMATTING_TAG     NC_("STR_CHARACTER_DIRECT_FORMATTING_TAG", "df")
 
 #endif
 

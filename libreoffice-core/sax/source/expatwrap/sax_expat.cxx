@@ -44,15 +44,14 @@
 #include <sal/log.hxx>
 
 #include <expat.h>
+#include <xml2utf.hxx>
 
-using namespace ::std;
 using namespace ::osl;
 using namespace ::cppu;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::xml::sax;
 using namespace ::com::sun::star::io;
 
-#include <xml2utf.hxx>
 
 namespace {
 
@@ -142,8 +141,6 @@ struct Entity
 };
 
 
-constexpr OUStringLiteral gsCDATA = u"CDATA";
-
 class SaxExpatParser_Impl
 {
 public: // module scope
@@ -162,7 +159,7 @@ public: // module scope
     rtl::Reference < comphelper::AttributeList > rAttrList;
 
     // External entity stack
-    vector<struct Entity>   vecEntity;
+    std::vector<struct Entity>   vecEntity;
     void pushEntity( Entity &&entity )
         { vecEntity.push_back( std::move(entity) ); }
     void popEntity()
@@ -711,7 +708,6 @@ void SaxExpatParser_Impl::callbackStartElement( void *pvThis ,
         assert(awAttributes[i+1]);
         pImpl->rAttrList->AddAttribute(
             XML_CHAR_TO_OUSTRING( awAttributes[i] ) ,
-            gsCDATA,  // expat doesn't know types
             XML_CHAR_TO_OUSTRING( awAttributes[i+1] ) );
         i +=2;
     }

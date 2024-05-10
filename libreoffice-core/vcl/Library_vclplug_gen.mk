@@ -56,7 +56,6 @@ $(eval $(call gb_Library_use_externals,vclplug_gen,\
 	graphite \
 	epoxy \
 	expat \
-	glm_headers \
 	harfbuzz \
 	icu_headers \
 	icuuc \
@@ -98,15 +97,10 @@ $(eval $(call gb_Library_add_exception_objects,vclplug_gen,\
     vcl/unx/generic/dtrans/X11_service \
     vcl/unx/generic/dtrans/X11_transferable \
     vcl/unx/generic/gdi/cairo_xlib_cairo \
-    vcl/unx/generic/gdi/x11cairotextrender \
     vcl/unx/generic/gdi/X11CairoSalGraphicsImpl \
-    vcl/unx/generic/gdi/gdiimpl \
-    vcl/unx/generic/gdi/salbmp \
-    vcl/unx/generic/gdi/salgdi2 \
     vcl/unx/generic/gdi/font \
     vcl/unx/generic/gdi/salgdi \
     vcl/unx/generic/gdi/salvd \
-    vcl/unx/generic/gdi/xrender_peer \
     vcl/unx/generic/window/salframe \
     vcl/unx/generic/window/salobj \
     vcl/unx/x11/x11sys \
@@ -138,10 +132,7 @@ $(eval $(call gb_Library_add_defs,vclplug_gen,\
 endif
 
 ## handle Xinerama
-ifneq ($(USE_XINERAMA),)
-$(eval $(call gb_Library_add_defs,vclplug_gen,\
-    -DUSE_XINERAMA_XORG \
-))
+ifneq ($(USING_X11),)
 ifeq ($(XINERAMA_LINK),dynamic)
 $(eval $(call gb_Library_add_libs,vclplug_gen,\
     -lXinerama \
@@ -151,7 +142,7 @@ $(eval $(call gb_Library_add_libs,vclplug_gen,\
     -Wl$(COMMA)-Bstatic -lXinerama -Wl$(COMMA)-Bdynamic \
 ))
 endif
-endif # USE_XINERAMA
+endif # USING_X11
 
 ifeq ($(OS),LINUX)
 $(eval $(call gb_Library_add_libs,vclplug_gen,\

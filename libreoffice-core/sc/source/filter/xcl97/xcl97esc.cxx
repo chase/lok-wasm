@@ -48,6 +48,7 @@
 #include <unotools/streamwrap.hxx>
 #include <oox/ole/olehelper.hxx>
 #include <sfx2/objsh.hxx>
+#include <docsh.hxx>
 
 using ::com::sun::star::uno::Any;
 using ::com::sun::star::uno::Exception;
@@ -75,8 +76,8 @@ XclEscherExGlobal::XclEscherExGlobal( const XclExpRoot& rRoot )
 
 SvStream* XclEscherExGlobal::ImplQueryPictureStream()
 {
-    mxPicTempFile.reset( new ::utl::TempFileFast );
-    mpPicStrm = mxPicTempFile->GetStream( StreamMode::READWRITE );
+    moPicTempFile.emplace();
+    mpPicStrm = moPicTempFile->GetStream( StreamMode::READWRITE );
     mpPicStrm->SetEndian( SvStreamEndian::LITTLE );
     return mpPicStrm;
 }
@@ -164,7 +165,7 @@ bool lcl_IsFontwork( const SdrObject* pObj )
     bool bIsFontwork = false;
     if( pObj->GetObjIdentifier() == SdrObjKind::CustomShape )
     {
-        static const OUStringLiteral aTextPath = u"TextPath";
+        static constexpr OUString aTextPath = u"TextPath"_ustr;
         const SdrCustomShapeGeometryItem& rGeometryItem =
             pObj->GetMergedItem( SDRATTR_CUSTOMSHAPE_GEOMETRY );
         if( const Any* pAny = rGeometryItem.GetPropertyValueByName( aTextPath, aTextPath ) )
@@ -216,7 +217,7 @@ EscherExHostAppData* XclEscherEx::StartShape( const Reference< XShape >& rxShape
                         pCurrXclObj = nullptr;     // no metafile or whatsoever
                     }
                     else    // metafile and OLE object
-                        pCurrXclObj = new XclObjOle( mrObjMgr, *pObj );
+                        pCurrXclObj = new XclObjOle( mrObjMgr, *static_cast<SdrOle2Obj*>(pObj) );
                 }
                 else    // just a metafile
                     pCurrXclObj = new XclObjAny( mrObjMgr, rxShape, &GetDoc() );

@@ -25,7 +25,10 @@ $(eval $(call gb_Library_set_include,svgio,\
     -I$(SRCDIR)/svgio/inc \
 ))
 
-$(eval $(call gb_Library_use_external,svgio,boost_headers))
+$(eval $(call gb_Library_use_externals,svgio,\
+    boost_headers \
+    frozen \
+))
 
 $(eval $(call gb_Library_set_precompiled_header,svgio,svgio/inc/pch/precompiled_svgio))
 
@@ -38,6 +41,7 @@ $(eval $(call gb_Library_use_libraries,svgio,\
     comphelper \
     cppu \
     cppuhelper \
+    i18nlangtag \
     sal \
     salhelper \
     tk \
@@ -45,6 +49,7 @@ $(eval $(call gb_Library_use_libraries,svgio,\
     sax \
     vcl \
     svt \
+    utl \
 ))
 
 $(eval $(call gb_Library_add_exception_objects,svgio,\
@@ -56,6 +61,13 @@ $(eval $(call gb_Library_add_exception_objects,svgio,\
     svgio/source/svgreader/svgellipsenode \
     svgio/source/svgreader/svggnode \
     svgio/source/svgreader/svganode \
+    svgio/source/svgreader/svgfecolormatrixnode \
+    svgio/source/svgreader/svgfedropshadownode \
+    svgio/source/svgreader/svgfefloodnode \
+    svgio/source/svgreader/svgfeimagenode \
+    svgio/source/svgreader/svgfegaussianblurnode \
+    svgio/source/svgreader/svgfeoffsetnode \
+    svgio/source/svgreader/svgfilternode \
     svgio/source/svgreader/svggradientnode \
     svgio/source/svgreader/svggradientstopnode \
     svgio/source/svgreader/svgimagenode \
@@ -72,8 +84,10 @@ $(eval $(call gb_Library_add_exception_objects,svgio,\
     svgio/source/svgreader/svgstyleattributes \
     svgio/source/svgreader/svgstylenode \
     svgio/source/svgreader/svgsvgnode \
+    svgio/source/svgreader/svgswitchnode \
     svgio/source/svgreader/svgsymbolnode \
     svgio/source/svgreader/svgtextnode \
+    svgio/source/svgreader/svgtextposition \
     svgio/source/svgreader/svgtitledescnode \
     svgio/source/svgreader/svgtoken \
     svgio/source/svgreader/svgtrefnode \

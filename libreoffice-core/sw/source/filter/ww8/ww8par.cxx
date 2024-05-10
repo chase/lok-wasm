@@ -27,6 +27,7 @@
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/packages/XPackageEncryption.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
+#include <com/sun/star/text/XTextFieldsSupplier.hpp>
 
 #include <i18nlangtag/languagetag.hxx>
 
@@ -142,11 +143,6 @@
 #include <unordered_set>
 #include <memory>
 
-using namespace ::com::sun::star;
-using namespace sw::util;
-using namespace sw::types;
-using namespace nsHdFtFlags;
-
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <com/sun/star/i18n/ScriptType.hpp>
 #include <unotools/pathoptions.hxx>
@@ -159,6 +155,11 @@ using namespace nsHdFtFlags;
 #include <comphelper/storagehelper.hxx>
 #include <sfx2/DocumentMetadataAccess.hxx>
 #include <comphelper/diagnose_ex.hxx>
+
+using namespace ::com::sun::star;
+using namespace sw::util;
+using namespace sw::types;
+using namespace nsHdFtFlags;
 
 static SwMacroInfo* GetMacroInfo( SdrObject* pObj )
 {
@@ -1226,14 +1227,15 @@ tools::Long GetListFirstLineIndent(const SwNumFormat &rFormat)
     return nReverseListIndented;
 }
 
-static tools::Long lcl_GetTrueMargin(const SvxLRSpaceItem &rLR, const SwNumFormat &rFormat,
+static tools::Long lcl_GetTrueMargin(SvxFirstLineIndentItem const& rFirstLine,
+        SvxTextLeftMarginItem const& rLeftMargin, const SwNumFormat &rFormat,
     tools::Long &rFirstLinePos)
 {
     OSL_ENSURE( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION,
             "<lcl_GetTrueMargin> - misusage: position-and-space-mode does not equal LABEL_WIDTH_AND_POSITION" );
 
-    const tools::Long nBodyIndent = rLR.GetTextLeft();
-    const tools::Long nFirstLineDiff = rLR.GetTextFirstLineOffset();
+    const tools::Long nBodyIndent = rLeftMargin.GetTextLeft();
+    const tools::Long nFirstLineDiff = rFirstLine.GetTextFirstLineOffset();
     rFirstLinePos = nBodyIndent + nFirstLineDiff;
 
     const auto nPseudoListBodyIndent = rFormat.GetAbsLSpace();
@@ -1245,7 +1247,8 @@ static tools::Long lcl_GetTrueMargin(const SvxLRSpaceItem &rLR, const SwNumForma
 
 // #i103711#
 // #i105414#
-void SyncIndentWithList( SvxLRSpaceItem &rLR,
+void SyncIndentWithList( SvxFirstLineIndentItem & rFirstLine,
+                         SvxTextLeftMarginItem & rLeftMargin,
                          const SwNumFormat &rFormat,
                          const bool bFirstLineOfstSet,
                          const bool bLeftIndentSet )
@@ -1253,31 +1256,31 @@ void SyncIndentWithList( SvxLRSpaceItem &rLR,
     if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_WIDTH_AND_POSITION )
     {
         tools::Long nWantedFirstLinePos;
-        tools::Long nExtraListIndent = lcl_GetTrueMargin(rLR, rFormat, nWantedFirstLinePos);
-        rLR.SetTextLeft(nWantedFirstLinePos - nExtraListIndent);
-        rLR.SetTextFirstLineOffset(0);
+        tools::Long nExtraListIndent = lcl_GetTrueMargin(rFirstLine, rLeftMargin, rFormat, nWantedFirstLinePos);
+        rLeftMargin.SetTextLeft(nWantedFirstLinePos - nExtraListIndent);
+        rFirstLine.SetTextFirstLineOffset(0);
     }
     else if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
     {
         if ( !bFirstLineOfstSet && bLeftIndentSet &&
              rFormat.GetFirstLineIndent() != 0 )
         {
-            rLR.SetTextFirstLineOffset( rFormat.GetFirstLineIndent() );
+            rFirstLine.SetTextFirstLineOffset(rFormat.GetFirstLineIndent());
         }
         else if ( bFirstLineOfstSet && !bLeftIndentSet &&
                   rFormat.GetIndentAt() != 0 )
         {
-            rLR.SetTextLeft( rFormat.GetIndentAt() );
+            rLeftMargin.SetTextLeft(rFormat.GetIndentAt());
         }
         else if (!bFirstLineOfstSet && !bLeftIndentSet )
         {
             if ( rFormat.GetFirstLineIndent() != 0 )
             {
-                rLR.SetTextFirstLineOffset( rFormat.GetFirstLineIndent() );
+                rFirstLine.SetTextFirstLineOffset(rFormat.GetFirstLineIndent());
             }
             if ( rFormat.GetIndentAt() != 0 )
             {
-                rLR.SetTextLeft( rFormat.GetIndentAt() );
+                rLeftMargin.SetTextLeft(rFormat.GetIndentAt());
             }
         }
     }
@@ -1341,6 +1344,10 @@ void SwWW8FltControlStack::SetAttrInDoc(const SwPosition& rTmpPos,
     switch (rEntry.m_pAttr->Which())
     {
         case RES_LR_SPACE:
+            assert(false);
+            break;
+        case RES_MARGIN_FIRSTLINE:
+        case RES_MARGIN_TEXTLEFT:
             {
                 /*
                  Loop over the affected nodes and
@@ -1352,7 +1359,19 @@ void SwWW8FltControlStack::SetAttrInDoc(const SwPosition& rTmpPos,
                 SwPaM aRegion(rTmpPos);
                 if (rEntry.MakeRegion(m_rDoc, aRegion, SwFltStackEntry::RegionMode::NoCheck))
                 {
-                    SvxLRSpaceItem aNewLR( *static_cast<SvxLRSpaceItem*>(rEntry.m_pAttr.get()) );
+                    SvxFirstLineIndentItem firstLineNew(RES_MARGIN_FIRSTLINE);
+                    SvxTextLeftMarginItem leftMarginNew(RES_MARGIN_TEXTLEFT);
+                    if (rEntry.m_pAttr->Which() == RES_MARGIN_FIRSTLINE)
+                    {
+                        SvxFirstLineIndentItem const firstLineEntry(*static_cast<SvxFirstLineIndentItem*>(rEntry.m_pAttr.get()));
+                        firstLineNew.SetTextFirstLineOffset(firstLineEntry.GetTextFirstLineOffset(), firstLineEntry.GetPropTextFirstLineOffset());
+                        firstLineNew.SetAutoFirst(firstLineEntry.IsAutoFirst());
+                    }
+                    else
+                    {
+                        SvxTextLeftMarginItem const leftMarginEntry(*static_cast<SvxTextLeftMarginItem*>(rEntry.m_pAttr.get()));
+                        leftMarginNew.SetTextLeft(leftMarginEntry.GetTextLeft(), leftMarginEntry.GetPropLeft());
+                    }
                     SwNodeOffset nStart = aRegion.Start()->GetNodeIndex();
                     SwNodeOffset nEnd   = aRegion.End()->GetNodeIndex();
                     for(; nStart <= nEnd; ++nStart)
@@ -1362,7 +1381,17 @@ void SwWW8FltControlStack::SetAttrInDoc(const SwPosition& rTmpPos,
                             continue;
 
                         SwContentNode* pNd = static_cast<SwContentNode*>(pNode);
-                        SvxLRSpaceItem aOldLR = pNd->GetAttr(RES_LR_SPACE);
+                        SvxFirstLineIndentItem firstLineOld(pNd->GetAttr(RES_MARGIN_FIRSTLINE));
+                        SvxTextLeftMarginItem leftMarginOld(pNd->GetAttr(RES_MARGIN_TEXTLEFT));
+                        if (rEntry.m_pAttr->Which() == RES_MARGIN_FIRSTLINE)
+                        {
+                            leftMarginNew.SetTextLeft(leftMarginOld.GetTextLeft(), leftMarginOld.GetPropLeft());
+                        }
+                        else
+                        {
+                            firstLineNew.SetTextFirstLineOffset(firstLineOld.GetTextFirstLineOffset(), firstLineOld.GetPropTextFirstLineOffset());
+                            firstLineNew.SetAutoFirst(firstLineOld.IsAutoFirst());
+                        }
 
                         SwTextNode *pTextNode = static_cast<SwTextNode*>(pNode);
 
@@ -1383,16 +1412,22 @@ void SwWW8FltControlStack::SetAttrInDoc(const SwPosition& rTmpPos,
                             const bool bLeftIndentSet =
                                 (  m_rReader.m_aTextNodesHavingLeftIndentSet.end() !=
                                     m_rReader.m_aTextNodesHavingLeftIndentSet.find( pNode ) );
-                            SyncIndentWithList( aNewLR, *pNum,
+                            SyncIndentWithList(firstLineNew, leftMarginNew, *pNum,
                                                 bFirstLineIndentSet,
                                                 bLeftIndentSet );
                         }
 
-                        if (aNewLR == aOldLR)
-                            continue;
-
-                        pNd->SetAttr(aNewLR);
-
+                        if (firstLineNew != firstLineOld)
+                        {
+                            if (nStart == aRegion.Start()->GetNodeIndex())
+                            {
+                                pNd->SetAttr(firstLineNew);
+                            }
+                        }
+                        if (leftMarginNew != leftMarginOld)
+                        {
+                            pNd->SetAttr(leftMarginNew);
+                        }
                     }
                 }
             }
@@ -1462,13 +1497,28 @@ const SfxPoolItem* SwWW8FltControlStack::GetFormatAttr(const SwPosition& rPos,
             not writer format, because that's the style that the filter works
             in (naturally)
             */
-            if (nWhich == RES_LR_SPACE)
+            if (nWhich == RES_MARGIN_FIRSTLINE
+                || nWhich == RES_MARGIN_TEXTLEFT
+                || nWhich == RES_MARGIN_RIGHT)
             {
                 SfxItemState eState = SfxItemState::DEFAULT;
                 if (const SfxItemSet *pSet = pNd->GetpSwAttrSet())
-                    eState = pSet->GetItemState(RES_LR_SPACE, false);
+                    eState = pSet->GetItemState(nWhich, false);
                 if (eState != SfxItemState::SET && m_rReader.m_nCurrentColl < m_rReader.m_vColl.size())
-                    pItem = m_rReader.m_vColl[m_rReader.m_nCurrentColl].maWordLR.get();
+                {
+                    switch (nWhich)
+                    {
+                        case RES_MARGIN_FIRSTLINE:
+                            pItem = m_rReader.m_vColl[m_rReader.m_nCurrentColl].m_pWordFirstLine.get();
+                            break;
+                        case RES_MARGIN_TEXTLEFT:
+                            pItem = m_rReader.m_vColl[m_rReader.m_nCurrentColl].m_pWordLeftMargin.get();
+                            break;
+                        case RES_MARGIN_RIGHT:
+                            pItem = m_rReader.m_vColl[m_rReader.m_nCurrentColl].m_pWordRightMargin.get();
+                            break;
+                    }
+                }
             }
 
             /*
@@ -1896,6 +1946,7 @@ void SwWW8ImplReader::ImportDop()
     m_rDoc.getIDocumentSettingAccess().set(DocumentSettingId::PROP_LINE_SPACING_SHRINKS_FIRST_LINE, true);
     m_rDoc.getIDocumentSettingAccess().set(DocumentSettingId::CONTINUOUS_ENDNOTES, true);
     // rely on default for HYPHENATE_URLS=false
+    // rely on default for APPLY_TEXT_ATTR_TO_EMPTY_LINE_AT_END_OF_PARAGRAPH=true
 
     IDocumentSettingAccess& rIDSA = m_rDoc.getIDocumentSettingAccess();
     if (m_xWDop->fDontBreakWrappedTables)
@@ -1968,7 +2019,7 @@ void SwWW8ImplReader::ImportDopTypography(const WW8DopTypography &rTypo)
             {
                 i18n::ForbiddenCharacters aForbidden(OUString(+rTypo.m_rgxchFPunct),
                     OUString(+rTypo.m_rgxchLPunct));
-                    // unary + makes sure not to accidentally call the
+                    // unary + makes sure not to accidentally call the deleted
                     // OUString(ConstCharArrayDetector<...>::TypeUtf16) ctor that takes the full
                     // m_rgxchFPunct, m_rgxchLPunct arrays with embedded NULs, instead of just the
                     // prefix leading up to the first NUL
@@ -2761,7 +2812,7 @@ rtl_TextEncoding SwWW8ImplReader::GetCharSetFromLanguage()
      correctly set in the character runs involved, so it's hard to reproduce
      documents that require this to be sure of the process involved.
     */
-    const SvxLanguageItem *pLang = static_cast<const SvxLanguageItem*>(GetFormatAttr(RES_CHRATR_LANGUAGE));
+    const SvxLanguageItem *pLang = GetFormatAttr(RES_CHRATR_LANGUAGE);
     LanguageType eLang = pLang ? pLang->GetLanguage() : LANGUAGE_SYSTEM;
     css::lang::Locale aLocale(LanguageTag::convertToLocale(eLang));
     return msfilter::util::getBestTextEncodingFromLocale(aLocale);
@@ -2779,7 +2830,7 @@ rtl_TextEncoding SwWW8ImplReader::GetCJKCharSetFromLanguage()
      correctly set in the character runs involved, so it's hard to reproduce
      documents that require this to be sure of the process involved.
     */
-    const SvxLanguageItem *pLang = static_cast<const SvxLanguageItem*>(GetFormatAttr(RES_CHRATR_CJK_LANGUAGE));
+    const SvxLanguageItem *pLang = GetFormatAttr(RES_CHRATR_CJK_LANGUAGE);
     LanguageType eLang = pLang ? pLang->GetLanguage() : LANGUAGE_SYSTEM;
     css::lang::Locale aLocale(LanguageTag::convertToLocale(eLang));
     return msfilter::util::getBestTextEncodingFromLocale(aLocale);
@@ -3051,8 +3102,8 @@ bool SwWW8ImplReader::ReadPlainChars(WW8_CP& rPos, sal_Int32 nEnd, sal_Int32 nCp
         the language is not Japanese
         */
 
-        const SfxPoolItem * pItem = GetFormatAttr(RES_CHRATR_CJK_LANGUAGE);
-        if (pItem != nullptr && LANGUAGE_JAPANESE != static_cast<const SvxLanguageItem *>(pItem)->GetLanguage())
+        const SvxLanguageItem * pItem = GetFormatAttr(RES_CHRATR_CJK_LANGUAGE);
+        if (pItem != nullptr && LANGUAGE_JAPANESE != pItem->GetLanguage())
         {
             SAL_WARN("sw.ww8", "discarding word95 RTL_TEXTENCODING_MS_932 encoding");
             eSrcCharSet = GetCharSetFromLanguage();
@@ -3081,9 +3132,9 @@ bool SwWW8ImplReader::ReadPlainChars(WW8_CP& rPos, sal_Int32 nEnd, sal_Int32 nCp
     sal_uInt16 nUCode;
 
     LanguageType nCTLLang = LANGUAGE_SYSTEM;
-    const SfxPoolItem * pItem = GetFormatAttr(RES_CHRATR_CTL_LANGUAGE);
+    const SvxLanguageItem * pItem = GetFormatAttr(RES_CHRATR_CTL_LANGUAGE);
     if (pItem != nullptr)
-        nCTLLang = static_cast<const SvxLanguageItem *>(pItem)->GetLanguage();
+        nCTLLang = pItem->GetLanguage();
 
     sal_Int32 nL2;
     for (nL2 = 0; nL2 < nStrLen; ++nL2)
@@ -3282,20 +3333,20 @@ void SwWW8ImplReader::emulateMSWordAddTextToParagraph(const OUString& rAddString
             break;
 
         OUString sChunk(rAddString.copy(nPos, nEnd-nPos));
-        const sal_uInt16 aIds[] = {RES_CHRATR_FONT, RES_CHRATR_CJK_FONT, RES_CHRATR_CTL_FONT};
+        const TypedWhichId<SvxFontItem> aIds[] = {RES_CHRATR_FONT, RES_CHRATR_CJK_FONT, RES_CHRATR_CTL_FONT};
         const SvxFontItem *pOverriddenItems[] = {nullptr, nullptr, nullptr};
         bool aForced[] = {false, false, false};
 
         int nLclIdctHint = 0xFF;
         if (nScript == i18n::ScriptType::WEAK)
         {
-            const SfxInt16Item *pIdctHint = static_cast<const SfxInt16Item*>(GetFormatAttr(RES_CHRATR_IDCTHINT));
+            const SfxInt16Item *pIdctHint = GetFormatAttr(RES_CHRATR_IDCTHINT);
             nLclIdctHint = pIdctHint->GetValue();
         }
         else if (nScript == MSASCII) // Force weak chars in ascii range to use LATIN font
             nLclIdctHint = 0;
 
-        sal_uInt16 nForceFromFontId = 0;
+        TypedWhichId<SvxFontItem> nForceFromFontId(0);
         if (nLclIdctHint != 0xFF)
         {
             switch (nLclIdctHint)
@@ -3314,7 +3365,7 @@ void SwWW8ImplReader::emulateMSWordAddTextToParagraph(const OUString& rAddString
             }
         }
 
-        if (nForceFromFontId != 0)
+        if (sal_uInt16(nForceFromFontId) != 0)
         {
             // Now we know that word would use the nForceFromFontId font for this range
             // Try and determine what script writer would assign this range to
@@ -3336,9 +3387,9 @@ void SwWW8ImplReader::emulateMSWordAddTextToParagraph(const OUString& rAddString
                 }
                 else
                 {
-                    const SvxFontItem *pSourceFont = static_cast<const SvxFontItem*>(GetFormatAttr(nForceFromFontId));
-                    sal_uInt16 nDestId = aIds[nWriterScript-1];
-                    const SvxFontItem *pDestFont = static_cast<const SvxFontItem*>(GetFormatAttr(nDestId));
+                    const SvxFontItem *pSourceFont = GetFormatAttr(nForceFromFontId);
+                    TypedWhichId<SvxFontItem> nDestId = aIds[nWriterScript-1];
+                    const SvxFontItem *pDestFont = GetFormatAttr(nDestId);
                     bWriterWillUseSameFontAsWordAutomatically = sameFontIgnoringIrrelevantFields(*pSourceFont, *pDestFont);
                 }
             }
@@ -3346,11 +3397,11 @@ void SwWW8ImplReader::emulateMSWordAddTextToParagraph(const OUString& rAddString
             // Writer won't use the same font as word, so force the issue
             if (!bWriterWillUseSameFontAsWordAutomatically)
             {
-                const SvxFontItem *pSourceFont = static_cast<const SvxFontItem*>(GetFormatAttr(nForceFromFontId));
+                const SvxFontItem *pSourceFont = GetFormatAttr(nForceFromFontId);
 
                 for (size_t i = 0; i < SAL_N_ELEMENTS(aIds); ++i)
                 {
-                    const SvxFontItem *pDestFont = static_cast<const SvxFontItem*>(GetFormatAttr(aIds[i]));
+                    const SvxFontItem *pDestFont = GetFormatAttr(aIds[i]);
                     aForced[i] = aIds[i] != nForceFromFontId && *pSourceFont != *pDestFont;
                     if (aForced[i])
                     {
@@ -4074,8 +4125,7 @@ bool SwWW8ImplReader::ReadText(WW8_CP nStartCp, WW8_CP nTextLen, ManTypes nType)
                 }
 
                 // Get the default document dropcap which we can use as our template
-                const SwFormatDrop* defaultDrop =
-                    static_cast<const SwFormatDrop*>( GetFormatAttr(RES_PARATR_DROP));
+                const SwFormatDrop* defaultDrop = GetFormatAttr(RES_PARATR_DROP);
                 SwFormatDrop aDrop(*defaultDrop);
 
                 aDrop.GetLines() = nDropLines;
@@ -4760,27 +4810,35 @@ void SwWW8ImplReader::ReadDocVars()
         aDocVarStrings, &aDocVarStringIds, &aDocValueStrings);
     if (m_bVer67)        return;
 
-    uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-        m_pDocShell->GetModel(), uno::UNO_QUERY_THROW);
-    uno::Reference<document::XDocumentProperties> xDocProps(
-        xDPS->getDocumentProperties());
-    OSL_ENSURE(xDocProps.is(), "DocumentProperties is null");
-    uno::Reference<beans::XPropertyContainer> xUserDefinedProps =
-        xDocProps->getUserDefinedProperties();
-    OSL_ENSURE(xUserDefinedProps.is(), "UserDefinedProperties is null");
-
-    for(size_t i=0; i<aDocVarStrings.size(); i++)
+    uno::Reference< text::XTextFieldsSupplier > xFieldsSupplier(m_pDocShell->GetModel(), uno::UNO_QUERY_THROW);
+    uno::Reference<css::lang::XMultiServiceFactory> xTextFactory(m_pDocShell->GetModel(), uno::UNO_QUERY);
+    uno::Reference< container::XNameAccess > xFieldMasterAccess = xFieldsSupplier->getTextFieldMasters();
+    for(size_t i = 0; i < aDocVarStrings.size(); i++)
     {
         const OUString &rName = aDocVarStrings[i];
         uno::Any aValue;
-        aValue <<= rName;
-        try {
-            xUserDefinedProps->addProperty( rName,
-                beans::PropertyAttribute::REMOVABLE,
-                aValue );
-        } catch (const uno::Exception &) {
-            // ignore
+        if (aDocValueStrings.size() > i)
+        {
+            OUString value = aDocValueStrings[i];
+            value = value.replaceAll("\r\n", "\n");
+            value = value.replaceAll("\r", "\n");
+            aValue <<= value;
         }
+
+        uno::Reference< beans::XPropertySet > xMaster;
+        OUString sFieldMasterService("com.sun.star.text.FieldMaster.User." + rName);
+
+        // Find or create Field Master
+        if (xFieldMasterAccess->hasByName(sFieldMasterService))
+        {
+            xMaster.set(xFieldMasterAccess->getByName(sFieldMasterService), uno::UNO_QUERY_THROW);
+        }
+        else
+        {
+            xMaster.set(xTextFactory->createInstance("com.sun.star.text.FieldMaster.User"), uno::UNO_QUERY_THROW);
+            xMaster->setPropertyValue("Name", uno::Any(rName));
+        }
+        xMaster->setPropertyValue("Content", aValue);
     }
 }
 
@@ -4950,7 +5008,7 @@ void SwWW8ImplReader::ReadGlobalTemplateSettings( std::u16string_view sCreatedFr
         refMainStream->SetEndian(SvStreamEndian::LITTLE);
         WW8Fib aWwFib( *refMainStream, 8 );
         tools::SvRef<SotStorageStream> xTableStream =
-                rRoot->OpenSotStream(aWwFib.m_fWhichTableStm ? OUString(SL::a1Table) : OUString(SL::a0Table), StreamMode::STD_READ);
+                rRoot->OpenSotStream(aWwFib.m_fWhichTableStm ? SL::a1Table : SL::a0Table, StreamMode::STD_READ);
 
         if (xTableStream.is() && ERRCODE_NONE == xTableStream->GetError())
         {
@@ -5029,7 +5087,7 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
 
     RedlineFlags eMode = RedlineFlags::ShowInsert | RedlineFlags::ShowDelete;
 
-    m_xSprmParser.reset(new wwSprmParser(*m_xWwFib));
+    m_oSprmParser.emplace(*m_xWwFib);
 
     // Set handy helper variables
     m_bVer6  = (6 == m_xWwFib->m_nVersion);
@@ -5137,6 +5195,13 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
         if( m_xWDop->nEdn )
             aInfo.m_nFootnoteOffset = m_xWDop->nEdn - 1;
         m_rDoc.SetEndNoteInfo( aInfo );
+
+        if (m_xSBase->GetEndnoteCount() > 2)
+        {
+            // This compatibility flag only works in easy cases, disable it for anything non-trivial
+            // for now.
+            m_rDoc.getIDocumentSettingAccess().set(DocumentSettingId::CONTINUOUS_ENDNOTES, false);
+        }
     }
 
     if (m_xWwFib->m_lcbPlcfhdd)
@@ -5332,7 +5397,7 @@ ErrCode SwWW8ImplReader::CoreLoad(WW8Glossary const *pGloss)
     m_xWDop.reset();
     m_xFonts.reset();
     m_xAtnNames.reset();
-    m_xSprmParser.reset();
+    m_oSprmParser.reset();
     m_xProgress.reset();
 
     m_pDataStream = nullptr;
@@ -5474,7 +5539,7 @@ ErrCode SwWW8ImplReader::SetSubStreams(tools::SvRef<SotStorageStream> &rTableStr
             }
 
             rTableStream = m_pStg->OpenSotStream(
-                m_xWwFib->m_fWhichTableStm ? OUString(SL::a1Table) : OUString(SL::a0Table),
+                m_xWwFib->m_fWhichTableStm ? SL::a1Table : SL::a0Table,
                 StreamMode::STD_READ);
 
             m_pTableStream = rTableStream.get();
@@ -5548,10 +5613,7 @@ namespace
     {
         OUString aPassw;
 
-        const SfxItemSet* pSet = rMedium.GetItemSet();
-        const SfxStringItem *pPasswordItem;
-
-        if(pSet && (pPasswordItem = pSet->GetItemIfSet(SID_PASSWORD)))
+        if (const SfxStringItem* pPasswordItem = rMedium.GetItemSet().GetItemIfSet(SID_PASSWORD))
             aPassw = pPasswordItem->GetValue();
         else
         {
@@ -5582,7 +5644,7 @@ namespace
     uno::Sequence< beans::NamedValue > InitXorWord95Codec( ::msfilter::MSCodec_XorWord95& rCodec, SfxMedium& rMedium, WW8Fib const * pWwFib )
     {
         uno::Sequence< beans::NamedValue > aEncryptionData;
-        const SfxUnoAnyItem* pEncryptionData = SfxItemSet::GetItem<SfxUnoAnyItem>(rMedium.GetItemSet(), SID_ENCRYPTIONDATA, false);
+        const SfxUnoAnyItem* pEncryptionData = rMedium.GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
         if ( pEncryptionData && ( pEncryptionData->GetValue() >>= aEncryptionData ) && !rCodec.InitCodec( aEncryptionData ) )
             aEncryptionData.realloc( 0 );
 
@@ -5612,8 +5674,10 @@ namespace
 
                 rtlRandomPool aRandomPool = rtl_random_createPool();
                 sal_uInt8 pDocId[ 16 ];
-                rtl_random_getBytes( aRandomPool, pDocId, 16 );
-
+                if (rtl_random_getBytes(aRandomPool, pDocId, 16) != rtl_Random_E_None)
+                {
+                    throw uno::RuntimeException("rtl_random_getBytes failed");
+                }
                 rtl_random_destroyPool( aRandomPool );
 
                 sal_uInt16 pStd97Pass[16] = {};
@@ -5635,7 +5699,7 @@ namespace
     uno::Sequence< beans::NamedValue > Init97Codec(msfilter::MSCodec97& rCodec, sal_uInt8 const pDocId[16], SfxMedium& rMedium)
     {
         uno::Sequence< beans::NamedValue > aEncryptionData;
-        const SfxUnoAnyItem* pEncryptionData = SfxItemSet::GetItem<SfxUnoAnyItem>(rMedium.GetItemSet(), SID_ENCRYPTIONDATA, false);
+        const SfxUnoAnyItem* pEncryptionData = rMedium.GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
         if ( pEncryptionData && ( pEncryptionData->GetValue() >>= aEncryptionData ) && !rCodec.InitCodec( aEncryptionData ) )
             aEncryptionData.realloc( 0 );
 
@@ -5817,8 +5881,8 @@ ErrCode SwWW8ImplReader::LoadThroughDecryption(WW8Glossary *pGloss)
                             m_pDataStream = pDecryptData;
                         }
 
-                        pMedium->GetItemSet()->ClearItem( SID_PASSWORD );
-                        pMedium->GetItemSet()->Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
+                        pMedium->GetItemSet().ClearItem( SID_PASSWORD );
+                        pMedium->GetItemSet().Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
                     }
                 }
                 break;
@@ -5881,8 +5945,8 @@ ErrCode SwWW8ImplReader::LoadThroughDecryption(WW8Glossary *pGloss)
                             m_pDataStream = pDecryptData;
                         }
 
-                        pMedium->GetItemSet()->ClearItem( SID_PASSWORD );
-                        pMedium->GetItemSet()->Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
+                        pMedium->GetItemSet().ClearItem( SID_PASSWORD );
+                        pMedium->GetItemSet().Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
                     }
                 }
                 break;
@@ -6428,7 +6492,7 @@ ErrCode WW8Reader::DecryptDRMPackage()
 
         // Set the media descriptor data
         uno::Sequence<beans::NamedValue> aEncryptionData = xPackageEncryption->createEncryptionData("");
-        m_pMedium->GetItemSet()->Put(SfxUnoAnyItem(SID_ENCRYPTIONDATA, uno::Any(aEncryptionData)));
+        m_pMedium->GetItemSet().Put(SfxUnoAnyItem(SID_ENCRYPTIONDATA, uno::Any(aEncryptionData)));
     }
     catch (const std::exception&)
     {
@@ -6438,7 +6502,7 @@ ErrCode WW8Reader::DecryptDRMPackage()
     return ERRCODE_NONE;
 }
 
-ErrCode WW8Reader::Read(SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, const OUString & /* FileName */)
+ErrCodeMsg WW8Reader::Read(SwDoc &rDoc, const OUString& rBaseURL, SwPaM &rPaM, const OUString & /* FileName */)
 {
     sal_uInt16 nOldBuffSize = 32768;
     bool bNew = !m_bInsertMode; // New Doc (no inserting)

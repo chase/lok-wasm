@@ -154,7 +154,7 @@ void ScClient::ObjectAreaChanged()
     // #i118524# if sheared/rotated, center to non-rotated LogicRect
     pDrawObj->setSuppressSetVisAreaSize(true);
 
-    if(pDrawObj->GetGeoStat().nRotationAngle || pDrawObj->GetGeoStat().nShearAngle)
+    if(pDrawObj->GetGeoStat().m_nRotationAngle || pDrawObj->GetGeoStat().m_nShearAngle)
     {
         pDrawObj->SetLogicRect( aNewRectangle );
 
@@ -184,6 +184,8 @@ void ScClient::ViewChanged()
     }
 
     uno::Reference < embed::XEmbeddedObject > xObj = GetObject();
+    if (!xObj.is())
+        return;
 
     // TODO/LEAN: working with Visual Area can switch object to running state
     awt::Size aSz;

@@ -27,6 +27,7 @@
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <unotools/accessiblerelationsethelper.hxx>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <comphelper/accessibletexthelper.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/window.hxx>
@@ -247,7 +248,7 @@ awt::Rectangle OAccessibleMenuItemComponent::implGetBounds()
         vcl::Window* pWindow = m_pParent->GetWindow();
         if ( pWindow )
         {
-            tools::Rectangle aRect = pWindow->GetWindowExtentsRelative( nullptr );
+            AbsoluteScreenPixelRectangle aRect = pWindow->GetWindowExtentsAbsolute();
             awt::Point aWindowScreenLoc = AWTPoint( aRect.TopLeft() );
 
             // get position of accessible parent in screen coordinates

@@ -91,11 +91,10 @@ bool QtGraphics_Controls::isNativeControlSupported(ControlType type, ControlPart
         case ControlType::ListNode:
             return (part == ControlPart::Entire);
 
+        case ControlType::Pushbutton:
         case ControlType::Radiobutton:
         case ControlType::Checkbox:
             return (part == ControlPart::Entire) || (part == ControlPart::Focus);
-        case ControlType::Pushbutton:
-            return (part == ControlPart::Entire);
 
         case ControlType::ListHeader:
             return (part == ControlPart::Button);
@@ -310,6 +309,11 @@ bool QtGraphics_Controls::drawNativeControl(ControlType type, ControlPart part,
     if (type == ControlType::Pushbutton)
     {
         const PushButtonValue& rPBValue = static_cast<const PushButtonValue&>(value);
+        if (part == ControlPart::Focus)
+            // Nothing to do. Drawing focus separately is not needed because that's
+            // already handled by the ControlState::FOCUSED state being set when
+            // drawing the entire control
+            return true;
         assert(part == ControlPart::Entire);
         QStyleOptionButton option;
         if (nControlState & ControlState::DEFAULT)
@@ -740,6 +744,8 @@ bool QtGraphics_Controls::getNativeControlRegion(ControlType type, ControlPart p
                     retVal = true;
                 }
             }
+            else if (part == ControlPart::Focus)
+                retVal = true;
             break;
         case ControlType::Editbox:
         case ControlType::MultilineEditbox:
@@ -763,7 +769,7 @@ bool QtGraphics_Controls::getNativeControlRegion(ControlType type, ControlPart p
             int nBottom = qMax(nLine, upscale(fo.rect.bottom() - aSubRect.bottom(), Round::Ceil));
             boundingRect.adjust(nLeft, nTop, nRight, nBottom);
 
-            // tdf#150451: ensure a minimium size that fits text content + frame at top and bottom.
+            // tdf#150451: ensure a minimum size that fits text content + frame at top and bottom.
             // Themes may use the widget type for determining the actual frame width to use,
             // so pass a dummy QLineEdit
             //

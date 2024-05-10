@@ -52,6 +52,9 @@ endif
 # MACRO: Export functions using embind, not library flags
 
 ifeq ($(OS),EMSCRIPTEN)
+$(call gb_LinkTarget_get_target,$(call gb_Executable_get_linktarget,soffice_bin)) : $(call gb_StaticLibrary_get_linktarget_target,unoembind)
+$(call gb_LinkTarget_get_headers_target,$(call gb_Executable_get_linktarget,soffice_bin)) : $(call gb_StaticLibrary_get_headers_target,unoembind)
+$(call gb_LinkTarget__static_lib_dummy_depend,unoembind)
 
 # Allows using <lib/init.hxx>
 $(eval $(call gb_Executable_set_include,soffice_bin,\
@@ -71,13 +74,12 @@ $(eval $(call gb_Executable_add_exception_objects,soffice_bin,\
     desktop/source/app/main_wasm \
 ))
 
-gb_SOFFICE_BIN_EXPORTED_RUNTIME_METHODS := -s EXPORTED_RUNTIME_METHODS=[]
-
 # See: https://github.com/emscripten-core/emscripten/blob/main/src/settings.js
 $(eval $(call gb_Executable_add_ldflags,soffice_bin,\
     --pre-js $(SRCDIR)/desktop/wasm/pre-js.js \
     --profiling \
     -lworkerfs.js -s MODULARIZE=1 -s EXPORT_NAME=LOK -s EXPORT_ES6=1 -s ENVIRONMENT=worker --no-entry \
+	-Wl$(COMMA)--whole-archive $(call gb_StaticLibrary_get_target,unoembind) -Wl$(COMMA)--no-whole-archive \
 ))
 
 endif

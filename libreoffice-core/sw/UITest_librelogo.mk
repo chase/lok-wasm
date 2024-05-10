@@ -14,3 +14,5 @@ $(eval $(call gb_UITest_add_modules,librelogo,$(SRCDIR)/sw/qa/uitest,\
 $(eval $(call gb_UITest_set_defs,librelogo, \
     TDOC="$(SRCDIR)/sw/qa/uitest/data" \
 ))
+
+# vim: set noet sw=4 ts=4:

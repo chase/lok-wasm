@@ -23,6 +23,7 @@
 #include <txtfld.hxx>
 #include <doc.hxx>
 #include <docsh.hxx>
+#include <wrtsh.hxx>
 #include <fmtfld.hxx>
 #include <frmtool.hxx>
 #include <IDocumentUndoRedo.hxx>
@@ -41,6 +42,7 @@
 #include <osl/diagnose.h>
 #include <editeng/prntitem.hxx>
 #include <comphelper/lok.hxx>
+#include <svl/whichranges.hxx>
 
 using namespace com::sun::star;
 
@@ -443,7 +445,7 @@ namespace
             {
                 for( sal_uInt16 nItem = 0; nItem < aTmp.TotalCount(); ++nItem)
                 {
-                    sal_uInt16 nWhich = aTmp.GetWhichByPos(nItem);
+                    sal_uInt16 nWhich = aTmp.GetWhichByOffset(nItem);
                     if( SfxItemState::SET == aTmp.GetItemState( nWhich, false ) &&
                         SfxItemState::SET != aTmp2.GetItemState( nWhich, false ) )
                             aTmp2.Put( aTmp.GetPool()->GetDefaultItem(nWhich), nWhich );
@@ -464,6 +466,32 @@ namespace
         const SwTableBox* pBox = pPos->GetNode().GetTableBox();
         if ( !pBox )
             return;
+
+        // tracked column deletion
+
+        const SvxPrintItem *pHasBoxTextChangesOnlyProp =
+                pBox->GetFrameFormat()->GetAttrSet().GetItem<SvxPrintItem>(RES_PRINT);
+        // empty table cell with property "HasTextChangesOnly" = false
+        if ( pHasBoxTextChangesOnlyProp && !pHasBoxTextChangesOnlyProp->GetValue() )
+        {
+            SwCursor aCursor( *pPos, nullptr );
+            if ( pBox->IsEmpty() )
+            {
+                // tdf#155747 remove table cursor
+                pPos->GetDoc().GetDocShell()->GetWrtShell()->EnterStdMode();
+                // TODO check the other cells of the column
+                // before removing the column
+                pPos->GetDoc().DeleteCol( aCursor );
+                return;
+            }
+            else
+            {
+                SvxPrintItem aHasTextChangesOnly(RES_PRINT, false);
+                pPos->GetDoc().SetBoxAttr( aCursor, aHasTextChangesOnly );
+            }
+        }
+
+        // tracked row deletion
 
         const SwTableLine* pLine = pBox->GetUpper();
         const SvxPrintItem *pHasTextChangesOnlyProp =
@@ -492,6 +520,20 @@ namespace
         const SwTableBox* pBox = pPos->GetNode().GetTableBox();
         if ( !pBox )
             return;
+
+        // tracked column deletion
+
+        const SvxPrintItem *pHasBoxTextChangesOnlyProp =
+                pBox->GetFrameFormat()->GetAttrSet().GetItem<SvxPrintItem>(RES_PRINT);
+        // table cell property "HasTextChangesOnly" is set and its value is false
+        if ( pHasBoxTextChangesOnlyProp && !pHasBoxTextChangesOnlyProp->GetValue() )
+        {
+            SvxPrintItem aUnsetTracking(RES_PRINT, true);
+            SwCursor aCursor( *pPos, nullptr );
+            pPos->GetDoc().SetBoxAttr( aCursor, aUnsetTracking );
+        }
+
+        // tracked row deletion
 
         const SwTableLine* pLine = pBox->GetUpper();
         const SvxPrintItem *pHasTextChangesOnlyProp =
@@ -912,7 +954,26 @@ namespace
                 if ( pRedl->GetType() == RedlineType::Format )
                 {
                     SwPaM aPam( *(pRedl->Start()), *(pRedl->End()) );
-                    rDoc.ResetAttrs(aPam);
+                    // MACRO : MACRO-1781 {
+                    // Instead of simply resetting all attributes, we only
+                    // reset the attributes that were changed by the redline.
+                    const SwRedlineExtraData_FormatColl* pExtraData =
+                        dynamic_cast<const SwRedlineExtraData_FormatColl*>(pRedl->GetExtraData());
+                    if (pExtraData)
+                    {
+                        o3tl::sorted_vector<sal_uInt16> aResetAttrsArray;
+
+                        WhichRangesContainer rangesContainer = pExtraData->GetItemSet()->GetRanges();
+
+                        for (const auto& [nBegin, nEnd] : rangesContainer)
+                        {
+                            for (sal_uInt16 i = nBegin; i <= nEnd; ++i)
+                                aResetAttrsArray.insert( i );
+                        }
+
+                        rDoc.ResetAttrs(aPam, false, aResetAttrsArray);
+                    }
+                    // MACRO : MACRO-1781 }
                 }
                 else if ( pRedl->GetType() == RedlineType::ParagraphFormat )
                 {
@@ -1230,6 +1291,9 @@ SwExtraRedlineTable& DocumentRedlineManager::GetExtraRedlineTable()
 
 bool DocumentRedlineManager::IsInRedlines(const SwNode & rNode) const
 {
+    if (&rNode.GetNodes() != &m_rDoc.GetNodes())
+        return false;
+
     SwPosition aPos(rNode);
     SwNode & rEndOfRedlines = m_rDoc.GetNodes().GetEndOfRedlines();
     SwPaM aPam(SwPosition(*rEndOfRedlines.StartOfSectionNode()),
@@ -1294,6 +1358,14 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
         CHECK_REDLINE( *this )
         return AppendResult::IGNORED;
     }
+
+    // MACRO: MACRO-1266 - Do not create a comment added/deleted redline {
+    if(pNewRedl->IsAnnotation()) {
+        pNewRedl = nullptr;
+        CHECK_REDLINE( *this )
+        return AppendResult::IGNORED;
+    }
+    // MACRO: }
 
     // Collect MoveID's of the redlines we delete.
     // If there is only 1, then we should use its ID. (continuing the move)
@@ -1416,7 +1488,8 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                         }
 
                         bMerged = true;
-                        bDelete = true;
+                        // MACRO:
+                        bDelete = bMaybeNotify = true;
                     }
                     else if( (( SwComparePosition::Before == eCmpPos &&
                                 IsPrevPos( *pEnd, *pRStt ) ) ||
@@ -1432,7 +1505,8 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                         maRedlineTable.Insert( pRedl );
 
                         bMerged = true;
-                        bDelete = true;
+                        // MACRO:
+                        bDelete = bMaybeNotify =true;
                     }
                     else if ( SwComparePosition::Outside == eCmpPos )
                     {
@@ -1516,6 +1590,9 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                         delete pNewRedl;
                         pNewRedl = nullptr;
                         bCompress = true;
+
+                        // MACRO:
+                        MaybeNotifyRedlineModification(*pRedl, m_rDoc);
                     }
                 }
                 else if ( SwComparePosition::OverlapBehind == eCmpPos )
@@ -1578,6 +1655,9 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                         delete pNewRedl;
                         pNewRedl = nullptr;
                         bCompress = true;
+
+                        // MACRO:
+                        MaybeNotifyRedlineModification(*pRedl, m_rDoc);
                     }
                 }
                 else if ( SwComparePosition::Equal == eCmpPos )
@@ -1820,6 +1900,9 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                         delete pNewRedl;
                         pNewRedl = nullptr;
 
+                        // MACRO:
+                        MaybeNotifyRedlineModification(*pRedl, m_rDoc);
+
                         // No need to call MaybeNotifyRedlineModification, because a notification
                         // was already sent in DocumentRedlineManager::DeleteRedline
                         break;
@@ -1920,13 +2003,23 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
 
                     case SwComparePosition::Inside:
                         {
+                            // Redlines have the same start position
                             if( *pRStt == *pStt )
                             {
                                 // #i97421#
                                 // redline w/out extent loops
+                                // new redline has some content
                                 if (*pStt != *pEnd)
                                 {
-                                    pNewRedl->PushData( *pRedl, false );
+
+                                    // MACRO-1723: Fix Author when adding deletion within
+                                    // an existing insertion: {
+                                    // Copy the redline data from the existing redline
+                                    // but keep the author of the new redline
+                                    SwRedlineData pTmp = pRedl->GetRedlineData();
+                                    pTmp.SetAuthor(pNewRedl->GetAuthor());
+                                    pNewRedl->PushData( pTmp, false );
+                                    // MACRO: }
                                     pRedl->SetStart( *pEnd, pRStt );
                                     // re-insert
                                     maRedlineTable.Remove( n );
@@ -1936,7 +2029,14 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                             }
                             else
                             {
-                                pNewRedl->PushData( *pRedl, false );
+                                // MACRO-1723: Fix Author when adding deletion within
+                                // an existing insertion: {
+                                // Copy the redline data from the existing redline
+                                // but keep the author of the new redline
+                                SwRedlineData pTmp = pRedl->GetRedlineData();
+                                pTmp.SetAuthor(pNewRedl->GetAuthor());
+                                pNewRedl->PushData( pTmp, false );
+                                // MACRO : }
                                 if( *pREnd != *pEnd )
                                 {
                                     pNew = new SwRangeRedline( *pRedl );
@@ -2341,8 +2441,7 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                         // tracked deletion of the text containing such a table leaves an
                         // empty table at the place of the table (a problem inherited from OOo).
                         pTextNd = nullptr;
-                        while( --aIdx && pDelNd->GetIndex() < aIdx.GetIndex() &&
-                                !aIdx.GetNode().IsContentNode() )
+                        while( --aIdx > *pDelNd && !aIdx.GetNode().IsContentNode() )
                         {
                             // possible table end
                             if( aIdx.GetNode().IsEndNode() && aIdx.GetNode().FindTableNode() )
@@ -2383,9 +2482,9 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                     {
                         if ( aSttIdx.GetNode().IsTableNode() )
                         {
-                            SvxPrintItem aNotTracked(RES_PRINT, false);
+                            SvxPrintItem aHasTextChangesOnly(RES_PRINT, false);
                             SwCursor aCursor( SwPosition(aSttIdx), nullptr );
-                            m_rDoc.SetRowNotTracked( aCursor, aNotTracked, /*bAll=*/true );
+                            m_rDoc.SetRowNotTracked( aCursor, aHasTextChangesOnly, /*bAll=*/true );
                         }
                         ++aSttIdx;
                     }

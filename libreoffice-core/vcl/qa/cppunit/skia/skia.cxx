@@ -18,7 +18,7 @@
 
 #include <skia/salbmp.hxx>
 #include <skia/utils.hxx>
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 using namespace SkiaHelper;
 
@@ -116,7 +116,7 @@ void SkiaTest::testDrawShaders()
 {
     if (!SkiaHelper::isVCLSkiaEnabled())
         return;
-    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     device->SetOutputSizePixel(Size(20, 20));
     device->SetBackground(Wallpaper(COL_WHITE));
     device->Erase();
@@ -126,7 +126,8 @@ void SkiaTest::testDrawShaders()
     CPPUNIT_ASSERT(skiaBitmap->PreferSkShader());
     AlphaMask alpha(Size(10, 10));
     alpha.Erase(64);
-    SkiaSalBitmap* skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    SkiaSalBitmap* skiaAlpha
+        = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaAlpha->PreferSkShader());
 
     device->DrawBitmap(Point(5, 5), bitmap);
@@ -159,7 +160,8 @@ void SkiaTest::testDrawShaders()
     device->Erase();
 
     // Test with scaling. Use everything 10x larger to reduce the impact of smoothscaling.
-    ScopedVclPtr<VirtualDevice> deviceLarge = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    ScopedVclPtr<VirtualDevice> deviceLarge
+        = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     deviceLarge->SetOutputSizePixel(Size(200, 200));
     deviceLarge->SetBackground(Wallpaper(COL_WHITE));
     deviceLarge->Erase();
@@ -231,57 +233,59 @@ void SkiaTest::testAlphaBlendWith()
     if (!SkiaHelper::isVCLSkiaEnabled())
         return;
     AlphaMask alpha(Size(10, 10));
-    Bitmap bitmap(Size(10, 10), vcl::PixelFormat::N24_BPP);
+    AlphaMask bitmap(Size(10, 10));
     // Test with erase colors set.
     alpha.Erase(64);
-    SkiaSalBitmap* skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    SkiaSalBitmap* skiaAlpha
+        = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaAlpha->unittestHasEraseColor());
-    bitmap.Erase(Color(64, 64, 64));
-    SkiaSalBitmap* skiaBitmap = dynamic_cast<SkiaSalBitmap*>(bitmap.ImplGetSalBitmap().get());
+    bitmap.Erase(64);
+    SkiaSalBitmap* skiaBitmap
+        = dynamic_cast<SkiaSalBitmap*>(bitmap.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaBitmap->unittestHasEraseColor());
     alpha.BlendWith(bitmap);
-    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaAlpha->unittestHasEraseColor());
     CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N8_BPP, alpha.getPixelFormat());
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(112),
-                         AlphaMask::ScopedReadAccess(alpha)->GetPixelIndex(0, 0));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(208),
+                         BitmapScopedReadAccess(alpha)->GetPixelIndex(0, 0));
 
     // Test with images set.
     alpha.Erase(64);
-    AlphaMask::ScopedReadAccess(alpha)->GetColor(0, 0); // Reading a pixel will create pixel data.
-    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    BitmapScopedReadAccess(alpha)->GetColor(0, 0); // Reading a pixel will create pixel data.
+    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     skiaAlpha->GetSkImage();
     CPPUNIT_ASSERT(!skiaAlpha->unittestHasEraseColor());
     CPPUNIT_ASSERT(skiaAlpha->unittestHasImage());
-    bitmap.Erase(Color(64, 64, 64));
-    Bitmap::ScopedReadAccess(bitmap)->GetColor(0, 0); // Reading a pixel will create pixel data.
-    skiaBitmap = dynamic_cast<SkiaSalBitmap*>(bitmap.ImplGetSalBitmap().get());
+    bitmap.Erase(64);
+    BitmapScopedReadAccess(bitmap)->GetColor(0, 0); // Reading a pixel will create pixel data.
+    skiaBitmap = dynamic_cast<SkiaSalBitmap*>(bitmap.GetBitmap().ImplGetSalBitmap().get());
     skiaBitmap->GetSkImage();
     CPPUNIT_ASSERT(!skiaBitmap->unittestHasEraseColor());
     CPPUNIT_ASSERT(skiaBitmap->unittestHasImage());
     alpha.BlendWith(bitmap);
-    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaAlpha->unittestHasImage());
     CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N8_BPP, alpha.getPixelFormat());
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(112),
-                         AlphaMask::ScopedReadAccess(alpha)->GetPixelIndex(0, 0));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(207),
+                         BitmapScopedReadAccess(alpha)->GetPixelIndex(0, 0));
 
     // Test with erase color for alpha and image for other bitmap.
     alpha.Erase(64);
-    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaAlpha->unittestHasEraseColor());
-    bitmap.Erase(Color(64, 64, 64));
-    Bitmap::ScopedReadAccess(bitmap)->GetColor(0, 0); // Reading a pixel will create pixel data.
-    skiaBitmap = dynamic_cast<SkiaSalBitmap*>(bitmap.ImplGetSalBitmap().get());
+    bitmap.Erase(64);
+    BitmapScopedReadAccess(bitmap)->GetColor(0, 0); // Reading a pixel will create pixel data.
+    skiaBitmap = dynamic_cast<SkiaSalBitmap*>(bitmap.GetBitmap().ImplGetSalBitmap().get());
     skiaBitmap->GetSkImage();
     CPPUNIT_ASSERT(!skiaBitmap->unittestHasEraseColor());
     CPPUNIT_ASSERT(skiaBitmap->unittestHasImage());
     alpha.BlendWith(bitmap);
-    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.ImplGetSalBitmap().get());
+    skiaAlpha = dynamic_cast<SkiaSalBitmap*>(alpha.GetBitmap().ImplGetSalBitmap().get());
     CPPUNIT_ASSERT(skiaAlpha->unittestHasImage());
     CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N8_BPP, alpha.getPixelFormat());
-    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(112),
-                         AlphaMask::ScopedReadAccess(alpha)->GetPixelIndex(0, 0));
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_uInt8>(207),
+                         BitmapScopedReadAccess(alpha)->GetPixelIndex(0, 0));
 }
 
 void SkiaTest::testBitmapCopyOnWrite()
@@ -439,7 +443,7 @@ void SkiaTest::testDrawDelayedScaleImage()
         return;
     if (SkiaHelper::renderMethodToUse() != SkiaHelper::RenderRaster)
         return; // This test tests caching that's done only in raster mode.
-    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     device->SetOutputSizePixel(Size(10, 10));
     device->SetBackground(Wallpaper(COL_WHITE));
     device->Erase();
@@ -513,7 +517,7 @@ void SkiaTest::testTdf137329()
         return;
     // Draw a filled polygon in the entire device, with AA enabled.
     // All pixels in the device should be black, even those at edges (i.e. not affected by AA).
-    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     device->SetOutputSizePixel(Size(10, 10));
     device->SetBackground(Wallpaper(COL_WHITE));
     device->SetAntialiasing(AntialiasingFlags::Enable);
@@ -534,7 +538,7 @@ void SkiaTest::testTdf140848()
 {
     if (!SkiaHelper::isVCLSkiaEnabled())
         return;
-    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     device->SetOutputSizePixel(Size(1300, 400));
     device->SetBackground(Wallpaper(COL_BLACK));
     device->SetAntialiasing(AntialiasingFlags::Enable);
@@ -562,7 +566,7 @@ void SkiaTest::testTdf132367()
 {
     if (!SkiaHelper::isVCLSkiaEnabled())
         return;
-    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     device->SetOutputSizePixel(Size(2, 2));
     device->SetBackground(Wallpaper(COL_BLACK));
     device->Erase();

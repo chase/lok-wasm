@@ -40,6 +40,7 @@
 #include <svx/scene3d.hxx>
 #include <svx/svdovirt.hxx>
 #include <sdr/overlay/overlayrollingrectangle.hxx>
+#include <svx/sdr/contact/displayinfo.hxx>
 #include <svx/sdr/contact/objectcontact.hxx>
 #include <svx/sdr/overlay/overlaymanager.hxx>
 #include <svx/sdr/overlay/overlayselection.hxx>
@@ -59,6 +60,8 @@
 #include <sfx2/lokcomponenthelpers.hxx>
 #include <sfx2/viewsh.hxx>
 #include <svtools/optionsdrawinglayer.hxx>
+
+#include <drawinglayer/processor2d/textextractor2d.hxx>
 
 #include <array>
 
@@ -571,12 +574,9 @@ bool SdrMarkView::MarkableObjectsExceed( int n ) const
         return false;
 
     SdrObjList* pOL=pPV->GetObjList();
-    const size_t nObjCount = pOL->GetObjCount();
-    for (size_t nObjNum=0; nObjNum<nObjCount; ++nObjNum) {
-        SdrObject* pObj=pOL->GetObj(nObjNum);
-        if (IsObjMarkable(pObj,pPV) && --n<0)
+    for (const rtl::Reference<SdrObject>& pObj : *pOL)
+        if (IsObjMarkable(pObj.get(),pPV) && --n<0)
             return true;
-    }
 
     return false;
 }
@@ -711,11 +711,9 @@ bool SdrMarkView::dumpGluePointsToJSON(boost::property_tree::ptree& rTree)
         const SdrObjList* pOL = mpMarkedPV->GetObjList();
         if (!pOL)
             return false;
-        const size_t nObjCount = pOL->GetObjCount();
         boost::property_tree::ptree elements;
-        for (size_t nObjNum = 0; nObjNum < nObjCount; ++nObjNum)
+        for (const rtl::Reference<SdrObject>& pObj : *pOL)
         {
-            SdrObject* pObj = pOL->GetObj(nObjNum);
             if (!pObj)
                 continue;
             if (pObj == GetMarkedObjectByIndex(0))
@@ -762,6 +760,66 @@ bool SdrMarkView::dumpGluePointsToJSON(boost::property_tree::ptree& rTree)
         rTree.add_child("shapes", elements);
     }
     return result;
+}
+
+namespace
+{
+    class TextBoundsExtractor final : public drawinglayer::processor2d::TextExtractor2D
+    {
+    private:
+        basegfx::B2DRange maTextRange;
+        void processTextPrimitive2D(const drawinglayer::primitive2d::BasePrimitive2D& rCandidate) override
+        {
+            maTextRange.expand(rCandidate.getB2DRange(getViewInformation2D()));
+        }
+    public:
+        explicit TextBoundsExtractor(const drawinglayer::geometry::ViewInformation2D& rViewInformation)
+            : drawinglayer::processor2d::TextExtractor2D(rViewInformation, true)
+        {
+        }
+
+        basegfx::B2DRange getTextBounds(const sdr::contact::ViewObjectContact &rVOC, sdr::contact::DisplayInfo &raDisplayInfo)
+        {
+            this->process(rVOC.getPrimitive2DSequence(raDisplayInfo));
+            return maTextRange;
+        }
+    };
+}
+
+OString SdrMarkView::CreateInnerTextRectString() const
+{
+    if (!mpMarkedObj)
+        return OString();
+
+    SdrPageView* pPageView = GetSdrPageView();
+    const sdr::contact::ViewObjectContact& rVOC = mpMarkedObj->GetViewContact().GetViewObjectContact(
+        pPageView->GetPageWindow(0)->GetObjectContact());
+
+    sdr::contact::DisplayInfo aDisplayInfo;
+    TextBoundsExtractor aTextBoundsExtractor(rVOC.GetObjectContact().getViewInformation2D());
+    basegfx::B2DRange aRange = aTextBoundsExtractor.getTextBounds(rVOC, aDisplayInfo);
+    if (!aRange.isEmpty()) {
+        tools::Rectangle rect(aRange.getMinX(), aRange.getMinY(), aRange.getMaxX(), aRange.getMaxY());
+        tools::Rectangle aRangeTWIP = o3tl::convert(rect, o3tl::Length::mm100, o3tl::Length::twip);
+        OString innerTextInfo = "\"innerTextRect\":[" +
+            OString::number(aRangeTWIP.getX()) + "," +
+            OString::number(aRangeTWIP.getY()) + "," +
+            OString::number(aRangeTWIP.GetWidth()) + "," +
+            OString::number(aRangeTWIP.GetHeight()) + "]";
+        return innerTextInfo;
+    }
+
+    return OString();
+}
+
+void SdrMarkView::SetInnerTextAreaForLOKit() const
+{
+    if (!comphelper::LibreOfficeKit::isActive())
+        return;
+    SfxViewShell* pViewShell = GetSfxViewShell();
+    OString sRectString = CreateInnerTextRectString();
+    if (pViewShell && !sRectString.isEmpty())
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_SHAPE_INNER_TEXT, sRectString);
 }
 
 void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const SfxViewShell* pOtherShell)
@@ -819,7 +877,7 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
         }
 
         // hide the text selection too
-        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, "");
+        pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, ""_ostr);
     }
 
     {
@@ -842,6 +900,8 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
             bConnectorSelection = dumpGluePointsToJSON(aGluePointsTree);
         }
 
+        SdrPageView* pPageView = GetSdrPageView();
+
         if (GetMarkedObjectCount())
         {
             SdrMark* pM = GetSdrMarkByIndex(0);
@@ -853,10 +913,17 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
 
             OString handleArrayStr;
 
-            aExtraInfo.append("{\"id\":\"");
-            aExtraInfo.append(reinterpret_cast<sal_IntPtr>(pO));
-            aExtraInfo.append("\",\"type\":");
-            aExtraInfo.append(static_cast<sal_Int32>(pO->GetObjIdentifier()));
+            aExtraInfo.append("{\"id\":\""
+                + OString::number(reinterpret_cast<sal_IntPtr>(pO))
+                + "\",\"type\":"
+                + OString::number(static_cast<sal_Int32>(pO->GetObjIdentifier())));
+
+            if (mpMarkedObj && !pOtherShell)
+            {
+                OString innerTextInfo = CreateInnerTextRectString();
+                if (!innerTextInfo.isEmpty())
+                    aExtraInfo.append("," + innerTextInfo);
+            }
 
             // In core, the gridOffset is calculated based on the LogicRect's TopLeft coordinate
             // In online, we have the SnapRect and we calculate it based on its TopLeft coordinate
@@ -867,15 +934,15 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
             // whether the shape is rotated or not, we will always have the correct gridOffset
             // Note that the gridOffset is calculated from the first selected obj
             basegfx::B2DVector aGridOffset(0.0, 0.0);
-            if(getPossibleGridOffsetForSdrObject(aGridOffset, GetMarkedObjectByIndex(0), GetSdrPageView()))
+            if(getPossibleGridOffsetForSdrObject(aGridOffset, GetMarkedObjectByIndex(0), pPageView))
             {
                 Point p(aGridOffset.getX(), aGridOffset.getY());
                 if (convertMapMode)
                     p = o3tl::convert(p, o3tl::Length::mm100, o3tl::Length::twip);
-                aExtraInfo.append(",\"gridOffsetX\":");
-                aExtraInfo.append(nSignX * p.getX());
-                aExtraInfo.append(",\"gridOffsetY\":");
-                aExtraInfo.append(p.getY());
+                aExtraInfo.append(",\"gridOffsetX\":"
+                    + OString::number(nSignX * p.getX())
+                    + ",\"gridOffsetY\":"
+                    + OString::number(p.getY()));
             }
 
             if (bWriterGraphic)
@@ -894,7 +961,7 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                     if (aSel >>= aValue)
                     {
                         OString aObjectCID(aValue.getStr(), aValue.getLength(), osl_getThreadTextEncoding());
-                        const std::vector<OString> aProps{"Draggable", "Resizable", "Rotatable"};
+                        const std::vector<OString> aProps{"Draggable"_ostr, "Resizable"_ostr, "Rotatable"_ostr};
                         for (const auto& rProp: aProps)
                         {
                             sal_Int32 nPos = aObjectCID.indexOf(rProp);
@@ -902,10 +969,8 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                             nPos += rProp.getLength() + 1; // '='
                             if (aExtraInfo.getLength() > 2) // != "{ "
                                 aExtraInfo.append(", ");
-                            aExtraInfo.append("\"is");
-                            aExtraInfo.append(rProp);
-                            aExtraInfo.append("\": ");
-                            aExtraInfo.append(OString::boolean(aObjectCID[nPos] == '1'));
+                            aExtraInfo.append("\"is" + rProp + "\": "
+                                + OString::boolean(aObjectCID[nPos] == '1'));
                         }
 
                         std::u16string_view sDragMethod = lcl_getDragMethodServiceName(aValue);
@@ -917,10 +982,10 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                             std::u16string_view sDragParameters = lcl_getDragParameterString(aValue);
                             if (!sDragParameters.empty())
                             {
-                                aExtraInfo.append(", \"dragInfo\": { ");
-                                aExtraInfo.append("\"dragMethod\": \"");
-                                aExtraInfo.append(OUString(sDragMethod).toUtf8());
-                                aExtraInfo.append("\"");
+                                aExtraInfo.append(", \"dragInfo\": { "
+                                    "\"dragMethod\": \""
+                                    + OUString(sDragMethod).toUtf8()
+                                    + "\"");
 
                                 sal_Int32 nStartIndex = 0;
                                 std::array<int, 5> aDragParameters;
@@ -938,8 +1003,8 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                                 else if (aDragParameters[0] > 100)
                                     aDragParameters[0] = 100;
 
-                                aExtraInfo.append(", \"initialOffset\": ");
-                                aExtraInfo.append(static_cast<sal_Int32>(aDragParameters[0]));
+                                aExtraInfo.append(", \"initialOffset\": "
+                                    + OString::number(static_cast<sal_Int32>(aDragParameters[0])));
 
                                 // drag direction constraint
                                 Point aMinPos(aDragParameters[1], aDragParameters[2]);
@@ -947,9 +1012,9 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                                 Point aDragDirection = aMaxPos - aMinPos;
                                 aDragDirection = o3tl::convert(aDragDirection, o3tl::Length::mm100, o3tl::Length::twip);
 
-                                aExtraInfo.append(", \"dragDirection\": [");
-                                aExtraInfo.append(aDragDirection.toString());
-                                aExtraInfo.append("]");
+                                aExtraInfo.append(", \"dragDirection\": ["
+                                    + aDragDirection.toString()
+                                    + "]");
 
                                 // polygon approximating the pie segment or donut segment
                                 if (pO->GetObjIdentifier() == SdrObjKind::PathFill)
@@ -970,7 +1035,7 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
 
                                                 Point aOffsetPx = pWin->GetOffsetPixelFrom(*pViewShellWindow);
                                                 Point aLogicOffset = pWin->PixelToLogic(aOffsetPx);
-                                                OString sPolygonElem("<polygon points=\\\"");
+                                                OString sPolygonElem("<polygon points=\\\""_ostr);
                                                 for (sal_uInt32 nIndex = 0; nIndex < nPolySize; ++nIndex)
                                                 {
                                                     const basegfx::B2DPoint aB2Point = aPolygon.getB2DPoint(nIndex);
@@ -992,12 +1057,12 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                                                     aSelection.toString() +
                                                     R"elem(\" preserveAspectRatio=\"xMidYMid\" xmlns=\"http://www.w3.org/2000/svg\">)elem";
 
-                                                aExtraInfo.append(", \"svg\": \"");
-                                                aExtraInfo.append(sSVGElem);
-                                                aExtraInfo.append("\\n  ");
-                                                aExtraInfo.append(sPolygonElem);
-                                                aExtraInfo.append("\\n</svg>");
-                                                aExtraInfo.append("\""); // svg
+                                                aExtraInfo.append(", \"svg\": \""
+                                                    + sSVGElem
+                                                    + "\\n  "
+                                                    + sPolygonElem
+                                                    + "\\n</svg>"
+                                                    "\""); // svg
                                             }
                                         }
                                     }
@@ -1080,7 +1145,7 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
                 responseJSON.add_child("kinds", nodes);
                 std::stringstream aStream;
                 boost::property_tree::write_json(aStream, responseJSON, /*pretty=*/ false);
-                handleArrayStr = ", \"handles\":";
+                handleArrayStr = ", \"handles\":"_ostr;
                 handleArrayStr = handleArrayStr + aStream.str().c_str();
                 if (bConnectorSelection)
                 {
@@ -1108,33 +1173,29 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
 
             if (!aExtraInfo.isEmpty())
             {
-                sSelectionTextView = sSelectionText + ", " + aExtraInfo.toString() + "}";
+                sSelectionTextView = sSelectionText + ", " + aExtraInfo + "}";
 
                 if (bMediaObj && pOtherShell == nullptr)
                 {
-                    // Add the URL only if we hav a Media Object and
-                    // we are the the selecting view.
+                    // Add the URL only if we have a Media Object and
+                    // we are the selecting view.
                     SdrMediaObj* mediaObj = dynamic_cast<SdrMediaObj*>(mpMarkedObj);
                     if (mediaObj)
-                    {
-                        aExtraInfo.append(", \"url\": \"");
-                        aExtraInfo.append(mediaObj->getTempURL().toUtf8());
-                        aExtraInfo.append("\"");
-                    }
+                        aExtraInfo.append(", \"url\": \"" + mediaObj->getTempURL().toUtf8() + "\"");
                 }
 
-                aExtraInfo.append(handleArrayStr);
-                aExtraInfo.append("}");
-                sSelectionText += ", " + aExtraInfo.toString();
+                aExtraInfo.append(handleArrayStr
+                    + "}");
+                sSelectionText += ", " + aExtraInfo;
             }
         }
 
         if (sSelectionText.isEmpty())
         {
-            sSelectionText = "EMPTY";
-            sSelectionTextView = "EMPTY";
+            sSelectionText = "EMPTY"_ostr;
+            sSelectionTextView = "EMPTY"_ostr;
             if (!pOtherShell)
-                pViewShell->NotifyOtherViews(LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", OString());
+                pViewShell->NotifyOtherViews(LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection"_ostr, OString());
         }
 
         if (bTableSelection)
@@ -1148,11 +1209,11 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
 
             std::stringstream aStream;
             boost::property_tree::write_json(aStream, aTableJsonTree);
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TABLE_SELECTED, aStream.str().c_str());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TABLE_SELECTED, OString(aStream.str()));
         }
         else if (!getSdrModelFromSdrView().IsWriter())
         {
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TABLE_SELECTED, "{}");
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TABLE_SELECTED, "{}"_ostr);
         }
 
         if (pOtherShell)
@@ -1166,7 +1227,7 @@ void SdrMarkView::SetMarkHandlesForLOKit(tools::Rectangle const & rRect, const S
         {
             // We have a new selection, so both pViewShell and the
             // other views want to know about it.
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_GRAPHIC_SELECTION, sSelectionText.getStr());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_GRAPHIC_SELECTION, sSelectionText);
 
             SfxLokHelper::notifyOtherViews(pViewShell, LOK_CALLBACK_GRAPHIC_VIEW_SELECTION, "selection", sSelectionTextView);
         }
@@ -1562,7 +1623,7 @@ void SdrMarkView::AddDragModeHdl(SdrDragMode eMode)
             if(nMarkCount == 1)
             {
                 SdrObject* pObj = GetMarkedObjectByIndex(0);
-                SdrModel* pModel = GetModel();
+                SdrModel& rModel = GetModel();
                 const SfxItemSet& rSet = pObj->GetMergedItemSet();
 
                 if(SfxItemState::SET != rSet.GetItemState(XATTR_FILLFLOATTRANSPARENCE, false))
@@ -1577,14 +1638,14 @@ void SdrMarkView::AddDragModeHdl(SdrDragMode eMode)
                     aNewItem.SetGradientValue(aGrad);
 
                     // add undo to allow user to take back this step
-                    if( pModel->IsUndoEnabled() )
+                    if (rModel.IsUndoEnabled())
                     {
-                        pModel->BegUndo(SvxResId(SIP_XA_FILLTRANSPARENCE));
-                        pModel->AddUndo(pModel->GetSdrUndoFactory().CreateUndoAttrObject(*pObj));
-                        pModel->EndUndo();
+                        rModel.BegUndo(SvxResId(SIP_XA_FILLTRANSPARENCE));
+                        rModel.AddUndo(rModel.GetSdrUndoFactory().CreateUndoAttrObject(*pObj));
+                        rModel.EndUndo();
                     }
 
-                    SfxItemSet aNewSet(pModel->GetItemPool());
+                    SfxItemSet aNewSet(rModel.GetItemPool());
                     aNewSet.Put(aNewItem);
                     pObj->SetMergedItemSetAndBroadcast(aNewSet);
                 }
@@ -2134,19 +2195,17 @@ void SdrMarkView::MarkObj(const tools::Rectangle& rRect, bool bUnmark)
     {
         pObjList=pPV->GetObjList();
         tools::Rectangle aFrm1(aR);
-        const size_t nObjCount = pObjList->GetObjCount();
-        for (size_t nO=0; nO<nObjCount; ++nO) {
-            SdrObject* pObj=pObjList->GetObj(nO);
+        for (const rtl::Reference<SdrObject>& pObj : *pObjList) {
             tools::Rectangle aRect(pObj->GetCurrentBoundRect());
             if (aFrm1.Contains(aRect)) {
                 if (!bUnmark) {
-                    if (IsObjMarkable(pObj,pPV))
+                    if (IsObjMarkable(pObj.get(),pPV))
                     {
-                        GetMarkedObjectListWriteAccess().InsertEntry(SdrMark(pObj,pPV));
+                        GetMarkedObjectListWriteAccess().InsertEntry(SdrMark(pObj.get(),pPV));
                         bFnd=true;
                     }
                 } else {
-                    const size_t nPos=TryToFindMarkedObject(pObj);
+                    const size_t nPos=TryToFindMarkedObject(pObj.get());
                     if (nPos!=SAL_MAX_SIZE)
                     {
                         GetMarkedObjectListWriteAccess().DeleteMark(nPos);
@@ -2329,7 +2388,7 @@ SdrObject* SdrMarkView::CheckSingleSdrObjectHit(const Point& rPnt, sal_uInt16 nT
             basegfx::fround(aGridOffset.getY()));
     }
 
-    sal_uInt16 nTol2(nTol);
+    double nTol2(nTol);
 
     // double tolerance for OLE, text frames and objects in
     // active text edit
@@ -2367,7 +2426,7 @@ SdrObject* SdrMarkView::CheckSingleSdrObjectHit(const Point& rPnt, sal_uInt16 nT
             {
                 if(!pMVisLay || pMVisLay->IsSet(pObj->GetLayer()))
                 {
-                    pRet = SdrObjectPrimitiveHit(*pObj, rPnt, nTol2, *pPV, &pPV->GetVisibleLayers(), false);
+                    pRet = SdrObjectPrimitiveHit(*pObj, rPnt, {nTol2, nTol2}, *pPV, &pPV->GetVisibleLayers(), false);
                 }
             }
         }

@@ -154,7 +154,7 @@ namespace Translate
 #endif
         OString sPath(OUStringToOString(path, eEncoding));
 #endif
-        gen.add_messages_path(sPath.getStr());
+        gen.add_messages_path(std::string(sPath));
 #if defined UNX && !defined MACOSX && !defined IOS && !defined ANDROID && !defined EMSCRIPTEN
         // allow gettext to find these .mo files e.g. so gtk dialogs can use them
         bindtextdomain(aPrefixName.data(), sPath.getStr());
@@ -202,7 +202,7 @@ namespace Translate
 
 #endif
 
-        std::locale aRet(gen(sIdentifier.getStr()));
+        std::locale aRet(gen(std::string(sIdentifier)));
 
         aCache[sUnique] = aRet;
         return aRet;
@@ -210,17 +210,17 @@ namespace Translate
 
     OUString get(TranslateId sContextAndId, const std::locale &loc)
     {
-        assert(!strchr(sContextAndId.mpId, '\004') && "should be using nget, not get");
+        assert(!strchr(sContextAndId.getId(), '\004') && "should be using nget, not get");
 
         //if it's a key id locale, generate it here
         if (std::use_facet<boost::locale::info>(loc).language() == "qtz")
         {
-            OString sKeyId(genKeyId(OString::Concat(sContextAndId.mpContext) + "|" + std::string_view(sContextAndId.mpId)));
-            return OUString::fromUtf8(sKeyId) + u"\u2016" + createFromUtf8(sContextAndId.mpId, strlen(sContextAndId.mpId));
+            OString sKeyId(genKeyId(OString::Concat(sContextAndId.mpContext) + "|" + std::string_view(sContextAndId.getId())));
+            return OUString::fromUtf8(sKeyId) + u"\u2016" + createFromUtf8(sContextAndId.getId(), strlen(sContextAndId.getId()));
         }
 
         //otherwise translate it
-        const std::string ret = boost::locale::pgettext(sContextAndId.mpContext, sContextAndId.mpId, loc);
+        const std::string ret = boost::locale::pgettext(sContextAndId.mpContext, sContextAndId.getId(), loc);
         OUString result(ExpandVariables(createFromUtf8(ret.data(), ret.size())));
 
         if (comphelper::LibreOfficeKit::isActive())
@@ -290,7 +290,7 @@ bool TranslateId::operator==(const TranslateId& other) const
     {
         return mpId == other.mpId;
     }
-    return strcmp(mpId,other.mpId) == 0;
+    return strcmp(getId(),other.getId()) == 0;
 }
 
 bool TranslateNId::operator==(const TranslateNId& other) const

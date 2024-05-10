@@ -61,7 +61,7 @@ void SwTemplateControl::StateChangedAtStatusBarControl(
     else
     {
         GetStatusBar().SetItemText(GetId(), OUString());
-        GetStatusBar().SetQuickHelpText(GetId(), u"");
+        GetStatusBar().SetQuickHelpText(GetId(), u""_ustr);
     }
 }
 
@@ -101,14 +101,14 @@ void SwTemplateControl::Command( const CommandEvent& rCEvt )
 
                 ::tools::Rectangle aRect(rCEvt.GetMousePosPixel(), Size(1, 1));
                 weld::Window* pParent = weld::GetPopupParent(GetStatusBar(), aRect);
-                OString sResult = xPopup->popup_at_rect(pParent, aRect);
+                OUString sResult = xPopup->popup_at_rect(pParent, aRect);
                 if (!sResult.isEmpty())
                 {
                     sal_uInt32 nCurrId = sResult.toUInt32();
                     // looks a bit awkward, but another way is not possible
                     pStyle = xIter->operator[]( nCurrId - 1 );
                     SfxStringItem aStyle( FN_SET_PAGE_STYLE, pStyle->GetName() );
-                    pWrtShell->GetView().GetViewFrame()->GetDispatcher()->ExecuteList(
+                    pWrtShell->GetView().GetViewFrame().GetDispatcher()->ExecuteList(
                                 FN_SET_PAGE_STYLE,
                                 SfxCallMode::SLOT|SfxCallMode::RECORD,
                                 { &aStyle });

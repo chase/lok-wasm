@@ -63,7 +63,7 @@ public:
 static tools::Long getCharacterTopWidth(VirtualDevice* device, const Point& start)
 {
     Bitmap bitmap = device->GetBitmap(Point(), device->GetOutputSizePixel());
-    Bitmap::ScopedReadAccess access(bitmap);
+    BitmapScopedReadAccess access(bitmap);
     tools::Long y = start.Y();
     while (y < bitmap.GetSizePixel().Height() && access->GetColor(y, start.X()) != COL_BLACK)
         ++y;
@@ -82,7 +82,7 @@ static tools::Long getCharacterTopWidth(VirtualDevice* device, const Point& star
 static tools::Long getCharacterRightSideHeight(VirtualDevice* device, const Point& start)
 {
     Bitmap bitmap = device->GetBitmap(Point(), device->GetOutputSizePixel());
-    Bitmap::ScopedReadAccess access(bitmap);
+    BitmapScopedReadAccess access(bitmap);
     tools::Long x = start.X();
     while (x >= 0 && access->GetColor(start.Y(), x) != COL_BLACK)
         --x;
@@ -104,8 +104,8 @@ static tools::Long getCharacterRightSideHeight(VirtualDevice* device, const Poin
 // IMPORTANT: If you modify this, modify also the void VclTextTest::testSimpleText().
 void VclCjkTextTest::testVerticalText()
 {
-    OUString text(u"\x30e8");
-    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::DEFAULT);
+    OUString text(u"\x30e8"_ustr);
+    ScopedVclPtr<VirtualDevice> device = VclPtr<VirtualDevice>::Create(DeviceFormat::WITHOUT_ALPHA);
     device->SetOutputSizePixel(Size(100, 100));
     device->SetBackground(Wallpaper(COL_WHITE));
     // Disable AA, to make all pixels be black or white.
@@ -178,7 +178,7 @@ void VclCjkTextTest::testVerticalText()
     tools::Long height36Rotated = getCharacterRightSideHeight(device, Point(99, 35));
     CPPUNIT_ASSERT_DOUBLES_EQUAL(height36, height36Rotated, 1);
     tools::Long width36Rotated = getCharacterTopWidth(device, Point(25, 0));
-    CPPUNIT_ASSERT_DOUBLES_EQUAL(width36, width36Rotated, 1);
+    CPPUNIT_ASSERT_DOUBLES_EQUAL(width36, width36Rotated, 2);
 
     font = baseFont;
     font.SetFontSize(Size(0, 72));

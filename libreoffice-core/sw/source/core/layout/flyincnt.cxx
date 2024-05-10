@@ -94,6 +94,12 @@ void SwFlyInContentFrame::SetRefPoint( const Point& rPoint,
 
 void SwFlyInContentFrame::SwClientNotify(const SwModify& rMod, const SfxHint& rHint)
 {
+    if (rHint.GetId() == SfxHintId::SwAutoFormatUsedHint)
+    {
+        // There's a FlyFrame, so use it
+        static_cast<const sw::AutoFormatUsedHint&>(rHint).SetUsed();
+        return;
+    }
     if (rHint.GetId() != SfxHintId::SwLegacyModify)
         return;
     auto pLegacy = static_cast<const sw::LegacyModifyHint*>(&rHint);
@@ -185,7 +191,7 @@ void SwFlyInContentFrame::MakeObjPos()
 void SwFlyInContentFrame::ActionOnInvalidation( const InvalidationType _nInvalid )
 {
     if ( INVALID_POS == _nInvalid || INVALID_ALL == _nInvalid )
-        AnchorFrame()->Prepare( PrepareHint::FlyFrameAttributesChanged, &GetFrameFormat() );
+        AnchorFrame()->Prepare( PrepareHint::FlyFrameAttributesChanged, GetFrameFormat() );
 }
 
 void SwFlyInContentFrame::NotifyBackground( SwPageFrame *, const SwRect& rRect,

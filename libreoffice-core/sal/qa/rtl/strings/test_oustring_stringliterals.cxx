@@ -18,10 +18,8 @@
 
 #include <o3tl/cppunittraitshelper.hxx>
 #include <sal/types.h>
-#include <config_global.h>
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
-#include <rtl/string.h>
 #include <rtl/ustring.hxx>
 #include <rtl/ustrbuf.hxx>
 
@@ -41,6 +39,7 @@ private:
     void checkOUStringChar();
     void checkUtf16();
     void checkEmbeddedNul();
+    void checkOstr();
 
     void testcall( const char str[] );
 
@@ -56,6 +55,7 @@ CPPUNIT_TEST(checkOUStringLiteral);
 CPPUNIT_TEST(checkOUStringChar);
 CPPUNIT_TEST(checkUtf16);
 CPPUNIT_TEST(checkEmbeddedNul);
+CPPUNIT_TEST(checkOstr);
 CPPUNIT_TEST_SUITE_END();
 };
 
@@ -122,10 +122,7 @@ void test::oustring::StringLiterals::testcall( const char str[] )
 
 void test::oustring::StringLiterals::checkConstexprCtor()
 {
-#if __cplusplus >= 202002L
-    static constinit
-#endif
-    rtl::OUString s(dummy);
+    static constinit rtl::OUString s(dummy);
     CPPUNIT_ASSERT_EQUAL(oslInterlockedCount(0x40000000), s.pData->refCount);
         // SAL_STRING_STATIC_FLAG (sal/rtl/strimp.hxx)
     CPPUNIT_ASSERT_EQUAL(sal_Int32(5), s.getLength());
@@ -342,9 +339,9 @@ void test::oustring::StringLiterals::checkOUStringChar()
 }
 
 void test::oustring::StringLiterals::checkUtf16() {
-    rtl::OUString s1(u"abc");
+    rtl::OUString s1(u"abc"_ustr);
     CPPUNIT_ASSERT_EQUAL(rtl::OUString("abc"), s1);
-    s1 = u"de";
+    s1 = u"de"_ustr;
     CPPUNIT_ASSERT_EQUAL(rtl::OUString("de"), s1);
     s1 += u"fde";
     CPPUNIT_ASSERT_EQUAL(rtl::OUString("defde"), s1);
@@ -354,13 +351,13 @@ void test::oustring::StringLiterals::checkUtf16() {
     CPPUNIT_ASSERT(s1.matchIgnoreAsciiCase(u"FDE", 2));
     rtl::OUString s2;
     CPPUNIT_ASSERT(s1.startsWith(u"de", &s2));
-    CPPUNIT_ASSERT_EQUAL(rtl::OUString(u"fde"), s2);
+    CPPUNIT_ASSERT_EQUAL(u"fde"_ustr, s2);
     CPPUNIT_ASSERT(s1.startsWithIgnoreAsciiCase(u"DEFD", &s2));
-    CPPUNIT_ASSERT_EQUAL(rtl::OUString(u"e"), s2);
+    CPPUNIT_ASSERT_EQUAL(u"e"_ustr, s2);
     CPPUNIT_ASSERT(s1.endsWith(u"de", &s2));
-    CPPUNIT_ASSERT_EQUAL(rtl::OUString(u"def"), s2);
+    CPPUNIT_ASSERT_EQUAL(u"def"_ustr, s2);
     CPPUNIT_ASSERT(s1.endsWithIgnoreAsciiCase(u"EFDE", &s2));
-    CPPUNIT_ASSERT_EQUAL(rtl::OUString(u"d"), s2);
+    CPPUNIT_ASSERT_EQUAL(u"d"_ustr, s2);
     CPPUNIT_ASSERT(bool(s1 == u"defde"));
     CPPUNIT_ASSERT(bool(u"defde" == s1));
     CPPUNIT_ASSERT(s1 != u"abc");
@@ -369,32 +366,32 @@ void test::oustring::StringLiterals::checkUtf16() {
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3), s1.lastIndexOf(u"de"));
     sal_Int32 i = 0;
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfde"),
+        u"abcfde"_ustr,
         s1.replaceFirst(u"de", rtl::OUString("abc"), &i));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), i);
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfde"),
+        u"abcfde"_ustr,
         s1.replaceFirst(rtl::OUString("de"), u"abc", &i));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), i);
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfde"), s1.replaceFirst(u"de", u"abc", &i));
+        u"abcfde"_ustr, s1.replaceFirst(u"de", u"abc", &i));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), i);
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfde"), s1.replaceFirst(u"de", "abc", &i));
+        u"abcfde"_ustr, s1.replaceFirst(u"de", "abc", &i));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), i);
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfde"), s1.replaceFirst("de", u"abc", &i));
+        u"abcfde"_ustr, s1.replaceFirst("de", u"abc", &i));
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), i);
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfabc"), s1.replaceAll(u"de", rtl::OUString("abc")));
+        u"abcfabc"_ustr, s1.replaceAll(u"de", rtl::OUString("abc")));
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfabc"), s1.replaceAll(rtl::OUString("de"), u"abc"));
+        u"abcfabc"_ustr, s1.replaceAll(rtl::OUString("de"), u"abc"));
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfabc"), s1.replaceAll(u"de", u"abc"));
+        u"abcfabc"_ustr, s1.replaceAll(u"de", u"abc"));
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfabc"), s1.replaceAll(u"de", "abc"));
+        u"abcfabc"_ustr, s1.replaceAll(u"de", "abc"));
     CPPUNIT_ASSERT_EQUAL(
-        rtl::OUString(u"abcfabc"), s1.replaceAll("de", u"abc"));
+        u"abcfabc"_ustr, s1.replaceAll("de", u"abc"));
     CPPUNIT_ASSERT_EQUAL(
         rtl::OUString("abcdef"), rtl::OUString(rtl::OUString("abc") + u"def"));
     CPPUNIT_ASSERT_EQUAL(
@@ -417,12 +414,31 @@ void test::oustring::StringLiterals::checkEmbeddedNul() {
     CPPUNIT_ASSERT(s.startsWith(a));
     CPPUNIT_ASSERT(s.startsWith(p));
     CPPUNIT_ASSERT(s.startsWith(u"foo\0hidden"));
+    // For Clang against libstdc++, this would hit not-yet-fixed
+    // <https://github.com/llvm/llvm-project/issues/24502> "eagerly-instantiated entities whose
+    // templates are defined after the first point of instantiation don't get instantiated at all"
+    // (see the mailing list thread starting at
+    // <https://gcc.gnu.org/pipermail/libstdc++/2021-November/053548.html> "std::basic_string<_Tp>
+    // constructor point of instantiation woes?"):
+#if !(defined __clang__ && defined __GLIBCXX__)
     CPPUNIT_ASSERT(!s.startsWith(u"foo\0hidden"s));
+#endif
     CPPUNIT_ASSERT(!s.startsWith(u"foo\0hidden"sv));
 /*TODO:*/
     CPPUNIT_ASSERT(!s.startsWith(rtlunittest::OUStringLiteral(a)));
     CPPUNIT_ASSERT(!s.startsWith(rtlunittest::OUStringLiteral(u"foo\0hidden")));
 /*TODO*/
+}
+
+void test::oustring::StringLiterals::checkOstr() {
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), u""_ustr.getLength());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), u"foobar"_ustr.getLength());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), u"foo\0bar"_ustr.getLength());
+    CPPUNIT_ASSERT_EQUAL(u""_ustr, rtl::OUString(""_tstr));
+    CPPUNIT_ASSERT_EQUAL(u"foobar"_ustr, rtl::OUString("foobar"_tstr));
+    // Unlike in a OString context, the below "foo\0bar"_tstr in a OUString context would trigger
+    // the assert(c!='\0') in Copy in sal/rtl/strtmpl.hxx:
+    // CPPUNIT_ASSERT_EQUAL(u"foo\0bar"_ustr, rtl::OUString("foo\0bar"_tstr));
 }
 
 } // namespace

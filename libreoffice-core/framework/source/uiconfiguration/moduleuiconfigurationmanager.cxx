@@ -30,7 +30,7 @@
 #include <com/sun/star/ui/UIElementType.hpp>
 #include <com/sun/star/ui/ConfigurationEvent.hpp>
 #include <com/sun/star/ui/ModuleAcceleratorConfiguration.hpp>
-#include <com/sun/star/ui/XModuleUIConfigurationManager3.hpp>
+#include <com/sun/star/ui/XModuleUIConfigurationManager2.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/IllegalAccessException.hpp>
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>
@@ -83,7 +83,7 @@ namespace {
 class ModuleUIConfigurationManager : public cppu::WeakImplHelper<
                                        css::lang::XServiceInfo,
                                        css::lang::XComponent,
-                                       css::ui::XModuleUIConfigurationManager3 >
+                                       css::ui::XModuleUIConfigurationManager2 >
 {
 public:
     ModuleUIConfigurationManager(
@@ -430,7 +430,7 @@ void ModuleUIConfigurationManager::impl_requestUIElementData( sal_Int16 nElement
                         {
                             MenuConfiguration aMenuCfg( m_xContext );
                             Reference< XIndexAccess > xContainer( aMenuCfg.CreateMenuBarConfigurationFromXML( xInputStream ));
-                            auto pRootItemContainer = comphelper::getFromUnoTunnel<RootItemContainer>( xContainer );
+                            auto pRootItemContainer = dynamic_cast<RootItemContainer*>( xContainer.get() );
                             if ( pRootItemContainer )
                                 aUIElementData.xSettings = new ConstItemContainer( pRootItemContainer, true );
                             else
@@ -449,7 +449,7 @@ void ModuleUIConfigurationManager::impl_requestUIElementData( sal_Int16 nElement
                         {
                             Reference< XIndexContainer > xIndexContainer( new RootItemContainer() );
                             ToolBoxConfiguration::LoadToolBox( m_xContext, xInputStream, xIndexContainer );
-                            auto pRootItemContainer = comphelper::getFromUnoTunnel<RootItemContainer>( xIndexContainer );
+                            auto pRootItemContainer = dynamic_cast<RootItemContainer*>( xIndexContainer.get() );
                             aUIElementData.xSettings = new ConstItemContainer( pRootItemContainer, true );
                             return;
                         }
@@ -466,7 +466,7 @@ void ModuleUIConfigurationManager::impl_requestUIElementData( sal_Int16 nElement
                         {
                             Reference< XIndexContainer > xIndexContainer( new RootItemContainer() );
                             StatusBarConfiguration::LoadStatusBar( m_xContext, xInputStream, xIndexContainer );
-                            auto pRootItemContainer = comphelper::getFromUnoTunnel<RootItemContainer>( xIndexContainer );
+                            auto pRootItemContainer = dynamic_cast<RootItemContainer*>( xIndexContainer.get() );
                             aUIElementData.xSettings = new ConstItemContainer( pRootItemContainer, true );
                             return;
                         }
@@ -1243,14 +1243,13 @@ void SAL_CALL ModuleUIConfigurationManager::replaceSettings( const OUString& Res
                 rElements.emplace( ResourceURL, aUIElementData );
 
             Reference< XUIConfigurationManager > xThis(this);
-            Reference< XInterface > xIfac( xThis, UNO_QUERY );
 
             // Create event to notify listener about replaced element settings
             ui::ConfigurationEvent aEvent;
 
             aEvent.ResourceURL = ResourceURL;
             aEvent.Accessor <<= xThis;
-            aEvent.Source = xIfac;
+            aEvent.Source.set(xThis, UNO_QUERY);
             aEvent.ReplacedElement <<= pDataSettings->xSettings;
             aEvent.Element <<= aUIElementData.xSettings;
 

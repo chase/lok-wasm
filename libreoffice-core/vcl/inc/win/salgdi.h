@@ -53,7 +53,7 @@ class WinFontInstance;
 class ImplFontAttrCache;
 class SalGraphicsImpl;
 class WinSalGraphicsImplBase;
-class ImplFontMetricData;
+class FontMetricData;
 
 #define RGB_TO_PALRGB(nRGB)         ((nRGB)|0x02000000)
 #define PALRGB_TO_RGB(nPalRGB)      ((nPalRGB)&0x00ffffff)
@@ -221,7 +221,7 @@ public:
     void Flush();
 
 protected:
-    virtual bool        setClipRegion( const vcl::Region& ) override;
+    virtual void        setClipRegion( const vcl::Region& ) override;
     // draw --> LineColor and FillColor and RasterOp and ClipRegion
     virtual void        drawPixel( tools::Long nX, tools::Long nY ) override;
     virtual void        drawPixel( tools::Long nX, tools::Long nY, Color nColor ) override;
@@ -230,7 +230,7 @@ protected:
     virtual void        drawPolyLine( sal_uInt32 nPoints, const Point* pPtAry ) override;
     virtual void        drawPolygon( sal_uInt32 nPoints, const Point* pPtAry ) override;
     virtual void        drawPolyPolygon( sal_uInt32 nPoly, const sal_uInt32* pPoints, const Point** pPtAry ) override;
-    virtual bool        drawPolyPolygon(
+    virtual void        drawPolyPolygon(
         const basegfx::B2DHomMatrix& rObjectToDevice,
         const basegfx::B2DPolyPolygon&,
         double fTransparency) override;
@@ -348,7 +348,7 @@ public:
     // set the font
     virtual void            SetFont( LogicalFontInstance*, int nFallbackLevel ) override;
     // get the current font's metrics
-    virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
+    virtual void            GetFontMetric( FontMetricDataRef&, int nFallbackLevel ) override;
     // get the repertoire of the current font
     virtual FontCharMapRef  GetFontCharMap() const override;
     // get the layout capabilities of the current font

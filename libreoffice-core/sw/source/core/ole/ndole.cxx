@@ -59,7 +59,6 @@
 #include <atomic>
 #include <deque>
 #include <libxml/xmlwriter.h>
-#include <sfx2/xmldump.hxx>
 #include <osl/diagnose.h>
 #include <flyfrm.hxx>
 

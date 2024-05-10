@@ -35,6 +35,7 @@
 #include <drawinglayer/processor2d/textaspolygonextractor2d.hxx>
 #include <basegfx/polygon/b2dpolypolygoncutter.hxx>
 #include <svgclippathnode.hxx>
+#include <svgfilternode.hxx>
 #include <svgmasknode.hxx>
 #include <basegfx/polygon/b2dpolypolygontools.hxx>
 #include <svgmarkernode.hxx>
@@ -849,7 +850,8 @@ namespace svgio::svgreader
                         const basegfx::B2DRange aTargetRange(0.0, 0.0, fTargetWidth, fTargetHeight);
                         const SvgAspectRatio& rRatio = rMarker.getSvgAspectRatio();
 
-                        if(rRatio.isSet())
+
+                        if(rRatio.isSet() && Overflow::visible != rMarker.getSvgStyleAttributes()->getOverflow())
                         {
                             // let mapping be created from SvgAspectRatio
                             rMarkerTransform = rRatio.createMapping(aTargetRange, aPrimitiveRange);
@@ -1148,7 +1150,8 @@ namespace svgio::svgreader
 
             // Svg supports markers for path, polygon, polyline and line
             if(SVGToken::Path == mrOwner.getType() ||         // path
-                SVGToken::Polygon == mrOwner.getType() ||     // polygon, polyline
+                SVGToken::Polygon == mrOwner.getType() ||     // polygon
+                SVGToken::Polyline == mrOwner.getType() ||     // polyline
                 SVGToken::Line == mrOwner.getType() ||        // line
                 SVGToken::Style == mrOwner.getType())        // tdf#150323
             {
@@ -1162,9 +1165,6 @@ namespace svgio::svgreader
             drawinglayer::primitive2d::Primitive2DContainer&& rSource,
             const std::optional<basegfx::B2DHomMatrix>& pTransform) const
         {
-            if(rSource.empty())
-                return;
-
             const double fOpacity(getOpacity().solve(mrOwner));
 
             if(basegfx::fTools::equalZero(fOpacity))
@@ -1207,6 +1207,16 @@ namespace svgio::svgreader
 
             if(!aSource.empty()) // test again, applied clipPath may have lead to empty geometry
             {
+                const SvgFilterNode* pFilter = accessFilterXLink();
+                if(pFilter)
+                {
+                    pFilter->apply(aSource);
+                }
+            }
+
+            if(!aSource.empty()) // test again, applied filter may have lead to empty geometry
+            {
+
                 const SvgMaskNode* pMask = accessMaskXLink();
                 if(pMask)
                 {
@@ -1270,28 +1280,16 @@ namespace svgio::svgreader
             maTextAlign(TextAlign::notset),
             maTextDecoration(TextDecoration::notset),
             maTextAnchor(TextAnchor::notset),
+            maOverflow(Overflow::notset),
             maVisibility(Visibility::notset),
-            mpClipPathXLink(nullptr),
-            mpMaskXLink(nullptr),
-            mpMarkerStartXLink(nullptr),
-            mpMarkerMidXLink(nullptr),
-            mpMarkerEndXLink(nullptr),
             maFillRule(FillRule::notset),
             maClipRule(FillRule::notset),
             maBaselineShift(BaselineShift::Baseline),
             maBaselineShiftNumber(0),
+            maDominantBaseline(DominantBaseline::Auto),
             maResolvingParent(32, 0),
-            mbIsClipPathContent(SVGToken::ClipPathNode == mrOwner.getType()),
             mbStrokeDasharraySet(false)
         {
-            const SvgStyleAttributes* pParentStyle = getParentStyle();
-            if(!mbIsClipPathContent)
-            {
-                if(pParentStyle)
-                {
-                    mbIsClipPathContent = pParentStyle->mbIsClipPathContent;
-                }
-            }
         }
 
         SvgStyleAttributes::~SvgStyleAttributes()
@@ -1817,6 +1815,21 @@ namespace svgio::svgreader
                     }
                     break;
                 }
+                case SVGToken::Overflow:
+                {
+                    if(!aContent.isEmpty())
+                    {
+                        if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"visible"))
+                        {
+                            setOverflow(Overflow::visible);
+                        }
+                        else if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"hidden"))
+                        {
+                            setOverflow(Overflow::hidden);
+                        }
+                    }
+                    break;
+                }
                 case SVGToken::Visibility:
                 {
                     if(!aContent.isEmpty())
@@ -1853,6 +1866,11 @@ namespace svgio::svgreader
                 case SVGToken::ClipPathProperty:
                 {
                     readLocalUrl(aContent, maClipPathXLink);
+                    break;
+                }
+                case SVGToken::Filter:
+                {
+                    readLocalUrl(aContent, maFilterXLink);
                     break;
                 }
                 case SVGToken::Mask:
@@ -1947,6 +1965,30 @@ namespace svgio::svgreader
                     }
                     break;
                 }
+                case SVGToken::DominantBaseline:
+                {
+                    if(!aContent.isEmpty())
+                    {
+                        if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"middle"))
+                        {
+                            setDominantBaseline(DominantBaseline::Middle);
+                        }
+                        else if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"hanging"))
+                        {
+                            setDominantBaseline(DominantBaseline::Hanging);
+                        }
+                        else if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"central"))
+                        {
+                            setDominantBaseline(DominantBaseline::Central);
+                        }
+                        else
+                        {
+                            // no DominantBaseline
+                            setDominantBaseline(DominantBaseline::Auto);
+                        }
+                    }
+                    break;
+                }
                 default:
                 {
                     break;
@@ -1954,10 +1996,27 @@ namespace svgio::svgreader
             }
         }
 
+        bool SvgStyleAttributes::isClipPathContent() const
+        {
+            if (SVGToken::ClipPathNode == mrOwner.getType())
+                return true;
+
+            const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+            if (pSvgStyleAttributes && maResolvingParent[31] < nStyleDepthLimit)
+            {
+                ++maResolvingParent[31];
+                bool ret = pSvgStyleAttributes->isClipPathContent();
+                --maResolvingParent[31];
+                return ret;
+            }
+
+            return false;
+        }
+
         // #i125258# ask if fill is a direct hard attribute (no hierarchy)
         bool SvgStyleAttributes::isFillSet() const
         {
-            if(mbIsClipPathContent)
+            if(isClipPathContent())
             {
                 return false;
             }
@@ -1991,7 +2050,7 @@ namespace svgio::svgreader
                 {
                     return &maFill.getBColor();
                 }
-                else if(mbIsClipPathContent)
+                else if(isClipPathContent())
                 {
                     const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
@@ -2015,7 +2074,7 @@ namespace svgio::svgreader
                     const basegfx::BColor* pFill = pSvgStyleAttributes->getFill();
                     --maResolvingParent[0];
 
-                    if(mbIsClipPathContent)
+                    if(isClipPathContent())
                     {
                         if (pFill)
                         {
@@ -2218,7 +2277,7 @@ namespace svgio::svgreader
                 return ret;
             }
 
-            if(mbIsClipPathContent)
+            if(isClipPathContent())
             {
                 return SvgNumber(0.0);
             }
@@ -2266,18 +2325,39 @@ namespace svgio::svgreader
                 return maOpacity;
             }
 
-            const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
-
-            if (pSvgStyleAttributes && maResolvingParent[8] < nStyleDepthLimit)
+            // This is called from add_postProcess so only check the parent style
+            // if it has a local css style, because it's the first in the stack
+            if(mrOwner.hasLocalCssStyle())
             {
-                ++maResolvingParent[8];
-                auto ret = pSvgStyleAttributes->getOpacity();
-                --maResolvingParent[8];
-                return ret;
+                const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+
+                if (pSvgStyleAttributes && pSvgStyleAttributes->maOpacity.isSet())
+                {
+                    return pSvgStyleAttributes->maOpacity;
+                }
             }
 
             // default is 1
             return SvgNumber(1.0);
+        }
+
+        Overflow SvgStyleAttributes::getOverflow() const
+        {
+            if(Overflow::notset != maOverflow)
+            {
+                return maOverflow;
+            }
+
+            if(mrOwner.hasLocalCssStyle())
+            {
+                const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+                if (pSvgStyleAttributes)
+                {
+                    return pSvgStyleAttributes->getOverflow();
+                }
+            }
+
+            return Overflow::hidden;
         }
 
         Visibility SvgStyleAttributes::getVisibility() const
@@ -2360,11 +2440,11 @@ namespace svgio::svgreader
 
             const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-            if (pSvgStyleAttributes && maResolvingParent[31] < nStyleDepthLimit)
+            if (pSvgStyleAttributes && maResolvingParent[25] < nStyleDepthLimit)
             {
-                ++maResolvingParent[31];
+                ++maResolvingParent[25];
                 auto ret = pSvgStyleAttributes->getClipRule();
-                --maResolvingParent[31];
+                --maResolvingParent[25];
                 return ret;
             }
 
@@ -2562,11 +2642,11 @@ namespace svgio::svgreader
                     if(pSvgStyleAttributes)
                     {
                         const SvgNumber aParentNumber = pSvgStyleAttributes->getFontSizeNumber();
+                        double n = aParentNumber.getNumber() * maFontSizeNumber.getNumber();
+                        if (SvgUnit::ex == maFontSizeNumber.getUnit())
+                            n *= 0.5; // FIXME: use "x-height of the first available font"
 
-                        return SvgNumber(
-                            aParentNumber.getNumber() * maFontSizeNumber.getNumber(),
-                            aParentNumber.getUnit(),
-                            true);
+                        return SvgNumber(n, aParentNumber.getUnit());
                     }
                 }
 
@@ -2843,16 +2923,15 @@ namespace svgio::svgreader
                 return maClipPathXLink;
             }
 
-            if(getCssStyleParent())
+            // This is called from add_postProcess so only check the parent style
+            // if it has a local css style, because it's the first in the stack
+            if(mrOwner.hasLocalCssStyle())
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if (pSvgStyleAttributes && maResolvingParent[30] < nStyleDepthLimit)
+                if (pSvgStyleAttributes)
                 {
-                    ++maResolvingParent[30];
-                    auto ret = pSvgStyleAttributes->getClipPathXLink();
-                    --maResolvingParent[30];
-                    return ret;
+                    return pSvgStyleAttributes->maClipPathXLink;
                 }
             }
 
@@ -2861,17 +2940,46 @@ namespace svgio::svgreader
 
         const SvgClipPathNode* SvgStyleAttributes::accessClipPathXLink() const
         {
-            if(!mpClipPathXLink)
-            {
-                const OUString aClipPath(getClipPathXLink());
+            const OUString aClipPath(getClipPathXLink());
 
-                if(!aClipPath.isEmpty())
+            if(!aClipPath.isEmpty())
+            {
+                return dynamic_cast< const SvgClipPathNode* >(mrOwner.getDocument().findSvgNodeById(aClipPath));
+            }
+            return nullptr;
+        }
+
+        OUString SvgStyleAttributes::getFilterXLink() const
+        {
+            if(!maFilterXLink.isEmpty())
+            {
+                return maFilterXLink;
+            }
+
+            // This is called from add_postProcess so only check the parent style
+            // if it has a local css style, because it's the first in the stack
+            if(mrOwner.hasLocalCssStyle())
+            {
+                const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+
+                if (pSvgStyleAttributes)
                 {
-                    return dynamic_cast< const SvgClipPathNode* >(mrOwner.getDocument().findSvgNodeById(aClipPath));
+                    return pSvgStyleAttributes->maFilterXLink;
                 }
             }
 
-            return mpClipPathXLink;
+            return OUString();
+        }
+
+        const SvgFilterNode* SvgStyleAttributes::accessFilterXLink() const
+        {
+            const OUString aFilter(getFilterXLink());
+
+            if(!aFilter.isEmpty())
+            {
+                return dynamic_cast< const SvgFilterNode* >(mrOwner.getDocument().findSvgNodeById(aFilter));
+            }
+            return nullptr;
         }
 
         OUString SvgStyleAttributes::getMaskXLink() const
@@ -2881,14 +2989,16 @@ namespace svgio::svgreader
                 return maMaskXLink;
             }
 
-            const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
-
-            if (pSvgStyleAttributes && maResolvingParent[25] < nStyleDepthLimit)
+            // This is called from add_postProcess so only check the parent style
+            // if it has a local css style, because it's the first in the stack
+            if(mrOwner.hasLocalCssStyle())
             {
-                ++maResolvingParent[25];
-                auto ret = pSvgStyleAttributes->getMaskXLink();
-                --maResolvingParent[25];
-                return ret;
+                const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+
+                if (pSvgStyleAttributes)
+                {
+                    return pSvgStyleAttributes->maMaskXLink;
+                }
             }
 
             return OUString();
@@ -2896,17 +3006,13 @@ namespace svgio::svgreader
 
         const SvgMaskNode* SvgStyleAttributes::accessMaskXLink() const
         {
-            if(!mpMaskXLink)
+            const OUString aMask(getMaskXLink());
+
+            if(!aMask.isEmpty())
             {
-                const OUString aMask(getMaskXLink());
-
-                if(!aMask.isEmpty())
-                {
-                    return dynamic_cast< const SvgMaskNode* >(mrOwner.getDocument().findSvgNodeById(aMask));
-                }
+                return dynamic_cast< const SvgMaskNode* >(mrOwner.getDocument().findSvgNodeById(aMask));
             }
-
-            return mpMaskXLink;
+            return nullptr;
         }
 
         OUString SvgStyleAttributes::getMarkerStartXLink() const
@@ -2931,17 +3037,13 @@ namespace svgio::svgreader
 
         const SvgMarkerNode* SvgStyleAttributes::accessMarkerStartXLink() const
         {
-            if(!mpMarkerStartXLink)
+            const OUString aMarker(getMarkerStartXLink());
+
+            if(!aMarker.isEmpty())
             {
-                const OUString aMarker(getMarkerStartXLink());
-
-                if(!aMarker.isEmpty())
-                {
-                    return dynamic_cast< const SvgMarkerNode* >(mrOwner.getDocument().findSvgNodeById(getMarkerStartXLink()));
-                }
+                return dynamic_cast< const SvgMarkerNode* >(mrOwner.getDocument().findSvgNodeById(getMarkerStartXLink()));
             }
-
-            return mpMarkerStartXLink;
+            return nullptr;
         }
 
         OUString SvgStyleAttributes::getMarkerMidXLink() const
@@ -2966,17 +3068,13 @@ namespace svgio::svgreader
 
         const SvgMarkerNode* SvgStyleAttributes::accessMarkerMidXLink() const
         {
-            if(!mpMarkerMidXLink)
+            const OUString aMarker(getMarkerMidXLink());
+
+            if(!aMarker.isEmpty())
             {
-                const OUString aMarker(getMarkerMidXLink());
-
-                if(!aMarker.isEmpty())
-                {
-                    return dynamic_cast< const SvgMarkerNode* >(mrOwner.getDocument().findSvgNodeById(getMarkerMidXLink()));
-                }
+                return dynamic_cast< const SvgMarkerNode* >(mrOwner.getDocument().findSvgNodeById(getMarkerMidXLink()));
             }
-
-            return mpMarkerMidXLink;
+            return nullptr;
         }
 
         OUString SvgStyleAttributes::getMarkerEndXLink() const
@@ -3001,17 +3099,13 @@ namespace svgio::svgreader
 
         const SvgMarkerNode* SvgStyleAttributes::accessMarkerEndXLink() const
         {
-            if(!mpMarkerEndXLink)
+            const OUString aMarker(getMarkerEndXLink());
+
+            if(!aMarker.isEmpty())
             {
-                const OUString aMarker(getMarkerEndXLink());
-
-                if(!aMarker.isEmpty())
-                {
-                    return dynamic_cast< const SvgMarkerNode* >(mrOwner.getDocument().findSvgNodeById(getMarkerEndXLink()));
-                }
+                return dynamic_cast< const SvgMarkerNode* >(mrOwner.getDocument().findSvgNodeById(getMarkerEndXLink()));
             }
-
-            return mpMarkerEndXLink;
+            return nullptr;
         }
 
         SvgNumber SvgStyleAttributes::getBaselineShiftNumber() const
@@ -3021,11 +3115,11 @@ namespace svgio::svgreader
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if (pSvgStyleAttributes && maResolvingParent[29] < nStyleDepthLimit)
+                if (pSvgStyleAttributes && maResolvingParent[8] < nStyleDepthLimit)
                 {
-                    ++maResolvingParent[29];
+                    ++maResolvingParent[8];
                     const SvgNumber aParentNumber = pSvgStyleAttributes->getBaselineShiftNumber();
-                    --maResolvingParent[29];
+                    --maResolvingParent[8];
 
                     return SvgNumber(
                         aParentNumber.getNumber() * maBaselineShiftNumber.getNumber() * 0.01,
@@ -3035,6 +3129,46 @@ namespace svgio::svgreader
             }
 
             return maBaselineShiftNumber;
+        }
+
+        BaselineShift SvgStyleAttributes::getBaselineShift() const
+        {
+            if(maBaselineShift != BaselineShift::Baseline)
+            {
+                return maBaselineShift;
+            }
+
+            const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+
+            if (pSvgStyleAttributes && maResolvingParent[29] < nStyleDepthLimit)
+            {
+                ++maResolvingParent[29];
+                auto ret = pSvgStyleAttributes->getBaselineShift();
+                --maResolvingParent[29];
+                return ret;
+            }
+
+            return BaselineShift::Baseline;
+        }
+
+        DominantBaseline SvgStyleAttributes::getDominantBaseline() const
+        {
+            if(maDominantBaseline != DominantBaseline::Auto)
+            {
+                return maDominantBaseline;
+            }
+
+            const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+
+            if (pSvgStyleAttributes && maResolvingParent[30] < nStyleDepthLimit)
+            {
+                ++maResolvingParent[30];
+                auto ret = pSvgStyleAttributes->getDominantBaseline();
+                --maResolvingParent[30];
+                return ret;
+            }
+
+            return DominantBaseline::Auto;
         }
 } // end of namespace svgio
 

@@ -166,7 +166,7 @@ void FrameBorder::SetState( FrameBorderState eState )
 
 void FrameBorder::AddFocusPolygon( const tools::Polygon& rFocus )
 {
-    lclPolyPolyUnion( maFocusArea, rFocus );
+    lclPolyPolyUnion( maFocusArea, tools::PolyPolygon(rFocus) );
 }
 
 void FrameBorder::MergeFocusToPolyPolygon( tools::PolyPolygon& rPPoly ) const
@@ -176,7 +176,7 @@ void FrameBorder::MergeFocusToPolyPolygon( tools::PolyPolygon& rPPoly ) const
 
 void FrameBorder::AddClickRect( const tools::Rectangle& rRect )
 {
-    lclPolyPolyUnion( maClickArea, tools::Polygon( rRect ) );
+    lclPolyPolyUnion( maClickArea, tools::PolyPolygon( rRect ) );
 }
 
 bool FrameBorder::ContainsClickPoint( const Point& rPos ) const
@@ -238,7 +238,7 @@ FrameSelectorImpl::FrameSelectorImpl( FrameSelector& rFrameSel ) :
     mbAutoSelect( true ),
     mbHCMode( false )
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
-    ,maChildVec( 8 )
+    ,maChildVec(FRAMEBORDERTYPE_COUNT)
 #endif
 {
     maAllBorders.resize( FRAMEBORDERTYPE_COUNT, nullptr );
@@ -275,7 +275,10 @@ FrameSelectorImpl::~FrameSelectorImpl()
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
     for( auto& rpChild : maChildVec )
         if( rpChild.is() )
+        {
             rpChild->Invalidate();
+            rpChild->dispose();
+        }
 #endif
 }
 
@@ -310,7 +313,7 @@ void FrameSelectorImpl::InitColors()
     maHCLineCol = COL_BLACK;
 }
 
-constexpr rtl::OUStringConstExpr aImageIds[] =
+constexpr OUString aImageIds[] =
 {
     RID_SVXBMP_FRMSEL_ARROW1,
     RID_SVXBMP_FRMSEL_ARROW2,
@@ -347,7 +350,7 @@ void FrameSelectorImpl::InitArrowImageList()
     assert(SAL_N_ELEMENTS(aImageIds) == 16);
     for (size_t i = 0; i < SAL_N_ELEMENTS(aImageIds); ++i)
     {
-        BitmapEx aBmpEx { OUString(aImageIds[i]) };
+        BitmapEx aBmpEx { aImageIds[i] };
         aBmpEx.Replace(pColorAry1, pColorAry2, 3);
         maArrows.emplace_back(aBmpEx);
     }
@@ -410,12 +413,12 @@ void FrameSelectorImpl::InitBorderGeometry()
     maHor.ClearFocusArea();
     maBottom.ClearFocusArea();
 
-    maLeft.AddFocusPolygon(   tools::Rectangle( mnLine1 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine1 + mnFocusOffs, mnLine3 + mnFocusOffs ) );
-    maVer.AddFocusPolygon(    tools::Rectangle( mnLine2 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine2 + mnFocusOffs, mnLine3 + mnFocusOffs ) );
-    maRight.AddFocusPolygon(  tools::Rectangle( mnLine3 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine3 + mnFocusOffs ) );
-    maTop.AddFocusPolygon(    tools::Rectangle( mnLine1 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine1 + mnFocusOffs ) );
-    maHor.AddFocusPolygon(    tools::Rectangle( mnLine1 - mnFocusOffs, mnLine2 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine2 + mnFocusOffs ) );
-    maBottom.AddFocusPolygon( tools::Rectangle( mnLine1 - mnFocusOffs, mnLine3 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine3 + mnFocusOffs ) );
+    maLeft.AddFocusPolygon(   tools::Polygon(tools::Rectangle( mnLine1 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine1 + mnFocusOffs, mnLine3 + mnFocusOffs )) );
+    maVer.AddFocusPolygon(    tools::Polygon(tools::Rectangle( mnLine2 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine2 + mnFocusOffs, mnLine3 + mnFocusOffs )) );
+    maRight.AddFocusPolygon(  tools::Polygon(tools::Rectangle( mnLine3 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine3 + mnFocusOffs )) );
+    maTop.AddFocusPolygon(    tools::Polygon(tools::Rectangle( mnLine1 - mnFocusOffs, mnLine1 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine1 + mnFocusOffs )) );
+    maHor.AddFocusPolygon(    tools::Polygon(tools::Rectangle( mnLine1 - mnFocusOffs, mnLine2 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine2 + mnFocusOffs )) );
+    maBottom.AddFocusPolygon( tools::Polygon(tools::Rectangle( mnLine1 - mnFocusOffs, mnLine3 - mnFocusOffs, mnLine3 + mnFocusOffs, mnLine3 + mnFocusOffs )) );
 
     maTLBR.ClearFocusArea();
     maBLTR.ClearFocusArea();

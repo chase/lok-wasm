@@ -78,6 +78,8 @@
 #include <textboxhelper.hxx>
 #include <textcontentcontrol.hxx>
 #include <memory>
+#include <algorithm>
+#include <functional>
 
 using namespace ::com::sun::star::i18n;
 using namespace ::com::sun::star::lang;
@@ -498,14 +500,16 @@ void SwDoc::SetAttr( const SfxItemSet& rSet, SwFormat& rFormat )
     getIDocumentState().SetModified();
 }
 
-void SwDoc::ResetAttrAtFormat( const sal_uInt16 nWhichId,
+void SwDoc::ResetAttrAtFormat( const std::vector<sal_uInt16>& rIds,
                                SwFormat& rChangedFormat )
 {
     std::unique_ptr<SwUndo> pUndo;
     if (GetIDocumentUndoRedo().DoesUndo())
-        pUndo.reset(new SwUndoFormatResetAttr( rChangedFormat, nWhichId ));
+        pUndo.reset(new SwUndoFormatResetAttr( rChangedFormat, rIds ));
 
-    const bool bAttrReset = rChangedFormat.ResetFormatAttr( nWhichId );
+    bool bAttrReset = false;
+    for (const auto& nWhichId : rIds)
+        bAttrReset = rChangedFormat.ResetFormatAttr(nWhichId) || bAttrReset;
 
     if ( bAttrReset )
     {
@@ -711,7 +715,7 @@ void SwDoc::DelFrameFormat( SwFrameFormat *pFormat, bool bBroadcast )
     else
     {
         // The format has to be in the one or the other, we'll see in which one.
-        if (mpFrameFormatTable->ContainsFormat(*pFormat))
+        if (mpFrameFormatTable->ContainsFormat(pFormat))
         {
             if (bBroadcast)
                 BroadcastStyleOperation(pFormat->GetName(),
@@ -729,20 +733,21 @@ void SwDoc::DelFrameFormat( SwFrameFormat *pFormat, bool bBroadcast )
         }
         else
         {
-            bool contains = GetSpzFrameFormats()->ContainsFormat(*pFormat);
-            OSL_ENSURE( contains, "FrameFormat not found." );
-            if( contains )
+            auto pSpz = static_cast<sw::SpzFrameFormat*>(pFormat);
+            if(GetSpzFrameFormats()->ContainsFormat(pSpz))
             {
-                GetSpzFrameFormats()->erase( pFormat );
-                delete pFormat;
+                GetSpzFrameFormats()->erase(pSpz);
+                delete pSpz;
             }
+            else
+                SAL_WARN("sw", "FrameFormat not found.");
         }
     }
 }
 
 void SwDoc::DelTableFrameFormat( SwTableFormat *pFormat )
 {
-    SwFrameFormats::const_iterator it = mpTableFrameFormatTable->find( pFormat );
+    auto it = mpTableFrameFormatTable->find( pFormat );
     OSL_ENSURE( it != mpTableFrameFormatTable->end(), "Format not found," );
     mpTableFrameFormatTable->erase( it );
     delete pFormat;
@@ -750,7 +755,7 @@ void SwDoc::DelTableFrameFormat( SwTableFormat *pFormat )
 
 SwFrameFormat* SwDoc::FindFrameFormatByName( const OUString& rName ) const
 {
-    return mpFrameFormatTable->FindFormatByName( rName );
+    return static_cast<SwFrameFormat*>(mpFrameFormatTable->FindFormatByName(rName));
 }
 
 /// Create the formats
@@ -775,40 +780,23 @@ SwDrawFrameFormat *SwDoc::MakeDrawFrameFormat( const OUString &rFormatName,
 size_t SwDoc::GetTableFrameFormatCount(bool bUsed) const
 {
     if (!bUsed)
-    {
         return mpTableFrameFormatTable->size();
-    }
-
-    SwAutoFormatGetDocNode aGetHt(&GetNodes());
-    size_t nCount = 0;
-    for (SwFrameFormat* const & pFormat : *mpTableFrameFormatTable)
-    {
-        if (!pFormat->GetInfo(aGetHt))
-            nCount++;
-    }
-    return nCount;
+    return std::count_if(mpTableFrameFormatTable->begin(), mpTableFrameFormatTable->end(),
+            std::mem_fn(&SwFormat::IsUsed));
 }
 
-SwFrameFormat& SwDoc::GetTableFrameFormat(size_t nFormat, bool bUsed) const
+SwTableFormat& SwDoc::GetTableFrameFormat(size_t nFormat, bool bUsed) const
 {
     if (!bUsed)
+        return *const_cast<SwTableFormat*>((*mpTableFrameFormatTable)[nFormat]);
+    for(SwTableFormat* pFormat: *mpTableFrameFormatTable)
     {
-        return *((*mpTableFrameFormatTable)[nFormat]);
-    }
-
-    SwAutoFormatGetDocNode aGetHt(&GetNodes());
-
-    size_t index = 0;
-
-    for (SwFrameFormat* const & pFormat : *mpTableFrameFormatTable)
-    {
-        if (!pFormat->GetInfo(aGetHt))
-        {
-            if (index == nFormat)
-                return *pFormat;
-            else
-                index++;
-        }
+        if(!pFormat->IsUsed())
+            continue;
+        if(nFormat)
+            --nFormat;
+        else
+            return *pFormat;
     }
     throw std::out_of_range("Format index out of range.");
 }
@@ -1025,7 +1013,7 @@ static bool lcl_SetTextFormatColl( SwNode* pNode, void* pArgs )
         }
     }
 
-    SwTextFormatColl* pFormat = static_cast<SwTextFormatColl*>(pPara->pFormatColl);
+    SwTextFormatColl* pFormat = pPara->pFormatColl;
     if ( pPara->bReset )
     {
         lcl_RstAttr(pCNd, pPara);
@@ -1069,12 +1057,22 @@ static bool lcl_SetTextFormatColl( SwNode* pNode, void* pArgs )
                 pCNd->ResetAttr( RES_PARATR_LIST_ISCOUNTED );
                 pCNd->ResetAttr( RES_PARATR_LIST_ID );
             }
+            else
+            {
+                // The List Level must be applied as direct formatting. The spec says:
+                // 19.495 The style:list-level attribute specifies the list level value
+                // of a list style that may be applied to any paragraph style.
+                // It does not directly specify the paragraph's list level value,
+                // but consumers can change the paragraph's list level value to the specified value
+                // when the paragraph style is applied.
+                pCNd->SetAttr(pFormat->GetFormatAttr(RES_PARATR_LIST_LEVEL));
+            }
         }
     }
 
     // add to History so that old data is saved, if necessary
     if( pPara->pHistory )
-        pPara->pHistory->Add( pCNd->GetFormatColl(), pCNd->GetIndex(),
+        pPara->pHistory->AddColl(pCNd->GetFormatColl(), pCNd->GetIndex(),
                 SwNodeType::Text );
 
     pCNd->ChgFormatColl( pFormat );
@@ -1555,8 +1553,21 @@ void SwDoc::CopyPageDesc( const SwPageDesc& rSrcDesc, SwPageDesc& rDstDesc,
                 {
                     if (pStashedFormatSrc->GetDoc() != this)
                     {
-                        auto pFrameFormat = CopyFrameFormat(*pStashedFormatSrc);
-                        rDstDesc.StashFrameFormat(*pFrameFormat, bHeader, bLeft, bFirst);
+                        SwFrameFormat newFormat(GetAttrPool(), "CopyDesc", GetDfltFrameFormat());
+
+                        SfxItemSet aAttrSet(pStashedFormatSrc->GetAttrSet());
+                        aAttrSet.ClearItem(RES_HEADER);
+                        aAttrSet.ClearItem(RES_FOOTER);
+
+                        newFormat.DelDiffs(aAttrSet);
+                        newFormat.SetFormatAttr(aAttrSet);
+
+                        if (bHeader)
+                            CopyHeader(*pStashedFormatSrc, newFormat);
+                        else
+                            CopyFooter(*pStashedFormatSrc, newFormat);
+
+                        rDstDesc.StashFrameFormat(newFormat, bHeader, bLeft, bFirst);
                     }
                     else
                     {
@@ -1580,12 +1591,10 @@ void SwDoc::ReplaceStyles( const SwDoc& rSource, bool bIncludePageStyles )
                 &SwDoc::MakeTextFormatColl_, *mpDfltTextFormatColl );
 
     //To-Do:
-    //  a) in rtf export don't export our hideous pgdsctbl
-    //  extension to rtf anymore
-    //  b) in sd rtf import (View::InsertData) don't use
+    //  a) in sd rtf import (View::InsertData) don't use
     //  a super-fragile test for mere presence of \trowd to
     //  indicate import of rtf into a table
-    //  c) then drop use of bIncludePageStyles
+    //  b) then drop use of bIncludePageStyles
     if (bIncludePageStyles)
     {
         // and now the page templates
@@ -1671,10 +1680,12 @@ void SwDoc::MoveLeftMargin(const SwPaM& rPam, bool bRight, bool bModulus,
         if( pTNd )
         {
             pTNd = sw::GetParaPropsNode(*pLayout, aIdx.GetNode());
-            SvxLRSpaceItem aLS(pTNd->SwContentNode::GetAttr(RES_LR_SPACE));
+            SvxFirstLineIndentItem firstLine(pTNd->SwContentNode::GetAttr(RES_MARGIN_FIRSTLINE));
+            SvxTextLeftMarginItem leftMargin(pTNd->SwContentNode::GetAttr(RES_MARGIN_TEXTLEFT));
 
             // #i93873# See also lcl_MergeListLevelIndentAsLRSpaceItem in thints.cxx
-            if ( pTNd->AreListLevelIndentsApplicable() )
+            ::sw::ListLevelIndents const indents(pTNd->AreListLevelIndentsApplicable());
+            if (indents != ::sw::ListLevelIndents::No)
             {
                 const SwNumRule* pRule = pTNd->GetNumRule();
                 if ( pRule )
@@ -1685,14 +1696,20 @@ void SwDoc::MoveLeftMargin(const SwPaM& rPam, bool bRight, bool bModulus,
                         const SwNumFormat& rFormat = pRule->Get(o3tl::narrowing<sal_uInt16>(nListLevel));
                         if ( rFormat.GetPositionAndSpaceMode() == SvxNumberFormat::LABEL_ALIGNMENT )
                         {
-                            aLS.SetTextLeft( rFormat.GetIndentAt() );
-                            aLS.SetTextFirstLineOffset( static_cast<short>(rFormat.GetFirstLineIndent()) );
+                            if (indents & ::sw::ListLevelIndents::LeftMargin)
+                            {
+                                leftMargin.SetTextLeft(rFormat.GetIndentAt());
+                            }
+                            if (indents & ::sw::ListLevelIndents::FirstLine)
+                            {
+                                firstLine.SetTextFirstLineOffset(static_cast<short>(rFormat.GetFirstLineIndent()));
+                            }
                         }
                     }
                 }
             }
 
-            tools::Long nNext = aLS.GetTextLeft();
+            tools::Long nNext = leftMargin.GetTextLeft();
             if( bModulus )
                 nNext = ( nNext / nDefDist ) * nDefDist;
 
@@ -1702,10 +1719,11 @@ void SwDoc::MoveLeftMargin(const SwPaM& rPam, bool bRight, bool bModulus,
                 if(nNext >0) // fdo#75936 set limit for decreasing indent
                     nNext -= nDefDist;
 
-            aLS.SetTextLeft( nNext );
+            leftMargin.SetTextLeft( nNext );
 
             SwRegHistory aRegH( pTNd, *pTNd, pHistory );
-            pTNd->SetAttr( aLS );
+            pTNd->SetAttr(firstLine);
+            pTNd->SetAttr(leftMargin);
             aIdx = *sw::GetFirstAndLastNode(*pLayout, aIdx.GetNode()).second;
         }
         ++aIdx;
@@ -2070,115 +2088,4 @@ namespace docfunc
         return bRet;
     }
 }
-
-SwFrameFormats::SwFrameFormats()
-    : m_PosIndex( m_Array.get<0>() )
-    , m_TypeAndNameIndex( m_Array.get<1>() )
-{
-}
-
-SwFrameFormats::~SwFrameFormats()
-{
-    DeleteAndDestroyAll();
-}
-
-SwFrameFormats::const_iterator SwFrameFormats::find( const value_type& x ) const
-{
-    ByTypeAndName::iterator it = m_TypeAndNameIndex.find(
-        std::make_tuple(x->GetName(), x->Which(), x) );
-    return m_Array.project<0>( it );
-}
-
-SwFrameFormats::ByTypeAndName::const_iterator
-SwFrameFormats::findByTypeAndName( sal_uInt16 type, const OUString& name ) const
-{
-    return m_TypeAndNameIndex.find( std::make_tuple(name, type) );
-}
-
-std::pair<SwFrameFormats::ByTypeAndName::const_iterator, SwFrameFormats::ByTypeAndName::const_iterator>
-SwFrameFormats::findRangeByName( const OUString& rName ) const
-{
-    auto it = m_TypeAndNameIndex.lower_bound( std::make_tuple(rName, sal_uInt16(0)) );
-    auto itEnd = m_TypeAndNameIndex.upper_bound( std::make_tuple(rName, SAL_MAX_UINT16) );
-    return { it, itEnd };
-}
-
-SwFrameFormat* SwFrameFormats::FindFormatByName( const OUString& rName ) const
-{
-    auto it = m_TypeAndNameIndex.lower_bound( std::make_tuple(rName, sal_uInt16(0)) );
-    if (it != m_TypeAndNameIndex.end() && (*it)->GetName() == rName)
-        return *it;
-    return nullptr;
-}
-
-void SwFrameFormats::DeleteAndDestroyAll( bool keepDefault )
-{
-    if ( empty() )
-        return;
-    const int _offset = keepDefault ? 1 : 0;
-    for( const_iterator it = begin() + _offset; it != end(); ++it )
-        delete *it;
-    if ( _offset )
-        m_PosIndex.erase( begin() + _offset, end() );
-    else
-        m_Array.clear();
-}
-
-std::pair<SwFrameFormats::const_iterator,bool> SwFrameFormats::push_back( const value_type& x )
-{
-    SAL_WARN_IF(x->m_ffList != nullptr, "sw.core", "Inserting already assigned item");
-    assert(x->m_ffList == nullptr);
-    x->m_ffList = this;
-    return m_PosIndex.push_back( x );
-}
-
-bool SwFrameFormats::erase( const value_type& x )
-{
-    const_iterator const ret = find( x );
-    SAL_WARN_IF(x->m_ffList != this, "sw.core", "Removing invalid / unassigned item");
-    if (ret != end()) {
-        assert( x == *ret );
-        m_PosIndex.erase( ret );
-        x->m_ffList = nullptr;
-        return true;
-    }
-    return false;
-}
-
-void SwFrameFormats::erase( size_type index_ )
-{
-    erase( begin() + index_ );
-}
-
-void SwFrameFormats::erase( const_iterator const& position )
-{
-    (*position)->m_ffList = nullptr;
-    m_PosIndex.erase( begin() + (position - begin()) );
-}
-
-bool SwFrameFormats::ContainsFormat(const SwFrameFormat& x) const
-{
-    return (x.m_ffList == this);
-}
-
-bool SwFrameFormats::IsAlive(SwFrameFormat const*const p) const
-{
-    return find(const_cast<SwFrameFormat*>(p)) != end();
-}
-
-bool SwFrameFormats::newDefault( const value_type& x )
-{
-    std::pair<iterator,bool> res = m_PosIndex.push_front( x );
-    if( ! res.second )
-        newDefault( res.first );
-    return res.second;
-}
-
-void SwFrameFormats::newDefault( const_iterator const& position )
-{
-    if (position == begin())
-        return;
-    m_PosIndex.relocate( begin(), position );
-}
-
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -160,7 +160,7 @@ namespace dbaui
     // QueryDesigner
     QueryDesigner::QueryDesigner( const Reference< XComponentContext >& _rxORB, const Reference< XDatabaseDocumentUI >& _rxApplication,
         const Reference< XFrame >& _rxParentFrame, bool _bCreateView )
-        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, _bCreateView ? OUString(URL_COMPONENT_VIEWDESIGN) : OUString(URL_COMPONENT_QUERYDESIGN) )
+        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, _bCreateView ? URL_COMPONENT_VIEWDESIGN : URL_COMPONENT_QUERYDESIGN )
         ,m_nCommandType( _bCreateView ? CommandType::TABLE : CommandType::QUERY )
     {
     }
@@ -189,7 +189,7 @@ namespace dbaui
 
     // TableDesigner
     TableDesigner::TableDesigner( const Reference< XComponentContext >& _rxORB, const Reference< XDatabaseDocumentUI >& _rxApplication, const Reference< XFrame >& _rxParentFrame )
-        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, static_cast< OUString >( URL_COMPONENT_TABLEDESIGN ) )
+        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, URL_COMPONENT_TABLEDESIGN )
     {
     }
 
@@ -243,7 +243,7 @@ namespace dbaui
     // ResultSetBrowser
     ResultSetBrowser::ResultSetBrowser( const Reference< XComponentContext >& _rxORB, const Reference< XDatabaseDocumentUI >& _rxApplication, const Reference< XFrame >& _rxParentFrame,
             bool _bTable )
-        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, static_cast < OUString >( URL_COMPONENT_DATASOURCEBROWSER ) )
+        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, URL_COMPONENT_DATASOURCEBROWSER )
         ,m_bTable(_bTable)
     {
     }
@@ -253,27 +253,27 @@ namespace dbaui
     {
         DatabaseObjectView::fillDispatchArgs( i_rDispatchArgs, _aDataSource, _rQualifiedName );
         OSL_ENSURE( !_rQualifiedName.isEmpty(),"A Table name must be set");
-        OUString sCatalog;
-        OUString sSchema;
-        OUString sTable;
-        if ( m_bTable )
-            ::dbtools::qualifiedNameComponents( getConnection()->getMetaData(), _rQualifiedName, sCatalog, sSchema, sTable, ::dbtools::EComposeRule::InDataManipulation );
-
-        i_rDispatchArgs.put( PROPERTY_COMMAND_TYPE, (m_bTable ? CommandType::TABLE : CommandType::QUERY) );
         i_rDispatchArgs.put( PROPERTY_COMMAND, _rQualifiedName );
         i_rDispatchArgs.put( PROPERTY_ENABLE_BROWSER, false );
 
         if ( m_bTable )
         {
+            OUString sCatalog;
+            OUString sSchema;
+            OUString sTable;
+            ::dbtools::qualifiedNameComponents( getConnection()->getMetaData(), _rQualifiedName, sCatalog, sSchema, sTable, ::dbtools::EComposeRule::InDataManipulation );
             i_rDispatchArgs.put( PROPERTY_UPDATE_CATALOGNAME, sCatalog );
             i_rDispatchArgs.put( PROPERTY_UPDATE_SCHEMANAME, sSchema );
             i_rDispatchArgs.put( PROPERTY_UPDATE_TABLENAME, sTable );
+            i_rDispatchArgs.put( PROPERTY_COMMAND_TYPE, CommandType::TABLE );
         }
+        else
+            i_rDispatchArgs.put( PROPERTY_COMMAND_TYPE, CommandType::QUERY );
     }
 
     // RelationDesigner
     RelationDesigner::RelationDesigner( const Reference< XComponentContext >& _rxORB, const Reference< XDatabaseDocumentUI >& _rxApplication, const Reference< XFrame >& _rxParentFrame )
-        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, static_cast< OUString >( URL_COMPONENT_RELATIONDESIGN ) )
+        :DatabaseObjectView( _rxORB, _rxApplication, _rxParentFrame, URL_COMPONENT_RELATIONDESIGN )
     {
     }
 }   // namespace dbaui

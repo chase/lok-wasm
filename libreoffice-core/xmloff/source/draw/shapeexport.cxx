@@ -137,37 +137,37 @@ namespace {
 
 bool supportsText(XmlShapeType eShapeType)
 {
-        return eShapeType != XmlShapeTypePresChartShape &&
-        eShapeType != XmlShapeTypePresOLE2Shape &&
-        eShapeType != XmlShapeTypeDrawSheetShape &&
-        eShapeType != XmlShapeTypePresSheetShape &&
-        eShapeType != XmlShapeTypeDraw3DSceneObject &&
-        eShapeType != XmlShapeTypeDraw3DCubeObject &&
-        eShapeType != XmlShapeTypeDraw3DSphereObject &&
-        eShapeType != XmlShapeTypeDraw3DLatheObject &&
-        eShapeType != XmlShapeTypeDraw3DExtrudeObject &&
-        eShapeType != XmlShapeTypeDrawPageShape &&
-        eShapeType != XmlShapeTypePresPageShape &&
-        eShapeType != XmlShapeTypeDrawGroupShape;
+        return eShapeType != XmlShapeType::PresChartShape &&
+        eShapeType != XmlShapeType::PresOLE2Shape &&
+        eShapeType != XmlShapeType::DrawSheetShape &&
+        eShapeType != XmlShapeType::PresSheetShape &&
+        eShapeType != XmlShapeType::Draw3DSceneObject &&
+        eShapeType != XmlShapeType::Draw3DCubeObject &&
+        eShapeType != XmlShapeType::Draw3DSphereObject &&
+        eShapeType != XmlShapeType::Draw3DLatheObject &&
+        eShapeType != XmlShapeType::Draw3DExtrudeObject &&
+        eShapeType != XmlShapeType::DrawPageShape &&
+        eShapeType != XmlShapeType::PresPageShape &&
+        eShapeType != XmlShapeType::DrawGroupShape;
 
 }
 
 }
 
-constexpr OUStringLiteral gsZIndex( u"ZOrder" );
+constexpr OUString gsZIndex( u"ZOrder"_ustr );
 constexpr OUStringLiteral gsPrintable( u"Printable" );
 constexpr OUStringLiteral gsVisible( u"Visible" );
-constexpr OUStringLiteral gsModel( u"Model" );
+constexpr OUString gsModel( u"Model"_ustr );
 constexpr OUStringLiteral gsStartShape( u"StartShape" );
 constexpr OUStringLiteral gsEndShape( u"EndShape" );
-constexpr OUStringLiteral gsOnClick( u"OnClick" );
+constexpr OUString gsOnClick( u"OnClick"_ustr );
 constexpr OUStringLiteral gsEventType( u"EventType" );
 constexpr OUStringLiteral gsPresentation( u"Presentation" );
 constexpr OUStringLiteral gsMacroName( u"MacroName" );
-constexpr OUStringLiteral gsScript( u"Script" );
+constexpr OUString gsScript( u"Script"_ustr );
 constexpr OUStringLiteral gsLibrary( u"Library" );
 constexpr OUStringLiteral gsClickAction( u"ClickAction" );
-constexpr OUStringLiteral gsBookmark( u"Bookmark" );
+constexpr OUString gsBookmark( u"Bookmark"_ustr );
 constexpr OUStringLiteral gsEffect( u"Effect" );
 constexpr OUStringLiteral gsPlayFull( u"PlayFull" );
 constexpr OUStringLiteral gsVerb( u"Verb" );
@@ -261,8 +261,7 @@ uno::Reference< drawing::XShape > XMLShapeExport::checkForCustomShapeReplacement
 }
 
 // This method collects all automatic styles for the given XShape
-void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShape >& xShape,
-        const css::uno::Sequence<OUString>& rAutoStylePropNames )
+void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShape >& xShape )
 {
     if( maCurrentShapesIter == maShapesInfos.end() )
     {
@@ -291,13 +290,13 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
     // first compute the shapes type
     ImpCalcShapeType(xShape, aShapeInfo.meShapeType);
 
-    // #i118485# enabled XmlShapeTypeDrawChartShape and XmlShapeTypeDrawOLE2Shape
+    // #i118485# enabled XmlShapeType::DrawChartShape and XmlShapeType::DrawOLE2Shape
     // to have text
     const bool bObjSupportsText =
         supportsText(aShapeInfo.meShapeType);
 
     const bool bObjSupportsStyle =
-        aShapeInfo.meShapeType != XmlShapeTypeDrawGroupShape;
+        aShapeInfo.meShapeType != XmlShapeType::DrawGroupShape;
 
     bool bIsEmptyPresObj = false;
 
@@ -393,11 +392,11 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
         std::vector< XMLPropertyState > aPropStates;
 
         sal_Int32 nCount = 0;
-        if( !bIsEmptyPresObj || (aShapeInfo.meShapeType != XmlShapeTypePresPageShape) )
+        if( !bIsEmptyPresObj || (aShapeInfo.meShapeType != XmlShapeType::PresPageShape) )
         {
             aPropStates = GetPropertySetMapper()->Filter(mrExport, xPropSet);
 
-            if (XmlShapeTypeDrawControlShape == aShapeInfo.meShapeType)
+            if (XmlShapeType::DrawControlShape == aShapeInfo.meShapeType)
             {
                 // for control shapes, we additionally need the number format style (if any)
                 uno::Reference< drawing::XControlShape > xControl(xShape, uno::UNO_QUERY);
@@ -444,12 +443,12 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
         }
 
         // optionally generate auto style for text attributes
-        if( (!bIsEmptyPresObj || (aShapeInfo.meShapeType != XmlShapeTypePresPageShape)) && bObjSupportsText )
+        if( (!bIsEmptyPresObj || (aShapeInfo.meShapeType != XmlShapeType::PresPageShape)) && bObjSupportsText )
         {
             aPropStates = GetExport().GetTextParagraphExport()->GetParagraphPropertyMapper()->Filter(mrExport, xPropSet);
 
             // yet more additionally, we need to care for the ParaAdjust property
-            if ( XmlShapeTypeDrawControlShape == aShapeInfo.meShapeType )
+            if ( XmlShapeType::DrawControlShape == aShapeInfo.meShapeType )
             {
                 uno::Reference< beans::XPropertySetInfo > xPropSetInfo( xPropSet->getPropertySetInfo() );
                 uno::Reference< beans::XPropertyState > xPropState( xPropSet, uno::UNO_QUERY );
@@ -502,7 +501,7 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
 
     switch( aShapeInfo.meShapeType )
     {
-        case XmlShapeTypeDrawConnectorShape:
+        case XmlShapeType::DrawConnectorShape:
         {
             uno::Reference< uno::XInterface > xConnection;
 
@@ -516,8 +515,8 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
                 mrExport.getInterfaceToIdentifierMapper().registerReference( xConnection );
             break;
         }
-        case XmlShapeTypePresTableShape:
-        case XmlShapeTypeDrawTableShape:
+        case XmlShapeType::PresTableShape:
+        case XmlShapeType::DrawTableShape:
         {
             try
             {
@@ -542,7 +541,7 @@ void XMLShapeExport::collectShapeAutoStyles(const uno::Reference< drawing::XShap
         uno::Reference< drawing::XShapes > xShapes( xCollection, uno::UNO_QUERY );
         if( xShapes.is() )
         {
-            collectShapesAutoStyles( xShapes,rAutoStylePropNames );
+            collectShapesAutoStyles( xShapes );
         }
     }
 }
@@ -571,7 +570,7 @@ namespace
 void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape,
                                  XMLShapeExportFlags nFeatures /* = SEF_DEFAULT */,
                                  css::awt::Point* pRefPoint /* = NULL */,
-                                 SvXMLAttributeList* pAttrList /* = NULL */ )
+                                 comphelper::AttributeList* pAttrList /* = NULL */ )
 {
     SAL_INFO("xmloff", xShape->getShapeType());
     if( maCurrentShapesIter == maShapesInfos.end() )
@@ -595,7 +594,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
     // Need to stash the attributes that are pre-loaded for the shape export
     // (otherwise they will become attributes of the draw:a element)
     uno::Reference<xml::sax::XAttributeList> xSaveAttribs(
-        new SvXMLAttributeList(GetExport().GetAttrList()));
+        new comphelper::AttributeList(GetExport().GetAttrList()));
     GetExport().ClearAttrList();
     if( xSet.is() && (GetExport().GetModelType() == SvtModuleOptions::EFactory::DRAW) )
     {
@@ -661,7 +660,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
 
     // first compute the shapes type
     {
-        XmlShapeType eShapeType(XmlShapeTypeNotYetSet);
+        XmlShapeType eShapeType(XmlShapeType::NotYetSet);
         ImpCalcShapeType(xShape, eShapeType);
 
         SAL_WARN_IF( eShapeType != aShapeInfo.meShapeType, "xmloff", "exportShape callings do not correspond to collectShapeAutoStyles calls!: " << xShape->getShapeType() );
@@ -683,8 +682,8 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
                GetExport().GetModelType() != SvtModuleOptions::EFactory::WRITERWEB &&
                GetExport().GetModelType() != SvtModuleOptions::EFactory::WRITERGLOBAL ) ||
              ( GetExport().getExportFlags() & SvXMLExportFlags::OASIS ) ||
-             aShapeInfo.meShapeType == XmlShapeTypeDrawGroupShape ||
-             ( aShapeInfo.meShapeType == XmlShapeTypeDrawCustomShape &&
+             aShapeInfo.meShapeType == XmlShapeType::DrawGroupShape ||
+             ( aShapeInfo.meShapeType == XmlShapeType::DrawCustomShape &&
                aShapeInfo.xCustomShapeReplacement.is() ) )
         {
             uno::Reference< container::XNamed > xNamed( xShape, uno::UNO_QUERY );
@@ -747,8 +746,8 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
     // export draw:display (do not export in ODF 1.3 or older)
     if (xSet.is() && (mrExport.getSaneDefaultVersion() & SvtSaveOptions::ODFSVER_EXTENDED))
     {
-        if( aShapeInfo.meShapeType != XmlShapeTypeDrawPageShape && aShapeInfo.meShapeType != XmlShapeTypePresPageShape &&
-            aShapeInfo.meShapeType != XmlShapeTypeHandoutShape && aShapeInfo.meShapeType != XmlShapeTypeDrawChartShape )
+        if( aShapeInfo.meShapeType != XmlShapeType::DrawPageShape && aShapeInfo.meShapeType != XmlShapeType::PresPageShape &&
+            aShapeInfo.meShapeType != XmlShapeType::HandoutShape && aShapeInfo.meShapeType != XmlShapeType::DrawChartShape )
             try
             {
                 bool bVisible = true;
@@ -788,147 +787,147 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
     // export shape element
     switch(aShapeInfo.meShapeType)
     {
-        case XmlShapeTypeDrawRectangleShape:
+        case XmlShapeType::DrawRectangleShape:
         {
             ImpExportRectangleShape(xShape, nFeatures, pRefPoint );
             break;
         }
-        case XmlShapeTypeDrawEllipseShape:
+        case XmlShapeType::DrawEllipseShape:
         {
             ImpExportEllipseShape(xShape, nFeatures, pRefPoint );
             break;
         }
-        case XmlShapeTypeDrawLineShape:
+        case XmlShapeType::DrawLineShape:
         {
             ImpExportLineShape(xShape, nFeatures, pRefPoint );
             break;
         }
-        case XmlShapeTypeDrawPolyPolygonShape:  // closed PolyPolygon
-        case XmlShapeTypeDrawPolyLineShape:     // open PolyPolygon
-        case XmlShapeTypeDrawClosedBezierShape: // closed tools::PolyPolygon containing curves
-        case XmlShapeTypeDrawOpenBezierShape:   // open tools::PolyPolygon containing curves
+        case XmlShapeType::DrawPolyPolygonShape:  // closed PolyPolygon
+        case XmlShapeType::DrawPolyLineShape:     // open PolyPolygon
+        case XmlShapeType::DrawClosedBezierShape: // closed tools::PolyPolygon containing curves
+        case XmlShapeType::DrawOpenBezierShape:   // open tools::PolyPolygon containing curves
         {
             ImpExportPolygonShape(xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawTextShape:
-        case XmlShapeTypePresTitleTextShape:
-        case XmlShapeTypePresOutlinerShape:
-        case XmlShapeTypePresSubtitleShape:
-        case XmlShapeTypePresNotesShape:
-        case XmlShapeTypePresHeaderShape:
-        case XmlShapeTypePresFooterShape:
-        case XmlShapeTypePresSlideNumberShape:
-        case XmlShapeTypePresDateTimeShape:
+        case XmlShapeType::DrawTextShape:
+        case XmlShapeType::PresTitleTextShape:
+        case XmlShapeType::PresOutlinerShape:
+        case XmlShapeType::PresSubtitleShape:
+        case XmlShapeType::PresNotesShape:
+        case XmlShapeType::PresHeaderShape:
+        case XmlShapeType::PresFooterShape:
+        case XmlShapeType::PresSlideNumberShape:
+        case XmlShapeType::PresDateTimeShape:
         {
             ImpExportTextBoxShape(xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawGraphicObjectShape:
-        case XmlShapeTypePresGraphicObjectShape:
+        case XmlShapeType::DrawGraphicObjectShape:
+        case XmlShapeType::PresGraphicObjectShape:
         {
             ImpExportGraphicObjectShape(xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawChartShape:
-        case XmlShapeTypePresChartShape:
+        case XmlShapeType::DrawChartShape:
+        case XmlShapeType::PresChartShape:
         {
             ImpExportChartShape(xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint, pAttrList );
             break;
         }
 
-        case XmlShapeTypeDrawControlShape:
+        case XmlShapeType::DrawControlShape:
         {
             ImpExportControlShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawConnectorShape:
+        case XmlShapeType::DrawConnectorShape:
         {
             ImpExportConnectorShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawMeasureShape:
+        case XmlShapeType::DrawMeasureShape:
         {
             ImpExportMeasureShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawOLE2Shape:
-        case XmlShapeTypePresOLE2Shape:
-        case XmlShapeTypeDrawSheetShape:
-        case XmlShapeTypePresSheetShape:
+        case XmlShapeType::DrawOLE2Shape:
+        case XmlShapeType::PresOLE2Shape:
+        case XmlShapeType::DrawSheetShape:
+        case XmlShapeType::PresSheetShape:
         {
             ImpExportOLE2Shape(xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypePresTableShape:
-        case XmlShapeTypeDrawTableShape:
+        case XmlShapeType::PresTableShape:
+        case XmlShapeType::DrawTableShape:
         {
             ImpExportTableShape( xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawPageShape:
-        case XmlShapeTypePresPageShape:
-        case XmlShapeTypeHandoutShape:
+        case XmlShapeType::DrawPageShape:
+        case XmlShapeType::PresPageShape:
+        case XmlShapeType::HandoutShape:
         {
             ImpExportPageShape(xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawCaptionShape:
+        case XmlShapeType::DrawCaptionShape:
         {
             ImpExportCaptionShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDraw3DCubeObject:
-        case XmlShapeTypeDraw3DSphereObject:
-        case XmlShapeTypeDraw3DLatheObject:
-        case XmlShapeTypeDraw3DExtrudeObject:
+        case XmlShapeType::Draw3DCubeObject:
+        case XmlShapeType::Draw3DSphereObject:
+        case XmlShapeType::Draw3DLatheObject:
+        case XmlShapeType::Draw3DExtrudeObject:
         {
             ImpExport3DShape(xShape, aShapeInfo.meShapeType);
             break;
         }
 
-        case XmlShapeTypeDraw3DSceneObject:
+        case XmlShapeType::Draw3DSceneObject:
         {
             ImpExport3DSceneShape( xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawGroupShape:
+        case XmlShapeType::DrawGroupShape:
         {
             // empty group
             ImpExportGroupShape( xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawFrameShape:
+        case XmlShapeType::DrawFrameShape:
         {
             ImpExportFrameShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawAppletShape:
+        case XmlShapeType::DrawAppletShape:
         {
             ImpExportAppletShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawPluginShape:
+        case XmlShapeType::DrawPluginShape:
         {
             ImpExportPluginShape(xShape, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypeDrawCustomShape:
+        case XmlShapeType::DrawCustomShape:
         {
             if ( aShapeInfo.xCustomShapeReplacement.is() )
                 ImpExportGroupShape( aShapeInfo.xCustomShapeReplacement, nFeatures, pRefPoint );
@@ -937,16 +936,16 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
             break;
         }
 
-        case XmlShapeTypePresMediaShape:
-        case XmlShapeTypeDrawMediaShape:
+        case XmlShapeType::PresMediaShape:
+        case XmlShapeType::DrawMediaShape:
         {
             ImpExportMediaShape( xShape, aShapeInfo.meShapeType, nFeatures, pRefPoint );
             break;
         }
 
-        case XmlShapeTypePresOrgChartShape:
-        case XmlShapeTypeUnknown:
-        case XmlShapeTypeNotYetSet:
+        case XmlShapeType::PresOrgChartShape:
+        case XmlShapeType::Unknown:
+        case XmlShapeType::NotYetSet:
         default:
         {
             // this should never happen and is an error
@@ -968,9 +967,7 @@ void XMLShapeExport::exportShape(const uno::Reference< drawing::XShape >& xShape
 }
 
 // This method collects all automatic styles for the shapes inside the given XShapes collection
-void XMLShapeExport::collectShapesAutoStyles(
-        const uno::Reference < drawing::XShapes >& xShapes,
-        const css::uno::Sequence<OUString>& rAutoStylePropNames)
+void XMLShapeExport::collectShapesAutoStyles( const uno::Reference < drawing::XShapes >& xShapes )
 {
     ShapesInfos::iterator aOldCurrentShapesIter = maCurrentShapesIter;
     seekShapes( xShapes );
@@ -984,7 +981,7 @@ void XMLShapeExport::collectShapesAutoStyles(
         if(!xShape.is())
             continue;
 
-        collectShapeAutoStyles( xShape, rAutoStylePropNames );
+        collectShapeAutoStyles( xShape );
     }
 
     maCurrentShapesIter = aOldCurrentShapesIter;
@@ -1049,9 +1046,7 @@ void FixZOrder(uno::Reference<drawing::XShapes> const& xShapes,
             layers[nLayer].nMax = i;
         }
     }
-    layers.erase(std::remove_if(layers.begin(), layers.end(),
-                    [](Layer const& rLayer) { return rLayer.shapes.empty(); }),
-        layers.end());
+    std::erase_if(layers, [](Layer const& rLayer) { return rLayer.shapes.empty(); });
     bool isSorted(true);
     for (size_t i = 1; i < layers.size(); ++i)
     {
@@ -1092,11 +1087,9 @@ void XMLShapeExport::seekShapes( const uno::Reference< drawing::XShapes >& xShap
         maCurrentShapesIter = maShapesInfos.find( xShapes );
         if( maCurrentShapesIter == maShapesInfos.end() )
         {
-            ImplXMLShapeExportInfoVector aNewInfoVector;
-            aNewInfoVector.resize( static_cast<ShapesInfos::size_type>(xShapes->getCount()) );
-            maShapesInfos[ xShapes ] = aNewInfoVector;
+            auto itPair = maShapesInfos.emplace( xShapes, ImplXMLShapeExportInfoVector( static_cast<ShapesInfos::size_type>(xShapes->getCount()) ) );
 
-            maCurrentShapesIter = maShapesInfos.find( xShapes );
+            maCurrentShapesIter = itPair.first;
 
             SAL_WARN_IF( maCurrentShapesIter == maShapesInfos.end(), "xmloff", "XMLShapeExport::seekShapes(): insert into stl::map failed" );
         }
@@ -1145,7 +1138,7 @@ void XMLShapeExport::ImpCalcShapeType(const uno::Reference< drawing::XShape >& x
     XmlShapeType& eShapeType)
 {
     // set in every case, so init here
-    eShapeType = XmlShapeTypeUnknown;
+    eShapeType = XmlShapeType::Unknown;
 
     if(!xShape.is())
         return;
@@ -1158,38 +1151,38 @@ void XMLShapeExport::ImpCalcShapeType(const uno::Reference< drawing::XShape >& x
     if(aType.match("drawing.", 13))
     {
         // drawing shapes
-        if     (aType.match("Rectangle", 21)) { eShapeType = XmlShapeTypeDrawRectangleShape; }
+        if     (aType.match("Rectangle", 21)) { eShapeType = XmlShapeType::DrawRectangleShape; }
 
         // #i72177# Note: Correcting CustomShape, CustomShape->Custom, len from 9 (was wrong anyways) to 6.
         // As can be seen at the other compares, the appendix "Shape" is left out of the comparison.
-        else if(aType.match("Custom", 21)) { eShapeType = XmlShapeTypeDrawCustomShape; }
+        else if(aType.match("Custom", 21)) { eShapeType = XmlShapeType::DrawCustomShape; }
 
-        else if(aType.match("Ellipse", 21)) { eShapeType = XmlShapeTypeDrawEllipseShape; }
-        else if(aType.match("Control", 21)) { eShapeType = XmlShapeTypeDrawControlShape; }
-        else if(aType.match("Connector", 21)) { eShapeType = XmlShapeTypeDrawConnectorShape; }
-        else if(aType.match("Measure", 21)) { eShapeType = XmlShapeTypeDrawMeasureShape; }
-        else if(aType.match("Line", 21)) { eShapeType = XmlShapeTypeDrawLineShape; }
+        else if(aType.match("Ellipse", 21)) { eShapeType = XmlShapeType::DrawEllipseShape; }
+        else if(aType.match("Control", 21)) { eShapeType = XmlShapeType::DrawControlShape; }
+        else if(aType.match("Connector", 21)) { eShapeType = XmlShapeType::DrawConnectorShape; }
+        else if(aType.match("Measure", 21)) { eShapeType = XmlShapeType::DrawMeasureShape; }
+        else if(aType.match("Line", 21)) { eShapeType = XmlShapeType::DrawLineShape; }
 
         // #i72177# Note: This covers two types by purpose, PolyPolygonShape and PolyPolygonPathShape
-        else if(aType.match("PolyPolygon", 21)) { eShapeType = XmlShapeTypeDrawPolyPolygonShape; }
+        else if(aType.match("PolyPolygon", 21)) { eShapeType = XmlShapeType::DrawPolyPolygonShape; }
 
         // #i72177# Note: This covers two types by purpose, PolyLineShape and PolyLinePathShape
-        else if(aType.match("PolyLine", 21)) { eShapeType = XmlShapeTypeDrawPolyLineShape; }
+        else if(aType.match("PolyLine", 21)) { eShapeType = XmlShapeType::DrawPolyLineShape; }
 
-        else if(aType.match("OpenBezier", 21)) { eShapeType = XmlShapeTypeDrawOpenBezierShape; }
-        else if(aType.match("ClosedBezier", 21)) { eShapeType = XmlShapeTypeDrawClosedBezierShape; }
+        else if(aType.match("OpenBezier", 21)) { eShapeType = XmlShapeType::DrawOpenBezierShape; }
+        else if(aType.match("ClosedBezier", 21)) { eShapeType = XmlShapeType::DrawClosedBezierShape; }
 
         // #i72177# FreeHand (opened and closed) now supports the types OpenFreeHandShape and
         // ClosedFreeHandShape respectively. Represent them as bezier shapes
-        else if(aType.match("OpenFreeHand", 21)) { eShapeType = XmlShapeTypeDrawOpenBezierShape; }
-        else if(aType.match("ClosedFreeHand", 21)) { eShapeType = XmlShapeTypeDrawClosedBezierShape; }
+        else if(aType.match("OpenFreeHand", 21)) { eShapeType = XmlShapeType::DrawOpenBezierShape; }
+        else if(aType.match("ClosedFreeHand", 21)) { eShapeType = XmlShapeType::DrawClosedBezierShape; }
 
-        else if(aType.match("GraphicObject", 21)) { eShapeType = XmlShapeTypeDrawGraphicObjectShape; }
-        else if(aType.match("Group", 21)) { eShapeType = XmlShapeTypeDrawGroupShape; }
-        else if(aType.match("Text", 21)) { eShapeType = XmlShapeTypeDrawTextShape; }
+        else if(aType.match("GraphicObject", 21)) { eShapeType = XmlShapeType::DrawGraphicObjectShape; }
+        else if(aType.match("Group", 21)) { eShapeType = XmlShapeType::DrawGroupShape; }
+        else if(aType.match("Text", 21)) { eShapeType = XmlShapeType::DrawTextShape; }
         else if(aType.match("OLE2", 21))
         {
-            eShapeType = XmlShapeTypeDrawOLE2Shape;
+            eShapeType = XmlShapeType::DrawOLE2Shape;
 
             // get info about presentation shape
             uno::Reference <beans::XPropertySet> xPropSet(xShape, uno::UNO_QUERY);
@@ -1209,11 +1202,11 @@ void XMLShapeExport::ImpCalcShapeType(const uno::Reference< drawing::XShape >& x
 #endif
                         sCLSID == SvGlobalName( SO3_RPTCH_CLASSID ).GetHexName() )
                     {
-                        eShapeType = XmlShapeTypeDrawChartShape;
+                        eShapeType = XmlShapeType::DrawChartShape;
                     }
                     else if (sCLSID == SvGlobalName( SO3_SC_CLASSID ).GetHexName() )
                     {
-                        eShapeType = XmlShapeTypeDrawSheetShape;
+                        eShapeType = XmlShapeType::DrawSheetShape;
                     }
                     else
                     {
@@ -1222,32 +1215,32 @@ void XMLShapeExport::ImpCalcShapeType(const uno::Reference< drawing::XShape >& x
                 }
             }
         }
-        else if(aType.match("Page", 21)) { eShapeType = XmlShapeTypeDrawPageShape; }
-        else if(aType.match("Frame", 21)) { eShapeType = XmlShapeTypeDrawFrameShape; }
-        else if(aType.match("Caption", 21)) { eShapeType = XmlShapeTypeDrawCaptionShape; }
-        else if(aType.match("Plugin", 21)) { eShapeType = XmlShapeTypeDrawPluginShape; }
-        else if(aType.match("Applet", 21)) { eShapeType = XmlShapeTypeDrawAppletShape; }
-        else if(aType.match("MediaShape", 21)) { eShapeType = XmlShapeTypeDrawMediaShape; }
-        else if(aType.match("TableShape", 21)) { eShapeType = XmlShapeTypeDrawTableShape; }
+        else if(aType.match("Page", 21)) { eShapeType = XmlShapeType::DrawPageShape; }
+        else if(aType.match("Frame", 21)) { eShapeType = XmlShapeType::DrawFrameShape; }
+        else if(aType.match("Caption", 21)) { eShapeType = XmlShapeType::DrawCaptionShape; }
+        else if(aType.match("Plugin", 21)) { eShapeType = XmlShapeType::DrawPluginShape; }
+        else if(aType.match("Applet", 21)) { eShapeType = XmlShapeType::DrawAppletShape; }
+        else if(aType.match("MediaShape", 21)) { eShapeType = XmlShapeType::DrawMediaShape; }
+        else if(aType.match("TableShape", 21)) { eShapeType = XmlShapeType::DrawTableShape; }
 
         // 3D shapes
-        else if(aType.match("Scene", 21 + 7)) { eShapeType = XmlShapeTypeDraw3DSceneObject; }
-        else if(aType.match("Cube", 21 + 7)) { eShapeType = XmlShapeTypeDraw3DCubeObject; }
-        else if(aType.match("Sphere", 21 + 7)) { eShapeType = XmlShapeTypeDraw3DSphereObject; }
-        else if(aType.match("Lathe", 21 + 7)) { eShapeType = XmlShapeTypeDraw3DLatheObject; }
-        else if(aType.match("Extrude", 21 + 7)) { eShapeType = XmlShapeTypeDraw3DExtrudeObject; }
+        else if(aType.match("Scene", 21 + 7)) { eShapeType = XmlShapeType::Draw3DSceneObject; }
+        else if(aType.match("Cube", 21 + 7)) { eShapeType = XmlShapeType::Draw3DCubeObject; }
+        else if(aType.match("Sphere", 21 + 7)) { eShapeType = XmlShapeType::Draw3DSphereObject; }
+        else if(aType.match("Lathe", 21 + 7)) { eShapeType = XmlShapeType::Draw3DLatheObject; }
+        else if(aType.match("Extrude", 21 + 7)) { eShapeType = XmlShapeType::Draw3DExtrudeObject; }
     }
     else if(aType.match("presentation.", 13))
     {
         // presentation shapes
-        if     (aType.match("TitleText", 26)) { eShapeType = XmlShapeTypePresTitleTextShape; }
-        else if(aType.match("Outliner", 26)) { eShapeType = XmlShapeTypePresOutlinerShape;  }
-        else if(aType.match("Subtitle", 26)) { eShapeType = XmlShapeTypePresSubtitleShape;  }
-        else if(aType.match("GraphicObject", 26)) { eShapeType = XmlShapeTypePresGraphicObjectShape;  }
-        else if(aType.match("Page", 26)) { eShapeType = XmlShapeTypePresPageShape;  }
+        if     (aType.match("TitleText", 26)) { eShapeType = XmlShapeType::PresTitleTextShape; }
+        else if(aType.match("Outliner", 26)) { eShapeType = XmlShapeType::PresOutlinerShape;  }
+        else if(aType.match("Subtitle", 26)) { eShapeType = XmlShapeType::PresSubtitleShape;  }
+        else if(aType.match("GraphicObject", 26)) { eShapeType = XmlShapeType::PresGraphicObjectShape;  }
+        else if(aType.match("Page", 26)) { eShapeType = XmlShapeType::PresPageShape;  }
         else if(aType.match("OLE2", 26))
         {
-            eShapeType = XmlShapeTypePresOLE2Shape;
+            eShapeType = XmlShapeType::PresOLE2Shape;
 
             // get info about presentation shape
             uno::Reference <beans::XPropertySet> xPropSet(xShape, uno::UNO_QUERY);
@@ -1259,7 +1252,7 @@ void XMLShapeExport::ImpCalcShapeType(const uno::Reference< drawing::XShape >& x
                 {
                     if( sCLSID == SvGlobalName( SO3_SC_CLASSID ).GetHexName() )
                     {
-                        eShapeType = XmlShapeTypePresSheetShape;
+                        eShapeType = XmlShapeType::PresSheetShape;
                     }
                 }
             }
@@ -1268,17 +1261,17 @@ void XMLShapeExport::ImpCalcShapeType(const uno::Reference< drawing::XShape >& x
                 SAL_WARN( "xmloff", "XMLShapeExport::ImpCalcShapeType(), expected ole shape to have the CLSID property?" );
             }
         }
-        else if(aType.match("Chart", 26)) { eShapeType = XmlShapeTypePresChartShape;  }
-        else if(aType.match("OrgChart", 26)) { eShapeType = XmlShapeTypePresOrgChartShape;  }
-        else if(aType.match("CalcShape", 26)) { eShapeType = XmlShapeTypePresSheetShape; }
-        else if(aType.match("TableShape", 26)) { eShapeType = XmlShapeTypePresTableShape; }
-        else if(aType.match("Notes", 26)) { eShapeType = XmlShapeTypePresNotesShape;  }
-        else if(aType.match("HandoutShape", 26)) { eShapeType = XmlShapeTypeHandoutShape; }
-        else if(aType.match("HeaderShape", 26)) { eShapeType = XmlShapeTypePresHeaderShape; }
-        else if(aType.match("FooterShape", 26)) { eShapeType = XmlShapeTypePresFooterShape; }
-        else if(aType.match("SlideNumberShape", 26)) { eShapeType = XmlShapeTypePresSlideNumberShape; }
-        else if(aType.match("DateTimeShape", 26)) { eShapeType = XmlShapeTypePresDateTimeShape; }
-        else if(aType.match("MediaShape", 26)) { eShapeType = XmlShapeTypePresMediaShape; }
+        else if(aType.match("Chart", 26)) { eShapeType = XmlShapeType::PresChartShape;  }
+        else if(aType.match("OrgChart", 26)) { eShapeType = XmlShapeType::PresOrgChartShape;  }
+        else if(aType.match("CalcShape", 26)) { eShapeType = XmlShapeType::PresSheetShape; }
+        else if(aType.match("TableShape", 26)) { eShapeType = XmlShapeType::PresTableShape; }
+        else if(aType.match("Notes", 26)) { eShapeType = XmlShapeType::PresNotesShape;  }
+        else if(aType.match("HandoutShape", 26)) { eShapeType = XmlShapeType::HandoutShape; }
+        else if(aType.match("HeaderShape", 26)) { eShapeType = XmlShapeType::PresHeaderShape; }
+        else if(aType.match("FooterShape", 26)) { eShapeType = XmlShapeType::PresFooterShape; }
+        else if(aType.match("SlideNumberShape", 26)) { eShapeType = XmlShapeType::PresSlideNumberShape; }
+        else if(aType.match("DateTimeShape", 26)) { eShapeType = XmlShapeType::PresDateTimeShape; }
+        else if(aType.match("MediaShape", 26)) { eShapeType = XmlShapeType::PresMediaShape; }
     }
 }
 
@@ -1439,8 +1432,9 @@ void XMLShapeExport::ExportGraphicDefaults()
         {
             aStEx->exportDefaultStyle( xDefaults, XML_STYLE_FAMILY_SD_GRAPHICS_NAME, xPropertySetMapper );
 
-            // write graphic family styles
-            aStEx->exportStyleFamily("graphics", OUString(XML_STYLE_FAMILY_SD_GRAPHICS_NAME), xPropertySetMapper, false, XmlStyleFamily::SD_GRAPHICS_ID);
+            // write graphic styles (family name differs depending on the module)
+            aStEx->exportStyleFamily("graphics", XML_STYLE_FAMILY_SD_GRAPHICS_NAME, xPropertySetMapper, false, XmlStyleFamily::SD_GRAPHICS_ID);
+            aStEx->exportStyleFamily("GraphicStyles", XML_STYLE_FAMILY_SD_GRAPHICS_NAME, xPropertySetMapper, false, XmlStyleFamily::SD_GRAPHICS_ID);
         }
     }
     catch(const lang::ServiceNotRegisteredException&)
@@ -1517,9 +1511,10 @@ void XMLShapeExport::ImpExportNewTrans_GetB2DHomMatrix(::basegfx::B2DHomMatrix& 
     rMatrix.set(1, 0, aMatrix.Line2.Column1);
     rMatrix.set(1, 1, aMatrix.Line2.Column2);
     rMatrix.set(1, 2, aMatrix.Line2.Column3);
-    rMatrix.set(2, 0, aMatrix.Line3.Column1);
-    rMatrix.set(2, 1, aMatrix.Line3.Column2);
-    rMatrix.set(2, 2, aMatrix.Line3.Column3);
+    // For this to be a valid 2D transform matrix, the last row must be [0,0,1]
+    assert( aMatrix.Line3.Column1 == 0 );
+    assert( aMatrix.Line3.Column2 == 0 );
+    assert( aMatrix.Line3.Column3 == 1 );
 }
 
 void XMLShapeExport::ImpExportNewTrans_DecomposeAndRefPoint(const ::basegfx::B2DHomMatrix& rMatrix, ::basegfx::B2DTuple& rTRScale,
@@ -2023,49 +2018,49 @@ void XMLShapeExport::ImpExportTextBoxShape(
 
     switch(eShapeType)
     {
-        case XmlShapeTypePresSubtitleShape:
+        case XmlShapeType::PresSubtitleShape:
         {
             aStr = GetXMLToken(XML_SUBTITLE);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresTitleTextShape:
+        case XmlShapeType::PresTitleTextShape:
         {
             aStr = GetXMLToken(XML_TITLE);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresOutlinerShape:
+        case XmlShapeType::PresOutlinerShape:
         {
             aStr = GetXMLToken(XML_PRESENTATION_OUTLINE);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresNotesShape:
+        case XmlShapeType::PresNotesShape:
         {
             aStr = GetXMLToken(XML_NOTES);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresHeaderShape:
+        case XmlShapeType::PresHeaderShape:
         {
             aStr = GetXMLToken(XML_HEADER);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresFooterShape:
+        case XmlShapeType::PresFooterShape:
         {
             aStr = GetXMLToken(XML_FOOTER);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresSlideNumberShape:
+        case XmlShapeType::PresSlideNumberShape:
         {
             aStr = GetXMLToken(XML_PAGE_NUMBER);
             bIsPresShape = true;
             break;
         }
-        case XmlShapeTypePresDateTimeShape:
+        case XmlShapeType::PresDateTimeShape:
         {
             aStr = GetXMLToken(XML_DATE_TIME);
             bIsPresShape = true;
@@ -2309,8 +2304,8 @@ void XMLShapeExport::ImpExportPolygonShape(
     if(!xPropSet.is())
         return;
 
-    bool bBezier(eShapeType == XmlShapeTypeDrawClosedBezierShape
-        || eShapeType == XmlShapeTypeDrawOpenBezierShape);
+    bool bBezier(eShapeType == XmlShapeType::DrawClosedBezierShape
+        || eShapeType == XmlShapeType::DrawOpenBezierShape);
 
     // get matrix
     ::basegfx::B2DHomMatrix aMatrix;
@@ -2448,7 +2443,7 @@ void XMLShapeExport::ImpExportGraphicObjectShape(
     // Transformation
     ImpExportNewTrans(xPropSet, nFeatures, pRefPoint);
 
-    if(eShapeType == XmlShapeTypePresGraphicObjectShape)
+    if(eShapeType == XmlShapeType::PresGraphicObjectShape)
         bIsEmptyPresObj = ImpExportPresentationAttributes( xPropSet, GetXMLToken(XML_GRAPHIC) );
 
     bool bCreateNewline( (nFeatures & XMLShapeExportFlags::NO_WS) == XMLShapeExportFlags::NONE ); // #86116#/#92210#
@@ -2588,7 +2583,7 @@ void XMLShapeExport::ImpExportGraphicObjectShape(
 void XMLShapeExport::ImpExportChartShape(
     const uno::Reference< drawing::XShape >& xShape,
     XmlShapeType eShapeType, XMLShapeExportFlags nFeatures, awt::Point* pRefPoint,
-    SvXMLAttributeList* pAttrList )
+    comphelper::AttributeList* pAttrList )
 {
     ImpExportOLE2Shape( xShape, eShapeType, nFeatures, pRefPoint, pAttrList );
 }
@@ -2932,7 +2927,7 @@ void XMLShapeExport::ImpExportMeasureShape(
 void XMLShapeExport::ImpExportOLE2Shape(
     const uno::Reference< drawing::XShape >& xShape,
     XmlShapeType eShapeType, XMLShapeExportFlags nFeatures /* = SEF_DEFAULT */, awt::Point* pRefPoint /* = NULL */,
-    SvXMLAttributeList* pAttrList /* = NULL */ )
+    comphelper::AttributeList* pAttrList /* = NULL */ )
 {
     uno::Reference< beans::XPropertySet > xPropSet(xShape, uno::UNO_QUERY);
     uno::Reference< container::XNamed > xNamed(xShape, uno::UNO_QUERY);
@@ -2947,11 +2942,11 @@ void XMLShapeExport::ImpExportOLE2Shape(
     bool bIsEmptyPresObj = false;
 
     // presentation settings
-    if(eShapeType == XmlShapeTypePresOLE2Shape)
+    if(eShapeType == XmlShapeType::PresOLE2Shape)
         bIsEmptyPresObj = ImpExportPresentationAttributes( xPropSet, GetXMLToken(XML_OBJECT) );
-    else if(eShapeType == XmlShapeTypePresChartShape)
+    else if(eShapeType == XmlShapeType::PresChartShape)
         bIsEmptyPresObj = ImpExportPresentationAttributes( xPropSet, GetXMLToken(XML_CHART) );
-    else if(eShapeType == XmlShapeTypePresSheetShape)
+    else if(eShapeType == XmlShapeType::PresSheetShape)
         bIsEmptyPresObj = ImpExportPresentationAttributes( xPropSet, GetXMLToken(XML_TABLE) );
 
     bool bCreateNewline( (nFeatures & XMLShapeExportFlags::NO_WS) == XMLShapeExportFlags::NONE ); // #86116#/#92210#
@@ -3130,7 +3125,7 @@ void XMLShapeExport::ImpExportPageShape(
 
     // export page number used for this page
     uno::Reference< beans::XPropertySetInfo > xPropSetInfo( xPropSet->getPropertySetInfo() );
-    static const OUStringLiteral aPageNumberStr(u"PageNumber");
+    static constexpr OUString aPageNumberStr(u"PageNumber"_ustr);
     if( xPropSetInfo.is() && xPropSetInfo->hasPropertyByName(aPageNumberStr))
     {
         sal_Int32 nPageNumber = 0;
@@ -3142,7 +3137,7 @@ void XMLShapeExport::ImpExportPageShape(
     // a presentation page shape, normally used on notes pages only. If
     // it is used not as presentation shape, it may have been created with
     // copy-paste exchange between draw and impress (this IS possible...)
-    if(eShapeType == XmlShapeTypePresPageShape)
+    if(eShapeType == XmlShapeType::PresPageShape)
     {
         mrExport.AddAttribute(XML_NAMESPACE_PRESENTATION, XML_CLASS,
                              XML_PAGE);
@@ -3498,7 +3493,7 @@ void XMLShapeExport::ImpExportMediaShape(
     // Transformation
     ImpExportNewTrans(xPropSet, nFeatures, pRefPoint);
 
-    if(eShapeType == XmlShapeTypePresMediaShape)
+    if(eShapeType == XmlShapeType::PresMediaShape)
     {
         (void)ImpExportPresentationAttributes( xPropSet, GetXMLToken(XML_OBJECT) );
     }
@@ -3527,17 +3522,18 @@ void XMLShapeExport::ImpExportMediaShape(
     auto pPluginOBJ = std::make_unique<SvXMLElementExport>(mrExport, XML_NAMESPACE_DRAW, XML_PLUGIN, !( nFeatures & XMLShapeExportFlags::NO_WS ), true);
 
     // export parameters
-    const OUString aFalseStr(  "false"  ), aTrueStr(  "true"  );
+    static constexpr OUString aFalseStr( u"false"_ustr );
+    static constexpr OUString aTrueStr( u"true"_ustr );
 
     bool bLoop = false;
-    static const OUStringLiteral aLoopStr(  u"Loop"  );
+    static constexpr OUString aLoopStr(  u"Loop"_ustr  );
     xPropSet->getPropertyValue( aLoopStr ) >>= bLoop;
     mrExport.AddAttribute( XML_NAMESPACE_DRAW, XML_NAME, aLoopStr );
     mrExport.AddAttribute( XML_NAMESPACE_DRAW, XML_VALUE, bLoop ? aTrueStr : aFalseStr );
     delete new SvXMLElementExport( mrExport, XML_NAMESPACE_DRAW, XML_PARAM, false, true );
 
     bool bMute = false;
-    static const OUStringLiteral aMuteStr(  u"Mute"  );
+    static constexpr OUString aMuteStr(  u"Mute"_ustr  );
     xPropSet->getPropertyValue( aMuteStr ) >>= bMute;
     mrExport.AddAttribute( XML_NAMESPACE_DRAW, XML_NAME, aMuteStr );
     mrExport.AddAttribute( XML_NAMESPACE_DRAW, XML_VALUE, bMute ? aTrueStr : aFalseStr );
@@ -3653,7 +3649,7 @@ void XMLShapeExport::ImpExport3DShape(
 
     switch(eShapeType)
     {
-        case XmlShapeTypeDraw3DCubeObject:
+        case XmlShapeType::Draw3DCubeObject:
         {
             // minEdge
             aAny = xPropSet->getPropertyValue("D3DPosition");
@@ -3693,7 +3689,7 @@ void XMLShapeExport::ImpExport3DShape(
 
             break;
         }
-        case XmlShapeTypeDraw3DSphereObject:
+        case XmlShapeType::Draw3DSphereObject:
         {
             // Center
             aAny = xPropSet->getPropertyValue("D3DPosition");
@@ -3730,8 +3726,8 @@ void XMLShapeExport::ImpExport3DShape(
 
             break;
         }
-        case XmlShapeTypeDraw3DLatheObject:
-        case XmlShapeTypeDraw3DExtrudeObject:
+        case XmlShapeType::Draw3DLatheObject:
+        case XmlShapeType::Draw3DExtrudeObject:
         {
             // write special 3DLathe/3DExtrude attributes, get 3D tools::PolyPolygon as drawing::PolyPolygonShape3D
             aAny = xPropSet->getPropertyValue("D3DPolyPolygon3D");
@@ -3773,7 +3769,7 @@ void XMLShapeExport::ImpExport3DShape(
             // write point array
             mrExport.AddAttribute(XML_NAMESPACE_SVG, XML_D, aPolygonString);
 
-            if(eShapeType == XmlShapeTypeDraw3DLatheObject)
+            if(eShapeType == XmlShapeType::Draw3DLatheObject)
             {
                 // write 3DLathe shape
                 SvXMLElementExport aOBJ(mrExport, XML_NAMESPACE_DR3D, XML_ROTATE, true, true);
@@ -3913,9 +3909,9 @@ void XMLShapeExport::export3DLamps( const css::uno::Reference< css::beans::XProp
     OUString aStr;
     OUStringBuffer sStringBuffer;
 
-    static const OUStringLiteral aColorPropName(u"D3DSceneLightColor");
-    static const OUStringLiteral aDirectionPropName(u"D3DSceneLightDirection");
-    static const OUStringLiteral aLightOnPropName(u"D3DSceneLightOn");
+    static constexpr OUStringLiteral aColorPropName(u"D3DSceneLightColor");
+    static constexpr OUStringLiteral aDirectionPropName(u"D3DSceneLightDirection");
+    static constexpr OUStringLiteral aLightOnPropName(u"D3DSceneLightOn");
 
     ::basegfx::B3DVector aLightDirection;
     drawing::Direction3D aLightDir;
@@ -4369,7 +4365,7 @@ static void ImpExportEnhancedGeometry( SvXMLExport& rExport, const uno::Referenc
     uno::Reference< beans::XPropertySetInfo > xPropSetInfo( xPropSet->getPropertySetInfo() );
 
     // geometry
-    static const OUStringLiteral sCustomShapeGeometry( u"CustomShapeGeometry" );
+    static constexpr OUString sCustomShapeGeometry( u"CustomShapeGeometry"_ustr );
     if ( xPropSetInfo.is() && xPropSetInfo->hasPropertyByName( sCustomShapeGeometry ) )
     {
         uno::Any aGeoPropSet( xPropSet->getPropertyValue( sCustomShapeGeometry ) );
@@ -5006,10 +5002,10 @@ static void ImpExportEnhancedGeometry( SvXMLExport& rExport, const uno::Referenc
             // otherwise loext:writing-mode is used in style export.
             if (!(rExport.getSaneDefaultVersion() & SvtSaveOptions::ODFSVER_EXTENDED))
             {
-                if (xPropSetInfo->hasPropertyByName(u"WritingMode"))
+                if (xPropSetInfo->hasPropertyByName(u"WritingMode"_ustr))
                 {
                     sal_Int16 nDirection = -1;
-                    xPropSet->getPropertyValue(u"WritingMode") >>= nDirection;
+                    xPropSet->getPropertyValue(u"WritingMode"_ustr) >>= nDirection;
                     if (nDirection == text::WritingMode2::TB_RL90)
                         fTextRotateAngle -= 90;
                     else if (nDirection == text::WritingMode2::BT_LR)
@@ -5126,7 +5122,7 @@ void XMLShapeExport::ImpExportTableShape( const uno::Reference< drawing::XShape 
         bool bIsEmptyPresObj = false;
 
         // presentation settings
-        if(eShapeType == XmlShapeTypePresTableShape)
+        if(eShapeType == XmlShapeType::PresTableShape)
             bIsEmptyPresObj = ImpExportPresentationAttributes( xPropSet, GetXMLToken(XML_TABLE) );
 
         const bool bCreateNewline( (nFeatures & XMLShapeExportFlags::NO_WS) == XMLShapeExportFlags::NONE );

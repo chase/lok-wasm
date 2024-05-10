@@ -240,10 +240,28 @@ namespace sal::systools
         T* com_ptr_;
     };
 
+    // A class to use with functions taking an out pointer argument,
+    // that needs to be freed with CoTaskMemFree - like SHGetKnownFolderPath
+    template <typename T> class CoTaskMemAllocated
+    {
+    public:
+        ~CoTaskMemAllocated() { CoTaskMemFree(m_pv); }
+
+        T** operator&()
+        {
+            CoTaskMemFree(std::exchange(m_pv, nullptr));
+            return &m_pv;
+        };
+
+        operator T*() { return m_pv; }
+
+    private:
+        T* m_pv = nullptr;
+    };
+
 } // sal::systools
 
 /* Typedefs for some popular COM interfaces */
 typedef sal::systools::COMReference<IDataObject> IDataObjectPtr;
-typedef sal::systools::COMReference<IStream> IStreamPtr;
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

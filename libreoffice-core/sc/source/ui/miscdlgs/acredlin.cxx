@@ -807,13 +807,13 @@ IMPL_LINK_NOARG(ScAcceptChgDlg, RefHandle, SvxTPFilter*, void)
 
     SC_MOD()->SetRefDialog( nId, true );
 
-    SfxViewFrame* pViewFrm = pViewData->GetViewShell()->GetViewFrame();
-    ScSimpleRefDlgWrapper* pWnd = static_cast<ScSimpleRefDlgWrapper*>(pViewFrm->GetChildWindow( nId ));
+    SfxViewFrame& rViewFrm = pViewData->GetViewShell()->GetViewFrame();
+    ScSimpleRefDlgWrapper* pWnd = static_cast<ScSimpleRefDlgWrapper*>(rViewFrm.GetChildWindow( nId ));
 
     if(pWnd!=nullptr)
     {
         sal_uInt16 nAcceptId=ScAcceptChgDlgWrapper::GetChildWindowId();
-        pViewFrm->ShowChildWindow(nAcceptId,false);
+        rViewFrm.ShowChildWindow(nAcceptId,false);
         pWnd->SetCloseHdl(LINK( this, ScAcceptChgDlg,RefInfoHandle));
         pWnd->SetRefString(pTPFilter->GetRange());
         ScSimpleRefDlgWrapper::SetAutoReOpen(false);
@@ -830,17 +830,17 @@ IMPL_LINK( ScAcceptChgDlg, RefInfoHandle, const OUString*, pResult, void)
 
     ScSimpleRefDlgWrapper::SetAutoReOpen(true);
 
-    SfxViewFrame* pViewFrm = pViewData->GetViewShell()->GetViewFrame();
+    SfxViewFrame& rViewFrm = pViewData->GetViewShell()->GetViewFrame();
     if (pResult)
     {
         pTPFilter->SetRange(*pResult);
         FilterHandle(pTPFilter);
 
-        pViewFrm->ShowChildWindow(nId);
+        rViewFrm.ShowChildWindow(nId);
     }
     else
     {
-        pViewFrm->SetChildWindow(nId, false);
+        rViewFrm.SetChildWindow(nId, false);
     }
 }
 
@@ -1600,7 +1600,7 @@ IMPL_LINK(ScAcceptChgDlg, CommandHdl, const CommandEvent&, rCEvt, bool)
 
     int nSortedCol = rTreeView.get_sort_column();
     for (sal_Int32 i = 0; i < 5; ++i)
-        m_xSortMenu->set_active("calcsort" + OString::number(i), i == nSortedCol);
+        m_xSortMenu->set_active("calcsort" + OUString::number(i), i == nSortedCol);
 
     m_xPopup->set_sensitive("calcedit", false);
 
@@ -1615,7 +1615,7 @@ IMPL_LINK(ScAcceptChgDlg, CommandHdl, const CommandEvent&, rCEvt, bool)
         }
     }
 
-    OString sCommand = m_xPopup->popup_at_rect(&rTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1)));
+    OUString sCommand = m_xPopup->popup_at_rect(&rTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1)));
 
     if (!sCommand.isEmpty())
     {

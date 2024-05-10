@@ -68,6 +68,7 @@ namespace dxcanvas
         const ::basegfx::B2ISize&              rOutputOffset,
         const css::rendering::StringContext&   rText,
         const css::uno::Sequence< double >&    rLogicalAdvancements,
+        const css::uno::Sequence< sal_Bool >&  rKashidaPositions,
         const css::uno::Reference<
             css::rendering::XCanvasFont >&     rCanvasFont,
         const css::geometry::Matrix2D&         rFontMatrix,
@@ -83,7 +84,7 @@ namespace dxcanvas
         SystemGraphicsData aSystemGraphicsData;
         aSystemGraphicsData.nSize = sizeof(SystemGraphicsData);
         aSystemGraphicsData.hDC = reinterpret_cast< ::HDC >(hdc);
-        ScopedVclPtrInstance<VirtualDevice> xVirtualDevice(aSystemGraphicsData, Size(1, 1), DeviceFormat::DEFAULT);
+        ScopedVclPtrInstance<VirtualDevice> xVirtualDevice(aSystemGraphicsData, Size(1, 1), DeviceFormat::WITHOUT_ALPHA);
 
         // disable font antialiasing - GDI does not handle alpha
         // surfaces properly.
@@ -156,7 +157,7 @@ namespace dxcanvas
 
             if(!rOutputOffset.equalZero())
             {
-                aWorldTransform.translate(rOutputOffset.getX(), rOutputOffset.getY());
+                aWorldTransform.translate(rOutputOffset.getWidth(), rOutputOffset.getHeight());
             }
 
             // set ViewState clipping
@@ -168,7 +169,7 @@ namespace dxcanvas
 
                 if(!rOutputOffset.equalZero())
                 {
-                    aMatrix.translate(rOutputOffset.getX(), rOutputOffset.getY());
+                    aMatrix.translate(rOutputOffset.getWidth(), rOutputOffset.getHeight());
                 }
 
                 aClipPoly.transform(aMatrix);
@@ -213,11 +214,13 @@ namespace dxcanvas
                 for( sal_Int32 i=0; i<nLen; ++i )
                     DXArray.push_back(basegfx::fround(rLogicalAdvancements[i]));
 
+                std::span<const sal_Bool> aKashidaArray(rKashidaPositions.getConstArray(), rKashidaPositions.getLength());
+
                 // draw the String
                 xVirtualDevice->DrawTextArray( aEmptyPoint,
                                               aText,
                                               DXArray,
-                                              {},
+                                              aKashidaArray,
                                               rText.StartPosition,
                                               rText.Length,
                                               bIsRTL ? SalLayoutFlags::BiDiRtl : SalLayoutFlags::NONE);
@@ -246,7 +249,7 @@ namespace dxcanvas
         SystemGraphicsData aSystemGraphicsData;
         aSystemGraphicsData.nSize = sizeof(SystemGraphicsData);
         aSystemGraphicsData.hDC = reinterpret_cast< ::HDC >(GetDC( nullptr ));
-        ScopedVclPtrInstance<VirtualDevice> xVirtualDevice(aSystemGraphicsData, Size(1, 1), DeviceFormat::DEFAULT);
+        ScopedVclPtrInstance<VirtualDevice> xVirtualDevice(aSystemGraphicsData, Size(1, 1), DeviceFormat::WITHOUT_ALPHA);
 
         // create the font
         const css::rendering::FontRequest& rFontRequest = rCanvasFont->getFontRequest();

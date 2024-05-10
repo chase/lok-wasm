@@ -14,8 +14,7 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <com/sun/star/xml/sax/XDocumentHandler.hpp>
 #include <com/sun/star/xml/sax/XAttributeList.hpp>
-
-#include <xmloff/attrlist.hxx>
+#include <comphelper/attributelist.hxx>
 #include <xmloff/xmlimp.hxx>
 
 namespace writerperfect
@@ -109,7 +108,6 @@ static void unescapeXML(const char* s, const unsigned long sz, librevenge::RVNGS
 }
 
 using com::sun::star::uno::Reference;
-using com::sun::star::xml::sax::XAttributeList;
 using com::sun::star::xml::sax::XDocumentHandler;
 
 DocumentHandler::DocumentHandler(Reference<XDocumentHandler> const& xHandler)
@@ -126,7 +124,7 @@ void DocumentHandler::endDocument() { mxHandler->endDocument(); }
 void DocumentHandler::startElement(const char* psName,
                                    const librevenge::RVNGPropertyList& xPropList)
 {
-    rtl::Reference<SvXMLAttributeList> pAttrList = new SvXMLAttributeList();
+    rtl::Reference<comphelper::AttributeList> pAttrList = new comphelper::AttributeList();
     librevenge::RVNGPropertyList::Iter i(xPropList);
     for (i.rewind(); i.next();)
     {

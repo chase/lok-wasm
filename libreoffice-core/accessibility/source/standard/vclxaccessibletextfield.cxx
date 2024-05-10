@@ -18,6 +18,7 @@
  */
 
 #include <standard/vclxaccessibletextfield.hxx>
+#include <comphelper/sequence.hxx>
 #include <vcl/toolkit/lstbox.hxx>
 
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
@@ -31,7 +32,7 @@ using namespace ::com::sun::star::accessibility;
 
 
 VCLXAccessibleTextField::VCLXAccessibleTextField (VCLXWindow* pVCLWindow, const Reference< XAccessible >& _xParent) :
-    VCLXAccessibleTextComponent (pVCLWindow),
+    ImplInheritanceHelper (pVCLWindow),
     m_xParent( _xParent )
 
 {
@@ -47,9 +48,6 @@ OUString VCLXAccessibleTextField::implGetText()
 
     return aText;
 }
-
-IMPLEMENT_FORWARD_XINTERFACE2(VCLXAccessibleTextField, VCLXAccessibleTextComponent, VCLXAccessible_BASE)
-IMPLEMENT_FORWARD_XTYPEPROVIDER2(VCLXAccessibleTextField, VCLXAccessibleTextComponent, VCLXAccessible_BASE)
 
 
 // XAccessible
@@ -77,8 +75,6 @@ Reference<XAccessible> SAL_CALL VCLXAccessibleTextField::getAccessibleChild (sal
 
 sal_Int16 SAL_CALL VCLXAccessibleTextField::getAccessibleRole()
 {
-    ::osl::Guard< ::osl::Mutex > aGuard( GetMutex() );
-
     return AccessibleRole::TEXT;
 }
 

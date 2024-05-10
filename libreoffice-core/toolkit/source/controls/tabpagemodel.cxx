@@ -20,7 +20,7 @@
 #include <controls/tabpagemodel.hxx>
 
 #include <vcl/svapp.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <com/sun/star/awt/UnoControlDialogModelProvider.hpp>
 #include <com/sun/star/awt/tab/XTabPage.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
@@ -142,7 +142,7 @@ void SAL_CALL UnoControlTabPageModel::initialize (const Sequence<Any>& rArgument
             Reference<XPropertySet> xDialogProp(xDialogModel,UNO_QUERY);
             if ( xDialogProp.is() )
             {
-                static constexpr OUStringLiteral s_sResourceResolver = u"ResourceResolver";
+                static constexpr OUString s_sResourceResolver = u"ResourceResolver"_ustr;
                 setPropertyValue(s_sResourceResolver,xDialogProp->getPropertyValue(s_sResourceResolver));
                 setPropertyValue(GetPropertyName(BASEPROPERTY_TITLE),xDialogProp->getPropertyValue(GetPropertyName(BASEPROPERTY_TITLE)));
                 setPropertyValue(GetPropertyName(BASEPROPERTY_HELPTEXT),xDialogProp->getPropertyValue(GetPropertyName(BASEPROPERTY_HELPTEXT)));
@@ -184,15 +184,6 @@ sal_Bool SAL_CALL UnoControlTabPage::supportsService(OUString const & ServiceNam
 css::uno::Sequence<OUString> SAL_CALL UnoControlTabPage::getSupportedServiceNames()
 {
     return { "com.sun.star.awt.tab.UnoControlTabPage" };
-}
-
-void UnoControlTabPage::dispose()
-{
-    SolarMutexGuard aSolarGuard;
-
-    lang::EventObject aEvt;
-    aEvt.Source = static_cast< ::cppu::OWeakObject* >( this );
-    ControlContainerBase::dispose();
 }
 
 void SAL_CALL UnoControlTabPage::disposing( const lang::EventObject& Source )

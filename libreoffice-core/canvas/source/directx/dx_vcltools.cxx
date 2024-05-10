@@ -100,7 +100,7 @@ namespace dxcanvas::tools
                 {
                     // first of all, ensure that Bitmap contains a DIB, by
                     // acquiring a read access
-                    BitmapReadAccess* pReadAcc = rBmp.AcquireReadAccess();
+                    BitmapScopedReadAccess pReadAcc(rBmp);
 
                     // TODO(P2): Acquiring a read access can actually
                     // force a read from VRAM, thus, avoiding this
@@ -116,8 +116,6 @@ namespace dxcanvas::tools
                             return drawDIBits( rGraphics,
                                                aBmpSysData.pDIB );
                         }
-
-                        Bitmap::ReleaseAccess( pReadAcc );
                     }
                 }
                 else
@@ -156,7 +154,7 @@ namespace dxcanvas::tools
 
                 Bitmap aBitmap( rBmpEx.GetBitmap() );
 
-                Bitmap::ScopedReadAccess pReadAccess( aBitmap );
+                BitmapScopedReadAccess pReadAccess( aBitmap );
 
                 const sal_Int32 nWidth( aBmpSize.Width() );
                 const sal_Int32 nHeight( aBmpSize.Height() );
@@ -165,9 +163,9 @@ namespace dxcanvas::tools
                                   "::dxcanvas::tools::bitmapFromVCLBitmapEx(): "
                                   "Unable to acquire read access to bitmap" );
 
-                Bitmap aAlpha( rBmpEx.GetAlpha().GetBitmap() );
+                Bitmap aAlpha( rBmpEx.GetAlphaMask().GetBitmap() );
 
-                Bitmap::ScopedReadAccess pAlphaReadAccess( aAlpha );
+                BitmapScopedReadAccess pAlphaReadAccess( aAlpha );
 
                 // By convention, the access buffer always has
                 // one of the following formats:
@@ -211,11 +209,7 @@ namespace dxcanvas::tools
                                     *pCurrOutput++ = aCol.GetBlue();
                                     *pCurrOutput++ = aCol.GetGreen();
                                     *pCurrOutput++ = aCol.GetRed();
-
-                                    // our notion of alpha is
-                                    // different from the rest
-                                    // of the world's
-                                    *pCurrOutput++ = 255 - static_cast<BYTE>(*pAScan++);
+                                    *pCurrOutput++ = static_cast<BYTE>(*pAScan++);
                                 }
                             }
                             break;
@@ -231,11 +225,7 @@ namespace dxcanvas::tools
                                     *pCurrOutput++ = *pScan++;
                                     *pCurrOutput++ = *pScan++;
                                     *pCurrOutput++ = *pScan++;
-
-                                    // our notion of alpha is
-                                    // different from the rest
-                                    // of the world's
-                                    *pCurrOutput++ = 255 - static_cast<BYTE>(*pAScan++);
+                                    *pCurrOutput++ = static_cast<BYTE>(*pAScan++);
                                 }
                             }
                             break;
@@ -258,16 +248,11 @@ namespace dxcanvas::tools
                                     *pCurrOutput++ = aCol.GetBlue();
                                     *pCurrOutput++ = aCol.GetGreen();
                                     *pCurrOutput++ = aCol.GetRed();
-
-                                    // our notion of alpha is
-                                    // different from the rest
-                                    // of the world's
-                                    *pCurrOutput++ = 255 - static_cast<BYTE>(*pAScan++);
+                                    *pCurrOutput++ = static_cast<BYTE>(*pAScan++);
                                 }
                             }
                             break;
 
-                        case ScanlineFormat::N1BitLsbPal:
                         case ScanlineFormat::N24BitTcRgb:
                         case ScanlineFormat::N32BitTcAbgr:
                         case ScanlineFormat::N32BitTcArgb:

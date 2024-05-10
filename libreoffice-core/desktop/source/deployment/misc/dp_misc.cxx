@@ -46,6 +46,7 @@
 #include <com/sun/star/task/OfficeRestartManager.hpp>
 #include <memory>
 #include <string_view>
+#include <thread>
 #include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <salhelper/linkhelper.hxx>
@@ -61,15 +62,17 @@ using namespace ::com::sun::star::uno;
 namespace dp_misc {
 namespace {
 
-struct UnoRc : public rtl::StaticWithInit<
-    std::shared_ptr<rtl::Bootstrap>, UnoRc> {
-    std::shared_ptr<rtl::Bootstrap> operator () () {
-        OUString unorc( "$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("louno") );
-        ::rtl::Bootstrap::expandMacros( unorc );
-        auto ret = std::make_shared<::rtl::Bootstrap>( unorc );
-        OSL_ASSERT( ret->getHandle() != nullptr );
-        return ret;
-    }
+std::shared_ptr<rtl::Bootstrap> & UnoRc()
+{
+    static std::shared_ptr<rtl::Bootstrap> theRc = []()
+        {
+            OUString unorc( "$BRAND_BASE_DIR/" LIBO_ETC_FOLDER "/" SAL_CONFIGFILE("louno") );
+            ::rtl::Bootstrap::expandMacros( unorc );
+            auto ret = std::make_shared<::rtl::Bootstrap>( unorc );
+            OSL_ASSERT( ret->getHandle() != nullptr );
+            return ret;
+        }();
+    return theRc;
 };
 
 OUString generateOfficePipeId()
@@ -101,8 +104,7 @@ OUString generateOfficePipeId()
 
     // create hex-value string from the MD5 value to keep
     // the string size minimal
-    OUStringBuffer buf;
-    buf.append( "SingleOfficeIPC_" );
+    OUStringBuffer buf( "SingleOfficeIPC_" );
     for ( sal_uInt32 i = 0; i < md5_key_len; ++i ) {
         buf.append( static_cast<sal_Int32>(md5_buf[ i ]), 0x10 );
     }
@@ -292,16 +294,14 @@ OUString makeURLAppendSysPathSegment( std::u16string_view baseURL, OUString cons
 OUString expandUnoRcTerm( OUString const & term_ )
 {
     OUString term(term_);
-    UnoRc::get()->expandMacrosFrom( term );
+    UnoRc()->expandMacrosFrom( term );
     return term;
 }
 
 OUString makeRcTerm( OUString const & url )
 {
     OSL_ASSERT( url.match( "vnd.sun.star.expand:" ));
-    if (url.match( "vnd.sun.star.expand:" )) {
-        // cut protocol:
-        OUString rcterm( url.copy( sizeof ("vnd.sun.star.expand:") - 1 ) );
+    if (OUString rcterm; url.startsWithIgnoreAsciiCase("vnd.sun.star.expand:", &rcterm)) {
         // decode uric class chars:
         rcterm = ::rtl::Uri::decode(
             rcterm, rtl_UriDecodeWithCharset, RTL_TEXTENCODING_UTF8 );
@@ -314,14 +314,12 @@ OUString makeRcTerm( OUString const & url )
 
 OUString expandUnoRcUrl( OUString const & url )
 {
-    if (url.match( "vnd.sun.star.expand:" )) {
-        // cut protocol:
-        OUString rcurl( url.copy( sizeof ("vnd.sun.star.expand:") - 1 ) );
+    if (OUString rcurl; url.startsWithIgnoreAsciiCase("vnd.sun.star.expand:", &rcurl)) {
         // decode uric class chars:
         rcurl = ::rtl::Uri::decode(
             rcurl, rtl_UriDecodeWithCharset, RTL_TEXTENCODING_UTF8 );
         // expand macro string:
-        UnoRc::get()->expandMacrosFrom( rcurl );
+        UnoRc()->expandMacrosFrom( rcurl );
         return rcurl;
     }
     else {
@@ -447,7 +445,7 @@ Reference<XInterface> resolveUnoURL(
         catch (const connection::NoConnectException &) {
             if (i < 40)
             {
-                ::osl::Thread::wait( std::chrono::milliseconds(500) );
+                std::this_thread::sleep_for( std::chrono::milliseconds(500) );
             }
             else throw;
         }

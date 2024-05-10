@@ -25,7 +25,6 @@
 #include <osl/diagnose.h>
 #include <sfx2/htmlmode.hxx>
 #include <sfx2/sfxdlg.hxx>
-#include <svtools/htmlcfg.hxx>
 #include <svl/cjkoptions.hxx>
 #include <vcl/svapp.hxx>
 #include <numpara.hxx>
@@ -58,18 +57,19 @@
 #include <svl/intitem.hxx>
 #include <svx/dialogs.hrc>
 #include <svx/flagsdef.hxx>
+#include <officecfg/Office/Common.hxx>
 
 // the dialog's carrier
 SwTemplateDlgController::SwTemplateDlgController(weld::Window* pParent,
                                                  SfxStyleSheetBase& rBase,
                                                  SfxStyleFamily nRegion,
-                                                 const OString& sPage,
+                                                 const OUString& sPage,
                                                  SwWrtShell* pActShell,
                                                  bool bNew)
     : SfxStyleDialogController(pParent,
                                "modules/swriter/ui/templatedialog" +
                                    OUString::number(static_cast<sal_uInt16>(nRegion)) + ".ui",
-                               "TemplateDialog" + OString::number(static_cast<sal_uInt16>(nRegion)),
+                               "TemplateDialog" + OUString::number(static_cast<sal_uInt16>(nRegion)),
                                rBase)
     , m_nType(nRegion)
     , m_pWrtShell(pActShell)
@@ -146,7 +146,7 @@ SwTemplateDlgController::SwTemplateDlgController(weld::Window* pParent,
 
             if(m_nHtmlMode & HTMLMODE_ON)
             {
-                if (!SvxHtmlOptions::IsPrintLayoutExtension())
+                if (!officecfg::Office::Common::Filter::HTML::Export::PrintLayout::get())
                     RemoveTabPage("textflow");
                 RemoveTabPage("asiantypo");
                 RemoveTabPage("tabs");
@@ -267,7 +267,7 @@ void SwTemplateDlgController::RefreshInputSet()
     pInSet->SetParent( &GetStyleSheet().GetItemSet() );
 }
 
-void SwTemplateDlgController::PageCreated(const OString& rId, SfxTabPage &rPage )
+void SwTemplateDlgController::PageCreated(const OUString& rId, SfxTabPage &rPage )
 {
     // set style's and metric's names
     OUString sNumCharFormat, sBulletCharFormat;
@@ -534,7 +534,7 @@ void SwTemplateDlgController::PageCreated(const OString& rId, SfxTabPage &rPage 
         SfxAllItemSet aNewSet(*aSet.GetPool());
         aNewSet.Put( SwMacroAssignDlg::AddEvents(MACASSGN_ALLFRM) );
         if ( m_pWrtShell )
-            rPage.SetFrame( m_pWrtShell->GetView().GetViewFrame()->GetFrame().GetFrameInterface() );
+            rPage.SetFrame( m_pWrtShell->GetView().GetViewFrame().GetFrame().GetFrameInterface() );
         rPage.PageCreated(aNewSet);
     }
 }

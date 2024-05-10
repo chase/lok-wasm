@@ -44,7 +44,6 @@ namespace pdfi
 {
 
 PDFIHybridAdaptor::PDFIHybridAdaptor( const uno::Reference< uno::XComponentContext >& xContext ) :
-    PDFIHybridAdaptorBase( m_aMutex ),
     m_xContext( xContext )
 {
 }
@@ -203,7 +202,6 @@ css::uno::Sequence<OUString> PDFIHybridAdaptor::getSupportedServiceNames()
 }
 
 PDFIRawAdaptor::PDFIRawAdaptor( OUString const & implementationName, const uno::Reference< uno::XComponentContext >& xContext ) :
-    PDFIAdaptorBase( m_aMutex ),
     m_implementationName(implementationName),
     m_xContext( xContext )
 {
@@ -331,7 +329,7 @@ sdext_PDFIRawAdaptor_Writer_get_implementation(
     rtl::Reference<pdfi::PDFIRawAdaptor> pAdaptor = new pdfi::PDFIRawAdaptor( "org.libreoffice.comp.documents.WriterPDFImport", context );
     pAdaptor->setTreeVisitorFactory(pdfi::createWriterTreeVisitorFactory());
     pAdaptor->acquire();
-    return static_cast<cppu::OWeakObject*>(pAdaptor.get());
+    return getXWeak(pAdaptor.get());
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
@@ -341,7 +339,7 @@ sdext_PDFIRawAdaptor_Draw_get_implementation(
     rtl::Reference<pdfi::PDFIRawAdaptor> pAdaptor = new pdfi::PDFIRawAdaptor( "org.libreoffice.comp.documents.DrawPDFImport", context );
     pAdaptor->setTreeVisitorFactory(pdfi::createDrawTreeVisitorFactory());
     pAdaptor->acquire();
-    return static_cast<cppu::OWeakObject*>(pAdaptor.get());
+    return getXWeak(pAdaptor.get());
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
@@ -351,7 +349,7 @@ sdext_PDFIRawAdaptor_Impress_get_implementation(
     rtl::Reference<pdfi::PDFIRawAdaptor> pAdaptor = new pdfi::PDFIRawAdaptor( "org.libreoffice.comp.documents.ImpressPDFImport", context );
     pAdaptor->setTreeVisitorFactory(pdfi::createImpressTreeVisitorFactory());
     pAdaptor->acquire();
-    return static_cast<cppu::OWeakObject*>(pAdaptor.get());
+    return getXWeak(pAdaptor.get());
 }
 
 extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*

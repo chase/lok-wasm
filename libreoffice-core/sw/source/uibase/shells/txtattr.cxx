@@ -95,7 +95,7 @@ void SwTextShell::ExecCharAttr(SfxRequest &rReq)
                             (nWhich == FN_SET_SUPER_SCRIPT && nTmpEsc > 0) )
                     eEscape = SvxEscapement::Off;
 
-                SfxBindings& rBind = GetView().GetViewFrame()->GetBindings();
+                SfxBindings& rBind = GetView().GetViewFrame().GetBindings();
                 if( nWhich == FN_SET_SUB_SCRIPT )
                     rBind.SetState( SfxBoolItem( FN_SET_SUPER_SCRIPT,
                                                                     false ) );
@@ -115,10 +115,6 @@ void SwTextShell::ExecCharAttr(SfxRequest &rReq)
                 break;
             }
             SvxEscapementItem aEscape( eEscape, RES_CHRATR_ESCAPEMENT );
-            if(eEscape == SvxEscapement::Superscript)
-                aEscape.GetEsc() = DFLT_ESC_AUTO_SUPER;
-            else if(eEscape == SvxEscapement::Subscript)
-                aEscape.GetEsc() = DFLT_ESC_AUTO_SUB;
             rSh.SetAttrItem( aEscape );
             rReq.AppendItem( aEscape );
             rReq.Done();
@@ -213,7 +209,7 @@ void SwTextShell::ExecCharAttrArgs(SfxRequest &rReq)
     if (rWrtSh.HasSelection() && rWrtSh.IsSelFullPara())
     {
         pColl = rWrtSh.GetCurTextFormatColl();
-        if ( pColl && !pColl->IsAutoUpdateFormat() )
+        if ( pColl && !pColl->IsAutoUpdateOnDirectFormat() )
             pColl = nullptr;
     }
     SfxItemPool& rPool = GetPool();
@@ -409,7 +405,7 @@ SET_LINESPACE:
                 SvxAdjustItem aAdjust( eAdjust, RES_PARATR_ADJUST );
                 aSet.Put( aAdjust );
                 aAdjust.SetWhich(SID_ATTR_PARA_ADJUST);
-                GetView().GetViewFrame()->GetBindings().SetState( aAdjust );
+                GetView().GetViewFrame().GetBindings().SetState( aAdjust );
                 // Toggle numbering alignment
                 const SwNumRule* pCurRule = GetShell().GetNumRuleAtCurrCursorPos();
                 if( pCurRule )
@@ -444,7 +440,7 @@ SET_LINESPACE:
     }
     SwWrtShell& rWrtSh = GetShell();
     SwTextFormatColl* pColl = rWrtSh.GetCurTextFormatColl();
-    if(pColl && pColl->IsAutoUpdateFormat())
+    if(pColl && pColl->IsAutoUpdateOnDirectFormat())
     {
         rWrtSh.AutoUpdatePara(pColl, aSet);
     }
@@ -745,10 +741,19 @@ void SwTextShell::GetAttrState(SfxItemSet &rSet)
             case SID_ATTR_PARA_RIGHTSPACE:
             case SID_ATTR_PARA_FIRSTLINESPACE:
             {
-                eState = aCoreSet.GetItemState(RES_LR_SPACE);
+                eState = aCoreSet.GetItemState(RES_MARGIN_FIRSTLINE);
+                eState = std::min(aCoreSet.GetItemState(RES_MARGIN_TEXTLEFT), eState);
+                eState = std::min(aCoreSet.GetItemState(RES_MARGIN_RIGHT), eState);
                 if( eState >= SfxItemState::DEFAULT )
                 {
-                    SvxLRSpaceItem aLR = aCoreSet.Get( RES_LR_SPACE );
+                    SvxLRSpaceItem aLR(RES_LR_SPACE);
+                    SvxFirstLineIndentItem const& rFirstLine(aCoreSet.Get(RES_MARGIN_FIRSTLINE));
+                    SvxTextLeftMarginItem const& rLeftMargin(aCoreSet.Get(RES_MARGIN_TEXTLEFT));
+                    SvxRightMarginItem const& rRightMargin(aCoreSet.Get(RES_MARGIN_RIGHT));
+                    aLR.SetTextFirstLineOffset(rFirstLine.GetTextFirstLineOffset(), rFirstLine.GetPropTextFirstLineOffset());
+                    aLR.SetAutoFirst(rFirstLine.IsAutoFirst());
+                    aLR.SetTextLeft(rLeftMargin.GetTextLeft(), rLeftMargin.GetPropLeft());
+                    aLR.SetRight(rRightMargin.GetRight(), rRightMargin.GetPropRight());
                     aLR.SetWhich(nSlot);
                     rSet.Put(aLR);
                 }
@@ -761,7 +766,7 @@ void SwTextShell::GetAttrState(SfxItemSet &rSet)
             case SID_ATTR_PARA_LEFT_TO_RIGHT :
             case SID_ATTR_PARA_RIGHT_TO_LEFT :
             {
-                if ( !SW_MOD()->GetCTLOptions().IsCTLFontEnabled() )
+                if ( !SvtCTLOptions::IsCTLFontEnabled() )
                 {
                     rSet.DisableItem( nSlot );
                     nSlot = 0;

@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <ChartController.hxx>
+#include <ChartView.hxx>
 
 #include <dlg_InsertAxis_Grid.hxx>
 #include <dlg_InsertDataLabel.hxx>
@@ -34,6 +35,7 @@
 #include <DataSeries.hxx>
 #include <DiagramHelper.hxx>
 #include <Diagram.hxx>
+#include <GridProperties.hxx>
 #include <chartview/DrawModelWrapper.hxx>
 #include <chartview/ChartSfxItemIds.hxx>
 #include <NumberFormatterWrapper.hxx>
@@ -357,7 +359,7 @@ void ChartController::executeDispatch_OpenLegendDialog()
 
 void ChartController::executeDispatch_InsertMenu_DataLabels()
 {
-    UndoGuard aUndoGuard(
+    std::shared_ptr<UndoGuard> aUndoGuard = std::make_shared<UndoGuard>(
         ActionDescriptionProvider::createDescription(
             ActionDescriptionProvider::ActionType::Insert, SchResId( STR_OBJECT_DATALABELS )),
         m_xUndoManager );
@@ -374,12 +376,9 @@ void ChartController::executeDispatch_InsertMenu_DataLabels()
         OUString aObjectCID = ObjectIdentifier::createClassifiedIdentifierForParticles(
             ObjectIdentifier::getSeriesParticleFromCID(m_aSelection.getSelectedCID()), aChildParticle );
 
-        bool bSuccess = ChartController::executeDlg_ObjectProperties_withoutUndoGuard( aObjectCID, true );
-        if( bSuccess )
-            aUndoGuard.commit();
+        ChartController::executeDlg_ObjectProperties_withUndoGuard( aUndoGuard, aObjectCID, true );
         return;
     }
-
     try
     {
         wrapper::AllDataLabelItemConverter aItemConverter(
@@ -407,7 +406,7 @@ void ChartController::executeDispatch_InsertMenu_DataLabels()
             ControllerLockGuardUNO aCLGuard( getChartModel() );
             bool bChanged = aItemConverter.ApplyItemSet( aOutItemSet );//model should be changed now
             if( bChanged )
-                aUndoGuard.commit();
+                aUndoGuard->commit();
         }
     }
     catch(const uno::RuntimeException&)
@@ -441,10 +440,10 @@ void ChartController::executeDispatch_InsertMenu_MeanValues()
         //if a series is selected insert mean value only for that series:
         lcl_InsertMeanValueLine( xSeries );
     }
-    else
+    else if (rtl::Reference<Diagram> xDiagram = getFirstDiagram())
     {
         std::vector< rtl::Reference< DataSeries > > aSeries =
-            DiagramHelper::getDataSeriesFromDiagram( getFirstDiagram());
+            xDiagram->getDataSeries();
 
         for( const auto& xSrs : aSeries )
             lcl_InsertMeanValueLine( xSrs );
@@ -820,7 +819,7 @@ void ChartController::executeDispatch_InsertAxisTitle()
 {
     try
     {
-        uno::Reference< XTitle > xTitle;
+        rtl::Reference< Title > xTitle;
         {
             UndoGuard aUndoGuard(
             ActionDescriptionProvider::createDescription(
@@ -908,7 +907,7 @@ void ChartController::executeDispatch_InsertMajorGrid()
         rtl::Reference< Axis > xAxis = ObjectIdentifier::getAxisForCID( m_aSelection.getSelectedCID(), getChartModel() );
         if( xAxis.is() )
         {
-            AxisHelper::makeGridVisible( xAxis->getGridProperties() );
+            AxisHelper::makeGridVisible( xAxis->getGridProperties2() );
             aUndoGuard.commit();
         }
     }
@@ -930,7 +929,7 @@ void ChartController::executeDispatch_DeleteMajorGrid()
         rtl::Reference< Axis > xAxis = ObjectIdentifier::getAxisForCID( m_aSelection.getSelectedCID(), getChartModel() );
         if( xAxis.is() )
         {
-            AxisHelper::makeGridInvisible( xAxis->getGridProperties() );
+            AxisHelper::makeGridInvisible( xAxis->getGridProperties2() );
             aUndoGuard.commit();
         }
     }
@@ -952,8 +951,8 @@ void ChartController::executeDispatch_InsertMinorGrid()
         rtl::Reference< Axis > xAxis = ObjectIdentifier::getAxisForCID( m_aSelection.getSelectedCID(), getChartModel() );
         if( xAxis.is() )
         {
-            const Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-            for( Reference< beans::XPropertySet > const & props : aSubGrids)
+            std::vector< rtl::Reference< ::chart::GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
+            for( rtl::Reference< GridProperties > const & props : aSubGrids)
                 AxisHelper::makeGridVisible( props );
             aUndoGuard.commit();
         }
@@ -976,8 +975,8 @@ void ChartController::executeDispatch_DeleteMinorGrid()
         rtl::Reference< Axis > xAxis = ObjectIdentifier::getAxisForCID( m_aSelection.getSelectedCID(), getChartModel() );
         if( xAxis.is() )
         {
-            const Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-            for( Reference< beans::XPropertySet > const & props : aSubGrids)
+            std::vector< rtl::Reference< ::chart::GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
+            for( rtl::Reference< ::chart::GridProperties > const & props : aSubGrids)
                 AxisHelper::makeGridInvisible( props );
             aUndoGuard.commit();
         }

@@ -23,7 +23,6 @@
 
 #include <vector>
 
-#include <basegfx/polygon/b2dpolypolygon.hxx>
 #include <tools/long.hxx>
 
 #include <premac.h>
@@ -48,91 +47,23 @@
 
 
 #include <font/LogicalFontInstance.hxx>
-#include <impfontmetricdata.hxx>
-#include <font/PhysicalFontFace.hxx>
+#include <font/FontMetricData.hxx>
 #include <salgdi.hxx>
 
 #include <quartz/salgdicommon.hxx>
-#include <unordered_map>
-#include <hb-ot.h>
 
 #include <quartz/CGHelpers.hxx>
 
 class AquaSalFrame;
-class FontAttributes;
 class XorEmulation;
-
-// CoreText-specific physically available font face
-class CoreTextFontFace final : public vcl::font::PhysicalFontFace
-{
-public:
-                                    CoreTextFontFace( const FontAttributes&, CTFontDescriptorRef xRef );
-                                    ~CoreTextFontFace() override;
-
-    sal_IntPtr                      GetFontId() const override;
-
-    CTFontDescriptorRef             GetFontDescriptorRef() const { return mxFontDescriptor; }
-
-    rtl::Reference<LogicalFontInstance> CreateFontInstance(const vcl::font::FontSelectPattern&) const override;
-
-    hb_blob_t* GetHbTable(hb_tag_t nTag) const override;
-
-    const std::vector<hb_variation_t>& GetVariations(const LogicalFontInstance&) const override;
-
-private:
-    CTFontDescriptorRef             mxFontDescriptor;
-};
-
-class CoreTextFont final : public LogicalFontInstance
-{
-    friend rtl::Reference<LogicalFontInstance> CoreTextFontFace::CreateFontInstance(const vcl::font::FontSelectPattern&) const;
-
-public:
-    ~CoreTextFont() override;
-
-    void       GetFontMetric( ImplFontMetricDataRef const & );
-    bool GetGlyphOutline(sal_GlyphId, basegfx::B2DPolyPolygon&, bool) const override;
-
-    CTFontRef GetCTFont() const { return mpCTFont; }
-
-    /// <1.0: font is squeezed, >1.0 font is stretched, else 1.0
-    float mfFontStretch;
-    /// text rotation in radian
-    float mfFontRotation;
-
-private:
-    explicit CoreTextFont(const CoreTextFontFace&, const vcl::font::FontSelectPattern&);
-
-    bool ImplGetGlyphBoundRect(sal_GlyphId, tools::Rectangle&, bool) const override;
-
-    CTFontRef mpCTFont;
-};
-
-// TODO: move into cross-platform headers
-
-class SystemFontList
-{
-public:
-    SystemFontList( void );
-    ~SystemFontList( void );
-
-    bool        Init( void );
-    void        AddFont( CoreTextFontFace* );
-
-    void    AnnounceFonts( vcl::font::PhysicalFontCollection& ) const;
-    CoreTextFontFace* GetFontDataFromId( sal_IntPtr nFontId ) const;
-
-    CTFontCollectionRef fontCollection() { return mpCTFontCollection; }
-
-private:
-    CTFontCollectionRef mpCTFontCollection;
-    CFArrayRef mpCTFontArray;
-
-    std::unordered_map<sal_IntPtr, rtl::Reference<CoreTextFontFace>> maFontContainer;
-};
+class CoreTextFont;
 
 namespace sal::aqua
 {
+#ifdef MACOSX
+NSRect getTotalScreenBounds();
+void resetTotalScreenBounds();
+#endif
 float getWindowScaling();
 void resetWindowScaling();
 }
@@ -290,7 +221,7 @@ public:
                                    const tools::Rectangle &rControlRegion,
                                    ControlState nState,
                                    const ImplControlValue &aValue) = 0;
-    virtual void drawTextLayout(const GenericSalLayout& layout, bool bTextRenderModeForResolutionIndependentLayout) = 0;
+    virtual void drawTextLayout(const GenericSalLayout& layout) = 0;
     virtual void Flush() {}
     virtual void Flush( const tools::Rectangle& ) {}
     virtual void WindowBackingPropertiesChanged() {};
@@ -347,7 +278,7 @@ public:
         return "aqua";
     }
 
-    bool setClipRegion(vcl::Region const& rRegion) override;
+    void setClipRegion(vcl::Region const& rRegion) override;
     void ResetClipRegion() override;
 
     sal_uInt16 GetBitCount() const override;
@@ -372,7 +303,7 @@ public:
     void drawPolyPolygon(sal_uInt32 nPoly, const sal_uInt32* pPoints,
                          const Point** pPointArray) override;
 
-    bool drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
+    void drawPolyPolygon(const basegfx::B2DHomMatrix& rObjectToDevice,
                          const basegfx::B2DPolyPolygon&, double fTransparency) override;
 
     bool drawPolyLine(const basegfx::B2DHomMatrix& rObjectToDevice, const basegfx::B2DPolygon&,
@@ -443,7 +374,7 @@ public:
                                    ControlState nState,
                                    const ImplControlValue &aValue) override;
 
-    virtual void drawTextLayout(const GenericSalLayout& layout, bool bTextRenderModeForResolutionIndependentLayout) override;
+    virtual void drawTextLayout(const GenericSalLayout& layout) override;
 
     bool supportsOperation(OutDevSupportType eType) const override;
 };
@@ -528,7 +459,7 @@ public:
     // set the font
     virtual void            SetFont( LogicalFontInstance*, int nFallbackLevel ) override;
     // get the current font's metrics
-    virtual void            GetFontMetric( ImplFontMetricDataRef&, int nFallbackLevel ) override;
+    virtual void            GetFontMetric( FontMetricDataRef&, int nFallbackLevel ) override;
     // get the repertoire of the current font
     virtual FontCharMapRef  GetFontCharMap() const override;
     virtual bool            GetFontCapabilities(vcl::FontCapabilities &rFontCapabilities) const override;

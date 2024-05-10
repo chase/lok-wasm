@@ -170,7 +170,7 @@ public:
     explicit ScUnoEditEngine(ScEditEngineDefaulter* pSource);
 
     virtual OUString  CalcFieldValue( const SvxFieldItem& rField, sal_Int32 nPara, sal_Int32 nPos,
-                                   std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor ) override;
+                                   std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor, std::optional<FontLineStyle>& rFldLineStyle ) override;
 
     sal_uInt16 CountFields();
     SvxFieldData* FindByIndex(sal_uInt16 nIndex);
@@ -196,9 +196,9 @@ ScUnoEditEngine::ScUnoEditEngine(ScEditEngineDefaulter* pSource)
 }
 
 OUString ScUnoEditEngine::CalcFieldValue( const SvxFieldItem& rField,
-            sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor )
+            sal_Int32 nPara, sal_Int32 nPos, std::optional<Color>& rTxtColor, std::optional<Color>& rFldColor, std::optional<FontLineStyle>& rFldLineStyle )
 {
-    OUString aRet(EditEngine::CalcFieldValue( rField, nPara, nPos, rTxtColor, rFldColor ));
+    OUString aRet(EditEngine::CalcFieldValue( rField, nPara, nPos, rTxtColor, rFldColor, rFldLineStyle ));
     if (eMode != SC_UNO_COLLECT_NONE)
     {
         const SvxFieldData* pFieldData = rField.GetField();
@@ -276,22 +276,24 @@ ScCellFieldsObj::ScCellFieldsObj(
 
 ScCellFieldsObj::~ScCellFieldsObj()
 {
-    SolarMutexGuard g;
+    {
+        SolarMutexGuard g;
 
-    if (pDocShell)
-        pDocShell->GetDocument().RemoveUnoObject(*this);
+        if (pDocShell)
+            pDocShell->GetDocument().RemoveUnoObject(*this);
 
-    mpEditSource.reset();
+        mpEditSource.reset();
+    }
 
     // increment refcount to prevent double call off dtor
     osl_atomic_increment( &m_refCount );
 
-    if (mpRefreshListeners)
+    std::unique_lock g(aMutex);
+    if (maRefreshListeners.getLength(g))
     {
         lang::EventObject aEvent;
-        aEvent.Source.set(static_cast<cppu::OWeakObject*>(this));
-        mpRefreshListeners->disposeAndClear(aEvent);
-        mpRefreshListeners.reset();
+        aEvent.Source.set(getXWeak());
+        maRefreshListeners.disposeAndClear(g, aEvent);
     }
 }
 
@@ -383,12 +385,13 @@ void SAL_CALL ScCellFieldsObj::removeContainerListener(
 // XRefreshable
 void SAL_CALL ScCellFieldsObj::refresh(  )
 {
-    if (mpRefreshListeners)
+    std::unique_lock g(aMutex);
+    if (maRefreshListeners.getLength(g))
     {
         //  Call all listeners.
         lang::EventObject aEvent;
         aEvent.Source.set(uno::Reference< util::XRefreshable >(this));
-        mpRefreshListeners->notifyEach( &util::XRefreshListener::refreshed, aEvent );
+        maRefreshListeners.notifyEach( g, &util::XRefreshListener::refreshed, aEvent );
     }
 }
 
@@ -396,10 +399,8 @@ void SAL_CALL ScCellFieldsObj::addRefreshListener( const uno::Reference< util::X
 {
     if (xListener.is())
     {
-        SolarMutexGuard aGuard;
-        if (!mpRefreshListeners)
-            mpRefreshListeners.reset( new comphelper::OInterfaceContainerHelper3<util::XRefreshListener>(aMutex) );
-        mpRefreshListeners->addInterface(xListener);
+        std::unique_lock g(aMutex);
+        maRefreshListeners.addInterface(g, xListener);
     }
 }
 
@@ -407,9 +408,8 @@ void SAL_CALL ScCellFieldsObj::removeRefreshListener( const uno::Reference<util:
 {
     if (xListener.is())
     {
-        SolarMutexGuard aGuard;
-        if (mpRefreshListeners)
-            mpRefreshListeners->removeInterface(xListener);
+        std::unique_lock g(aMutex);
+        maRefreshListeners.removeInterface(g, xListener);
     }
 }
 
@@ -423,15 +423,15 @@ ScHeaderFieldsObj::~ScHeaderFieldsObj()
 {
     mpEditSource.reset();
 
-    // increment refcount to prevent double call off dtor
+    // increment refcount to prevent double call of dtor
     osl_atomic_increment( &m_refCount );
 
-    if (mpRefreshListeners)
+    std::unique_lock g(aMutex);
+    if (maRefreshListeners.getLength(g))
     {
         lang::EventObject aEvent;
-        aEvent.Source = static_cast<cppu::OWeakObject*>(this);
-        mpRefreshListeners->disposeAndClear(aEvent);
-        mpRefreshListeners.reset();
+        aEvent.Source = getXWeak();
+        maRefreshListeners.disposeAndClear(g, aEvent);
     }
 }
 
@@ -533,12 +533,13 @@ void SAL_CALL ScHeaderFieldsObj::removeContainerListener(
 // XRefreshable
 void SAL_CALL ScHeaderFieldsObj::refresh(  )
 {
-    if (mpRefreshListeners)
+    std::unique_lock g(aMutex);
+    if (maRefreshListeners.getLength(g))
     {
         //  Call all listeners.
         lang::EventObject aEvent;
         aEvent.Source.set(uno::Reference< util::XRefreshable >(this));
-        mpRefreshListeners->notifyEach( &util::XRefreshListener::refreshed, aEvent);
+        maRefreshListeners.notifyEach( g, &util::XRefreshListener::refreshed, aEvent);
     }
 }
 
@@ -546,10 +547,8 @@ void SAL_CALL ScHeaderFieldsObj::addRefreshListener( const uno::Reference< util:
 {
     if (xListener.is())
     {
-        SolarMutexGuard aGuard;
-        if (!mpRefreshListeners)
-            mpRefreshListeners.reset(new comphelper::OInterfaceContainerHelper3<util::XRefreshListener>(aMutex));
-        mpRefreshListeners->addInterface(xListener);
+        std::unique_lock g(aMutex);
+        maRefreshListeners.addInterface(g, xListener);
     }
 }
 
@@ -557,9 +556,8 @@ void SAL_CALL ScHeaderFieldsObj::removeRefreshListener( const uno::Reference<uti
 {
     if (xListener.is())
     {
-        SolarMutexGuard aGuard;
-        if (mpRefreshListeners)
-            mpRefreshListeners->removeInterface(xListener);
+        std::unique_lock g(aMutex);
+        maRefreshListeners.removeInterface(g, xListener);
     }
 }
 
@@ -1251,10 +1249,6 @@ uno::Any SAL_CALL ScEditFieldObj::getPropertyValue( const OUString& aPropertyNam
 }
 
 SC_IMPL_DUMMY_PROPERTY_LISTENER( ScEditFieldObj )
-
-// XUnoTunnel
-
-UNO3_GETIMPLEMENTATION_IMPL(ScEditFieldObj);
 
 // XServiceInfo
 

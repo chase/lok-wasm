@@ -26,6 +26,10 @@
 #include <typeinfo>
 #include <boost/property_tree/ptree.hpp>
 
+#ifdef DBG_UTIL
+#include <unordered_set>
+#endif
+
 //////////////////////////////////////////////////////////////////////////////
 // list of classes derived from SfxPoolItem
 // will not be kept up-to-date, but give a good overview for right now
@@ -70,7 +74,6 @@
 // class SfxObjectShellItem: public SfxPoolItem
 // class SfxViewFrameItem: public SfxPoolItem
 // class SfxWatermarkItem: public SfxPoolItem
-// class SfxAllEnumItem: public SfxPoolItem
 // class SfxEnumItemInterface: public SfxPoolItem
 //    class SvxAdjustItem : public SfxEnumItemInterface
 //    class SvxEscapementItem : public SfxEnumItemInterface
@@ -435,12 +438,9 @@
 //     class SwPtrMsgPoolItem : public SwMsgPoolItem
 //     class SwFormatChg: public SwMsgPoolItem
 //     class SwUpdateAttr : public SwMsgPoolItem
-//     class SwRefMarkFieldUpdate : public SwMsgPoolItem
-//     class SwDocPosUpdate : public SwMsgPoolItem
 //     class SwTableFormulaUpdate : public SwMsgPoolItem
 //     class SwAutoFormatGetDocNode: public SwMsgPoolItem
 //     class SwAttrSetChg: public SwMsgPoolItem
-//     class SwVirtPageNumInfo: public SwMsgPoolItem
 //     class SwFindNearestNode : public SwMsgPoolItem
 //     class SwStringMsgPoolItem : public SwMsgPoolItem
 // class SwFormatDrop: public SfxPoolItem, public SwClient
@@ -465,16 +465,60 @@
 // class SwPaMItem : public SfxPoolItem
 //////////////////////////////////////////////////////////////////////////////
 
+#ifdef DBG_UTIL
+static size_t nAllocatedSfxPoolItemCount(0);
+static size_t nUsedSfxPoolItemCount(0);
+size_t getAllocatedSfxPoolItemCount() { return nAllocatedSfxPoolItemCount; }
+size_t getUsedSfxPoolItemCount() { return nUsedSfxPoolItemCount; }
+static std::unordered_set<const SfxPoolItem*>& incarnatedSfxPoolItems()
+{
+    // Deferred instantiation to avoid initialization-order-fiasco:
+    static std::unordered_set<const SfxPoolItem*> items;
+    return items;
+}
+void listAllocatedSfxPoolItems()
+{
+    SAL_INFO("svl.items", "ITEM: List of still allocated SfxPoolItems:");
+    for (const auto& rCandidate : incarnatedSfxPoolItems())
+    {
+        SAL_INFO("svl.items", "  ITEM: WhichID: " << rCandidate->Which() << "  SerialNumber: "
+                                                  << rCandidate->getSerialNumber()
+                                                  << "  Class: " << typeid(*rCandidate).name());
+    }
+}
+#endif
+
 SfxPoolItem::SfxPoolItem(sal_uInt16 const nWhich)
     : m_nRefCount(0)
     , m_nWhich(nWhich)
-    , m_nKind(SfxItemKind::NONE)
+#ifdef DBG_UTIL
+    , m_nSerialNumber(nUsedSfxPoolItemCount)
+#endif
+    , m_bIsVoidItem(false)
+    , m_bStaticDefault(false)
+    , m_bPoolDefault(false)
+    , m_bRegisteredAtPool(false)
+    , m_bExceptionalSCItem(false)
+    , m_bIsSetItem(false)
+#ifdef DBG_UTIL
+    , m_bDeleted(false)
+#endif
 {
+#ifdef DBG_UTIL
+    nAllocatedSfxPoolItemCount++;
+    nUsedSfxPoolItemCount++;
+    incarnatedSfxPoolItems().insert(this);
+#endif
     assert(nWhich <= SHRT_MAX);
 }
 
 SfxPoolItem::~SfxPoolItem()
 {
+#ifdef DBG_UTIL
+    nAllocatedSfxPoolItemCount--;
+    incarnatedSfxPoolItems().erase(this);
+    m_bDeleted = true;
+#endif
     assert((m_nRefCount == 0 || m_nRefCount > SFX_ITEMS_MAXREF) && "destroying item in use");
 }
 
@@ -537,6 +581,7 @@ bool SfxPoolItem::GetPresentation(
 void SfxPoolItem::dumpAsXml(xmlTextWriterPtr pWriter) const
 {
     (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SfxPoolItem"));
+    (void)xmlTextWriterWriteFormatAttribute(pWriter, BAD_CAST("ptr"), "%p", this);
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"),
                                       BAD_CAST(OString::number(Which()).getStr()));
     (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("typeName"),
@@ -563,42 +608,6 @@ std::unique_ptr<SfxPoolItem> SfxPoolItem::CloneSetWhich(sal_uInt16 nNewWhich) co
     return pItem;
 }
 
-bool SfxPoolItem::IsVoidItem() const { return false; }
-
-SfxPoolItem* SfxVoidItem::CreateDefault() { return new SfxVoidItem(0); }
-
-SfxVoidItem::SfxVoidItem(sal_uInt16 which)
-    : SfxPoolItem(which)
-{
-}
-
-bool SfxVoidItem::operator==(const SfxPoolItem& rCmp) const
-{
-    assert(SfxPoolItem::operator==(rCmp));
-    (void)rCmp;
-    return true;
-}
-
-bool SfxVoidItem::GetPresentation(SfxItemPresentation /*ePresentation*/, MapUnit /*eCoreMetric*/,
-                                  MapUnit /*ePresentationMetric*/, OUString& rText,
-                                  const IntlWrapper&) const
-{
-    rText = "Void";
-    return true;
-}
-
-void SfxVoidItem::dumpAsXml(xmlTextWriterPtr pWriter) const
-{
-    (void)xmlTextWriterStartElement(pWriter, BAD_CAST("SfxVoidItem"));
-    (void)xmlTextWriterWriteAttribute(pWriter, BAD_CAST("whichId"),
-                                      BAD_CAST(OString::number(Which()).getStr()));
-    (void)xmlTextWriterEndElement(pWriter);
-}
-
-SfxVoidItem* SfxVoidItem::Clone(SfxItemPool*) const { return new SfxVoidItem(*this); }
-
-bool SfxVoidItem::IsVoidItem() const { return true; }
-
 void SfxPoolItem::ScaleMetrics(tools::Long /*lMult*/, tools::Long /*lDiv*/) {}
 
 bool SfxPoolItem::HasMetrics() const { return false; }
@@ -615,6 +624,80 @@ bool SfxPoolItem::PutValue(const css::uno::Any&, sal_uInt8)
     return false;
 }
 
-SfxVoidItem::~SfxVoidItem() {}
+bool areSfxPoolItemPtrsEqual(const SfxPoolItem* pItem1, const SfxPoolItem* pItem2)
+{
+#ifdef DBG_UTIL
+    if (nullptr != pItem1 && nullptr != pItem2 && pItem1->Which() == pItem2->Which()
+        && static_cast<const void*>(pItem1) != static_cast<const void*>(pItem2)
+        && typeid(*pItem1) == typeid(*pItem2) && *pItem1 == *pItem2)
+    {
+        SAL_INFO("svl.items", "ITEM: PtrCompare != ContentCompare (!)");
+    }
+#endif
+
+    // cast to void* to not trigger [loplugin:itemcompare]
+    return (static_cast<const void*>(pItem1) == static_cast<const void*>(pItem2));
+}
+
+bool SfxPoolItem::areSame(const SfxPoolItem* pItem1, const SfxPoolItem* pItem2)
+{
+    if (pItem1 == pItem2)
+        // pointer compare, this handles already
+        // nullptr, INVALID_POOL_ITEM, SfxVoidItem
+        // and if any Item is indeed handed over twice
+        return true;
+
+    if (nullptr == pItem1 || nullptr == pItem2)
+        // one ptr is nullptr, not both, that would
+        // have triggered above
+        return false;
+
+    if (pItem1->Which() != pItem2->Which())
+        // WhichIDs differ (fast)
+        return false;
+
+    if (typeid(*pItem1) != typeid(*pItem2))
+        // types differ (fast)
+        // NOTE: we can now use typeid since we do not have (-1)
+        // anymore for Invalid state -> safe
+        return false;
+
+    // return content compare using operator== at last
+    return *pItem1 == *pItem2;
+}
+
+bool SfxPoolItem::areSame(const SfxPoolItem& rItem1, const SfxPoolItem& rItem2)
+{
+    if (&rItem1 == &rItem2)
+        // still use pointer compare, this handles already
+        // nullptr, INVALID_POOL_ITEM, SfxVoidItem
+        // and if any Item is indeed handed over twice
+        return true;
+
+    if (rItem1.Which() != rItem2.Which())
+        // WhichIDs differ (fast)
+        return false;
+
+    if (typeid(rItem1) != typeid(rItem2))
+        // types differ (fast)
+        // NOTE: we can now use typeid since we do not have (-1)
+        // anymore for Invalid state -> safe
+        return false;
+
+    // return content compare using operator== at last
+    return rItem1 == rItem2;
+}
+
+namespace
+{
+class InvalidItem final : public SfxPoolItem
+{
+    virtual bool operator==(const SfxPoolItem&) const override { return true; }
+    virtual SfxPoolItem* Clone(SfxItemPool*) const override { return nullptr; }
+};
+InvalidItem aInvalidItem;
+}
+
+SfxPoolItem const* const INVALID_POOL_ITEM = &aInvalidItem;
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

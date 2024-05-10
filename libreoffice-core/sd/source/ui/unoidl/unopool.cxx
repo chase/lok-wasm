@@ -21,7 +21,7 @@
 #include <comphelper/propertysetinfo.hxx>
 #include <editeng/eeitem.hxx>
 #include <svx/unopool.hxx>
-
+#include <svx/unoprov.hxx>
 #include <drawdoc.hxx>
 #include "unopool.hxx"
 
@@ -44,7 +44,7 @@ static LanguageType SdUnoGetLanguage( const lang::Locale& rLocale )
 
 namespace {
 
-class SdUnoDrawPool : public SvxUnoDrawPool
+class SdUnoDrawPool final : public SvxUnoDrawPool
 {
 public:
     explicit SdUnoDrawPool(SdDrawDocument* pModel);
@@ -59,7 +59,7 @@ private:
 }
 
 SdUnoDrawPool::SdUnoDrawPool(SdDrawDocument* pModel)
-: SvxUnoDrawPool( pModel ), mpDrawModel( pModel )
+: SvxUnoDrawPool( pModel, SvxPropertySetInfoPool::getDrawingDefaults() ), mpDrawModel( pModel )
 {
 }
 
@@ -83,7 +83,7 @@ void SdUnoDrawPool::putAny( SfxItemPool* pPool, const comphelper::PropertyMapEnt
 
 uno::Reference< uno::XInterface > SdUnoCreatePool( SdDrawDocument* pDrawModel )
 {
-    return static_cast<uno::XAggregation*>(new SdUnoDrawPool( pDrawModel ));
+    return static_cast<cppu::OWeakObject*>(new SdUnoDrawPool( pDrawModel ));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -47,6 +47,7 @@
 #include <editeng/justifyitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/numformat.hxx>
+#include <svl/whiter.hxx>
 #include <svl/zforlist.hxx>
 #include <vcl/outdev.hxx>
 #include <tools/fract.hxx>
@@ -64,38 +65,55 @@
 #include <validat.hxx>
 #include <scmod.hxx>
 #include <fillinfo.hxx>
-#include <boost/functional/hash.hpp>
 #include <comphelper/lok.hxx>
 #include <tabvwsh.hxx>
+
+const WhichRangesContainer aScPatternAttrSchema(svl::Items<ATTR_PATTERN_START, ATTR_PATTERN_END>);
 
 ScPatternAttr::ScPatternAttr( SfxItemSet&& pItemSet, const OUString& rStyleName )
     :   SfxSetItem  ( ATTR_PATTERN, std::move(pItemSet) ),
         pName       ( rStyleName ),
         pStyle      ( nullptr ),
-        mnKey(0)
+        mnPAKey(0)
 {
+    setExceptionalSCItem();
+
+    // We need to ensure that ScPatternAttr is using the correct WhichRange,
+    // see comments in commit message. This does transfers the items with
+    // minimized overhead, too
+    if (GetItemSet().GetRanges() != aScPatternAttrSchema)
+        GetItemSet().SetRanges(aScPatternAttrSchema);
 }
 
 ScPatternAttr::ScPatternAttr( SfxItemSet&& pItemSet )
     :   SfxSetItem  ( ATTR_PATTERN, std::move(pItemSet) ),
         pStyle      ( nullptr ),
-        mnKey(0)
+        mnPAKey(0)
 {
+    setExceptionalSCItem();
+
+    // We need to ensure that ScPatternAttr is using the correct WhichRange,
+    // see comments in commit message. This does transfers the items with
+    // minimized overhead, too
+    if (GetItemSet().GetRanges() != aScPatternAttrSchema)
+        GetItemSet().SetRanges(aScPatternAttrSchema);
 }
 
 ScPatternAttr::ScPatternAttr( SfxItemPool* pItemPool )
     :   SfxSetItem  ( ATTR_PATTERN, SfxItemSetFixed<ATTR_PATTERN_START, ATTR_PATTERN_END>( *pItemPool ) ),
         pStyle      ( nullptr ),
-        mnKey(0)
+        mnPAKey(0)
 {
+    setExceptionalSCItem();
 }
 
 ScPatternAttr::ScPatternAttr( const ScPatternAttr& rPatternAttr )
     :   SfxSetItem  ( rPatternAttr ),
         pName       ( rPatternAttr.pName ),
         pStyle      ( rPatternAttr.pStyle ),
-        mnKey(rPatternAttr.mnKey)
+        mnPAKey(rPatternAttr.mnPAKey)
 {
+    setExceptionalSCItem();
 }
 
 ScPatternAttr* ScPatternAttr::Clone( SfxItemPool *pPool ) const
@@ -121,71 +139,63 @@ static bool StrCmp( const OUString* pStr1, const OUString* pStr2 )
 
 constexpr size_t compareSize = ATTR_PATTERN_END - ATTR_PATTERN_START + 1;
 
-std::optional<bool> ScPatternAttr::FastEqualPatternSets( const SfxItemSet& rSet1, const SfxItemSet& rSet2 )
-{
-    // #i62090# The SfxItemSet in the SfxSetItem base class always has the same ranges
-    // (single range from ATTR_PATTERN_START to ATTR_PATTERN_END), and the items are pooled,
-    // so it's enough to compare just the pointers (Count just because it's even faster).
-
-    if ( rSet1.Count() != rSet2.Count() )
-        return { false };
-
-    // Actually test_tdf133629 from UITest_calc_tests9 somehow manages to have
-    // a different range (and I don't understand enough why), so better be safe and compare fully.
-    if( rSet1.TotalCount() != compareSize || rSet2.TotalCount() != compareSize )
-        return std::nullopt;
-
-    SfxPoolItem const ** pItems1 = rSet1.GetItems_Impl();   // inline method of SfxItemSet
-    SfxPoolItem const ** pItems2 = rSet2.GetItems_Impl();
-
-    return { memcmp( pItems1, pItems2, compareSize * sizeof(pItems1[0]) ) == 0 };
-}
-
-static bool EqualPatternSets( const SfxItemSet& rSet1, const SfxItemSet& rSet2 )
-{
-    std::optional<bool> equal = ScPatternAttr::FastEqualPatternSets( rSet1, rSet2 );
-    if(equal.has_value())
-        return *equal;
-    return rSet1 == rSet2;
-}
-
 bool ScPatternAttr::operator==( const SfxPoolItem& rCmp ) const
 {
-    // #i62090# Use quick comparison between ScPatternAttr's ItemSets
+    // check if same incarnation
+    if (this == &rCmp)
+        return true;
 
+    // check SfxPoolItem base class
     if (!SfxPoolItem::operator==(rCmp) )
         return false;
-    if (!mxHashCode)
-        CalcHashCode();
-    auto const & rOther = static_cast<const ScPatternAttr&>(rCmp);
-    if (!rOther.mxHashCode)
-        rOther.CalcHashCode();
-    if (*mxHashCode != *rOther.mxHashCode)
-        return false;
-    return EqualPatternSets( GetItemSet(), rOther.GetItemSet() ) &&
-            StrCmp( GetStyleName(), rOther.GetStyleName() );
-}
 
-SfxPoolItem::lookup_iterator ScPatternAttr::Lookup(lookup_iterator begin, lookup_iterator end ) const
-{
-    if( !mxHashCode )
-        CalcHashCode();
-    if( *mxHashCode != 0 )
+    // check everything except the SfxItemSet from base class SfxSetItem
+    const ScPatternAttr& rOther(static_cast<const ScPatternAttr&>(rCmp));
+    if (!StrCmp(GetStyleName(), rOther.GetStyleName()))
+        return false;
+
+    // here we need to compare the SfxItemSet. We *know* that these are
+    // all simple (one range, same range)
+    const SfxItemSet& rSet1(GetItemSet());
+    const SfxItemSet& rSet2(rOther.GetItemSet());
+
+    // the former method 'FastEqualPatternSets' mentioned:
+    //   "Actually test_tdf133629 from UITest_calc_tests9 somehow manages to have
+    //   a different range (and I don't understand enough why), so better be safe and compare fully."
+    // in that case the hash code above would already fail, too
+    if (rSet1.TotalCount() != compareSize || rSet2.TotalCount() != compareSize)
     {
-        for( auto it = begin; it != end; ++it)
-        {
-            const ScPatternAttr* other = static_cast<const ScPatternAttr*>(*it);
-            if( !other->mxHashCode )
-                other->CalcHashCode();
-            if (*mxHashCode == *other->mxHashCode
-                && EqualPatternSets( GetItemSet(), other->GetItemSet())
-                && StrCmp( GetStyleName(), other->GetStyleName()))
-            {
-                return it;
-            }
-        }
+        // assert this for now, should not happen. If it does, look for it and evtl.
+        // enable SfxItemSet::operator== below
+        assert(false);
+        return rSet1 == rSet2;
     }
-    return end;
+
+    // check pools, do not accept different pools
+    if (rSet1.GetPool() != rSet2.GetPool())
+        return false;
+
+    // check count of set items, has to be equal
+    if (rSet1.Count() != rSet2.Count())
+        return false;
+
+    // compare each item separately
+    const SfxPoolItem **ppItem1(rSet1.GetItems_Impl());
+    const SfxPoolItem **ppItem2(rSet2.GetItems_Impl());
+
+    // are all pointers the same?
+    if (0 == memcmp(ppItem1, ppItem2, compareSize * sizeof(ppItem1[0])))
+        return true;
+
+    for (sal_uInt16 nPos(0); nPos < compareSize; nPos++)
+    {
+        if (!SfxPoolItem::areSame(*ppItem1, *ppItem2))
+            return false;
+        ++ppItem1;
+        ++ppItem2;
+    }
+
+    return true;
 }
 
 SvxCellOrientation ScPatternAttr::GetCellOrientation( const SfxItemSet& rItemSet, const SfxItemSet* pCondSet )
@@ -460,92 +470,85 @@ void ScPatternAttr::fillColor(model::ComplexColor& rComplexColor, const SfxItemS
         aComplexColor.setColor(aColor);
     }
 
-    if ((aColor == COL_AUTO && eAutoMode != SC_AUTOCOL_RAW)
-        || eAutoMode == SC_AUTOCOL_IGNOREFONT
-        || eAutoMode == SC_AUTOCOL_IGNOREALL)
+    if ((aColor == COL_AUTO && eAutoMode != ScAutoFontColorMode::Raw)
+        || eAutoMode == ScAutoFontColorMode::IgnoreFont
+        || eAutoMode == ScAutoFontColorMode::IgnoreAll)
     {
-        if (eAutoMode == SC_AUTOCOL_BLACK)
+        //  get background color from conditional or own set
+        Color aBackColor;
+        if ( pCondSet )
         {
+            const SvxBrushItem* pItem = pCondSet->GetItemIfSet(ATTR_BACKGROUND);
+            if (!pItem)
+                pItem = &rItemSet.Get(ATTR_BACKGROUND);
+            aBackColor = pItem->GetColor();
+        }
+        else
+        {
+            aBackColor = rItemSet.Get(ATTR_BACKGROUND).GetColor();
+        }
+
+        //  if background color attribute is transparent, use window color for brightness comparisons
+        if (aBackColor == COL_TRANSPARENT
+            || eAutoMode == ScAutoFontColorMode::IgnoreBack
+            || eAutoMode == ScAutoFontColorMode::IgnoreAll)
+        {
+            if (!comphelper::LibreOfficeKit::isActive())
+            {
+                if ( eAutoMode == ScAutoFontColorMode::Print )
+                    aBackColor = COL_WHITE;
+                else if ( pBackConfigColor )
+                {
+                    // pBackConfigColor can be used to avoid repeated lookup of the configured color
+                    aBackColor = *pBackConfigColor;
+                }
+                else
+                    aBackColor = SC_MOD()->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor;
+            }
+            else
+            {
+                // Get document color from current view instead
+                SfxViewShell* pSfxViewShell = SfxViewShell::Current();
+                ScTabViewShell* pViewShell = dynamic_cast<ScTabViewShell*>(pSfxViewShell);
+                if (pViewShell)
+                {
+                    const ScViewRenderingOptions& rViewRenderingOptions = pViewShell->GetViewRenderingData();
+                    aBackColor = rViewRenderingOptions.GetDocColor();
+                }
+            }
+        }
+
+        //  get system text color for comparison
+        Color aSysTextColor;
+        if (eAutoMode == ScAutoFontColorMode::Print)
+        {
+            aSysTextColor = COL_BLACK;
+        }
+        else if (pTextConfigColor)
+        {
+            // pTextConfigColor can be used to avoid repeated lookup of the configured color
+            aSysTextColor = *pTextConfigColor;
+        }
+        else
+        {
+            aSysTextColor = SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor;
+        }
+
+        //  select the resulting color
+        if ( aBackColor.IsDark() && aSysTextColor.IsDark() )
+        {
+            //  use white instead of dark on dark
+            aColor = COL_WHITE;
+        }
+        else if ( aBackColor.IsBright() && aSysTextColor.IsBright() )
+        {
+            //  use black instead of bright on bright
             aColor = COL_BLACK;
         }
         else
         {
-            //  get background color from conditional or own set
-            Color aBackColor;
-            if ( pCondSet )
-            {
-                const SvxBrushItem* pItem = pCondSet->GetItemIfSet(ATTR_BACKGROUND);
-                if (!pItem)
-                    pItem = &rItemSet.Get(ATTR_BACKGROUND);
-                aBackColor = pItem->GetColor();
-            }
-            else
-            {
-                aBackColor = rItemSet.Get(ATTR_BACKGROUND).GetColor();
-            }
-
-            //  if background color attribute is transparent, use window color for brightness comparisons
-            if (aBackColor == COL_TRANSPARENT
-                || eAutoMode == SC_AUTOCOL_IGNOREBACK
-                || eAutoMode == SC_AUTOCOL_IGNOREALL)
-            {
-                if (!comphelper::LibreOfficeKit::isActive())
-                {
-                    if ( eAutoMode == SC_AUTOCOL_PRINT )
-                        aBackColor = COL_WHITE;
-                    else if ( pBackConfigColor )
-                    {
-                        // pBackConfigColor can be used to avoid repeated lookup of the configured color
-                        aBackColor = *pBackConfigColor;
-                    }
-                    else
-                        aBackColor = SC_MOD()->GetColorConfig().GetColorValue(svtools::DOCCOLOR).nColor;
-                }
-                else
-                {
-                    // Get document color from current view instead
-                    SfxViewShell* pSfxViewShell = SfxViewShell::Current();
-                    ScTabViewShell* pViewShell = dynamic_cast<ScTabViewShell*>(pSfxViewShell);
-                    if (pViewShell)
-                    {
-                        const ScViewRenderingOptions& rViewRenderingOptions = pViewShell->GetViewRenderingData();
-                        aBackColor = rViewRenderingOptions.GetDocColor();
-                    }
-                }
-            }
-
-            //  get system text color for comparison
-            Color aSysTextColor;
-            if (eAutoMode == SC_AUTOCOL_PRINT)
-            {
-                aSysTextColor = COL_BLACK;
-            }
-            else if (pTextConfigColor)
-            {
-                // pTextConfigColor can be used to avoid repeated lookup of the configured color
-                aSysTextColor = *pTextConfigColor;
-            }
-            else
-            {
-                aSysTextColor = SC_MOD()->GetColorConfig().GetColorValue(svtools::FONTCOLOR).nColor;
-            }
-
-            //  select the resulting color
-            if ( aBackColor.IsDark() && aSysTextColor.IsDark() )
-            {
-                //  use white instead of dark on dark
-                aColor = COL_WHITE;
-            }
-            else if ( aBackColor.IsBright() && aSysTextColor.IsBright() )
-            {
-                //  use black instead of bright on bright
-                aColor = COL_BLACK;
-            }
-            else
-            {
-                //  use aSysTextColor (black for SC_AUTOCOL_PRINT, from style settings otherwise)
-                aColor = aSysTextColor;
-            }
+            //  use aSysTextColor (black for ScAutoFontColorMode::Print, from style settings otherwise)
+            aColor = aSysTextColor;
         }
     }
     aComplexColor.setFinalColor(aColor);
@@ -995,7 +998,6 @@ void ScPatternAttr::GetFromEditItemSet( const SfxItemSet* pEditSet )
     if( !pEditSet )
         return;
     GetFromEditItemSet( GetItemSet(), *pEditSet );
-    mxHashCode.reset();
     mxVisible.reset();
 }
 
@@ -1036,10 +1038,9 @@ void ScPatternAttr::DeleteUnchanged( const ScPatternAttr* pOldAttrs )
             if ( eOldState == SfxItemState::SET )
             {
                 //  item is set in OldAttrs (or its parent) -> compare pointers
-                if ( pThisItem == pOldItem )
+                if (SfxPoolItem::areSame( pThisItem, pOldItem ))
                 {
                     rThisSet.ClearItem( nSubWhich );
-                    mxHashCode.reset();
                     mxVisible.reset();
                 }
             }
@@ -1049,7 +1050,6 @@ void ScPatternAttr::DeleteUnchanged( const ScPatternAttr* pOldAttrs )
                 if ( *pThisItem == rThisSet.GetPool()->GetDefaultItem( nSubWhich ) )
                 {
                     rThisSet.ClearItem( nSubWhich );
-                    mxHashCode.reset();
                     mxVisible.reset();
                 }
             }
@@ -1071,7 +1071,6 @@ void ScPatternAttr::ClearItems( const sal_uInt16* pWhich )
     SfxItemSet& rSet = GetItemSet();
     for (sal_uInt16 i=0; pWhich[i]; i++)
         rSet.ClearItem(pWhich[i]);
-    mxHashCode.reset();
     mxVisible.reset();
 }
 
@@ -1109,7 +1108,7 @@ static SfxStyleSheetBase* lcl_CopyStyleToPool
         if ( pFormatExchangeList &&
              (pSrcItem = rSrcSet.GetItemIfSet( ATTR_VALUE_FORMAT, false )) )
         {
-            sal_uLong nOldFormat = pSrcItem->GetValue();
+            sal_uInt32 nOldFormat = pSrcItem->GetValue();
             SvNumberFormatterIndexTable::const_iterator it = pFormatExchangeList->find(nOldFormat);
             if (it != pFormatExchangeList->end())
             {
@@ -1185,7 +1184,7 @@ ScPatternAttr* ScPatternAttr::PutInPool( ScDocument* pDestDoc, ScDocument* pSrcD
             {
                 //  Number format to Exchange List
 
-                sal_uLong nOldFormat = static_cast<const SfxUInt32Item*>(pSrcItem)->GetValue();
+                sal_uInt32 nOldFormat = static_cast<const SfxUInt32Item*>(pSrcItem)->GetValue();
                 SvNumberFormatterIndexTable::const_iterator it = pDestDoc->GetFormatExchangeList()->find(nOldFormat);
                 if (it != pDestDoc->GetFormatExchangeList()->end())
                 {
@@ -1203,13 +1202,13 @@ ScPatternAttr* ScPatternAttr::PutInPool( ScDocument* pDestDoc, ScDocument* pSrcD
         }
     }
 
-    ScPatternAttr* pPatternAttr = const_cast<ScPatternAttr*>( &pDestDoc->GetPool()->Put(aDestPattern) );
+    ScPatternAttr* pPatternAttr = const_cast<ScPatternAttr*>( &pDestDoc->GetPool()->DirectPutItemInPool(aDestPattern) );
     return pPatternAttr;
 }
 
 bool ScPatternAttr::IsVisible() const
 {
-    if (!mxVisible)
+    if (!mxVisible.has_value())
         mxVisible = CalcVisible();
     return *mxVisible;
 }
@@ -1244,24 +1243,66 @@ bool ScPatternAttr::CalcVisible() const
     return false;
 }
 
-static bool OneEqual( const SfxItemSet& rSet1, const SfxItemSet& rSet2, sal_uInt16 nId )
-{
-    const SfxPoolItem* pItem1 = &rSet1.Get(nId);
-    const SfxPoolItem* pItem2 = &rSet2.Get(nId);
-    return ( pItem1 == pItem2 || *pItem1 == *pItem2 );
-}
-
 bool ScPatternAttr::IsVisibleEqual( const ScPatternAttr& rOther ) const
 {
-    const SfxItemSet& rThisSet = GetItemSet();
-    const SfxItemSet& rOtherSet = rOther.GetItemSet();
+    // This method is hot, so we do an optimised comparison here, by
+    // walking the two itemsets in parallel, avoiding doing repeated searches.
+    auto IsInterestingWhich = [](sal_uInt16 n)
+    {
+        return n == ATTR_BORDER_TLBR || n == ATTR_BORDER_BLTR || n == ATTR_BACKGROUND
+               || n == ATTR_BORDER || n == ATTR_SHADOW;
+    };
+    SfxWhichIter aIter1(GetItemSet());
+    SfxWhichIter aIter2(rOther.GetItemSet());
+    sal_uInt16 nWhich1 = aIter1.FirstWhich();
+    sal_uInt16 nWhich2 = aIter2.FirstWhich();
+    for (;;)
+    {
+        while (nWhich1 != nWhich2)
+        {
+            SfxWhichIter* pIterToIncrement;
+            sal_uInt16* pSmallerWhich;
+            if (nWhich1 == 0 || nWhich1 > nWhich2)
+            {
+                pSmallerWhich = &nWhich2;
+                pIterToIncrement = &aIter2;
+            }
+            else
+            {
+                pSmallerWhich = &nWhich1;
+                pIterToIncrement = &aIter1;
+            }
 
-    return OneEqual( rThisSet, rOtherSet, ATTR_BACKGROUND ) &&
-            OneEqual( rThisSet, rOtherSet, ATTR_BORDER ) &&
-            OneEqual( rThisSet, rOtherSet, ATTR_BORDER_TLBR ) &&
-            OneEqual( rThisSet, rOtherSet, ATTR_BORDER_BLTR ) &&
-            OneEqual( rThisSet, rOtherSet, ATTR_SHADOW );
+            if (IsInterestingWhich(*pSmallerWhich))
+            {
+                // the iter with larger which has already passed this point, and has no interesting
+                // item available in the other - so indeed these are unequal
+                return false;
+            }
 
+            *pSmallerWhich = pIterToIncrement->NextWhich();
+        }
+
+        // Here nWhich1 == nWhich2
+
+        if (!nWhich1 /* && !nWhich2*/)
+            return true;
+
+        if (IsInterestingWhich(nWhich1))
+        {
+            const SfxPoolItem* pItem1 = nullptr;
+            const SfxPoolItem* pItem2 = nullptr;
+            SfxItemState state1 = aIter1.GetItemState(true, &pItem1);
+            SfxItemState state2 = aIter2.GetItemState(true, &pItem2);
+            if (state1 != state2
+                && (state1 < SfxItemState::DEFAULT || state2 < SfxItemState::DEFAULT))
+                return false;
+            if (!SfxPoolItem::areSame(pItem1, pItem2))
+                return false;
+        }
+        nWhich1 = aIter1.NextWhich();
+        nWhich2 = aIter2.NextWhich();
+    }
     //TODO: also here only check really visible values !!!
 }
 
@@ -1295,7 +1336,6 @@ void ScPatternAttr::SetStyleSheet( ScStyleSheet* pNewStyle, bool bClearDirectFor
         GetItemSet().SetParent(nullptr);
         pStyle = nullptr;
     }
-    mxHashCode.reset();
     mxVisible.reset();
 }
 
@@ -1322,7 +1362,6 @@ void ScPatternAttr::UpdateStyleSheet(const ScDocument& rDoc)
     }
     else
         pStyle = nullptr;
-    mxHashCode.reset();
     mxVisible.reset();
 }
 
@@ -1335,7 +1374,6 @@ void ScPatternAttr::StyleToName()
         pName = pStyle->GetName();
         pStyle = nullptr;
         GetItemSet().SetParent( nullptr );
-        mxHashCode.reset();
         mxVisible.reset();
     }
 }
@@ -1370,6 +1408,17 @@ sal_uInt32 ScPatternAttr::GetNumberFormat( SvNumberFormatter* pFormatter ) const
         ;       // it remains as it is
     else if ( pFormatter )
         nFormat = pFormatter->GetFormatForLanguageIfBuiltIn( nFormat, eLang );
+    return nFormat;
+}
+
+sal_uInt32 ScPatternAttr::GetNumberFormat( const ScInterpreterContext& rContext ) const
+{
+    sal_uInt32 nFormat = getNumberFormatKey(GetItemSet());
+    LanguageType eLang = getLanguageType(GetItemSet());
+    if ( nFormat < SV_COUNTRY_LANGUAGE_OFFSET && eLang == LANGUAGE_SYSTEM )
+        ;       // it remains as it is
+    else
+        nFormat = rContext.GetFormatForLanguageIfBuiltIn( nFormat, eLang );
     return nFormat;
 }
 
@@ -1461,26 +1510,14 @@ ScRotateDir ScPatternAttr::GetRotateDir( const SfxItemSet* pCondSet ) const
     return nRet;
 }
 
-void ScPatternAttr::SetKey(sal_uInt64 nKey)
+void ScPatternAttr::SetPAKey(sal_uInt64 nKey)
 {
-    mnKey = nKey;
+    mnPAKey = nKey;
 }
 
-sal_uInt64 ScPatternAttr::GetKey() const
+sal_uInt64 ScPatternAttr::GetPAKey() const
 {
-    return mnKey;
-}
-
-void ScPatternAttr::CalcHashCode() const
-{
-    auto const & rSet = GetItemSet();
-    if( rSet.TotalCount() != compareSize ) // see EqualPatternSets()
-    {
-        mxHashCode = 0; // invalid
-        return;
-    }
-    mxHashCode = 1; // Set up seed so that an empty pattern does not have an (invalid) hash of 0.
-    boost::hash_range(*mxHashCode, rSet.GetItems_Impl(), rSet.GetItems_Impl() + compareSize);
+    return mnPAKey;
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

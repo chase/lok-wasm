@@ -107,7 +107,7 @@ private:
                                 ImplSalPrinterErrorCodeToVCL( SalPrinterError nError );
 
     SAL_DLLPRIVATE void         ImplPrintTransparent (
-                                    const Bitmap& rBmp, const Bitmap& rMask,
+                                    const Bitmap& rBmp,
                                     const Point& rDestPt, const Size& rDestSize,
                                     const Point& rSrcPtPixel, const Size& rSrcSizePixel );
 
@@ -227,6 +227,8 @@ public:
 
     bool                        SetPaperBin( sal_uInt16 nPaperBin );
     sal_uInt16                  GetPaperBin() const;
+    sal_uInt16                  GetPaperBinBySourceIndex(sal_uInt16 nPaperSource) const;
+    sal_uInt16                  GetSourceIndexByPaperBin(sal_uInt16 nPaperBin) const;
     void                        SetPaper( Paper ePaper );
     bool                        SetPaperSizeUser( const Size& rSize );
     /** @return The paper format of the printer's current "jobsetup". Note that if PAPER_USER the actual size can be anything. */

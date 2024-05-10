@@ -88,7 +88,8 @@ private:
 
     void Clear_( SwFont* pFnt );
     bool ChkSpecialUnderline_() const;
-    void FillHints( std::size_t nAuthor, RedlineType eType );
+    // MACRO:
+    void FillHints( RedlineType eType );
     short EnterExtend(SwFont& rFnt, SwNodeOffset const nNode, sal_Int32 const nNew)
     {
         if (m_pExt) return m_pExt->Enter(rFnt, nNode, nNew);

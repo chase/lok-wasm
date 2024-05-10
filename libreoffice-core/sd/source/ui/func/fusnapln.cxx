@@ -157,8 +157,8 @@ void FuSnapLine::DoExecute( SfxRequest& rReq )
     }
     Point aHlpPos;
 
-    aHlpPos.setX( static_cast<const SfxInt32Item&>( pArgs->Get(ATTR_SNAPLINE_X)).GetValue() );
-    aHlpPos.setY( static_cast<const SfxInt32Item&>( pArgs->Get(ATTR_SNAPLINE_Y)).GetValue() );
+    aHlpPos.setX( pArgs->Get(ATTR_SNAPLINE_X).GetValue() );
+    aHlpPos.setY( pArgs->Get(ATTR_SNAPLINE_Y).GetValue() );
     pPV->PagePosToLogic(aHlpPos);
 
     if ( bCreateNew )
@@ -167,8 +167,7 @@ void FuSnapLine::DoExecute( SfxRequest& rReq )
 
         pPV = mpView->GetSdrPageView();
 
-        switch ( static_cast<SnapKind>(static_cast<const SfxUInt16Item&>(
-                 pArgs->Get(ATTR_SNAPLINE_KIND)).GetValue()) )
+        switch ( static_cast<SnapKind>(pArgs->Get(ATTR_SNAPLINE_KIND).GetValue()) )
         {
             case SnapKind::Horizontal  : eKind = SdrHelpLineKind::Horizontal;   break;
             case SnapKind::Vertical    : eKind = SdrHelpLineKind::Vertical;     break;

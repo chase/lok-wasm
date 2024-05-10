@@ -21,8 +21,6 @@
 
 #include <com/sun/star/frame/Desktop.hpp>
 
-using namespace ::com::sun::star;
-
 #include <scitems.hxx>
 #include <editeng/flstitem.hxx>
 #include <sfx2/fcontnr.hxx>
@@ -111,15 +109,17 @@ using namespace ::com::sun::star;
 #include <helpids.h>
 #include <editeng/eeitem.hxx>
 #include <editeng/langitem.hxx>
+#include <officecfg/Office/Common.hxx>
 
 #include <svx/xdef.hxx>
+
+using namespace ::com::sun::star;
 
 void ScDocShell::SetInitialLinkUpdate( const SfxMedium* pMed )
 {
     if (pMed)
     {
-        const SfxUInt16Item* pUpdateDocItem = SfxItemSet::GetItem<SfxUInt16Item>( pMed->GetItemSet(),
-                SID_UPDATEDOCMODE, false);
+        const SfxUInt16Item* pUpdateDocItem = pMed->GetItemSet().GetItem(SID_UPDATEDOCMODE, false);
         m_nCanUpdate = pUpdateDocItem ? pUpdateDocItem->GetValue() : css::document::UpdateDocMode::NO_UPDATE;
     }
 
@@ -198,8 +198,23 @@ void ScDocShell::ReloadAllLinks()
     m_pDocument->UpdateAreaLinks();
 }
 
-IMPL_LINK_NOARG( ScDocShell, ReloadAllLinksHdl, weld::Button&, void )
+IMPL_LINK( ScDocShell, ReloadAllLinksHdl, weld::Button&, rButton, void )
 {
+    ScDocument& rDoc = GetDocument();
+    if (rDoc.HasLinkFormulaNeedingCheck() && rDoc.GetDocLinkManager().hasExternalRefLinks())
+    {
+        // If we have WEBSERVICE/Dde link and other external links in the document, it might indicate some
+        // exfiltration attempt, add *another* warning about this on top of the "Security Warning"
+        // shown in the infobar before they got here.
+        std::unique_ptr<weld::MessageDialog> xQueryBox(Application::CreateMessageDialog(&rButton,
+                                                       VclMessageType::Warning, VclButtonsType::YesNo,
+                                                       ScResId(STR_TRUST_DOCUMENT_WARNING)));
+        xQueryBox->set_secondary_text(ScResId(STR_WEBSERVICE_WITH_LINKS_WARNING));
+        xQueryBox->set_default_response(RET_NO);
+        if (xQueryBox->run() != RET_YES)
+            return;
+    }
+
     ReloadAllLinks();
 
     ScTabViewShell* pViewSh = GetBestViewShell();
@@ -551,6 +566,13 @@ void ScDocShell::Execute( SfxRequest& rReq )
                             rBtn.set_label(ScResId(STR_ENABLE_CONTENT));
                             rBtn.set_tooltip_text(ScResId(STR_ENABLE_CONTENT_TOOLTIP));
                             rBtn.connect_clicked(LINK(this, ScDocShell, ReloadAllLinksHdl));
+
+                            // when active content is disabled the "Allow updating" button has no functionality.
+                            if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+                            {
+                                rBtn.set_tooltip_text(ScResId(STR_ENABLE_CONTENT_TOOLTIP_DISABLED));
+                                rBtn.set_sensitive(false);
+                            }
                         }
                     }
                     rReq.Done();
@@ -819,11 +841,11 @@ void ScDocShell::Execute( SfxRequest& rReq )
                 ScDocShell* pOtherDocSh = new ScDocShell;
                 SfxObjectShellLock aDocShTablesRef = pOtherDocSh;
                 pOtherDocSh->DoLoad( pMed );
-                ErrCode nErr = pOtherDocSh->GetErrorCode();
+                ErrCodeMsg nErr = pOtherDocSh->GetErrorCode();
                 if (nErr)
                     ErrorHandler::HandleError( nErr );          // also warnings
 
-                if ( !pOtherDocSh->GetError() )                 // only errors
+                if ( !pOtherDocSh->GetErrorIgnoreWarning() )                 // only errors
                 {
                     bool bHadTrack = ( m_pDocument->GetChangeTrack() != nullptr );
 #if HAVE_FEATURE_MULTIUSER_ENVIRONMENT
@@ -853,7 +875,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                         }
                     }
 
-                    rReq.SetReturnValue( SfxInt32Item( nSlot, 0 ) );        //! ???????
+                    rReq.SetReturnValue( SfxInt32Item( TypedWhichId<SfxInt32Item>(nSlot), 0 ) );        //! ???????
                     rReq.Done();
 
                     if (!bHadTrack)         //  newly turned on -> show as well
@@ -1131,9 +1153,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                                             EnableSharedSettings( false );
 
                                             // Do *not* use dispatch mechanism in this place - we don't want others (extensions etc.) to intercept this.
-                                            uno::Reference<frame::XStorable> xStorable2(
-                                                GetModel(), uno::UNO_QUERY_THROW);
-                                            xStorable2->store();
+                                            GetModel()->store();
 
                                             ScTabView* pTabView = pViewData->GetView();
                                             if ( pTabView )
@@ -1210,9 +1230,9 @@ void ScDocShell::Execute( SfxRequest& rReq )
             if ( !aLangText.isEmpty() )
             {
                 LanguageType eLang, eLatin, eCjk, eCtl;
-                static const OUStringLiteral aSelectionLangPrefix(u"Current_");
-                static const OUStringLiteral aParagraphLangPrefix(u"Paragraph_");
-                static const OUStringLiteral aDocLangPrefix(u"Default_");
+                static constexpr OUString aSelectionLangPrefix(u"Current_"_ustr);
+                static constexpr OUString aParagraphLangPrefix(u"Paragraph_"_ustr);
+                static constexpr OUString aDocLangPrefix(u"Default_"_ustr);
 
                 bool bSelection = false;
                 bool bParagraph = false;
@@ -1241,9 +1261,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
                     }
                     else if ( aLangText == "RESET_LANGUAGES" )
                     {
-                        bool bAutoSpell;
-
-                        ScModule::GetSpellSettings(eLang, eCjk, eCtl, bAutoSpell);
+                        ScModule::GetSpellSettings(eLang, eCjk, eCtl);
                         rDoc.SetLanguage(eLang, eCjk, eCtl);
                     }
                     else
@@ -1360,7 +1378,7 @@ void ScDocShell::Execute( SfxRequest& rReq )
             if (pItem2)
                 sApplyText = pItem2->GetValue();
 
-            static const OUStringLiteral sSpellingRule(u"Spelling_");
+            static constexpr OUString sSpellingRule(u"Spelling_"_ustr);
             sal_Int32 nPos = 0;
             if(-1 != (nPos = sApplyText.indexOf( sSpellingRule )))
             {
@@ -1864,7 +1882,7 @@ void ScDocShell::ExecutePageStyle( const SfxViewShell& rCaller,
 
                                 // memorizing for GetState():
                                 GetPageOnFromPageStyleSet( &rStyleSet, nCurTab, m_bHeaderOn, m_bFooterOn );
-                                rCaller.GetViewFrame()->GetBindings().Invalidate( SID_HFEDIT );
+                                rCaller.GetViewFrame().GetBindings().Invalidate( SID_HFEDIT );
 
                                 ScStyleSaveData aNewData;
                                 aNewData.InitFromStyle( pStyleSheet );
@@ -2454,7 +2472,7 @@ bool ScDocShell::DdeSetData( const OUString& rItem,
     {
         if( rItem.equalsIgnoreAsciiCase( "Format" ) )
         {
-            if ( ScByteSequenceToString::GetString( m_aDdeTextFmt, rValue, osl_getThreadTextEncoding() ) )
+            if ( ScByteSequenceToString::GetString( m_aDdeTextFmt, rValue ) )
             {
                 m_aDdeTextFmt = m_aDdeTextFmt.toAsciiUpperCase();
                 return true;
@@ -2468,7 +2486,7 @@ bool ScDocShell::DdeSetData( const OUString& rItem,
             m_aDdeTextFmt == "FSYLK" )
         {
             OUString aData;
-            if ( ScByteSequenceToString::GetString( aData, rValue, osl_getThreadTextEncoding() ) )
+            if ( ScByteSequenceToString::GetString( aData, rValue ) )
             {
                 return aObj.ImportString( aData, SotClipboardFormatId::SYLK );
             }
@@ -2489,6 +2507,9 @@ bool ScDocShell::DdeSetData( const OUString& rItem,
 
 ::sfx2::SvLinkSource* ScDocShell::DdeCreateLinkSource( const OUString& rItem )
 {
+    if (officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+        return nullptr;
+
     //  only check for valid item string - range is parsed again in ScServerObject ctor
 
     //  named range?
@@ -2523,9 +2544,9 @@ bool ScDocShell::DdeSetData( const OUString& rItem,
     return pObj;
 }
 
-void ScDocShell::LOKCommentNotify(LOKCommentNotificationType nType, const ScDocument* pDocument, const ScAddress& rPos, const ScPostIt* pNote)
+void ScDocShell::LOKCommentNotify(LOKCommentNotificationType nType, const ScDocument& rDocument, const ScAddress& rPos, const ScPostIt* pNote)
 {
-    if ( !pDocument->IsDocVisible() || // don't want callbacks until document load
+    if ( !rDocument.IsDocVisible() || // don't want callbacks until document load
          !comphelper::LibreOfficeKit::isActive() ||
          comphelper::LibreOfficeKit::isTiledAnnotations() )
         return;
@@ -2550,11 +2571,11 @@ void ScDocShell::LOKCommentNotify(LOKCommentNotificationType nType, const ScDocu
             // Calculating the cell cursor position
             ScViewData* pViewData = GetViewData();
             if (pViewData && pViewData->GetActiveWin())
-                aAnnotation.put("cellRange", ScPostIt::NoteRangeToJsonString(*pDocument, rPos));
+                aAnnotation.put("cellRange", ScPostIt::NoteRangeToJsonString(rDocument, rPos));
         }
     }
 
-    std::string aPayload(aAnnotation.extractAsStdString());
+    OString aPayload = aAnnotation.finishAndGetAsOString();
 
     ScViewData* pViewData = GetViewData();
     SfxViewShell* pThisViewShell = ( pViewData ? pViewData->GetViewShell() : nullptr );
@@ -2562,7 +2583,7 @@ void ScDocShell::LOKCommentNotify(LOKCommentNotificationType nType, const ScDocu
     while (pViewShell)
     {
         if (pThisViewShell == nullptr || pViewShell->GetDocId() == pThisViewShell->GetDocId())
-            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload.c_str());
+            pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aPayload);
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }
 }
@@ -2608,7 +2629,7 @@ SfxBindings* ScDocShell::GetViewBindings()
 
     SfxViewShell* pViewSh = GetBestViewShell();
     if (pViewSh)
-        return &pViewSh->GetViewFrame()->GetBindings();
+        return &pViewSh->GetViewFrame().GetBindings();
     else
         return nullptr;
 }
@@ -2658,8 +2679,7 @@ IMPL_LINK( ScDocShell, DialogClosedHdl, sfx2::FileDialogHelper*, _pFileDlg, void
             }
             const SfxPoolItem* pItem = nullptr;
             const SfxInt16Item* pInt16Item(nullptr);
-            SfxItemSet* pSet = pMed->GetItemSet();
-            if (pSet && pSet->GetItemState(SID_VERSION, true, &pItem) == SfxItemState::SET)
+            if (pMed->GetItemSet().GetItemState(SID_VERSION, true, &pItem) == SfxItemState::SET)
             {
                 pInt16Item = dynamic_cast<const SfxInt16Item*>(pItem);
             }
@@ -2720,7 +2740,7 @@ uno::Reference< frame::XModel > ScDocShell::LoadSharedDocument()
 
         if ( GetMedium() )
         {
-            const SfxStringItem* pPasswordItem = SfxItemSet::GetItem<SfxStringItem>(GetMedium()->GetItemSet(), SID_PASSWORD, false);
+            const SfxStringItem* pPasswordItem = GetMedium()->GetItemSet().GetItem(SID_PASSWORD, false);
             if ( pPasswordItem && !pPasswordItem->GetValue().isEmpty() )
             {
                 aArgs.realloc( 2 );
@@ -2728,7 +2748,7 @@ uno::Reference< frame::XModel > ScDocShell::LoadSharedDocument()
                 pArgs[1].Name = "Password";
                 pArgs[1].Value <<= pPasswordItem->GetValue();
             }
-            const SfxUnoAnyItem* pEncryptionItem = SfxItemSet::GetItem<SfxUnoAnyItem>(GetMedium()->GetItemSet(), SID_ENCRYPTIONDATA, false);
+            const SfxUnoAnyItem* pEncryptionItem = GetMedium()->GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
             if (pEncryptionItem)
             {
                 aArgs.realloc(aArgs.getLength() + 1);

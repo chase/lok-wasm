@@ -16,6 +16,16 @@ $(eval $(call gb_UnpackedTarball_set_patchlevel,java_websocket,1))
 $(eval $(call gb_UnpackedTarball_add_patches,java_websocket,\
 	external/java_websocket/patches/ant-build.patch \
 	external/java_websocket/patches/no-slf4j.patch \
+	external/java_websocket/patches/0001-cid-1546192-SIC-Inner-class-could-be-made-static.patch \
+	external/java_websocket/patches/0001-cid-1545614-UR-Uninitialized-read-of-field-in-constr.patch \
+	external/java_websocket/patches/0002-cid-1545284-UR-Uninitialized-read-of-field-in-constr.patch \
+	external/java_websocket/patches/0001-cid-1546292-DLS-Dead-local-store.patch \
+	external/java_websocket/patches/0001-cid-1545227-Dm-Dubious-method-used.patch \
+	external/java_websocket/patches/0001-cid-1545515-Dm-Dubious-method-used.patch \
+	external/java_websocket/patches/0001-cid-1546264-Dm-Dubious-method-used.patch \
+	external/java_websocket/patches/0001-cid-1546341-Resource-leak-on-an-exceptional-path.patch \
+	external/java_websocket/patches/0001-cid-1545249-Bad-bit-shift-operation.patch \
+	external/java_websocket/patches/0001-cid-1546344-Dm-Dubious-method-used.patch \
 ))
 
 # vim: set noet sw=4 ts=4:

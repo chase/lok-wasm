@@ -122,10 +122,12 @@ ObjectPropertiesDialogParameter::~ObjectPropertiesDialogParameter()
 void ObjectPropertiesDialogParameter::init( const rtl::Reference<::chart::ChartModel>& xChartModel )
 {
     m_xChartDocument = xChartModel;
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartModel );
+    rtl::Reference< Diagram > xDiagram = xChartModel->getFirstChartDiagram();
     rtl::Reference< DataSeries > xSeries = ObjectIdentifier::getDataSeriesForCID( m_aObjectCID, xChartModel );
     rtl::Reference< ChartType > xChartType = ChartModelHelper::getChartTypeOfSeries( xChartModel, xSeries );
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+    sal_Int32 nDimensionCount = 0;
+    if (xDiagram)
+        nDimensionCount = xDiagram->getDimension();
 
     bool bHasSeriesProperties = (m_eObjectType==OBJECTTYPE_DATA_SERIES);
     bool bHasDataPointproperties = (m_eObjectType==OBJECTTYPE_DATA_POINT);
@@ -473,7 +475,7 @@ SchAttribTabDlg::SchAttribTabDlg(weld::Window* pParent,
             AddTabPage("fontname", SchResId(STR_PAGE_FONT), RID_SVXPAGE_CHAR_NAME);
             AddTabPage("effects", SchResId(STR_PAGE_FONT_EFFECTS), RID_SVXPAGE_CHAR_EFFECTS);
             AddTabPage("numberformat", SchResId(STR_PAGE_NUMBERS), RID_SVXPAGE_NUMBERFORMAT);
-            if (SvtCTLOptions().IsCTLFontEnabled())
+            if (SvtCTLOptions::IsCTLFontEnabled())
             {
                 /*  When rotation is supported for equation text boxes, use
                     SchAlignmentTabPage::Create here. The special
@@ -495,7 +497,7 @@ SchAttribTabDlg::~SchAttribTabDlg()
 {
 }
 
-void SchAttribTabDlg::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SchAttribTabDlg::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
     if (rId == "border")

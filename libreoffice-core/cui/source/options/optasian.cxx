@@ -42,15 +42,15 @@ using namespace com::sun::star::i18n;
 using namespace com::sun::star::frame;
 using namespace com::sun::star::beans;
 
-constexpr OUStringLiteral cIsKernAsianPunctuation = u"IsKernAsianPunctuation";
-constexpr OUStringLiteral cCharacterCompressionType = u"CharacterCompressionType";
+constexpr OUString cIsKernAsianPunctuation = u"IsKernAsianPunctuation"_ustr;
+constexpr OUString cCharacterCompressionType = u"CharacterCompressionType"_ustr;
 
 namespace {
 
 struct SvxForbiddenChars_Impl
 {
     bool                                  bRemoved;
-    std::unique_ptr<ForbiddenCharacters>  pCharacters;
+    std::optional<ForbiddenCharacters>    oCharacters;
 };
 
 }
@@ -63,12 +63,12 @@ struct SvxAsianLayoutPage_Impl
     Reference< XForbiddenCharacters >   xForbidden;
     Reference< XPropertySet >           xPrSet;
     Reference< XPropertySetInfo >       xPrSetInfo;
-    std::map< LanguageType, std::unique_ptr<SvxForbiddenChars_Impl> >
+    std::map< LanguageType, SvxForbiddenChars_Impl >
                                         aChangedLanguagesMap;
 
     bool                hasForbiddenCharacters(LanguageType eLang);
     SvxForbiddenChars_Impl* getForbiddenCharacters(LanguageType eLang);
-    void                    addForbiddenCharacters(LanguageType eLang, std::unique_ptr<ForbiddenCharacters> pForbidden);
+    void                    addForbiddenCharacters(LanguageType eLang, std::optional<ForbiddenCharacters> oForbidden);
 };
 
 bool    SvxAsianLayoutPage_Impl::hasForbiddenCharacters(LanguageType eLang)
@@ -81,25 +81,25 @@ SvxForbiddenChars_Impl* SvxAsianLayoutPage_Impl::getForbiddenCharacters(Language
     auto it = aChangedLanguagesMap.find( eLang );
     DBG_ASSERT( ( it != aChangedLanguagesMap.end() ), "language not available");
     if( it != aChangedLanguagesMap.end() )
-        return it->second.get();
+        return &it->second;
     return nullptr;
 }
 
 void SvxAsianLayoutPage_Impl::addForbiddenCharacters(
-    LanguageType eLang, std::unique_ptr<ForbiddenCharacters> pForbidden)
+    LanguageType eLang, std::optional<ForbiddenCharacters> oForbidden)
 {
     auto itOld = aChangedLanguagesMap.find( eLang );
     if( itOld == aChangedLanguagesMap.end() )
     {
-        std::unique_ptr<SvxForbiddenChars_Impl> pChar(new SvxForbiddenChars_Impl);
-        pChar->bRemoved = nullptr == pForbidden;
-        pChar->pCharacters = std::move(pForbidden);
-        aChangedLanguagesMap.emplace( eLang, std::move(pChar) );
+        SvxForbiddenChars_Impl aChar;
+        aChar.bRemoved = !oForbidden.has_value();
+        aChar.oCharacters = std::move(oForbidden);
+        aChangedLanguagesMap.emplace( eLang, std::move(aChar) );
     }
     else
     {
-        itOld->second->bRemoved = nullptr == pForbidden;
-        itOld->second->pCharacters = std::move(pForbidden);
+        itOld->second.bRemoved = !oForbidden.has_value();
+        itOld->second.oCharacters = std::move(oForbidden);
     }
 }
 
@@ -141,6 +141,32 @@ std::unique_ptr<SfxTabPage> SvxAsianLayoutPage::Create(weld::Container* pPage, w
     return std::make_unique<SvxAsianLayoutPage>(pPage, pController, *rAttrSet);
 }
 
+OUString SvxAsianLayoutPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[]
+        = { "label1", "label2", "label3", "languageft", "startft", "endft", "hintft" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "charkerning", "charpunctkerning", "nocompression",
+                               "punctcompression", "punctkanacompression" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    sAllStrings += m_xStandardCB->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
+}
+
 bool SvxAsianLayoutPage::FillItemSet( SfxItemSet* )
 {
     if(m_xCharKerningRB->get_state_changed_from_saved())
@@ -175,10 +201,10 @@ bool SvxAsianLayoutPage::FillItemSet( SfxItemSet* )
             for (auto const& changedLanguage : pImpl->aChangedLanguagesMap)
             {
                 Locale aLocale( LanguageTag::convertToLocale(changedLanguage.first));
-                if(changedLanguage.second->bRemoved)
+                if(changedLanguage.second.bRemoved)
                     pImpl->xForbidden->removeForbiddenCharacters( aLocale );
-                else if(changedLanguage.second->pCharacters)
-                    pImpl->xForbidden->setForbiddenCharacters( aLocale, *( changedLanguage.second->pCharacters ) );
+                else if(changedLanguage.second.oCharacters)
+                    pImpl->xForbidden->setForbiddenCharacters( aLocale, *( changedLanguage.second.oCharacters ) );
             }
         }
         catch (const Exception&)
@@ -286,14 +312,14 @@ IMPL_LINK_NOARG(SvxAsianLayoutPage, LanguageHdl, weld::ComboBox&, void)
         if(bAvail)
         {
             SvxForbiddenChars_Impl* pElement = pImpl->getForbiddenCharacters(eSelectLanguage);
-            if(pElement->bRemoved || !pElement->pCharacters)
+            if(pElement->bRemoved || !pElement->oCharacters)
             {
                 bAvail = false;
             }
             else
             {
-                sStart = pElement->pCharacters->beginLine;
-                sEnd = pElement->pCharacters->endLine;
+                sStart = pElement->oCharacters->beginLine;
+                sEnd = pElement->oCharacters->endLine;
             }
         }
         else
@@ -358,13 +384,13 @@ IMPL_LINK(SvxAsianLayoutPage, ModifyHdl, weld::Entry&, rEdit, void)
         {
             if(bEnable)
             {
-                std::unique_ptr<ForbiddenCharacters> pFCSet(new ForbiddenCharacters);
-                pFCSet->beginLine = sStart;
-                pFCSet->endLine = sEnd;
-                pImpl->addForbiddenCharacters(eSelectLanguage, std::move(pFCSet));
+                ForbiddenCharacters aFCSet;
+                aFCSet.beginLine = sStart;
+                aFCSet.endLine = sEnd;
+                pImpl->addForbiddenCharacters(eSelectLanguage, std::move(aFCSet));
             }
             else
-                pImpl->addForbiddenCharacters(eSelectLanguage, nullptr);
+                pImpl->addForbiddenCharacters(eSelectLanguage, std::nullopt);
         }
         catch (const Exception&)
         {

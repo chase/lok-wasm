@@ -36,7 +36,6 @@
 #include <oox/drawingml/color.hxx>
 #include <oox/drawingml/connectorshapecontext.hxx>
 #include <oox/drawingml/drawingmltypes.hxx>
-#include <oox/helper/helper.hxx>
 #include <oox/helper/propertymap.hxx>
 #include <rtl/ustring.hxx>
 #include <sal/types.h>
@@ -70,7 +69,7 @@ struct FillProperties;
 struct GraphicProperties;
 struct LineProperties;
 struct Shape3DProperties;
-
+class AdvancedDiagramHelper;
 class CustomShapeProperties;
 typedef std::shared_ptr< CustomShapeProperties > CustomShapePropertiesPtr;
 
@@ -174,6 +173,7 @@ public:
     void                            setId( const OUString& rId ) { msId = rId; }
     const OUString&                 getId() const { return msId; }
     void                            setDescription( const OUString& rDescr ) { msDescription = rDescr; }
+    void                            setDecorative(bool const isDecorative) { m_isDecorative = isDecorative; }
     void                            setHidden( bool bHidden ) { mbHidden = bHidden; }
     void                            setHiddenMasterShape( bool bHiddenMasterShape ) { mbHiddenMasterShape = bHiddenMasterShape; }
     void                            setLocked( bool bLocked ) { mbLocked = bLocked; }
@@ -222,6 +222,8 @@ public:
     const Color&        getFontRefColorForNodes() const { return maFontRefColorForNodes; }
     void                setLockedCanvas(bool bLockedCanvas);
     bool                getLockedCanvas() const { return mbLockedCanvas;}
+    void                setWordprocessingCanvas(bool bWordprocessingCanvas);
+    bool                isInWordprocessingCanvas() const {return mbWordprocessingCanvas;}
     void                setWPGChild(bool bWPG);
     bool                isWPGChild() const { return mbWPGChild;}
     void                setWps(bool bWps);
@@ -236,8 +238,6 @@ public:
     void                setTxbxHasLinkedTxtBox( const bool rhs){ mbHasLinkedTxbx = rhs; };
     const LinkedTxbxAttr&     getLinkedTxbxAttributes() const { return maLinkedTxbxAttr; };
     bool                isLinkedTxbx() const { return mbHasLinkedTxbx; };
-    void                setHasCustomPrompt(bool bValue) { mbHasCustomPrompt = bValue; }
-    bool                hasCustomPrompt() { return mbHasCustomPrompt; }
 
     void setZOrder(sal_Int32 nZOrder) { mnZOrder = nZOrder; }
 
@@ -358,6 +358,7 @@ protected:
     OUString                    msInternalName; // used by diagram; not displayed in UI
     OUString                    msId;
     OUString                    msDescription;
+    bool                        m_isDecorative = false;
     sal_Int32                   mnSubType;      // if this type is not zero, then the shape is a placeholder
     std::optional< sal_Int32 >  moSubTypeIndex;
 
@@ -389,11 +390,11 @@ private:
     bool                            mbLocked;
     bool mbWPGChild; // Is this shape a child of a WPG shape?
     bool mbLockedCanvas; ///< Is this shape part of a locked canvas?
+    bool mbWordprocessingCanvas; ///< Is this shape part of a wordprocessing canvas?
     bool mbWps; ///< Is this a wps shape?
     bool mbTextBox; ///< This shape has a textbox.
     LinkedTxbxAttr                  maLinkedTxbxAttr;
     bool                            mbHasLinkedTxbx; // this text box has linked text box ?
-    bool                            mbHasCustomPrompt; // indicates that it's not a generic placeholder
 
     css::uno::Sequence<css::beans::PropertyValue> maDiagramDoms;
 
@@ -417,7 +418,7 @@ private:
 
     // temporary space for DiagramHelper in preparation for collecting data
     // Note: I tried to use a unique_ptr here, but existing constructor func does not allow that
-    svx::diagram::IDiagramHelper* mpDiagramHelper;
+    AdvancedDiagramHelper* mpDiagramHelper;
 
     // association-ID to identify the Diagram ModelData
     OUString msDiagramDataModelID;

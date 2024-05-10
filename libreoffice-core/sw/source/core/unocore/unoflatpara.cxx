@@ -68,6 +68,7 @@ CreateFlatParagraphIterator(SwDoc & rDoc, sal_Int32 const nTextMarkupType,
 SwXFlatParagraph::SwXFlatParagraph( SwTextNode& rTextNode, OUString aExpandText, const ModelToViewHelper& rMap )
     : SwXFlatParagraph_Base(& rTextNode, rMap)
     , maExpandText(std::move(aExpandText))
+    , maOrigText(rTextNode.GetText())
 {
 }
 
@@ -83,6 +84,8 @@ SwXFlatParagraph::getPropertySetInfo()
     static const comphelper::PropertyMapEntry s_Entries[] = {
         { OUString("FieldPositions"), -1, ::cppu::UnoType<uno::Sequence<sal_Int32>>::get(), beans::PropertyAttribute::READONLY, 0 },
         { OUString("FootnotePositions"), -1, ::cppu::UnoType<uno::Sequence<sal_Int32>>::get(), beans::PropertyAttribute::READONLY, 0 },
+        { OUString("SortedTextId"), -1, ::cppu::UnoType<sal_Int32>::get(), beans::PropertyAttribute::READONLY, 0 },
+        { OUString("DocumentElementsCount"), -1, ::cppu::UnoType<sal_Int32>::get(), beans::PropertyAttribute::READONLY, 0 },
     };
     return new comphelper::PropertySetInfo(s_Entries);
 }
@@ -91,7 +94,7 @@ void SAL_CALL
 SwXFlatParagraph::setPropertyValue(const OUString&, const uno::Any&)
 {
     throw lang::IllegalArgumentException("no values can be set",
-            static_cast< ::cppu::OWeakObject*>(this), 0);
+            getXWeak(), 0);
 }
 
 uno::Any SAL_CALL
@@ -106,6 +109,22 @@ SwXFlatParagraph::getPropertyValue(const OUString& rPropertyName)
     else if (rPropertyName == "FootnotePositions")
     {
         return uno::Any( comphelper::containerToSequence( GetConversionMap().getFootnotePositions() ) );
+    }
+    else if (rPropertyName == "SortedTextId")
+    {
+        SwTextNode const*const pCurrentNode = GetTextNode();
+        sal_Int32 nIndex = -1;
+        if ( pCurrentNode )
+            nIndex = pCurrentNode->GetIndex().get();
+        return uno::Any( nIndex );
+    }
+    else if (rPropertyName == "DocumentElementsCount")
+    {
+        SwTextNode const*const pCurrentNode = GetTextNode();
+        sal_Int32 nCount = -1;
+        if ( pCurrentNode )
+            nCount = pCurrentNode->GetDoc().GetNodes().Count().get();
+        return uno::Any( nCount );
     }
     return uno::Any();
 }
@@ -215,7 +234,7 @@ sal_Bool SAL_CALL SwXFlatParagraph::isChecked( ::sal_Int32 nType )
 sal_Bool SAL_CALL SwXFlatParagraph::isModified()
 {
     SolarMutexGuard aGuard;
-    return nullptr == GetTextNode();
+    return !GetTextNode() || GetTextNode()->GetText() != maOrigText;
 }
 
 // text::XFlatParagraph:
@@ -308,20 +327,6 @@ void SAL_CALL SwXFlatParagraph::changeAttributes(::sal_Int32 nPos, ::sal_Int32 n
 css::uno::Sequence< ::sal_Int32 > SAL_CALL SwXFlatParagraph::getLanguagePortions()
 {
     return css::uno::Sequence< ::sal_Int32>();
-}
-
-const uno::Sequence< sal_Int8 >&
-SwXFlatParagraph::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXFlatParagraphUnoTunnelId;
-    return theSwXFlatParagraphUnoTunnelId.getSeq();
-}
-
-sal_Int64 SAL_CALL
-SwXFlatParagraph::getSomething(
-        const uno::Sequence< sal_Int8 >& rId)
-{
-    return comphelper::getSomethingImpl(rId, this);
 }
 
 SwXFlatParagraphIterator::SwXFlatParagraphIterator( SwDoc& rDoc, sal_Int32 nType, bool bAutomatic )
@@ -499,10 +504,8 @@ uno::Reference< text::XFlatParagraph > SwXFlatParagraphIterator::getParaAfter(co
     if (!mpDoc)
         return xRet;
 
-    const uno::Reference<lang::XUnoTunnel> xFPTunnel(xPara, uno::UNO_QUERY);
-    SAL_WARN_IF(!xFPTunnel.is(), "sw.core", "invalid argument");
-    SwXFlatParagraph* const pFlatParagraph(comphelper::getFromUnoTunnel<SwXFlatParagraph>(xFPTunnel));
-
+    SwXFlatParagraph* const pFlatParagraph(dynamic_cast<SwXFlatParagraph*>(xPara.get()));
+    SAL_WARN_IF(!pFlatParagraph, "sw.core", "invalid argument");
     if ( !pFlatParagraph )
         return xRet;
 
@@ -542,11 +545,8 @@ uno::Reference< text::XFlatParagraph > SwXFlatParagraphIterator::getParaBefore(c
     if (!mpDoc)
         return xRet;
 
-    const uno::Reference<lang::XUnoTunnel> xFPTunnel(xPara, uno::UNO_QUERY);
-
-    SAL_WARN_IF(!xFPTunnel.is(), "sw.core", "invalid argument");
-    SwXFlatParagraph* const pFlatParagraph(comphelper::getFromUnoTunnel<SwXFlatParagraph>(xFPTunnel));
-
+    SwXFlatParagraph* const pFlatParagraph(dynamic_cast<SwXFlatParagraph*>(xPara.get()));
+    SAL_WARN_IF(!pFlatParagraph, "sw.core", "invalid argument");
     if ( !pFlatParagraph )
         return xRet;
 

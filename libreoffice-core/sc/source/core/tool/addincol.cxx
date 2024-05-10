@@ -70,7 +70,7 @@ using namespace com::sun::star;
 
 ScUnoAddInFuncData::ScUnoAddInFuncData( const OUString& rNam, const OUString& rLoc,
                                         OUString aDesc,
-                                        sal_uInt16 nCat, OString sHelp,
+                                        sal_uInt16 nCat, OUString sHelp,
                                         uno::Reference<reflection::XIdlMethod> xFunc,
                                         uno::Any aO,
                                         tools::Long nAC, const ScAddInArgDesc* pAD,
@@ -346,9 +346,9 @@ constexpr OUStringLiteral CFGSTR_ADDINFUNCTIONS = u"AddInFunctions";
 #define CFG_FUNCPROP_DESCRIPTION    1
 #define CFG_FUNCPROP_CATEGORY       2
 #define CFG_FUNCPROP_COUNT          3
-constexpr OUStringLiteral CFGSTR_DISPLAYNAME = u"DisplayName";
-constexpr OUStringLiteral CFGSTR_DESCRIPTION = u"Description";
-constexpr OUStringLiteral CFGSTR_CATEGORY = u"Category";
+constexpr OUString CFGSTR_DISPLAYNAME = u"DisplayName"_ustr;
+constexpr OUString CFGSTR_DESCRIPTION = u"Description"_ustr;
+constexpr OUString CFGSTR_CATEGORY = u"Category"_ustr;
 // CategoryDisplayName is ignored for now
 
 constexpr OUStringLiteral CFGSTR_COMPATIBILITYNAME = u"CompatibilityName";
@@ -564,7 +564,7 @@ void ScUnoAddInCollection::ReadConfiguration()
                     }
                 }
 
-                OString sHelpId = aHelpIdGenerator.GetHelpId( pFuncNameArray[nFuncPos] );
+                OUString sHelpId = aHelpIdGenerator.GetHelpId( pFuncNameArray[nFuncPos] );
 
                 uno::Reference<reflection::XIdlMethod> xFunc;       // remains empty
                 uno::Any aObject;                                   // also empty
@@ -898,7 +898,7 @@ void ScUnoAddInCollection::ReadFromAddIn( const uno::Reference<uno::XInterface>&
                     sal_uInt16 nCategory = lcl_GetCategory(
                             xAddIn->getProgrammaticCategoryName( aFuncU ) );
 
-                    OString sHelpId = aHelpIdGenerator.GetHelpId( aFuncU );
+                    OUString sHelpId = aHelpIdGenerator.GetHelpId( aFuncU );
 
                     OUString aLocalName;
                     try

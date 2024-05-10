@@ -90,12 +90,7 @@ uno::Sequence<sal_Int8> SwXRedlineText::getImplementationId()
     return css::uno::Sequence<sal_Int8>();
 }
 
-uno::Reference<text::XTextCursor> SwXRedlineText::CreateCursor()
-{
-    return createTextCursor();
-}
-
-uno::Reference<text::XTextCursor> SwXRedlineText::createTextCursor()
+rtl::Reference< SwXTextCursor > SwXRedlineText::createXTextCursor()
 {
     SolarMutexGuard aGuard;
 
@@ -124,20 +119,18 @@ uno::Reference<text::XTextCursor> SwXRedlineText::createTextCursor()
         // We have gone too far and have left our own redline. This means that
         // no content node outside of a table could be found, and therefore we
         // except.
-        uno::RuntimeException aExcept;
-        aExcept.Message =
+        throw uno::RuntimeException(
             "No content node found that is inside this change section "
-            "but outside of a table";
-        throw aExcept;
+            "but outside of a table");
     }
 
-    return static_cast<text::XWordCursor*>(pXCursor.get());
+    return pXCursor;
 }
 
-uno::Reference<text::XTextCursor> SwXRedlineText::createTextCursorByRange(
+rtl::Reference< SwXTextCursor > SwXRedlineText::createXTextCursorByRange(
     const uno::Reference<text::XTextRange> & aTextRange)
 {
-    uno::Reference<text::XTextCursor> xCursor = createTextCursor();
+    rtl::Reference< SwXTextCursor > xCursor = createXTextCursor();
     xCursor->gotoRange(aTextRange->getStart(), false);
     xCursor->gotoRange(aTextRange->getEnd(), true);
     return xCursor;
@@ -262,7 +255,8 @@ uno::Any  SwXRedlinePortion::GetPropertyValue( std::u16string_view rPropertyName
     else if (rPropertyName == UNO_NAME_REDLINE_COMMENT)
         aRet <<= rRedline.GetComment();
     else if(rPropertyName == UNO_NAME_REDLINE_DESCRIPTION)
-        aRet <<= const_cast<SwRangeRedline&>(rRedline).GetDescr();
+        // MACRO:
+        aRet <<= const_cast<SwRangeRedline&>(rRedline).GetDescr(true);
     else if(rPropertyName == UNO_NAME_REDLINE_TYPE)
     {
         aRet <<= SwRedlineTypeToOUString(rRedline.GetType());
@@ -303,7 +297,9 @@ uno::Sequence< beans::PropertyValue > SwXRedlinePortion::CreateRedlineProperties
     pRet[nPropIdx].Name = UNO_NAME_REDLINE_COMMENT;
     pRet[nPropIdx++].Value <<= rRedline.GetComment();
     pRet[nPropIdx].Name = UNO_NAME_REDLINE_DESCRIPTION;
-    pRet[nPropIdx++].Value <<= const_cast<SwRangeRedline&>(rRedline).GetDescr();
+
+    // MACRO
+    pRet[nPropIdx++].Value <<= const_cast<SwRangeRedline&>(rRedline).GetDescr(true);
     pRet[nPropIdx].Name = UNO_NAME_REDLINE_TYPE;
     pRet[nPropIdx++].Value <<= SwRedlineTypeToOUString(rRedline.GetType());
     pRet[nPropIdx].Name = UNO_NAME_REDLINE_IDENTIFIER;
@@ -527,9 +523,8 @@ sal_Bool SwXRedline::hasElements(  )
     return nullptr != m_pRedline->GetContentIdx();
 }
 
-uno::Reference< text::XTextCursor >  SwXRedline::createTextCursor()
+rtl::Reference< SwXTextCursor >  SwXRedline::createXTextCursor()
 {
-    SolarMutexGuard aGuard;
     if(!m_pDoc)
         throw uno::RuntimeException();
 
@@ -554,10 +549,10 @@ uno::Reference< text::XTextCursor >  SwXRedline::createTextCursor()
         pTableNode = pCont->FindTableNode();
     }
 
-    return static_cast<text::XWordCursor*>(pXCursor.get());
+    return pXCursor;
 }
 
-uno::Reference< text::XTextCursor >  SwXRedline::createTextCursorByRange(
+rtl::Reference< SwXTextCursor > SwXRedline::createXTextCursorByRange(
     const uno::Reference< text::XTextRange > & /*aTextPosition*/)
 {
     throw uno::RuntimeException();

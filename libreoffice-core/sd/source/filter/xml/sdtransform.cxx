@@ -81,8 +81,8 @@ void TransformOOo2xDocument( SdDrawDocument* pDocument )
     }
 }
 
-constexpr OUStringLiteral gsEnableNumbering( u"enable-numbering" );
-constexpr OUStringLiteral gsTextNamespace( u"urn:oasis:names:tc:opendocument:xmlns:text:1.0" );
+constexpr OUString gsEnableNumbering( u"enable-numbering"_ustr );
+constexpr OUString gsTextNamespace( u"urn:oasis:names:tc:opendocument:xmlns:text:1.0"_ustr );
 constexpr OUStringLiteral gsTrue( u"true" );
 
 SdTransformOOo2xDocument::SdTransformOOo2xDocument( SdDrawDocument& rDocument )
@@ -154,13 +154,8 @@ void SdTransformOOo2xDocument::transformStyle( SfxStyleSheetBase& rSheet )
 
 void SdTransformOOo2xDocument::transformShapes( SdrObjList const & rShapes )
 {
-    const size_t nShapeCount = rShapes.GetObjCount();
-    for( size_t nShape = 0; nShape < nShapeCount; ++nShape )
-    {
-        SdrObject* pObj = rShapes.GetObj( nShape );
-        if( pObj )
-            transformShape( *pObj );
-    }
+    for (const rtl::Reference<SdrObject>& pObj : rShapes)
+        transformShape( *pObj );
 }
 
 void SdTransformOOo2xDocument::transformShape( SdrObject& rObj )

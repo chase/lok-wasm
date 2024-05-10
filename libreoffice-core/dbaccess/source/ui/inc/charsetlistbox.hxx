@@ -19,10 +19,12 @@
 
 #pragma once
 
+#include <svl/typedwhich.hxx>
 #include <vcl/weld.hxx>
 #include "charsets.hxx"
 
 class SfxItemSet;
+class SfxStringItem;
 
 namespace dbaui
 {
@@ -32,8 +34,8 @@ namespace dbaui
     public:
         CharSetListBox(std::unique_ptr<weld::ComboBox> xControl);
 
-        void    SelectEntryByIanaName( const OUString& _rIanaName );
-        bool    StoreSelectedCharSet( SfxItemSet& _rSet, const sal_uInt16 _nItemId );
+        void    SelectEntryByIanaName( std::u16string_view _rIanaName );
+        bool    StoreSelectedCharSet( SfxItemSet& _rSet, TypedWhichId<SfxStringItem> _nItemId );
 
         weld::ComboBox* get_widget() { return m_xControl.get(); }
         void connect_changed(const Link<weld::ComboBox&, void>& rLink) { m_xControl->connect_changed(rLink); }

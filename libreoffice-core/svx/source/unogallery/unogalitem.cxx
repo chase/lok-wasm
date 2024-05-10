@@ -20,6 +20,7 @@
 
 #include "unogalitem.hxx"
 #include "unogaltheme.hxx"
+#include <galleryfilestorage.hxx>
 #include <svx/galtheme.hxx>
 #include <svx/galmisc.hxx>
 #include <svx/fmmodel.hxx>
@@ -69,7 +70,7 @@ bool GalleryItem::isValid() const
 }
 
 
-uno::Any SAL_CALL GalleryItem::queryAggregation( const uno::Type & rType )
+uno::Any SAL_CALL GalleryItem::queryInterface( const uno::Type & rType )
 {
     uno::Any aAny;
 
@@ -86,29 +87,23 @@ uno::Any SAL_CALL GalleryItem::queryAggregation( const uno::Type & rType )
     else if( rType == cppu::UnoType<beans::XMultiPropertySet>::get())
         aAny <<= uno::Reference< beans::XMultiPropertySet >(this);
     else
-        aAny = OWeakAggObject::queryAggregation( rType );
+        aAny = OWeakObject::queryInterface( rType );
 
     return aAny;
-}
-
-
-uno::Any SAL_CALL GalleryItem::queryInterface( const uno::Type & rType )
-{
-    return OWeakAggObject::queryInterface( rType );
 }
 
 
 void SAL_CALL GalleryItem::acquire()
     noexcept
 {
-    OWeakAggObject::acquire();
+    OWeakObject::acquire();
 }
 
 
 void SAL_CALL GalleryItem::release()
     noexcept
 {
-    OWeakAggObject::release();
+    OWeakObject::release();
 }
 
 
@@ -255,7 +250,7 @@ void GalleryItem::_getPropertyValues( const comphelper::PropertyMapEntry** ppEnt
                 ::GalleryTheme* pGalTheme = ( isValid() ? mpTheme->implGetTheme() : nullptr );
 
                 if( pGalTheme )
-                    *pValue <<= implGetObject()->getURL().GetMainURL( INetURLObject::DecodeMechanism::NONE );
+                    *pValue <<= implGetObject()->m_oStorageUrl->GetMainURL( INetURLObject::DecodeMechanism::NONE );
             }
             break;
 
@@ -319,10 +314,10 @@ void GalleryItem::_getPropertyValues( const comphelper::PropertyMapEntry** ppEnt
 
                     if( pGalTheme && pGalTheme->GetModel( pGalTheme->maGalleryObjectCollection.searchPosWithObject( implGetObject() ), *pModel ) )
                     {
-                        uno::Reference< lang::XComponent > xDrawing( new GalleryDrawingModel( pModel ) );
+                        rtl::Reference< GalleryDrawingModel > xDrawing( new GalleryDrawingModel( pModel ) );
 
-                        pModel->setUnoModel( uno::Reference< uno::XInterface >::query( xDrawing ) );
-                        *pValue <<= xDrawing;
+                        pModel->setUnoModel( xDrawing );
+                        *pValue <<= uno::Reference< lang::XComponent >(xDrawing);
                     }
                     else
                         delete pModel;

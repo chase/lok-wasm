@@ -23,7 +23,6 @@
 #include <rtl/math.h>
 #include <sal/log.hxx>
 #include <comphelper/processfactory.hxx>
-#include <comphelper/sequence.hxx>
 
 #include <cassert>
 #include <optional>
@@ -48,7 +47,7 @@ using ::com::sun::star::io::XOutputStream;
 
 const char sClosingBracket[] = ">";
 const char sSlashAndClosingBracket[] = "/>";
-constexpr OStringLiteral sColon = ":";
+constexpr OString sColon = ":"_ostr;
 const char sOpeningBracket[] = "<";
 const char sOpeningBracketAndSlash[] = "</";
 const char sQuote[] = "\"";
@@ -99,9 +98,9 @@ namespace sax_fastparser {
 
     }
 
-    void FastSaxSerializer::write( const OString& sOutput, bool bEscape )
+    void FastSaxSerializer::write( std::string_view sOutput, bool bEscape )
     {
-        write( sOutput.getStr(), sOutput.getLength(), bEscape );
+        write( sOutput.data(), sOutput.length(), bEscape );
     }
 
     /** Characters not allowed in XML 1.0

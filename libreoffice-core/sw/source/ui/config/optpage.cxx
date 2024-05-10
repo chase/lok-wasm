@@ -51,6 +51,8 @@
 #include <editeng/langitem.hxx>
 #include <editeng/svxenum.hxx>
 #include <officecfg/Office/Common.hxx>
+#include <officecfg/Office/Writer.hxx>
+#include <officecfg/Office/WriterWeb.hxx>
 #include <sal/macros.h>
 #include <sfx2/dialoghelper.hxx>
 #include <sfx2/printer.hxx>
@@ -86,25 +88,40 @@ void drawRect(vcl::RenderContext& rRenderContext, const tools::Rectangle &rRect,
 SwContentOptPage::SwContentOptPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rCoreSet)
     : SfxTabPage(pPage, pController, "modules/swriter/ui/viewoptionspage.ui", "ViewOptionsPage", &rCoreSet)
     , m_xCrossCB(m_xBuilder->weld_check_button("helplines"))
+    , m_xCrossImg(m_xBuilder->weld_widget("lockhelplines"))
     , m_xHMetric(m_xBuilder->weld_combo_box("hrulercombobox"))
+    , m_xHMetricImg(m_xBuilder->weld_widget("lockhruler"))
     , m_xVRulerCBox(m_xBuilder->weld_check_button("vruler"))
+    , m_xVRulerImg(m_xBuilder->weld_widget("lockvruler"))
     , m_xVRulerRightCBox(m_xBuilder->weld_check_button("vrulerright"))
+    , m_xVRulerRightImg(m_xBuilder->weld_widget("lockvrulerright"))
     , m_xVMetric(m_xBuilder->weld_combo_box("vrulercombobox"))
     , m_xSmoothCBox(m_xBuilder->weld_check_button("smoothscroll"))
+    , m_xSmoothImg(m_xBuilder->weld_widget("locksmoothscroll"))
     , m_xGrfCB(m_xBuilder->weld_check_button("graphics"))
+    , m_xGrfImg(m_xBuilder->weld_widget("lockgraphics"))
     , m_xTableCB(m_xBuilder->weld_check_button("tables"))
+    , m_xTableImg(m_xBuilder->weld_widget("locktables"))
     , m_xDrwCB(m_xBuilder->weld_check_button("drawings"))
+    , m_xDrwImg(m_xBuilder->weld_widget("lockdrawings"))
     , m_xPostItCB(m_xBuilder->weld_check_button("comments"))
     , m_xSettingsFrame(m_xBuilder->weld_frame("settingsframe"))
     , m_xSettingsLabel(m_xBuilder->weld_label("settingslabel"))
     , m_xMetricLabel(m_xBuilder->weld_label("measureunitlabel"))
     , m_xMetricLB(m_xBuilder->weld_combo_box("measureunit"))
+    , m_xMetricImg(m_xBuilder->weld_widget("lockmeasureunit"))
     , m_xShowInlineTooltips(m_xBuilder->weld_check_button("changestooltip"))
+    , m_xShowInlineTooltipsImg(m_xBuilder->weld_widget("lockchangestooltip"))
     , m_xShowOutlineContentVisibilityButton(m_xBuilder->weld_check_button("outlinecontentvisibilitybutton"))
+    , m_xShowOutlineContentVImg(m_xBuilder->weld_widget("lockoutlinecontentvisibility"))
     , m_xTreatSubOutlineLevelsAsContent(m_xBuilder->weld_check_button("suboutlinelevelsascontent"))
+    , m_xTreatSubOutlineLevelsImg(m_xBuilder->weld_widget("locksuboutlinelevels"))
     , m_xShowChangesInMargin(m_xBuilder->weld_check_button("changesinmargin"))
+    , m_xShowChangesInMarginImg(m_xBuilder->weld_widget("lockchangesinmargin"))
     , m_xFieldHiddenCB(m_xBuilder->weld_check_button("hiddentextfield"))
+    , m_xFieldHiddenImg(m_xBuilder->weld_widget("lockhiddentextfield"))
     , m_xFieldHiddenParaCB(m_xBuilder->weld_check_button("hiddenparafield"))
+    , m_xFieldHiddenParaImg(m_xBuilder->weld_widget("lockhiddenparafield"))
 {
     m_xShowOutlineContentVisibilityButton->connect_toggled(LINK(this, SwContentOptPage, ShowOutlineContentVisibilityButtonHdl));
 
@@ -187,29 +204,146 @@ static void lcl_SelectMetricLB(weld::ComboBox& rMetric, TypedWhichId<SfxUInt16It
 
 void SwContentOptPage::Reset(const SfxItemSet* rSet)
 {
+    bool bReadOnly = false;
+    bool bWebOptionsPage = m_xSettingsFrame->is_visible();
     const SwElemItem* pElemAttr = rSet->GetItemIfSet( FN_PARAM_ELEM , false );
     if(pElemAttr)
     {
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Content::Display::Table::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::Display::Table::isReadOnly();
         m_xTableCB->set_active(pElemAttr->m_bTable);
+        m_xTableCB->set_sensitive(!bReadOnly);
+        m_xTableImg->set_visible(bReadOnly);
+
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Content::Display::GraphicObject::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::Display::GraphicObject::isReadOnly();
         m_xGrfCB->set_active(pElemAttr->m_bGraphic);
+        m_xGrfCB->set_sensitive(!bReadOnly);
+        m_xGrfImg->set_visible(bReadOnly);
+
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Content::Display::DrawingControl::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::Display::DrawingControl::isReadOnly();
         m_xDrwCB->set_active(pElemAttr->m_bDrawing);
+        m_xDrwCB->set_sensitive(!bReadOnly);
+        m_xDrwImg->set_visible(bReadOnly);
+
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Content::Display::Note::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::Display::Note::isReadOnly();
         m_xPostItCB->set_active(pElemAttr->m_bNotes);
+        m_xPostItCB->set_sensitive(!bReadOnly);
+        m_xPostItCB->set_visible(pElemAttr->m_bNotes);
+
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Layout::Line::Guide::isReadOnly() :
+            officecfg::Office::WriterWeb::Layout::Line::Guide::isReadOnly();
         m_xCrossCB->set_active(pElemAttr->m_bCrosshair);
+        m_xCrossCB->set_sensitive(!bReadOnly);
+        m_xCrossImg->set_visible(bReadOnly);
+
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Layout::Window::VerticalRuler::isReadOnly() :
+            officecfg::Office::WriterWeb::Layout::Window::VerticalRuler::isReadOnly();
         m_xVRulerCBox->set_active(pElemAttr->m_bVertRuler);
+        m_xVRulerCBox->set_sensitive(!bReadOnly);
+        m_xVRulerImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Layout::Window::IsVerticalRulerRight::isReadOnly();
         m_xVRulerRightCBox->set_active(pElemAttr->m_bVertRulerRight);
+        m_xVRulerRightCBox->set_sensitive(!bReadOnly);
+        m_xVRulerRightImg->set_visible(bReadOnly);
+
+        bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Layout::Window::SmoothScroll::isReadOnly() :
+            officecfg::Office::WriterWeb::Layout::Window::SmoothScroll::isReadOnly();
         m_xSmoothCBox->set_active(pElemAttr->m_bSmoothScroll);
+        m_xSmoothCBox->set_sensitive(!bReadOnly);
+        m_xSmoothImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::Display::ShowInlineTooltips::isReadOnly();
         m_xShowInlineTooltips->set_active(pElemAttr->m_bShowInlineTooltips);
+        m_xShowInlineTooltips->set_sensitive(!bReadOnly);
+        m_xShowInlineTooltipsImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::Display::ShowOutlineContentVisibilityButton::isReadOnly();
         m_xShowOutlineContentVisibilityButton->set_active(pElemAttr->m_bShowOutlineContentVisibilityButton);
+        m_xShowOutlineContentVisibilityButton->set_sensitive(!bReadOnly);
+        m_xShowOutlineContentVImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::Display::TreatSubOutlineLevelsAsContent::isReadOnly();
         m_xTreatSubOutlineLevelsAsContent->set_active(pElemAttr->m_bTreatSubOutlineLevelsAsContent);
-        m_xTreatSubOutlineLevelsAsContent->set_sensitive(pElemAttr->m_bShowOutlineContentVisibilityButton);
+        m_xTreatSubOutlineLevelsAsContent->set_sensitive(pElemAttr->m_bShowOutlineContentVisibilityButton && !bReadOnly);
+        m_xTreatSubOutlineLevelsImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::Display::ShowChangesInMargin::isReadOnly();
         m_xShowChangesInMargin->set_active(pElemAttr->m_bShowChangesInMargin);
+        m_xShowChangesInMargin->set_sensitive(!bReadOnly);
+        m_xShowChangesInMarginImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::NonprintingCharacter::HiddenText::isReadOnly();
         m_xFieldHiddenCB->set_active( pElemAttr->m_bFieldHiddenText );
+        m_xFieldHiddenCB->set_sensitive(!bReadOnly);
+        m_xFieldHiddenImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::NonprintingCharacter::HiddenParagraph::isReadOnly();
         m_xFieldHiddenParaCB->set_active( pElemAttr->m_bShowHiddenPara );
+        m_xFieldHiddenParaCB->set_sensitive(!bReadOnly);
+        m_xFieldHiddenParaImg->set_visible(bReadOnly);
     }
+
+    bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Layout::Window::HorizontalRulerUnit::isReadOnly() :
+        officecfg::Office::WriterWeb::Layout::Window::HorizontalRulerUnit::isReadOnly();
+    m_xHMetric->set_sensitive(!bReadOnly);
+    m_xHMetricImg->set_visible(bReadOnly);
+
+    bReadOnly = !bWebOptionsPage ? officecfg::Office::Writer::Layout::Window::VerticalRulerUnit::isReadOnly() :
+        officecfg::Office::WriterWeb::Layout::Window::VerticalRulerUnit::isReadOnly();
+    m_xVMetric->set_sensitive(!bReadOnly);
+
     m_xMetricLB->set_active(-1);
+    if (bWebOptionsPage)
+    {
+        bReadOnly = officecfg::Office::WriterWeb::Layout::Other::MeasureUnit::isReadOnly();
+        m_xMetricLB->set_sensitive(!bReadOnly);
+        m_xMetricImg->set_visible(bReadOnly);
+    }
     lcl_SelectMetricLB(*m_xMetricLB, SID_ATTR_METRIC, *rSet);
     lcl_SelectMetricLB(*m_xHMetric, FN_HSCROLL_METRIC, *rSet);
     lcl_SelectMetricLB(*m_xVMetric, FN_VSCROLL_METRIC, *rSet);
+}
+
+OUString SwContentOptPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[]
+        = { "guideslabel", "displaylabel",  "displayfl1",       "changeslabel", "label3",
+            "hruler",      "settingslabel", "measureunitlabel", "outlinelabel" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "helplines",
+                               "graphics",
+                               "tables",
+                               "drawings",
+                               "comments",
+                               "resolvedcomments",
+                               "hiddentextfield",
+                               "hiddenparafield",
+                               "changesinmargin",
+                               "changestooltip",
+                               "vruler",
+                               "vrulerright",
+                               "smoothscroll",
+                               "outlinecontentvisibilitybutton",
+                               "suboutlinelevelsascontent" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwContentOptPage::FillItemSet(SfxItemSet* rSet)
@@ -265,7 +399,8 @@ bool SwContentOptPage::FillItemSet(SfxItemSet* rSet)
 
 IMPL_LINK(SwContentOptPage, VertRulerHdl, weld::Toggleable&, rBox, void)
 {
-    m_xVRulerRightCBox->set_sensitive(rBox.get_sensitive() && rBox.get_active());
+    m_xVRulerRightCBox->set_sensitive(rBox.get_sensitive() && rBox.get_active() &&
+        !officecfg::Office::Writer::Layout::Window::IsVerticalRulerRight::isReadOnly());
 }
 
 IMPL_LINK(SwContentOptPage, ShowOutlineContentVisibilityButtonHdl, weld::Toggleable&, rBox, void)
@@ -280,26 +415,41 @@ SwAddPrinterTabPage::SwAddPrinterTabPage(weld::Container* pPage, weld::DialogCon
     , m_sNone(SwResId(SW_STR_NONE))
     , m_bAttrModified(false)
     , m_bPreview(false)
+    , m_bHTMLMode(false)
     , m_xGrfCB(m_xBuilder->weld_check_button("graphics"))
+    , m_xGrfImg(m_xBuilder->weld_widget("lockgraphics"))
     , m_xCtrlFieldCB(m_xBuilder->weld_check_button("formcontrols"))
+    , m_xCtrlFieldImg(m_xBuilder->weld_widget("lockformcontrols"))
     , m_xBackgroundCB(m_xBuilder->weld_check_button("background"))
+    , m_xBackgroundImg(m_xBuilder->weld_widget("lockbackground"))
     , m_xBlackFontCB(m_xBuilder->weld_check_button("inblack"))
+    , m_xBlackFontImg(m_xBuilder->weld_widget("lockinblack"))
     , m_xPrintHiddenTextCB(m_xBuilder->weld_check_button("hiddentext"))
+    , m_xPrintHiddenTextImg(m_xBuilder->weld_widget("lockhiddentext"))
     , m_xPrintTextPlaceholderCB(m_xBuilder->weld_check_button("textplaceholder"))
+    , m_xPrintTextPlaceholderImg(m_xBuilder->weld_widget("locktextplaceholder"))
     , m_xPagesFrame(m_xBuilder->weld_widget("pagesframe"))
     , m_xLeftPageCB(m_xBuilder->weld_check_button("leftpages"))
+    , m_xLeftPageImg(m_xBuilder->weld_widget("lockleftpages"))
     , m_xRightPageCB(m_xBuilder->weld_check_button("rightpages"))
+    , m_xRightPageImg(m_xBuilder->weld_widget("lockrightpages"))
     , m_xProspectCB(m_xBuilder->weld_check_button("brochure"))
+    , m_xProspectImg(m_xBuilder->weld_widget("lockbrochure"))
     , m_xProspectCB_RTL(m_xBuilder->weld_check_button("rtl"))
+    , m_xProspectImg_RTL(m_xBuilder->weld_widget("lockrtl"))
     , m_xCommentsFrame(m_xBuilder->weld_widget("commentsframe"))
     , m_xNoRB(m_xBuilder->weld_radio_button("none"))
     , m_xOnlyRB(m_xBuilder->weld_radio_button("only"))
     , m_xEndRB(m_xBuilder->weld_radio_button("end"))
     , m_xEndPageRB(m_xBuilder->weld_radio_button("endpage"))
     , m_xInMarginsRB(m_xBuilder->weld_radio_button("inmargins"))
+    , m_xMarginsImg(m_xBuilder->weld_widget("lockcomments"))
     , m_xPrintEmptyPagesCB(m_xBuilder->weld_check_button("blankpages"))
+    , m_xPrintEmptyPagesImg(m_xBuilder->weld_widget("lockblankpages"))
     , m_xPaperFromSetupCB(m_xBuilder->weld_check_button("papertray"))
+    , m_xPaperFromSetupImg(m_xBuilder->weld_widget("lockpapertray"))
     , m_xFaxLB(m_xBuilder->weld_combo_box("fax"))
+    , m_xFaxImg(m_xBuilder->weld_widget("lockfax"))
 {
     Link<weld::Toggleable&,void> aLk = LINK( this, SwAddPrinterTabPage, AutoClickHdl);
     m_xGrfCB->connect_toggled( aLk );
@@ -324,6 +474,7 @@ SwAddPrinterTabPage::SwAddPrinterTabPage(weld::Container* pPage, weld::DialogCon
     const SfxUInt16Item* pItem = rCoreSet.GetItemIfSet(SID_HTML_MODE, false );
     if(pItem && pItem->GetValue() & HTMLMODE_ON)
     {
+        m_bHTMLMode = true;
         m_xLeftPageCB->hide();
         m_xRightPageCB->hide();
         m_xPrintHiddenTextCB->hide();
@@ -332,7 +483,7 @@ SwAddPrinterTabPage::SwAddPrinterTabPage(weld::Container* pPage, weld::DialogCon
     }
     m_xProspectCB_RTL->set_sensitive(false);
     SvtCTLOptions aCTLOptions;
-    m_xProspectCB_RTL->set_visible(aCTLOptions.IsCTLFontEnabled());
+    m_xProspectCB_RTL->set_visible(SvtCTLOptions::IsCTLFontEnabled());
 }
 
 SwAddPrinterTabPage::~SwAddPrinterTabPage()
@@ -350,6 +501,38 @@ std::unique_ptr<SfxTabPage> SwAddPrinterTabPage::Create( weld::Container* pPage,
                                                 const SfxItemSet* rAttrSet )
 {
     return std::make_unique<SwAddPrinterTabPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SwAddPrinterTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label2", "label10", "label1", "label5", "4" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[]
+        = { "graphics",  "formcontrols", "background", "inblack", "hiddentext", "textplaceholder",
+            "leftpages", "rightpages",   "brochure",   "rtl",     "blankpages", "papertray" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "none", "only", "end", "endpage", "inmargins" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool    SwAddPrinterTabPage::FillItemSet( SfxItemSet* rCoreSet )
@@ -396,36 +579,108 @@ bool    SwAddPrinterTabPage::FillItemSet( SfxItemSet* rCoreSet )
 void    SwAddPrinterTabPage::Reset( const SfxItemSet*  )
 {
     const   SfxItemSet&         rSet = GetItemSet();
+    bool bReadOnly = false;
 
     if( const SwAddPrinterItem* pAddPrinterAttr = rSet.GetItemIfSet( FN_PARAM_ADDPRINTER , false ) )
     {
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Content::Graphic::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Content::Graphic::isReadOnly();
         m_xGrfCB->set_active(pAddPrinterAttr->m_bPrintGraphic || pAddPrinterAttr->m_bPrintDraw);
+        m_xGrfCB->set_sensitive(!bReadOnly);
+        m_xGrfImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Content::Control::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Content::Control::isReadOnly();
         m_xCtrlFieldCB->set_active(       pAddPrinterAttr->m_bPrintControl);
+        m_xCtrlFieldCB->set_sensitive(!bReadOnly);
+        m_xCtrlFieldImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Content::Background::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Content::Background::isReadOnly();
         m_xBackgroundCB->set_active(    pAddPrinterAttr->m_bPrintPageBackground);
+        m_xBackgroundCB->set_sensitive(!bReadOnly);
+        m_xBackgroundImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Content::PrintBlack::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Content::PrintBlack::isReadOnly();
         m_xBlackFontCB->set_active(     pAddPrinterAttr->m_bPrintBlackFont);
+        m_xBlackFontCB->set_sensitive(!bReadOnly);
+        m_xBlackFontImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Print::Content::PrintHiddenText::isReadOnly();
         m_xPrintHiddenTextCB->set_active( pAddPrinterAttr->m_bPrintHiddenText);
+        m_xPrintHiddenTextCB->set_sensitive(!bReadOnly);
+        m_xPrintHiddenTextImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Print::Content::PrintPlaceholders::isReadOnly();
         m_xPrintTextPlaceholderCB->set_active(pAddPrinterAttr->m_bPrintTextPlaceholder);
+        m_xPrintTextPlaceholderCB->set_sensitive(!bReadOnly);
+        m_xPrintTextPlaceholderImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Print::Page::LeftPage::isReadOnly();
         m_xLeftPageCB->set_active(      pAddPrinterAttr->m_bPrintLeftPages);
+        m_xLeftPageCB->set_sensitive(!bReadOnly);
+        m_xLeftPageImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Print::Page::RightPage::isReadOnly();
         m_xRightPageCB->set_active(     pAddPrinterAttr->m_bPrintRightPages);
+        m_xRightPageCB->set_sensitive(!bReadOnly);
+        m_xRightPageImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Papertray::FromPrinterSetup::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Papertray::FromPrinterSetup::isReadOnly();
         m_xPaperFromSetupCB->set_active(pAddPrinterAttr->m_bPaperFromSetup);
+        m_xPaperFromSetupCB->set_sensitive(!bReadOnly);
+        m_xPaperFromSetupImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Print::EmptyPages::isReadOnly();
         m_xPrintEmptyPagesCB->set_active(pAddPrinterAttr->m_bPrintEmptyPages);
+        m_xPrintEmptyPagesCB->set_sensitive(!bReadOnly);
+        m_xPrintEmptyPagesImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Page::Brochure::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Page::Brochure::isReadOnly();
         m_xProspectCB->set_active(      pAddPrinterAttr->m_bPrintProspect);
+        m_xProspectCB->set_sensitive(!bReadOnly);
+        m_xProspectImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Page::BrochureRightToLeft::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Page::BrochureRightToLeft::isReadOnly();
         m_xProspectCB_RTL->set_active(      pAddPrinterAttr->m_bPrintProspectRTL);
+        m_xProspectCB_RTL->set_sensitive(!bReadOnly);
+        m_xProspectImg_RTL->set_visible(bReadOnly);
 
         m_xNoRB->set_active(pAddPrinterAttr->m_nPrintPostIts== SwPostItMode::NONE ) ;
         m_xOnlyRB->set_active(pAddPrinterAttr->m_nPrintPostIts== SwPostItMode::Only ) ;
         m_xEndRB->set_active(pAddPrinterAttr->m_nPrintPostIts== SwPostItMode::EndDoc ) ;
         m_xEndPageRB->set_active(pAddPrinterAttr->m_nPrintPostIts== SwPostItMode::EndPage ) ;
         m_xInMarginsRB->set_active(pAddPrinterAttr->m_nPrintPostIts== SwPostItMode::InMargins ) ;
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Content::Note::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Content::Note::isReadOnly();
+        m_xNoRB->set_sensitive(!bReadOnly);
+        m_xOnlyRB->set_sensitive(!bReadOnly);
+        m_xEndRB->set_sensitive(!bReadOnly);
+        m_xEndPageRB->set_sensitive(!bReadOnly);
+        m_xInMarginsRB->set_sensitive(!bReadOnly);
+        m_xMarginsImg->set_visible(bReadOnly);
+
         auto nFound = m_xFaxLB->find_text(pAddPrinterAttr->m_sFaxName);
         if (nFound != -1)
             m_xFaxLB->set_active(nFound);
         else if (m_xFaxLB->get_count())
             m_xFaxLB->set_active(0);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Output::Fax::isReadOnly() :
+            officecfg::Office::WriterWeb::Print::Output::Fax::isReadOnly();
+        m_xFaxLB->set_sensitive(!bReadOnly);
+        m_xFaxImg->set_visible(bReadOnly);
     }
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Print::Page::BrochureRightToLeft::isReadOnly() :
+        officecfg::Office::WriterWeb::Print::Page::BrochureRightToLeft::isReadOnly();
     if (m_xProspectCB->get_active())
     {
-        m_xProspectCB_RTL->set_sensitive(true);
+        m_xProspectCB_RTL->set_sensitive(!bReadOnly);
         m_xNoRB->set_sensitive( false );
         m_xOnlyRB->set_sensitive( false );
         m_xEndRB->set_sensitive( false );
@@ -433,6 +688,8 @@ void    SwAddPrinterTabPage::Reset( const SfxItemSet*  )
     }
     else
         m_xProspectCB_RTL->set_sensitive( false );
+
+    m_xProspectImg_RTL->set_visible(bReadOnly);
 }
 
 IMPL_LINK_NOARG(SwAddPrinterTabPage, AutoClickHdl, weld::Toggleable&, void)
@@ -503,15 +760,25 @@ SwStdFontTabPage::SwStdFontTabPage(weld::Container* pPage, weld::DialogControlle
     , m_sScriptComplex(SwResId(ST_SCRIPT_CTL))
     , m_xLabelFT(m_xBuilder->weld_label("label1"))
     , m_xStandardBox(m_xBuilder->weld_combo_box("standardbox"))
+    , m_xStandardBoxImg(m_xBuilder->weld_widget("lockstandardbox"))
     , m_xStandardHeightLB(new FontSizeBox(m_xBuilder->weld_combo_box("standardheight")))
+    , m_xStandardHeightImg(m_xBuilder->weld_widget("lockstandardheight"))
     , m_xTitleBox(m_xBuilder->weld_combo_box("titlebox"))
+    , m_xTitleBoxImg(m_xBuilder->weld_widget("locktitlebox"))
     , m_xTitleHeightLB(new FontSizeBox(m_xBuilder->weld_combo_box("titleheight")))
+    , m_xTitleHeightImg(m_xBuilder->weld_widget("locktitleheight"))
     , m_xListBox(m_xBuilder->weld_combo_box("listbox"))
+    , m_xListBoxImg(m_xBuilder->weld_widget("locklistbox"))
     , m_xListHeightLB(new FontSizeBox(m_xBuilder->weld_combo_box("listheight")))
+    , m_xListHeightImg(m_xBuilder->weld_widget("locklistheight"))
     , m_xLabelBox(m_xBuilder->weld_combo_box("labelbox"))
+    , m_xLabelBoxImg(m_xBuilder->weld_widget("locklabelbox"))
     , m_xLabelHeightLB(new FontSizeBox(m_xBuilder->weld_combo_box("labelheight")))
+    , m_xLabelHeightImg(m_xBuilder->weld_widget("locklabelheight"))
     , m_xIdxBox(m_xBuilder->weld_combo_box("idxbox"))
+    , m_xIdxBoxImg(m_xBuilder->weld_widget("lockidxbox"))
     , m_xIndexHeightLB(new FontSizeBox(m_xBuilder->weld_combo_box("indexheight")))
+    , m_xIndexHeightImg(m_xBuilder->weld_widget("lockindexheight"))
     , m_xStandardPB(m_xBuilder->weld_button("standard"))
 {
     m_xStandardBox->make_sorted();
@@ -572,6 +839,23 @@ static void lcl_SetColl(SwWrtShell* pWrtShell, sal_uInt16 nType,
     nHeight = CalcToUnit( fSize, MapUnit::MapTwip );
     SwTextFormatColl *pColl = pWrtShell->GetTextCollFromPool(nType);
     pColl->SetFormatAttr(SvxFontHeightItem(nHeight, 100, nFontHeightWhich));
+}
+
+OUString SwStdFontTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1",        "font_label", "size_label",    "default_label",
+                          "heading_label", "list_label", "caption_label", "index_label" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    sAllStrings += m_xStandardPB->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwStdFontTabPage::FillItemSet( SfxItemSet* )
@@ -809,10 +1093,10 @@ void SwStdFontTabPage::Reset( const SfxItemSet* rSet)
                 FONT_GROUP_CJK == m_nFontGroup ? pColl->GetCJKFont() : pColl->GetCTLFont();
         m_sShellStd = sStdBackup =  rFont.GetFamilyName();
 
-        const sal_uInt16 nFontHeightWhich =
+        const TypedWhichId<SvxFontHeightItem> nFontHeightWhich =
             m_nFontGroup == FONT_GROUP_DEFAULT  ? RES_CHRATR_FONTSIZE :
             FONT_GROUP_CJK == m_nFontGroup ? RES_CHRATR_CJK_FONTSIZE : RES_CHRATR_CTL_FONTSIZE;
-        const SvxFontHeightItem& rFontHeightStandard = static_cast<const SvxFontHeightItem& >(pColl->GetFormatAttr(nFontHeightWhich));
+        const SvxFontHeightItem& rFontHeightStandard = pColl->GetFormatAttr(nFontHeightWhich);
         nStandardHeight = static_cast<sal_Int32>(rFontHeightStandard.GetHeight());
 
         pColl = m_pWrtShell->GetTextCollFromPool(RES_POOLCOLL_HEADLINE_BASE);
@@ -820,7 +1104,7 @@ void SwStdFontTabPage::Reset( const SfxItemSet* rSet)
                 FONT_GROUP_CJK == m_nFontGroup ? pColl->GetCJKFont() : pColl->GetCTLFont();
         m_sShellTitle = sOutBackup = rFontHL.GetFamilyName();
 
-        const SvxFontHeightItem& rFontHeightTitle = static_cast<const SvxFontHeightItem&>(pColl->GetFormatAttr( nFontHeightWhich ));
+        const SvxFontHeightItem& rFontHeightTitle = pColl->GetFormatAttr( nFontHeightWhich );
         nTitleHeight = static_cast<sal_Int32>(rFontHeightTitle.GetHeight());
 
         const sal_uInt16 nFontWhich =
@@ -832,7 +1116,7 @@ void SwStdFontTabPage::Reset( const SfxItemSet* rSet)
         m_bListDefault = SfxItemState::DEFAULT == pColl->GetAttrSet().GetItemState(nFontWhich, false);
         m_sShellList = sListBackup = rFontLS.GetFamilyName();
 
-        const SvxFontHeightItem& rFontHeightList = static_cast<const SvxFontHeightItem&>(pColl->GetFormatAttr(nFontHeightWhich));
+        const SvxFontHeightItem& rFontHeightList = pColl->GetFormatAttr(nFontHeightWhich);
         nListHeight = static_cast<sal_Int32>(rFontHeightList.GetHeight());
 
         pColl = m_pWrtShell->GetTextCollFromPool(RES_POOLCOLL_LABEL);
@@ -840,7 +1124,7 @@ void SwStdFontTabPage::Reset( const SfxItemSet* rSet)
         const SvxFontItem& rFontCP = !m_nFontGroup ? pColl->GetFont() :
                 FONT_GROUP_CJK == m_nFontGroup ? pColl->GetCJKFont() : pColl->GetCTLFont();
         m_sShellLabel = sCapBackup = rFontCP.GetFamilyName();
-        const SvxFontHeightItem& rFontHeightLabel = static_cast<const SvxFontHeightItem&>(pColl->GetFormatAttr(nFontHeightWhich));
+        const SvxFontHeightItem& rFontHeightLabel = pColl->GetFormatAttr(nFontHeightWhich);
         nLabelHeight = static_cast<sal_Int32>(rFontHeightLabel.GetHeight());
 
         pColl = m_pWrtShell->GetTextCollFromPool(RES_POOLCOLL_REGISTER_BASE);
@@ -848,7 +1132,7 @@ void SwStdFontTabPage::Reset( const SfxItemSet* rSet)
         const SvxFontItem& rFontIDX = !m_nFontGroup ? pColl->GetFont() :
                 FONT_GROUP_CJK == m_nFontGroup ? pColl->GetCJKFont() : pColl->GetCTLFont();
         m_sShellIndex = sIdxBackup = rFontIDX.GetFamilyName();
-        const SvxFontHeightItem& rFontHeightIndex = static_cast<const SvxFontHeightItem&>(pColl->GetFormatAttr(nFontHeightWhich));
+        const SvxFontHeightItem& rFontHeightIndex = pColl->GetFormatAttr(nFontHeightWhich);
         nIndexHeight = static_cast<sal_Int32>(rFontHeightIndex.GetHeight());
     }
     m_xStandardBox->set_entry_text(sStdBackup );
@@ -868,6 +1152,45 @@ void SwStdFontTabPage::Reset( const SfxItemSet* rSet)
     m_xListHeightLB->set_value( CalcToPoint( nListHeight    , MapUnit::MapTwip, 10 ) );
     m_xLabelHeightLB->set_value( CalcToPoint( nLabelHeight   , MapUnit::MapTwip, 10 ));
     m_xIndexHeightLB->set_value( CalcToPoint( nIndexHeight   , MapUnit::MapTwip, 10 ));
+
+
+    if (m_nFontGroup == FONT_GROUP_DEFAULT)
+    {
+        bool bReadonly = officecfg::Office::Writer::DefaultFont::Standard::isReadOnly();
+        m_xStandardBox->set_sensitive(!bReadonly);
+        m_xStandardBoxImg->set_visible(bReadonly);
+        bReadonly = officecfg::Office::Writer::DefaultFont::StandardHeight::isReadOnly();
+        m_xStandardHeightLB->set_sensitive(!bReadonly);
+        m_xStandardHeightImg->set_visible(bReadonly);
+
+        bReadonly = officecfg::Office::Writer::DefaultFont::Heading::isReadOnly();
+        m_xTitleBox->set_sensitive(!bReadonly);
+        m_xTitleBoxImg->set_visible(bReadonly);
+        bReadonly = officecfg::Office::Writer::DefaultFont::HeadingHeight::isReadOnly();
+        m_xTitleHeightLB->set_sensitive(!bReadonly);
+        m_xTitleHeightImg->set_visible(bReadonly);
+
+        bReadonly = officecfg::Office::Writer::DefaultFont::List::isReadOnly();
+        m_xListBox->set_sensitive(!bReadonly);
+        m_xListBoxImg->set_visible(bReadonly);
+        bReadonly = officecfg::Office::Writer::DefaultFont::ListHeight::isReadOnly();
+        m_xListHeightLB->set_sensitive(!bReadonly);
+        m_xListHeightImg->set_visible(bReadonly);
+
+        bReadonly = officecfg::Office::Writer::DefaultFont::Caption::isReadOnly();
+        m_xLabelBox->set_sensitive(!bReadonly);
+        m_xLabelBoxImg->set_visible(bReadonly);
+        bReadonly = officecfg::Office::Writer::DefaultFont::CaptionHeight::isReadOnly();
+        m_xLabelHeightLB->set_sensitive(!bReadonly);
+        m_xLabelHeightImg->set_visible(bReadonly);
+
+        bReadonly = officecfg::Office::Writer::DefaultFont::Index::isReadOnly();
+        m_xIdxBox->set_sensitive(!bReadonly);
+        m_xIdxBoxImg->set_visible(bReadonly);
+        bReadonly = officecfg::Office::Writer::DefaultFont::IndexHeight::isReadOnly();
+        m_xIndexHeightLB->set_sensitive(!bReadonly);
+        m_xIndexHeightImg->set_visible(bReadonly);
+    }
 
     m_xStandardBox->save_value();
     m_xTitleBox->save_value();
@@ -981,19 +1304,31 @@ SwTableOptionsTabPage::SwTableOptionsTabPage(weld::Container* pPage, weld::Dialo
     , m_pWrtShell(nullptr)
     , m_bHTMLMode(false)
     , m_xHeaderCB(m_xBuilder->weld_check_button("header"))
+    , m_xHeaderImg(m_xBuilder->weld_widget("lockheader"))
     , m_xRepeatHeaderCB(m_xBuilder->weld_check_button("repeatheader"))
+    , m_xRepeatHeaderImg(m_xBuilder->weld_widget("lockrepeatheader"))
     , m_xDontSplitCB(m_xBuilder->weld_check_button("dontsplit"))
+    , m_xDontSplitImg(m_xBuilder->weld_widget("lockdontsplit"))
     , m_xBorderCB(m_xBuilder->weld_check_button("border"))
+    , m_xBorderImg(m_xBuilder->weld_widget("lockborder"))
     , m_xNumFormattingCB(m_xBuilder->weld_check_button("numformatting"))
+    , m_xNumFormattingImg(m_xBuilder->weld_widget("locknumformatting"))
     , m_xNumFormatFormattingCB(m_xBuilder->weld_check_button("numfmtformatting"))
+    , m_xNumFormatFormattingImg(m_xBuilder->weld_widget("locknumfmtformatting"))
     , m_xNumAlignmentCB(m_xBuilder->weld_check_button("numalignment"))
+    , m_xNumAlignmentImg(m_xBuilder->weld_widget("locknumalignment"))
     , m_xRowMoveMF(m_xBuilder->weld_metric_spin_button("rowmove", FieldUnit::CM))
+    , m_xRowMoveImg(m_xBuilder->weld_widget("lockrowmove"))
     , m_xColMoveMF(m_xBuilder->weld_metric_spin_button("colmove", FieldUnit::CM))
+    , m_xColMoveImg(m_xBuilder->weld_widget("lockcolmove"))
     , m_xRowInsertMF(m_xBuilder->weld_metric_spin_button("rowinsert", FieldUnit::CM))
+    , m_xRowInsertImg(m_xBuilder->weld_widget("lockrowinsert"))
     , m_xColInsertMF(m_xBuilder->weld_metric_spin_button("colinsert", FieldUnit::CM))
+    , m_xColInsertImg(m_xBuilder->weld_widget("lockcolinsert"))
     , m_xFixRB(m_xBuilder->weld_radio_button("fix"))
     , m_xFixPropRB(m_xBuilder->weld_radio_button("fixprop"))
     , m_xVarRB(m_xBuilder->weld_radio_button("var"))
+    , m_xBehaviorOfImg(m_xBuilder->weld_widget("lockbehaviorof"))
 {
     Link<weld::Toggleable&,void> aLnk(LINK(this, SwTableOptionsTabPage, CheckBoxHdl));
     m_xNumFormattingCB->connect_toggled(aLnk);
@@ -1009,6 +1344,39 @@ std::unique_ptr<SfxTabPage> SwTableOptionsTabPage::Create( weld::Container* pPag
                                                   const SfxItemSet* rAttrSet )
 {
     return std::make_unique<SwTableOptionsTabPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SwTableOptionsTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[]
+        = { "label1",  "label3",  "label4",  "label5",  "label6",  "label10", "label2",
+            "label14", "label15", "label16", "label11", "label12", "label13" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "header",        "repeatheader",     "dontsplit",   "border",
+                               "numformatting", "numfmtformatting", "numalignment" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "fix", "fixprop", "var" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwTableOptionsTabPage::FillItemSet( SfxItemSet* )
@@ -1049,7 +1417,7 @@ bool SwTableOptionsTabPage::FillItemSet( SfxItemSet* )
                                     FN_TABLE_MODE_VARIABLE,
                                     0
                                 };
-            m_pWrtShell->GetView().GetViewFrame()->GetBindings().Invalidate( aInva );
+            m_pWrtShell->GetView().GetViewFrame().GetBindings().Invalidate( aInva );
         }
 
         bRet = true;
@@ -1100,6 +1468,11 @@ bool SwTableOptionsTabPage::FillItemSet( SfxItemSet* )
 
 void SwTableOptionsTabPage::Reset( const SfxItemSet* rSet)
 {
+    if (const SfxUInt16Item* pItem = rSet->GetItemIfSet(SID_HTML_MODE, false))
+    {
+        m_bHTMLMode = 0 != (pItem->GetValue() & HTMLMODE_ON);
+    }
+
     const SwModuleOptions* pModOpt = SW_MOD()->GetModuleConfig();
     if ( rSet->GetItemState( SID_ATTR_METRIC ) >= SfxItemState::DEFAULT )
     {
@@ -1111,20 +1484,35 @@ void SwTableOptionsTabPage::Reset( const SfxItemSet* rSet)
         ::SetFieldUnit( *m_xColInsertMF, eFieldUnit );
     }
 
+    bool bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Shift::Row::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Shift::Row::isReadOnly();
     m_xRowMoveMF->set_value(m_xRowMoveMF->normalize(pModOpt->GetTableHMove()), FieldUnit::TWIP);
+    m_xRowMoveMF->set_sensitive(!bReadOnly);
+    m_xRowMoveImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Shift::Column::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Shift::Column::isReadOnly();
     m_xColMoveMF->set_value(m_xColMoveMF->normalize(pModOpt->GetTableVMove()), FieldUnit::TWIP);
+    m_xColMoveMF->set_sensitive(!bReadOnly);
+    m_xColMoveImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Insert::Row::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Insert::Row::isReadOnly();
     m_xRowInsertMF->set_value(m_xRowInsertMF->normalize(pModOpt->GetTableHInsert()), FieldUnit::TWIP);
+    m_xRowInsertMF->set_sensitive(!bReadOnly);
+    m_xRowInsertImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Insert::Column::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Insert::Column::isReadOnly();
     m_xColInsertMF->set_value(m_xColInsertMF->normalize(pModOpt->GetTableVInsert()), FieldUnit::TWIP);
+    m_xColInsertMF->set_sensitive(!bReadOnly);
+    m_xColInsertImg->set_visible(bReadOnly);
 
     switch(pModOpt->GetTableMode())
     {
         case TableChgMode::FixedWidthChangeAbs:   m_xFixRB->set_active(true);     break;
         case TableChgMode::FixedWidthChangeProp:  m_xFixPropRB->set_active(true); break;
         case TableChgMode::VarWidthChangeAbs:     m_xVarRB->set_active(true); break;
-    }
-    if(const SfxUInt16Item* pItem = rSet->GetItemIfSet(SID_HTML_MODE, false))
-    {
-        m_bHTMLMode = 0 != (pItem->GetValue() & HTMLMODE_ON);
     }
 
     // hide certain controls for html
@@ -1134,17 +1522,58 @@ void SwTableOptionsTabPage::Reset( const SfxItemSet* rSet)
         m_xDontSplitCB->hide();
     }
 
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Change::Effect::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Change::Effect::isReadOnly();
+    if (bReadOnly)
+    {
+        m_xFixRB->set_sensitive(false);
+        m_xFixPropRB->set_sensitive(false);
+        m_xVarRB->set_sensitive(false);
+        m_xBehaviorOfImg->set_visible(true);
+    }
+
     SwInsertTableOptions aInsOpts = pModOpt->GetInsTableFlags(m_bHTMLMode);
     const SwInsertTableFlags nInsTableFlags = aInsOpts.mnInsMode;
 
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Insert::Table::Header::isReadOnly() :
+        officecfg::Office::WriterWeb::Insert::Table::Header::isReadOnly();
     m_xHeaderCB->set_active(bool(nInsTableFlags & SwInsertTableFlags::Headline));
-    m_xRepeatHeaderCB->set_active((!m_bHTMLMode) && (aInsOpts.mnRowsToRepeat > 0));
-    m_xDontSplitCB->set_active(!(nInsTableFlags & SwInsertTableFlags::SplitLayout));
-    m_xBorderCB->set_active(bool(nInsTableFlags & SwInsertTableFlags::DefaultBorder));
+    m_xHeaderCB->set_sensitive(!bReadOnly);
+    m_xHeaderImg->set_visible(bReadOnly);
 
+    bReadOnly = officecfg::Office::Writer::Insert::Table::RepeatHeader::isReadOnly();
+    m_xRepeatHeaderCB->set_active((!m_bHTMLMode) && (aInsOpts.mnRowsToRepeat > 0));
+    m_xRepeatHeaderCB->set_sensitive(!bReadOnly);
+    m_xRepeatHeaderImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Insert::Table::Split::isReadOnly();
+    m_xDontSplitCB->set_active(!(nInsTableFlags & SwInsertTableFlags::SplitLayout));
+    m_xDontSplitCB->set_sensitive(!bReadOnly);
+    m_xDontSplitImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Insert::Table::Border::isReadOnly() :
+        officecfg::Office::WriterWeb::Insert::Table::Border::isReadOnly();
+    m_xBorderCB->set_active(bool(nInsTableFlags & SwInsertTableFlags::DefaultBorder));
+    m_xBorderCB->set_sensitive(!bReadOnly);
+    m_xBorderImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Input::NumberRecognition::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Input::NumberRecognition::isReadOnly();
     m_xNumFormattingCB->set_active(pModOpt->IsInsTableFormatNum(m_bHTMLMode));
+    m_xNumFormattingCB->set_sensitive(!bReadOnly);
+    m_xNumFormattingImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Input::NumberFormatRecognition::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Input::NumberFormatRecognition::isReadOnly();
     m_xNumFormatFormattingCB->set_active(pModOpt->IsInsTableChangeNumFormat(m_bHTMLMode));
+    m_xNumFormatFormattingCB->set_sensitive(!bReadOnly);
+    m_xNumFormatFormattingImg->set_visible(bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Input::Alignment::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Input::Alignment::isReadOnly();
     m_xNumAlignmentCB->set_active(pModOpt->IsInsTableAlignNum(m_bHTMLMode));
+    m_xNumAlignmentCB->set_sensitive(!bReadOnly);
+    m_xNumAlignmentImg->set_visible(bReadOnly);
 
     m_xHeaderCB->save_state();
     m_xRepeatHeaderCB->save_state();
@@ -1163,9 +1592,16 @@ void SwTableOptionsTabPage::Reset( const SfxItemSet* rSet)
 
 IMPL_LINK_NOARG(SwTableOptionsTabPage, CheckBoxHdl, weld::Toggleable&, void)
 {
-    m_xNumFormatFormattingCB->set_sensitive(m_xNumFormattingCB->get_active());
-    m_xNumAlignmentCB->set_sensitive(m_xNumFormattingCB->get_active());
-    m_xRepeatHeaderCB->set_sensitive(m_xHeaderCB->get_active());
+    bool bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Input::NumberFormatRecognition::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Input::NumberFormatRecognition::isReadOnly();
+    m_xNumFormatFormattingCB->set_sensitive(m_xNumFormattingCB->get_active() && !bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Table::Input::Alignment::isReadOnly() :
+        officecfg::Office::WriterWeb::Table::Input::Alignment::isReadOnly();
+    m_xNumAlignmentCB->set_sensitive(m_xNumFormattingCB->get_active() && !bReadOnly);
+
+    bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Insert::Table::RepeatHeader::isReadOnly() : false;
+    m_xRepeatHeaderCB->set_sensitive(m_xHeaderCB->get_active() && !bReadOnly);
 }
 
 void SwTableOptionsTabPage::PageCreated( const SfxAllItemSet& aSet)
@@ -1178,24 +1614,38 @@ void SwTableOptionsTabPage::PageCreated( const SfxAllItemSet& aSet)
 SwShdwCursorOptionsTabPage::SwShdwCursorOptionsTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rSet)
     : SfxTabPage(pPage, pController, "modules/swriter/ui/optformataidspage.ui", "OptFormatAidsPage", &rSet)
     , m_pWrtShell(nullptr)
+    , m_bHTMLMode(false)
     , m_xParaCB(m_xBuilder->weld_check_button("paragraph"))
+    , m_xParaImg(m_xBuilder->weld_widget("lockparagraph"))
     , m_xSHyphCB(m_xBuilder->weld_check_button("hyphens"))
+    , m_xSHyphImg(m_xBuilder->weld_widget("lockhyphens"))
     , m_xSpacesCB(m_xBuilder->weld_check_button("spaces"))
+    , m_xSpacesImg(m_xBuilder->weld_widget("lockspaces"))
     , m_xHSpacesCB(m_xBuilder->weld_check_button("nonbreak"))
+    , m_xHSpacesImg(m_xBuilder->weld_widget("locknonbreak"))
     , m_xTabCB(m_xBuilder->weld_check_button("tabs"))
+    , m_xTabImg(m_xBuilder->weld_widget("locktabs"))
     , m_xTabLabel(m_xBuilder->weld_label("tabs_label"))
     , m_xBreakCB(m_xBuilder->weld_check_button("break"))
+    , m_xBreakImg(m_xBuilder->weld_widget("lockbreak"))
     , m_xCharHiddenCB(m_xBuilder->weld_check_button("hiddentext"))
+    , m_xCharHiddenImg(m_xBuilder->weld_widget("lockhiddentext"))
     , m_xBookmarkCB(m_xBuilder->weld_check_button("bookmarks"))
+    , m_xBookmarkImg(m_xBuilder->weld_widget("lockbookmarks"))
     , m_xBookmarkLabel(m_xBuilder->weld_label("bookmarks_label"))
     , m_xDirectCursorFrame(m_xBuilder->weld_frame("directcrsrframe"))
     , m_xOnOffCB(m_xBuilder->weld_check_button("cursoronoff"))
+    , m_xOnOffImg(m_xBuilder->weld_widget("lockcursoronoff"))
     , m_xDirectCursorFillMode(m_xBuilder->weld_combo_box("cxDirectCursorFillMode"))
+    , m_xDirectCursorFillModeImg(m_xBuilder->weld_widget("lockfillmode"))
     , m_xCursorProtFrame(m_xBuilder->weld_frame("crsrprotframe"))
     , m_xImageFrame(m_xBuilder->weld_frame("frmImage"))
     , m_xCursorInProtCB(m_xBuilder->weld_check_button("cursorinprot"))
+    , m_xCursorInProtImg(m_xBuilder->weld_widget("lockcursorinprot"))
     , m_xDefaultAnchorType(m_xBuilder->weld_combo_box("cxDefaultAnchor"))
+    , m_xDefaultAnchorTypeImg(m_xBuilder->weld_widget("lockAnchor"))
     , m_xMathBaselineAlignmentCB(m_xBuilder->weld_check_button("mathbaseline"))
+    , m_xMathBaselineAlignmentImg(m_xBuilder->weld_widget("lockmathbaseline"))
 {
     SwFillMode eMode = SwFillMode::Tab;
     bool bIsOn = false;
@@ -1211,6 +1661,8 @@ SwShdwCursorOptionsTabPage::SwShdwCursorOptionsTabPage(weld::Container* pPage, w
     const SfxUInt16Item* pHtmlModeItem = rSet.GetItemIfSet(SID_HTML_MODE, false);
     if(!pHtmlModeItem || !(pHtmlModeItem->GetValue() & HTMLMODE_ON))
         return;
+
+    m_bHTMLMode = true;
 
     m_xTabCB->hide();
     m_xTabLabel->hide();
@@ -1240,6 +1692,31 @@ void SwShdwCursorOptionsTabPage::PageCreated( const SfxAllItemSet& aSet )
     const SwWrtShellItem* pWrtSh = aSet.GetItem<SwWrtShellItem>(SID_WRT_SHELL, false);
     if (pWrtSh)
         m_pWrtShell = pWrtSh->GetValue();
+}
+
+OUString SwShdwCursorOptionsTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "layoutopt", "displayfl", "cursoropt",      "cursorlabel",
+                          "fillmode",  "lbImage",   "lbDefaultAnchor" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[]
+        = { "mathbaseline", "paragraph",  "hyphens",   "spaces",       "nonbreak",   "tabs",
+            "break",        "hiddentext", "bookmarks", "cursorinprot", "cursoronoff" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwShdwCursorOptionsTabPage::FillItemSet( SfxItemSet* rSet )
@@ -1301,11 +1778,23 @@ void SwShdwCursorOptionsTabPage::Reset( const SfxItemSet* rSet )
         eMode = pItem->GetMode();
         bIsOn = pItem->IsOn();
     }
-    m_xOnOffCB->set_active( bIsOn );
 
+    bool bReadOnly = officecfg::Office::Writer::Cursor::DirectCursor::UseDirectCursor::isReadOnly();
+    m_xOnOffCB->set_active( bIsOn );
+    m_xOnOffCB->set_sensitive(!bReadOnly);
+    m_xOnOffImg->set_visible(bReadOnly);
+
+    bReadOnly = officecfg::Office::Writer::Cursor::DirectCursor::Insert::isReadOnly();
     m_xDirectCursorFillMode->set_active( static_cast<int>(eMode) );
+    m_xDirectCursorFillMode->set_sensitive(!bReadOnly);
+    m_xDirectCursorFillModeImg->set_visible(bReadOnly);
+
     if (m_pWrtShell) {
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Layout::Other::IsAlignMathObjectsToBaseline::isReadOnly() :
+            officecfg::Office::WriterWeb::Layout::Other::IsAlignMathObjectsToBaseline::isReadOnly();
         m_xMathBaselineAlignmentCB->set_active( m_pWrtShell->GetDoc()->getIDocumentSettingAccess().get( DocumentSettingId::MATH_BASELINE_ALIGNMENT ) );
+        m_xMathBaselineAlignmentCB->set_sensitive(!bReadOnly);
+        m_xMathBaselineAlignmentImg->set_visible(bReadOnly);
         m_xMathBaselineAlignmentCB->save_state();
     } else {
         m_xMathBaselineAlignmentCB->hide();
@@ -1313,20 +1802,63 @@ void SwShdwCursorOptionsTabPage::Reset( const SfxItemSet* rSet )
 
     if( const SfxBoolItem* pItem = rSet->GetItemIfSet( FN_PARAM_CRSR_IN_PROTECTED, false ) )
         m_xCursorInProtCB->set_active(pItem->GetValue());
+    bReadOnly = officecfg::Office::Writer::Cursor::Option::ProtectedArea::isReadOnly();
+    m_xCursorInProtCB->set_sensitive(!bReadOnly);
+    m_xCursorInProtImg->set_visible(bReadOnly);
     m_xCursorInProtCB->save_state();
 
     const SwDocDisplayItem* pDocDisplayAttr = rSet->GetItemIfSet( FN_PARAM_DOCDISP, false );
     if(pDocDisplayAttr)
     {
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Content::NonprintingCharacter::ParagraphEnd::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::NonprintingCharacter::ParagraphEnd::isReadOnly();
         m_xParaCB->set_active( pDocDisplayAttr->m_bParagraphEnd );
+        m_xParaCB->set_sensitive(!bReadOnly);
+        m_xParaImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::NonprintingCharacter::Tab::isReadOnly();
         m_xTabCB->set_active( pDocDisplayAttr->m_bTab );
+        m_xTabCB->set_sensitive(!bReadOnly);
+        m_xTabImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Content::NonprintingCharacter::Space::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::NonprintingCharacter::Space::isReadOnly();
         m_xSpacesCB->set_active( pDocDisplayAttr->m_bSpace );
+        m_xSpacesCB->set_sensitive(!bReadOnly);
+        m_xSpacesImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Content::NonprintingCharacter::ProtectedSpace::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::NonprintingCharacter::ProtectedSpace::isReadOnly();
         m_xHSpacesCB->set_active( pDocDisplayAttr->m_bNonbreakingSpace );
+        m_xHSpacesCB->set_sensitive(!bReadOnly);
+        m_xHSpacesImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Content::NonprintingCharacter::OptionalHyphen::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::NonprintingCharacter::OptionalHyphen::isReadOnly();
         m_xSHyphCB->set_active( pDocDisplayAttr->m_bSoftHyphen );
+        m_xSHyphCB->set_sensitive(!bReadOnly);
+        m_xSHyphImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::NonprintingCharacter::HiddenCharacter::isReadOnly();
         m_xCharHiddenCB->set_active( pDocDisplayAttr->m_bCharHiddenText );
+        m_xCharHiddenCB->set_sensitive(!bReadOnly);
+        m_xCharHiddenImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::NonprintingCharacter::Bookmarks::isReadOnly();
         m_xBookmarkCB->set_active(pDocDisplayAttr->m_bBookmarks);
+        m_xBookmarkCB->set_sensitive(!bReadOnly);
+        m_xBookmarkImg->set_visible(bReadOnly);
+
+        bReadOnly = !m_bHTMLMode ? officecfg::Office::Writer::Content::NonprintingCharacter::Break::isReadOnly() :
+            officecfg::Office::WriterWeb::Content::NonprintingCharacter::Break::isReadOnly();
         m_xBreakCB->set_active( pDocDisplayAttr->m_bManualBreak );
+        m_xBreakCB->set_sensitive(!bReadOnly);
+        m_xBreakImg->set_visible(bReadOnly);
+
+        bReadOnly = officecfg::Office::Writer::Content::Display::DefaultAnchor::isReadOnly();
         m_xDefaultAnchorType->set_active( pDocDisplayAttr->m_xDefaultAnchor );
+        m_xDefaultAnchorType->set_sensitive(!bReadOnly);
+        m_xDefaultAnchorTypeImg->set_visible(bReadOnly);
     }
 }
 
@@ -1526,23 +2058,31 @@ SwRedlineOptionsTabPage::SwRedlineOptionsTabPage(weld::Container* pPage, weld::D
                                                  const SfxItemSet& rSet)
     : SfxTabPage(pPage, pController, "modules/swriter/ui/optredlinepage.ui", "OptRedLinePage", &rSet)
     , m_xInsertLB(m_xBuilder->weld_combo_box("insert"))
+    , m_xInsertImg(m_xBuilder->weld_widget("lockinsert"))
     , m_xInsertColorLB(new ColorListBox(m_xBuilder->weld_menu_button("insertcolor"),
                 [this]{ return GetDialogController()->getDialog(); }))
+    , m_xInsertColorImg(m_xBuilder->weld_widget("lockinsertcolor"))
     , m_xInsertedPreviewWN(new SvxFontPrevWindow)
     , m_xInsertedPreview(new weld::CustomWeld(*m_xBuilder, "insertedpreview", *m_xInsertedPreviewWN))
     , m_xDeletedLB(m_xBuilder->weld_combo_box("deleted"))
+    , m_xDeletedImg(m_xBuilder->weld_widget("lockdeleted"))
     , m_xDeletedColorLB(new ColorListBox(m_xBuilder->weld_menu_button("deletedcolor"),
                 [this]{ return GetDialogController()->getDialog(); }))
+    , m_xDeletedColorImg(m_xBuilder->weld_widget("lockdeletedcolor"))
     , m_xDeletedPreviewWN(new SvxFontPrevWindow)
     , m_xDeletedPreview(new weld::CustomWeld(*m_xBuilder, "deletedpreview", *m_xDeletedPreviewWN))
     , m_xChangedLB(m_xBuilder->weld_combo_box("changed"))
+    , m_xChangedImg(m_xBuilder->weld_widget("lockchanged"))
     , m_xChangedColorLB(new ColorListBox(m_xBuilder->weld_menu_button("changedcolor"),
                 [this]{ return GetDialogController()->getDialog(); }))
+    , m_xChangedColorImg(m_xBuilder->weld_widget("lockchangedcolor"))
     , m_xChangedPreviewWN(new SvxFontPrevWindow)
     , m_xChangedPreview(new weld::CustomWeld(*m_xBuilder, "changedpreview", *m_xChangedPreviewWN))
     , m_xMarkPosLB(m_xBuilder->weld_combo_box("markpos"))
+    , m_xMarkPosImg(m_xBuilder->weld_widget("lockmarkpos"))
     , m_xMarkColorLB(new ColorListBox(m_xBuilder->weld_menu_button("markcolor"),
                 [this]{ return GetDialogController()->getDialog(); }))
+    , m_xMarkColorImg(m_xBuilder->weld_widget("lockmarkcolor"))
     , m_xMarkPreviewWN(new SwMarkPreview)
     , m_xMarkPreview(new weld::CustomWeld(*m_xBuilder, "markpreview", *m_xMarkPreviewWN))
 {
@@ -1604,6 +2144,23 @@ SwRedlineOptionsTabPage::~SwRedlineOptionsTabPage()
 std::unique_ptr<SfxTabPage> SwRedlineOptionsTabPage::Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rSet)
 {
     return std::make_unique<SwRedlineOptionsTabPage>(pPage, pController, *rSet);
+}
+
+OUString SwRedlineOptionsTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label2", "insert_label",  "insertcolor_label",
+                          "label3", "deleted_label", "deletedcolor_label",
+                          "label4", "changed_label", "changedcolor_label",
+                          "label5", "markpos_label", "markcolor_label" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwRedlineOptionsTabPage::FillItemSet( SfxItemSet* )
@@ -1698,18 +2255,32 @@ void SwRedlineOptionsTabPage::Reset( const SfxItemSet*  )
 
     Color nColor = rInsertAttr.m_nColor;
     m_xInsertColorLB->SelectEntry(nColor);
+    m_xInsertColorLB->set_sensitive(!officecfg::Office::Writer::Revision::TextDisplay::Insert::Attribute::isReadOnly());
+    m_xInsertColorImg->set_visible(officecfg::Office::Writer::Revision::TextDisplay::Insert::Attribute::isReadOnly());
 
     nColor = rDeletedAttr.m_nColor;
     m_xDeletedColorLB->SelectEntry(nColor);
+    m_xDeletedColorLB->set_sensitive(!officecfg::Office::Writer::Revision::TextDisplay::Delete::Attribute::isReadOnly());
+    m_xDeletedColorImg->set_visible(officecfg::Office::Writer::Revision::TextDisplay::Delete::Attribute::isReadOnly());
 
     nColor = rChangedAttr.m_nColor;
     m_xChangedColorLB->SelectEntry(nColor);
+    m_xChangedColorLB->set_sensitive(!officecfg::Office::Writer::Revision::TextDisplay::ChangedAttribute::Attribute::isReadOnly());
+    m_xChangedColorImg->set_visible(officecfg::Office::Writer::Revision::TextDisplay::ChangedAttribute::Attribute::isReadOnly());
 
     m_xMarkColorLB->SelectEntry(pOpt->GetMarkAlignColor());
+    m_xMarkColorLB->set_sensitive(!officecfg::Office::Writer::Revision::LinesChanged::Color::isReadOnly());
+    m_xMarkColorImg->set_visible(officecfg::Office::Writer::Revision::LinesChanged::Color::isReadOnly());
 
     m_xInsertLB->set_active(0);
+    m_xInsertLB->set_sensitive(!officecfg::Office::Writer::Revision::TextDisplay::Insert::Color::isReadOnly());
+    m_xInsertImg->set_visible(officecfg::Office::Writer::Revision::TextDisplay::Insert::Color::isReadOnly());
     m_xDeletedLB->set_active(0);
+    m_xDeletedLB->set_sensitive(!officecfg::Office::Writer::Revision::TextDisplay::Delete::Color::isReadOnly());
+    m_xDeletedImg->set_visible(officecfg::Office::Writer::Revision::TextDisplay::Delete::Color::isReadOnly());
     m_xChangedLB->set_active(0);
+    m_xChangedLB->set_sensitive(!officecfg::Office::Writer::Revision::TextDisplay::ChangedAttribute::Color::isReadOnly());
+    m_xChangedImg->set_visible(officecfg::Office::Writer::Revision::TextDisplay::ChangedAttribute::Color::isReadOnly());
 
     lcl_FillRedlineAttrListBox(*m_xInsertLB, rInsertAttr, aInsertAttrMap, SAL_N_ELEMENTS(aInsertAttrMap));
     lcl_FillRedlineAttrListBox(*m_xDeletedLB, rDeletedAttr, aDeletedAttrMap, SAL_N_ELEMENTS(aDeletedAttrMap));
@@ -1725,6 +2296,8 @@ void SwRedlineOptionsTabPage::Reset( const SfxItemSet*  )
         case text::HoriOrientation::INSIDE:   nPos = 4;   break;
     }
     m_xMarkPosLB->set_active(nPos);
+    m_xMarkPosLB->set_sensitive(!officecfg::Office::Writer::Revision::LinesChanged::Mark::isReadOnly());
+    m_xMarkPosImg->set_visible(officecfg::Office::Writer::Revision::LinesChanged::Mark::isReadOnly());
 
     // show settings in preview
     AttribHdl(*m_xInsertLB);
@@ -1970,10 +2543,15 @@ SwCompareOptionsTabPage::SwCompareOptionsTabPage(weld::Container* pPage, weld::D
     , m_xAutoRB(m_xBuilder->weld_radio_button("auto"))
     , m_xWordRB(m_xBuilder->weld_radio_button("byword"))
     , m_xCharRB(m_xBuilder->weld_radio_button("bycharacter"))
+    , m_xCompareModeImg(m_xBuilder->weld_widget("lockcomparemode"))
     , m_xRsidCB(m_xBuilder->weld_check_button("useRSID"))
+    , m_xRsidImg(m_xBuilder->weld_widget("lockuseRSID"))
     , m_xIgnoreCB(m_xBuilder->weld_check_button("ignore"))
+    , m_xIgnoreImg(m_xBuilder->weld_widget("lockignore"))
     , m_xLenNF(m_xBuilder->weld_spin_button("ignorelen"))
+    , m_xLenImg(m_xBuilder->weld_widget("lockignorelen"))
     , m_xStoreRsidCB(m_xBuilder->weld_check_button("storeRSID"))
+    , m_xStoreRsidImg(m_xBuilder->weld_widget("lockstoreRSID"))
 {
     Link<weld::Toggleable&,void> aLnk( LINK( this, SwCompareOptionsTabPage, ComparisonHdl ) );
     m_xAutoRB->connect_toggled( aLnk );
@@ -1990,6 +2568,36 @@ SwCompareOptionsTabPage::~SwCompareOptionsTabPage()
 std::unique_ptr<SfxTabPage> SwCompareOptionsTabPage::Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet )
 {
     return std::make_unique<SwCompareOptionsTabPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SwCompareOptionsTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "setting" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "useRSID", "ignore", "storeRSID" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString radioButton[] = { "auto", "byword", "bycharacter" };
+
+    for (const auto& radio : radioButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_radio_button(radio))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwCompareOptionsTabPage::FillItemSet( SfxItemSet* )
@@ -2064,22 +2672,48 @@ void SwCompareOptionsTabPage::Reset( const SfxItemSet* )
         m_xIgnoreCB->set_sensitive(true);
         m_xLenNF->set_sensitive(true);
     }
+
+    if (officecfg::Office::Writer::Comparison::Mode::isReadOnly())
+    {
+        m_xAutoRB->set_sensitive(false);
+        m_xWordRB->set_sensitive(false);
+        m_xCharRB->set_sensitive(false);
+        m_xCompareModeImg->set_visible(true);
+    }
+
     m_xAutoRB->save_state();
     m_xWordRB->save_state();
     m_xCharRB->save_state();
 
     m_xRsidCB->set_active( pOpt->IsUseRsid() );
+    if (officecfg::Office::Writer::Comparison::UseRSID::isReadOnly())
+    {
+        m_xRsidCB->set_sensitive(false);
+        m_xRsidImg->set_visible(true);
+    }
     m_xRsidCB->save_state();
 
     m_xIgnoreCB->set_active( pOpt->IsIgnorePieces() );
+    if (officecfg::Office::Writer::Comparison::IgnorePieces::isReadOnly())
+    {
+        m_xIgnoreCB->set_sensitive(false);
+        m_xIgnoreImg->set_visible(true);
+    }
     m_xIgnoreCB->save_state();
 
     m_xLenNF->set_sensitive( m_xIgnoreCB->get_active() && eCmpMode != SwCompareMode::Auto );
 
     m_xLenNF->set_value( pOpt->GetPieceLen() );
+    if (officecfg::Office::Writer::Comparison::IgnoreLength::isReadOnly())
+    {
+        m_xLenNF->set_sensitive(false);
+        m_xLenImg->set_visible(true);
+    }
     m_xLenNF->save_value();
 
     m_xStoreRsidCB->set_active(pOpt->IsStoreRsid());
+    m_xStoreRsidCB->set_sensitive(!officecfg::Office::Writer::Comparison::StoreRSID::isReadOnly());
+    m_xStoreRsidImg->set_visible(officecfg::Office::Writer::Comparison::StoreRSID::isReadOnly());
     m_xStoreRsidCB->save_state();
 }
 
@@ -2126,6 +2760,26 @@ std::unique_ptr<SfxTabPage> SwTestTabPage::Create( weld::Container* pPage, weld:
                                           const SfxItemSet* rAttrSet )
 {
     return std::make_unique<SwTestTabPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SwTestTabPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString checkButton[] = { "unused",           "dynamic",  "nocalm",
+                               "wysiwygdbg",       "noidle",   "noscreenadj",
+                               "winformat",        "noscroll", "DrawingLayerNotLoading",
+                               "AutoFormatByInput" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    if (const auto& pString = m_xBuilder->weld_label("label1"))
+        sAllStrings += pString->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool    SwTestTabPage::FillItemSet( SfxItemSet* rCoreSet )

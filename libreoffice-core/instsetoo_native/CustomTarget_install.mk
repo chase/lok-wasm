@@ -59,7 +59,7 @@ endif
 # delimiter is U+2027 Hyphenation point - files with colon in their name confuse the heck out of
 # make and cannot be used as targets or prerequisites. For passing to call_installer.sh it is
 # substituted by the : so that cut doesn't stumble over the delimiter
-ifeq (TRUE,$(LIBO_TEST_INSTALL))
+ifeq (TRUE,$(filter TRUE,$(LIBO_TEST_INSTALL) $(ENABLE_WIX)))
 instsetoo_installer_targets = openoffice‧en-US‧‧‧archive‧nostrip
 ifeq (ODK,$(filter ODK,$(BUILD_TYPE)))
 instsetoo_installer_targets += sdkoo‧en-US‧_SDK‧‧archive‧nostrip
@@ -73,6 +73,8 @@ instsetoo_installer_targets := $(foreach pkgformat,$(PKGFORMAT),\
         $(if $(and $(filter-out WNT,$(OS)),$(filter-out MACOSX,$(OS))), \
             $(foreach lang,$(filter-out en-US,$(gb_WITH_LANG)),ooolangpack‧$(lang)‧‧-languagepack‧$(pkgformat)‧nostrip)))
 endif
+
+LIBO_VERSION = $(LIBO_VERSION_MAJOR).$(LIBO_VERSION_MINOR).$(LIBO_VERSION_MICRO).$(LIBO_VERSION_PATCH)
 
 instsetoo_wipe:
 	$(call gb_Output_announce,wiping installation output dir,$(true),WPE,6)
@@ -93,8 +95,19 @@ $(call gb_CustomTarget_get_workdir,instsetoo_native/install)/msi_templates/%/Bin
 	$(call gb_Output_announce,setting up msi templates for type $* - copying binary assets,$(true),CPY,4)
 	rm -rf $@ && mkdir -p $@ && cd $@ && cp $(SRCDIR)/instsetoo_native/inc_common/windows/msi_templates/Binary/*.* ./
 
+gb_Make_JobLimiter := $(WORKDIR)/job-limiter.exe
+
+$(gb_Make_JobLimiter): $(SRCDIR)/solenv/bin/job-limiter.cpp
+	cd $(WORKDIR) && \
+	$(CXX_FOR_BUILD) $(SOLARINC) -EHsc $^ -link -LIBPATH:$(subst ;, -LIBPATH:,$(ILIB_FOR_BUILD)) || rm -f $@
+
 # with all languages the logfile name would be too long when building the windows installation set,
 # that's the reason for the substitution to multilang below in case more than just en-US is packaged
+# also for windows msi packaging parallel execution is reduced by the job-limiter. This only has any
+# effect when building with help and multiple languages, and it also won't affect the real time for
+# packaging (since packaging the main installer takes longer than packaging sdk and all helppacks
+# even with the reduced parallelism (the higher the parallelism, the higher the chance for random
+# failures during the cscript call to WiLangId.vbs)
 $(instsetoo_installer_targets): $(SRCDIR)/solenv/bin/make_installer.pl \
         $(foreach ulf,$(instsetoo_ULFLIST),$(call gb_CustomTarget_get_workdir,instsetoo_native/install)/win_ulffiles/$(ulf).ulf) \
         $(if $(filter-out WNT,$(OS)),\
@@ -102,17 +115,21 @@ $(instsetoo_installer_targets): $(SRCDIR)/solenv/bin/make_installer.pl \
                 bin/find-requires-gnome.sh \
                 bin/find-requires-x11.sh) \
         ,instsetoo_msi_templates) \
-        $(call gb_Postprocess_get_target,AllModulesButInstsetNative) | instsetoo_wipe
+        $(call gb_Postprocess_get_target,AllModulesButInstsetNative) \
+        | instsetoo_wipe $(if $(filter msi,$(PKGFORMAT)),$(gb_Make_JobLimiter))
 	$(call gb_Output_announce,$(if $(filter en-US$(COMMA)%,$(instsetoo_installer_langs)),$(subst $(instsetoo_installer_langs),multilang,$@),$@),$(true),INS,1)
+	$(if $(filter %msi‧nostrip,$@),$(gb_Make_JobLimiter) grab)
 	$(call gb_Trace_StartRange,$@,INSTALLER)
 	$(call gb_Helper_print_on_error, \
 	    $(SRCDIR)/solenv/bin/call_installer.sh $(if $(verbose),-verbose,-quiet) $(subst ‧,:,$@),\
 	    $(call gb_CustomTarget_get_workdir,instsetoo_native/install)/$(if $(filter en-US$(COMMA)%,$(instsetoo_installer_langs)),$(subst $(instsetoo_installer_langs),multilang,$@),$@).log)
+	$(if $(filter %msi‧nostrip,$@),$(gb_Make_JobLimiter) release)
 	$(call gb_Trace_EndRange,$@,INSTALLER)
 
 $(call gb_CustomTarget_get_workdir,instsetoo_native/install)/install.phony: $(instsetoo_installer_targets)
 	$(call gb_Output_announce,$(subst $(WORKDIR)/,,$@),$(true),PRL,2)
 	$(call gb_Trace_StartRange,$(subst $(WORKDIR)/,,$@),PRL)
+	$(if $(ENABLE_WIX),$(call gb_ExternalExecutable_get_command,python) $(SRCDIR)/msicreator/create_installer.py $(BUILDDIR) $(SRCDIR) $(LIBO_VERSION) $(PRODUCTNAME_WITHOUT_SPACES))
 ifeq (TRUE,$(LIBO_TEST_INSTALL))
 	unzip -q -d $(TESTINSTALLDIR) $(instsetoo_OUT)/$(PRODUCTNAME_WITHOUT_SPACES)/archive/install/en-US/LibreOffice*_archive.zip
 	mv $(TESTINSTALLDIR)/LibreOffice*_archive/LibreOffice*/* $(TESTINSTALLDIR)/

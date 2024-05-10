@@ -25,7 +25,6 @@ class SdrPage;
 class SdrObject;
 class SfxItemSet;
 class SwFrameFormat;
-class SwFrameFormats;
 class SwFormatAnchor;
 class SwFormatContent;
 class SwDoc;
@@ -41,6 +40,11 @@ class XShape;
 namespace com::sun::star::text
 {
 class XTextFrame;
+}
+namespace sw
+{
+template <class T> class FrameFormats;
+class SpzFrameFormat;
 }
 
 /**
@@ -165,7 +169,7 @@ public:
     static void getShapeWrapThrough(const SwFrameFormat* pTextBox, bool& rWrapThrough);
 
     /// Saves the current shape -> textbox links in a map, so they can be restored later.
-    static void saveLinks(const SwFrameFormats& rFormats,
+    static void saveLinks(const sw::FrameFormats<sw::SpzFrameFormat*>& rFormats,
                           std::map<const SwFrameFormat*, const SwFrameFormat*>& rLinks);
     /// Undo the effect of saveLinks() + individual resetLink() calls.
     static void restoreLinks(std::set<ZSortFly>& rOld, std::vector<SwFrameFormat*>& rNew,

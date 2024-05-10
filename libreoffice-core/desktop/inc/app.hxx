@@ -58,7 +58,8 @@ class Desktop final : public Application
             BE_LANGUAGE_MISSING,
             BE_USERINSTALL_NOTENOUGHDISKSPACE,
             BE_USERINSTALL_NOWRITEACCESS,
-            BE_OFFICECONFIG_BROKEN
+            BE_OFFICECONFIG_BROKEN,
+            BE_2NDOFFICE_WITHCAT,
         };
         enum BootstrapStatus
         {
@@ -68,7 +69,7 @@ class Desktop final : public Application
 
                                 Desktop();
                                 virtual ~Desktop() override;
-        virtual int             Main( ) override;
+        virtual int             Main() override;
         virtual void            Init() override;
         virtual void            InitFinished() override;
         virtual void            DeInit() override;

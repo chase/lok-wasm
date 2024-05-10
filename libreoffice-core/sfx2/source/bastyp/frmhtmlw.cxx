@@ -55,9 +55,9 @@ void SfxFrameHTMLWriter::OutMeta( SvStream& rStrm,
                                   bool bHTTPEquiv,
                                   OUString *pNonConvertableChars  )
 {
-    rStrm.WriteCharPtr( SAL_NEWLINE_STRING );
+    rStrm.WriteOString( SAL_NEWLINE_STRING );
     if( pIndent )
-        rStrm.WriteCharPtr( pIndent );
+        rStrm.WriteOString( pIndent );
 
     OStringBuffer sOut;
     sOut.append("<" OOO_STRING_SVTOOLS_HTML_meta " ")
@@ -71,7 +71,7 @@ void SfxFrameHTMLWriter::OutMeta( SvStream& rStrm,
     rStrm.WriteOString( sOut );
     sOut.setLength(0);
 
-    HTMLOutFuncs::Out_String( rStrm, rContent, pNonConvertableChars ).WriteCharPtr( "\"/>" );
+    HTMLOutFuncs::Out_String( rStrm, rContent, pNonConvertableChars ).WriteOString( "\"/>" );
 }
 
 void SfxFrameHTMLWriter::Out_DocInfo( SvStream& rStrm, const OUString& rBaseURL,
@@ -83,9 +83,9 @@ void SfxFrameHTMLWriter::Out_DocInfo( SvStream& rStrm, const OUString& rBaseURL,
                  pNonConvertableChars );
 
     // Title (regardless if empty)
-    rStrm.WriteCharPtr( SAL_NEWLINE_STRING );
+    rStrm.WriteOString( SAL_NEWLINE_STRING );
     if( pIndent )
-        rStrm.WriteCharPtr( pIndent );
+        rStrm.WriteOString( pIndent );
     HTMLOutFuncs::Out_AsciiTag( rStrm, OOO_STRING_SVTOOLS_HTML_title );
     if( i_xDocProps.is() )
     {
@@ -101,14 +101,14 @@ void SfxFrameHTMLWriter::Out_DocInfo( SvStream& rStrm, const OUString& rBaseURL,
         const OUString& rTarget = i_xDocProps->getDefaultTarget();
         if( !rTarget.isEmpty() )
         {
-            rStrm.WriteCharPtr( SAL_NEWLINE_STRING );
+            rStrm.WriteOString( SAL_NEWLINE_STRING );
             if( pIndent )
-                rStrm.WriteCharPtr( pIndent );
+                rStrm.WriteOString( pIndent );
 
             rStrm.WriteOString( "<" OOO_STRING_SVTOOLS_HTML_base " "
                 OOO_STRING_SVTOOLS_HTML_O_target "=\"" );
             HTMLOutFuncs::Out_String( rStrm, rTarget, pNonConvertableChars )
-               .WriteCharPtr( "\">" );
+               .WriteOString( "\">" );
         }
     }
 
@@ -253,14 +253,14 @@ void SfxFrameHTMLWriter::Out_FrameDescriptor(
         aAny = xSet->getPropertyValue("FrameMarginWidth");
         if ( (aAny >>= nVal) && nVal != SIZE_NOT_SET )
         {
-            sOut.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_marginwidth)
-                .append('=').append(nVal);
+            sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_marginwidth
+                    "=" + OString::number(nVal));
         }
         aAny = xSet->getPropertyValue("FrameMarginHeight");
         if ( (aAny >>= nVal) && nVal != SIZE_NOT_SET )
         {
-            sOut.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_marginheight)
-                .append('=').append(nVal);
+            sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_marginheight
+                    "=" + OString::number(nVal));
         }
 
         bool bVal = true;
@@ -284,8 +284,8 @@ void SfxFrameHTMLWriter::Out_FrameDescriptor(
             if ( aAny >>= bVal )
             {
                 const char* pStr = bVal ? sHTML_SC_yes : sHTML_SC_no;
-                sOut.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_frameborder)
-                    .append('=').append(pStr);
+                sOut.append(OString::Concat(" " OOO_STRING_SVTOOLS_HTML_O_frameborder
+                        "=") + pStr);
             }
         }
         rOut.WriteOString( sOut );

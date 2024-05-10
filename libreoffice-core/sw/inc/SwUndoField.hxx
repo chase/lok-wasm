@@ -44,15 +44,15 @@ public:
 class SwUndoFieldFromDoc final : public SwUndoField
 {
     std::unique_ptr<SwField> m_pOldField, m_pNewField;
-    SwMsgPoolItem * m_pHint;
     bool m_bUpdate;
 
     void DoImpl();
 
 public:
-    SwUndoFieldFromDoc(const SwPosition & rPos, const SwField & aOldField,
-                       const SwField & aNewField,
-                       SwMsgPoolItem * pHint, bool bUpdate);
+    SwUndoFieldFromDoc(const SwPosition& rPos,
+        const SwField& aOldField,
+        const SwField& aNewField,
+        bool bUpdate);
 
     virtual ~SwUndoFieldFromDoc() override;
 

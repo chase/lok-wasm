@@ -74,7 +74,7 @@ CryptoTest::~CryptoTest()
 void CryptoTest::testCryptoHash()
 {
     // Check examples from Wikipedia (https://en.wikipedia.org/wiki/HMAC)
-    OString aContentString("The quick brown fox jumps over the lazy dog");
+    OString aContentString("The quick brown fox jumps over the lazy dog"_ostr);
     std::vector<sal_uInt8> aContent(aContentString.getStr(),
                                     aContentString.getStr() + aContentString.getLength());
     std::vector<sal_uInt8> aKey = { 'k', 'e', 'y' };
@@ -93,6 +93,15 @@ void CryptoTest::testCryptoHash()
         CPPUNIT_ASSERT_EQUAL(
             std::string("f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"),
             toString(aHash));
+    }
+
+    {
+        oox::crypto::CryptoHash aCryptoHash(aKey, oox::crypto::CryptoHashType::SHA384);
+        aCryptoHash.update(aContent);
+        std::vector<sal_uInt8> aHash = aCryptoHash.finalize();
+        CPPUNIT_ASSERT_EQUAL(std::string("d7f4727e2c0b39ae0f1e40cc96f60242d5b7801841cea6fc592c5d3e1"
+                                         "ae50700582a96cf35e1e554995fe4e03381c237"),
+                             toString(aHash));
     }
 
     {
@@ -136,7 +145,7 @@ void CryptoTest::testStandard2007()
     SvMemoryStream aUnencryptedInput;
     SvMemoryStream aEncryptedStream;
 
-    OString aTestString = "1234567890ABCDEFG";
+    OString aTestString = "1234567890ABCDEFG"_ostr;
 
     aUnencryptedInput.WriteBytes(aTestString.getStr(), aTestString.getLength() + 1);
     aUnencryptedInput.Seek(STREAM_SEEK_TO_BEGIN);
@@ -197,6 +206,13 @@ void CryptoTest::testAgileEncryptionVerifier()
     CPPUNIT_ASSERT_EQUAL(false, aEngine.decryptAndCheckVerifierHash("Wrong"));
     CPPUNIT_ASSERT_EQUAL(true, aEngine.decryptAndCheckVerifierHash(aPassword));
 
+    aEngine.setupEncryptionParameters({ 100000, 16, 128, 48, 16, OUString("AES"),
+                                        OUString("ChainingModeCBC"), OUString("SHA384") });
+
+    CPPUNIT_ASSERT_EQUAL(true, aEngine.generateAndEncryptVerifierHash(aPassword));
+    CPPUNIT_ASSERT_EQUAL(false, aEngine.decryptAndCheckVerifierHash("Wrong"));
+    CPPUNIT_ASSERT_EQUAL(true, aEngine.decryptAndCheckVerifierHash(aPassword));
+
     aEngine.setupEncryptionParameters({ 100000, 16, 256, 64, 16, OUString("AES"),
                                         OUString("ChainingModeCBC"), OUString("SHA512") });
 
@@ -249,6 +265,52 @@ void CryptoTest::testAgileEncryptionInfoWritingAndParsing()
             CPPUNIT_ASSERT_EQUAL(OUString("AES"), rInfo.cipherAlgorithm);
             CPPUNIT_ASSERT_EQUAL(OUString("ChainingModeCBC"), rInfo.cipherChaining);
             CPPUNIT_ASSERT_EQUAL(OUString("SHA1"), rInfo.hashAlgorithm);
+            CPPUNIT_ASSERT_EQUAL(toString(aKeyDataSalt), toString(rInfo.keyDataSalt));
+
+            CPPUNIT_ASSERT_EQUAL(false, aEngine.decryptAndCheckVerifierHash("Wrong"));
+            CPPUNIT_ASSERT_EQUAL(true, aEngine.decryptAndCheckVerifierHash(aPassword));
+        }
+    }
+
+    { // Preset AES128 - SHA384
+        SvMemoryStream aEncryptionInfo;
+        {
+            oox::crypto::AgileEngine aEngine;
+
+            aEngine.setPreset(oox::crypto::AgileEncryptionPreset::AES_128_SHA384);
+            aEngine.setupEncryption(aPassword);
+            aKeyDataSalt = aEngine.getInfo().keyDataSalt;
+
+            oox::BinaryXOutputStream aBinaryEncryptionInfoOutputStream(
+                new utl::OSeekableOutputStreamWrapper(aEncryptionInfo), true);
+
+            aEngine.writeEncryptionInfo(aBinaryEncryptionInfoOutputStream);
+            aBinaryEncryptionInfoOutputStream.close();
+
+            CPPUNIT_ASSERT_EQUAL(sal_uInt64(1040), aEncryptionInfo.GetSize());
+        }
+
+        aEncryptionInfo.Seek(STREAM_SEEK_TO_BEGIN);
+
+        {
+            oox::crypto::AgileEngine aEngine;
+
+            uno::Reference<io::XInputStream> xInputStream(
+                new utl::OSeekableInputStreamWrapper(aEncryptionInfo));
+
+            xInputStream->skipBytes(4); // Encryption type -> Agile
+
+            CPPUNIT_ASSERT(aEngine.readEncryptionInfo(xInputStream));
+
+            oox::crypto::AgileEncryptionInfo& rInfo = aEngine.getInfo();
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(100000), rInfo.spinCount);
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(16), rInfo.saltSize);
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(128), rInfo.keyBits);
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(48), rInfo.hashSize);
+            CPPUNIT_ASSERT_EQUAL(sal_Int32(16), rInfo.blockSize);
+            CPPUNIT_ASSERT_EQUAL(OUString("AES"), rInfo.cipherAlgorithm);
+            CPPUNIT_ASSERT_EQUAL(OUString("ChainingModeCBC"), rInfo.cipherChaining);
+            CPPUNIT_ASSERT_EQUAL(OUString("SHA384"), rInfo.hashAlgorithm);
             CPPUNIT_ASSERT_EQUAL(toString(aKeyDataSalt), toString(rInfo.keyDataSalt));
 
             CPPUNIT_ASSERT_EQUAL(false, aEngine.decryptAndCheckVerifierHash("Wrong"));
@@ -356,7 +418,7 @@ void CryptoTest::testAgileEncryptingAndDecrypting()
     SvMemoryStream aEncryptionInfo;
     SvMemoryStream aEncryptedStream;
 
-    OString aTestString = "1234567890ABCDEFGH";
+    OString aTestString = "1234567890ABCDEFGH"_ostr;
 
     {
         oox::crypto::AgileEngine aEngine;

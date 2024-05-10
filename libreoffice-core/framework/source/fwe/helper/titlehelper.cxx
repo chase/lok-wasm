@@ -51,38 +51,24 @@ TitleHelper::TitleHelper(css::uno::Reference< css::uno::XComponentContext > xCon
                         const css::uno::Reference< css::frame::XUntitledNumbers >& xNumbers)
     : ::cppu::BaseMutex ()
     , m_xContext        (std::move(xContext))
+    , m_xOwner          (xOwner)
+    , m_xUntitledNumbers(xNumbers)
     , m_bExternalTitle  (false)
     , m_nLeasedNumber   (css::frame::UntitledNumbersConst::INVALID_NUMBER)
     , m_aListener       (m_aMutex)
 {
-    // SYNCHRONIZED ->
-    {
-        osl::MutexGuard aLock(m_aMutex);
-
-        m_xOwner = xOwner;
-        m_xUntitledNumbers = xNumbers;
-    }
-    // <- SYNCHRONIZED
-
-    css::uno::Reference< css::frame::XModel > xModel(xOwner, css::uno::UNO_QUERY);
-    if (xModel.is ())
+    if (css::uno::Reference<css::frame::XModel> xModel{ xOwner, css::uno::UNO_QUERY })
     {
         impl_startListeningForModel (xModel);
-        return;
     }
-
-    css::uno::Reference< css::frame::XController > xController(xOwner, css::uno::UNO_QUERY);
-    if (xController.is ())
+    else if (css::uno::Reference<css::frame::XController> xController{ xOwner,
+                                                                       css::uno::UNO_QUERY })
     {
         impl_startListeningForController (xController);
-        return;
     }
-
-    css::uno::Reference< css::frame::XFrame > xFrame(xOwner, css::uno::UNO_QUERY);
-    if (xFrame.is ())
+    else if (css::uno::Reference<css::frame::XFrame> xFrame{ xOwner, css::uno::UNO_QUERY })
     {
         impl_startListeningForFrame (xFrame);
-        return;
     }
 }
 
@@ -105,7 +91,7 @@ OUString SAL_CALL TitleHelper::getTitle()
     if (!m_sTitle.isEmpty())
         return m_sTitle;
 
-    // Title seems to be unused till now ... do bootstraping
+    // Title seems to be unused till now ... do bootstrapping
     impl_updateTitle (true);
 
     return m_sTitle;
@@ -145,7 +131,7 @@ void SAL_CALL TitleHelper::titleChanged(const css::frame::TitleChangedEvent& aEv
     {
         osl::MutexGuard aLock(m_aMutex);
 
-        xSubTitle.set(m_xSubTitle.get (), css::uno::UNO_QUERY);
+        xSubTitle = m_xSubTitle;
     }
     // <- SYNCHRONIZED
 
@@ -167,7 +153,7 @@ void SAL_CALL TitleHelper::documentEventOccured(const css::document::DocumentEve
     {
         osl::MutexGuard aLock(m_aMutex);
 
-        xOwner.set(m_xOwner.get (), css::uno::UNO_QUERY);
+        xOwner.set(m_xOwner, css::uno::UNO_QUERY);
     }
     // <- SYNCHRONIZED
 
@@ -189,7 +175,7 @@ void SAL_CALL TitleHelper::frameAction(const css::frame::FrameActionEvent& aEven
     {
         osl::MutexGuard aLock(m_aMutex);
 
-        xOwner.set(m_xOwner.get (), css::uno::UNO_QUERY);
+        xOwner.set(m_xOwner, css::uno::UNO_QUERY);
     }
     // <- SYNCHRONIZED
 
@@ -219,7 +205,7 @@ void SAL_CALL TitleHelper::disposing(const css::lang::EventObject& aEvent)
         osl::MutexGuard aLock(m_aMutex);
 
         xOwner = m_xOwner;
-        xNumbers.set(m_xUntitledNumbers.get(), css::uno::UNO_QUERY);
+        xNumbers = m_xUntitledNumbers;
         nLeasedNumber = m_nLeasedNumber;
     }
     // <- SYNCHRONIZED
@@ -245,7 +231,7 @@ void SAL_CALL TitleHelper::disposing(const css::lang::EventObject& aEvent)
         osl::MutexGuard aLock(m_aMutex);
 
         m_xOwner.clear();
-        m_sTitle        = OUString ();
+        m_sTitle.clear();
         m_nLeasedNumber = css::frame::UntitledNumbersConst::INVALID_NUMBER;
     }
     // <- SYNCHRONIZED
@@ -287,31 +273,36 @@ void TitleHelper::impl_sendTitleChangedEvent ()
 
 void TitleHelper::impl_updateTitle (bool init)
 {
-    css::uno::Reference< css::frame::XModel3 >     xModel;
-    css::uno::Reference< css::frame::XController > xController;
-    css::uno::Reference< css::frame::XFrame >      xFrame;
+    css::uno::Reference<css::uno::XInterface> xOwner;
+
     // SYNCHRONIZED ->
     {
         osl::MutexGuard aLock(m_aMutex);
 
-        xModel.set     (m_xOwner.get(), css::uno::UNO_QUERY);
-        xController.set(m_xOwner.get(), css::uno::UNO_QUERY);
-        xFrame.set     (m_xOwner.get(), css::uno::UNO_QUERY);
+        xOwner = m_xOwner;
     }
     // <- SYNCHRONIZED
 
-    if (xModel.is ())
+    if (css::uno::Reference<css::frame::XModel3> xModel{ xOwner, css::uno::UNO_QUERY })
     {
         impl_updateTitleForModel (xModel, init);
     }
-    else if (xController.is ())
+    else if (css::uno::Reference<css::frame::XController> xController{ xOwner,
+                                                                       css::uno::UNO_QUERY })
     {
         impl_updateTitleForController (xController, init);
     }
-    else if (xFrame.is ())
+    else if (css::uno::Reference<css::frame::XFrame> xFrame{ xOwner, css::uno::UNO_QUERY })
     {
         impl_updateTitleForFrame (xFrame, init);
     }
+}
+
+static OUString getURLFromModel(const css::uno::Reference< css::frame::XModel3 >& xModel)
+{
+    if (css::uno::Reference<css::frame::XStorable> xURLProvider{ xModel, css::uno::UNO_QUERY })
+        return xURLProvider->getLocation();
+    return {};
 }
 
 void TitleHelper::impl_updateTitleForModel (const css::uno::Reference< css::frame::XModel3 >& xModel, bool init)
@@ -329,7 +320,7 @@ void TitleHelper::impl_updateTitleForModel (const css::uno::Reference< css::fram
             return;
 
         xOwner = m_xOwner;
-        xNumbers.set   (m_xUntitledNumbers.get(), css::uno::UNO_QUERY);
+        xNumbers = m_xUntitledNumbers;
         nLeasedNumber = m_nLeasedNumber;
     }
     // <- SYNCHRONIZED
@@ -342,24 +333,27 @@ void TitleHelper::impl_updateTitleForModel (const css::uno::Reference< css::fram
         return;
 
     OUString sTitle;
-    OUString sURL;
 
-    css::uno::Reference< css::frame::XStorable > xURLProvider(xModel , css::uno::UNO_QUERY);
-    if (xURLProvider.is())
-        sURL = xURLProvider->getLocation ();
+    utl::MediaDescriptor aDescriptor(
+        xModel->getArgs2({ utl::MediaDescriptor::PROP_DOCUMENTTITLE,
+                           utl::MediaDescriptor::PROP_SUGGESTEDSAVEASNAME }));
 
-    utl::MediaDescriptor aDescriptor(xModel->getArgs2( { utl::MediaDescriptor::PROP_SUGGESTEDSAVEASNAME } ));
-    const OUString sSuggestedSaveAsName = aDescriptor.getUnpackedValueOrDefault(
-        utl::MediaDescriptor::PROP_SUGGESTEDSAVEASNAME, OUString());
-
-    if (!sURL.isEmpty())
+    if (const OUString sMediaTitle = aDescriptor.getUnpackedValueOrDefault(
+            utl::MediaDescriptor::PROP_DOCUMENTTITLE, OUString());
+        !sMediaTitle.isEmpty())
+    {
+        sTitle = sMediaTitle;
+    }
+    else if (const OUString sURL = getURLFromModel(xModel); !sURL.isEmpty())
     {
         sTitle = impl_convertURL2Title(sURL);
         if (nLeasedNumber != css::frame::UntitledNumbersConst::INVALID_NUMBER)
             xNumbers->releaseNumber (nLeasedNumber);
         nLeasedNumber = css::frame::UntitledNumbersConst::INVALID_NUMBER;
     }
-    else if (!sSuggestedSaveAsName.isEmpty())
+    else if (const OUString sSuggestedSaveAsName = aDescriptor.getUnpackedValueOrDefault(
+                 utl::MediaDescriptor::PROP_SUGGESTEDSAVEASNAME, OUString());
+             !sSuggestedSaveAsName.isEmpty())
     {
         // tdf#121537 Use suggested save as name for title if file has not yet been saved
         sTitle = sSuggestedSaveAsName;
@@ -408,7 +402,7 @@ void TitleHelper::impl_updateTitleForController (const css::uno::Reference< css:
             return;
 
         xOwner = m_xOwner;
-        xNumbers.set    (m_xUntitledNumbers.get(), css::uno::UNO_QUERY);
+        xNumbers = m_xUntitledNumbers;
         nLeasedNumber = m_nLeasedNumber;
     }
     // <- SYNCHRONIZED
@@ -434,8 +428,7 @@ void TitleHelper::impl_updateTitleForController (const css::uno::Reference< css:
         sTitle.append      (xModelTitle->getTitle ());
         if ( nLeasedNumber > 1 )
         {
-            sTitle.append(" : ");
-            sTitle.append(nLeasedNumber);
+            sTitle.append(" : " + OUString::number(nLeasedNumber));
         }
         if (xModel.is ())
         {
@@ -497,11 +490,14 @@ void TitleHelper::impl_updateTitleForFrame (const css::uno::Reference< css::fram
 
     impl_appendComponentTitle   (sTitle, xComponent);
 #ifndef MACOSX
-    // fdo#70376: We want the window title to contain just the
-    // document name (from the above "component title").
-    impl_appendProductName      (sTitle);
-    impl_appendModuleName       (sTitle);
-    impl_appendDebugVersion     (sTitle);
+    if (!utl::ConfigManager::IsFuzzing())
+    {
+        // fdo#70376: We want the window title to contain just the
+        // document name (from the above "component title").
+        impl_appendProductName      (sTitle);
+        impl_appendModuleName       (sTitle);
+        impl_appendDebugVersion     (sTitle);
+    }
 #endif
     impl_appendSafeMode         (sTitle);
 
@@ -536,7 +532,10 @@ void TitleHelper::impl_appendProductName (OUStringBuffer& sTitle)
     if (!name.isEmpty())
     {
         if (!sTitle.isEmpty())
-            sTitle.append(" - ");
+        {
+            OUString separator (FwkResId (STR_EMDASH_SEPARATOR));
+            sTitle.append(separator);
+        }
         sTitle.append(name);
     }
 }
@@ -549,7 +548,7 @@ void TitleHelper::impl_appendModuleName (OUStringBuffer& sTitle)
     {
         osl::MutexGuard aLock(m_aMutex);
 
-        xOwner   = m_xOwner.get();
+        xOwner   = m_xOwner;
         xContext = m_xContext;
     }
     // <- SYNCHRONIZED
@@ -634,7 +633,7 @@ void TitleHelper::impl_setSubTitle (const css::uno::Reference< css::frame::XTitl
         osl::MutexGuard aLock(m_aMutex);
 
         // ignore duplicate calls. Makes outside using of this helper more easy :-)
-        xOldSubTitle.set(m_xSubTitle.get(), css::uno::UNO_QUERY);
+        xOldSubTitle = m_xSubTitle;
         if (xOldSubTitle == xSubTitle)
             return;
 

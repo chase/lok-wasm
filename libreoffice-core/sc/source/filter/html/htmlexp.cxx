@@ -55,6 +55,7 @@
 #include <global.hxx>
 #include <postit.hxx>
 #include <document.hxx>
+#include <docsh.hxx>
 #include <attrib.hxx>
 #include <patattr.hxx>
 #include <stlpool.hxx>
@@ -87,7 +88,6 @@
 #include <rtl/strbuf.hxx>
 #include <officecfg/Office/Common.hxx>
 #include <tools/json_writer.hxx>
-#include <comphelper/lok.hxx>
 #include <svl/numformat.hxx>
 #include <svl/zformat.hxx>
 
@@ -122,15 +122,15 @@ const char ScHTMLExport::sIndentSource[nIndentMax+1] =
 #define TAG_ON( tag )       HTMLOutFuncs::Out_AsciiTag( rStrm, tag )
 #define TAG_OFF( tag )      HTMLOutFuncs::Out_AsciiTag( rStrm, tag, false )
 #define OUT_STR( str )      HTMLOutFuncs::Out_String( rStrm, str, &aNonConvertibleChars )
-#define OUT_LF()            rStrm.WriteCharPtr( SAL_NEWLINE_STRING ).WriteCharPtr( GetIndentStr() )
-#define TAG_ON_LF( tag )    (TAG_ON( tag ).WriteCharPtr( SAL_NEWLINE_STRING ).WriteCharPtr( GetIndentStr() ))
-#define TAG_OFF_LF( tag )   (TAG_OFF( tag ).WriteCharPtr( SAL_NEWLINE_STRING ).WriteCharPtr( GetIndentStr() ))
+#define OUT_LF()            rStrm.WriteOString( SAL_NEWLINE_STRING ).WriteOString( GetIndentStr() )
+#define TAG_ON_LF( tag )    (TAG_ON( tag ).WriteOString( SAL_NEWLINE_STRING ).WriteOString( GetIndentStr() ))
+#define TAG_OFF_LF( tag )   (TAG_OFF( tag ).WriteOString( SAL_NEWLINE_STRING ).WriteOString( GetIndentStr() ))
 #define OUT_HR()            TAG_ON_LF( OOO_STRING_SVTOOLS_HTML_horzrule )
-#define OUT_COMMENT( comment )  (rStrm.WriteCharPtr( sMyBegComment ), OUT_STR( comment ) \
-                                .WriteCharPtr( sMyEndComment ).WriteCharPtr( SAL_NEWLINE_STRING ) \
-                                .WriteCharPtr( GetIndentStr() ))
+#define OUT_COMMENT( comment )  (rStrm.WriteOString( sMyBegComment ), OUT_STR( comment ) \
+                                .WriteOString( sMyEndComment ).WriteOString( SAL_NEWLINE_STRING ) \
+                                .WriteOString( GetIndentStr() ))
 
-#define OUT_SP_CSTR_ASS( s )    rStrm.WriteChar( ' ').WriteCharPtr( s ).WriteChar( '=' )
+#define OUT_SP_CSTR_ASS( s )    rStrm.WriteChar(' ').WriteOString( s ).WriteChar( '=' )
 
 #define GLOBSTR(id) ScResId( id )
 
@@ -145,19 +145,19 @@ void ScFormatFilterPluginImpl::ScExportHTML( SvStream& rStrm, const OUString& rB
 
 static OString lcl_getColGroupString(sal_Int32 nSpan, sal_Int32 nWidth)
 {
-    OStringBuffer aByteStr(OOO_STRING_SVTOOLS_HTML_colgroup);
-    aByteStr.append(' ');
+    OStringBuffer aByteStr(OString::Concat(OOO_STRING_SVTOOLS_HTML_colgroup)
+        + " ");
     if( nSpan > 1 )
     {
-        aByteStr.append(OOO_STRING_SVTOOLS_HTML_O_span);
-        aByteStr.append("=\"");
-        aByteStr.append(nSpan);
-        aByteStr.append("\" ");
+        aByteStr.append(OString::Concat(OOO_STRING_SVTOOLS_HTML_O_span)
+            + "=\""
+            + OString::number(nSpan)
+            + "\" ");
     }
-    aByteStr.append(OOO_STRING_SVTOOLS_HTML_O_width);
-    aByteStr.append("=\"");
-    aByteStr.append(nWidth);
-    aByteStr.append('"');
+    aByteStr.append(OString::Concat(OOO_STRING_SVTOOLS_HTML_O_width)
+        + "=\""
+        + OString::number(nWidth)
+        + "\"");
     return aByteStr.makeStringAndClear();
 }
 
@@ -302,8 +302,8 @@ void ScHTMLExport::Write()
 {
     if (!mbSkipHeaderFooter)
     {
-        rStrm.WriteChar( '<' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_doctype ).WriteChar( ' ' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_doctype5 ).WriteChar( '>' )
-           .WriteCharPtr( SAL_NEWLINE_STRING ).WriteCharPtr( SAL_NEWLINE_STRING );
+        rStrm.WriteChar( '<' ).WriteOString( OOO_STRING_SVTOOLS_HTML_doctype ).WriteChar( ' ' ).WriteOString( OOO_STRING_SVTOOLS_HTML_doctype5 ).WriteChar( '>' )
+           .WriteOString( SAL_NEWLINE_STRING ).WriteOString( SAL_NEWLINE_STRING );
         TAG_ON_LF( OOO_STRING_SVTOOLS_HTML_html );
         WriteHeader();
         OUT_LF();
@@ -325,7 +325,7 @@ void ScHTMLExport::WriteHeader()
     else
     {
         uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
-            pDoc->GetDocumentShell()->GetModel(), uno::UNO_QUERY_THROW);
+            static_cast<cppu::OWeakObject*>(pDoc->GetDocumentShell()->GetModel()), uno::UNO_QUERY_THROW);
         uno::Reference<document::XDocumentProperties> xDocProps
             = xDPS->getDocumentProperties();
         SfxFrameHTMLWriter::Out_DocInfo( rStrm, aBaseURL, xDocProps,
@@ -347,30 +347,30 @@ void ScHTMLExport::WriteHeader()
     // CSS1 StyleSheet
     PageDefaults( bAll ? 0 : aRange.aStart.Tab() );
     IncIndent(1);
-    rStrm.WriteCharPtr( "<" ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_style ).WriteCharPtr( " " ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_O_type ).WriteCharPtr( "=\"text/css\">" );
+    rStrm.WriteOString( "<" ).WriteOString( OOO_STRING_SVTOOLS_HTML_style ).WriteOString( " " ).WriteOString( OOO_STRING_SVTOOLS_HTML_O_type ).WriteOString( "=\"text/css\">" );
 
     OUT_LF();
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_body);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_division);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_table);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_thead);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_tbody);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_tfoot);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_tablerow);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_tableheader);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_tabledata);
-    rStrm.WriteCharPtr(",");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_parabreak);
-    rStrm.WriteCharPtr(" { ");
-    rStrm.WriteCharPtr("font-family:");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_body);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_division);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_table);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_thead);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_tbody);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_tfoot);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_tablerow);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_tableheader);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_tabledata);
+    rStrm.WriteOString(",");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_parabreak);
+    rStrm.WriteOString(" { ");
+    rStrm.WriteOString("font-family:");
 
     if (!aHTMLStyle.aFontFamilyName.isEmpty())
     {
@@ -382,70 +382,70 @@ void ScHTMLExport::WriteHeader()
             rStrm.WriteChar( '\"' );
             if (nPos<0)
                 break;
-            rStrm.WriteCharPtr( ", " );
+            rStrm.WriteOString( ", " );
         }
     }
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr("font-size:");
-    rStrm.WriteCharPtr(GetFontSizeCss(static_cast<sal_uInt16>(aHTMLStyle.nFontHeight)));
-    rStrm.WriteCharPtr(" }");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString("font-size:");
+    rStrm.WriteOString(GetFontSizeCss(static_cast<sal_uInt16>(aHTMLStyle.nFontHeight)));
+    rStrm.WriteOString(" }");
 
     OUT_LF();
 
     // write the style for the comments to make them stand out from normal cell content
     // this is done through only showing the cell contents when the custom indicator is hovered
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_anchor);
-    rStrm.WriteCharPtr(".comment-indicator:hover");
-    rStrm.WriteCharPtr(" + ");
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_comment2);
-    rStrm.WriteCharPtr(" { ");
-    rStrm.WriteCharPtr(sBackground);
-    rStrm.WriteCharPtr("#ffd");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr("position:");
-    rStrm.WriteCharPtr("absolute");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(sDisplay);
-    rStrm.WriteCharPtr("block");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(sBorder);
-    rStrm.WriteCharPtr("1px solid black");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr("padding:");
-    rStrm.WriteCharPtr("0.5em");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(" } ");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_anchor);
+    rStrm.WriteOString(".comment-indicator:hover");
+    rStrm.WriteOString(" + ");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_comment2);
+    rStrm.WriteOString(" { ");
+    rStrm.WriteOString(sBackground);
+    rStrm.WriteOString("#ffd");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString("position:");
+    rStrm.WriteOString("absolute");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(sDisplay);
+    rStrm.WriteOString("block");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(sBorder);
+    rStrm.WriteOString("1px solid black");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString("padding:");
+    rStrm.WriteOString("0.5em");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(" } ");
 
     OUT_LF();
 
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_anchor);
-    rStrm.WriteCharPtr(".comment-indicator");
-    rStrm.WriteCharPtr(" { ");
-    rStrm.WriteCharPtr(sBackground);
-    rStrm.WriteCharPtr("red");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(sDisplay);
-    rStrm.WriteCharPtr("inline-block");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(sBorder);
-    rStrm.WriteCharPtr("1px solid black");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr("width:");
-    rStrm.WriteCharPtr("0.5em");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr("height:");
-    rStrm.WriteCharPtr("0.5em");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(" } ");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_anchor);
+    rStrm.WriteOString(".comment-indicator");
+    rStrm.WriteOString(" { ");
+    rStrm.WriteOString(sBackground);
+    rStrm.WriteOString("red");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(sDisplay);
+    rStrm.WriteOString("inline-block");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(sBorder);
+    rStrm.WriteOString("1px solid black");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString("width:");
+    rStrm.WriteOString("0.5em");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString("height:");
+    rStrm.WriteOString("0.5em");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(" } ");
 
     OUT_LF();
 
-    rStrm.WriteCharPtr(OOO_STRING_SVTOOLS_HTML_comment2);
-    rStrm.WriteCharPtr(" { ");
-    rStrm.WriteCharPtr(sDisplay);
-    rStrm.WriteCharPtr("none");
-    rStrm.WriteCharPtr("; ");
-    rStrm.WriteCharPtr(" } ");
+    rStrm.WriteOString(OOO_STRING_SVTOOLS_HTML_comment2);
+    rStrm.WriteOString(" { ");
+    rStrm.WriteOString(sDisplay);
+    rStrm.WriteOString("none");
+    rStrm.WriteOString("; ");
+    rStrm.WriteOString(" } ");
 
 
     IncIndent(-1);
@@ -477,11 +477,11 @@ void ScHTMLExport::WriteOverview()
         if ( !IsEmptyTable( nTab ) )
         {
             pDoc->GetName( nTab, aStr );
-            rStrm.WriteCharPtr( "<A HREF=\"#table" )
+            rStrm.WriteOString( "<A HREF=\"#table" )
                .WriteOString( OString::number(nTab) )
-               .WriteCharPtr( "\">" );
+               .WriteOString( "\">" );
             OUT_STR( aStr );
-            rStrm.WriteCharPtr( "</A>" );
+            rStrm.WriteOString( "</A>" );
             TAG_ON_LF( OOO_STRING_SVTOOLS_HTML_linebreak );
         }
     }
@@ -614,7 +614,7 @@ void ScHTMLExport::WriteBody()
     // default text color black
     if (!mbSkipHeaderFooter)
     {
-        rStrm.WriteChar( '<' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_body );
+        rStrm.WriteChar( '<' ).WriteOString( OOO_STRING_SVTOOLS_HTML_body );
 
         if (!mbSkipImages)
         {
@@ -657,7 +657,7 @@ void ScHTMLExport::WriteBody()
                 }
                 if( !aLink.isEmpty() )
                 {
-                    rStrm.WriteChar( ' ' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_O_background ).WriteCharPtr( "=\"" );
+                    rStrm.WriteChar( ' ' ).WriteOString( OOO_STRING_SVTOOLS_HTML_O_background ).WriteOString( "=\"" );
                     OUT_STR( URIHelper::simpleNormalizedMakeRelative(
                                 aBaseURL,
                                 aLink ) ).WriteChar( '\"' );
@@ -685,7 +685,7 @@ void ScHTMLExport::WriteBody()
         }
         else if (comphelper::LibreOfficeKit::isActive())
         {
-            aMarker = "<google-sheets-html-origin/>";
+            aMarker = "<google-sheets-html-origin/>"_ostr;
         }
         rStrm.WriteOString(aMarker);
     }
@@ -748,9 +748,9 @@ void ScHTMLExport::WriteTables()
                 OUT_HR();
 
                 // Write anchor
-                rStrm.WriteCharPtr( "<A NAME=\"table" )
+                rStrm.WriteOString( "<A NAME=\"table" )
                    .WriteOString( OString::number(nTab) )
-                   .WriteCharPtr( "\">" );
+                   .WriteOString( "\">" );
                 TAG_ON( OOO_STRING_SVTOOLS_HTML_head1 );
                 OUT_STR( aStrOut );
                 TAG_ON( OOO_STRING_SVTOOLS_HTML_emphasis );
@@ -760,7 +760,7 @@ void ScHTMLExport::WriteTables()
 
                 TAG_OFF( OOO_STRING_SVTOOLS_HTML_emphasis );
                 TAG_OFF( OOO_STRING_SVTOOLS_HTML_head1 );
-                rStrm.WriteCharPtr( "</A>" ); OUT_LF();
+                rStrm.WriteOString( "</A>" ); OUT_LF();
             }
         }
         else
@@ -796,7 +796,7 @@ void ScHTMLExport::WriteTables()
 
         // BORDER=0, we do the styling of the cells in <TD>
         aByteStrOut.append(" " OOO_STRING_SVTOOLS_HTML_O_border "=\"0\"");
-        IncIndent(1); TAG_ON_LF( aByteStrOut.makeStringAndClear().getStr() );
+        IncIndent(1); TAG_ON_LF( aByteStrOut.makeStringAndClear() );
 
         // --- <COLGROUP> ----
         {
@@ -815,7 +815,7 @@ void ScHTMLExport::WriteTables()
                 {
                     if( nSpan != 0 )
                     {
-                        TAG_ON(lcl_getColGroupString(nSpan, nWidth).getStr());
+                        TAG_ON(lcl_getColGroupString(nSpan, nWidth));
                         TAG_OFF_LF( OOO_STRING_SVTOOLS_HTML_colgroup );
                     }
                     nWidth = ToPixel( pDoc->GetColWidth( nCol, nTab ) );
@@ -827,7 +827,7 @@ void ScHTMLExport::WriteTables()
             }
             if( nSpan )
             {
-                TAG_ON(lcl_getColGroupString(nSpan, nWidth).getStr());
+                TAG_ON(lcl_getColGroupString(nSpan, nWidth));
                 TAG_OFF_LF( OOO_STRING_SVTOOLS_HTML_colgroup );
             }
         }
@@ -886,11 +886,12 @@ void ScHTMLExport::WriteTables()
             if ( bTabAlignedLeft )
             {
                 // clear <TABLE ALIGN=LEFT> with <BR CLEAR=LEFT>
-                aByteStrOut.append(OOO_STRING_SVTOOLS_HTML_linebreak);
-                aByteStrOut.append(' ').
-                    append(OOO_STRING_SVTOOLS_HTML_O_clear).append('=').
-                    append(OOO_STRING_SVTOOLS_HTML_AL_left);
-                TAG_ON_LF( aByteStrOut.makeStringAndClear().getStr() );
+                aByteStrOut.append(
+                        OOO_STRING_SVTOOLS_HTML_linebreak
+                        " "
+                        OOO_STRING_SVTOOLS_HTML_O_clear "="
+                        OOO_STRING_SVTOOLS_HTML_AL_left);
+                TAG_ON_LF( aByteStrOut.makeStringAndClear() );
             }
         }
 
@@ -993,8 +994,8 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
             nC = rMergeAttr.GetColMerge();
         if ( nC > 1 )
         {
-            aStrTD.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_colspan).
-                append('=').append(static_cast<sal_Int32>(nC));
+            aStrTD.append(" " OOO_STRING_SVTOOLS_HTML_O_colspan
+                    "=" + OString::number(static_cast<sal_Int32>(nC)));
             nC = nC + nCol;
             for ( jC=nCol, v=0; jC<nC; jC++ )
                 v += pDoc->GetColWidth( jC, nTab );
@@ -1007,8 +1008,8 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
             nR = rMergeAttr.GetRowMerge();
         if ( nR > 1 )
         {
-            aStrTD.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_rowspan).
-                append('=').append(static_cast<sal_Int32>(nR));
+            aStrTD.append(" " OOO_STRING_SVTOOLS_HTML_O_rowspan
+                "=" + OString::number(static_cast<sal_Int32>(nR)));
             nR += nRow;
             v = pDoc->GetRowHeight( nRow, nR-1, nTab );
             nHeightPixel = ToPixel( static_cast< sal_uInt16 >( v ) );
@@ -1114,15 +1115,13 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
     }
     if ( pChar )
     {
-        aStrTD.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_valign).
-            append('=').append(pChar);
+        aStrTD.append(OString::Concat(" " OOO_STRING_SVTOOLS_HTML_O_valign "=") + pChar);
     }
 
     if ( aHTMLStyle.aBackgroundColor != aBgColor )
     {
-        aStrTD.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_bgcolor).
-            append('=');
-        aStrTD.append(lcl_makeHTMLColorTriplet(aBgColor));
+        aStrTD.append(" " OOO_STRING_SVTOOLS_HTML_O_bgcolor "="
+            + lcl_makeHTMLColorTriplet(aBgColor));
     }
 
     double fVal = 0.0;
@@ -1147,6 +1146,7 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
         nFormat, *pFormatter, &aNonConvertibleChars));
 
     std::optional<tools::JsonWriter> oJson;
+    const SvNumberformat* pNumberFormat = nullptr;
     if (bValueData)
     {
         if (nFormat)
@@ -1162,7 +1162,24 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
                     oJson->put("1", static_cast<sal_Int32>(4));
                     oJson->put("4", static_cast<sal_Int32>(fVal));
                 }
+                else
+                {
+                    // 3 is number.
+                    oJson.emplace();
+                    oJson->put("1", static_cast<sal_Int32>(3));
+                    oJson->put("3", static_cast<sal_Int32>(fVal));
+                    pNumberFormat = pFormatEntry;
+                }
             }
+        }
+
+        if (aCell.getType() == CELLTYPE_FORMULA)
+        {
+            // If it's a formula, then also emit that, grammar is R1C1 reference style.
+            OUString aFormula = aCell.getFormula()->GetFormula(
+                    formula::FormulaGrammar::GRAM_ENGLISH_XL_R1C1);
+            aStrTD.append(" " OOO_STRING_SVTOOLS_HTML_O_DSformula "=\""
+                    + HTMLOutFuncs::ConvertStringToHTML(aFormula) + "\"");
         }
     }
     else
@@ -1175,13 +1192,25 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
 
     if (oJson)
     {
-        std::unique_ptr<char, o3tl::free_delete> aJsonResult(oJson->extractData());
-        OUString aJsonString = OUString::fromUtf8(aJsonResult.get());
+        OUString aJsonString = OUString::fromUtf8(oJson->finishAndGetAsOString());
         aStrTD.append(" " OOO_STRING_SVTOOLS_HTML_O_DSval "=\""
                       + HTMLOutFuncs::ConvertStringToHTML(aJsonString) + "\"");
     }
 
-    TAG_ON(aStrTD.makeStringAndClear().getStr());
+    if (pNumberFormat)
+    {
+        // 2 is a number format.
+        oJson.emplace();
+        oJson->put("1", static_cast<sal_Int32>(2));
+        oJson->put("2", pNumberFormat->GetFormatstring());
+        // The number format is for a number.
+        oJson->put("3", static_cast<sal_Int32>(1));
+        OUString aJsonString = OUString::fromUtf8(oJson->finishAndGetAsOString());
+        aStrTD.append(" " OOO_STRING_SVTOOLS_HTML_O_DSnum "=\""
+                      + HTMLOutFuncs::ConvertStringToHTML(aJsonString) + "\"");
+    }
+
+    TAG_ON(aStrTD.makeStringAndClear());
 
     //write the note for this as the first thing in the tag
     ScPostIt* pNote = pDoc->HasNote(aPos) ? pDoc->GetNote(aPos) : nullptr;
@@ -1189,8 +1218,8 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
     {
         //create the comment indicator
         OString aStr = OOO_STRING_SVTOOLS_HTML_anchor " "
-            OOO_STRING_SVTOOLS_HTML_O_class "=\"comment-indicator\"";
-        TAG_ON(aStr.getStr());
+            OOO_STRING_SVTOOLS_HTML_O_class "=\"comment-indicator\""_ostr;
+        TAG_ON(aStr);
         TAG_OFF(OOO_STRING_SVTOOLS_HTML_anchor);
         OUT_LF();
 
@@ -1234,8 +1263,8 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
         }
         if ( nSetFontSizeNumber )
         {
-            aStr.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_size).
-                append('=').append(static_cast<sal_Int32>(nSetFontSizeNumber));
+            aStr.append(" " OOO_STRING_SVTOOLS_HTML_O_size "="
+                + OString::number(static_cast<sal_Int32>(nSetFontSizeNumber)));
         }
         if ( bSetFontColor )
         {
@@ -1245,10 +1274,10 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
             if ( aColor == COL_AUTO )
                 aColor = COL_BLACK;
 
-            aStr.append(' ').append(OOO_STRING_SVTOOLS_HTML_O_color).
-                append('=').append(lcl_makeHTMLColorTriplet(aColor));
+            aStr.append(" " OOO_STRING_SVTOOLS_HTML_O_color "="
+                + lcl_makeHTMLColorTriplet(aColor));
         }
-        TAG_ON(aStr.makeStringAndClear().getStr());
+        TAG_ON(aStr.makeStringAndClear());
     }
 
     OUString aURL;
@@ -1268,7 +1297,7 @@ void ScHTMLExport::WriteCell( sc::ColumnBlockPosition& rBlockPos, SCCOL nCol, SC
     {
         OString aURLStr = HTMLOutFuncs::ConvertStringToHTML(aURL, &aNonConvertibleChars);
         OString aStr = OOO_STRING_SVTOOLS_HTML_anchor " " OOO_STRING_SVTOOLS_HTML_O_href "=\"" + aURLStr + "\"";
-        TAG_ON(aStr.getStr());
+        TAG_ON(aStr);
     }
 
     OUString aStrOut;
@@ -1368,11 +1397,11 @@ bool ScHTMLExport::WriteFieldText( const EditTextObject* pData )
                         if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
                         {
                             bUrl = true;
-                            rStrm.WriteChar( '<' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_anchor ).WriteChar( ' ' ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_O_href ).WriteCharPtr( "=\"" );
+                            rStrm.WriteChar( '<' ).WriteOString( OOO_STRING_SVTOOLS_HTML_anchor ).WriteChar( ' ' ).WriteOString( OOO_STRING_SVTOOLS_HTML_O_href ).WriteOString( "=\"" );
                             OUT_STR( pURLField->GetURL() );
-                            rStrm.WriteCharPtr( "\">" );
+                            rStrm.WriteOString( "\">" );
                             OUT_STR( pURLField->GetRepresentation() );
-                            rStrm.WriteCharPtr( "</" ).WriteCharPtr( OOO_STRING_SVTOOLS_HTML_anchor ).WriteChar( '>' );
+                            rStrm.WriteOString( "</" ).WriteOString( OOO_STRING_SVTOOLS_HTML_anchor ).WriteChar( '>' );
                         }
                     }
                 }
@@ -1392,11 +1421,16 @@ void ScHTMLExport::CopyLocalFileToINet( OUString& rFileNm,
     INetURLObject aFileUrl, aTargetUrl;
     aFileUrl.SetSmartURL( rFileNm );
     aTargetUrl.SetSmartURL( rTargetNm );
-    if( !(INetProtocol::File == aFileUrl.GetProtocol() &&
-        ( INetProtocol::File != aTargetUrl.GetProtocol() &&
-          INetProtocol::Ftp <= aTargetUrl.GetProtocol() &&
-          INetProtocol::Javascript >= aTargetUrl.GetProtocol()))  )
+    if (!(INetProtocol::File == aFileUrl.GetProtocol()
+            && (INetProtocol::Http == aTargetUrl.GetProtocol()
+                || INetProtocol::Https == aTargetUrl.GetProtocol()
+                || INetProtocol::VndSunStarWebdav == aTargetUrl.GetProtocol()
+                || INetProtocol::Smb == aTargetUrl.GetProtocol()
+                || INetProtocol::Sftp == aTargetUrl.GetProtocol()
+                || INetProtocol::Cmis == aTargetUrl.GetProtocol())))
+    {
         return;
+    }
 
     if( pFileNameMap )
     {
@@ -1430,7 +1464,7 @@ void ScHTMLExport::CopyLocalFileToINet( OUString& rFileNm,
     aMedium.Close();
     aMedium.Commit();
 
-    bRet = ERRCODE_NONE == aMedium.GetError();
+    bRet = ERRCODE_NONE == aMedium.GetErrorIgnoreWarning();
 
     if( bRet )
     {

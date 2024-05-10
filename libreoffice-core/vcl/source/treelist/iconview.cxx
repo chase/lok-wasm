@@ -153,10 +153,6 @@ void IconView::PaintEntry(SvTreeListEntry& rEntry, tools::Long nX, tools::Long n
             }
             aWallpaper.SetColor(aNewWallColor);
         }
-        else // no selection
-        {
-            aWallpaper.SetColor(rEntry.GetBackColor());
-        }
 
         Color aBackgroundColor = aWallpaper.GetColor();
         if (aBackgroundColor != COL_TRANSPARENT)
@@ -241,7 +237,7 @@ css::uno::Reference<css::accessibility::XAccessible> IconView::CreateAccessible(
         if (auto xAccParent = pParent->GetAccessible())
         {
             // need to be done here to get the vclxwindow later on in the accessible
-            css::uno::Reference<css::awt::XWindowPeer> xHoldAlive(GetComponentInterface());
+            css::uno::Reference<css::awt::XVclWindowPeer> xHoldAlive(GetComponentInterface());
             return pImpl->m_aFactoryAccess.getFactory().createAccessibleIconView(*this, xAccParent);
         }
     }
@@ -279,7 +275,7 @@ static OString extractPngString(const SvLBoxContextBmp* pBmpItem)
         return aBuffer.makeStringAndClear();
     }
 
-    return "";
+    return ""_ostr;
 }
 
 void IconView::DumpEntryAndSiblings(tools::JsonWriter& rJsonWriter, SvTreeListEntry* pEntry)

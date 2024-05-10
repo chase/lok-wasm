@@ -1168,20 +1168,7 @@ void SwEditShell::ApplyChangedSentence(const svx::SpellPortions& rNewPortions, b
 
                 // if there is a comment inside the original word, don't delete it:
                 // but keep it at the end of the replacement
-                // TODO: keep all the comments with a recursive function
-                sal_Int32 nCommentPos(pCursor->GetText().indexOf(OUStringChar(CH_TXTATR_INWORD)));
-                if ( nCommentPos > -1 )
-                {
-                    // delete the original word after the comment
-                    pCursor->GetPoint()->AdjustContent(nCommentPos + 1);
-
-                    mxDoc->getIDocumentContentOperations().ReplaceRange(*pCursor, OUString(), false);
-                    // and select only the remaining part before the comment
-                    pCursor->GetPoint()->AdjustContent(-(nCommentPos + 1));
-                    pCursor->GetMark()->AdjustContent(-1);
-                }
-
-                mxDoc->getIDocumentContentOperations().ReplaceRange(*pCursor, aCurrentNewPortion->sText, false);
+                ReplaceKeepComments(aCurrentNewPortion->sText);
             }
             else if(aCurrentNewPortion->eLanguage != aCurrentOldPortion->eLanguage)
             {
@@ -1532,7 +1519,7 @@ void SwSpellIter::ToSentenceStart() { m_bBackToStartOfSentence = true; }
 static LanguageType lcl_GetLanguage(SwEditShell& rSh)
 {
     SvtScriptType nScriptType = rSh.GetScriptType();
-    sal_uInt16 nLangWhichId = RES_CHRATR_LANGUAGE;
+    TypedWhichId<SvxLanguageItem> nLangWhichId = RES_CHRATR_LANGUAGE;
 
     switch(nScriptType)
     {
@@ -1542,7 +1529,7 @@ static LanguageType lcl_GetLanguage(SwEditShell& rSh)
     }
     SfxItemSet aSet(rSh.GetAttrPool(), nLangWhichId, nLangWhichId);
     rSh.GetCurAttr( aSet );
-    const SvxLanguageItem& rLang = static_cast<const SvxLanguageItem& >(aSet.Get(nLangWhichId));
+    const SvxLanguageItem& rLang = aSet.Get(nLangWhichId);
     return rLang.GetLanguage();
 }
 

@@ -27,6 +27,7 @@
 #include <unotools/weakref.hxx>
 
 #include "swdllapi.h"
+#include "swtypes.hxx"
 #include "calbck.hxx"
 #include "reffld.hxx"
 #include "nodeoffset.hxx"
@@ -94,7 +95,8 @@ namespace sw {
 }
 
 
-// ATT_FLD
+/// SfxPoolItem subclass that is a wrapper around an SwField, i.e. one inserted field into paragraph
+/// text. Typically owned by an SwTextField.
 class SW_DLLPUBLIC SwFormatField final
     : public SfxPoolItem
     , public sw::BroadcastingModify
@@ -122,8 +124,6 @@ public:
     /// "Pure virtual methods" of SfxPoolItem.
     virtual bool            operator==( const SfxPoolItem& ) const override;
     virtual SwFormatField*  Clone( SfxItemPool* pPool = nullptr ) const override;
-
-    virtual bool GetInfo( SfxPoolItem& rInfo ) const override;
 
     void InvalidateField();
 
@@ -166,7 +166,9 @@ public:
 
     void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 
-    void UpdateTextNode(const SfxPoolItem* pOld, const SfxPoolItem* pNew);
+    void ForceUpdateTextNode();
+    void UpdateTextNode(const SfxHint& rHint);
+    void UpdateDocPos(const SwTwips nDocPos);
 };
 
 enum class SwFormatFieldHintWhich
@@ -175,9 +177,8 @@ enum class SwFormatFieldHintWhich
     REMOVED    = 2,
     FOCUS      = 3,
     CHANGED    = 4,
-    LANGUAGE   = 5,
-    RESOLVED   = 6,
-    REDLINED_DELETION = 7
+    RESOLVED   = 5,
+    REDLINED_DELETION = 6
 };
 
 class SW_DLLPUBLIC SwFormatFieldHint final : public SfxHint

@@ -25,12 +25,11 @@
 namespace svgio::svgreader
 {
         SvgPolyNode::SvgPolyNode(
+            SVGToken aType,
             SvgDocument& rDocument,
-            SvgNode* pParent,
-            bool bIsPolyline)
-        :   SvgNode(SVGToken::Polygon, rDocument, pParent),
-            maSvgStyleAttributes(*this),
-            mbIsPolyline(bIsPolyline)
+            SvgNode* pParent)
+        :   SvgNode(aType, rDocument, pParent),
+            maSvgStyleAttributes(*this)
         {
         }
 
@@ -40,13 +39,13 @@ namespace svgio::svgreader
 
         const SvgStyleAttributes* SvgPolyNode::getSvgStyleAttributes() const
         {
-            return checkForCssStyle(mbIsPolyline? OUString("polyline") : OUString("polygon"), maSvgStyleAttributes);
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgPolyNode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgPolyNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);
@@ -67,7 +66,7 @@ namespace svgio::svgreader
                     {
                         if(aPath.count())
                         {
-                            if(!mbIsPolyline)
+                            if(getType() == SVGToken::Polygon)
                             {
                                 aPath.setClosed(true);
                             }

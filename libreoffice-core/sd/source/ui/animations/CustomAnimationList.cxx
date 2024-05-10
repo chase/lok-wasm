@@ -134,13 +134,13 @@ OUString getShapeDescription( const Reference< XShape >& xShape, bool bWithText 
         Reference<XPropertySetInfo> xInfo(xSet->getPropertySetInfo());
         if (xInfo.is())
         {
-            static const OUStringLiteral aPropName1(u"Name");
+            static constexpr OUString aPropName1(u"Name"_ustr);
             if(xInfo->hasPropertyByName(aPropName1))
                 xSet->getPropertyValue(aPropName1) >>= aDescription;
 
             bAppendIndex = aDescription.isEmpty();
 
-            static const OUStringLiteral aPropName2(u"UINameSingular");
+            static constexpr OUString aPropName2(u"UINameSingular"_ustr);
             if(xInfo->hasPropertyByName(aPropName2))
                 xSet->getPropertyValue(aPropName2) >>= aDescription;
         }
@@ -310,12 +310,10 @@ void CustomAnimationListEntryItem::PaintTrigger(vcl::RenderContext& rRenderConte
 
     ::tools::Rectangle aOutRect(rRect);
 
-    // fill the background
-    Color aColor(rRenderContext.GetSettings().GetStyleSettings().GetDialogColor());
-
     rRenderContext.Push();
-    rRenderContext.SetFillColor(aColor);
+    rRenderContext.SetFillColor(rRenderContext.GetSettings().GetStyleSettings().GetDialogColor());
     rRenderContext.SetLineColor();
+    // fill the background with the dialog bg color
     rRenderContext.DrawRect(aOutRect);
 
     // Erase the four corner pixels to make the rectangle appear rounded.
@@ -335,6 +333,8 @@ void CustomAnimationListEntryItem::PaintTrigger(vcl::RenderContext& rRenderConte
     aOutRect.AdjustTop( nVertBorder );
     aOutRect.AdjustBottom( -nVertBorder );
 
+    // Draw the text with the dialog text color
+    rRenderContext.SetTextColor(rRenderContext.GetSettings().GetStyleSettings().GetDialogTextColor());
     rRenderContext.DrawText(aOutRect, rRenderContext.GetEllipsisString(msDescription, aOutRect.GetWidth()));
     rRenderContext.Pop();
 }
@@ -449,7 +449,7 @@ CustomAnimationList::CustomAnimationList(std::unique_ptr<weld::TreeView> xTreeVi
     mxTreeView->connect_drag_begin(LINK(this, CustomAnimationList, DragBeginHdl));
     mxTreeView->connect_custom_get_size(LINK(this, CustomAnimationList, CustomGetSizeHdl));
     mxTreeView->connect_custom_render(LINK(this, CustomAnimationList, CustomRenderHdl));
-    mxTreeView->set_column_custom_renderer(0, true);
+    mxTreeView->set_column_custom_renderer(1, true);
 }
 
 CustomAnimationListDropTarget::CustomAnimationListDropTarget(CustomAnimationList& rTreeView)
@@ -1209,14 +1209,14 @@ IMPL_LINK(CustomAnimationList, CommandHdl, const CommandEvent&, rCEvt, bool)
     xMenu->set_sensitive("options", nEntries == 1);
     xMenu->set_sensitive("timing", nEntries == 1);
 
-    OString sCommand = xMenu->popup_at_rect(mxTreeView.get(), ::tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1)));
+    OUString sCommand = xMenu->popup_at_rect(mxTreeView.get(), ::tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1,1)));
     if (!sCommand.isEmpty())
         ExecuteContextMenuAction(sCommand);
 
     return true;
 }
 
-void CustomAnimationList::ExecuteContextMenuAction(const OString& rIdent)
+void CustomAnimationList::ExecuteContextMenuAction(const OUString& rIdent)
 {
     mpController->onContextMenu(rIdent);
 }

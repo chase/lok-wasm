@@ -22,10 +22,11 @@
 class SfxMedium;
 class SmDocShell;
 class SmMLImport;
+class SmModel;
 
 class SmMLImportWrapper
 {
-    css::uno::Reference<css::frame::XModel> m_xModel;
+    rtl::Reference<SmModel> m_xModel;
     SmDocShell* m_pDocShell;
     SmMLImport* m_pMlImport;
 
@@ -40,7 +41,7 @@ public:
 public:
     /** Constructor
      */
-    explicit SmMLImportWrapper(css::uno::Reference<css::frame::XModel> xRef)
+    explicit SmMLImportWrapper(rtl::Reference<SmModel> xRef)
         : m_xModel(std::move(xRef))
         , m_pDocShell(nullptr)
         , m_pMlImport(nullptr)
@@ -115,10 +116,6 @@ public:
     virtual ~SmMLImport() noexcept override { cleanup(); };
 
 public:
-    // XUnoTunnel
-    sal_Int64 SAL_CALL getSomething(const css::uno::Sequence<sal_Int8>& rId) override;
-    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId() noexcept;
-
     /** End the document
     */
     void SAL_CALL endDocument() override;
@@ -141,11 +138,11 @@ public:
 
     /** Set syntax version
     */
-    void SetSmSyntaxVersion(sal_uInt16 nSmSyntaxVersion) { m_nSmSyntaxVersion = nSmSyntaxVersion; }
+    void SetSmSyntaxVersion(sal_Int16 nSmSyntaxVersion) { m_nSmSyntaxVersion = nSmSyntaxVersion; }
 
     /** Get syntax version
     */
-    sal_uInt16 GetSmSyntaxVersion() const { return m_nSmSyntaxVersion; }
+    sal_Int16 GetSmSyntaxVersion() const { return m_nSmSyntaxVersion; }
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */

@@ -26,6 +26,7 @@
 #include <svl/undo.hxx>
 #include <tools/debug.hxx>
 #include <unotools/lingucfg.hxx>
+#include <editeng/editund2.hxx>
 #include <editeng/colritem.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/langitem.hxx>
@@ -173,7 +174,7 @@ SpellDialog::SpellDialog(SpellDialogChildWindow* pChildWindow,
     , m_xExplainFT(m_xBuilder->weld_label("explain"))
     , m_xExplainLink(m_xBuilder->weld_link_button("explainlink"))
     , m_xNotInDictFT(m_xBuilder->weld_label("notindictft"))
-    , m_xSentenceED(new SentenceEditWindow_Impl)
+    , m_xSentenceED(new SentenceEditWindow_Impl(m_xBuilder->weld_scrolled_window("scrolledwindow", true)))
     , m_xSuggestionFT(m_xBuilder->weld_label("suggestionsft"))
     , m_xSuggestionLB(m_xBuilder->weld_tree_view("suggestionslb"))
     , m_xIgnorePB(m_xBuilder->weld_button("ignore"))
@@ -728,8 +729,7 @@ void SpellDialog::Close()
     // section - in that case, the cursor can move from the editable field to
     // the protected area, and the slots get disabled because of
     // SfxDisableFlags::SwOnProtectedCursor (see FN_SPELL_GRAMMAR_DIALOG in .sdi).
-    SfxViewFrame* pViewFrame = SfxViewFrame::Current();
-    if (pViewFrame)
+    if (SfxViewFrame* pViewFrame = SfxViewFrame::Current())
         pViewFrame->ToggleChildWindow(rParent.GetType());
 }
 
@@ -843,15 +843,15 @@ int SpellDialog::InitUserDicts()
 
 IMPL_LINK_NOARG(SpellDialog, AddToDictClickHdl, weld::Button&, void)
 {
-    AddToDictionaryExecute(OString::number(1));
+    AddToDictionaryExecute(OUString::number(1));
 }
 
-IMPL_LINK(SpellDialog, AddToDictSelectHdl, const OString&, rIdent, void)
+IMPL_LINK(SpellDialog, AddToDictSelectHdl, const OUString&, rIdent, void)
 {
     AddToDictionaryExecute(rIdent);
 }
 
-void SpellDialog::AddToDictionaryExecute(const OString& rItemId)
+void SpellDialog::AddToDictionaryExecute(const OUString& rItemId)
 {
     auto xGuard(std::make_unique<UndoChangeGroupGuard>(*m_xSentenceED));
 
@@ -1130,13 +1130,15 @@ bool SpellDialog::ApplyChangeAllList_Impl(SpellPortions& rSentence, bool &bHasRe
     return bRet;
 }
 
-SentenceEditWindow_Impl::SentenceEditWindow_Impl()
-    : m_pSpellDialog(nullptr)
+SentenceEditWindow_Impl::SentenceEditWindow_Impl(std::unique_ptr<weld::ScrolledWindow> xScrolledWindow)
+    : m_xScrolledWindow(std::move(xScrolledWindow))
+    , m_pSpellDialog(nullptr)
     , m_pToolbar(nullptr)
     , m_nErrorStart(0)
     , m_nErrorEnd(0)
     , m_bIsUndoEditMode(false)
 {
+    m_xScrolledWindow->connect_vadjustment_changed(LINK(this, SentenceEditWindow_Impl, ScrollHdl));
 }
 
 void SentenceEditWindow_Impl::SetDrawingArea(weld::DrawingArea* pDrawingArea)
@@ -1148,12 +1150,89 @@ void SentenceEditWindow_Impl::SetDrawingArea(weld::DrawingArea* pDrawingArea)
     // tdf#132288 don't merge equal adjacent attributes
     m_xEditEngine->DisableAttributeExpanding();
 
+    m_xEditEngine->SetStatusEventHdl(LINK(this, SentenceEditWindow_Impl, EditStatusHdl));
+
+    SetDocumentColor(pDrawingArea);
+}
+
+void SentenceEditWindow_Impl::SetDocumentColor(weld::DrawingArea* pDrawingArea)
+{
+    if (!pDrawingArea || !m_xEditView || !m_xEditEngine)
+        return;
     // tdf#142631 use document background color in this widget
     Color aBgColor = svtools::ColorConfig().GetColorValue(svtools::DOCCOLOR).nColor;
     OutputDevice& rDevice = pDrawingArea->get_ref_device();
     rDevice.SetBackground(aBgColor);
     m_xEditView->SetBackgroundColor(aBgColor);
     m_xEditEngine->SetBackgroundColor(aBgColor);
+}
+
+void SentenceEditWindow_Impl::StyleUpdated()
+{
+    SetDocumentColor(GetDrawingArea());
+    WeldEditView::StyleUpdated();
+}
+
+IMPL_LINK_NOARG(SentenceEditWindow_Impl, EditStatusHdl, EditStatus&, void)
+{
+    SetScrollBarRange();
+    DoScroll();
+}
+
+IMPL_LINK_NOARG(SentenceEditWindow_Impl, ScrollHdl, weld::ScrolledWindow&, void)
+{
+    DoScroll();
+}
+
+void SentenceEditWindow_Impl::DoScroll()
+{
+    if (m_xEditView)
+    {
+        auto currentDocPos = m_xEditView->GetVisArea().Top();
+        auto nDiff = currentDocPos - m_xScrolledWindow->vadjustment_get_value();
+        // we expect SetScrollBarRange callback to be triggered by Scroll
+        // to set where we ended up
+        m_xEditView->Scroll(0, nDiff);
+    }
+}
+
+void SentenceEditWindow_Impl::EditViewScrollStateChange()
+{
+    // editengine height has changed or editview scroll pos has changed
+    SetScrollBarRange();
+}
+
+void SentenceEditWindow_Impl::SetScrollBarRange()
+{
+    EditEngine *pEditEngine = GetEditEngine();
+    if (!pEditEngine)
+        return;
+    if (!m_xScrolledWindow)
+        return;
+    EditView* pEditView = GetEditView();
+    if (!pEditView)
+        return;
+
+    int nVUpper = pEditEngine->GetTextHeight();
+    int nVCurrentDocPos = pEditView->GetVisArea().Top();
+    const Size aOut(pEditView->GetOutputArea().GetSize());
+    int nVStepIncrement = aOut.Height() * 2 / 10;
+    int nVPageIncrement = aOut.Height() * 8 / 10;
+    int nVPageSize = aOut.Height();
+
+    /* limit the page size to below nUpper because gtk's gtk_scrolled_window_start_deceleration has
+       effectively...
+
+       lower = gtk_adjustment_get_lower
+       upper = gtk_adjustment_get_upper - gtk_adjustment_get_page_size
+
+       and requires that upper > lower or the deceleration animation never ends
+    */
+    nVPageSize = std::min(nVPageSize, nVUpper);
+
+    m_xScrolledWindow->vadjustment_configure(nVCurrentDocPos, 0, nVUpper,
+                                             nVStepIncrement, nVPageIncrement, nVPageSize);
+    m_xScrolledWindow->set_vpolicy(nVUpper > nVPageSize ? VclPolicyType::ALWAYS : VclPolicyType::NEVER);
 }
 
 SentenceEditWindow_Impl::~SentenceEditWindow_Impl()
@@ -1181,7 +1260,10 @@ namespace
     void ExtractErrorDescription(const EECharAttrib& rEECharAttrib, SpellErrorDescription& rSpellErrorDescription)
     {
         css::uno::Sequence<css::uno::Any> aSequence;
-        static_cast<const SfxGrabBagItem*>(rEECharAttrib.pAttr)->GetGrabBag().find("SpellErrorDescription")->second >>= aSequence;
+        const auto pGrabBag = static_cast<const SfxGrabBagItem*>(rEECharAttrib.pAttr)->GetGrabBag();
+        const auto iter = pGrabBag.find("SpellErrorDescription");
+        assert(iter != pGrabBag.end());
+        iter->second >>= aSequence;
         rSpellErrorDescription.fromSequence(aSequence);
     }
 }
@@ -1505,6 +1587,8 @@ bool SentenceEditWindow_Impl::KeyInput(const KeyEvent& rKeyEvt)
         //start position
         if (!IsUndoEditMode() && bIsErrorActive)
         {
+            aAttribList.clear();
+            m_xEditEngine->GetCharAttribs(0, aAttribList);
             const EECharAttrib* pFontColor = FindCharAttrib(nCursor, EE_CHAR_COLOR, aAttribList);
             const EECharAttrib* pErrorAttrib = FindCharAttrib(m_nErrorStart, EE_CHAR_GRABBAG, aAttribList);
             if (pFontColor && pErrorAttrib)
@@ -1536,7 +1620,7 @@ void SentenceEditWindow_Impl::Init(weld::Toolbar* pToolbar)
     m_pToolbar->connect_clicked(LINK(this,SentenceEditWindow_Impl,ToolbarHdl));
 }
 
-IMPL_LINK(SentenceEditWindow_Impl, ToolbarHdl, const OString&, rCurItemId, void)
+IMPL_LINK(SentenceEditWindow_Impl, ToolbarHdl, const OUString&, rCurItemId, void)
 {
     if (rCurItemId == "paste")
     {
@@ -1969,7 +2053,6 @@ svx::SpellPortions SentenceEditWindow_Impl::CreateSpellPortions() const
                 aPortion1.eLanguage = eLang;
 
                 aPortion1.sText = m_xEditEngine->GetText(ESelection(0, nStart, 0, aStart->nPosition));
-
                 bool bIsIgnoreError = m_aIgnoreErrorsAt.find( nStart ) != m_aIgnoreErrorsAt.end();
                 if( bIsIgnoreError )
                 {
@@ -2013,7 +2096,7 @@ svx::SpellPortions SentenceEditWindow_Impl::CreateSpellPortions() const
 
 void SentenceEditWindow_Impl::Undo()
 {
-    SfxUndoManager& rUndoMgr = m_xEditEngine->GetUndoManager();
+    EditUndoManager& rUndoMgr = m_xEditEngine->GetUndoManager();
     DBG_ASSERT(GetUndoActionCount(), "no undo actions available" );
     if(!GetUndoActionCount())
         return;
@@ -2032,13 +2115,13 @@ void SentenceEditWindow_Impl::Undo()
 
 void SentenceEditWindow_Impl::ResetUndo()
 {
-    SfxUndoManager& rUndo = m_xEditEngine->GetUndoManager();
+    EditUndoManager& rUndo = m_xEditEngine->GetUndoManager();
     rUndo.Clear();
 }
 
 void SentenceEditWindow_Impl::AddUndoAction( std::unique_ptr<SfxUndoAction> pAction )
 {
-    SfxUndoManager& rUndoMgr = m_xEditEngine->GetUndoManager();
+    EditUndoManager& rUndoMgr = m_xEditEngine->GetUndoManager();
     rUndoMgr.AddUndoAction(std::move(pAction));
     GetSpellDialog()->m_xUndoPB->set_sensitive(true);
 }

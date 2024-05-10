@@ -57,6 +57,8 @@
 #include <unomodel.hxx>
 #include <osl/thread.hxx>
 #include <slideshow.hxx>
+#include <sdresid.hxx>
+#include <strings.hrc>
 
 using namespace ::com::sun::star;
 
@@ -164,7 +166,6 @@ void SdUiImpressTest::lcl_search(const OUString& rKey, bool bFindAll, bool bBack
     }));
 
     dispatchCommand(mxComponent, ".uno:ExecuteSearch", aPropertyValues);
-    Scheduler::ProcessEventsToIdle();
 }
 
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf111522)
@@ -180,7 +181,7 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf111522)
     CPPUNIT_ASSERT(pViewShell1 != pViewShell2);
 
     // Have slide 1 in window 1, slide 2 in window 2.
-    SfxRequest aRequest(pViewShell2->GetViewFrame(), SID_SWITCHPAGE);
+    SfxRequest aRequest(*pViewShell2->GetViewFrame(), SID_SWITCHPAGE);
     aRequest.AppendItem(SfxUInt32Item(ID_VAL_WHATPAGE, 1));
     aRequest.AppendItem(
         SfxUInt32Item(ID_VAL_WHATKIND, static_cast<sal_uInt32>(PageKind::Standard)));
@@ -267,7 +268,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf124708)
     createSdImpressDoc("tdf124708.ppt");
 
     dispatchCommand(mxComponent, ".uno:NextPage", {});
-    Scheduler::ProcessEventsToIdle();
 
     checkCurrentPageNumber(2);
 
@@ -277,18 +277,36 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf124708)
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(16), pActualPage->GetObjCount());
 
     dispatchCommand(mxComponent, ".uno:SelectAll", {});
-    Scheduler::ProcessEventsToIdle();
 
     // Without the fix in place, this test would have crashed here
     dispatchCommand(mxComponent, ".uno:Delete", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(0), pActualPage->GetObjCount());
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(16), pActualPage->GetObjCount());
+}
+
+CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf159666)
+{
+    createSdDrawDoc("tdf159666.odg");
+
+    auto pXImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    SdPage* pActualPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(12), pActualPage->GetObjCount());
+
+    // Without the fix in place, this test would have crashed here
+    dispatchCommand(mxComponent, ".uno:SelectAll", {});
+
+    dispatchCommand(mxComponent, ".uno:Delete", {});
+
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(0), pActualPage->GetObjCount());
+
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(12), pActualPage->GetObjCount());
 }
 
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf143412)
@@ -391,16 +409,12 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf139996)
 
     // Without the fix in place, this test would have crashed here
     dispatchCommand(mxComponent, ".uno:MovePageUp", {});
-    Scheduler::ProcessEventsToIdle();
 
     dispatchCommand(mxComponent, ".uno:MovePageDown", {});
-    Scheduler::ProcessEventsToIdle();
 
     dispatchCommand(mxComponent, ".uno:MovePageTop", {});
-    Scheduler::ProcessEventsToIdle();
 
     dispatchCommand(mxComponent, ".uno:MovePageBottom", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(0, rPageSelector.GetSelectedPageCount());
 }
@@ -445,7 +459,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf126605)
     createSdImpressDoc();
 
     dispatchCommand(mxComponent, ".uno:InsertPage", {});
-    Scheduler::ProcessEventsToIdle();
 
     insertStringToObject(0, u"Test", /*bUseEscape*/ false);
 
@@ -472,13 +485,11 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf126605)
 
     // Without the fix in place, this test would have crashed here
     dispatchCommand(mxComponent, ".uno:ParaRightToLeft", {});
-    Scheduler::ProcessEventsToIdle();
 
     xPropSet->getPropertyValue("WritingMode") >>= nWritingMode;
     CPPUNIT_ASSERT_EQUAL(text::WritingMode2::RL_TB, nWritingMode);
 
     dispatchCommand(mxComponent, ".uno:ParaLeftToRight", {});
-    Scheduler::ProcessEventsToIdle();
 
     xPropSet->getPropertyValue("WritingMode") >>= nWritingMode;
     CPPUNIT_ASSERT_EQUAL(text::WritingMode2::LR_TB, nWritingMode);
@@ -489,15 +500,12 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf100950)
     createSdImpressDoc();
 
     dispatchCommand(mxComponent, ".uno:InsertPage", {});
-    Scheduler::ProcessEventsToIdle();
 
     dispatchCommand(mxComponent, ".uno:InsertPage", {});
-    Scheduler::ProcessEventsToIdle();
 
     insertStringToObject(0, u"Test", /*bUseEscape*/ true);
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     sd::slidesorter::SlideSorterViewShell* pSSVS = getSlideSorterViewShell();
     auto& rSSController = pSSVS->GetSlideSorter().GetController();
@@ -507,20 +515,65 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf100950)
     CPPUNIT_ASSERT(rPageSelector.IsPageSelected(2));
 }
 
+CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf130581_undo_hide_show_slide)
+{
+    createSdImpressDoc();
+
+    // Hide slide and check the number of available undo actions
+    dispatchCommand(mxComponent, ".uno:ShowSlide", {});
+    dispatchCommand(mxComponent, ".uno:HideSlide", {});
+
+    // There should be a single undo action, i.e., hide slide
+    auto pXImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
+    SdDrawDocument* pDocument = pXImpressDocument->GetDoc();
+    sd::UndoManager* pUndoManager = pDocument->GetUndoManager();
+    // Check if there is the correct undo action, i.e., hide slide
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pUndoManager->GetUndoActionCount());
+    CPPUNIT_ASSERT_EQUAL(SdResId(STR_UNDO_HIDE_SLIDE), pUndoManager->GetUndoActionComment());
+    sd::slidesorter::SlideSorterViewShell* pSSVS = getSlideSorterViewShell();
+
+    // Check if the page is actually hidden
+    auto& rSSController = pSSVS->GetSlideSorter().GetController();
+    auto& rPageSelector = rSSController.GetPageSelector();
+    CPPUNIT_ASSERT_EQUAL(true, rPageSelector.IsPageExcluded(0));
+
+    // Undo hide slide action and check the number of available redo actions
+    // including the correct undo action, i.e., hide slide
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pUndoManager->GetRedoActionCount());
+    CPPUNIT_ASSERT_EQUAL(SdResId(STR_UNDO_HIDE_SLIDE), pUndoManager->GetRedoActionComment());
+    CPPUNIT_ASSERT_EQUAL(false, rPageSelector.IsPageExcluded(0));
+
+    // Show slide and check the number of available undo actions
+    dispatchCommand(mxComponent, ".uno:Redo", {});
+    CPPUNIT_ASSERT_EQUAL(true, rPageSelector.IsPageExcluded(0));
+    dispatchCommand(mxComponent, ".uno:ShowSlide", {});
+    // There should be two undo actions, i.e., show and hide slide
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(2), pUndoManager->GetUndoActionCount());
+    CPPUNIT_ASSERT_EQUAL(SdResId(STR_UNDO_SHOW_SLIDE), pUndoManager->GetUndoActionComment());
+    CPPUNIT_ASSERT_EQUAL(false, rPageSelector.IsPageExcluded(0));
+
+    // Undo show slide and check the number of available undo/redo actions
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+    // There should be one undo action, i.e., hide slide, and one redo action, i.e., show slide
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pUndoManager->GetUndoActionCount());
+    CPPUNIT_ASSERT_EQUAL(SdResId(STR_UNDO_HIDE_SLIDE), pUndoManager->GetUndoActionComment());
+    CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), pUndoManager->GetRedoActionCount());
+    CPPUNIT_ASSERT_EQUAL(SdResId(STR_UNDO_SHOW_SLIDE), pUndoManager->GetRedoActionComment());
+    CPPUNIT_ASSERT_EQUAL(true, rPageSelector.IsPageExcluded(0));
+}
+
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf129346)
 {
     createSdImpressDoc();
 
     dispatchCommand(mxComponent, ".uno:DiaMode", {});
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(1);
 
     dispatchCommand(mxComponent, ".uno:InsertPage", {});
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(2);
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(1);
 }
 
@@ -538,7 +591,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testmoveSlides)
                                            { "IsPageObj", uno::Any(false) } }));
 
     dispatchCommand(mxComponent, ".uno:InsertPage", aArgs);
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(2);
 
     CPPUNIT_ASSERT_EQUAL(OUString("Test 1"), pViewShell->GetActualPage()->GetName());
@@ -549,7 +601,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testmoveSlides)
                                                { "IsPageObj", uno::Any(false) } });
 
     dispatchCommand(mxComponent, ".uno:InsertPage", aArgs);
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(3);
 
     CPPUNIT_ASSERT_EQUAL(OUString("Test 2"), pViewShell->GetActualPage()->GetName());
@@ -558,7 +609,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testmoveSlides)
     for (size_t i = 2; i > 0; --i)
     {
         dispatchCommand(mxComponent, ".uno:MovePageUp", {});
-        Scheduler::ProcessEventsToIdle();
         checkCurrentPageNumber(i);
         CPPUNIT_ASSERT_EQUAL(OUString("Test 2"), pViewShell->GetActualPage()->GetName());
     }
@@ -567,20 +617,17 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testmoveSlides)
     for (size_t i = 2; i < 4; ++i)
     {
         dispatchCommand(mxComponent, ".uno:MovePageDown", {});
-        Scheduler::ProcessEventsToIdle();
         checkCurrentPageNumber(i);
         CPPUNIT_ASSERT_EQUAL(OUString("Test 2"), pViewShell->GetActualPage()->GetName());
     }
 
     // Move slide 'Test 2' to the top
     dispatchCommand(mxComponent, ".uno:MovePageFirst", {});
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(1);
     CPPUNIT_ASSERT_EQUAL(OUString("Test 2"), pViewShell->GetActualPage()->GetName());
 
     // Move slide 'Test 2' to the bottom
     dispatchCommand(mxComponent, ".uno:MovePageLast", {});
-    Scheduler::ProcessEventsToIdle();
     checkCurrentPageNumber(3);
     CPPUNIT_ASSERT_EQUAL(OUString("Test 2"), pViewShell->GetActualPage()->GetName());
 }
@@ -595,7 +642,7 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf148620)
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
                                                  uno::UNO_QUERY);
     uno::Reference<text::XTextRange> xShape(xDrawPage->getByIndex(1), uno::UNO_QUERY);
-    CPPUNIT_ASSERT_EQUAL(OUString(u""), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u""_ustr, xShape->getString());
 
     insertStringToObject(1, u"one", /*bUseEscape*/ false);
     typeKey(pXImpressDocument, KEY_RETURN);
@@ -609,59 +656,49 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf148620)
     typeKey(pXImpressDocument, KEY_RETURN);
     typeString(pXImpressDocument, u"six");
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nThree\nFour\nFive\nsix"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nThree\nFour\nFive\nsix"_ustr, xShape->getString());
 
     uno::Sequence<beans::PropertyValue> aArgs(
         comphelper::InitPropertySequence({ { "KeyModifier", uno::Any(sal_Int32(0)) } }));
     dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nThree\nFour\nsix\nFive"), xShape->getString());
-
-    dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
-    Scheduler::ProcessEventsToIdle();
-
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nThree\nsix\nFour\nFive"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nThree\nFour\nsix\nFive"_ustr, xShape->getString());
 
     dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nsix\nThree\nFour\nFive"), xShape->getString());
-
-    dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
-    Scheduler::ProcessEventsToIdle();
-
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nsix\nTwo\nThree\nFour\nFive"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nThree\nsix\nFour\nFive"_ustr, xShape->getString());
 
     dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"six\nOne\nTwo\nThree\nFour\nFive"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nsix\nThree\nFour\nFive"_ustr, xShape->getString());
 
-    dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
-    Scheduler::ProcessEventsToIdle();
+    dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nsix\nTwo\nThree\nFour\nFive"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nsix\nTwo\nThree\nFour\nFive"_ustr, xShape->getString());
 
-    dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
-    Scheduler::ProcessEventsToIdle();
+    dispatchCommand(mxComponent, ".uno:OutlineUp", aArgs);
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nsix\nThree\nFour\nFive"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"six\nOne\nTwo\nThree\nFour\nFive"_ustr, xShape->getString());
 
     dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nThree\nsix\nFour\nFive"), xShape->getString());
-
-    dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
-    Scheduler::ProcessEventsToIdle();
-
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nThree\nFour\nsix\nFive"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nsix\nTwo\nThree\nFour\nFive"_ustr, xShape->getString());
 
     dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(u"One\nTwo\nThree\nFour\nFive\nsix"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nsix\nThree\nFour\nFive"_ustr, xShape->getString());
+
+    dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
+
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nThree\nsix\nFour\nFive"_ustr, xShape->getString());
+
+    dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
+
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nThree\nFour\nsix\nFive"_ustr, xShape->getString());
+
+    dispatchCommand(mxComponent, ".uno:OutlineDown", aArgs);
+
+    CPPUNIT_ASSERT_EQUAL(u"One\nTwo\nThree\nFour\nFive\nsix"_ustr, xShape->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf141703)
@@ -674,7 +711,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf141703)
         { { "Rows", uno::Any(sal_Int32(2)) }, { "Columns", uno::Any(sal_Int32(2)) } }));
 
     dispatchCommand(mxComponent, ".uno:InsertTable", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     // Move to A1 using Alt + Tab and write 'A'
     for (int i = 0; i < 3; i++)
@@ -730,12 +766,10 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf127481)
         { { "Rows", uno::Any(sal_Int32(1)) }, { "Columns", uno::Any(sal_Int32(1)) } }));
 
     dispatchCommand(mxComponent, ".uno:InsertTable", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), pActualPage->GetObjCount());
 
     dispatchCommand(mxComponent, ".uno:DuplicatePage", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     checkCurrentPageNumber(2);
 
@@ -760,10 +794,9 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testPageFillColor)
 
     // Set FillPageColor
 
-    uno::Sequence<beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence({
-        { "Color", uno::Any(OUString("ff0000")) },
-    }));
-
+    uno::Sequence<beans::PropertyValue> aPropertyValues = {
+        comphelper::makePropertyValue("FillColor", static_cast<sal_Int32>(0xff0000)),
+    };
     dispatchCommand(mxComponent, ".uno:FillPageColor", aPropertyValues);
 
     SdPage* pPage = pViewShell->getCurrentPage();
@@ -808,9 +841,9 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testPageFillGradient)
 
     CPPUNIT_ASSERT_EQUAL(size_t(2), rColorStops.size());
     CPPUNIT_ASSERT(basegfx::fTools::equal(rColorStops[0].getStopOffset(), 0.0));
-    CPPUNIT_ASSERT_EQUAL(rColorStops[0].getStopColor(), basegfx::BColor(1.0, 0.0, 0.0));
+    CPPUNIT_ASSERT_EQUAL(Color(0xff0000), Color(rColorStops[0].getStopColor()));
     CPPUNIT_ASSERT(basegfx::fTools::equal(rColorStops[1].getStopOffset(), 1.0));
-    CPPUNIT_ASSERT_EQUAL(rColorStops[1].getStopColor(), basegfx::BColor(0.0, 0.0, 1.0));
+    CPPUNIT_ASSERT_EQUAL(Color(0x0000ff), Color(rColorStops[1].getStopColor()));
 }
 
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf134053)
@@ -867,7 +900,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf38669)
     uno::Sequence<beans::PropertyValue> aArgs(
         comphelper::InitPropertySequence({ { "KeyModifier", uno::Any(KEY_MOD1) } }));
     dispatchCommand(mxComponent, ".uno:BasicShapes.rectangle", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -880,7 +912,7 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf38669)
     // Without the fix in place, this test would have failed with:
     // - Expected: °
     // - Actual  : ㅀ
-    CPPUNIT_ASSERT_EQUAL(OUString(u"°"), xShape->getString());
+    CPPUNIT_ASSERT_EQUAL(u"°"_ustr, xShape->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf151417)
@@ -902,7 +934,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf151417)
 
     // Without the fix in place, this test would have crashed here
     dispatchCommand(mxComponent, ".uno:Edit", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xDrawPage->getCount());
 }
@@ -917,7 +948,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf123841)
     uno::Sequence<beans::PropertyValue> aArgs(
         comphelper::InitPropertySequence({ { "KeyModifier", uno::Any(KEY_MOD1) } }));
     dispatchCommand(mxComponent, ".uno:Rect_Unfilled", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
@@ -979,7 +1009,7 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf142589)
     auto pImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
     sd::ViewShell* pViewShell = pImpressDocument->GetDocShell()->GetViewShell();
 
-    SfxRequest aRequest(pViewShell->GetViewFrame(), SID_PRESENTATION);
+    SfxRequest aRequest(*pViewShell->GetViewFrame(), SID_PRESENTATION);
     pImpressDocument->GetDoc()->getPresentationSettings().mbCustomShow = true;
     pImpressDocument->GetDoc()->getPresentationSettings().mbStartCustomShow = true;
     sd::slideshowhelp::ShowSlideShow(aRequest, *pImpressDocument->GetDoc());
@@ -996,7 +1026,7 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testCharColorTheme)
     uno::Reference<text::XTextRange> xShape(xPage->getByIndex(0), uno::UNO_QUERY);
     {
         uno::Reference<text::XSimpleText> xText = xShape->getText();
-        xText->insertString(xText->getStart(), u"test", false);
+        xText->insertString(xText->getStart(), u"test"_ustr, false);
     }
     uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
     uno::Reference<view::XSelectionSupplier> xController(xModel->getCurrentController(),
@@ -1004,13 +1034,11 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testCharColorTheme)
     xController->select(uno::Any(xShape));
     Scheduler::ProcessEventsToIdle();
     dispatchCommand(mxComponent, ".uno:Text", {});
-    Scheduler::ProcessEventsToIdle();
     auto pImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
     sd::ViewShell* pViewShell = pImpressDocument->GetDocShell()->GetViewShell();
     SdrView* pView = pViewShell->GetView();
     CPPUNIT_ASSERT(pView->IsTextEdit());
     dispatchCommand(mxComponent, ".uno:SelectAll", {});
-    Scheduler::ProcessEventsToIdle();
 
     // When picking a theme color on the sidebar:
     {
@@ -1028,7 +1056,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testCharColorTheme)
             comphelper::makePropertyValue("Color.ComplexColorJSON", uno::Any(aJSON)),
         };
         dispatchCommand(mxComponent, ".uno:Color", aColorArgs);
-        Scheduler::ProcessEventsToIdle();
     }
 
     // Then make sure the theme "metadata" is set in the document model:
@@ -1084,7 +1111,6 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testFillColorTheme)
                                           uno::Any(aJSON)), // accent 1
         };
         dispatchCommand(mxComponent, ".uno:FillColor", aColorArgs);
-        Scheduler::ProcessEventsToIdle();
     }
 
     // Then make sure the theme index is not lost when the sidebar sets it:
@@ -1117,12 +1143,64 @@ CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testFillColorNoColor)
     pDispatcher->ExecuteList(SID_ATTR_FILL_COLOR, SfxCallMode::RECORD, { &aXFillStyleItem });
 }
 
+CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf153161)
+{
+    createSdImpressDoc("odp/tdf153161_FlushToSave.odp");
+
+    uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
+                                                 uno::UNO_QUERY);
+    uno::Reference<text::XTextRange> xShape(xDrawPage->getByIndex(1), uno::UNO_QUERY);
+    OUString sOldText(xShape->getString());
+    CPPUNIT_ASSERT(sOldText.startsWith(u"在没有版本控制系统的时期"));
+
+    // Type something, getting into text editing mode (appending) automatically
+    insertStringToObject(1, u"Foo Bar", /*bUseEscape*/ false);
+
+    saveAndReload("impress8");
+
+    xDrawPagesSupplier.set(mxComponent, uno::UNO_QUERY);
+    xDrawPage.set(xDrawPagesSupplier->getDrawPages()->getByIndex(0), uno::UNO_QUERY);
+    xShape.set(xDrawPage->getByIndex(1), uno::UNO_QUERY);
+    OUString sExpectedText = sOldText + "Foo Bar";
+    CPPUNIT_ASSERT_EQUAL(sExpectedText, xShape->getString());
+}
+
+CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf148810)
+{
+    createSdImpressDoc("pptx/tdf148810_PARA_OUTLLEVEL.pptx");
+
+    // type something to get into text editing mode (instead of shape selection).
+    insertStringToObject(1, u"x", /*bUseEscape*/ false);
+
+    auto pXImpressDocument = dynamic_cast<SdXImpressDocument*>(mxComponent.get());
+    typeKey(pXImpressDocument, KEY_HOME);
+
+    typeKey(pXImpressDocument, KEY_BACKSPACE);
+
+    uno::Reference<beans::XPropertySet> xShape(getShapeFromPage(1, 0));
+    uno::Reference<text::XTextRange> xParagraph(getParagraphFromShape(0, xShape));
+    uno::Reference<beans::XPropertySet> xPropSet(xParagraph, uno::UNO_QUERY_THROW);
+    sal_Int16 nNumberingLevel = -1;
+    xPropSet->getPropertyValue("NumberingLevel") >>= nNumberingLevel;
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), nNumberingLevel);
+
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    nNumberingLevel = -1;
+    xPropSet->getPropertyValue("NumberingLevel") >>= nNumberingLevel;
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: 0
+    // - Actual  : -1
+    CPPUNIT_ASSERT_EQUAL(sal_Int16(0), nNumberingLevel);
+}
+
 CPPUNIT_TEST_FIXTURE(SdUiImpressTest, testTdf127696)
 {
     createSdImpressDoc();
 
     dispatchCommand(mxComponent, ".uno:InsertPage", {});
-    Scheduler::ProcessEventsToIdle();
 
     insertStringToObject(0, u"Test", /*bUseEscape*/ false);
     dispatchCommand(mxComponent, ".uno:SelectAll", {});

@@ -30,7 +30,6 @@
 #include <com/sun/star/beans/XMultiPropertySet.hpp>
 #include <com/sun/star/beans/XPropertyState.hpp>
 #include <com/sun/star/beans/XMultiPropertyStates.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <comphelper/servicehelper.hxx>
 #include <cppuhelper/implbase.hxx>
 
@@ -161,7 +160,6 @@ class ScStyleObj final : public ::cppu::WeakImplHelper<
                     css::beans::XMultiPropertySet,
                     css::beans::XPropertyState,
                     css::beans::XMultiPropertyStates,
-                    css::lang::XUnoTunnel,
                     css::lang::XServiceInfo >,
                 public SfxListener
 {
@@ -172,7 +170,6 @@ private:
     OUString                aStyleName;
     SfxStyleSheetBase*      pStyle_cached;
 
-    SfxStyleSheetBase*      GetStyle_Impl( bool bUseCachedValue = false );
     const SfxItemSet*       GetStyleItemSet_Impl( std::u16string_view rPropName, const SfxItemPropertyMapEntry*& rpEntry );
     /// @throws css::beans::UnknownPropertyException
     /// @throws css::uno::RuntimeException
@@ -200,6 +197,7 @@ public:
     bool                    IsInserted() const      { return pDocShell != nullptr; }
     SfxStyleFamily          GetFamily() const       { return eFamily; }
     void                    InitDoc( ScDocShell* pNewDocSh, const OUString& rNewName );
+    SfxStyleSheetBase*      GetStyle_Impl( bool bUseCachedValue = false );
 
     virtual void            Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
 
@@ -262,9 +260,6 @@ public:
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService( const OUString& ServiceName ) override;
     virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
-
-                            // XUnoTunnel
-    UNO3_GETIMPLEMENTATION_DECL(ScStyleObj)
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -301,9 +301,7 @@ void SfxManageStyleSheetPage::SetDescriptionText_Impl()
     SfxModule* pModule = SfxModule::GetActiveModule();
     if ( pModule )
     {
-        const SfxPoolItem* pPoolItem = pModule->GetItem( SID_ATTR_METRIC );
-        if ( pPoolItem )
-            eFieldUnit = static_cast<FieldUnit>(static_cast<const SfxUInt16Item*>( pPoolItem )->GetValue());
+        eFieldUnit = pModule->GetFieldUnit();
     }
 
     switch ( eFieldUnit )
@@ -369,11 +367,11 @@ bool SfxManageStyleSheetPage::Execute_Impl(
 
     pItems[ nCount++ ] = nullptr;
 
-    const SfxPoolItem* pItem = rDispatcher.Execute(
+    const SfxPoolItemHolder aResult(rDispatcher.Execute(
         nId, SfxCallMode::SYNCHRON | SfxCallMode::RECORD,
-        pItems );
+        pItems ));
 
-    return pItem != nullptr;
+    return nullptr != aResult.getItem();
 
 }
 

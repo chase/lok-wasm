@@ -17,10 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifndef INCLUDED_VCL_INC_UNX_FC_FONTOPTIONS_HXX
-#define INCLUDED_VCL_INC_UNX_FC_FONTOPTIONS_HXX
+#pragma once
 
 #include <rtl/string.hxx>
+#include <vcl/dllapi.h>
 
 typedef struct _FcPattern   FcPattern;
 class VCL_DLLPUBLIC FontConfigFontOptions
@@ -36,8 +36,5 @@ public:
 private:
     FcPattern* mpPattern;
 };
-
-
-#endif // INCLUDED_VCL_INC_UNX_FC_FONTOPTIONS_HXX
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

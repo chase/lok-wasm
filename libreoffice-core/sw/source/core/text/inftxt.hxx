@@ -416,6 +416,8 @@ public:
 
     void DrawCheckBox(const SwFieldFormCheckboxPortion &rPor, bool bChecked) const;
 
+    void DrawCSDFHighlighting(const SwLinePortion &rPor) const;
+
     /**
      * Calculate the rectangular area where the portion takes place.
      * @param[in]   rPor        portion for which the method specify the painting area
@@ -441,8 +443,10 @@ public:
     void SetSpaceIdx( sal_uInt16 nNew ) { m_nSpaceIdx = nNew; }
     void IncSpaceIdx() { ++m_nSpaceIdx; }
     void RemoveFirstSpaceAdd() { m_pSpaceAdd->erase( m_pSpaceAdd->begin() ); }
-    tools::Long GetSpaceAdd() const
-        { return ( m_pSpaceAdd && m_nSpaceIdx < m_pSpaceAdd->size() )
+    tools::Long GetSpaceAdd( bool bShrink = false ) const
+        { return ( m_pSpaceAdd && m_nSpaceIdx < m_pSpaceAdd->size() &&
+                   // get shrink data only if asked explicitly, otherwise zero it
+                   ( bShrink || (*m_pSpaceAdd)[m_nSpaceIdx] < LONG_MAX/2 ) )
                    ? (*m_pSpaceAdd)[m_nSpaceIdx] : 0; }
 
     void SetpSpaceAdd( std::vector<tools::Long>* pNew ){ m_pSpaceAdd = pNew; }
@@ -513,6 +517,16 @@ class SwTextFormatInfo : public SwTextPaintInfo
     sal_Unicode   m_cHookChar;    // For tabs in fields etc.
     sal_uInt8   m_nMaxHyph;       // Max. line count of followup hyphenations
 
+    // Used to stop justification after center/right/decimal tab stops - see tdf#tdf#106234
+    enum class TabSeen
+    {
+        None,
+        Left,
+        Center,
+        Right,
+        Decimal,
+    } m_eLastTabsSeen = TabSeen::None;
+
     // Hyphenating ...
     bool InitHyph( const bool bAuto = false );
     bool CheckFootnotePortion_( SwLineLayout const * pCurr );
@@ -562,7 +576,7 @@ public:
 
     void SetRoot( SwLineLayout *pNew ) { m_pRoot = pNew; }
     SwLinePortion *GetLast() { return m_pLast; }
-    void SetLast( SwLinePortion *pNewLast ) { m_pLast = pNewLast; }
+    void SetLast(SwLinePortion* pNewLast);
     bool IsFull() const { return m_bFull; }
     void SetFull( const bool bNew ) { m_bFull = bNew; }
     bool IsHyphForbud() const
@@ -589,6 +603,13 @@ public:
     void SetDropInit( const bool bNew ) { m_bDropInit = bNew; }
     bool IsQuick() const { return m_bQuick; }
     bool IsTest() const { return m_bTestFormat; }
+    // see tdf#106234
+    void UpdateTabSeen(PortionType);
+    bool DontBlockJustify() const
+    {
+        return m_eLastTabsSeen == TabSeen::Center || m_eLastTabsSeen == TabSeen::Right
+               || m_eLastTabsSeen == TabSeen::Decimal;
+    }
 
     TextFrameIndex GetLineStart() const { return m_nLineStart; }
     void SetLineStart(TextFrameIndex const nNew) { m_nLineStart = nNew; }

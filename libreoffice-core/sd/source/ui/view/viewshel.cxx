@@ -26,6 +26,7 @@
 #include <ShellFactory.hxx>
 #include <DrawController.hxx>
 #include <LayerTabBar.hxx>
+#include <Outliner.hxx>
 
 #include <sal/log.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -81,6 +82,7 @@
 #include <editeng/eeitem.hxx>
 #include <editeng/editview.hxx>
 #include <editeng/editeng.hxx>
+#include <editeng/editund2.hxx>
 #include <svl/itempool.hxx>
 #include <svl/intitem.hxx>
 #include <svl/poolitem.hxx>
@@ -120,7 +122,7 @@ SfxViewFrame* ViewShell::GetViewFrame() const
     const SfxViewShell* pViewShell = GetViewShell();
     if (pViewShell != nullptr)
     {
-        return pViewShell->GetViewFrame();
+        return &pViewShell->GetViewFrame();
     }
     else
     {
@@ -143,7 +145,7 @@ ViewShell::~ViewShell()
     // Keep the content window from accessing in its destructor the
     // WindowUpdater.
     if (mpContentWindow)
-        mpContentWindow->SetViewShell(nullptr);
+        suppress_fun_call_w_exception(mpContentWindow->SetViewShell(nullptr));
 
     mpZoomList.reset();
 
@@ -325,7 +327,7 @@ void ViewShell::Activate(bool bIsMDIActivate)
 
         SfxViewShell* pViewShell = GetViewShell();
         OSL_ASSERT (pViewShell!=nullptr);
-        SfxBindings& rBindings = pViewShell->GetViewFrame()->GetBindings();
+        SfxBindings& rBindings = pViewShell->GetViewFrame().GetBindings();
         rBindings.Invalidate( SID_3D_STATE, true );
 
         rtl::Reference< SlideShow > xSlideShow( SlideShow::GetSlideShow( GetViewShellBase() ) );
@@ -749,7 +751,7 @@ bool ViewShell::HandleScrollCommand(const CommandEvent& rCEvt, ::sd::Window* pWi
                 {
                     if( mpContentWindow.get() == pWin )
                     {
-                        sal_uLong nScrollLines = pData->GetScrollLines();
+                        double nScrollLines = pData->GetScrollLines();
                         if(IsPageFlipMode())
                             nScrollLines = COMMAND_WHEEL_PAGESCROLL;
                         CommandWheelData aWheelData( pData->GetDelta(),pData->GetNotchDelta(),
@@ -1585,11 +1587,11 @@ void ViewShell::SwitchActiveViewFireFocus()
 // move these two methods from DrawViewShell.
 void ViewShell::fireSwitchCurrentPage(sal_Int32 pageIndex)
 {
-    GetViewShellBase().GetDrawController().fireSwitchCurrentPage(pageIndex);
+    GetViewShellBase().GetDrawController()->fireSwitchCurrentPage(pageIndex);
 }
 void ViewShell::NotifyAccUpdate( )
 {
-    GetViewShellBase().GetDrawController().NotifyAccUpdate();
+    GetViewShellBase().GetDrawController()->NotifyAccUpdate();
 }
 
 weld::Window* ViewShell::GetFrameWeld() const

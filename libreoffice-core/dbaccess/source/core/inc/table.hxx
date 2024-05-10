@@ -114,7 +114,6 @@ namespace dbaccess
         //XTypeProvider
         virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes(  ) override;
         virtual css::uno::Sequence< sal_Int8 > SAL_CALL getImplementationId() override;
-        static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
 
     // css::lang::XServiceInfo
         DECLARE_SERVICE_INFO();
@@ -127,9 +126,6 @@ namespace dbaccess
 
     // css::sdbcx::XAlterTable,
         virtual void SAL_CALL alterColumnByName( const OUString& _rName, const css::uno::Reference< css::beans::XPropertySet >& _rxDescriptor ) override;
-
-        // css::lang::XUnoTunnel
-        virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
 
     private:
         using OTable_Base::createArrayHelper;

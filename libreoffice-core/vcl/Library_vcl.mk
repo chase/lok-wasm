@@ -48,7 +48,6 @@ $(eval $(call gb_Library_add_defs,vcl,\
     -DCUI_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,cui))\" \
     -DDESKTOP_DETECTOR_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,desktop_detector))\" \
     -DTK_DLL_NAME=\"$(call gb_Library_get_runtime_filename,$(call gb_Library__get_name,tk))\" \
-    $(if $(SYSTEM_GLM),-DGLM_ENABLE_EXPERIMENTAL) \
     $(if $(SYSTEM_LIBFIXMATH),-DSYSTEM_LIBFIXMATH) \
 ))
 
@@ -82,8 +81,8 @@ $(eval $(call gb_Library_use_libraries,vcl,\
 $(eval $(call gb_Library_use_externals,vcl,\
     boost_headers \
     expat \
+    frozen \
     gio \
-    glm_headers \
     graphite \
     harfbuzz \
     icu_headers \
@@ -94,12 +93,12 @@ $(eval $(call gb_Library_use_externals,vcl,\
     libpng \
     libtiff \
     libwebp \
-    mdds_headers \
 ))
 
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/rendercontext/drawmode \
     vcl/skia/SkiaHelper \
+    vcl/source/accessibility/AccessibleTextAttributeHelper \
     vcl/source/animate/Animation \
     vcl/source/animate/AnimationFrame \
     vcl/source/animate/AnimationRenderer \
@@ -245,6 +244,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/outdev/map \
     vcl/source/text/ImplLayoutArgs \
     vcl/source/text/TextLayoutCache \
+    vcl/source/text/textlayout \
     vcl/source/treelist/headbar \
     vcl/source/treelist/iconview \
     vcl/source/treelist/iconviewimpl \
@@ -264,6 +264,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/treelist/uiobject \
     vcl/source/text/ImplLayoutRuns \
     vcl/source/text/mnemonic \
+    vcl/source/gdi/formpdfexport \
     vcl/source/gdi/configsettings \
     vcl/source/gdi/cvtgrf \
     vcl/source/gdi/embeddedfontshelper \
@@ -303,7 +304,6 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/sallayout \
     vcl/source/gdi/salmisc \
     vcl/source/gdi/vectorgraphicdata \
-    vcl/source/gdi/textlayout \
     vcl/source/gdi/virdev \
     vcl/source/gdi/wall \
     vcl/source/gdi/scrptrun \
@@ -384,6 +384,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/helper/displayconnectiondispatch \
     vcl/source/helper/driverblocklist \
     vcl/source/helper/evntpost \
+    vcl/source/helper/idletask \
     vcl/source/helper/lazydelete \
     vcl/source/helper/strhelper \
     vcl/source/helper/svtaccessiblefactory \
@@ -556,17 +557,9 @@ vcl_headless_freetype_code=\
     vcl/unx/generic/fontmanager/fontconfig \
     vcl/unx/generic/fontmanager/fontmanager \
     vcl/unx/generic/fontmanager/helper \
-    vcl/headless/svpcairotextrender \
-    vcl/unx/generic/print/bitmap_gfx \
-    vcl/unx/generic/print/common_gfx \
-    vcl/unx/generic/print/glyphset \
-    vcl/unx/generic/print/printerjob \
-    vcl/unx/generic/print/psputil \
-    vcl/unx/generic/print/GenPspGfxBackend \
     vcl/unx/generic/print/genpspgraphics \
     vcl/unx/generic/print/genprnpsp \
     vcl/unx/generic/print/prtsetup \
-    vcl/unx/generic/print/text_gfx \
     vcl/unx/generic/printer/jobdata \
     vcl/unx/generic/printer/ppdparser \
 
@@ -578,7 +571,7 @@ endif
 
 ifeq ($(USING_X11),TRUE)
 $(eval $(call gb_Library_add_exception_objects,vcl,\
-    vcl/unx/generic/window/screensaverinhibitor \
+    vcl/unx/generic/window/sessioninhibitor \
     vcl/unx/generic/printer/cpdmgr \
 ))
 
@@ -693,7 +686,9 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/ios/iOSTransferable \
     vcl/ios/DataFlavorMapping \
     vcl/ios/HtmlFmtFlt \
-    vcl/quartz/ctfonts \
+    vcl/quartz/CoreTextFont \
+    vcl/quartz/CoreTextFontFace \
+    vcl/quartz/SystemFontList \
     vcl/quartz/salbmp \
     vcl/quartz/salgdi \
     vcl/quartz/salgdicommon \
@@ -720,6 +715,7 @@ $(eval $(call gb_Library_add_objcxxobjects,vcl,\
 $(eval $(call gb_Library_use_system_darwin_frameworks,vcl,\
     Cocoa \
     CoreFoundation \
+    Metal \
 ))
 endif
 

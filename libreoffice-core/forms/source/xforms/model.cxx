@@ -52,7 +52,6 @@
 #include <com/sun/star/io/XInputStream.hpp>
 
 
-using com::sun::star::lang::XUnoTunnel;
 using com::sun::star::beans::XPropertySet;
 using com::sun::star::beans::PropertyValue;
 using com::sun::star::ucb::SimpleFileAccess;
@@ -126,13 +125,6 @@ EvaluationContext Model::getEvaluationContext()
                 "no element in evaluation context" );
 
     return EvaluationContext( xElement, this, mxNamespaces );
-}
-
-
-css::uno::Sequence<sal_Int8> Model::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit aImplementationId;
-    return aImplementationId.getSeq();
 }
 
 
@@ -434,9 +426,9 @@ void SAL_CALL Model::submitWithInteraction(
     if( mxSubmissions->hasItem( sID ) )
     {
         Submission* pSubmission =
-            comphelper::getFromUnoTunnel<Submission>( mxSubmissions->getItem( sID ) );
-        OSL_ENSURE( pSubmission != nullptr, "no submission?" );
-        OSL_ENSURE( pSubmission->getModel() == Reference<XModel>( this ),
+            dynamic_cast<Submission*>( mxSubmissions->getItem( sID ).get() );
+        assert(pSubmission && "no submission?");
+        OSL_ENSURE( pSubmission->getModelImpl() == this,
                     "wrong model" );
 
         // submit. All exceptions are allowed to leave.
@@ -582,11 +574,6 @@ void Model::update()
     rebuild();
 }
 
-
-sal_Int64 Model::getSomething( const css::uno::Sequence<sal_Int8>& xId )
-{
-    return comphelper::getSomethingImpl(xId, this);
-}
 
 Sequence<sal_Int8> Model::getImplementationId()
 {

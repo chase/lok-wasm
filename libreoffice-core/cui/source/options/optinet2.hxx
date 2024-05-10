@@ -30,25 +30,27 @@ class SvxProxyTabPage : public SfxTabPage
 {
 private:
 
+    std::unique_ptr<weld::Label> m_xProxyModeFT;
     std::unique_ptr<weld::ComboBox> m_xProxyModeLB;
+    std::unique_ptr<weld::Widget> m_xProxyModeImg;
 
     std::unique_ptr<weld::Label> m_xHttpProxyFT;
     std::unique_ptr<weld::Entry> m_xHttpProxyED;
+    std::unique_ptr<weld::Widget> m_xHttpProxyImg;
     std::unique_ptr<weld::Label> m_xHttpPortFT;
     std::unique_ptr<weld::Entry> m_xHttpPortED;
+    std::unique_ptr<weld::Widget> m_xHttpPortImg;
 
     std::unique_ptr<weld::Label> m_xHttpsProxyFT;
     std::unique_ptr<weld::Entry> m_xHttpsProxyED;
+    std::unique_ptr<weld::Widget> m_xHttpsProxyImg;
     std::unique_ptr<weld::Label> m_xHttpsPortFT;
     std::unique_ptr<weld::Entry> m_xHttpsPortED;
-
-    std::unique_ptr<weld::Label> m_xFtpProxyFT;
-    std::unique_ptr<weld::Entry> m_xFtpProxyED;
-    std::unique_ptr<weld::Label> m_xFtpPortFT;
-    std::unique_ptr<weld::Entry> m_xFtpPortED;
+    std::unique_ptr<weld::Widget> m_xHttpsPortImg;
 
     std::unique_ptr<weld::Label> m_xNoProxyForFT;
     std::unique_ptr<weld::Entry> m_xNoProxyForED;
+    std::unique_ptr<weld::Widget> m_xNoProxyForImg;
     std::unique_ptr<weld::Label> m_xNoProxyDescFT;
 
     css::uno::Reference< css::uno::XInterface > m_xConfigurationUpdateAccess;
@@ -68,6 +70,9 @@ public:
     SvxProxyTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rSet);
     virtual ~SvxProxyTabPage() override;
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
+
+    virtual OUString GetAllStrings() override;
+
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 };
@@ -87,9 +92,11 @@ private:
     std::unique_ptr<weld::Button> m_xSecurityOptionsPB;
 
     std::unique_ptr<weld::CheckButton> m_xSavePasswordsCB;
+    std::unique_ptr<weld::Widget> m_xSavePasswordsImg;
     std::unique_ptr<weld::Button> m_xShowConnectionsPB;
 
     std::unique_ptr<weld::CheckButton> m_xMasterPasswordCB;
+    std::unique_ptr<weld::Widget> m_xMasterPasswordImg;
     std::unique_ptr<weld::Label> m_xMasterPasswordFT;
     std::unique_ptr<weld::Button> m_xMasterPasswordPB;
 
@@ -98,11 +105,20 @@ private:
 
     std::unique_ptr<weld::Container> m_xCertFrame;
     std::unique_ptr<weld::Button> m_xCertPathPB;
+    std::unique_ptr<weld::Widget> m_xCertPathImg;
+    std::unique_ptr<weld::Label> m_xCertPathLabel;
 
     std::unique_ptr<weld::Container> m_xTSAURLsFrame;
     std::unique_ptr<weld::Button> m_xTSAURLsPB;
+    std::unique_ptr<weld::Widget> m_xTSAURLsImg;
+    std::unique_ptr<weld::Label> m_xTSAURLsLabel;
 
     std::unique_ptr<weld::Label> m_xNoPasswordSaveFT;
+
+    std::unique_ptr<weld::Button> m_xCertMgrPathLB;
+    std::unique_ptr<weld::Entry> m_xParameterEdit;
+    std::unique_ptr<weld::Widget> m_xCertMgrPathImg;
+    std::unique_ptr<weld::Label> m_xCertMgrPathLabel;
 
     DECL_LINK(SecurityOptionsHdl, weld::Button&, void);
     DECL_LINK(SavePasswordHdl, weld::Toggleable&, void);
@@ -112,6 +128,7 @@ private:
     DECL_LINK(MacroSecPBHdl, weld::Button&, void );
     DECL_LINK(CertPathPBHdl, weld::Button&, void );
     DECL_LINK(TSAURLsPBHdl, weld::Button&, void );
+    DECL_LINK(CertMgrPBHdl, weld::Button&, void );
 
     void                InitControls();
 
@@ -123,6 +140,9 @@ public:
     SvxSecurityTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& rSet);
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
     virtual ~SvxSecurityTabPage() override;
+
+    virtual OUString GetAllStrings() override;
+
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
 };
@@ -150,6 +170,8 @@ public:
     virtual ~SvxEMailTabPage() override;
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet );
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

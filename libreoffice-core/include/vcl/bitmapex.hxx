@@ -68,7 +68,7 @@ public:
     const Bitmap&       GetBitmap() const;
 
     bool                IsAlpha() const;
-    AlphaMask           GetAlpha() const;
+    const AlphaMask &   GetAlphaMask() const { return maAlphaMask; }
 
     const Size&         GetSizePixel() const { return maBitmapSize; }
     void                SetSizePixel(const Size& rNewSize);
@@ -139,10 +139,8 @@ public:
         during this copy operation, i.e. only the minimum of source
         and destination rectangle's width and height are used.
 
-        @param pBmpExSrc
-        The source bitmap to copy from. If this argument is NULL, or
-        equal to the object this method is called on, copying takes
-        place within the same bitmap.
+        @param rBmpExSrc
+        The source bitmap to copy from.
 
         @return true, if the operation completed successfully. false
         is not only returned when the operation failed, but also if
@@ -152,7 +150,28 @@ public:
     bool                CopyPixel(
                             const tools::Rectangle& rRectDst,
                             const tools::Rectangle& rRectSrc,
-                            const BitmapEx* pBmpExSrc );
+                            const BitmapEx& rBmpExSrc );
+
+    /** Copy a rectangular area from one part of the bitmap to another.
+
+        @param rRectDst
+        Destination rectangle in this bitmap. This is clipped to the
+        bitmap dimensions.
+
+        @param rRectSrc
+        Source rectangle in this bitmap. This is clipped to the
+        bitmap dimensions. Note further that no scaling takes place
+        during this copy operation, i.e. only the minimum of source
+        and destination rectangle's width and height are used.
+
+        @return true, if the operation completed successfully. false
+        is not only returned when the operation failed, but also if
+        nothing had to be done, e.g. because one of the rectangles are
+        empty.
+     */
+    bool                CopyPixel(
+                            const tools::Rectangle& rRectDst,
+                            const tools::Rectangle& rRectSrc );
 
     /** Fill the entire bitmap with the given color
 
@@ -435,7 +454,7 @@ public:
                             const css::uno::Reference< css::rendering::XBitmapCanvas > &xBitmapCanvas,
                             const Size &rSize );
 
-    void                setAlphaFrom( sal_uInt8 cIndexFrom, sal_Int8 nAlphaTo );
+    void                ChangeColorAlpha( sal_uInt8 cIndexFrom, sal_Int8 nAlphaTo );
 
     void                AdjustTransparency( sal_uInt8 cTrans );
 
@@ -450,6 +469,8 @@ public:
 
     SAL_DLLPRIVATE std::shared_ptr<SalBitmap> const & ImplGetBitmapSalBitmap() const { return maBitmap.ImplGetSalBitmap(); }
 
+    /// Dumps the pixels as PNG in bitmap.png.
+    void DumpAsPng(const char* pFileName = nullptr) const;
 
 private:
     friend class ImpGraphic;
@@ -463,7 +484,7 @@ private:
     void  loadFromIconTheme( const OUString& rIconName );
 
     Bitmap              maBitmap;
-    Bitmap              maAlphaMask;
+    AlphaMask           maAlphaMask;
     Size                maBitmapSize;
 };
 

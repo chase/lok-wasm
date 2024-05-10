@@ -307,6 +307,7 @@ void SwAccessibleContext::ScrolledIn()
     AccessibleEventObject aEvent;
     aEvent.EventId = AccessibleEventId::CHILD;
     aEvent.NewValue <<= xThis;
+    aEvent.IndexHint = -1;
 
     xParentImpl->FireAccessibleEvent( aEvent );
 
@@ -441,7 +442,7 @@ void SwAccessibleContext::FireAccessibleEvent( AccessibleEventObject& rEvent )
 {
     if( !GetFrame() )
     {
-        SAL_WARN("sw.a11y", "SwAccessibleContext::FireAccessibleEvent called for already disposed frame?");
+        SAL_INFO("sw.a11y", "SwAccessibleContext::FireAccessibleEvent called for already disposed frame?");
         return;
     }
 
@@ -528,7 +529,7 @@ void SwAccessibleContext::ThrowIfDisposed()
     if (IsDisposed())
     {
         throw lang::DisposedException("object is nonfunctional",
-                static_cast<cppu::OWeakObject*>(this));
+                getXWeak());
     }
 }
 
@@ -827,7 +828,7 @@ uno::Reference< XAccessible > SAL_CALL SwAccessibleContext::getAccessibleAtPoint
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
     Point aPixPoint( aPoint.X, aPoint.Y ); // px rel to parent
@@ -886,11 +887,11 @@ awt::Rectangle SwAccessibleContext::getBoundsImpl(bool bRelative)
 
     if (!pParent)
     {
-        throw uno::RuntimeException("no Parent", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Parent", getXWeak());
     }
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
     SwRect aLogBounds( GetBounds( *(GetMap()), GetFrame() ) ); // twip relative to document root
@@ -946,11 +947,11 @@ awt::Point SAL_CALL SwAccessibleContext::getLocationOnScreen()
     vcl::Window *pWin = GetWindow();
     if (!pWin)
     {
-        throw uno::RuntimeException("no Window", static_cast<cppu::OWeakObject*>(this));
+        throw uno::RuntimeException("no Window", getXWeak());
     }
 
-    aPixPos = pWin->OutputToAbsoluteScreenPixel(aPixPos);
-    awt::Point aPoint(aPixPos.getX(), aPixPos.getY());
+    AbsoluteScreenPixelPoint aPixPosAbs = pWin->OutputToAbsoluteScreenPixel(aPixPos);
+    awt::Point aPoint(aPixPosAbs.getX(), aPixPosAbs.getY());
 
     return aPoint;
 }
@@ -1028,6 +1029,7 @@ void SwAccessibleContext::DisposeShape( const SdrObject *pObj,
     aEvent.EventId = AccessibleEventId::CHILD;
     uno::Reference< XAccessible > xAcc( xAccImpl );
     aEvent.OldValue <<= xAcc;
+    aEvent.IndexHint = -1;
     FireAccessibleEvent( aEvent );
 
     GetMap()->RemoveContext( pObj );
@@ -1044,6 +1046,7 @@ void SwAccessibleContext::ScrolledInShape( ::accessibility::AccessibleShape *pAc
     aEvent.EventId = AccessibleEventId::CHILD;
     uno::Reference< XAccessible > xAcc( pAccImpl );
     aEvent.NewValue <<= xAcc;
+    aEvent.IndexHint = -1;
     FireAccessibleEvent( aEvent );
 
     if( !pAccImpl->GetState( AccessibleStateType::FOCUSED ) )
@@ -1087,6 +1090,7 @@ void SwAccessibleContext::Dispose(bool bRecursive, bool bCanSkipInvisible)
         AccessibleEventObject aEvent;
         aEvent.EventId = AccessibleEventId::CHILD;
         aEvent.OldValue <<= xThis;
+        aEvent.IndexHint = -1;
         pAcc->FireAccessibleEvent( aEvent );
     }
 
@@ -1148,6 +1152,7 @@ void SwAccessibleContext::DisposeChild( const SwAccessibleChild& rChildFrameOrOb
             uno::Reference< XAccessible > xAcc =
                                     rChildFrameOrObj.GetWindow()->GetAccessible();
             aEvent.OldValue <<= xAcc;
+            aEvent.IndexHint = -1;
             FireAccessibleEvent( aEvent );
         }
     }

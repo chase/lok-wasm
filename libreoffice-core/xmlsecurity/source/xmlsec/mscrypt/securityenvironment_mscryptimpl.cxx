@@ -53,8 +53,6 @@
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::lang ;
-using ::com::sun::star::lang::XMultiServiceFactory ;
-using ::com::sun::star::lang::XSingleServiceFactory ;
 
 using ::com::sun::star::xml::crypto::XSecurityEnvironment ;
 using ::com::sun::star::security::XCertificate ;
@@ -173,9 +171,6 @@ sal_Bool SAL_CALL SecurityEnvironment_MSCryptImpl::supportsService( const OUStri
 uno::Sequence< OUString > SAL_CALL SecurityEnvironment_MSCryptImpl::getSupportedServiceNames() {
     return { "com.sun.star.xml.crypto.SecurityEnvironment" };
 }
-
-/* XUnoTunnel */
-UNO3_GETIMPLEMENTATION_IMPL(SecurityEnvironment_MSCryptImpl);
 
 HCRYPTPROV SecurityEnvironment_MSCryptImpl::getCryptoProvider() {
     return m_hProv ;
@@ -587,8 +582,7 @@ uno::Sequence< uno::Reference < XCertificate > > SecurityEnvironment_MSCryptImpl
     chainPara.cbSize = sizeof( CERT_CHAIN_PARA ) ;
     chainPara.RequestedUsage = certUsage ;
 
-    uno::Reference< XUnoTunnel > xCertTunnel( begin, uno::UNO_QUERY_THROW ) ;
-    const auto* xcert = comphelper::getFromUnoTunnel<X509Certificate_MSCryptImpl>(xCertTunnel);
+    const auto* xcert = dynamic_cast<X509Certificate_MSCryptImpl*>(begin.get());
     if( xcert == nullptr ) {
         throw uno::RuntimeException() ;
     }
@@ -808,11 +802,9 @@ sal_Int32 SecurityEnvironment_MSCryptImpl::verifyCertificate(
     PCCERT_CHAIN_CONTEXT pChainContext = nullptr;
     PCCERT_CONTEXT pCertContext = nullptr;
 
-    uno::Reference< XUnoTunnel > xCertTunnel( aCert, uno::UNO_QUERY_THROW ) ;
-
     SAL_INFO("xmlsecurity.xmlsec", "Start verification of certificate: " << aCert->getSubjectName());
 
-    const auto* xcert = comphelper::getFromUnoTunnel<X509Certificate_MSCryptImpl>(xCertTunnel);
+    const auto* xcert = dynamic_cast<X509Certificate_MSCryptImpl*>(aCert.get());
     if( xcert == nullptr ) {
         throw uno::RuntimeException() ;
     }
@@ -976,8 +968,7 @@ sal_Int32 SecurityEnvironment_MSCryptImpl::getCertificateCharacters( const css::
     sal_Int32 characters ;
     PCCERT_CONTEXT pCertContext ;
 
-    uno::Reference< XUnoTunnel > xCertTunnel( aCert, uno::UNO_QUERY_THROW ) ;
-    const auto* xcert = comphelper::getFromUnoTunnel<X509Certificate_MSCryptImpl>(xCertTunnel);
+    const auto* xcert = dynamic_cast<X509Certificate_MSCryptImpl*>(aCert.get());
     if( xcert == nullptr ) {
         throw uno::RuntimeException() ;
     }

@@ -127,9 +127,9 @@ rtl::Reference<FmXGridPeer> SbaXGridControl::imp_CreatePeer(vcl::Window* pParent
     return pReturn;
 }
 
-Any SAL_CALL SbaXGridControl::queryInterface(const Type& _rType)
+Any SAL_CALL SbaXGridControl::queryAggregation(const Type& _rType)
 {
-    Any aRet = FmXGridControl::queryInterface(_rType);
+    Any aRet = FmXGridControl::queryAggregation(_rType);
     return aRet.hasValue() ? aRet : ::cppu::queryInterface(_rType,static_cast<css::frame::XDispatch*>(this));
 }
 
@@ -237,7 +237,6 @@ void SAL_CALL SbaXGridControl::dispose()
 // SbaXGridPeer
 SbaXGridPeer::SbaXGridPeer(const Reference< XComponentContext >& _rM)
 : FmXGridPeer(_rM)
-,m_aStatusListeners(m_aMutex)
 {
 }
 
@@ -247,10 +246,11 @@ SbaXGridPeer::~SbaXGridPeer()
 
 void SAL_CALL SbaXGridPeer::dispose()
 {
-    EventObject aEvt(*this);
-
-    m_aStatusListeners.disposeAndClear(aEvt);
-
+    {
+        std::unique_lock g(m_aMutex);
+        EventObject aEvt(*this);
+        m_aStatusListeners.disposeAndClear(g, aEvt);
+    }
     FmXGridPeer::dispose();
 }
 
@@ -275,12 +275,13 @@ void SbaXGridPeer::NotifyStatusChanged(const css::util::URL& _rUrl, const Refere
         xControl->statusChanged(aEvt);
     else
     {
-        ::comphelper::OInterfaceContainerHelper3<css::frame::XStatusListener> * pIter
-            = m_aStatusListeners.getContainer(_rUrl);
+        std::unique_lock g(m_aMutex);
+        ::comphelper::OInterfaceContainerHelper4<css::frame::XStatusListener> * pIter
+            = m_aStatusListeners.getContainer(g, _rUrl);
 
         if (pIter)
         {
-            pIter->notifyEach( &XStatusListener::statusChanged, aEvt );
+            pIter->notifyEach( g, &XStatusListener::statusChanged, aEvt );
         }
     }
 }
@@ -439,20 +440,24 @@ void SAL_CALL SbaXGridPeer::dispatch(const URL& aURL, const Sequence< PropertyVa
 
 void SAL_CALL SbaXGridPeer::addStatusListener(const Reference< css::frame::XStatusListener > & xControl, const css::util::URL& aURL)
 {
-    ::comphelper::OInterfaceContainerHelper3< css::frame::XStatusListener >* pCont
-        = m_aStatusListeners.getContainer(aURL);
-    if (!pCont)
-        m_aStatusListeners.addInterface(aURL,xControl);
-    else
-        pCont->addInterface(xControl);
+    {
+        std::unique_lock g(m_aMutex);
+        ::comphelper::OInterfaceContainerHelper4< css::frame::XStatusListener >* pCont
+            = m_aStatusListeners.getContainer(g, aURL);
+        if (!pCont)
+            m_aStatusListeners.addInterface(g, aURL,xControl);
+        else
+            pCont->addInterface(g, xControl);
+    }
     NotifyStatusChanged(aURL, xControl);
 }
 
 void SAL_CALL SbaXGridPeer::removeStatusListener(const Reference< css::frame::XStatusListener > & xControl, const css::util::URL& aURL)
 {
-    ::comphelper::OInterfaceContainerHelper3< css::frame::XStatusListener >* pCont = m_aStatusListeners.getContainer(aURL);
+    std::unique_lock g(m_aMutex);
+    ::comphelper::OInterfaceContainerHelper4< css::frame::XStatusListener >* pCont = m_aStatusListeners.getContainer(g, aURL);
     if ( pCont )
-        pCont->removeInterface(xControl);
+        pCont->removeInterface(g, xControl);
 }
 
 Sequence< Type > SAL_CALL SbaXGridPeer::getTypes()
@@ -461,8 +466,6 @@ Sequence< Type > SAL_CALL SbaXGridPeer::getTypes()
         FmXGridPeer::getTypes(),
         Sequence { cppu::UnoType<css::frame::XDispatch>::get() });
 }
-
-UNO3_GETIMPLEMENTATION2_IMPL(SbaXGridPeer, FmXGridPeer);
 
 VclPtr<FmGridControl> SbaXGridPeer::imp_CreateControl(vcl::Window* pParent, WinBits nStyle)
 {
@@ -590,7 +593,7 @@ void SbaGridHeader::PreExecuteColumnContextMenu(sal_uInt16 nColId, weld::Menu& r
     rMenu.insert_separator(nPos++, "separator2");
 }
 
-void SbaGridHeader::PostExecuteColumnContextMenu(sal_uInt16 nColId, const weld::Menu& rMenu, const OString& rExecutionResult)
+void SbaGridHeader::PostExecuteColumnContextMenu(sal_uInt16 nColId, const weld::Menu& rMenu, const OUString& rExecutionResult)
 {
     if (rExecutionResult == "colwidth")
         static_cast<SbaGridControl*>(GetParent())->SetColWidth(nColId);
@@ -787,7 +790,7 @@ void SbaGridControl::SetBrowserAttrs()
     }
 }
 
-void SbaGridControl::PostExecuteRowContextMenu(const OString& rExecutionResult)
+void SbaGridControl::PostExecuteRowContextMenu(const OUString& rExecutionResult)
 {
     if (rExecutionResult == "tableattr")
         SetBrowserAttrs();

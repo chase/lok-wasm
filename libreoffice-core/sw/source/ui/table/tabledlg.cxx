@@ -31,7 +31,6 @@
 #include <fmtpdsc.hxx>
 #include <fmtlsplt.hxx>
 
-#include <svtools/htmlcfg.hxx>
 #include <fmtrowsplt.hxx>
 #include <sfx2/htmlmode.hxx>
 #include <sfx2/sfxdlg.hxx>
@@ -57,6 +56,7 @@
 #include <svx/dialogs.hrc>
 #include <svx/flagsdef.hxx>
 #include <osl/diagnose.h>
+#include <officecfg/Office/Common.hxx>
 
 #include <com/sun/star/text/HoriOrientation.hpp>
 #include <com/sun/star/text/VertOrientation.hpp>
@@ -111,7 +111,7 @@ SwFormatTablePage::SwFormatTablePage(weld::Container* pPage, weld::DialogControl
     if(const SfxUInt16Item* pModeItem = rSet.GetItemIfSet(SID_HTML_MODE, false))
         m_bHtmlMode = 0 != (pModeItem->GetValue() & HTMLMODE_ON);
 
-    bool bCTL = SW_MOD()->GetCTLOptions().IsCTLFontEnabled();
+    bool bCTL = SvtCTLOptions::IsCTLFontEnabled();
     m_xProperties->set_visible(!m_bHtmlMode && bCTL);
 
     Init();
@@ -1227,7 +1227,7 @@ SwTableTabDlg::SwTableTabDlg(weld::Window* pParent, const SfxItemSet* pItemSet, 
     AddTabPage("borders", pFact->GetTabPageCreatorFunc(RID_SVXPAGE_BORDER), nullptr);
 }
 
-void  SwTableTabDlg::PageCreated(const OString& rId, SfxTabPage& rPage)
+void  SwTableTabDlg::PageCreated(const OUString& rId, SfxTabPage& rPage)
 {
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
     if (rId == "background")
@@ -1427,7 +1427,7 @@ bool  SwTextFlowPage::FillItemSet( SfxItemSet* rSet )
 
 void   SwTextFlowPage::Reset( const SfxItemSet* rSet )
 {
-    bool bFlowAllowed = !m_bHtmlMode || SvxHtmlOptions::IsPrintLayoutExtension();
+    bool bFlowAllowed = !m_bHtmlMode || officecfg::Office::Common::Filter::HTML::Export::PrintLayout::get();
     if(bFlowAllowed)
     {
         //Inserting of the existing page templates in the list box

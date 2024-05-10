@@ -63,6 +63,7 @@
 #include <sfx2/filedlghelper.hxx>
 #include <toxwrap.hxx>
 #include <chpfld.hxx>
+#include <svtools/editbrowsebox.hxx>
 
 #include <cmath>
 #include <memory>
@@ -76,7 +77,6 @@ using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::uno;
 using namespace com::sun::star::ui::dialogs;
 using namespace ::sfx2;
-#include <svtools/editbrowsebox.hxx>
 
 const sal_Unicode aDeliStart = '['; // for the form
 const sal_Unicode aDeliEnd    = ']'; // for the form
@@ -230,7 +230,7 @@ SwMultiTOXTabDialog::SwMultiTOXTabDialog(weld::Widget* pParent, const SfxItemSet
     }
     for(int i = m_vTypeData.size() - 1; i > -1; i--)
     {
-        m_vTypeData[i].m_pxIndexSections.reset(new SwIndexSections_Impl);
+        m_vTypeData[i].m_oIndexSections.emplace();
         if(pCurTOX)
         {
             m_eCurrentTOXType.eType = pCurTOX->GetType();
@@ -292,7 +292,7 @@ SwMultiTOXTabDialog::~SwMultiTOXTabDialog()
     SW_MOD()->GetModuleConfig()->SetShowIndexPreview(m_xShowExampleCB->get_active());
 }
 
-void SwMultiTOXTabDialog::PageCreated(const OString& rId, SfxTabPage &rPage)
+void SwMultiTOXTabDialog::PageCreated(const OUString& rId, SfxTabPage &rPage)
 {
     if (rId == "background")
     {
@@ -781,6 +781,8 @@ SwTOXSelectTabPage::SwTOXSelectTabPage(weld::Container* pPage, weld::DialogContr
     , m_xCaptionSequenceLB(m_xBuilder->weld_combo_box("category"))
     , m_xDisplayTypeFT(m_xBuilder->weld_label("displayft"))
     , m_xDisplayTypeLB(m_xBuilder->weld_combo_box("display"))
+    , m_xParaStyleCB(m_xBuilder->weld_check_button("useparastyle"))
+    , m_xParaStyleLB(m_xBuilder->weld_combo_box("parastyle"))
     , m_xTOXMarksCB(m_xBuilder->weld_check_button("indexmarks"))
     , m_xIdxOptionsFrame(m_xBuilder->weld_widget("optionsframe"))
     , m_xCollectSameCB(m_xBuilder->weld_check_button("combinesame"))
@@ -845,10 +847,12 @@ SwTOXSelectTabPage::SwTOXSelectTabPage(weld::Container* pPage, weld::DialogContr
     m_xUseDashCB->connect_toggled(aLk);
     m_xInitialCapsCB->connect_toggled(aLk);
     m_xKeyAsEntryCB->connect_toggled(aLk);
+    m_xParaStyleCB->connect_toggled(aLk);
 
     m_xTitleED->connect_changed(LINK(this, SwTOXSelectTabPage, ModifyEntryHdl));
     m_xLevelNF->connect_value_changed(LINK(this, SwTOXSelectTabPage, ModifySpinHdl));
     m_xSortAlgorithmLB->connect_changed(LINK(this, SwTOXSelectTabPage, ModifyListBoxHdl));
+    m_xParaStyleLB->connect_changed(LINK(this, SwTOXSelectTabPage, ModifyListBoxHdl));
 
     aLk = LINK(this, SwTOXSelectTabPage, RadioButtonHdl);
     m_xFromCaptionsRB->connect_toggled(aLk);
@@ -953,6 +957,7 @@ void SwTOXSelectTabPage::ApplyTOXDescription()
     SwMultiTOXTabDialog* pTOXDlg = static_cast<SwMultiTOXTabDialog*>(GetDialogController());
     const CurTOXType aCurType = pTOXDlg->GetCurrentTOXType();
     SwTOXDescription& rDesc = pTOXDlg->GetTOXDescription(aCurType);
+
     m_xReadOnlyCB->set_active(rDesc.IsReadonly());
     if (!m_xTitleED->get_value_changed_from_saved())
     {
@@ -991,6 +996,42 @@ void SwTOXSelectTabPage::ApplyTOXDescription()
     //all but illustration and table
     m_xTOXMarksCB->set_active( bool(nCreateType & SwTOXElement::Mark) );
 
+    if (TOX_ILLUSTRATIONS == aCurType.eType || TOX_TABLES == aCurType.eType
+        || TOX_OBJECTS== aCurType.eType)
+    {
+        // load all para styles...
+        m_xParaStyleLB->clear();
+        SwWrtShell const& rWrtSh(static_cast<SwMultiTOXTabDialog*>(GetDialogController())->GetWrtShell());
+        const sal_uInt16 nSz = rWrtSh.GetTextFormatCollCount();
+        for (sal_uInt16 j = 0; j < nSz; ++j)
+        {
+            SwTextFormatColl const& rColl = rWrtSh.GetTextFormatColl(j);
+            if (rColl.IsDefault())
+                continue;
+
+            OUString const name(rColl.GetName());
+            if (!name.isEmpty())
+            {
+                m_xParaStyleLB->append_text(name);
+            }
+        }
+        // first, init ParaStyle - because any later init (e.g. m_xFromCaptionsRB)
+        // ends up calling FillTOXDescription() resetting rDesc!
+        OUString const& rStyle(rDesc.GetStyleNames(0));
+        assert(rStyle.indexOf(TOX_STYLE_DELIMITER) == -1);
+        if (rStyle.isEmpty())
+        {
+            m_xParaStyleCB->set_active(false);
+            m_xParaStyleLB->set_sensitive(false);
+        }
+        else
+        {
+            m_xParaStyleCB->set_active(true);
+            m_xParaStyleLB->set_sensitive(true);
+            m_xParaStyleLB->set_active_text(rStyle);
+        }
+    }
+
     //content
     if(TOX_CONTENT == aCurType.eType)
     {
@@ -1016,8 +1057,6 @@ void SwTOXSelectTabPage::ApplyTOXDescription()
     }
     else if (TOX_ILLUSTRATIONS == aCurType.eType || TOX_TABLES == aCurType.eType)
     {
-        m_xFromObjectNamesRB->set_active(rDesc.IsCreateFromObjectNames());
-        m_xFromCaptionsRB->set_active(!rDesc.IsCreateFromObjectNames());
         OUString sName(rDesc.GetSequenceName());
         int nIndex = m_xCaptionSequenceLB->find_text(sName);
         if (nIndex != -1)
@@ -1025,8 +1064,9 @@ void SwTOXSelectTabPage::ApplyTOXDescription()
         m_xDisplayTypeLB->set_active(static_cast<sal_Int32>(rDesc.GetCaptionDisplay()));
         if (m_xDisplayTypeLB->get_active() == -1)
             m_xDisplayTypeLB->set_active(0);
+        m_xFromObjectNamesRB->set_active(rDesc.IsCreateFromObjectNames());
+        m_xFromCaptionsRB->set_active(!rDesc.IsCreateFromObjectNames());
         RadioButtonHdl(*m_xFromCaptionsRB);
-
     }
     else if(TOX_OBJECTS == aCurType.eType)
     {
@@ -1123,6 +1163,14 @@ void SwTOXSelectTabPage::FillTOXDescription()
             rDesc.SetCreateFromObjectNames(m_xFromObjectNamesRB->get_active());
             rDesc.SetSequenceName(m_xCaptionSequenceLB->get_active_text());
             rDesc.SetCaptionDisplay(static_cast<SwCaptionDisplay>(m_xDisplayTypeLB->get_active()));
+            if (m_xParaStyleCB->get_active())
+            {
+                m_aStyleArr[0] = m_xParaStyleLB->get_active_text();
+            }
+            else
+            {
+                m_aStyleArr[0] = OUString();
+            }
         break;
         case TOX_OBJECTS:
         {
@@ -1136,6 +1184,14 @@ void SwTOXSelectTabPage::FillTOXDescription()
                 }
             }
             rDesc.SetOLEOptions(nOLEData);
+            if (m_xParaStyleCB->get_active())
+            {
+                m_aStyleArr[0] = m_xParaStyleLB->get_active_text();
+            }
+            else
+            {
+                m_aStyleArr[0] = OUString();
+            }
         }
         break;
         case TOX_AUTHORITIES:
@@ -1158,8 +1214,11 @@ void SwTOXSelectTabPage::FillTOXDescription()
         nContentOptions |= SwTOXElement::Mark;
     if (m_xFromHeadingsCB->get_active() && m_xFromHeadingsCB->get_visible())
         nContentOptions |= SwTOXElement::OutlineLevel;
-    if (m_xAddStylesCB->get_active() && m_xAddStylesCB->get_visible())
+    if ((m_xAddStylesCB->get_active() && m_xAddStylesCB->get_visible())
+        || (m_xParaStyleCB->get_active() && m_xParaStyleCB->get_visible()))
+    {
         nContentOptions |= SwTOXElement::Template;
+    }
 
     rDesc.SetContentOptions(nContentOptions);
     rDesc.SetIndexOptions(nIndexOptions);
@@ -1264,6 +1323,8 @@ IMPL_LINK(SwTOXSelectTabPage, TOXTypeHdl, weld::ComboBox&, rBox, void)
     m_xCaptionSequenceLB->set_visible( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
     m_xDisplayTypeFT->set_visible( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
     m_xDisplayTypeLB->set_visible( 0 != (nType & (TO_ILLUSTRATION|TO_TABLE)) );
+    m_xParaStyleCB->set_visible(0 != (nType & (TO_ILLUSTRATION|TO_TABLE|TO_OBJECT)));
+    m_xParaStyleLB->set_visible(0 != (nType & (TO_ILLUSTRATION|TO_TABLE|TO_OBJECT)));
 
     m_xAuthorityFrame->set_visible( 0 != (nType & TO_AUTHORITIES) );
 
@@ -1347,6 +1408,13 @@ IMPL_LINK(SwTOXSelectTabPage, CheckBoxHdl, weld::Toggleable&, rButton, void)
         m_xUseDashCB->set_sensitive(m_xCollectSameCB->get_active() && !m_xUseFFCB->get_active());
         m_xCaseSensitiveCB->set_sensitive(m_xCollectSameCB->get_active());
     }
+    else if (TOX_ILLUSTRATIONS == aCurType.eType
+            || TOX_TABLES == aCurType.eType
+            || TOX_OBJECTS == aCurType.eType)
+    {
+        bool const bEnable(m_xParaStyleCB->get_active());
+        m_xParaStyleLB->set_sensitive(bEnable);
+    }
     ModifyHdl();
 };
 
@@ -1406,7 +1474,7 @@ IMPL_LINK_NOARG(SwTOXSelectTabPage, MenuEnableHdl, weld::Toggleable&, void)
     m_xAutoMarkPB->set_item_sensitive("edit", !m_sAutoMarkURL.isEmpty());
 }
 
-IMPL_LINK(SwTOXSelectTabPage, MenuExecuteHdl, const OString&, rIdent, void)
+IMPL_LINK(SwTOXSelectTabPage, MenuExecuteHdl, const OUString&, rIdent, void)
 {
     const OUString sSaveAutoMarkURL = m_sAutoMarkURL;
 
@@ -1831,6 +1899,8 @@ namespace
         STR_AUTH_FIELD_CUSTOM5,
         STR_AUTH_FIELD_ISBN,
         STR_AUTH_FIELD_LOCAL_URL,
+        STR_AUTH_FIELD_TARGET_TYPE,
+        STR_AUTH_FIELD_TARGET_URL,
     };
 }
 
@@ -1995,6 +2065,17 @@ SwTOXEntryTabPage::SwTOXEntryTabPage(weld::Container* pPage, weld::DialogControl
 SwTOXEntryTabPage::~SwTOXEntryTabPage()
 {
     m_xTokenWIN.reset();
+
+    // tdf#135266 - remember last used entry level depending on the index type
+    if (const auto aSelectedIndex = m_xLevelLB->get_selected_index(); aSelectedIndex != -1)
+    {
+        auto& rSh = static_cast<SwMultiTOXTabDialog*>(GetDialogController())->GetWrtShell();
+        SwViewOption* pVOpt = const_cast<SwViewOption*>(rSh.GetViewOptions());
+        if (m_aLastTOXType == TOX_INDEX)
+            pVOpt->SetIdxEntryLvl(aSelectedIndex);
+        else
+            pVOpt->SetTocEntryLvl(aSelectedIndex);
+    }
 }
 
 IMPL_LINK_NOARG(SwTOXEntryTabPage, ModifyClickHdl, weld::Toggleable&, void)
@@ -2170,7 +2251,10 @@ void SwTOXEntryTabPage::ActivatePage( const SfxItemSet& /*rSet*/)
         else
             m_xLevelFT->set_label(m_sLevelStr);
 
-        m_xLevelLB->select(bToxIsIndex ? 1 : 0);
+        // tdf#135266 - remember last used entry level depending on the index type
+        m_xLevelLB->select(bToxIsIndex ? pTOXDlg->GetWrtShell().GetViewOptions()->GetIdxEntryLvl()
+                                       : pTOXDlg->GetWrtShell().GetViewOptions()->GetTocEntryLvl());
+
 
         //show or hide controls
         ShowHideControls(aCurType.eType);
@@ -2234,7 +2318,7 @@ IMPL_LINK_NOARG(SwTOXEntryTabPage, EditStyleHdl, weld::Button&, void)
         SfxStringItem aStyle(SID_STYLE_EDIT, m_xCharStyleLB->get_active_text());
         SfxUInt16Item aFamily(SID_STYLE_FAMILY, sal_uInt16(SfxStyleFamily::Char));
         static_cast<SwMultiTOXTabDialog*>(GetDialogController())->GetWrtShell().
-        GetView().GetViewFrame()->GetDispatcher()->ExecuteList(SID_STYLE_EDIT,
+        GetView().GetViewFrame().GetDispatcher()->ExecuteList(SID_STYLE_EDIT,
                 SfxCallMode::SYNCHRON,
                 { &aStyle, &aFamily });
     }
@@ -2849,7 +2933,7 @@ SwTOXWidget* SwTokenWindow::InsertItem(const OUString& rText, const SwFormToken&
             //use the first two chars as symbol
             OUString sTmp(SwAuthorityFieldType::GetAuthFieldName(
                         static_cast<ToxAuthorityField>(rToken.nAuthorityField)));
-            pButton->SetText(sTmp.copy(0, 2));
+            pButton->SetText(sTmp.copy(0, std::min(sTmp.getLength(), sal_Int32(2))));
         }
 
         sal_uInt32 nIndex = GetControlIndex( rToken.eTokenType );
@@ -3056,7 +3140,7 @@ void SwTokenWindow::InsertAtSelection(const SwFormToken& rToken)
         //use the first two chars as symbol
         OUString sTmp(SwAuthorityFieldType::GetAuthFieldName(
                     static_cast<ToxAuthorityField>(aToInsertToken.nAuthorityField)));
-        pButton->SetText(sTmp.copy(0, 2));
+        pButton->SetText(sTmp.copy(0, std::min(sTmp.getLength(), sal_Int32(2))));
     }
 
     pButton->Check();
@@ -3574,7 +3658,7 @@ IMPL_LINK_NOARG(SwTOXStylesTabPage, EditStyleHdl, weld::Button&, void)
         SfxStringItem aStyle(SID_STYLE_EDIT, m_xParaLayLB->get_selected_text());
         SfxUInt16Item aFamily(SID_STYLE_FAMILY, sal_uInt16(SfxStyleFamily::Para));
         SwWrtShell& rSh = static_cast<SwMultiTOXTabDialog*>(GetDialogController())->GetWrtShell();
-        rSh.GetView().GetViewFrame()->GetDispatcher()->ExecuteList(SID_STYLE_EDIT,
+        rSh.GetView().GetViewFrame().GetDispatcher()->ExecuteList(SID_STYLE_EDIT,
                 SfxCallMode::SYNCHRON,
                 { &aStyle, &aFamily });
     }

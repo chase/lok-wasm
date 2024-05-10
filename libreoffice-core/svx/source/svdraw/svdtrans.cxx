@@ -443,11 +443,11 @@ tools::Long GetLen(const Point& rPnt)
 
 void GeoStat::RecalcSinCos()
 {
-    if (nRotationAngle==0_deg100) {
+    if (m_nRotationAngle==0_deg100) {
         mfSinRotationAngle=0.0;
         mfCosRotationAngle=1.0;
     } else {
-        double a = toRadians(nRotationAngle);
+        double a = toRadians(m_nRotationAngle);
         mfSinRotationAngle=sin(a);
         mfCosRotationAngle=cos(a);
     }
@@ -455,10 +455,10 @@ void GeoStat::RecalcSinCos()
 
 void GeoStat::RecalcTan()
 {
-    if (nShearAngle==0_deg100) {
+    if (m_nShearAngle==0_deg100) {
         mfTanShearAngle=0.0;
     } else {
-        double a = toRadians(nShearAngle);
+        double a = toRadians(m_nShearAngle);
         mfTanShearAngle=tan(a);
     }
 }
@@ -472,52 +472,67 @@ tools::Polygon Rect2Poly(const tools::Rectangle& rRect, const GeoStat& rGeo)
     aPol[2]=rRect.BottomRight();
     aPol[3]=rRect.BottomLeft();
     aPol[4]=rRect.TopLeft();
-    if (rGeo.nShearAngle) ShearPoly(aPol,rRect.TopLeft(),rGeo.mfTanShearAngle);
-    if (rGeo.nRotationAngle) RotatePoly(aPol,rRect.TopLeft(),rGeo.mfSinRotationAngle,rGeo.mfCosRotationAngle);
+    if (rGeo.m_nShearAngle) ShearPoly(aPol,rRect.TopLeft(),rGeo.mfTanShearAngle);
+    if (rGeo.m_nRotationAngle) RotatePoly(aPol,rRect.TopLeft(),rGeo.mfSinRotationAngle,rGeo.mfCosRotationAngle);
     return aPol;
 }
 
-void Poly2Rect(const tools::Polygon& rPol, tools::Rectangle& rRect, GeoStat& rGeo)
+namespace svx
 {
-    rGeo.nRotationAngle=GetAngle(rPol[1]-rPol[0]);
-    rGeo.nRotationAngle=NormAngle36000(rGeo.nRotationAngle);
+tools::Rectangle polygonToRectangle(const tools::Polygon& rPolygon, GeoStat& rGeo)
+{
+    rGeo.m_nRotationAngle = GetAngle(rPolygon[1] - rPolygon[0]);
+    rGeo.m_nRotationAngle = NormAngle36000(rGeo.m_nRotationAngle);
+
     // rotation successful
     rGeo.RecalcSinCos();
 
-    Point aPt1(rPol[1]-rPol[0]);
-    if (rGeo.nRotationAngle) RotatePoint(aPt1,Point(0,0),-rGeo.mfSinRotationAngle,rGeo.mfCosRotationAngle); // -Sin to reverse rotation
-    tools::Long nWdt=aPt1.X();
+    Point aPoint1(rPolygon[1] - rPolygon[0]);
+    if (rGeo.m_nRotationAngle)
+        RotatePoint(aPoint1, Point(0,0), -rGeo.mfSinRotationAngle, rGeo.mfCosRotationAngle); // -Sin to reverse rotation
+    tools::Long nWidth = aPoint1.X();
 
-    Point aPt0(rPol[0]);
-    Point aPt3(rPol[3]-rPol[0]);
-    if (rGeo.nRotationAngle) RotatePoint(aPt3,Point(0,0),-rGeo.mfSinRotationAngle,rGeo.mfCosRotationAngle); // -Sin to reverse rotation
-    tools::Long nHgt=aPt3.Y();
+    Point aPoint0(rPolygon[0]);
+    Point aPoint3(rPolygon[3] - rPolygon[0]);
+    if (rGeo.m_nRotationAngle)
+        RotatePoint(aPoint3, Point(0,0), -rGeo.mfSinRotationAngle, rGeo.mfCosRotationAngle); // -Sin to reverse rotation
+    tools::Long nHeight = aPoint3.Y();
 
+    Degree100 nShearAngle = GetAngle(aPoint3);
+    nShearAngle -= 27000_deg100; // ShearWink is measured against a vertical line
+    nShearAngle = -nShearAngle;  // negating, because '+' is shearing clock-wise
 
-    Degree100 nShW=GetAngle(aPt3);
-    nShW-=27000_deg100; // ShearWink is measured against a vertical line
-    nShW=-nShW;  // negating, because '+' is shearing clock-wise
-
-    bool bMirr=aPt3.Y()<0;
-    if (bMirr) { // "exchange of points" when mirroring
-        nHgt=-nHgt;
-        nShW+=18000_deg100;
-        aPt0=rPol[3];
+    bool bMirror = aPoint3.Y() < 0;
+    if (bMirror)
+    {   // "exchange of points" when mirroring
+        nHeight = -nHeight;
+        nShearAngle += 18000_deg100;
+        aPoint0 = rPolygon[3];
     }
-    nShW=NormAngle18000(nShW);
-    if (nShW<-9000_deg100 || nShW>9000_deg100) {
-        nShW=NormAngle18000(nShW+18000_deg100);
+
+    nShearAngle = NormAngle18000(nShearAngle);
+    if (nShearAngle < -9000_deg100 || nShearAngle > 9000_deg100)
+    {
+        nShearAngle = NormAngle18000(nShearAngle + 18000_deg100);
     }
-    if (nShW<-SDRMAXSHEAR) nShW=-SDRMAXSHEAR; // limit ShearWinkel (shear angle) to +/- 89.00 deg
-    if (nShW>SDRMAXSHEAR)  nShW=SDRMAXSHEAR;
-    rGeo.nShearAngle=nShW;
+
+    if (nShearAngle < -SDRMAXSHEAR)
+        nShearAngle = -SDRMAXSHEAR; // limit ShearWinkel (shear angle) to +/- 89.00 deg
+
+    if (nShearAngle > SDRMAXSHEAR)
+        nShearAngle = SDRMAXSHEAR;
+
+    rGeo.m_nShearAngle = nShearAngle;
     rGeo.RecalcTan();
-    Point aRU(aPt0);
-    aRU.AdjustX(nWdt );
-    aRU.AdjustY(nHgt );
-    rRect=tools::Rectangle(aPt0,aRU);
+
+    Point aRU(aPoint0);
+    aRU.AdjustX(nWidth);
+    aRU.AdjustY(nHeight);
+
+    return tools::Rectangle(aPoint0, aRU);
 }
 
+} // end svx
 
 void OrthoDistance8(const Point& rPt0, Point& rPt, bool bBigOrtho)
 {
@@ -634,8 +649,8 @@ FrPair GetMapFactor(FieldUnit eS, FieldUnit eD)
 
 void SdrFormatter::Undirty()
 {
-    const o3tl::Length eFrom = MapToO3tlLength(eSrcMU, o3tl::Length::invalid);
-    const o3tl::Length eTo = MapToO3tlLength(eDstMU, o3tl::Length::invalid);
+    const o3tl::Length eFrom = MapToO3tlLength(m_eSrcMU, o3tl::Length::invalid);
+    const o3tl::Length eTo = MapToO3tlLength(m_eDstMU, o3tl::Length::invalid);
     if (eFrom != o3tl::Length::invalid && eTo != o3tl::Length::invalid)
     {
         const auto& [mul, div] = o3tl::getConversionMulDiv(eFrom, eTo);
@@ -656,22 +671,22 @@ void SdrFormatter::Undirty()
             nComma++;
             nDiv /= 10;
         }
-        nMul_ = nMul;
-        nDiv_ = nDiv;
-        nComma_ = nComma;
+        m_nMul = nMul;
+        m_nDiv = nDiv;
+        m_nComma = nComma;
     }
     else
     {
-        nMul_ = nDiv_ = 1;
-        nComma_ = 0;
+        m_nMul = m_nDiv = 1;
+        m_nComma = 0;
     }
-    bDirty=false;
+    m_bDirty=false;
 }
 
 
 OUString SdrFormatter::GetStr(tools::Long nVal) const
 {
-    const OUString aNullCode("0");
+    static constexpr OUString aNullCode(u"0"_ustr);
 
     if(!nVal)
     {
@@ -683,10 +698,10 @@ OUString SdrFormatter::GetStr(tools::Long nVal) const
     SvtSysLocale aSysLoc;
     const LocaleDataWrapper& rLoc = aSysLoc.GetLocaleData();
 
-    if (bDirty)
+    if (m_bDirty)
         const_cast<SdrFormatter*>(this)->Undirty();
 
-    sal_Int16 nC(nComma_);
+    sal_Int16 nC(m_nComma);
 
     if(bNeg)
         nVal = -nVal;
@@ -703,8 +718,8 @@ OUString SdrFormatter::GetStr(tools::Long nVal) const
         nC++;
     }
 
-    if(nMul_ != nDiv_)
-        nVal = BigMulDiv(nVal, nMul_, nDiv_);
+    if(m_nMul != m_nDiv)
+        nVal = BigMulDiv(nVal, m_nMul, m_nDiv);
 
     OUStringBuffer aStr = OUString::number(nVal);
 
@@ -738,7 +753,7 @@ OUString SdrFormatter::GetStr(tools::Long nVal) const
     {
         // insert comma char (decimal separator)
         // remove trailing zeros
-        while(nC > 0 && aStr[aStr.getLength() - 1] == aNullCode[0])
+        while(nC > 0 && aStr[aStr.getLength() - 1] == aNullCode.getStr()[0])
         {
             aStr.remove(aStr.getLength() - 1, 1);
             nC--;
@@ -772,7 +787,7 @@ OUString SdrFormatter::GetStr(tools::Long nVal) const
     if(aStr.isEmpty())
         aStr.append(aNullCode);
 
-    if(bNeg && (aStr.getLength() > 1 || aStr[0] != aNullCode[0]))
+    if(bNeg && (aStr.getLength() > 1 || aStr[0] != aNullCode.getStr()[0]))
     {
         aStr.insert(0, "-");
     }

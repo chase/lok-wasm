@@ -267,7 +267,7 @@ void batchPrint( std::u16string_view rPrinterName, const Reference< XPrintable >
     OString aTargetURL8 = OUStringToOString(aTempName, osl_getThreadTextEncoding() );
 
     std::cout << "print " << aSource8 << " -> " << aTargetURL8;
-    std::cout << " using " << (aPrinterName.isEmpty() ? "<default_printer>" : OUStringToOString( aPrinterName, osl_getThreadTextEncoding() ));
+    std::cout << " using " << (aPrinterName.isEmpty() ? "<default_printer>"_ostr : OUStringToOString( aPrinterName, osl_getThreadTextEncoding() ));
     std::cout << std::endl;
 
     // create the custom printer, if given
@@ -282,6 +282,44 @@ void batchPrint( std::u16string_view rPrinterName, const Reference< XPrintable >
     aPrinterArgs = { comphelper::makePropertyValue("FileName", aOutFile),
                      comphelper::makePropertyValue("Wait", true) };
     xDoc->print( aPrinterArgs );
+}
+
+// Get xDoc module name
+OUString getName(const Reference< XInterface > & xDoc)
+{
+    Reference< XModel > xModel( xDoc, UNO_QUERY );
+    if (!xModel)
+        return OUString();
+    utl::MediaDescriptor aMediaDesc( xModel->getArgs() );
+    OUString aDocService = aMediaDesc.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_DOCUMENTSERVICE, OUString() );
+    if (aDocService == "com.sun.star.text.TextDocument")
+        return "Writer";
+    else if (aDocService == "com.sun.star.text.GlobalDocument")
+        return "Writer master";
+    else if (aDocService == "com.sun.star.text.WebDocument")
+        return "Writer/Web";
+    else if (aDocService == "com.sun.star.drawing.DrawingDocument")
+        return "Draw";
+    else if (aDocService == "com.sun.star.presentation.PresentationDocument")
+        return "Impress";
+    else if (aDocService == "com.sun.star.sheet.SpreadsheetDocument")
+        return "Calc";
+    else if (aDocService == "com.sun.star.script.BasicIDE")
+        return "Basic";
+    else if (aDocService == "com.sun.star.formula.FormulaProperties")
+        return "Math";
+    else if (aDocService == "com.sun.star.sdb.RelationDesign")
+        return "Relation Design";
+    else if (aDocService == "com.sun.star.sdb.QueryDesign")
+        return "Query Design";
+    else if (aDocService == "com.sun.star.sdb.TableDesign")
+        return "Table Design";
+    else if (aDocService == "com.sun.star.sdb.DataSourceBrowser")
+        return "Data Source Browser";
+    else if (aDocService == "com.sun.star.sdb.DatabaseDocument")
+        return "Database";
+
+    return OUString();
 }
 
 } // anonymous namespace
@@ -398,11 +436,8 @@ bool DispatchWatcher::executeDispatchRequests( const std::vector<DispatchRequest
                 "unsupported dispatch request <" << aName << ">");
             if( xDispatcher.is() )
             {
-                {
-                    osl::MutexGuard aGuard(m_mutex);
-                    // Remember request so we can find it in statusChanged!
-                    m_nRequestCount++;
-                }
+                // Remember request so we can find it in statusChanged!
+                m_nRequestCount++;
 
                 // Use local vector to store dispatcher because we have to fill our request container before
                 // we can dispatch. Otherwise it would be possible that statusChanged is called before we dispatched all requests!!
@@ -664,7 +699,10 @@ bool DispatchWatcher::executeDispatchRequests( const std::vector<DispatchRequest
                                 OString aTargetURL8 = OUStringToOString(aTempName, osl_getThreadTextEncoding());
                                 if (aDispatchRequest.aRequestType != REQUEST_CAT)
                                 {
+                                    OUString name=getName(xDoc);
                                     std::cout << "convert " << aSource8;
+                                    if (!name.isEmpty())
+                                        std::cout << " as a " << name <<" document";
                                     if (!bMultiFileTarget)
                                         std::cout << " -> " << aTargetURL8;
                                     std::cout << " using filter : " << OUStringToOString(aFilter, osl_getThreadTextEncoding()) << std::endl;
@@ -770,18 +808,13 @@ bool DispatchWatcher::executeDispatchRequests( const std::vector<DispatchRequest
                 xDisp->dispatchWithNotification( aDispatche.aURL, aArgs, this );
             else
             {
-                {
-                    osl::MutexGuard aGuard(m_mutex);
-                    m_nRequestCount--;
-                }
+                m_nRequestCount--;
                 xDispatch->dispatch( aDispatche.aURL, aArgs );
             }
         }
     }
 
-    ::osl::ClearableMutexGuard aGuard(m_mutex);
     bool bEmpty = (m_nRequestCount == 0);
-    aGuard.clear();
 
     // No more asynchronous requests?
     // The requests are removed from the request container after they called back to this
@@ -809,9 +842,7 @@ void SAL_CALL DispatchWatcher::disposing( const css::lang::EventObject& )
 
 void SAL_CALL DispatchWatcher::dispatchFinished( const DispatchResultEvent& )
 {
-    osl::ClearableMutexGuard aGuard(m_mutex);
-    sal_Int16 nCount = --m_nRequestCount;
-    aGuard.clear();
+    int nCount = --m_nRequestCount;
     RequestHandler::RequestsCompleted();
     if ( !nCount && !RequestHandler::AreRequestsPending() )
     {

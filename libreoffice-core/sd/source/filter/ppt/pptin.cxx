@@ -788,7 +788,7 @@ bool ImplSdPPTImport::Import()
 
                 bool bNewAnimationsUsed = false;
                 ProcessData aProcessData( (*pList)[ m_nCurrentPageNum ], SdPageCapsule(pMPage) );
-                sal_uInt32 nOldFPos = rStCtrl.Tell();
+                sal_uInt64 nOldFPos = rStCtrl.Tell();
                 DffRecordHeader aPageHd;
                 if ( SeekToCurrentPage( &aPageHd ) )
                 {
@@ -921,7 +921,7 @@ bool ImplSdPPTImport::Import()
 
     // importing slide pages
     {
-        sal_uInt32          nOldFPos = rStCtrl.Tell();
+        sal_uInt64          nOldFPos = rStCtrl.Tell();
         PptPageKind     ePageKind = m_eCurrentPageKind;
         sal_uInt16          nPageNum = m_nCurrentPageNum;
 
@@ -1256,18 +1256,10 @@ bool ImplSdPPTImport::Import()
             switch ( m_aUserEditAtom.eLastViewType )
             {
                 case PptViewTypeEnum::Outline:
-                {
-                    SfxItemSet* pSet = mrMed.GetItemSet();
-                    if ( pSet )
-                        pSet->Put( SfxUInt16Item( SID_VIEW_ID, 3 ) );
-                }
+                    mrMed.GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, 3 ) );
                 break;
                 case PptViewTypeEnum::SlideSorter:
-                {
-                    SfxItemSet* pSet = mrMed.GetItemSet();
-                    if ( pSet )
-                        pSet->Put( SfxUInt16Item( SID_VIEW_ID, 2 ) );
-                }
+                    mrMed.GetItemSet().Put( SfxUInt16Item( SID_VIEW_ID, 2 ) );
                 break;
                 case PptViewTypeEnum::TitleMaster:
                     nSelectedPage = 1;
@@ -1899,7 +1891,7 @@ void ImplSdPPTImport::ImportPageEffect( SdPage* pPage, const bool bNewAnimations
 OUString ImplSdPPTImport::ReadSound(sal_uInt32 nSoundRef) const
 {
     OUString aRetval;
-    sal_uInt32 nOldPos = rStCtrl.Tell();
+    sal_uInt64 nOldPos = rStCtrl.Tell();
     DffRecordHeader aDocHd;
     if ( SeekToDocument( &aDocHd ) )
     {
@@ -1916,7 +1908,7 @@ OUString ImplSdPPTImport::ReadSound(sal_uInt32 nSoundRef) const
             {
                 sal_uInt32 nStrLen = aSoundRecHd.GetRecEndFilePos();
                 OUString aRefStr;
-                sal_uInt32 nOldPos2 = rStCtrl.Tell();
+                sal_uInt64 nOldPos2 = rStCtrl.Tell();
                 if ( SeekToRec( rStCtrl, PPT_PST_CString, nStrLen, nullptr, 2 ) )
                 {
                     if ( ReadString( aRefStr ) )
@@ -2081,27 +2073,27 @@ OUString ImplSdPPTImport::ReadMedia( sal_uInt32 nMediaRef ) const
 }
 
 // import of objects
-void ImplSdPPTImport::FillSdAnimationInfo( SdAnimationInfo* pInfo, PptInteractiveInfoAtom const * pIAtom, const OUString& aMacroName )
+void ImplSdPPTImport::FillSdAnimationInfo(SdAnimationInfo* pInfo, const PptInteractiveInfoAtom& rIAtom, const OUString& rMacroName)
 {
     // set local information into pInfo
-    if( pIAtom->nSoundRef )
+    if( rIAtom.nSoundRef )
     {
-        pInfo->SetBookmark( ReadSound( pIAtom->nSoundRef ) );   // path to sound file in MS DOS notation
+        pInfo->SetBookmark( ReadSound( rIAtom.nSoundRef ) );   // path to sound file in MS DOS notation
         pInfo->meClickAction = css::presentation::ClickAction_SOUND;           // RunProgramAction
     }
 
-    switch ( pIAtom->nAction )
+    switch ( rIAtom.nAction )
     {
 
         case 0x02 :                                         // RunProgramAction
         {
             pInfo->meClickAction = css::presentation::ClickAction_PROGRAM;
-            pInfo->SetBookmark( aMacroName );                   // program name in aBookmark
+            pInfo->SetBookmark(rMacroName);                   // program name in aBookmark
         }
         break;
         case 0x03 :                                         // JumpAction
         {
-            switch( pIAtom->nJump )
+            switch( rIAtom.nJump )
             {
                 case 0x01 :
                     pInfo->meClickAction = css::presentation::ClickAction_NEXTPAGE;        // Next slide
@@ -2131,14 +2123,14 @@ void ImplSdPPTImport::FillSdAnimationInfo( SdAnimationInfo* pInfo, PptInteractiv
         {
             SdHyperlinkEntry* pPtr = nullptr;
             for (SdHyperlinkEntry & entry : m_aHyperList) {
-                if ( entry.nIndex == pIAtom->nExHyperlinkId ) {
+                if ( entry.nIndex == rIAtom.nExHyperlinkId ) {
                     pPtr = &entry;
                     break;
                 }
             }
             if ( pPtr )
             {
-                switch( pIAtom->nHyperlinkType )
+                switch( rIAtom.nHyperlinkType )
                 {
                     case 9:
                     case 8:                                         // hyperlink : URL
@@ -2201,7 +2193,7 @@ SdrObject* ImplSdPPTImport::ApplyTextObj( PPTTextObj* pTextObj, SdrTextObj* pObj
     ppStyleSheetAry = nullptr;
 
     PresObjKind ePresKind = PresObjKind::NONE;
-    PptOEPlaceholderAtom* pPlaceHolder = pTextObj->GetOEPlaceHolderAtom();
+    const std::optional<PptOEPlaceholderAtom>& pPlaceHolder = pTextObj->GetOEPlaceHolderAtom();
     OUString aPresentationText;
     if ( pPlaceHolder )
     {
@@ -2675,7 +2667,7 @@ rtl::Reference<SdrObject> ImplSdPPTImport::ProcessObj( SvStream& rSt, DffObjData
                         break;
                         case PPT_PST_InteractiveInfo:
                         {
-                            sal_uInt32 nOldFilePos2 = rSt.Tell();
+                            sal_uInt64 nOldFilePos2 = rSt.Tell();
                             OUString aMacroName;
 
                             if(SeekToRec( rSt, PPT_PST_CString, nHdRecEnd ) )
@@ -2686,44 +2678,45 @@ rtl::Reference<SdrObject> ImplSdPPTImport::ProcessObj( SvStream& rSt, DffObjData
                             if ( SeekToRec( rSt, PPT_PST_InteractiveInfoAtom, nHdRecEnd, &aHdInteractiveInfoAtom ) )
                             {
                                 PptInteractiveInfoAtom aInteractiveInfoAtom;
-                                ReadPptInteractiveInfoAtom( rSt, aInteractiveInfoAtom );
-
-                                // interactive object
-                                SdAnimationInfo* pInfo = SdDrawDocument::GetShapeUserData(*pObj, true);
-
-                                FillSdAnimationInfo( pInfo, &aInteractiveInfoAtom, aMacroName );
-                                if ( aInteractiveInfoAtom.nAction == 6 ) // Sj -> media action
+                                if (ReadPptInteractiveInfoAtom(rSt, aInteractiveInfoAtom))
                                 {
-                                    rHdClientData.SeekToContent( rStCtrl );
-                                    DffRecordHeader aObjRefAtomHd;
-                                    if ( SeekToRec( rSt, PPT_PST_ExObjRefAtom, nHdRecEnd, &aObjRefAtomHd ) )
+                                    // interactive object
+                                    SdAnimationInfo* pInfo = SdDrawDocument::GetShapeUserData(*pObj, true);
+
+                                    FillSdAnimationInfo(pInfo, aInteractiveInfoAtom, aMacroName);
+                                    if ( aInteractiveInfoAtom.nAction == 6 ) // Sj -> media action
                                     {
-                                        sal_uInt32 nRef;
-                                        rSt.ReadUInt32( nRef );
-                                        OUString aMediaURL( ReadMedia( nRef ) );
-                                        if ( aMediaURL.isEmpty() )
-                                            aMediaURL = ReadSound( nRef );
-                                        if ( !aMediaURL.isEmpty() )
+                                        rHdClientData.SeekToContent( rStCtrl );
+                                        DffRecordHeader aObjRefAtomHd;
+                                        if ( SeekToRec( rSt, PPT_PST_ExObjRefAtom, nHdRecEnd, &aObjRefAtomHd ) )
                                         {
-                                            rtl::Reference<SdrMediaObj> pMediaObj = new SdrMediaObj(
-                                                pObj->getSdrModelFromSdrObject(),
-                                                pObj->GetSnapRect());
-                                            pMediaObj->SetMergedItemSet( pObj->GetMergedItemSet() );
-
-                                            //--remove object from maAnimations list and add the new object instead
-                                            Ppt97AnimationPtr pAnimation;
+                                            sal_uInt32 nRef;
+                                            rSt.ReadUInt32( nRef );
+                                            OUString aMediaURL( ReadMedia( nRef ) );
+                                            if ( aMediaURL.isEmpty() )
+                                                aMediaURL = ReadSound( nRef );
+                                            if ( !aMediaURL.isEmpty() )
                                             {
-                                                tAnimationMap::iterator aFound = maAnimations.find( pObj.get() );
-                                                if( aFound != maAnimations.end() )
-                                                {
-                                                    pAnimation = (*aFound).second;
-                                                    maAnimations.erase(aFound);
-                                                }
-                                                maAnimations[pMediaObj.get()] = pAnimation;
-                                            }
+                                                rtl::Reference<SdrMediaObj> pMediaObj = new SdrMediaObj(
+                                                    pObj->getSdrModelFromSdrObject(),
+                                                    pObj->GetSnapRect());
+                                                pMediaObj->SetMergedItemSet( pObj->GetMergedItemSet() );
 
-                                            pObj = pMediaObj;  // SJ: hoping that pObj is not inserted in any list
-                                            pMediaObj->setURL( aMediaURL, ""/*TODO?*/ );
+                                                //--remove object from maAnimations list and add the new object instead
+                                                Ppt97AnimationPtr pAnimation;
+                                                {
+                                                    tAnimationMap::iterator aFound = maAnimations.find( pObj.get() );
+                                                    if( aFound != maAnimations.end() )
+                                                    {
+                                                        pAnimation = (*aFound).second;
+                                                        maAnimations.erase(aFound);
+                                                    }
+                                                    maAnimations[pMediaObj.get()] = pAnimation;
+                                                }
+
+                                                pObj = pMediaObj;  // SJ: hoping that pObj is not inserted in any list
+                                                pMediaObj->setURL( aMediaURL, ""/*TODO?*/ );
+                                            }
                                         }
                                     }
                                 }

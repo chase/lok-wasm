@@ -33,6 +33,7 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
+#include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/drawing/XShape.hpp>
 #include <com/sun/star/lang/NoSupportException.hpp>
 
@@ -44,10 +45,11 @@
 #include <drwlayer.hxx>
 #include <userdat.hxx>
 #include <unonames.hxx>
+#include <styleuno.hxx>
 
 using namespace ::com::sun::star;
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetShapeMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetShapeMap()
 {
     static const SfxItemPropertyMapEntry aShapeMap_Impl[] =
     {
@@ -59,6 +61,7 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetShapeMap()
         { SC_UNONAME_MOVEPROTECT, 0, cppu::UnoType<sal_Bool>::get(), 0, 0 },
         { SC_UNONAME_HYPERLINK, 0, cppu::UnoType<OUString>::get(), 0, 0 },
         { SC_UNONAME_URL, 0, cppu::UnoType<OUString>::get(), 0, 0 },
+        { SC_UNONAME_STYLE, 0, cppu::UnoType<style::XStyle>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
     };
     return aShapeMap_Impl;
 }
@@ -96,7 +99,7 @@ ScShapeObj::ScShapeObj( uno::Reference<drawing::XShape>& xShape ) :
     {
         xShape = nullptr;      // during setDelegator, mxShapeAgg must be the only ref
 
-        mxShapeAgg->setDelegator( static_cast<cppu::OWeakObject*>(this) );
+        mxShapeAgg->setDelegator( getXWeak() );
 
         xShape.set(uno::Reference<drawing::XShape>( mxShapeAgg, uno::UNO_QUERY ));
 
@@ -313,7 +316,7 @@ void SAL_CALL ScShapeObj::setPropertyValue(const OUString& aPropertyName, const 
     {
         uno::Reference<sheet::XCellRangeAddressable> xRangeAdd(aValue, uno::UNO_QUERY);
         if (!xRangeAdd.is())
-            throw lang::IllegalArgumentException("only XCell or XSpreadsheet objects allowed", static_cast<cppu::OWeakObject*>(this), 0);
+            throw lang::IllegalArgumentException("only XCell or XSpreadsheet objects allowed", getXWeak(), 0);
 
         SdrObject *pObj = GetSdrObject();
         if (pObj)
@@ -327,8 +330,7 @@ void SAL_CALL ScShapeObj::setPropertyValue(const OUString& aPropertyName, const 
 
                 if ( pDoc )
                 {
-                    SfxObjectShell* pObjSh = pDoc->GetDocumentShell();
-                    if ( auto pDocSh = dynamic_cast<ScDocShell*>( pObjSh) )
+                    if ( ScDocShell* pDocSh = pDoc->GetDocumentShell() )
                     {
                         SCTAB nTab = 0;
                         if ( lcl_GetPageNum( pPage, rModel, nTab ) )
@@ -480,8 +482,7 @@ void SAL_CALL ScShapeObj::setPropertyValue(const OUString& aPropertyName, const 
                         ScDocument* pDoc = rModel.GetDocument();
                         if ( pDoc )
                         {
-                            SfxObjectShell* pObjSh = pDoc->GetDocumentShell();
-                            if ( auto pDocSh = dynamic_cast<ScDocShell*>( pObjSh) )
+                            if ( ScDocShell* pDocSh = pDoc->GetDocumentShell() )
                             {
                                 uno::Reference<drawing::XShape> xShape( mxShapeAgg, uno::UNO_QUERY );
                                 if (xShape.is())
@@ -580,8 +581,7 @@ void SAL_CALL ScShapeObj::setPropertyValue(const OUString& aPropertyName, const 
                         ScDocument* pDoc = rModel.GetDocument();
                         if ( pDoc )
                         {
-                            SfxObjectShell* pObjSh = pDoc->GetDocumentShell();
-                            if ( auto pDocSh = dynamic_cast<ScDocShell*>( pObjSh) )
+                            if ( ScDocShell* pDocSh = pDoc->GetDocumentShell() )
                             {
                                 uno::Reference<drawing::XShape> xShape( mxShapeAgg, uno::UNO_QUERY );
                                 if (xShape.is())
@@ -649,6 +649,22 @@ void SAL_CALL ScShapeObj::setPropertyValue(const OUString& aPropertyName, const 
                 pObj->SetMoveProtect( aProt );
         }
     }
+    else if ( aPropertyName == SC_UNONAME_STYLE )
+    {
+        if (SdrObject* pObj = GetSdrObject())
+        {
+            uno::Reference<style::XStyle> xStyle(aValue, uno::UNO_QUERY);
+            auto pStyleSheetObj = dynamic_cast<ScStyleObj*>(xStyle.get());
+            if (!pStyleSheetObj)
+                throw lang::IllegalArgumentException();
+
+            auto pStyleSheet = pStyleSheetObj->GetStyle_Impl();
+            auto pOldStyleSheet = pObj->GetStyleSheet();
+
+            if (pStyleSheet != pOldStyleSheet)
+                pObj->SetStyleSheet(static_cast<SfxStyleSheet*>(pStyleSheet), false);
+        }
+    }
     else
     {
         GetShapePropertySet();
@@ -678,14 +694,13 @@ uno::Any SAL_CALL ScShapeObj::getPropertyValue( const OUString& aPropertyName )
                     SCTAB nTab = 0;
                     if ( lcl_GetPageNum( pPage, rModel, nTab ) )
                     {
-                        SfxObjectShell* pObjSh = pDoc->GetDocumentShell();
-                        if ( auto pDocSh = dynamic_cast<ScDocShell*>( pObjSh) )
+                        if ( ScDocShell* pDocSh = pDoc->GetDocumentShell() )
                         {
                             uno::Reference< uno::XInterface > xAnchor;
                             if (ScDrawObjData *pAnchor = ScDrawLayer::GetObjDataTab(pObj, nTab))
-                                xAnchor.set(static_cast<cppu::OWeakObject*>(new ScCellObj( pDocSh, pAnchor->maStart)));
+                                xAnchor.set(cppu::getXWeak(new ScCellObj( pDocSh, pAnchor->maStart)));
                             else
-                                xAnchor.set(static_cast<cppu::OWeakObject*>(new ScTableSheetObj( pDocSh, nTab )));
+                                xAnchor.set(cppu::getXWeak(new ScTableSheetObj( pDocSh, nTab )));
                             aAny <<= xAnchor;
                         }
                     }
@@ -842,6 +857,20 @@ uno::Any SAL_CALL ScShapeObj::getPropertyValue( const OUString& aPropertyName )
         if ( SdrObject* pObj = GetSdrObject() )
             aProt = pObj->IsMoveProtect();
         aAny <<= aProt;
+    }
+    else if ( aPropertyName == SC_UNONAME_STYLE )
+    {
+        if (SdrObject* pObj = GetSdrObject())
+        {
+            if (auto pStyleSheet = pObj->GetStyleSheet())
+            {
+                ScDrawLayer& rModel(static_cast< ScDrawLayer& >(pObj->getSdrModelFromSdrObject()));
+                ScDocument* pDoc = rModel.GetDocument();
+                aAny <<= uno::Reference<style::XStyle>(new ScStyleObj(
+                    pDoc ? pDoc->GetDocumentShell() : nullptr,
+                    SfxStyleFamily::Frame, pStyleSheet->GetName()));
+            }
+        }
     }
     else
     {
@@ -1012,8 +1041,7 @@ uno::Reference<text::XTextRange> SAL_CALL ScShapeObj::getAnchor()
 
         if ( pPage && pDoc )
         {
-            SfxObjectShell* pObjSh = pDoc->GetDocumentShell();
-            if ( auto pDocSh = dynamic_cast<ScDocShell*>( pObjSh) )
+            if ( ScDocShell* pDocSh = pDoc->GetDocumentShell() )
             {
                 SCTAB nTab = 0;
                 if ( lcl_GetPageNum( pPage, rModel, nTab ) )
@@ -1086,7 +1114,7 @@ void SAL_CALL ScShapeObj::insertTextContent( const uno::Reference<text::XTextRan
 
     uno::Reference<text::XTextContent> xEffContent;
 
-    ScEditFieldObj* pCellField = comphelper::getFromUnoTunnel<ScEditFieldObj>( xContent );
+    ScEditFieldObj* pCellField = dynamic_cast<ScEditFieldObj*>( xContent.get() );
     if ( pCellField )
     {
         //  createInstance("TextField.URL") from the document creates a ScCellFieldObj.
@@ -1251,15 +1279,14 @@ uno::Reference< uno::XInterface > SAL_CALL ScShapeObj::getParent()
 
         if ( pPage && pDoc )
         {
-            SfxObjectShell* pObjSh = pDoc->GetDocumentShell();
-            if ( auto pDocSh = dynamic_cast<ScDocShell*>( pObjSh) )
+            if ( ScDocShell* pDocSh = pDoc->GetDocumentShell() )
             {
                 SCTAB nTab = 0;
                 if ( lcl_GetPageNum( pPage, rModel, nTab ) )
                 {
                     const ScDrawObjData* pCaptData = ScDrawLayer::GetNoteCaptionData( pObj, nTab );
                     if( pCaptData )
-                        return static_cast< ::cppu::OWeakObject* >( new ScCellObj( pDocSh, pCaptData->maStart ) );
+                        return cppu::getXWeak( new ScCellObj( pDocSh, pCaptData->maStart ) );
                 }
             }
         }
@@ -1307,9 +1334,9 @@ SdrObject* ScShapeObj::GetSdrObject() const noexcept
     return nullptr;
 }
 
-constexpr OUStringLiteral SC_EVENTACC_ONCLICK = u"OnClick";
-constexpr OUStringLiteral SC_EVENTACC_SCRIPT = u"Script";
-constexpr OUStringLiteral SC_EVENTACC_EVENTTYPE = u"EventType";
+constexpr OUString SC_EVENTACC_ONCLICK = u"OnClick"_ustr;
+constexpr OUString SC_EVENTACC_SCRIPT = u"Script"_ustr;
+constexpr OUString SC_EVENTACC_EVENTTYPE = u"EventType"_ustr;
 
 class ShapeUnoEventAccessImpl : public ::cppu::WeakImplHelper< container::XNameReplace >
 {
@@ -1370,7 +1397,7 @@ public:
         if ( pInfo && !pInfo->GetMacro().isEmpty() )
         {
             aProperties = { comphelper::makePropertyValue(SC_EVENTACC_EVENTTYPE,
-                                                          OUString(SC_EVENTACC_SCRIPT)),
+                                                          SC_EVENTACC_SCRIPT),
                             comphelper::makePropertyValue(SC_EVENTACC_SCRIPT, pInfo->GetMacro()) };
         }
 

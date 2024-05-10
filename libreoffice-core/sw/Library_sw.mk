@@ -538,7 +538,6 @@ $(eval $(call gb_Library_add_exception_objects,sw,\
     sw/source/filter/basflt/shellio \
     sw/source/filter/html/SwAppletImpl \
     sw/source/filter/html/css1atr \
-    sw/source/filter/html/css1kywd \
     sw/source/filter/html/htmlatr \
     sw/source/filter/html/htmlbas \
     sw/source/filter/html/htmlcss1 \
@@ -736,6 +735,7 @@ $(eval $(call gb_Library_add_exception_objects,sw,\
     sw/source/uibase/sidebar/ThemePanel \
     sw/source/uibase/sidebar/SwPanelFactory \
     sw/source/uibase/sidebar/WriterInspectorTextPanel \
+    sw/source/uibase/sidebar/A11yCheckIssuesPanel \
     sw/source/uibase/table/chartins \
     sw/source/uibase/table/swtablerep \
     sw/source/uibase/table/tablemgr \

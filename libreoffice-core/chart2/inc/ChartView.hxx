@@ -20,7 +20,7 @@
 
 #include <chartview/ExplicitValueProvider.hxx>
 #include <cppuhelper/implbase.hxx>
-#include <comphelper/multicontainer2.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 
 #include <svl/lstner.hxx>
 #include <com/sun/star/awt/Size.hpp>
@@ -30,7 +30,6 @@
 #include <com/sun/star/lang/XInitialization.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/qa/XDumper.hpp>
 #include <com/sun/star/util/XModeChangeBroadcaster.hpp>
 #include <com/sun/star/util/XModifyListener.hpp>
@@ -41,9 +40,9 @@
 
 #include <vector>
 #include <memory>
+#include <mutex>
 
 #include <vcl/timer.hxx>
-#include <sfx2/xmldump.hxx>
 
 namespace com::sun::star::drawing { class XDrawPage; }
 namespace com::sun::star::drawing { class XShapes; }
@@ -87,7 +86,6 @@ class OOO_DLLPUBLIC_CHARTVIEW ChartView final : public ::cppu::WeakImplHelper<
     css::lang::XInitialization
         ,css::lang::XServiceInfo
         ,css::datatransfer::XTransferable
-        ,css::lang::XUnoTunnel
         ,css::util::XModifyListener
         ,css::util::XModeChangeBroadcaster
         ,css::util::XUpdatable2
@@ -97,7 +95,6 @@ class OOO_DLLPUBLIC_CHARTVIEW ChartView final : public ::cppu::WeakImplHelper<
         >
         , public ExplicitValueProvider
         , private SfxListener
-        , public sfx2::XmlDump
 {
 private:
     void init();
@@ -118,7 +115,7 @@ public:
 
     // ___ExplicitValueProvider___
     virtual bool getExplicitValuesForAxis(
-        css::uno::Reference< css::chart2::XAxis > xAxis
+        rtl::Reference< Axis > xAxis
         , ExplicitScaleData&  rExplicitScale
         , ExplicitIncrementData& rExplicitIncrement ) override;
     virtual rtl::Reference< SvxShape >
@@ -175,19 +172,14 @@ public:
         const OUString& ServiceSpecifier, const css::uno::Sequence< css::uno::Any >& Arguments ) override;
     virtual css::uno::Sequence< OUString > SAL_CALL getAvailableServiceNames() override;
 
-    // for ExplicitValueProvider
-    // ____ XUnoTunnel ___
-    virtual ::sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< ::sal_Int8 >& aIdentifier ) override;
-
     // XDumper
-    virtual OUString SAL_CALL dump(const OUString& rKind) override;
+    virtual OUString SAL_CALL dump(OUString const & kind) override;
 
     void setViewDirty();
 
     css::uno::Reference<css::uno::XComponentContext> const& getComponentContext() { return m_xCC;}
 
-    /// See sfx2::XmlDump::dumpAsXml().
-    void dumpAsXml(xmlTextWriterPtr pWriter) const override;
+    void dumpAsXml(xmlTextWriterPtr pWriter) const;
 
 private: //methods
     void createShapes();
@@ -209,11 +201,11 @@ private: //methods
     DECL_LINK( UpdateTimeBased, Timer*, void );
 
 private: //member
-    ::osl::Mutex m_aMutex;
+    std::mutex m_aMutex;
 
     css::uno::Reference< css::uno::XComponentContext> m_xCC;
 
-    chart::ChartModel& mrChartModel;
+    ChartModel& mrChartModel;
 
     css::uno::Reference< css::lang::XMultiServiceFactory>
             m_xShapeFactory;
@@ -233,8 +225,8 @@ private: //member
 
     std::vector< std::unique_ptr<VCoordinateSystem> > m_aVCooSysList;
 
-    comphelper::OMultiTypeInterfaceContainerHelper2
-                        m_aListenerContainer;
+    comphelper::OInterfaceContainerHelper4<css::util::XModeChangeListener>
+                        m_aModeChangeListeners;
 
     bool m_bViewDirty; //states whether the view needs to be rebuild
     bool m_bInViewUpdate;
@@ -256,7 +248,7 @@ private: //member
     css::awt::Rectangle m_aResultingDiagramRectangleExcludingAxes;
 
     TimeBasedInfo maTimeBased;
-    osl::Mutex maTimeMutex;
+    std::mutex maTimeMutex;
 };
 
 }

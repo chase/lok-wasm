@@ -104,8 +104,7 @@ void handleCommand(
 #endif
         auto const env = getenv("SRC_ROOT");
         assert(env != nullptr);
-        buf.append(env);
-        buf.append("/solenv/bin/");
+        buf.append(OString::Concat(env) + "/solenv/bin/");
     }
     else
     {
@@ -116,19 +115,14 @@ void handleCommand(
 #endif
         auto const env = getenv("WORKDIR_FOR_BUILD");
         assert(env != nullptr);
-        buf.append(env);
-        buf.append("/LinkTarget/Executable/");
+        buf.append(OString::Concat(env) + "/LinkTarget/Executable/");
     }
-    buf.append(rExecutable.data());
-    buf.append(" -i ");
-    buf.append(rInPath);
-    buf.append(" -o ");
-    buf.append(rOutPath);
+    buf.append(OString::Concat(std::string_view(rExecutable))
+        + " -i " + rInPath + " -o " + rOutPath);
 
-    const OString cmd = buf.makeStringAndClear();
-    if (system(cmd.getStr()) != 0)
+    if (system(buf.getStr()) != 0)
     {
-        std::cerr << "Error: Failed to execute " << cmd << '\n';
+        std::cerr << "Error: Failed to execute " << buf.getStr() << '\n';
         throw false; //TODO
     }
 }
@@ -159,7 +153,7 @@ void InitPoFile(
 
     //Add header to the po file
     PoOfstream aPoOutPut;
-    aPoOutPut.open(rOutPath.getStr());
+    aPoOutPut.open(rOutPath);
     if (!aPoOutPut.isOpen())
     {
         std::cerr
@@ -209,7 +203,7 @@ bool handleFile(std::string_view rProject, const OUString& rUrl, std::string_vie
         { std::u16string_view(u".properties"), "propex", false },
         { std::u16string_view(u".ui"), "uiex", false },
         { std::u16string_view(u".tree"), "treex", false } };
-    for (size_t i = 0; i != SAL_N_ELEMENTS(commands); ++i)
+    for (size_t i = 0; i != std::size(commands); ++i)
     {
         if (rUrl.endsWith(commands[i].extension) &&
             (commands[i].executable != "propex" || rUrl.indexOf("en_US") != -1))

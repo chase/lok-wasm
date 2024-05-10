@@ -60,7 +60,7 @@ void SwTextAttr::Destroy( SwTextAttr * pToDestroy, SfxItemPool& rPool )
     if (!pToDestroy) return;
     SfxPoolItem * const pAttr = pToDestroy->m_pAttr;
     delete pToDestroy;
-    rPool.Remove( *pAttr );
+    rPool.DirectRemoveItemFromPool( *pAttr );
 }
 
 bool SwTextAttr::operator==( const SwTextAttr& rAttr ) const
@@ -113,13 +113,6 @@ void SwTextAttr::dumpAsXml(xmlTextWriterPtr pWriter) const
     case RES_TXTATR_FLYCNT:
         pWhich = "fly content";
         break;
-    case RES_TXTATR_CHARFMT:
-        {
-            pWhich = "character format";
-            if (SwCharFormat* pCharFormat = GetCharFormat().GetCharFormat())
-                oValue = OString("name: " + OUStringToOString(pCharFormat->GetName(), RTL_TEXTENCODING_UTF8));
-            break;
-        }
     case RES_TXTATR_INETFMT:
         {
             pWhich = "inet format";
@@ -161,6 +154,7 @@ void SwTextAttr::dumpAsXml(xmlTextWriterPtr pWriter) const
             GetFormatField().dumpAsXml(pWriter);
             break;
         case RES_TXTATR_FTN:
+            GetFootnote().dumpAsXml(pWriter);
             break;
         case RES_TXTATR_LINEBREAK:
             GetLineBreak().dumpAsXml(pWriter);
@@ -172,6 +166,15 @@ void SwTextAttr::dumpAsXml(xmlTextWriterPtr pWriter) const
             break;
         case RES_TXTATR_FLYCNT:
             GetFlyCnt().dumpAsXml(pWriter);
+            break;
+        case RES_TXTATR_CHARFMT:
+            GetCharFormat().dumpAsXml(pWriter);
+            break;
+        case RES_TXTATR_REFMARK:
+            GetRefMark().dumpAsXml(pWriter);
+            break;
+        case RES_TXTATR_INETFMT:
+            GetINetFormat().dumpAsXml(pWriter);
             break;
         default:
             SAL_WARN("sw.core", "Unhandled TXTATR");

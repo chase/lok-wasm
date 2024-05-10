@@ -40,10 +40,10 @@ namespace hierarchy_ucp {
                 "vnd.sun.star.hier"
 #define HIERARCHY_URL_SCHEME_LENGTH 17
 
-inline constexpr OUStringLiteral HIERARCHY_FOLDER_CONTENT_TYPE =
-                u"application/" HIERARCHY_URL_SCHEME "-folder";
-inline constexpr OUStringLiteral HIERARCHY_LINK_CONTENT_TYPE =
-                u"application/" HIERARCHY_URL_SCHEME "-link";
+inline constexpr OUString HIERARCHY_FOLDER_CONTENT_TYPE =
+                u"application/" HIERARCHY_URL_SCHEME "-folder"_ustr;
+inline constexpr OUString HIERARCHY_LINK_CONTENT_TYPE =
+                u"application/" HIERARCHY_URL_SCHEME "-link"_ustr;
 
 struct ConfigProviderMapEntry
 {
@@ -61,8 +61,8 @@ typedef std::unordered_map
 >
 ConfigProviderMap;
 
-class HierarchyContentProvider : public ::ucbhelper::ContentProviderImplHelper,
-                                 public css::lang::XInitialization
+typedef cppu::ImplInheritanceHelper< ::ucbhelper::ContentProviderImplHelper, css::lang::XInitialization> HierarchyContentProvider_Base;
+class HierarchyContentProvider : public HierarchyContentProvider_Base
 {
     ConfigProviderMap   m_aConfigProviderMap;
     css::uno::Reference< css::util::XOfficeInstallationDirectories > m_xOfficeInstDirs;
@@ -71,17 +71,6 @@ public:
     explicit HierarchyContentProvider(
                 const css::uno::Reference< css::uno::XComponentContext >& rxContext );
     virtual ~HierarchyContentProvider() override;
-
-    // XInterface
-    virtual css::uno::Any SAL_CALL queryInterface( const css::uno::Type & rType ) override;
-    virtual void SAL_CALL acquire()
-        noexcept override;
-    virtual void SAL_CALL release()
-        noexcept override;
-
-    // XTypeProvider
-    virtual css::uno::Sequence< sal_Int8 > SAL_CALL getImplementationId() override;
-    virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes() override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

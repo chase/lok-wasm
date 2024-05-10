@@ -27,11 +27,14 @@
 #include <undobj.hxx>
 #include <SwRewriter.hxx>
 #include <osl/diagnose.h>
+#include <wrtsh.hxx>
+#include <officecfg/Office/Writer.hxx>
 
 #include <strings.hrc>
 #include <vector>
 
-void SwEditShell::DeleteSel(SwPaM& rPam, bool const isArtificialSelection, bool *const pUndo)
+void SwEditShell::DeleteSel(SwPaM& rPam, bool const isArtificialSelection, bool goLeft,
+                            bool* const pUndo)
 {
     auto const oSelectAll(StartsWith_() != SwCursorShell::StartsWith::None
         ? ExtendedSelectedAll()
@@ -125,18 +128,28 @@ void SwEditShell::DeleteSel(SwPaM& rPam, bool const isArtificialSelection, bool 
         }
     }
 
+    rPam.Normalize(goLeft); // change tracking case: will make sure to end up in the correct point
     // Selection is not needed anymore
     rPam.DeleteMark();
 }
 
-bool SwEditShell::Delete(bool const isArtificialSelection)
+bool SwEditShell::Delete(bool const isArtificialSelection, bool goLeft)
 {
     CurrShell aCurr( this );
     bool bRet = false;
     if ( !HasReadonlySel() || CursorInsideInputField() )
     {
-        StartAllAction();
+        if (HasHiddenSections() &&
+            officecfg::Office::Writer::Content::Display::ShowWarningHiddenSection::get())
+        {
+            if (!WarnHiddenSectionDialog())
+            {
+                bRet = RemoveParagraphMetadataFieldAtCursor();
+                return bRet;
+            }
+        }
 
+        StartAllAction();
         bool bUndo = GetCursor()->GetNext() != GetCursor();
         if( bUndo ) // more than one selection?
         {
@@ -148,7 +161,7 @@ bool SwEditShell::Delete(bool const isArtificialSelection)
 
         for(SwPaM& rPaM : GetCursor()->GetRingContainer())
         {
-            DeleteSel(rPaM, isArtificialSelection, &bUndo);
+            DeleteSel(rPaM, isArtificialSelection, goLeft, &bUndo);
         }
 
         // If undo container then close here
@@ -162,6 +175,10 @@ bool SwEditShell::Delete(bool const isArtificialSelection)
     else
     {
         bRet = RemoveParagraphMetadataFieldAtCursor();
+        if (!bRet)
+        {
+            InfoReadOnlyDialog(false);
+        }
     }
 
     return bRet;
@@ -341,6 +358,52 @@ bool SwEditShell::Replace( const OUString& rNewStr, bool bRegExpRplc )
         GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::EMPTY, nullptr);
         EndAllAction();
     }
+    return bRet;
+}
+
+/** Replace a selected area in a text node with a given string.
+ *
+ * Method to replace a text selection with a new string while
+ * keeping possible comments (they will be moved to the end
+ * of the selection).
+ *
+ * @param rNewStr     the new string which the selected area is to be replaced with
+ * @return            true, if something has been replaced, false otherwise.
+ */
+bool SwEditShell::ReplaceKeepComments( const OUString& rNewStr)
+{
+    bool bRet       = false;
+    SwPaM *pCursor  = GetCursor();
+
+    if(pCursor != nullptr)
+    {
+        // go sure that the text selection pointed to by pCursor is valid
+        if(pCursor->HasMark())
+        {
+            // preserve comments inside of the number by deleting number portions starting from the back
+            OUString aSelectedText = pCursor->GetText();
+            sal_Int32 nCommentPos(aSelectedText.lastIndexOf(CH_TXTATR_INWORD));
+            // go sure that we have a valid selection and a comment has been found
+            while (nCommentPos > -1)
+            {
+                // select the part of the text after the last found comment
+                // selection start:
+                pCursor->GetPoint()->AdjustContent(nCommentPos + 1);
+                // selection end is left where it is -> will be adjusted later on
+                // delete the part of the word after the last found comment
+                Replace(OUString(), false);
+                // put the selection start back to the beginning of the word
+                pCursor->GetPoint()->AdjustContent(-(nCommentPos + 1));
+                // adjust the selection end, so that the last comment is no longer selected:
+                pCursor->GetMark()->AdjustContent(-1);
+                // search for the next possible comment
+                aSelectedText = pCursor->GetText();
+                nCommentPos = aSelectedText.lastIndexOf(CH_TXTATR_INWORD);
+            }
+            bRet = Replace(rNewStr, false);
+        }
+    }
+
     return bRet;
 }
 

@@ -15,6 +15,9 @@
 #include <com/sun/star/text/XTextViewCursorSupplier.hpp>
 #include <com/sun/star/text/XDependentTextField.hpp>
 #include <com/sun/star/document/XDocumentInsertable.hpp>
+#include <com/sun/star/view/XSelectionSupplier.hpp>
+#include <com/sun/star/text/XTextViewCursorSupplier.hpp>
+#include <com/sun/star/text/XPageCursor.hpp>
 
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/sequenceashashmap.hxx>
@@ -30,7 +33,6 @@
 #include <textcontentcontrol.hxx>
 #include <frmmgr.hxx>
 #include <fmtcntnt.hxx>
-#include <frameformats.hxx>
 
 using namespace ::com::sun::star;
 
@@ -63,7 +65,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testTdf119081)
 
     SwDoc* pDoc = pDocShell->GetDoc();
     SwPaM& rCursor = pWrtShell->GetCurrentShellCursor();
-    uno::Reference<text::XTextRange> xInsertPosition
+    rtl::Reference<SwXTextRange> xInsertPosition
         = SwXTextRange::CreateXTextRange(*pDoc, *rCursor.GetPoint(), nullptr);
     uno::Reference<text::XTextAppend> xTextAppend(xInsertPosition->getText(), uno::UNO_QUERY);
     // Without the accompanying fix in place, this test would have failed with:
@@ -74,6 +76,33 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testTdf119081)
     pWrtShell->Left(SwCursorSkipMode::Cells, /*bSelect=*/true, /*nCount=*/1, /*bBasicCall=*/false,
                     /*bVisual=*/true);
     CPPUNIT_ASSERT_EQUAL(OUString("x"), pWrtShell->GetCurrentShellCursor().GetText());
+}
+
+CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, selectTextRange)
+{
+    createSwDoc();
+    uno::Reference<text::XTextDocument> const xTD(mxComponent, uno::UNO_QUERY_THROW);
+    uno::Reference<text::XText> const xText(xTD->getText());
+    uno::Reference<text::XTextCursor> const xCursor(xText->createTextCursor());
+    xText->insertString(xCursor, "test", /*bAbsorb=*/false);
+    xCursor->gotoStart(false);
+    xCursor->gotoEnd(true);
+    CPPUNIT_ASSERT_EQUAL(OUString("test"), xCursor->getString());
+    uno::Reference<lang::XMultiServiceFactory> const xMSF(mxComponent, uno::UNO_QUERY_THROW);
+    uno::Reference<text::XTextSection> const xSection(
+        xMSF->createInstance("com.sun.star.text.TextSection"), uno::UNO_QUERY_THROW);
+    xText->insertTextContent(xCursor, xSection, true);
+    uno::Reference<text::XTextRange> const xAnchor(xSection->getAnchor());
+    uno::Reference<view::XSelectionSupplier> const xView(xTD->getCurrentController(),
+                                                         uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(OUString("test"), xAnchor->getString());
+    CPPUNIT_ASSERT(xView->select(uno::Any(xAnchor)));
+    uno::Reference<container::XIndexAccess> xSel;
+    CPPUNIT_ASSERT(xView->getSelection() >>= xSel);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSel->getCount());
+    uno::Reference<text::XTextRange> xSelRange;
+    CPPUNIT_ASSERT(xSel->getByIndex(0) >>= xSelRange);
+    CPPUNIT_ASSERT_EQUAL(OUString("test"), xSelRange->getString());
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, flyAtParaAnchor)
@@ -423,15 +452,16 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testContentControlTextPortionEnum)
 
     // Also test the generated layout:
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwFieldPortion", "expand", "");
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwFieldPortion"_ostr, "expand"_ostr, "");
     // Without the accompanying fix in place, this test would have failed with:
     // - Expected: PortionType::ContentControl
     // - Actual  : PortionType::Text
     // i.e. SwContentControl generated a plain text portion, not a dedicated content control
     // portion.
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion", "type",
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion"_ostr, "type"_ostr,
                 "PortionType::ContentControl");
-    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion", "portion", "test*");
+    assertXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwLinePortion"_ostr, "portion"_ostr,
+                "test*");
 
     // Also test the doc model, make sure that there is a dummy character at the start and end, so
     // the user can explicitly decide if they want to expand the content control or not:
@@ -465,8 +495,8 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testContentControlCheckbox)
     // An uncaught exception of type com.sun.star.beans.UnknownPropertyException
     xContentControlProps->setPropertyValue("Checkbox", uno::Any(true));
     xContentControlProps->setPropertyValue("Checked", uno::Any(true));
-    xContentControlProps->setPropertyValue("CheckedState", uno::Any(OUString(u"☒")));
-    xContentControlProps->setPropertyValue("UncheckedState", uno::Any(OUString(u"☐")));
+    xContentControlProps->setPropertyValue("CheckedState", uno::Any(u"☒"_ustr));
+    xContentControlProps->setPropertyValue("UncheckedState", uno::Any(u"☐"_ustr));
     xText->insertTextContent(xCursor, xContentControl, /*bAbsorb=*/true);
 
     // Then make sure that the specified properties are set:
@@ -479,8 +509,8 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testContentControlCheckbox)
     std::shared_ptr<SwContentControl> pContentControl = rFormatContentControl.GetContentControl();
     CPPUNIT_ASSERT(pContentControl->GetCheckbox());
     CPPUNIT_ASSERT(pContentControl->GetChecked());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☒"), pContentControl->GetCheckedState());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"☐"), pContentControl->GetUncheckedState());
+    CPPUNIT_ASSERT_EQUAL(u"☒"_ustr, pContentControl->GetCheckedState());
+    CPPUNIT_ASSERT_EQUAL(u"☐"_ustr, pContentControl->GetUncheckedState());
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testContentControlDropdown)
@@ -832,7 +862,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testParagraphMarkerODFExport)
     createSwDoc("paragraph-marker.docx");
 
     // When saving that as ODT + reload:
-    reload("writer8", nullptr);
+    saveAndReload("writer8");
 
     // Then make sure that it still has the correct color:
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
@@ -842,7 +872,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testParagraphMarkerODFExport)
     // i.e. the custom "red" color was lost as RES_PARATR_LIST_AUTOFMT was not serialized to ODT.
     CPPUNIT_ASSERT_EQUAL(
         OUString("00ff0000"),
-        getXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwFieldPortion", "font-color"));
+        getXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwFieldPortion/SwFont"_ostr, "color"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testParagraphMarkerFormattedRun)
@@ -851,7 +881,7 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testParagraphMarkerFormattedRun)
     createSwDoc("paragraph-marker-formatted-run.docx");
 
     // When saving that as ODT + reload:
-    reload("writer8", nullptr);
+    saveAndReload("writer8");
 
     // Then make sure that the numbering portion is still non-bold, matching Word:
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
@@ -859,9 +889,10 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testParagraphMarkerFormattedRun)
     // - Expected: normal
     // - Actual  : bold
     // i.e. the numbering portion was bold, while its weight should be normal.
-    CPPUNIT_ASSERT_EQUAL(
-        OUString("normal"),
-        getXPath(pXmlDoc, "//SwParaPortion/SwLineLayout/SwFieldPortion", "font-weight"));
+    CPPUNIT_ASSERT_EQUAL(OUString("normal"),
+                         getXPath(pXmlDoc,
+                                  "//SwParaPortion/SwLineLayout/SwFieldPortion/SwFont"_ostr,
+                                  "weight"_ostr));
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testFlySplit)
@@ -898,12 +929,12 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testConvertToTextFrame)
 
     // When checking the anchor of the inner frame:
     SwDoc* pDoc = getSwDoc();
-    const SwFrameFormats& rFrames = *pDoc->GetSpzFrameFormats();
-    SwFrameFormat* pFrame3 = rFrames.FindFormatByName("Frame3");
+    const sw::FrameFormats<sw::SpzFrameFormat*>& rFrames = *pDoc->GetSpzFrameFormats();
+    sw::SpzFrameFormat* pFrame3 = rFrames.FindFrameFormatByName("Frame3");
     SwNodeIndex aFrame3Anchor = pFrame3->GetAnchor().GetContentAnchor()->nNode;
 
     // Then make sure it's anchored in the outer frame's last content node:
-    SwFrameFormat* pFrame4 = rFrames.FindFormatByName("Frame4");
+    sw::SpzFrameFormat* pFrame4 = rFrames.FindFrameFormatByName("Frame4");
     SwPaM aPaM(*pFrame4->GetContent().GetContentIdx()->GetNode().EndOfSectionNode());
     aPaM.Move(fnMoveBackward, GoInContent);
     // Without the accompanying fix in place, this test would have failed with:
@@ -911,6 +942,57 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testConvertToTextFrame)
     // - Actual  : SwNodeIndex (node 49)
     // i.e. Frame3 was anchored much later, in the body text, not in Frame4.
     CPPUNIT_ASSERT_EQUAL(aPaM.GetPoint()->nNode, aFrame3Anchor);
+}
+
+namespace
+{
+/// This selection listener calls XTextRange::getString() on a selection change, which triggered
+/// a new selection change event by accident, resulting infinite recursion and crash
+struct SelectionChangeListener : public cppu::WeakImplHelper<view::XSelectionChangeListener>
+{
+public:
+    SelectionChangeListener();
+    // view::XSelectionChangeListener
+    void SAL_CALL selectionChanged(const lang::EventObject& rEvent) override;
+
+    // lang::XEventListener
+    void SAL_CALL disposing(const lang::EventObject& rSource) override;
+};
+}
+
+SelectionChangeListener::SelectionChangeListener() {}
+
+void SelectionChangeListener::selectionChanged(const lang::EventObject& rEvent)
+{
+    uno::Reference<view::XSelectionSupplier> xSelectionSupplier(rEvent.Source, uno::UNO_QUERY);
+    css::uno::Reference<css::container::XIndexAccess> xSelection(xSelectionSupplier->getSelection(),
+                                                                 css::uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xSelection->getCount());
+    css::uno::Reference<css::text::XTextRange> xTextRange(xSelection->getByIndex(0),
+                                                          css::uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT(xTextRange->getString().startsWith("test"));
+}
+
+void SelectionChangeListener::disposing(const lang::EventObject& /*rSource*/) {}
+
+CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testTdf155951)
+{
+    createSwDoc();
+    uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
+    uno::Reference<text::XText> xText = xTextDocument->getText();
+    uno::Reference<text::XTextCursor> xCursor = xText->createTextCursor();
+    xText->insertString(xCursor, "test", /*bAbsorb=*/false);
+
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+    uno::Reference<view::XSelectionSupplier> xController(xModel->getCurrentController(),
+                                                         uno::UNO_QUERY);
+    xController->addSelectionChangeListener(new SelectionChangeListener());
+
+    // This crashed here because of infinite recursion
+    dispatchCommand(mxComponent, ".uno:WordLeftSel", {});
+
+    // this needs to wait for dispatching (trigger also a second selection change)
+    xText->insertString(xCursor, "test", /*bAbsorb=*/false);
 }
 
 CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testCollectFrameAtNodeWithLayout)
@@ -929,7 +1011,45 @@ CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testCollectFrameAtNodeWithLayout)
     // element.
     xmlDocUniquePtr pXmlDoc = parseExport("content.xml");
     // Also make sure that we don't have multiple <draw:frame> elements in the first place.
-    assertXPath(pXmlDoc, "//draw:frame", 1);
+    assertXPath(pXmlDoc, "//draw:frame"_ostr, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(SwCoreUnocoreTest, testTdf149555)
+{
+    createSwDoc("tdf149555.docx");
+
+    uno::Reference<frame::XModel> xModel(mxComponent, uno::UNO_QUERY);
+    uno::Reference<text::XTextViewCursorSupplier> xTextViewCursorSupplier(
+        xModel->getCurrentController(), uno::UNO_QUERY);
+    uno::Reference<text::XPageCursor> xCursor(xTextViewCursorSupplier->getViewCursor(),
+                                              uno::UNO_QUERY);
+
+    xCursor->jumpToFirstPage();
+    OUString sPageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
+    uno::Reference<text::XText> xHeaderText = getProperty<uno::Reference<text::XText>>(
+        getStyles("PageStyles")->getByName(sPageStyleName), "HeaderText");
+    CPPUNIT_ASSERT_EQUAL(OUString("HEADER 1"), xHeaderText->getString());
+
+    // Without the fix in place, this test would have failed with
+    // - Expected: HEADER 2
+    // - Actual: HEADER 1
+    xCursor->jumpToPage(2);
+    sPageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
+    xHeaderText = getProperty<uno::Reference<text::XText>>(
+        getStyles("PageStyles")->getByName(sPageStyleName), "HeaderText");
+    CPPUNIT_ASSERT_EQUAL(OUString("HEADER 2"), xHeaderText->getString());
+
+    xCursor->jumpToPage(3);
+    sPageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
+    xHeaderText = getProperty<uno::Reference<text::XText>>(
+        getStyles("PageStyles")->getByName(sPageStyleName), "HeaderText");
+    CPPUNIT_ASSERT_EQUAL(OUString("HEADER 2"), xHeaderText->getString());
+
+    xCursor->jumpToPage(4);
+    sPageStyleName = getProperty<OUString>(xCursor, "PageStyleName");
+    xHeaderText = getProperty<uno::Reference<text::XText>>(
+        getStyles("PageStyles")->getByName(sPageStyleName), "HeaderText");
+    CPPUNIT_ASSERT_EQUAL(OUString("HEADER 2"), xHeaderText->getString());
 }
 
 // just care that it doesn't crash/assert

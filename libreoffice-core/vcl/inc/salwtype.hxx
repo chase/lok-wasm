@@ -20,9 +20,9 @@
 #ifndef INCLUDED_VCL_INC_SALWTYPE_HXX
 #define INCLUDED_VCL_INC_SALWTYPE_HXX
 
-#include <i18nlangtag/lang.h>
 #include <rtl/ref.hxx>
 #include <rtl/ustring.hxx>
+#include <tools/gen.hxx>
 #include <tools/solar.h>
 #include <tools/long.hxx>
 #include <vcl/GestureEventPan.hxx>
@@ -222,10 +222,7 @@ struct SalSurroundingTextSelectionChangeEvent
 struct SalQueryCharPositionEvent
 {
     sal_uLong       mnCharPos;              // The index of character in a composition.
-    tools::Long     mnCursorBoundX;         // The cursor bounds corresponding to the character specified by mnCharPos - X
-    tools::Long     mnCursorBoundY;         // The cursor bounds corresponding to the character specified by mnCharPos - Y
-    tools::Long     mnCursorBoundWidth;     // The cursor bounds corresponding to the character specified by mnCharPos - Width
-    tools::Long     mnCursorBoundHeight;    // The cursor bounds corresponding to the character specified by mnCharPos - Height
+    AbsoluteScreenPixelRectangle maCursorBound;         // The cursor bounds corresponding to the character specified by mnCharPos - X
     bool            mbValid;                // The data is valid or not.
     bool            mbVertical;             // The text is vertical or not.
 };

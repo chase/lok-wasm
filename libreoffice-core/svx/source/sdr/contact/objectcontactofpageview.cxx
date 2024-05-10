@@ -151,7 +151,9 @@ namespace sdr::contact
             bool bClipRegionPushed(false);
             const vcl::Region& rRedrawArea(rDisplayInfo.GetRedrawArea());
 
-            if(!rRedrawArea.IsEmpty() && !comphelper::LibreOfficeKit::isActive())
+            // tdf#153102 using the given RedrawArea is needed e.g. for Writer's
+            // visual clipping against PageBounds (also for android viewer)
+            if(!rRedrawArea.IsEmpty())
             {
                 bClipRegionPushed = true;
                 pOutDev->Push(vcl::PushFlags::CLIPREGION);
@@ -246,10 +248,8 @@ namespace sdr::contact
             {
                 // Not empty? Then not doing a full redraw, check if
                 // getPrimitive2DSequenceHierarchy() is still needed.
-                sal_Int32 nObjCount = GetSdrPage()->GetObjCount();
-                for (sal_Int32 i = 0; i < nObjCount; ++i)
+                for (const rtl::Reference<SdrObject>& pObject : *GetSdrPage())
                 {
-                    SdrObject* pObject = GetSdrPage()->GetObj(i);
                     if (rRedrawArea.Overlaps(pObject->GetCurrentBoundRect()))
                     {
                         bGetHierarchy = true;
@@ -307,15 +307,34 @@ namespace sdr::contact
 
             if(pActiveGroupList)
             {
-                if(nullptr != pActiveGroupList->getSdrPageFromSdrObjList())
+                // tdf#122735
+                // Here it is necessary to check for SdrObject 1st, that may
+                // return nullptr if it is not a SdrObject/SdrObjGroup.
+                // Checking for SrPage OTOH will *always* try to return
+                // something useful due to SdrObjGroup::getSdrPageFromSdrObjList
+                // using getSdrPageFromSdrObject which will recursively go up the
+                // hierarchy to get the SdrPage the SdrObject belongs to, so
+                // this will *not* be nullptr for e.g. a SdrObjGroup if the
+                // SdrObjGroup is inserted to a SdrPage.
+                // NOTE: It is also possible to use dynamic_cast<SdrObjGroup*>
+                //       here, but getSdrObjectFromSdrObjList and
+                //       getSdrPageFromSdrObjListexist  to not need to do that
+                SdrObject* pSdrObject(pActiveGroupList->getSdrObjectFromSdrObjList());
+
+                if(nullptr != pSdrObject)
                 {
-                    // It's a Page itself
-                    return &(pActiveGroupList->getSdrPageFromSdrObjList()->GetViewContact());
+                    // It is a group object
+                    return &(pSdrObject->GetViewContact());
                 }
-                else if(pActiveGroupList->getSdrObjectFromSdrObjList())
+                else
                 {
-                    // Group object
-                    return &(pActiveGroupList->getSdrObjectFromSdrObjList()->GetViewContact());
+                    SdrPage* pSdrPage(pActiveGroupList->getSdrPageFromSdrObjList());
+
+                    if(nullptr != pSdrPage)
+                    {
+                        // It's a Page itself
+                        return &(pSdrPage->GetViewContact());
+                    }
                 }
             }
             else if(GetSdrPage())
@@ -347,9 +366,7 @@ namespace sdr::contact
         {
             if (utl::ConfigManager::IsFuzzing())
                 return true;
-            SdrView& rView = GetPageWindow().GetPageView().GetView();
-            const SvtAccessibilityOptions& rOpt = rView.getAccessibilityOptions();
-            return rOpt.GetIsAllowAnimatedText();
+            return SvtAccessibilityOptions::GetIsAllowAnimatedText();
         }
 
         // check if graphic animation is allowed.
@@ -357,15 +374,27 @@ namespace sdr::contact
         {
             if (utl::ConfigManager::IsFuzzing())
                 return true;
-            SdrView& rView = GetPageWindow().GetPageView().GetView();
-            const SvtAccessibilityOptions& rOpt = rView.getAccessibilityOptions();
-            return rOpt.GetIsAllowAnimatedGraphics();
+
+            // Related tdf#156630 respect system animation setting
+            return SvtAccessibilityOptions::GetIsAllowAnimatedGraphics() && !MiscSettings::GetUseReducedAnimation();
         }
 
         // print?
         bool ObjectContactOfPageView::isOutputToPrinter() const
         {
             return (OUTDEV_PRINTER == mrPageWindow.GetPaintWindow().GetOutputDevice().GetOutDevType());
+        }
+
+        // display page decoration? Default is true
+        bool ObjectContactOfPageView::isPageDecorationActive() const
+        {
+            return GetPageWindow().GetPageView().GetView().IsPageDecorationAllowed();
+        }
+
+        // display mster page content (ViewContactOfMasterPage)? Default is true
+        bool ObjectContactOfPageView::isMasterPageActive() const
+        {
+            return GetPageWindow().GetPageView().GetView().IsMasterPageVisualizationAllowed();
         }
 
         // recording MetaFile?

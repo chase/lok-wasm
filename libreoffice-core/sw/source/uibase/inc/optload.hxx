@@ -30,6 +30,7 @@
 #include <sfx2/basedlgs.hxx>
 
 #include <SwCapObjType.hxx>
+#include <SwCapConfigProp.hxx>
 
 class SwFieldMgr;
 class SwWrtShell;
@@ -65,18 +66,29 @@ private:
     std::unique_ptr<weld::RadioButton> m_xAlwaysRB;
     std::unique_ptr<weld::RadioButton> m_xRequestRB;
     std::unique_ptr<weld::RadioButton> m_xNeverRB;
+    std::unique_ptr<weld::Widget> m_xGridupdatelink;
+    std::unique_ptr<weld::Widget> m_xUpdateLinkImg;
 
     std::unique_ptr<weld::CheckButton> m_xAutoUpdateFields;
+    std::unique_ptr<weld::Widget> m_xAutoUpdateFieldsImg;
     std::unique_ptr<weld::CheckButton> m_xAutoUpdateCharts;
+    std::unique_ptr<weld::Widget> m_xAutoUpdateChartsImg;
 
     std::unique_ptr<weld::ComboBox> m_xMetricLB;
+    std::unique_ptr<weld::Widget> m_xMetricImg;
     std::unique_ptr<weld::Label> m_xTabFT;
     std::unique_ptr<weld::MetricSpinButton> m_xTabMF;
+    std::unique_ptr<weld::Widget> m_xTabImg;
     std::unique_ptr<weld::CheckButton> m_xUseSquaredPageMode;
+    std::unique_ptr<weld::Widget> m_xUseSquaredPageModeImg;
     std::unique_ptr<weld::CheckButton> m_xUseCharUnit;
+    std::unique_ptr<weld::Widget> m_xUseCharUnitImg;
     std::unique_ptr<weld::Entry> m_xWordCountED;
+    std::unique_ptr<weld::Widget> m_xWordCountImg;
     std::unique_ptr<weld::CheckButton> m_xShowStandardizedPageCount;
+    std::unique_ptr<weld::Widget> m_xShowStandardizedPageCountImg;
     std::unique_ptr<weld::SpinButton> m_xStandardizedPageSizeNF;
+    std::unique_ptr<weld::Widget> m_xStandardizedPageSizeImg;
 
     DECL_LINK(MetricHdl, weld::ComboBox&, void);
     DECL_LINK(StandardizedPageCountCheckHdl, weld::Toggleable&, void);
@@ -87,6 +99,8 @@ public:
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController,
                                       const SfxItemSet* rAttrSet);
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;
@@ -144,25 +158,35 @@ private:
     SwCaptionPreview m_aPreview;
     std::unique_ptr<weld::TreeView> m_xCheckLB;
     std::unique_ptr<weld::ComboBox> m_xLbCaptionOrder;
+    std::unique_ptr<weld::Widget> m_xLbCaptionOrderImg;
 
     std::unique_ptr<weld::Widget> m_xSettingsGroup;
     std::unique_ptr<weld::ComboBox> m_xCategoryBox;
+    std::unique_ptr<weld::Widget> m_xCategoryBoxImg;
     std::unique_ptr<weld::Label> m_xFormatText;
     std::unique_ptr<weld::ComboBox> m_xFormatBox;
+    std::unique_ptr<weld::Widget> m_xFormatBoxImg;
     //#i61007# order of captions
     std::unique_ptr<weld::Label> m_xNumberingSeparatorFT;
     std::unique_ptr<weld::Entry> m_xNumberingSeparatorED;
+    std::unique_ptr<weld::Widget> m_xNumberingSeparatorImg;
     std::unique_ptr<weld::Label> m_xTextText;
     std::unique_ptr<weld::Entry> m_xTextEdit;
+    std::unique_ptr<weld::Widget> m_xTextEditImg;
     std::unique_ptr<weld::ComboBox> m_xPosBox;
+    std::unique_ptr<weld::Widget> m_xPosBoxImg;
 
     std::unique_ptr<weld::Widget> m_xNumCapt;
     std::unique_ptr<weld::ComboBox> m_xLbLevel;
+    std::unique_ptr<weld::Widget> m_xLbLevelImg;
     std::unique_ptr<weld::Entry> m_xEdDelim;
+    std::unique_ptr<weld::Widget> m_xEdDelimImg;
 
     std::unique_ptr<weld::Widget> m_xCategory;
     std::unique_ptr<weld::ComboBox> m_xCharStyleLB;
+    std::unique_ptr<weld::Widget> m_xCharStyleImg;
     std::unique_ptr<weld::CheckButton> m_xApplyBorderCB;
+    std::unique_ptr<weld::Widget> m_xApplyBorderImg;
     std::unique_ptr<weld::CustomWeld> m_xPreview;
 
     DECL_LINK(SelectHdl, weld::ComboBox&, void);
@@ -187,6 +211,8 @@ public:
 
     static std::unique_ptr<SfxTabPage> Create(weld::Container* pPage, weld::DialogController* pController,
                                      const SfxItemSet* rAttrSet);
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool        FillItemSet( SfxItemSet* rSet ) override;
     virtual void        Reset( const SfxItemSet* rSet ) override;

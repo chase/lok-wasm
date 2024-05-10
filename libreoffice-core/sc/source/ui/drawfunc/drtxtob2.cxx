@@ -82,7 +82,7 @@ void ScDrawTextObjectBar::ExecuteGlobal( SfxRequest &rReq )
         case SID_TEXTDIRECTION_LEFT_TO_RIGHT:
         case SID_TEXTDIRECTION_TOP_TO_BOTTOM:
             {
-                SfxItemSetFixed<SDRATTR_TEXTDIRECTION, SDRATTR_TEXTDIRECTION> aAttr( pView->GetModel()->GetItemPool() );
+                SfxItemSetFixed<SDRATTR_TEXTDIRECTION, SDRATTR_TEXTDIRECTION> aAttr(pView->GetModel().GetItemPool());
                 aAttr.Put( SvxWritingModeItem(
                     nSlot == SID_TEXTDIRECTION_LEFT_TO_RIGHT ?
                         css::text::WritingMode_LR_TB : css::text::WritingMode_TB_RL,
@@ -135,17 +135,17 @@ void ScDrawTextObjectBar::ExecuteExtra( SfxRequest &rReq )
         case SID_FONTWORK:
             {
                 sal_uInt16 nId = SvxFontWorkChildWindow::GetChildWindowId();
-                SfxViewFrame* pViewFrm = mrViewData.GetViewShell()->GetViewFrame();
+                SfxViewFrame& rViewFrm = mrViewData.GetViewShell()->GetViewFrame();
 
                 if ( rReq.GetArgs() )
-                    pViewFrm->SetChildWindow( nId,
+                    rViewFrm.SetChildWindow( nId,
                                                static_cast<const SfxBoolItem&>(
                                                 (rReq.GetArgs()->Get(SID_FONTWORK))).
                                                     GetValue() );
                 else
-                    pViewFrm->ToggleChildWindow( nId );
+                    rViewFrm.ToggleChildWindow( nId );
 
-                pViewFrm->GetBindings().Invalidate( SID_FONTWORK );
+                rViewFrm.GetBindings().Invalidate( SID_FONTWORK );
                 rReq.Done();
             }
             break;
@@ -154,7 +154,7 @@ void ScDrawTextObjectBar::ExecuteExtra( SfxRequest &rReq )
         case SID_ATTR_PARA_RIGHT_TO_LEFT:
             {
                 SfxItemSetFixed<EE_PARA_WRITINGDIR, EE_PARA_WRITINGDIR,
-                                    EE_PARA_JUST, EE_PARA_JUST>  aAttr( pView->GetModel()->GetItemPool() );
+                                    EE_PARA_JUST, EE_PARA_JUST>  aAttr(pView->GetModel().GetItemPool());
                 bool bLeft = ( nSlot == SID_ATTR_PARA_LEFT_TO_RIGHT );
                 aAttr.Put( SvxFrameDirectionItem(
                                 bLeft ? SvxFrameDirection::Horizontal_LR_TB : SvxFrameDirection::Horizontal_RL_TB,
@@ -220,7 +220,7 @@ void ScDrawTextObjectBar::GetFormTextState(SfxItemSet& rSet)
     }
     else
     {
-        SfxItemSet aViewAttr(pDrView->GetModel()->GetItemPool());
+        SfxItemSet aViewAttr(pDrView->GetModel().GetItemPool());
         pDrView->GetAttributes(aViewAttr);
         rSet.Set(aViewAttr);
     }

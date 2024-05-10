@@ -257,7 +257,25 @@ void SwInputWindow::ShowWin()
 
             SfxItemSetFixed<RES_BOXATR_FORMULA, RES_BOXATR_FORMULA> aSet( m_pWrtShell->GetAttrPool() );
             if( m_pWrtShell->GetTableBoxFormulaAttrs( aSet ))
-                sEdit += aSet.Get( RES_BOXATR_FORMULA ).GetFormula();
+            {
+                SwTableBoxFormula& rFormula
+                    = const_cast<SwTableBoxFormula&>(aSet.Get(RES_BOXATR_FORMULA));
+                // rFormula could be ANY of the table's formulas.
+                // GetFormula returns the "current" formula - which is basically undefined,
+                // so do something that encourages the current position's formula to become current.
+                if (m_pWrtShell->GetCursor())
+                {
+                    const SwNode* pNd = m_pWrtShell->GetCursor()->GetPointNode().FindTableNode();
+                    if (pNd)
+                    {
+                        const SwTable& rTable = static_cast<const SwTableNode*>(pNd)->GetTable();
+                        // get cell's external formula (for UI) by waving the magic wand.
+                        rFormula.PtrToBoxNm(&rTable);
+                    }
+                }
+
+                sEdit += rFormula.GetFormula();
+            }
         }
 
         if( m_bFirst )
@@ -277,7 +295,7 @@ void SwInputWindow::ShowWin()
         // For input cut the UserInterface
 
         m_pView->GetEditWin().LockKeyInput(true);
-        m_pView->GetViewFrame()->GetDispatcher()->Lock(true);
+        m_pView->GetViewFrame().GetDispatcher()->Lock(true);
         m_pWrtShell->Push();
     }
 
@@ -292,10 +310,10 @@ void SwInputWindow::ShowWin()
     }
 }
 
-void SwInputWindow::MenuHdl(std::string_view command)
+void SwInputWindow::MenuHdl(std::u16string_view command)
 {
     if (!command.empty())
-        mxEdit->replace_selection(OUString::fromUtf8(command) + " ");
+        mxEdit->replace_selection(OUString::Concat(command) + " ");
 }
 
 IMPL_LINK_NOARG(SwInputWindow, DropdownClickHdl, ToolBox *, void)
@@ -337,12 +355,12 @@ void  SwInputWindow::ApplyFormula()
         if (SwView* pView = GetActiveView())
         {
             // this just makes the input window go away, so that the next time it works
-            pView->GetViewFrame()->GetDispatcher()->Execute(FN_EDIT_FORMULA, SfxCallMode::ASYNCHRON);
+            pView->GetViewFrame().GetDispatcher()->Execute(FN_EDIT_FORMULA, SfxCallMode::ASYNCHRON);
         }
         return;
     }
 
-    m_pView->GetViewFrame()->GetDispatcher()->Lock(false);
+    m_pView->GetViewFrame().GetDispatcher()->Lock(false);
     m_pView->GetEditWin().LockKeyInput(false);
     CleanupUglyHackWithUndo();
     m_pWrtShell->Pop(SwCursorShell::PopMode::DeleteCurrent);
@@ -358,7 +376,7 @@ void  SwInputWindow::ApplyFormula()
     const SfxPoolItem* aArgs[2];
     aArgs[0] = &aParam;
     aArgs[1] = nullptr;
-    m_pView->GetViewFrame()->GetBindings().Execute( FN_EDIT_FORMULA, aArgs, SfxCallMode::ASYNCHRON );
+    m_pView->GetViewFrame().GetBindings().Execute( FN_EDIT_FORMULA, aArgs, SfxCallMode::ASYNCHRON );
 }
 
 void  SwInputWindow::CancelFormula()
@@ -369,15 +387,15 @@ void  SwInputWindow::CancelFormula()
     if (!m_pView || !m_pWrtShell)
     {
         // presumably there must be an active view now since the event arrived
-        if (SwView* pActiveView = GetActiveView())
+        if (SwView* pView = GetActiveView())
         {
             // this just makes the input window go away, so that the next time it works
-            pActiveView->GetViewFrame()->GetDispatcher()->Execute(FN_EDIT_FORMULA, SfxCallMode::ASYNCHRON);
+            pView->GetViewFrame().GetDispatcher()->Execute(FN_EDIT_FORMULA, SfxCallMode::ASYNCHRON);
         }
         return;
     }
 
-    m_pView->GetViewFrame()->GetDispatcher()->Lock( false );
+    m_pView->GetViewFrame().GetDispatcher()->Lock( false );
     m_pView->GetEditWin().LockKeyInput(false);
     CleanupUglyHackWithUndo();
     m_pWrtShell->Pop(SwCursorShell::PopMode::DeleteCurrent);
@@ -389,7 +407,7 @@ void  SwInputWindow::CancelFormula()
 
     m_pView->GetEditWin().GrabFocus();
 
-    m_pView->GetViewFrame()->GetDispatcher()->Execute( FN_EDIT_FORMULA, SfxCallMode::ASYNCHRON);
+    m_pView->GetViewFrame().GetDispatcher()->Execute( FN_EDIT_FORMULA, SfxCallMode::ASYNCHRON);
 }
 
 const sal_Unicode CH_LRE = 0x202a;

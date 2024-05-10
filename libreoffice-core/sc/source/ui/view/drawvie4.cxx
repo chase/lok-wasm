@@ -50,6 +50,7 @@
 #include <com/sun/star/chart2/XCoordinateSystemContainer.hpp>
 #include <com/sun/star/chart2/XDataSeriesContainer.hpp>
 #include <com/sun/star/chart2/XChartDocument.hpp>
+#include <comphelper/diagnose_ex.hxx>
 
 using namespace com::sun::star;
 
@@ -430,7 +431,7 @@ void ScDrawView::CalcNormScale( Fraction& rFractX, Fraction& rFractY ) const
 
 void ScDrawView::SetMarkedOriginalSize()
 {
-    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(*GetModel()));
+    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(GetModel()));
 
     const SdrMarkList& rMarkList = GetMarkedObjectList();
     tools::Long nDone = 0;
@@ -468,16 +469,16 @@ void ScDrawView::SetMarkedOriginalSize()
                         bDo = true;
                     } catch( embed::NoVisualAreaSizeException& )
                     {
-                        OSL_ENSURE( false, "Can't get the original size of the object!" );
+                        TOOLS_WARN_EXCEPTION("sc.ui", "Can't get the original size of the object!" );
                     }
                 }
             }
         }
         else if (nIdent == SdrObjKind::Graphic)
         {
-            const Graphic& rGraphic = static_cast<SdrGrafObj*>(pObj)->GetGraphic();
+            const SdrGrafObj* pSdrGrafObj = static_cast<const SdrGrafObj*>(pObj);
 
-            MapMode aSourceMap = rGraphic.GetPrefMapMode();
+            MapMode aSourceMap = pSdrGrafObj->GetGraphic().GetPrefMapMode();
             MapMode aDestMap( MapUnit::Map100thMM );
             if (aSourceMap.GetMapUnit() == MapUnit::MapPixel)
             {
@@ -487,16 +488,8 @@ void ScDrawView::SetMarkedOriginalSize()
                 aDestMap.SetScaleX(aNormScaleX);
                 aDestMap.SetScaleY(aNormScaleY);
             }
-            if (pViewData)
-            {
-                vcl::Window* pActWin = pViewData->GetActiveWin();
-                if (pActWin)
-                {
-                    aOriginalSize = pActWin->LogicToLogic(
-                                    rGraphic.GetPrefSize(), &aSourceMap, &aDestMap );
-                    bDo = true;
-                }
-            }
+            aOriginalSize = pSdrGrafObj->getOriginalSize();
+            bDo = true;
         }
 
         if ( bDo )
@@ -545,7 +538,7 @@ void ScDrawView::FitToCellSize()
         return;
     }
 
-    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(*GetModel()));
+    std::unique_ptr<SdrUndoGroup> pUndoGroup(new SdrUndoGroup(GetModel()));
     tools::Rectangle aGraphicRect = pObj->GetSnapRect();
     tools::Rectangle aCellRect = ScDrawLayer::GetCellRect( rDoc, pObjData->maStart, true);
 

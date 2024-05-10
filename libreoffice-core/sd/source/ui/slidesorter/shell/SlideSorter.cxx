@@ -43,27 +43,6 @@ using namespace ::com::sun::star;
 
 namespace sd::slidesorter {
 
-namespace {
-class ContentWindow : public ::sd::Window
-{
-public:
-    ContentWindow(vcl::Window& rParent, SlideSorter& rSlideSorter);
-
-    void SetCurrentFunction (const rtl::Reference<FuPoor>& rpFunction);
-    virtual void Paint(vcl::RenderContext& /*rRenderContext*/, const ::tools::Rectangle& rRect) override;
-    virtual void KeyInput (const KeyEvent& rEvent) override;
-    virtual void MouseMove (const MouseEvent& rEvent) override;
-    virtual void MouseButtonUp (const MouseEvent& rEvent) override;
-    virtual void MouseButtonDown (const MouseEvent& rEvent) override;
-    virtual void Command (const CommandEvent& rEvent) override;
-    virtual bool EventNotify (NotifyEvent& rEvent) override;
-
-private:
-    SlideSorter& mrSlideSorter;
-    rtl::Reference<FuPoor> mpCurrentFunction;
-};
-}
-
 //===== SlideSorter ===========================================================
 
 std::shared_ptr<SlideSorter> SlideSorter::CreateSlideSorter(
@@ -83,44 +62,16 @@ std::shared_ptr<SlideSorter> SlideSorter::CreateSlideSorter(
     return pSlideSorter;
 }
 
-std::shared_ptr<SlideSorter> SlideSorter::CreateSlideSorter (
-    ViewShellBase& rBase,
-    vcl::Window& rParentWindow)
-{
-    std::shared_ptr<SlideSorter> pSlideSorter(
-        new SlideSorter(
-            rBase,
-            rParentWindow),
-        o3tl::default_delete<SlideSorter>());
-    pSlideSorter->Init();
-    return pSlideSorter;
-}
-
 SlideSorter::SlideSorter (
     ViewShell& rViewShell,
     sd::Window* pContentWindow,
     ScrollAdaptor* pHorizontalScrollBar,
     ScrollAdaptor* pVerticalScrollBar)
-    : mbIsValid(false),
-      mpViewShell(&rViewShell),
+    : mpViewShell(&rViewShell),
       mpViewShellBase(&rViewShell.GetViewShellBase()),
       mpContentWindow(pContentWindow),
       mpHorizontalScrollBar(pHorizontalScrollBar),
       mpVerticalScrollBar(pVerticalScrollBar),
-      mpProperties(std::make_shared<controller::Properties>()),
-      mpTheme(std::make_shared<view::Theme>(mpProperties))
-{
-}
-
-SlideSorter::SlideSorter (
-    ViewShellBase& rBase,
-    vcl::Window& rParentWindow)
-    : mbIsValid(false),
-      mpViewShell(nullptr),
-      mpViewShellBase(&rBase),
-      mpContentWindow(VclPtr<ContentWindow>::Create(rParentWindow,*this )),
-      mpHorizontalScrollBar(VclPtr<ScrollAdaptor>::Create(&rParentWindow, true)),
-      mpVerticalScrollBar(VclPtr<ScrollAdaptor>::Create(&rParentWindow, false)),
       mpProperties(std::make_shared<controller::Properties>()),
       mpTheme(std::make_shared<view::Theme>(mpProperties))
 {
@@ -136,11 +87,7 @@ void SlideSorter::Init()
     {
         mpProperties->SetBackgroundColor(
             mpContentWindow->GetSettings().GetStyleSettings().GetWindowColor());
-        mpProperties->SetTextColor(
-            mpContentWindow->GetSettings().GetStyleSettings().GetWindowTextColor());
         mpProperties->SetSelectionColor(
-            mpContentWindow->GetSettings().GetStyleSettings().GetMenuHighlightColor());
-        mpProperties->SetHighlightColor(
             mpContentWindow->GetSettings().GetStyleSettings().GetMenuHighlightColor());
     }
 
@@ -166,14 +113,10 @@ void SlideSorter::Init()
 
     // Set view pointer of base class.
     SetupControls();
-
-    mbIsValid = true;
 }
 
 SlideSorter::~SlideSorter()
 {
-    mbIsValid = false;
-
     ReleaseListeners();
 
     // Dispose model, view and controller to avoid calls between them when
@@ -213,13 +156,6 @@ Reference<frame::XController> SlideSorter::GetXController() const
 {
     Reference<frame::XController> xController(mxControllerWeak);
     return xController;
-}
-
-void SlideSorter::Paint (const ::tools::Rectangle& rRepaintArea)
-{
-    GetController().Paint(
-        rRepaintArea,
-        GetContentWindow());
 }
 
 void SlideSorter::SetupControls()
@@ -363,12 +299,6 @@ void SlideSorter::SetCurrentFunction (const rtl::Reference<FuPoor>& rpFunction)
         GetViewShell()->SetCurrentFunction(rpFunction);
         GetViewShell()->SetOldFunction(rpFunction);
     }
-    else
-    {
-        ContentWindow* pWindow = dynamic_cast<ContentWindow*>(GetContentWindow().get());
-        if (pWindow != nullptr)
-            pWindow->SetCurrentFunction(rpFunction);
-    }
 }
 
 std::shared_ptr<controller::Properties> const & SlideSorter::GetProperties() const
@@ -382,67 +312,6 @@ std::shared_ptr<view::Theme> const & SlideSorter::GetTheme() const
     assert(mpTheme);
     return mpTheme;
 }
-
-//===== ContentWindow =========================================================
-
-namespace {
-
-ContentWindow::ContentWindow(
-    vcl::Window& rParent,
-    SlideSorter& rSlideSorter)
-    : ::sd::Window(&rParent),
-    mrSlideSorter(rSlideSorter)
-{
-    SetDialogControlFlags(GetDialogControlFlags() & ~DialogControlFlags::WantFocus);
-    SetStyle(GetStyle() | WB_NOPOINTERFOCUS);
-}
-
-void ContentWindow::SetCurrentFunction (const rtl::Reference<FuPoor>& rpFunction)
-{
-    mpCurrentFunction = rpFunction;
-}
-
-void ContentWindow::Paint (vcl::RenderContext& /*rRenderContext*/, const ::tools::Rectangle& rRect)
-{
-    mrSlideSorter.Paint(rRect);
-}
-
-void ContentWindow::KeyInput (const KeyEvent& rEvent)
-{
-    if (mpCurrentFunction.is())
-        mpCurrentFunction->KeyInput(rEvent);
-}
-
-void ContentWindow::MouseMove (const MouseEvent& rEvent)
-{
-    if (mpCurrentFunction.is())
-        mpCurrentFunction->MouseMove(rEvent);
-}
-
-void ContentWindow::MouseButtonUp(const MouseEvent& rEvent)
-{
-    if (mpCurrentFunction.is())
-        mpCurrentFunction->MouseButtonUp(rEvent);
-}
-
-void ContentWindow::MouseButtonDown(const MouseEvent& rEvent)
-{
-    if (mpCurrentFunction.is())
-        mpCurrentFunction->MouseButtonDown(rEvent);
-}
-
-void ContentWindow::Command(const CommandEvent& rEvent)
-{
-    if (mpCurrentFunction.is())
-        mpCurrentFunction->Command(rEvent);
-}
-
-bool ContentWindow::EventNotify(NotifyEvent&)
-{
-    return false;
-}
-
-} // end of anonymous namespace
 
 } // end of namespace ::sd::slidesorter
 

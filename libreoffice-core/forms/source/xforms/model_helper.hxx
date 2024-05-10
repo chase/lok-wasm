@@ -64,14 +64,14 @@ protected:
     {
         auto pBinding = comphelper::getFromUnoTunnel<Binding>( t );
         OSL_ENSURE( pBinding != nullptr, "invalid item?" );
-        pBinding->_setModel( css::uno::Reference<css::xforms::XModel>( mpModel ) );
+        pBinding->_setModel( mpModel );
     }
 
     virtual void _remove( const T& t ) override
     {
         auto pBinding = comphelper::getFromUnoTunnel<Binding>( t );
         OSL_ENSURE( pBinding != nullptr, "invalid item?" );
-        pBinding->_setModel( css::uno::Reference<css::xforms::XModel>() );
+        pBinding->_setModel( nullptr );
     }
 };
 
@@ -84,22 +84,22 @@ public:
 
     virtual bool isValid( const T& t ) const override
     {
-        return comphelper::getFromUnoTunnel<Submission>( t ) != nullptr;
+        return dynamic_cast<Submission*>( t.get() ) != nullptr;
     }
 
 protected:
     virtual void _insert( const T& t ) override
     {
-        auto pSubmission = comphelper::getFromUnoTunnel<Submission>( t );
-        OSL_ENSURE( pSubmission != nullptr, "invalid item?" );
-        pSubmission->setModel( css::uno::Reference<css::xforms::XModel>( mpModel ) );
+        auto pSubmission = dynamic_cast<Submission*>( t.get() );
+        assert(pSubmission && "invalid item?");
+        pSubmission->setModel( mpModel );
     }
 
     virtual void _remove( const T& t ) override
     {
-        auto pSubmission = comphelper::getFromUnoTunnel<Submission>( t );
-        OSL_ENSURE( pSubmission != nullptr, "invalid item?" );
-        pSubmission->setModel( css::uno::Reference<css::xforms::XModel>( ) );
+        auto pSubmission = dynamic_cast<Submission*>( t.get() );
+        assert(pSubmission && "invalid item?");
+        pSubmission->setModel( nullptr );
     }
 };
 

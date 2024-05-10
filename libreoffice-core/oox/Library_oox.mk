@@ -43,14 +43,12 @@ $(eval $(call gb_Library_use_libraries,oox,\
     comphelper \
     cppu \
     cppuhelper \
-    editeng \
     docmodel \
-    expwrap \
     drawinglayer \
-    docmodel \
+    editeng \
+    i18nlangtag \
     msfilter \
     sal \
-    i18nlangtag \
     sax \
     sfx \
     svl \
@@ -61,12 +59,13 @@ $(eval $(call gb_Library_use_libraries,oox,\
     tl \
     utl \
     vcl \
-    xo \
     xmlscript \
+    xo \
 ))
 
 $(eval $(call gb_Library_use_externals,oox,\
 	boost_headers \
+	frozen \
 ))
 
 ifeq ($(TLS),OPENSSL)
@@ -146,6 +145,7 @@ $(eval $(call gb_Library_add_exception_objects,oox,\
     oox/source/drawingml/clrschemecontext \
     oox/source/drawingml/clrscheme \
     oox/source/drawingml/colorchoicecontext \
+    oox/source/drawingml/connectorhelper \
     oox/source/drawingml/connectorshapecontext \
     oox/source/drawingml/customshapegeometry \
     oox/source/drawingml/customshapepresetdata \
@@ -167,6 +167,7 @@ $(eval $(call gb_Library_add_exception_objects,oox,\
     oox/source/drawingml/effectpropertiescontext \
     oox/source/drawingml/embeddedwavaudiofile \
     oox/source/drawingml/fillproperties \
+    oox/source/drawingml/fontworkhelpers \
     oox/source/drawingml/misccontexts \
     oox/source/drawingml/graphicshapecontext \
     oox/source/drawingml/guidcontext \
@@ -249,8 +250,7 @@ $(eval $(call gb_Library_add_exception_objects,oox,\
     oox/source/helper/storagebase \
     oox/source/helper/textinputstream \
     oox/source/helper/zipstorage \
-    oox/source/mathml/export \
-    oox/source/mathml/import \
+    oox/source/mathml/imexport \
     oox/source/mathml/importutils \
     oox/source/ole/axbinaryreader \
     oox/source/ole/axbinarywriter \
@@ -303,6 +303,7 @@ $(eval $(call gb_Library_add_exception_objects,oox,\
     oox/source/shape/ShapeContextHandler \
     oox/source/shape/ShapeDrawingFragmentHandler \
     oox/source/shape/ShapeFilterBase \
+    oox/source/shape/WordprocessingCanvasContext \
     oox/source/shape/WpgContext \
     oox/source/shape/WpsContext \
     oox/source/token/namespacemap \

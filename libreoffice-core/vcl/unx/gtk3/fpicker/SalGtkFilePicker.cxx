@@ -17,12 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#ifdef AIX
-#define _LINUX_SOURCE_COMPAT
-#include <sys/timer.h>
-#undef _LINUX_SOURCE_COMPAT
-#endif
-
 #include <config_gio.h>
 
 #include <com/sun/star/awt/SystemDependentXWindow.hpp>
@@ -991,7 +985,7 @@ sal_Int16 SAL_CALL SalGtkFilePicker::execute()
                                 RTL_TEXTENCODING_UTF8
                               )
                             );
-                            OString toReplace("$filename$");
+                            OString toReplace("$filename$"_ostr);
 
                             aMsg = aMsg.replaceAt(
                               aMsg.indexOf( toReplace ),
@@ -1031,7 +1025,7 @@ sal_Int16 SAL_CALL SalGtkFilePicker::execute()
                                     RTL_TEXTENCODING_UTF8
                                   );
 
-                                toReplace = "$dirname$";
+                                toReplace = "$dirname$"_ostr;
 
                                 aMsg = aMsg.replaceAt(
                                   aMsg.indexOf( toReplace ),
@@ -1683,7 +1677,7 @@ void SalGtkFilePicker::impl_initialize(GtkWidget* pParentWidget, sal_Int16 templ
     GtkFileChooserAction eAction = GTK_FILE_CHOOSER_ACTION_OPEN;
     OString sOpen = getOpenText();
     OString sSave = getSaveText();
-    const gchar *first_button_text = sOpen.getStr();
+    const gchar *first_button_text;
 
     SolarMutexGuard g;
 

@@ -11,12 +11,15 @@
 #define INCLUDED_VCL_SKIA_SKIAHELPER_HXX
 
 #include <vcl/dllapi.h>
+#include <rtl/ustring.hxx>
 
 #include <config_features.h>
 
 namespace SkiaHelper
 {
 VCL_DLLPUBLIC bool isVCLSkiaEnabled();
+VCL_DLLPUBLIC OUString readLog();
+VCL_DLLPUBLIC bool isAlphaMaskBlendingEnabled();
 
 #if HAVE_FEATURE_SKIA
 

@@ -19,6 +19,15 @@
 
 #include <sal/config.h>
 
+#if defined __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-value"
+#endif
+#if defined __GNUC__ && !defined __clang__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+#endif
+
 #include <skia/x11/textrender.hxx>
 
 #include <unx/fc_fontoptions.hxx>
@@ -29,6 +38,13 @@
 
 #include <SkFont.h>
 #include <SkFontMgr_fontconfig.h>
+
+#if defined __GNUC__ && !defined __clang__
+#pragma GCC diagnostic pop
+#endif
+#if defined __clang__
+#pragma clang diagnostic pop
+#endif
 
 void SkiaTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalGraphics& rGraphics)
 {
@@ -55,7 +71,7 @@ void SkiaTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalGr
     if (rInstance.NeedsArtificialBold())
         font.setEmbolden(true);
 
-    bool bSubpixelPositioning = rLayout.GetTextRenderModeForResolutionIndependentLayout();
+    bool bSubpixelPositioning = rLayout.GetSubpixelPositioning();
     SkFont::Edging ePreferredAliasing
         = bSubpixelPositioning ? SkFont::Edging::kSubpixelAntiAlias : SkFont::Edging::kAntiAlias;
     if (bSubpixelPositioning)
@@ -65,8 +81,10 @@ void SkiaTextRender::DrawTextLayout(const GenericSalLayout& rLayout, const SalGr
         font.setSubpixel(true);
 
         SkFontHinting eHinting = font.getHinting();
+        static bool bAllowDefaultHinting = getenv("SAL_ALLOW_DEFAULT_HINTING") != nullptr;
         bool bAllowedHintStyle
-            = eHinting == SkFontHinting::kNone || eHinting == SkFontHinting::kSlight;
+            = bAllowDefaultHinting
+              || (eHinting == SkFontHinting::kNone || eHinting == SkFontHinting::kSlight);
         if (!bAllowedHintStyle)
             font.setHinting(SkFontHinting::kSlight);
     }

@@ -129,14 +129,14 @@ void SwUiWriterTest::testRedlineFrame(char const*const file)
 
 //Replacement tests
 
-constexpr OUStringLiteral ORIGINAL_REPLACE_CONTENT(u"toto titi tutu");
-constexpr OUStringLiteral EXPECTED_REPLACE_CONTENT(u"toto toto tutu");
+constexpr OUString ORIGINAL_REPLACE_CONTENT(u"toto titi tutu"_ustr);
+constexpr OUString EXPECTED_REPLACE_CONTENT(u"toto toto tutu"_ustr);
 
 // Chinese conversion tests
 
 const sal_Unicode CHINESE_TRADITIONAL_CONTENT(0x9F8D);
 const sal_Unicode CHINESE_SIMPLIFIED_CONTENT(0x9F99);
-constexpr OUStringLiteral NON_CHINESE_CONTENT(u"Hippopotamus");
+constexpr OUString NON_CHINESE_CONTENT(u"Hippopotamus"_ustr);
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testReplaceForward)
 {
@@ -154,11 +154,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testReplaceForward)
     lcl_selectCharacters(aPaM, 5, 9);
     pDoc->getIDocumentContentOperations().ReplaceRange(aPaM, "toto", false);
 
-    CPPUNIT_ASSERT_EQUAL(OUString(EXPECTED_REPLACE_CONTENT), pTextNode->GetText());
+    CPPUNIT_ASSERT_EQUAL(EXPECTED_REPLACE_CONTENT, pTextNode->GetText());
 
     rUndoManager.Undo();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(ORIGINAL_REPLACE_CONTENT), pTextNode->GetText());
+    CPPUNIT_ASSERT_EQUAL(ORIGINAL_REPLACE_CONTENT, pTextNode->GetText());
 }
 
 
@@ -318,6 +318,127 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf149548)
     dispatchCommand(mxComponent, ".uno:Paste", {});
 }
 
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testPasteTableAtFlyAnchor)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    SwFormatAnchor anchor(RndStdIds::FLY_AT_CHAR);
+    anchor.SetAnchor(pWrtShell->GetCursor()->GetPoint());
+    SfxItemSet flySet(pDoc->GetAttrPool(), svl::Items<RES_ANCHOR, RES_ANCHOR>);
+    flySet.Put(anchor);
+    SwFlyFrameFormat const* pFly = dynamic_cast<SwFlyFrameFormat const*>(
+            pWrtShell->NewFlyFrame(flySet, /*bAnchValid=*/true));
+    CPPUNIT_ASSERT(pFly != nullptr);
+    CPPUNIT_ASSERT(pFly->GetFrame() != nullptr);
+    pWrtShell->SelFlyGrabCursor();
+    pWrtShell->GetDrawView()->UnmarkAll();
+    CPPUNIT_ASSERT(pWrtShell->GetCurrFlyFrame() != nullptr);
+
+    // insert table in fly
+    SwInsertTableOptions tableOpt(SwInsertTableFlags::DefaultBorder, 0);
+    pWrtShell->InsertTable(tableOpt, 2, 2);
+
+    // select table
+    pWrtShell->SelAll();
+
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+
+    // move cursor back to body
+    pWrtShell->ClearMark();
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    CPPUNIT_ASSERT(!pWrtShell->GetCurrFlyFrame());
+
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    CPPUNIT_ASSERT(pWrtShell->IsCursorInTable());
+    CPPUNIT_ASSERT(!pFly->GetAnchor().GetContentAnchor()->GetNode().FindTableNode());
+
+    pWrtShell->Undo();
+
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    CPPUNIT_ASSERT(!pWrtShell->IsCursorInTable());
+    CPPUNIT_ASSERT(!pFly->GetAnchor().GetContentAnchor()->GetNode().FindTableNode());
+
+    // the problem was that Redo moved the fly anchor into the first table cell
+    pWrtShell->Redo();
+
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    CPPUNIT_ASSERT(pWrtShell->IsCursorInTable());
+    CPPUNIT_ASSERT(!pFly->GetAnchor().GetContentAnchor()->GetNode().FindTableNode());
+
+    pWrtShell->Undo();
+
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    CPPUNIT_ASSERT(!pWrtShell->IsCursorInTable());
+    CPPUNIT_ASSERT(!pFly->GetAnchor().GetContentAnchor()->GetNode().FindTableNode());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testCopyPastePageBreak)
+{
+    {
+        createSwDoc("pagebreak-source.fodt");
+        SwDoc* pDoc = getSwDoc();
+
+        SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+        CPPUNIT_ASSERT_EQUAL(tools::Long(5669), pWrtShell->GetLayout()->GetLower()->getFramePrintArea().Top());
+
+        pWrtShell->SelAll();
+        dispatchCommand(mxComponent, ".uno:Copy", {});
+
+        mxComponent->dispose();
+        mxComponent.clear();
+    }
+
+    createSwDoc("pagebreak-target.fodt");
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+
+    CPPUNIT_ASSERT_EQUAL(1, getParagraphs());
+    CPPUNIT_ASSERT_EQUAL(OUString("WithMargin"), getProperty<OUString>(getParagraph(1), "PageDescName"));
+    CPPUNIT_ASSERT_EQUAL(OUString("TargetSection"), pWrtShell->GetCurrSection()->GetSectionName());
+    // page style WithMargin is used
+    CPPUNIT_ASSERT_EQUAL(tools::Long(5669), pWrtShell->GetLayout()->GetLower()->getFramePrintArea().Top());
+
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
+    CPPUNIT_ASSERT_EQUAL(OUString("WithMargin"), getProperty<OUString>(getParagraph(1), "PageDescName"));
+    CPPUNIT_ASSERT_EQUAL(size_t(2), pDoc->GetSections().size());
+    CPPUNIT_ASSERT_EQUAL(OUString("SourceSection"), pWrtShell->GetCurrSection()->GetSectionName());
+    // the problem was that there was a page break now
+    CPPUNIT_ASSERT_EQUAL(1, getPages());
+    // page style WithMargin is used
+    CPPUNIT_ASSERT_EQUAL(tools::Long(5669), pWrtShell->GetLayout()->GetLower()->getFramePrintArea().Top());
+
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(1, getParagraphs());
+    CPPUNIT_ASSERT_EQUAL(OUString("WithMargin"), getProperty<OUString>(getParagraph(1), "PageDescName"));
+    CPPUNIT_ASSERT_EQUAL(OUString("TargetSection"), pWrtShell->GetCurrSection()->GetSectionName());
+    CPPUNIT_ASSERT_EQUAL(1, getPages());
+    // page style WithMargin is used
+    CPPUNIT_ASSERT_EQUAL(tools::Long(5669), pWrtShell->GetLayout()->GetLower()->getFramePrintArea().Top());
+
+    pWrtShell->Redo();
+    CPPUNIT_ASSERT_EQUAL(2, getParagraphs());
+    CPPUNIT_ASSERT_EQUAL(OUString("WithMargin"), getProperty<OUString>(getParagraph(1), "PageDescName"));
+    CPPUNIT_ASSERT_EQUAL(size_t(2), pDoc->GetSections().size());
+    CPPUNIT_ASSERT_EQUAL(OUString("SourceSection"), pWrtShell->GetCurrSection()->GetSectionName());
+    CPPUNIT_ASSERT_EQUAL(1, getPages());
+    // page style WithMargin is used
+    CPPUNIT_ASSERT_EQUAL(tools::Long(5669), pWrtShell->GetLayout()->GetLower()->getFramePrintArea().Top());
+
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(1, getParagraphs());
+    CPPUNIT_ASSERT_EQUAL(OUString("WithMargin"), getProperty<OUString>(getParagraph(1), "PageDescName"));
+    CPPUNIT_ASSERT_EQUAL(OUString("TargetSection"), pWrtShell->GetCurrSection()->GetSectionName());
+    CPPUNIT_ASSERT_EQUAL(1, getPages());
+    // page style WithMargin is used
+    CPPUNIT_ASSERT_EQUAL(tools::Long(5669), pWrtShell->GetLayout()->GetLower()->getFramePrintArea().Top());
+}
+
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testBookmarkCopy)
 {
     createSwDoc();
@@ -416,7 +537,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testFormulaNumberWithGroupSeparator)
     CPPUNIT_ASSERT_EQUAL(OUString("5000*10%"), pField->GetFormula());
     CPPUNIT_ASSERT_EQUAL(OUString("500"), pField->ExpandField(true, nullptr));
     pWrtShell->Down(false);
-    CPPUNIT_ASSERT_EQUAL(OUString(u"-100,00 €"), pWrtShell->GetCursor()->GetPoint()->nNode.GetNode().GetTextNode()->GetText());
+    CPPUNIT_ASSERT_EQUAL(u"-100,00 €"_ustr, pWrtShell->GetCursor()->GetPoint()->nNode.GetNode().GetTextNode()->GetText());
     pWrtShell->GoNextCell();
     // tdf#42518 the problem was that this was 1.900,00 €
     CPPUNIT_ASSERT_EQUAL(OUString("** Expression is faulty **"), pWrtShell->GetCursor()->GetPoint()->nNode.GetNode().GetTextNode()->GetText());
@@ -557,7 +678,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf147220)
     SwDoc* pDoc = getSwDoc();
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
 
-    pWrtShell->Insert(u"él");
+    pWrtShell->Insert(u"él"_ustr);
 
     // hide and enable
     dispatchCommand(mxComponent, ".uno:ShowTrackedChanges", {});
@@ -572,21 +693,21 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf147220)
     pWrtShell->GoEndSentence();
 
     // this did not remove the original text from the layout
-    pWrtShell->Replace(u"Él", false);
+    pWrtShell->Replace(u"Él"_ustr, false);
 
     // currently the deleted text is before the replacement text, not sure if
     // that is really required
-    CPPUNIT_ASSERT_EQUAL(OUString(u"élÉl"),
+    CPPUNIT_ASSERT_EQUAL(u"élÉl"_ustr,
         pWrtShell->GetCursor()->GetPoint()->GetNode().GetTextNode()->GetText());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Él"),
+    CPPUNIT_ASSERT_EQUAL(u"Él"_ustr,
         static_cast<SwTextFrame const*>(pWrtShell->GetCursor()->GetPoint()->GetNode().GetTextNode()->getLayoutFrame(nullptr))->GetText());
 
     SwRedlineTable const& rRedlines(pDoc->getIDocumentRedlineAccess().GetRedlineTable());
     CPPUNIT_ASSERT_EQUAL(SwRedlineTable::size_type(2), rRedlines.size());
     CPPUNIT_ASSERT_EQUAL(RedlineType::Delete, rRedlines[0]->GetType());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"él"), rRedlines[0]->GetText());
+    CPPUNIT_ASSERT_EQUAL(u"él"_ustr, rRedlines[0]->GetText());
     CPPUNIT_ASSERT_EQUAL(RedlineType::Insert, rRedlines[1]->GetType());
-    CPPUNIT_ASSERT_EQUAL(OUString(u"Él"), rRedlines[1]->GetText());
+    CPPUNIT_ASSERT_EQUAL(u"Él"_ustr, rRedlines[1]->GetText());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf135978)
@@ -689,11 +810,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testReplaceBackward)
 
     pDoc->getIDocumentContentOperations().ReplaceRange(aPaM, "toto", false);
 
-    CPPUNIT_ASSERT_EQUAL(OUString(EXPECTED_REPLACE_CONTENT), pTextNode->GetText());
+    CPPUNIT_ASSERT_EQUAL(EXPECTED_REPLACE_CONTENT, pTextNode->GetText());
 
     rUndoManager.Undo();
 
-    CPPUNIT_ASSERT_EQUAL(OUString(ORIGINAL_REPLACE_CONTENT), pTextNode->GetText());
+    CPPUNIT_ASSERT_EQUAL(ORIGINAL_REPLACE_CONTENT, pTextNode->GetText());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testFdo69893)
@@ -749,12 +870,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testImportRTF)
     pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 3, /*bBasicCall=*/false);
 
     // Insert the RTF at the cursor position.
-    OString aData = "{\\rtf1 Hello world!\\par}";
+    OString aData = "{\\rtf1 Hello world!\\par}"_ostr;
     SvMemoryStream aStream(const_cast<char*>(aData.getStr()), aData.getLength(), StreamMode::READ);
     SwReader aReader(aStream, OUString(), OUString(), *pWrtShell->GetCursor());
     Reader* pRTFReader = SwReaderWriter::GetRtfReader();
     CPPUNIT_ASSERT(pRTFReader != nullptr);
-    CPPUNIT_ASSERT_EQUAL(ERRCODE_NONE, aReader.Read(*pRTFReader));
+    CPPUNIT_ASSERT_EQUAL(ERRCODE_NONE, aReader.Read(*pRTFReader).GetCode());
 
     SwNodeOffset nIndex = pWrtShell->GetCursor()->GetPointNode().GetIndex();
     CPPUNIT_ASSERT_EQUAL(OUString("fooHello world!"), pDoc->GetNodes()[nIndex - 1]->GetTextNode()->GetText());
@@ -886,8 +1007,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testWatermarkDOCX)
     createSwDoc("watermark.docx");
     SwDoc* const pDoc = getSwDoc();
     SwDocShell* pDocShell = pDoc->GetDocShell();
-    const SfxWatermarkItem* pWatermark;
-    SfxItemState eState = pDocShell->GetViewShell()->GetViewFrame()->GetDispatcher()->QueryState(SID_WATERMARK, pWatermark);
+    SfxPoolItemHolder aResult;
+    SfxItemState eState = pDocShell->GetViewShell()->GetViewFrame().GetDispatcher()->QueryState(SID_WATERMARK, aResult);
+    const SfxWatermarkItem* pWatermark(static_cast<const SfxWatermarkItem*>(aResult.getItem()));
 
     CPPUNIT_ASSERT(eState >= SfxItemState::DEFAULT);
     CPPUNIT_ASSERT(pWatermark);
@@ -919,8 +1041,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testWatermarkPosition)
         uno::Reference<frame::XModel> xModel = pDoc->GetDocShell()->GetBaseModel();
         uno::Reference<style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(xModel, uno::UNO_QUERY);
         uno::Reference<container::XNameAccess> xStyleFamilies = xStyleFamiliesSupplier->getStyleFamilies();
-        uno::Reference<container::XNameAccess> xStyleFamily(xStyleFamilies->getByName("PageStyles"), uno::UNO_QUERY);
-        uno::Reference<beans::XPropertySet> xPageStyle(xStyleFamily->getByName("Default Page Style"), uno::UNO_QUERY);
 
         // 1. Add additional page breaks
         for (int j = 0; j < aAdditionalPagesCount[i]; ++j)
@@ -1278,7 +1398,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testChineseConversionNonChineseText)
 
     // Then
     SwTextNode* pTextNode = aPaM.GetPointNode().GetTextNode();
-    CPPUNIT_ASSERT_EQUAL(OUString(NON_CHINESE_CONTENT), pTextNode->GetText());
+    CPPUNIT_ASSERT_EQUAL(NON_CHINESE_CONTENT, pTextNode->GetText());
 
 }
 
@@ -1347,7 +1467,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testFdo85554)
     xDrawPage->add(xShape);
 
     // Save it and load it back.
-    reload("writer8", "fdo85554.odt");
+    saveAndReload("writer8");
 
     // This was 1, we lost a shape on export.
     CPPUNIT_ASSERT_EQUAL(2, getShapes());
@@ -1435,6 +1555,152 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testBookmarkUndo)
     CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
     rUndoManager.Redo();
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), pMarkAccess->getAllMarksCount());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf148389_Left)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    CPPUNIT_ASSERT(pWrtShell);
+    pWrtShell->Insert("foo bar baz");
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 4, /*bBasicCall=*/false);
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/true, 3, /*bBasicCall=*/false);
+    IDocumentMarkAccess* const pMarkAccess = pDoc->getIDocumentMarkAccess();
+
+    auto pMark = pMarkAccess->makeMark(*pWrtShell->GetCursor(), "Mark",
+        IDocumentMarkAccess::MarkType::BOOKMARK, ::sw::mark::InsertMode::New);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    pWrtShell->Right(SwCursorSkipMode::Chars, /*bSelect=*/false, 4, /*bBasicCall=*/false);
+    pWrtShell->DelLeft();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->DelLeft();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->DelLeft();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->DelLeft();
+    // historically it wasn't deleted if empty, not sure if it should be
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    // the problem was that the end position was not restored
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    // this undo is no longer grouped, to prevent Redo deleting bookmark
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Redo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Redo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), pMark->GetOtherMarkPos().GetContentIndex());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf148389_Right)
+{
+    createSwDoc();
+    SwDoc* pDoc = getSwDoc();
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    CPPUNIT_ASSERT(pWrtShell);
+    pWrtShell->Insert("foo bar baz");
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 4, /*bBasicCall=*/false);
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/true, 3, /*bBasicCall=*/false);
+    IDocumentMarkAccess* const pMarkAccess = pDoc->getIDocumentMarkAccess();
+
+    auto pMark = pMarkAccess->makeMark(*pWrtShell->GetCursor(), "Mark",
+        IDocumentMarkAccess::MarkType::BOOKMARK, ::sw::mark::InsertMode::New);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 2, /*bBasicCall=*/false);
+    pWrtShell->DelRight();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->DelRight();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->DelRight();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->DelRight();
+    // historically it wasn't deleted if empty, not sure if it should be
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    // the problem was that the start position was not restored
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    // this undo is no longer grouped, to prevent Redo deleting bookmark
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    // this undo is no longer grouped, to prevent Redo deleting bookmark
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Redo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Redo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Redo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(5), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(6), pMark->GetOtherMarkPos().GetContentIndex());
+    pWrtShell->Undo();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), pMarkAccess->getAllMarksCount());
+    // Undo re-creates the mark...
+    pMark = *pMarkAccess->getAllMarksBegin();
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(4), pMark->GetMarkPos().GetContentIndex());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(7), pMark->GetOtherMarkPos().GetContentIndex());
 }
 
 static void lcl_setWeight(SwWrtShell* pWrtShell, FontWeight aWeight)
@@ -1545,7 +1811,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf137532)
     CPPUNIT_ASSERT_EQUAL(awt::FontWeight::BOLD, getProperty<float>(xCursor, "CharWeight"));
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     xCursor.set(xText->createTextCursorByRange(getRun(getParagraph(1), 1)));
     CPPUNIT_ASSERT(xCursor.is());
@@ -1557,7 +1822,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf137532)
     CPPUNIT_ASSERT_EQUAL(awt::FontWeight::BOLD, getProperty<float>(xCursor, "CharWeight"));
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     xCursor.set(xText->createTextCursorByRange(getRun(getParagraph(1), 1)));
     CPPUNIT_ASSERT(xCursor.is());
@@ -1593,10 +1857,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testFdo87448)
 
     // The first polyline in the document has a number of points to draw arcs,
     // the last one jumps back to the start, so we call "end" the last but one.
-    sal_Int32 nFirstEnd = getXPath(pXmlDoc, "(//polyline)[1]/point[last()-1]", "x").toInt32();
+    sal_Int32 nFirstEnd = getXPath(pXmlDoc, "(//polyline)[1]/point[last()-1]"_ostr, "x"_ostr).toInt32();
     // The second polyline has a different start point, but the arc it draws
     // should end at the ~same position as the first polyline.
-    sal_Int32 nSecondEnd = getXPath(pXmlDoc, "(//polyline)[2]/point[last()]", "x").toInt32();
+    sal_Int32 nSecondEnd = getXPath(pXmlDoc, "(//polyline)[2]/point[last()]"_ostr, "x"_ostr).toInt32();
 
     // nFirstEnd was 6023 and nSecondEnd was 6648, now they should be much closer, e.g. nFirstEnd = 6550, nSecondEnd = 6548
     OString aMsg = "nFirstEnd is " + OString::number(nFirstEnd) + ", nSecondEnd is " + OString::number(nSecondEnd);
@@ -1606,7 +1870,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testFdo87448)
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTextCursorInvalidation)
 {
-    createSwDoc();
     createSwDoc();
     SwDoc* pDoc = getSwDoc();
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
@@ -1654,13 +1917,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testCp1000115)
 {
     createSwDoc("cp1000115.fodt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    xmlXPathObjectPtr pXmlObj = getXPathNode(pXmlDoc, "/root/page[2]/body/tab/row/cell[2]/txt");
-    xmlNodeSetPtr pXmlNodes = pXmlObj->nodesetval;
     // This was 1: the long paragraph in the B1 cell did flow over to the
     // second page, so there was only one paragraph in the second cell of the
     // second page.
-    CPPUNIT_ASSERT_EQUAL(2, xmlXPathNodeSetGetLength(pXmlNodes));
-    xmlXPathFreeObject(pXmlObj);
+    assertXPath(pXmlDoc, "/root/page[2]/body/tab/row/cell[2]/txt"_ostr, 2);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf63214)
@@ -1698,7 +1958,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf90003)
     CPPUNIT_ASSERT(pXmlDoc);
     // This was 1: an unexpected fly portion was created, resulting in too
     // large x position for the empty paragraph marker.
-    assertXPath(pXmlDoc, "//SwFixPortion[@type='PortionType::Fly']", 0);
+    assertXPath(pXmlDoc, "//SwFixPortion[@type='PortionType::Fly']"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest, testTdf51741)

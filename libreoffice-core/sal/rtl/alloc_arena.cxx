@@ -23,11 +23,14 @@
 
 #include "alloc_impl.hxx"
 #include <rtllifecycle.h>
-#include <sal/macros.h>
 
 #include <cassert>
 #include <string.h>
 #include <stdio.h>
+
+#if defined(SAL_UNX)
+#include <unistd.h>
+#endif /* SAL_UNX */
 
 namespace {
 

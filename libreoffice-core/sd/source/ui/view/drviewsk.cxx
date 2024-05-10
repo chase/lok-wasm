@@ -32,13 +32,13 @@ void DrawViewShell::ConfigurationChanged( utl::ConfigurationBroadcaster* pCb, Co
         if (DrawViewShell* pCurrentDrawShell = dynamic_cast<DrawViewShell*>(pShellBase->GetMainViewShell().get()))
         {
             pCurrentDrawShell->maViewOptions.mnDocBackgroundColor = pColorConfig->GetColorValue(svtools::DOCCOLOR).nColor;
-            pCurrentDrawShell->maViewOptions.msColorSchemeName = pColorConfig->GetCurrentSchemeName();
+            pCurrentDrawShell->maViewOptions.msColorSchemeName = svtools::ColorConfig::GetCurrentSchemeName();
         }
         SdXImpressDocument* pDoc = comphelper::getFromUnoTunnel<SdXImpressDocument>(pCurrentShell->GetCurrentDocument());
         SfxLokHelper::notifyViewRenderState(pCurrentShell, pDoc);
         Color aFillColor(pColorConfig->GetColorValue(svtools::APPBACKGROUND).nColor);
         pCurrentShell->libreOfficeKitViewCallback(LOK_CALLBACK_APPLICATION_BACKGROUND_COLOR,
-                    aFillColor.AsRGBHexString().toUtf8().getStr());
+                    aFillColor.AsRGBHexString().toUtf8());
     }
 }
 

@@ -13,10 +13,9 @@
 #include <vcl/DocWindow.hxx>
 #include <vcl/ITiledRenderable.hxx>
 
-
 namespace vcl
 {
-void DocWindow::SetPointer( PointerStyle nPointer )
+void DocWindow::SetPointer(PointerStyle nPointer)
 {
     Window::SetPointer(nPointer);
 
@@ -26,14 +25,14 @@ void DocWindow::SetPointer( PointerStyle nPointer )
 
     PointerStyle aPointer = GetPointer();
     // We don't map all possible pointers hence we need a default
-    OString aPointerString = "default";
+    OString aPointerString = "default"_ostr;
     auto aIt = vcl::gaLOKPointerMap.find(aPointer);
     if (aIt != vcl::gaLOKPointerMap.end())
     {
         aPointerString = aIt->second;
     }
 
-    pWin->GetLOKNotifier()->libreOfficeKitViewCallback(LOK_CALLBACK_MOUSE_POINTER, aPointerString.getStr());
+    pWin->GetLOKNotifier()->libreOfficeKitViewCallback(LOK_CALLBACK_MOUSE_POINTER, aPointerString);
 }
 } // namespace vcl
 

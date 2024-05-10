@@ -31,6 +31,7 @@
 #include <charfmt.hxx>
 #include <layfrm.hxx>
 #include <SwPortionHandler.hxx>
+#include <EnhancedPDFExportHelper.hxx>
 #include "pormulti.hxx"
 #include "inftxt.hxx"
 #include "itrpaint.hxx"
@@ -119,7 +120,7 @@ void SwMultiPortion::CalcSize( SwTextFormatter& rLine, SwTextFormatInfo &rInf )
         SetAscent( nTmp );
 }
 
-tools::Long SwMultiPortion::CalcSpacing( tools::Long , const SwTextSizeInfo & ) const
+SwTwips SwMultiPortion::CalcSpacing( tools::Long , const SwTextSizeInfo & ) const
 {
     return 0;
 }
@@ -218,7 +219,7 @@ SwBidiPortion::SwBidiPortion(TextFrameIndex const nEnd, sal_uInt8 nLv)
         SetDirection( DIR_LEFT2RIGHT );
 }
 
-tools::Long SwBidiPortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo& rInf ) const
+SwTwips SwBidiPortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo& rInf ) const
 {
     return HasTabulator() ? 0 : sal_Int32(GetSpaceCnt(rInf)) * nSpaceAdd / SPACING_PRECISION_FACTOR;
 }
@@ -504,7 +505,7 @@ void SwDoubleLinePortion::CalcBlanks( SwTextFormatInfo &rInf )
     rInf.SetIdx( nStart );
 }
 
-tools::Long SwDoubleLinePortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo & ) const
+SwTwips SwDoubleLinePortion::CalcSpacing( tools::Long nSpaceAdd, const SwTextSizeInfo & ) const
 {
     return HasTabulator() ? 0 : sal_Int32(GetSpaceCnt()) * nSpaceAdd / SPACING_PRECISION_FACTOR;
 }
@@ -1079,7 +1080,7 @@ std::optional<SwMultiCreator> SwTextSizeInfo::GetMultiCreator(TextFrameIndex &rP
         return aRet;
     }
     if (pActiveTwoLinesHint ||
-        (pNodeTwoLinesItem && pNodeTwoLinesItem == pActiveTwoLinesItem &&
+        (pNodeTwoLinesItem && SfxPoolItem::areSame(pNodeTwoLinesItem, pActiveTwoLinesItem) &&
          rPos < TextFrameIndex(GetText().getLength())))
     {   // The winner is a 2-line-attribute,
         // the end of the multiportion depends on the following attributes...
@@ -1227,7 +1228,7 @@ std::optional<SwMultiCreator> SwTextSizeInfo::GetMultiCreator(TextFrameIndex &rP
         return aRet;
     }
     if (pActiveRotateHint ||
-        (pNodeRotateItem && pNodeRotateItem == pActiveRotateItem &&
+        (pNodeRotateItem && SfxPoolItem::areSame(pNodeRotateItem, pActiveRotateItem) &&
          rPos < TextFrameIndex(GetText().getLength())))
     {   // The winner is a rotate-attribute,
         // the end of the multiportion depends on the following attributes...
@@ -1601,6 +1602,10 @@ void SwTextPainter::PaintMultiPortion( const SwRect &rPaint,
 
     if( rMulti.HasBrackets() )
     {
+        // WP is mandatory
+        Por_Info const por(rMulti, *this, 1);
+        SwTaggedPDFHelper const tag(nullptr, nullptr, &por, *GetInfo().GetOut());
+
         TextFrameIndex const nTmpOldIdx = GetInfo().GetIdx();
         GetInfo().SetIdx(static_cast<SwDoubleLinePortion&>(rMulti).GetBrackets()->nStart);
         SeekAndChg( GetInfo() );
@@ -1659,8 +1664,18 @@ void SwTextPainter::PaintMultiPortion( const SwRect &rPaint,
     OSL_ENSURE( nullptr == GetInfo().GetUnderFnt() || rMulti.IsBidi(),
             " Only BiDi portions are allowed to use the common underlining font" );
 
-    if ( rMulti.IsRuby() )
+    ::std::optional<SwTaggedPDFHelper> oTag;
+    if (rMulti.IsDouble())
+    {
+        Por_Info const por(rMulti, *this, 2);
+        oTag.emplace(nullptr, nullptr, &por, *GetInfo().GetOut());
+    }
+    else if (rMulti.IsRuby())
+    {
+        Por_Info const por(rMulti, *this, bRubyTop ? 1 : 2);
+        oTag.emplace(nullptr, nullptr, &por, *GetInfo().GetOut());
         GetInfo().SetRuby( rMulti.OnTop() );
+    }
 
     do
     {
@@ -1763,7 +1778,12 @@ void SwTextPainter::PaintMultiPortion( const SwRect &rPaint,
             PaintMultiPortion( rPaint, static_cast<SwMultiPortion&>(*pPor), &rMulti );
         }
         else
+        {
+            Por_Info const por(*pPor, *this, 0);
+            SwTaggedPDFHelper const tag(nullptr, nullptr, &por, *GetInfo().GetOut());
+
             pPor->Paint( GetInfo() );
+        }
 
         bFirst &= !pPor->GetLen();
         if( pNext || !pPor->IsMarginPortion() )
@@ -1822,8 +1842,19 @@ void SwTextPainter::PaintMultiPortion( const SwRect &rPaint,
                 // We switch to the baseline of the next inner line
                 nOfst += rMulti.GetRoot().Height();
             }
+            if (rMulti.IsRuby())
+            {
+                oTag.reset();
+                Por_Info const por(rMulti, *this, bRubyTop ? 2 : 1);
+                oTag.emplace(nullptr, nullptr, &por, *GetInfo().GetOut());
+            }
         }
     } while( pPor );
+
+    if (rMulti.IsDouble())
+    {
+        oTag.reset();
+    }
 
     if ( bRubyInGrid )
         GetInfo().SetSnapToGrid( bOldGridModeAllowed );
@@ -1840,6 +1871,10 @@ void SwTextPainter::PaintMultiPortion( const SwRect &rPaint,
 
     if( rMulti.HasBrackets() )
     {
+        // WP is mandatory
+        Por_Info const por(rMulti, *this, 1);
+        SwTaggedPDFHelper const tag(nullptr, nullptr, &por, *GetInfo().GetOut());
+
         TextFrameIndex const nTmpOldIdx = GetInfo().GetIdx();
         GetInfo().SetIdx(static_cast<SwDoubleLinePortion&>(rMulti).GetBrackets()->nStart);
         SeekAndChg( GetInfo() );
@@ -2309,6 +2344,9 @@ bool SwTextFormatter::BuildMultiPortion( SwTextFormatInfo &rInf,
                 // we try to keep our ruby portion together
                 lcl_TruncateMultiPortion( rMulti, rInf, nStartIdx );
                 pTmp = nullptr;
+                // A follow field portion may still be waiting. If nobody wants
+                // it, we delete it.
+                delete pNextSecond;
             }
         }
         else if( rMulti.HasRotation() )
@@ -2380,6 +2418,11 @@ bool SwTextFormatter::BuildMultiPortion( SwTextFormatInfo &rInf,
     delete pSecondRest;
     oFontSave.reset();
     return bRet;
+}
+
+static bool IsIncompleteRuby(const SwMultiPortion& rHelpMulti)
+{
+    return rHelpMulti.IsRuby() && static_cast<const SwRubyPortion&>(rHelpMulti).GetRubyOffset() < TextFrameIndex(COMPLETE_STRING);
 }
 
 // When a fieldportion at the end of line breaks and needs a following
@@ -2490,19 +2533,19 @@ SwLinePortion* SwTextFormatter::MakeRestPortion( const SwLineLayout* pLine,
     if (!pCreate)
         return pRest;
 
-    if( pRest || nMultiPos > nPosition || ( pHelpMulti->IsRuby() &&
-        static_cast<const SwRubyPortion*>(pHelpMulti)->GetRubyOffset() < TextFrameIndex(COMPLETE_STRING)))
+    if( pRest || nMultiPos > nPosition || IsIncompleteRuby(*pHelpMulti))
     {
         SwMultiPortion* pTmp;
         if( pHelpMulti->IsDouble() )
             pTmp = new SwDoubleLinePortion( *pCreate, nMultiPos );
         else if( pHelpMulti->IsBidi() )
             pTmp = new SwBidiPortion( nMultiPos, pCreate->nLevel );
-        else if( pHelpMulti->IsRuby() )
+        else if (IsIncompleteRuby(*pHelpMulti) && pCreate->pAttr)
         {
+            TextFrameIndex nRubyOffset = static_cast<const SwRubyPortion*>(pHelpMulti)->GetRubyOffset();
             pTmp = new SwRubyPortion( *pCreate, *GetInfo().GetFont(),
                                        m_pFrame->GetDoc().getIDocumentSettingAccess(),
-                                       nMultiPos, static_cast<const SwRubyPortion*>(pHelpMulti)->GetRubyOffset(),
+                                       nMultiPos, nRubyOffset,
                                        GetInfo() );
         }
         else if( pHelpMulti->HasRotation() )

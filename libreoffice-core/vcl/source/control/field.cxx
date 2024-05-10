@@ -314,8 +314,7 @@ bool ImplNumericGetValue( const OUString& rStr, sal_Int64& rValue,
         sal_Int64 nDenom = o3tl::toInt64(aStrDenom);
         if (nDenom == 0) return false; // Division by zero
         double nFrac2Dec = nWholeNum + static_cast<double>(nNum)/nDenom; // Convert to double for floating point precision
-        OUStringBuffer aStrFrac;
-        aStrFrac.append(nFrac2Dec);
+        OUStringBuffer aStrFrac(OUString::number(nFrac2Dec));
         // Reconvert division result to string and parse
         nDecPos = aStrFrac.indexOf('.');
         if ( nDecPos >= 0)
@@ -383,14 +382,12 @@ void ImplUpdateSeparatorString( OUString& io_rText,
            || (nIndexTh != -1 && nIndexDec == -1)
            )
         {
-            aBuf.append( pBuffer + nIndex, nIndexTh - nIndex );
-            aBuf.append( rNewThSep );
+            aBuf.append( OUString::Concat(std::u16string_view(pBuffer + nIndex, nIndexTh - nIndex )) + rNewThSep );
             nIndex = nIndexTh + rOldThSep.size();
         }
         else if( nIndexDec != -1 )
         {
-            aBuf.append( pBuffer + nIndex, nIndexDec - nIndex );
-            aBuf.append( rNewDecSep );
+            aBuf.append( OUString::Concat(std::u16string_view(pBuffer + nIndex, nIndexDec - nIndex )) + rNewDecSep );
             nIndex = nIndexDec + rOldDecSep.size();
         }
         else
@@ -793,13 +790,13 @@ namespace
         OUStringBuffer aBuf;
         sal_Int32 nTextLen;
 
-        nTextLen = OUString(OUString::number(rFormatter.GetMin())).getLength();
+        nTextLen = std::u16string_view(OUString::number(rFormatter.GetMin())).size();
         string::padToLength(aBuf, nTextLen, '9');
         Size aMinTextSize = rSpinField.CalcMinimumSizeForText(
             rFormatter.CreateFieldText(OUString::unacquired(aBuf).toInt64()));
         aBuf.setLength(0);
 
-        nTextLen = OUString(OUString::number(rFormatter.GetMax())).getLength();
+        nTextLen = std::u16string_view(OUString::number(rFormatter.GetMax())).size();
         string::padToLength(aBuf, nTextLen, '9');
         Size aMaxTextSize = rSpinField.CalcMinimumSizeForText(
             rFormatter.CreateFieldText(OUString::unacquired(aBuf).toInt64()));
@@ -1286,7 +1283,7 @@ OUString MetricFormatter::CreateFieldText( sal_Int64 nValue ) const
             aStr += " ";
         if (meUnit == FieldUnit::INCH)
         {
-            OUString sDoublePrime = u"\u2033";
+            OUString sDoublePrime = u"\u2033"_ustr;
             if (aSuffix != "\"" && aSuffix != sDoublePrime)
                 aStr += " ";
             else
@@ -1294,7 +1291,7 @@ OUString MetricFormatter::CreateFieldText( sal_Int64 nValue ) const
         }
         else if (meUnit == FieldUnit::FOOT)
         {
-            OUString sPrime = u"\u2032";
+            OUString sPrime = u"\u2032"_ustr;
             if (aSuffix != "'" && aSuffix != sPrime)
                 aStr += " ";
             else
@@ -1417,7 +1414,7 @@ Size MetricField::CalcMinimumSize() const
     return calcMinimumSize(*this, *this);
 }
 
-bool MetricField::set_property(const OString &rKey, const OUString &rValue)
+bool MetricField::set_property(const OUString &rKey, const OUString &rValue)
 {
     if (rKey == "digits")
         SetDecimalDigits(rValue.toInt32());

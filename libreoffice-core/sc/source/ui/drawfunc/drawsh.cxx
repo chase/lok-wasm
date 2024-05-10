@@ -68,10 +68,8 @@ SFX_IMPL_INTERFACE(ScDrawShell, SfxShell)
 
 namespace
 {
-    void lcl_convertStringArguments(sal_uInt16 nSlot, SfxItemSet& rArgs)
+    void lcl_convertStringArguments(SfxItemSet& rArgs)
     {
-        Color aColor;
-
         if (const SvxDoubleItem* pWidthItem = rArgs.GetItemIfSet(SID_ATTR_LINE_WIDTH_ARG, false))
         {
             double fValue = pWidthItem->GetValue();
@@ -81,39 +79,6 @@ namespace
 
             XLineWidthItem aItem(nValue);
             rArgs.Put(aItem);
-        }
-        else if (const SfxStringItem* pColorItem = rArgs.GetItemIfSet(SID_ATTR_COLOR_STR, false))
-        {
-            OUString sColor = pColorItem->GetValue();
-
-            if (sColor == "transparent")
-                aColor = COL_TRANSPARENT;
-            else
-                aColor = Color(ColorTransparency, sColor.toInt32(16));
-
-            switch (nSlot)
-            {
-                case SID_ATTR_LINE_COLOR:
-                {
-                    XLineColorItem aLineColorItem(OUString(), aColor);
-                    rArgs.Put(aLineColorItem);
-                    break;
-                }
-
-                case SID_ATTR_FILL_COLOR:
-                {
-                    XFillColorItem aFillColorItem(OUString(), aColor);
-                    rArgs.Put(aFillColorItem);
-                    break;
-                }
-
-                case SID_ATTR_SHADOW_COLOR:
-                {
-                    XColorItem aItem(SDRATTR_SHADOWCOLOR, aColor);
-                    rArgs.Put(aItem);
-                    break;
-                }
-            }
         }
         if (const SfxStringItem* pJSON = rArgs.GetItemIfSet(SID_FILL_GRADIENT_JSON, false))
         {
@@ -162,7 +127,7 @@ void ScDrawShell::setModified()
 
 static void lcl_invalidateTransformAttr(const ScTabViewShell* pViewShell)
 {
-    SfxBindings& rBindings=pViewShell->GetViewFrame()->GetBindings();
+    SfxBindings& rBindings=pViewShell->GetViewFrame().GetBindings();
     rBindings.Invalidate(SID_ATTR_TRANSFORM_WIDTH);
     rBindings.Invalidate(SID_ATTR_TRANSFORM_HEIGHT);
     rBindings.Invalidate(SID_ATTR_TRANSFORM_POS_X);
@@ -196,9 +161,15 @@ void ScDrawShell::ExecDrawAttr( SfxRequest& rReq )
             }
             break;
 
-        case SID_TEXT_STANDARD: // delete hard text attributes
+        case SID_CELL_FORMAT_RESET:
+        case SID_TEXT_STANDARD:
             {
-                SfxItemSetFixed<EE_ITEMS_START, EE_ITEMS_END> aEmptyAttr(GetPool());
+                SfxItemSetFixed<SDRATTR_TEXT_MINFRAMEHEIGHT, SDRATTR_TEXT_MINFRAMEHEIGHT,
+                                SDRATTR_TEXT_MAXFRAMEHEIGHT, SDRATTR_TEXT_MAXFRAMEWIDTH> aEmptyAttr(GetPool());
+
+                if (ScDrawLayer::IsNoteCaption(pSingleSelectedObj))
+                    aEmptyAttr.Put(pView->GetAttrFromMarked(true));
+
                 pView->SetAttributes(aEmptyAttr, true);
             }
             break;
@@ -290,7 +261,7 @@ void ScDrawShell::ExecDrawAttr( SfxRequest& rReq )
                 if( pView->AreObjectsMarked() )
                 {
                     std::unique_ptr<SfxItemSet> pNewArgs = rReq.GetArgs()->Clone();
-                    lcl_convertStringArguments(rReq.GetSlot(), *pNewArgs);
+                    lcl_convertStringArguments(*pNewArgs);
                     pView->SetAttrToMarked(*pNewArgs, false);
                 }
                 else
@@ -467,7 +438,7 @@ void ScDrawShell::ExecuteMacroAssign(SdrObject* pObj, weld::Window* pWin)
 
     css::uno::Reference < css::frame::XFrame > xFrame;
     if (GetViewShell())
-        xFrame = GetViewShell()->GetViewFrame()->GetFrame().GetFrameInterface();
+        xFrame = GetViewShell()->GetViewFrame().GetFrame().GetFrameInterface();
 
     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
     ScopedVclPtr<SfxAbstractDialog> pMacroDlg(pFact->CreateEventConfigDialog( pWin, aItemSet, xFrame ));
@@ -487,10 +458,9 @@ void ScDrawShell::ExecuteMacroAssign(SdrObject* pObj, weld::Window* pWin)
     if ( pObj->IsGroupObject() )
     {
         SdrObjList* pOL = pObj->GetSubList();
-        const size_t nObj = pOL->GetObjCount();
-        for ( size_t index=0; index<nObj; ++index )
+        for (const rtl::Reference<SdrObject>& pChildObj : *pOL)
         {
-            pInfo = ScDrawLayer::GetMacroInfo( pOL->GetObj(index), true );
+            pInfo = ScDrawLayer::GetMacroInfo( pChildObj.get(), true );
             pInfo->SetMacro( sMacro );
         }
     }

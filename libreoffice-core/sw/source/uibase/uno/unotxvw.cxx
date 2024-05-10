@@ -86,7 +86,7 @@ using namespace ::com::sun::star::frame;
 using ::com::sun::star::util::URL;
 
 SwXTextView::SwXTextView(SwView* pSwView) :
-    SfxBaseController(pSwView),
+    SwXTextView_Base(pSwView),
     m_SelChangedListeners(m_aMutex),
     m_pView(pSwView),
     m_pPropSet( aSwMapProvider.GetPropertySet( PROPERTY_MAP_TEXT_VIEW ) )
@@ -103,14 +103,12 @@ void SwXTextView::Invalidate()
 {
     if(mxViewSettings.is())
     {
-        comphelper::ChainablePropertySet *pSettings = static_cast < comphelper::ChainablePropertySet * > ( mxViewSettings.get() );
-        static_cast < SwXViewSettings* > ( pSettings )->Invalidate();
+        mxViewSettings->Invalidate();
         mxViewSettings.clear();
     }
     if(mxTextViewCursor.is())
     {
-        text::XTextViewCursor* pCursor = mxTextViewCursor.get();
-        static_cast<SwXTextViewCursor*>(pCursor)->Invalidate();
+        mxTextViewCursor->Invalidate();
         mxTextViewCursor.clear();
     }
 
@@ -125,107 +123,6 @@ void SwXTextView::Invalidate()
 
     osl_atomic_decrement(&m_refCount);
     m_pView = nullptr;
-}
-
-Sequence< uno::Type > SAL_CALL SwXTextView::getTypes(  )
-{
-    return cppu::OTypeCollection(
-            cppu::UnoType<XSelectionSupplier>::get(),
-            cppu::UnoType<XServiceInfo>::get(),
-            cppu::UnoType<XFormLayerAccess>::get(),
-            cppu::UnoType<XTextViewCursorSupplier>::get(),
-            cppu::UnoType<XTextViewTextRangeSupplier>::get(),
-            cppu::UnoType<XViewSettingsSupplier>::get(),
-            cppu::UnoType<XRubySelection>::get(),
-            cppu::UnoType<XPropertySet>::get(),
-            cppu::UnoType<datatransfer::XTransferableSupplier>::get(),
-            cppu::UnoType<datatransfer::XTransferableTextSupplier>::get(),
-            cppu::UnoType<qa::XDumper>::get(),
-            SfxBaseController::getTypes()
-        ).getTypes();
-}
-
-Sequence< sal_Int8 > SAL_CALL SwXTextView::getImplementationId(  )
-{
-    return css::uno::Sequence<sal_Int8>();
-}
-
-void SAL_CALL SwXTextView::acquire(  )noexcept
-{
-    SfxBaseController::acquire();
-}
-
-void SAL_CALL SwXTextView::release(  )noexcept
-{
-    SfxBaseController::release();
-}
-
-uno::Any SAL_CALL SwXTextView::queryInterface( const uno::Type& aType )
-{
-    uno::Any aRet;
-    if(aType == cppu::UnoType<view::XSelectionSupplier>::get())
-    {
-        uno::Reference<view::XSelectionSupplier> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<lang::XServiceInfo>::get())
-    {
-        uno::Reference<lang::XServiceInfo> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<view::XControlAccess>::get())
-    {
-        uno::Reference<view::XControlAccess> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<view::XFormLayerAccess>::get())
-    {
-        uno::Reference<view::XFormLayerAccess> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<text::XTextViewCursorSupplier>::get())
-    {
-        uno::Reference<text::XTextViewCursorSupplier> xRet = this;
-        aRet <<= xRet;
-    }
-    else if (aType == cppu::UnoType<text::XTextViewTextRangeSupplier>::get())
-    {
-        uno::Reference<text::XTextViewTextRangeSupplier> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<view::XViewSettingsSupplier>::get())
-    {
-        uno::Reference<view::XViewSettingsSupplier> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<XRubySelection>::get())
-    {
-        uno::Reference<XRubySelection> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<XPropertySet>::get())
-    {
-        uno::Reference<XPropertySet> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<datatransfer::XTransferableSupplier>::get())
-    {
-        uno::Reference<datatransfer::XTransferableSupplier> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<datatransfer::XTransferableTextSupplier>::get())
-    {
-        uno::Reference<datatransfer::XTransferableTextSupplier> xRet = this;
-        aRet <<= xRet;
-    }
-    else if(aType == cppu::UnoType<qa::XDumper>::get())
-    {
-        uno::Reference<qa::XDumper> xRet = this;
-        aRet <<= xRet;
-    }
-    else
-        aRet = SfxBaseController::queryInterface(aType);
-    return aRet;
 }
 
 sal_Bool SwXTextView::select(const uno::Any& aInterface)
@@ -394,7 +291,7 @@ uno::Any SwXTextView::getSelection()
                 SwFrameFormat *const pFormat = rSh.GetFlyFrameFormat();
                 if (pFormat)
                 {
-                    aRef = static_cast<cppu::OWeakObject*>(SwXTextFrame::CreateXTextFrame(
+                    aRef = cppu::getXWeak(SwXTextFrame::CreateXTextFrame(
                             *pFormat->GetDoc(), pFormat).get());
                 }
             }
@@ -404,7 +301,7 @@ uno::Any SwXTextView::getSelection()
                 SwFrameFormat *const pFormat = rSh.GetFlyFrameFormat();
                 if (pFormat)
                 {
-                    aRef = static_cast<cppu::OWeakObject*>(SwXTextGraphicObject::CreateXTextGraphicObject(
+                    aRef = cppu::getXWeak(SwXTextGraphicObject::CreateXTextGraphicObject(
                             *pFormat->GetDoc(), pFormat).get());
                 }
             }
@@ -414,7 +311,7 @@ uno::Any SwXTextView::getSelection()
                 SwFrameFormat *const pFormat = rSh.GetFlyFrameFormat();
                 if (pFormat)
                 {
-                    aRef = static_cast<cppu::OWeakObject*>(SwXTextEmbeddedObject::CreateXTextEmbeddedObject(
+                    aRef = cppu::getXWeak(SwXTextEmbeddedObject::CreateXTextEmbeddedObject(
                             *pFormat->GetDoc(), pFormat).get());
                 }
             }
@@ -743,10 +640,7 @@ void SwXTextView::NotifySelChanged()
 {
     OSL_ENSURE( m_pView, "view is missing" );
 
-    uno::Reference<uno::XInterface> const xInt(
-        static_cast<cppu::OWeakObject*>(static_cast<SfxBaseController*>(this)));
-
-    lang::EventObject const aEvent(xInt);
+    lang::EventObject const aEvent(getXWeak());
     m_SelChangedListeners.notifyEach(
             &view::XSelectionChangeListener::selectionChanged, aEvent);
 }
@@ -972,7 +866,7 @@ void SwXTextViewCursor::collapseToStart()
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     SwWrtShell& rSh = m_pView->GetWrtShell();
     if(rSh.HasSelection())
@@ -994,7 +888,7 @@ void SwXTextViewCursor::collapseToEnd()
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     SwWrtShell& rSh = m_pView->GetWrtShell();
     if(rSh.HasSelection())
@@ -1017,7 +911,7 @@ sal_Bool SwXTextViewCursor::isCollapsed()
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     const SwWrtShell& rSh = m_pView->GetWrtShell();
     bRet = !rSh.HasSelection();
@@ -1034,7 +928,7 @@ sal_Bool SwXTextViewCursor::goLeft(sal_Int16 nCount, sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     bRet = m_pView->GetWrtShell().Left( SwCursorSkipMode::Chars, bExpand, nCount, true );
 
@@ -1049,7 +943,7 @@ sal_Bool SwXTextViewCursor::goRight(sal_Int16 nCount, sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     bRet = m_pView->GetWrtShell().Right( SwCursorSkipMode::Chars, bExpand, nCount, true );
 
@@ -1066,7 +960,7 @@ void SwXTextViewCursor::gotoRange(
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     SwUnoInternalPaM rDestPam(*m_pView->GetDocShell()->GetDoc());
     if (!::sw::XTextRangeToSwPaM(rDestPam, xRange))
@@ -1091,10 +985,9 @@ void SwXTextViewCursor::gotoRange(
         *aOwnPaM.GetMark() = *pShellCursor->GetMark();
     }
 
-    uno::Reference<lang::XUnoTunnel> xRangeTunnel( xRange, uno::UNO_QUERY);
-    SwXTextRange* pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel);
-    SwXParagraph* pPara = comphelper::getFromUnoTunnel<SwXParagraph>(xRangeTunnel);
-    OTextCursorHelper* pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel);
+    SwXTextRange* pRange = dynamic_cast<SwXTextRange*>(xRange.get());
+    SwXParagraph* pPara = dynamic_cast<SwXParagraph*>(xRange.get());
+    OTextCursorHelper* pCursor = dynamic_cast<OTextCursorHelper*>(xRange.get());
 
     const FrameTypeFlags nFrameType = rSh.GetFrameType(nullptr,true);
 
@@ -1195,7 +1088,7 @@ void SwXTextViewCursor::gotoStart(sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     m_pView->GetWrtShell().StartOfSection( bExpand );
 
@@ -1209,7 +1102,7 @@ void SwXTextViewCursor::gotoEnd(sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     m_pView->GetWrtShell().EndOfSection( bExpand );
 
@@ -1337,8 +1230,8 @@ sal_Bool SwXTextViewCursor::screenDown()
 
     SfxRequest aReq(FN_PAGEDOWN, SfxCallMode::SLOT, m_pView->GetPool());
     m_pView->Execute(aReq);
-    const SfxPoolItem* pRet = aReq.GetReturnValue();
-    bRet = pRet && static_cast<const SfxBoolItem*>(pRet)->GetValue();
+    const SfxPoolItemHolder& rResult(aReq.GetReturnValue());
+    bRet = nullptr != rResult.getItem() && static_cast<const SfxBoolItem*>(rResult.getItem())->GetValue();
 
     return bRet;
 }
@@ -1352,8 +1245,8 @@ sal_Bool SwXTextViewCursor::screenUp()
 
     SfxRequest aReq(FN_PAGEUP, SfxCallMode::SLOT, m_pView->GetPool());
     m_pView->Execute(aReq);
-    const SfxPoolItem* pRet = aReq.GetReturnValue();
-    bRet = pRet && static_cast<const SfxBoolItem*>(pRet)->GetValue();
+    const SfxPoolItemHolder& rResult(aReq.GetReturnValue());
+    bRet = nullptr != rResult.getItem() && static_cast<const SfxBoolItem*>(rResult.getItem())->GetValue();
 
     return bRet;
 }
@@ -1366,7 +1259,7 @@ uno::Reference< text::XText >  SwXTextViewCursor::getText()
         throw uno::RuntimeException();
 
     if (!IsTextSelection( false ))
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     SwWrtShell& rSh = m_pView->GetWrtShell();
     SwPaM* pShellCursor = rSh.GetCursor();
@@ -1384,7 +1277,7 @@ uno::Reference< text::XTextRange > SwXTextViewCursor::getStart()
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     SwWrtShell& rSh = m_pView->GetWrtShell();
     SwPaM* pShellCursor = rSh.GetCursor();
@@ -1402,7 +1295,7 @@ uno::Reference< text::XTextRange > SwXTextViewCursor::getEnd()
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     SwWrtShell& rSh = m_pView->GetWrtShell();
     SwPaM* pShellCursor = rSh.GetCursor();
@@ -1420,7 +1313,7 @@ OUString SwXTextViewCursor::getString()
     {
         if (!IsTextSelection( false ))
         {
-            SAL_WARN("sw.uno", "no text selection in getString() " << static_cast<cppu::OWeakObject*>(this));
+            SAL_WARN("sw.uno", "no text selection in getString() " << getXWeak());
             return uRet;
         }
 
@@ -1455,7 +1348,7 @@ void SwXTextViewCursor::setString(const OUString& aString)
         return;
 
     if (!IsTextSelection( false ))
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     ShellMode eSelMode = m_pView->GetShellMode();
     switch(eSelMode)
@@ -1602,7 +1495,7 @@ sal_Bool SwXTextViewCursor::goDown(sal_Int16 nCount, sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     bRet = m_pView->GetWrtShell().Down( bExpand, nCount, true );
 
@@ -1618,7 +1511,7 @@ sal_Bool SwXTextViewCursor::goUp(sal_Int16 nCount, sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection())
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     bRet = m_pView->GetWrtShell().Up( bExpand, nCount, true );
 
@@ -1633,7 +1526,7 @@ sal_Bool SwXTextViewCursor::isAtStartOfLine()
         throw uno::RuntimeException();
 
     if (!IsTextSelection( false ))
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     bRet = m_pView->GetWrtShell().IsAtLeftMargin();
 
@@ -1648,7 +1541,7 @@ sal_Bool SwXTextViewCursor::isAtEndOfLine()
         throw uno::RuntimeException();
 
     if (!IsTextSelection( false ))
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     bRet = m_pView->GetWrtShell().IsAtRightMargin();
 
@@ -1662,7 +1555,7 @@ void SwXTextViewCursor::gotoEndOfLine(sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection( false ))
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     m_pView->GetWrtShell().RightMargin(bExpand, true);
 
@@ -1675,7 +1568,7 @@ void SwXTextViewCursor::gotoStartOfLine(sal_Bool bExpand)
         throw uno::RuntimeException();
 
     if (!IsTextSelection( false ))
-        throw  uno::RuntimeException("no text selection", static_cast < cppu::OWeakObject * > ( this ) );
+        throw  uno::RuntimeException("no text selection", getXWeak() );
 
     m_pView->GetWrtShell().LeftMargin(bExpand, true);
 
@@ -1702,21 +1595,6 @@ Sequence< OUString > SwXTextViewCursor::getSupportedServiceNames()
              "com.sun.star.style.ParagraphPropertiesComplex" };
 }
 
-const uno::Sequence< sal_Int8 > & SwXTextViewCursor::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXTextViewCursorUnoTunnelId;
-    return theSwXTextViewCursorUnoTunnelId.getSeq();
-}
-
-//XUnoTunnel
-sal_Int64 SAL_CALL SwXTextViewCursor::getSomething(
-    const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this,
-                                        comphelper::FallbackToGetSomethingOf<OTextCursorHelper>{});
-}
-
-IMPLEMENT_FORWARD_XINTERFACE2(SwXTextViewCursor,SwXTextViewCursor_Base,OTextCursorHelper)
 const SwDoc*        SwXTextViewCursor::GetDoc() const
 {
     SwWrtShell& rSh = m_pView->GetWrtShell();

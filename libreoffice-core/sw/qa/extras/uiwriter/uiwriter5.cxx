@@ -63,21 +63,6 @@ public:
     {
     }
 
-    virtual std::unique_ptr<Resetter> preTest(const char* filename) override
-    {
-        m_aSavedSettings = Application::GetSettings();
-        if (OString(filename).indexOf("LocaleArabic") != -1)
-        {
-            std::unique_ptr<Resetter> pResetter(
-                new Resetter([this]() { Application::SetSettings(this->m_aSavedSettings); }));
-            AllSettings aSettings(m_aSavedSettings);
-            aSettings.SetLanguageTag(LanguageTag("ar"));
-            Application::SetSettings(aSettings);
-            return pResetter;
-        }
-        return nullptr;
-    }
-
 protected:
     AllSettings m_aSavedSettings;
 };
@@ -239,7 +224,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf140982)
     CPPUNIT_ASSERT_EQUAL(OUString("Lorem ipsum dolor sit amet..."), getParagraph(1)->getString());
 
     // Save it and load it back.
-    reload("writer8", "tdf115815.odt");
+    saveAndReload("writer8");
 
     // Test comment range feature on tracked deletion.
     uno::Reference<text::XTextDocument> xTextDocument(mxComponent, uno::UNO_QUERY);
@@ -766,7 +751,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTextFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IFieldmark* pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMTEXT), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMTEXT, pFieldmark->GetFieldname());
 
     // The text form field has the placeholder text in it
     uno::Reference<text::XTextRange> xPara = getParagraph(1);
@@ -805,7 +790,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testCheckboxFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IFieldmark* pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMCHECKBOX), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMCHECKBOX, pFieldmark->GetFieldname());
     // The checkbox is not checked by default
     ::sw::mark::ICheckboxFieldmark* pCheckBox
         = dynamic_cast<::sw::mark::ICheckboxFieldmark*>(pFieldmark);
@@ -823,7 +808,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testCheckboxFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMCHECKBOX), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMCHECKBOX, pFieldmark->GetFieldname());
 
     // tdf#147008 this would crash
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
@@ -854,7 +839,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDropDownFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IFieldmark* pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDROPDOWN), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDROPDOWN, pFieldmark->GetFieldname());
     // Check drop down field's parameters. By default these params are not set
     const sw::mark::IFieldmark::parameter_map_t* const pParameters = pFieldmark->GetParameters();
     auto pListEntries = pParameters->find(ODF_FORMDROPDOWN_LISTENTRY);
@@ -873,7 +858,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDropDownFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDROPDOWN), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDROPDOWN, pFieldmark->GetFieldname());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testMixedFormFieldInsertion)
@@ -982,7 +967,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDocxAttributeTableExport)
         xShape->setPropertyValue("HoriOrientRelation", uno::Any(static_cast<sal_Int16>(0)));
     }
     // save it to docx
-    reload("Office Open XML Text", "floating-table-position.docx");
+    saveAndReload("Office Open XML Text");
 
     uno::Reference<beans::XPropertySet> xShape(getShape(1), uno::UNO_QUERY);
 
@@ -1173,7 +1158,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageComment)
     selectShape(1);
 
     // Insert a comment while the image is selected.
-    pView->GetViewFrame()->GetDispatcher()->Execute(FN_POSTIT, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(FN_POSTIT, SfxCallMode::SYNCHRON);
 
     // Verify that the comment is around the image.
     // Without the accompanying fix in place, this test would have failed, as FN_POSTIT was disabled
@@ -1192,8 +1177,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageComment)
 
     // Insert content to the comment, and select the image again.
     SfxStringItem aItem(FN_INSERT_STRING, "x");
-    pView->GetViewFrame()->GetDispatcher()->ExecuteList(FN_INSERT_STRING, SfxCallMode::SYNCHRON,
-                                                        { &aItem });
+    pView->GetViewFrame().GetDispatcher()->ExecuteList(FN_INSERT_STRING, SfxCallMode::SYNCHRON,
+                                                       { &aItem });
     selectShape(1);
 
 #if !defined(MACOSX)
@@ -1231,15 +1216,14 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageComment)
     // rendering and on the desktop.
     tools::JsonWriter aJsonWriter;
     pTextDoc->getPostIts(aJsonWriter);
-    char* pChar = aJsonWriter.extractData();
-    std::stringstream aStream(pChar);
-    free(pChar);
+    OString pChar = aJsonWriter.finishAndGetAsOString();
+    std::stringstream aStream((std::string(pChar)));
     boost::property_tree::ptree aTree;
     boost::property_tree::read_json(aStream, aTree);
     for (const boost::property_tree::ptree::value_type& rValue : aTree.get_child("comments"))
     {
         const boost::property_tree::ptree& rComment = rValue.second;
-        OString aAnchorPos(rComment.get<std::string>("anchorPos").c_str());
+        OString aAnchorPos(rComment.get<std::string>("anchorPos"));
         OString aExpected
             = OString::number(nFrameLeft) + ", " + OString::number(nFrameTop) + ", 0, 0";
         CPPUNIT_ASSERT_EQUAL(aExpected, aAnchorPos);
@@ -1248,7 +1232,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageComment)
 #endif
 
     // Now delete the image.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_DELETE, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_DELETE, SfxCallMode::SYNCHRON);
     // Without the accompanying fix in place, this test would have failed with 'Expected: 0; Actual:
     // 1', i.e. the comment of the image was not deleted when the image was deleted.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
@@ -1266,7 +1250,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageCommentAtChar)
     selectShape(1);
 
     // Insert a comment while the image is selected.
-    pView->GetViewFrame()->GetDispatcher()->Execute(FN_POSTIT, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(FN_POSTIT, SfxCallMode::SYNCHRON);
 
     // Verify that the comment is around the image.
     // Without the accompanying fix in place, this test would have failed, as the comment was
@@ -1285,18 +1269,18 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageCommentAtChar)
 
     // Insert content to the comment, and select the image again.
     SfxStringItem aItem(FN_INSERT_STRING, "x");
-    pView->GetViewFrame()->GetDispatcher()->ExecuteList(FN_INSERT_STRING, SfxCallMode::SYNCHRON,
-                                                        { &aItem });
+    pView->GetViewFrame().GetDispatcher()->ExecuteList(FN_INSERT_STRING, SfxCallMode::SYNCHRON,
+                                                       { &aItem });
     selectShape(1);
     // Now delete the image.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_DELETE, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_DELETE, SfxCallMode::SYNCHRON);
     // Without the accompanying fix in place, this test would have failed with 'Expected: 0; Actual:
     // 1', i.e. the comment of the image was not deleted when the image was deleted.
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0),
                          pDoc->getIDocumentMarkAccess()->getAnnotationMarksCount());
 
     // Undo the deletion and move the image down, so the anchor changes.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_UNDO, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_UNDO, SfxCallMode::SYNCHRON);
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(1),
                          pDoc->getIDocumentMarkAccess()->getAnnotationMarksCount());
     SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
@@ -1307,8 +1291,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testImageCommentAtChar)
     // Get the image anchor doc model position.
     SwFlyFrame* pFly = pWrtShell->GetCurrFlyFrame(false);
     CPPUNIT_ASSERT(pFly);
-    SwFrameFormat& rFlyFormat = pFly->GetFrameFormat();
-    const SwPosition* pImageAnchor = rFlyFormat.GetAnchor().GetContentAnchor();
+    SwFrameFormat* pFlyFormat = pFly->GetFrameFormat();
+    const SwPosition* pImageAnchor = pFlyFormat->GetAnchor().GetContentAnchor();
     CPPUNIT_ASSERT(pImageAnchor);
 
     // Get the annotation mark doc model start.
@@ -1346,7 +1330,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTrackImageDeletion)
         IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
 
     // now delete the image with track changes
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_DELETE, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_DELETE, SfxCallMode::SYNCHRON);
 
     const SwRedlineTable& rTable = rIDRA.GetRedlineTable();
     // this was 0 (missing recording of deletion of images)
@@ -1472,14 +1456,14 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testShapePageMove)
     // Move the shape down to the 2nd page.
     SfxInt32Item aXItem(SID_ATTR_TRANSFORM_POS_X, 4000);
     SfxInt32Item aYItem(SID_ATTR_TRANSFORM_POS_Y, 12000);
-    pView->GetViewFrame()->GetDispatcher()->ExecuteList(SID_ATTR_TRANSFORM, SfxCallMode::SYNCHRON,
-                                                        { &aXItem, &aYItem });
+    pView->GetViewFrame().GetDispatcher()->ExecuteList(SID_ATTR_TRANSFORM, SfxCallMode::SYNCHRON,
+                                                       { &aXItem, &aYItem });
 
     // Check if the shape anchor was moved to the 2nd page as well.
-    SwFrameFormats* pShapeFormats = pDoc->GetSpzFrameFormats();
+    auto pShapeFormats = pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT(!pShapeFormats->empty());
     auto it = pShapeFormats->begin();
-    SwFrameFormat* pShapeFormat = *it;
+    auto pShapeFormat = *it;
     const SwPosition* pAnchor = pShapeFormat->GetAnchor().GetContentAnchor();
     CPPUNIT_ASSERT(pAnchor);
 
@@ -1518,7 +1502,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDateFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IFieldmark* pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDATE, pFieldmark->GetFieldname());
 
     // The date form field has the placeholder text in it
     uno::Reference<text::XTextRange> xPara = getParagraph(1);
@@ -1535,7 +1519,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDateFormFieldInsertion)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     pFieldmark = dynamic_cast<::sw::mark::IFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDATE, pFieldmark->GetFieldname());
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDateFormFieldContentOperations)
@@ -1556,7 +1540,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDateFormFieldContentOperations)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IDateFieldmark* pFieldmark = dynamic_cast<::sw::mark::IDateFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDATE, pFieldmark->GetFieldname());
 
     // Check the default content added by insertion
     uno::Reference<text::XTextRange> xPara = getParagraph(1);
@@ -1590,7 +1574,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDateFormFieldCurrentDateHandling)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IDateFieldmark* pFieldmark = dynamic_cast<::sw::mark::IDateFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDATE, pFieldmark->GetFieldname());
 
     // The default content is not a valid date
     uno::Reference<text::XTextRange> xPara = getParagraph(1);
@@ -1645,7 +1629,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testDateFormFieldCurrentDateInvalidation)
     CPPUNIT_ASSERT(aIter != pMarkAccess->getAllMarksEnd());
     ::sw::mark::IDateFieldmark* pFieldmark = dynamic_cast<::sw::mark::IDateFieldmark*>(*aIter);
     CPPUNIT_ASSERT(pFieldmark);
-    CPPUNIT_ASSERT_EQUAL(OUString(ODF_FORMDATE), pFieldmark->GetFieldname());
+    CPPUNIT_ASSERT_EQUAL(ODF_FORMDATE, pFieldmark->GetFieldname());
 
     // Set a date first
     sw::mark::IFieldmark::parameter_map_t* pParameters = pFieldmark->GetParameters();
@@ -1729,8 +1713,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf105330)
     SwView* pView = pDoc->GetDocShell()->GetView();
     SfxUInt16Item aRows(SID_ATTR_TABLE_ROW, 1);
     SfxUInt16Item aColumns(SID_ATTR_TABLE_COLUMN, 1);
-    pView->GetViewFrame()->GetDispatcher()->ExecuteList(FN_INSERT_TABLE, SfxCallMode::SYNCHRON,
-                                                        { &aRows, &aColumns });
+    pView->GetViewFrame().GetDispatcher()->ExecuteList(FN_INSERT_TABLE, SfxCallMode::SYNCHRON,
+                                                       { &aRows, &aColumns });
 
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
     rUndoManager.Undo();
@@ -1757,7 +1741,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf118311)
     dispatchCommand(mxComponent, ".uno:Cut", {});
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // .uno:SelectAll selects the whole table, and UNO command Cut cuts it
     dispatchCommand(mxComponent, ".uno:SelectAll", {});
@@ -1765,7 +1749,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf118311)
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
@@ -1787,7 +1771,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // delete table row with enabled change tracking
     // (HasTextChangesOnly property of the row will be false)
@@ -1796,7 +1780,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // This was deleted without change tracking
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept the deletion of the content of the first cell
     SwEditShell* const pEditShell(pDoc->GetEditShell());
@@ -1806,7 +1790,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // table row was still not deleted
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept last redline
     pEditShell->AcceptRedline(0);
@@ -1814,7 +1798,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // table row (and the 1-row table) was deleted finally
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 
     // Undo, and repeat the previous test, but only with deletion of the text content of the cells
     // (HasTextChangesOnly property will be removed by Undo)
@@ -1826,7 +1810,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // table exists again
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // delete table row with enabled change tracking
     dispatchCommand(mxComponent, ".uno:SelectRow", {});
@@ -1835,7 +1819,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // Table row still exists
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept the deletion of the content of the first cell
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(2), pEditShell->GetRedlineCount());
@@ -1844,7 +1828,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // table row was still not deleted
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept last redline
     pEditShell->AcceptRedline(0);
@@ -1853,7 +1837,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // (HasTextChangesOnly property wasn't set for table row deletion)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // Undo, and delete the row without change tracking
 
@@ -1864,7 +1848,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // table exists again
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // disable change tracking
     pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::ShowDelete
@@ -1879,7 +1863,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletion)
     // the table (row) was deleted
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf150976)
@@ -1899,16 +1883,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf150976)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
     // nested table in the last cell
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab"_ostr);
 
     // delete table row with enabled change tracking
     dispatchCommand(mxComponent, ".uno:DeleteRows", {});
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // deleted text content
     SwEditShell* const pEditShell(pDoc->GetEditShell());
@@ -1924,7 +1908,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf150976)
     SwTabFrame* pTabFrame = static_cast<SwTabFrame*>(pTable);
 
     // This was false (not deleted row)
-    CPPUNIT_ASSERT(pTabFrame->GetTable()->HasDeletedRow());
+    CPPUNIT_ASSERT(pTabFrame->GetTable()->HasDeletedRowOrCell());
 
     // accept all tracked changes
     dispatchCommand(mxComponent, ".uno:AcceptAllTrackedChanges", {});
@@ -1933,7 +1917,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf150976)
     pXmlDoc = parseLayoutDump();
 
     // tdf#151658 This was 1: not deleted table row (and table)
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf151657)
@@ -1952,16 +1936,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf151657)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
     // nested table in the last cell
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab"_ostr);
 
     // delete table row with enabled change tracking
     dispatchCommand(mxComponent, ".uno:DeleteRows", {});
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // deleted text content
     SwEditShell* const pEditShell(pDoc->GetEditShell());
@@ -1977,17 +1961,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf151657)
     SwTabFrame* pTabFrame = static_cast<SwTabFrame*>(pTable);
 
     // This was false (not deleted row)
-    CPPUNIT_ASSERT(pTabFrame->GetTable()->HasDeletedRow());
+    CPPUNIT_ASSERT(pTabFrame->GetTable()->HasDeletedRowOrCell());
 
     // accept all tracked changes
     dispatchCommand(mxComponent, ".uno:AcceptAllTrackedChanges", {});
-    Scheduler::ProcessEventsToIdle();
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
 
     // tdf#151658 This was 1: not deleted table row (and table)
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testSelectRowWithNestedTable)
@@ -1997,24 +1980,24 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testSelectRowWithNestedTable)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
     // nested table in the last cell
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab"_ostr);
 
     // select table row
     dispatchCommand(mxComponent, ".uno:EntireRow", {});
-    Scheduler::ProcessEventsToIdle();
     // convert selected text content to uppercase
     dispatchCommand(mxComponent, ".uno:ChangeCaseToUpper", {});
-    Scheduler::ProcessEventsToIdle();
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab/row/cell[1]/txt", "NESTED-A1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab/row/cell[1]/txt"_ostr,
+                       "NESTED-A1");
     // This was "a1" (bad selection of the table row)
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row/cell[1]/txt[1]", "A1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row/cell[1]/txt[1]"_ostr, "A1");
     // This was "nested-b1" (bad selection of the table row)
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab/row/cell[2]/txt", "NESTED-B1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row/cell[2]/tab/row/cell[2]/txt"_ostr,
+                       "NESTED-B1");
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf47979_row)
@@ -2038,17 +2021,16 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf47979_row)
 
     // convert selected text content to uppercase
     dispatchCommand(mxComponent, ".uno:ChangeCaseToUpper", {});
-    Scheduler::ProcessEventsToIdle();
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[1]/txt[1]", "a1");
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[2]/txt[1]", "b1");
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[1]/txt",
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[1]/txt[1]"_ostr, "a1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[2]/txt[1]"_ostr, "b1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[1]/txt"_ostr,
                        "NESTED-A1");
     // This was "a2" (bad selection of the table row)
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[1]/txt[1]", "A2");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[1]/txt[1]"_ostr, "A2");
     // This was "nested-b1" (bad selection of the table row)
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[2]/txt",
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[2]/txt"_ostr,
                        "NESTED-B1");
 }
 
@@ -2075,18 +2057,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf47979_column)
 
     // convert selected text content to uppercase
     dispatchCommand(mxComponent, ".uno:ChangeCaseToUpper", {});
-    Scheduler::ProcessEventsToIdle();
 
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[1]/txt[1]", "a1");
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[1]/txt[1]", "a2");
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[1]/txt",
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[1]/txt[1]"_ostr, "a1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[1]/txt[1]"_ostr, "a2");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[1]/txt"_ostr,
                        "NESTED-A1");
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[2]/txt",
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[2]/cell[2]/tab/row/cell[2]/txt"_ostr,
                        "NESTED-B1");
     // This was "b1" (bad selection of the table column)
-    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[2]/txt[1]", "B1");
+    assertXPathContent(pXmlDoc, "//page[1]//body/tab/row[1]/cell[2]/txt[1]"_ostr, "B1");
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithExport)
@@ -2108,7 +2089,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithExport)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // delete table row with enabled change tracking
     // (HasTextChangesOnly property of the row will be false)
@@ -2118,10 +2099,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithExport)
     // but not table deletion
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // Save it and load it back.
-    reload("writer8", "tdf60382_tracked_table_deletion.odt");
+    saveAndReload("writer8");
     pDoc = getSwDoc();
 
     // accept the deletion of the content of the first cell
@@ -2131,7 +2112,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithExport)
 
     // table row was still not deleted
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept last redline
     pEditShell->AcceptRedline(0);
@@ -2140,7 +2121,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithExport)
     // (working export/import of HasTextChangesOnly)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithDOCXExport)
@@ -2162,7 +2143,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithDOCXExport)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // delete table row with enabled change tracking
     // (HasTextChangesOnly property of the row will be false)
@@ -2172,12 +2153,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithDOCXExport)
     // but not table deletion
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // Save it to a DOCX and load it back.
     // Exporting change tracking of the row wasn't supported.
     // Also Manage Changes for the import.
-    reload("Office Open XML Text", "tdf79069_tracked_table_deletion.docx");
+    saveAndReload("Office Open XML Text");
     pDoc = getSwDoc();
 
     // accept the deletion of the content of the first cell
@@ -2187,7 +2168,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithDOCXExport)
 
     // table row was still not deleted
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept last redline
     pEditShell->AcceptRedline(0);
@@ -2196,7 +2177,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithDOCXExport)
     // (working export/import of HasTextChangesOnly)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineDOCXTableInsertion)
@@ -2277,7 +2258,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf157662_AcceptInsertRedlineCutWithDe
     pEditShell->RejectRedline(6);
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(6), pEditShell->GetRedlineCount());
 
-    // Accept insert that splitted into 4 parts, but separeted to 2-2 parts, with another insert.
+    // Accept insert that splitted into 4 parts, but separated to 2-2 parts, with another insert.
     // It will accept only 2 parts, that is not separated. It leave the deletion.
     pEditShell->AcceptRedline(0);
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(5), pEditShell->GetRedlineCount());
@@ -2304,12 +2285,12 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf157662_RejectInsertRedlineCutWithDe
     SwEditShell* const pEditShell(pDoc->GetEditShell());
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(9), pEditShell->GetRedlineCount());
 
-    // Reject the insert that splitted into 3 parts .. reject all 3 of them
+    // Reject the insert that splitted into 3 parts. reject all 3 of them
     // it even remove the deletion, that was on the 2. insert...
     pEditShell->RejectRedline(6);
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(6), pEditShell->GetRedlineCount());
 
-    // Reject insert that splitted into 4 parts, but separeted to 2-2 parts, with another insert.
+    // Reject insert that splitted into 4 parts, but separated to 2-2 parts, with another insert.
     // It will reject only 2 parts, that is not separated. It remove the deletion.
     pEditShell->RejectRedline(0);
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(4), pEditShell->GetRedlineCount());
@@ -2341,26 +2322,26 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf157663_RedlineMoveRecognition)
     // 20. and 22. redline is a delete/insert redline with the same text "three".
     // they are not recognised as a move, because 22. redline is not a whole paragraph.
     // Note: delete/insert redlines that are just a part of a paragraph decided to be part of
-    // a move, only if it is at least 6 character long and conatin a space "" character.
+    // a move, only if it is at least 6 character long and contain a space "" character.
     for (SwRedlineTable::size_type i = 0; i < rTable.size(); i++)
     {
         CPPUNIT_ASSERT_EQUAL(vMovedRedlines[i], rTable[i]->GetMoved() > 0);
     }
 
     // Check if accepting move redlines accept its pairs as well.
-    pEditShell->AcceptRedline(3);   // "9 3/4"
+    pEditShell->AcceptRedline(3); // "9 3/4"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(19), pEditShell->GetRedlineCount());
 
-    pEditShell->AcceptRedline(1);   // "sqrt(10)"
+    pEditShell->AcceptRedline(1); // "sqrt(10)"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(17), pEditShell->GetRedlineCount());
 
-    pEditShell->AcceptRedline(1);   // "four"
+    pEditShell->AcceptRedline(1); // "four"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(13), pEditShell->GetRedlineCount());
 
-    pEditShell->AcceptRedline(3);   // "six"
+    pEditShell->AcceptRedline(3); // "six"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(11), pEditShell->GetRedlineCount());
 
-    pEditShell->AcceptRedline(4);   // "sqrt(17)"
+    pEditShell->AcceptRedline(4); // "sqrt(17)"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(9), pEditShell->GetRedlineCount());
 
     // Undo back all the 5 redline accepts
@@ -2371,28 +2352,30 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf157663_RedlineMoveRecognition)
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(23), pEditShell->GetRedlineCount());
 
     // Check if rejecting redlines reject its pairs as well.
-    pEditShell->RejectRedline(3);   // "9 3/4"
+    pEditShell->RejectRedline(3); // "9 3/4"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(20), pEditShell->GetRedlineCount());
 
-    pEditShell->RejectRedline(2);   // "sqrt(10)"
+    pEditShell->RejectRedline(2); // "sqrt(10)"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(18), pEditShell->GetRedlineCount());
 
-    pEditShell->RejectRedline(2);   // "four"
+    pEditShell->RejectRedline(2); // "four"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(15), pEditShell->GetRedlineCount());
 
-    pEditShell->RejectRedline(2);   // "sqrt(17)"
+    pEditShell->RejectRedline(2); // "sqrt(17)"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(14), pEditShell->GetRedlineCount());
 
-    pEditShell->RejectRedline(2);   // "six"
+    pEditShell->RejectRedline(2); // "six"
     CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(12), pEditShell->GetRedlineCount());
+
+    const sal_uInt32 nZeroID = 0;
 
     // Check if there are no more move redlines
     for (SwRedlineTable::size_type i = 0; i < rTable.size(); i++)
     {
-        CPPUNIT_ASSERT(rTable[i]->GetMoved() == 0);
+        CPPUNIT_ASSERT_EQUAL(nZeroID, rTable[i]->GetMoved());
     }
 
-    // Check if Moveing Paragraps generate move redlines
+    // Check if moving paragraphs generate redline moves
 
     // move a paragraph that has delete redlines inside of it
     // original text: "Seve ent teen"
@@ -2405,13 +2388,13 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf157663_RedlineMoveRecognition)
 
     sal_uInt32 nMovedID = rTable[6]->GetMoved();
     //moved text from here
-    CPPUNIT_ASSERT(nMovedID > 0);                       // "Sev"
-    CPPUNIT_ASSERT(rTable[7]->GetMoved() == 0);         // "e " deleted text not moved
-    CPPUNIT_ASSERT(rTable[8]->GetMoved() == nMovedID);  // "ent"
-    CPPUNIT_ASSERT(rTable[9]->GetMoved() == 0);         // " t"
-    CPPUNIT_ASSERT(rTable[10]->GetMoved() == nMovedID); // "teen"
+    CPPUNIT_ASSERT(nMovedID > 0); // "Sev"
+    CPPUNIT_ASSERT_EQUAL(nZeroID, rTable[7]->GetMoved()); // "e " deleted text not moved
+    CPPUNIT_ASSERT_EQUAL(nMovedID, rTable[8]->GetMoved()); // "ent"
+    CPPUNIT_ASSERT_EQUAL(nZeroID, rTable[9]->GetMoved()); // " t"
+    CPPUNIT_ASSERT_EQUAL(nMovedID, rTable[10]->GetMoved()); // "teen"
     // moved text to here
-    CPPUNIT_ASSERT(rTable[11]->GetMoved() == nMovedID); // "Seventeen"
+    CPPUNIT_ASSERT_EQUAL(nMovedID, rTable[11]->GetMoved()); // "Seventeen"
 
     // move paragraph that has an insert redline inside of it
     // original text: "Eigen"
@@ -2424,11 +2407,11 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf157663_RedlineMoveRecognition)
 
     nMovedID = rTable[12]->GetMoved();
     // moved text to here
-    CPPUNIT_ASSERT(nMovedID > 0);                        // "Eighteen"
+    CPPUNIT_ASSERT(nMovedID > 0); // "Eighteen"
     // moved text from here
-    CPPUNIT_ASSERT(rTable[13]->GetMoved() == nMovedID);  // "Eigen"
-    CPPUNIT_ASSERT(rTable[14]->GetMoved() == nMovedID);  // "hte"
-    CPPUNIT_ASSERT(rTable[15]->GetMoved() == nMovedID);  // "en"
+    CPPUNIT_ASSERT_EQUAL(nMovedID, rTable[13]->GetMoved()); // "Eigen"
+    CPPUNIT_ASSERT_EQUAL(nMovedID, rTable[14]->GetMoved()); // "hte"
+    CPPUNIT_ASSERT_EQUAL(nMovedID, rTable[15]->GetMoved()); // "en"
 
     //Check if accept work on both side of the redlines made by manual move paragraphs
     pEditShell->AcceptRedline(13); // "Eigen"
@@ -2598,6 +2581,629 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf144748)
     CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
 }
 
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf147180)
+{
+    // load a tracked table insertion (single redline)
+    createSwDoc("tdf147180.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTextTablesSupplier->getTextTables(),
+                                                    uno::UNO_QUERY);
+    // there is a table in the text
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
+
+    // insert a character in the first cell with change tracking
+    SwWrtShell* const pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    pWrtShell->Insert("x");
+
+    // reject all the changes, including table insertion
+
+    IDocumentRedlineAccess& rIDRA(pDoc->getIDocumentRedlineAccess());
+    rIDRA.AcceptAllRedline(/*bAccept=*/false);
+
+    // no table left in the text
+
+    // This was 1 (lost tracking of the table after modifying its text content)
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf147180_empty_rows)
+{
+    // load a tracked table insertion (single redline) with empty rows
+    createSwDoc("tdf150824.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTextTablesSupplier->getTextTables(),
+                                                    uno::UNO_QUERY);
+    // there is a table in the text
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
+
+    // insert a character in the first cell with change tracking
+    SwWrtShell* const pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    pWrtShell->Insert("x");
+
+    // reject all the changes, including table insertion
+
+    IDocumentRedlineAccess& rIDRA(pDoc->getIDocumentRedlineAccess());
+    rIDRA.AcceptAllRedline(/*bAccept=*/false);
+
+    // no table left in the text
+
+    // This was 1 (lost tracking of the empty rows after modifying table text content)
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(0), xTables->getCount());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableColumnDeletion)
+{
+    // load a table, and delete the first column with enabled change tracking:
+    // now the column is not deleted silently, but keeps the deleted cell content,
+    // and only accepting it will result the deletion of the table column.
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // check table
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // delete table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    // This was 1 (deleted cell without change tracking)
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // accept the deletion
+    SwEditShell* const pEditShell(pDoc->GetEditShell());
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->AcceptRedline(0);
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    // deleted column
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 1);
+
+    // Undo, and repeat the previous test, but only with deletion of the text content of the cells
+    // (HasTextChangesOnly property will be removed by Undo)
+
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    // first column exists again
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // delete table column with enabled change tracking
+    dispatchCommand(mxComponent, ".uno:SelectColumn", {});
+    dispatchCommand(mxComponent, ".uno:Delete", {});
+
+    // Table column still exists
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // accept the deletion of the content of the first cell
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->AcceptRedline(0);
+
+    // table column was still not deleted
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // Undo, and delete the column without change tracking
+
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    // table exists again
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // disable change tracking
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+
+    CPPUNIT_ASSERT_MESSAGE("redlining should be off",
+                           !pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // delete table column without change tracking
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    // the table column was deleted
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf156474)
+{
+    // load a table, and insert a column with change tracking
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    uno::Reference<text::XTextTablesSupplier> xTextTablesSupplier(mxComponent, uno::UNO_QUERY);
+    uno::Reference<container::XIndexAccess> xTables(xTextTablesSupplier->getTextTables(),
+                                                    uno::UNO_QUERY);
+
+    // there is a table in the text with two columns
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(1), xTables->getCount());
+    uno::Reference<text::XTextTable> xTextTable(xTables->getByIndex(0), uno::UNO_QUERY);
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xTextTable->getColumns()->getCount());
+
+    // insert table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:InsertColumnsBefore", {});
+
+    // 3 columns
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTextTable->getColumns()->getCount());
+
+    // accept tracked changes: remove HasTextChangesOnly = false of the inserted cells
+    dispatchCommand(mxComponent, ".uno:AcceptAllTrackedChanges", {});
+
+    // still 3 columns
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTextTable->getColumns()->getCount());
+
+    // delete the text content (dummy character of the previous text change) of the newly
+    // inserted cell, and accept tracked changes
+    SwWrtShell* const pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 1, /*bBasicCall=*/false);
+    dispatchCommand(mxComponent, ".uno:SwBackspace", {});
+    dispatchCommand(mxComponent, ".uno:AcceptAllTrackedChanges", {});
+
+    // This was 2 columns (not removed HasTextChangesOnly = false resulted column deletion
+    // instead of deleting only content of the cell)
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(3), xTextTable->getColumns()->getCount());
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, tdf156475)
+{
+    // load a table, and insert a row without change tracking,
+    // and delete the first column with the empty cell in the second row with change tracking
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn off red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be off",
+                           !pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // insert table row
+    dispatchCommand(mxComponent, ".uno:InsertRowsAfter", {});
+
+    // check table
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 2);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row[1]/cell"_ostr, 2);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row[2]/cell"_ostr, 2);
+
+    // turn on red-lining
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // delete table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    // go down to the empty cell
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    pWrtShell->Down(/*bSelect=*/false);
+
+    // Without the fix in place, this couldn't work
+    dispatchCommand(mxComponent, ".uno:AcceptTrackedChange", {});
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 2);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row[1]/cell"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row[2]/cell"_ostr, 1);
+
+    // test Undo/Redo
+    for (sal_Int32 i = 0; i < 4; ++i)
+    {
+        dispatchCommand(mxComponent, ".uno:Undo", {});
+    }
+
+    for (sal_Int32 i = 0; i < 4; ++i)
+    {
+        dispatchCommand(mxComponent, ".uno:Redo", {});
+    }
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf155747)
+{
+    // load a table, and delete the first column with enabled change tracking:
+    // now the column is not deleted silently, but keeps the deleted cell content,
+    // and only accepting it will result the deletion of the table column.
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // delete table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    // select table
+    dispatchCommand(mxComponent, ".uno:SelectTable", {});
+
+    // Without the fix in place, this test would have crashed here
+    dispatchCommand(mxComponent, ".uno:AcceptTrackedChange", {});
+
+    // check removed column
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf156544)
+{
+    // load a table, and insert a column without change tracking,
+    // and delete the first column with the empty cell in the second row with change tracking
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn off red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be off",
+                           !pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // insert table column without change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:InsertColumnsBefore", {});
+
+    // check table
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row[1]/cell"_ostr, 3);
+
+    // turn on red-lining
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    // go to the empty column
+    SwWrtShell* pWrtShell = pDoc->GetDocShell()->GetWrtShell();
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/false, 1, /*bBasicCall=*/false);
+
+    // delete table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
+
+    // This was 2 (deleted column)
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 3);
+
+    // accept the deletion of the empty column
+    dispatchCommand(mxComponent, ".uno:AcceptTrackedChange", {});
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // test Undo/Redo
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 3);
+
+    dispatchCommand(mxComponent, ".uno:Redo", {});
+
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf156487)
+{
+    // load a table, and delete a column in Hide Changes mode
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and hide changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+
+    CPPUNIT_ASSERT_MESSAGE("redlines shouldn't be visible",
+                           !IDocumentRedlineAccess::IsShowChanges(
+                               pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // delete table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    // Dump the rendering of the first page as an XML file.
+    SwDocShell* pShell = pDoc->GetDocShell();
+    std::shared_ptr<GDIMetaFile> xMetaFile = pShell->GetPreviewMetaFile();
+    MetafileXmlDump dumper;
+    xmlDocUniquePtr pXmlDoc = dumpAndParse(dumper, *xMetaFile);
+    CPPUNIT_ASSERT(pXmlDoc);
+
+    // This would be 2 without hiding the first cell
+    assertXPath(pXmlDoc, "/metafile/push/push/push/textarray/text"_ostr, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf149498)
+{
+    // load a table, and delete the first column with enabled change tracking:
+    // now the column is not deleted silently, but keeps the deleted cell content,
+    // and only accepting it will result the deletion of the table column.
+    createSwDoc("tdf149498.docx");
+
+    // select table, copy, paste and Undo
+    dispatchCommand(mxComponent, ".uno:SelectAll", {});
+    dispatchCommand(mxComponent, ".uno:Copy", {});
+    dispatchCommand(mxComponent, ".uno:Paste", {});
+
+    // this would crash due to bookmark over cell boundary
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf150673_RedlineTableColumnDeletionWithExport)
+{
+    // load a table, and delete the first column with enabled change tracking:
+    // now the column is not deleted silently, but keeps the deleted cell contents,
+    // and only accepting all of them will result the deletion of the table column.
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // check table
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+
+    // delete table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    // Deleted text content with change tracking,
+    // but not table deletion
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // Save it and load it back.
+    saveAndReload("writer8");
+    pDoc = getSwDoc();
+
+    // accept the deletion of the content of the first cell
+    SwEditShell* const pEditShell(pDoc->GetEditShell());
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->AcceptRedline(0);
+
+    // first table column was deleted finally
+    // (working export/import of HasTextChangesOnly)
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 1);
+
+    // check removing HasTextChangesOnly at acceptance of the deletion
+
+    // Undo, and delete the column without change tracking
+    dispatchCommand(mxComponent, ".uno:Undo", {});
+
+    // table column exists again
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // reject deletion, setting HasTextChangesOnly to TRUE
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->RejectRedline(0);
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(0), pEditShell->GetRedlineCount());
+
+    // delete table column with enabled change tracking
+    dispatchCommand(mxComponent, ".uno:SelectColumn", {});
+    dispatchCommand(mxComponent, ".uno:Delete", {});
+
+    // Table column still exists
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // reject the deletion of the content of the first cell
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->AcceptRedline(0);
+
+    // table column is still not deleted
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableColumnDeletionWithDOCXExport)
+{
+    // load a 1-row table, and delete the first column with enabled change tracking:
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // check table
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // delete first table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:DeleteColumns", {});
+
+    // Deleted text content with change tracking,
+    // but not table deletion
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+
+    // Save it to a DOCX and load it back.
+    // Exporting change tracking of the cell wasn't supported.
+    // Also Manage Changes for the import.
+    saveAndReload("Office Open XML Text");
+    pDoc = getSwDoc();
+
+    // accept the deletion of the content of the first cell
+    SwEditShell* const pEditShell(pDoc->GetEditShell());
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->AcceptRedline(0);
+
+    // table column was deleted
+    // (working export/import of HasTextChangesOnly of table cells)
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf155341_RedlineTableColumnInsertionWithExport)
+{
+    // load a table, and insert a new column with enabled change tracking
+    createSwDoc("tdf118311.fodt");
+    SwDoc* pDoc = getSwDoc();
+
+    // turn on red-lining and show changes
+    pDoc->getIDocumentRedlineAccess().SetRedlineFlags(RedlineFlags::On | RedlineFlags::ShowDelete
+                                                      | RedlineFlags::ShowInsert);
+    CPPUNIT_ASSERT_MESSAGE("redlining should be on",
+                           pDoc->getIDocumentRedlineAccess().IsRedlineOn());
+    CPPUNIT_ASSERT_MESSAGE(
+        "redlines should be visible",
+        IDocumentRedlineAccess::IsShowChanges(pDoc->getIDocumentRedlineAccess().GetRedlineFlags()));
+
+    // check table
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+
+    // insert table column with enabled change tracking
+    // (HasTextChangesOnly property of the cell will be false)
+    dispatchCommand(mxComponent, ".uno:InsertColumnsAfter", {});
+
+    // text content with change tracking (dummy redline)
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 3);
+
+    // Save it and load it back.
+    saveAndReload("writer8");
+    pDoc = getSwDoc();
+
+    // reject the insertion of the hidden content of the cell
+    SwEditShell* const pEditShell(pDoc->GetEditShell());
+    CPPUNIT_ASSERT_EQUAL(static_cast<SwRedlineTable::size_type>(1), pEditShell->GetRedlineCount());
+    pEditShell->RejectRedline(0);
+
+    // inserted table column was deleted
+    // (working export/import of HasTextChangesOnly)
+    discardDumpedLayout();
+    pXmlDoc = parseLayoutDump();
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row/cell"_ostr, 2);
+}
+
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf128335)
 {
     // Load the bugdoc, which has 3 textboxes.
@@ -2615,17 +3221,17 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf128335)
     Scheduler::ProcessEventsToIdle();
 
     // Cut it.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_CUT, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_CUT, SfxCallMode::SYNCHRON);
 
     // Paste it: this makes the 3rd textbox anchored in the 2nd one.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_PASTE, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_PASTE, SfxCallMode::SYNCHRON);
 
     selectShape(1);
 
     // Cut them.
     // Without the accompanying fix in place, this test would have crashed as the textboxes were
     // deleted in an incorrect order.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_CUT, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_CUT, SfxCallMode::SYNCHRON);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithReject)
@@ -2647,7 +3253,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithReject)
 
     // check table
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // delete table row with enabled change tracking
     // (HasTextChangesOnly property of the row will be false)
@@ -2657,10 +3263,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithReject)
     // but not table deletion
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // Save it and load it back.
-    reload("writer8", "tdf60382_tracked_table_deletion.odt");
+    saveAndReload("writer8");
     pDoc = getSwDoc();
 
     // reject the deletion of the content of the first cell
@@ -2675,7 +3281,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithReject)
 
     // table row was still not deleted
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // accept all redlines
     while (pEditShell->GetRedlineCount())
@@ -2685,7 +3291,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithReject)
     // (HasTextChangesOnly was false)
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // restore HasTextChangesOnly = false
     dispatchCommand(mxComponent, ".uno:Undo", {});
@@ -2701,7 +3307,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowDeletionWithReject)
     // table row (and the 1-row table) was deleted finally
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab", 0);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowInsertionWithReject)
@@ -2721,8 +3327,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowInsertionWithReject)
 
     // check table and its single row
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
 
     // insert rows before and after with enabled change tracking
     // (HasTextChangesOnly property of the row will be false, and
@@ -2736,8 +3342,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowInsertionWithReject)
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 3);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 3);
 
     // reject redlines
     pEditShell->RejectRedline(0);
@@ -2745,9 +3351,9 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testRedlineTableRowInsertionWithReject)
 
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
     // This was 3 (not rejected row insertion)
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145089_RedlineTableRowInsertionDOCX)
@@ -2767,8 +3373,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145089_RedlineTableRowInsertionDOCX
 
     // check table and its single row
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
 
     // insert rows before and after with enabled change tracking
     // (HasTextChangesOnly property of the row will be false, and
@@ -2777,7 +3383,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145089_RedlineTableRowInsertionDOCX
     dispatchCommand(mxComponent, ".uno:InsertRowsAfter", {});
 
     // save it to DOCX
-    reload("Office Open XML Text", "tdf145089.docx");
+    saveAndReload("Office Open XML Text");
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwViewShell* pViewShell
         = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
@@ -2785,8 +3391,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145089_RedlineTableRowInsertionDOCX
     discardDumpedLayout();
     pXmlDoc = parseLayoutDump();
 
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 3);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 3);
 
     // reject redlines
     SwDoc* pDOCXDoc(pTextDoc->GetDocShell()->GetDoc());
@@ -2798,10 +3404,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145089_RedlineTableRowInsertionDOCX
     discardDumpedLayout();
 
     pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
 
     // This was 3 (not rejected row insertion)
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 1);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 1);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testPasteTrackedTableRow)
@@ -2965,7 +3571,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145091)
     CPPUNIT_ASSERT(pEditShell->GetRedlineCount() > 0);
 
     // save it to DOCX
-    reload("Office Open XML Text", "tdf145091.docx");
+    saveAndReload("Office Open XML Text");
     SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
     SwViewShell* pViewShell
         = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
@@ -2973,8 +3579,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145091)
     discardDumpedLayout();
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 3);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 3);
 
     // accept all redlines
     dispatchCommand(mxComponent, ".uno:AcceptAllTrackedChanges", {});
@@ -2983,8 +3589,8 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145091)
 
     pXmlDoc = parseLayoutDump();
     // This was false (deleted table with accepting deletions)
-    assertXPath(pXmlDoc, "//page[1]//body/tab");
-    assertXPath(pXmlDoc, "//page[1]//body/tab/row", 3);
+    assertXPath(pXmlDoc, "//page[1]//body/tab"_ostr);
+    assertXPath(pXmlDoc, "//page[1]//body/tab/row"_ostr, 3);
 }
 
 CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf128603)
@@ -3004,10 +3610,10 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf128603)
     Scheduler::ProcessEventsToIdle();
 
     // Cut it.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_CUT, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_CUT, SfxCallMode::SYNCHRON);
 
     // Paste it: this makes the 3rd textbox anchored in the 2nd one.
-    pView->GetViewFrame()->GetDispatcher()->Execute(SID_PASTE, SfxCallMode::SYNCHRON);
+    pView->GetViewFrame().GetDispatcher()->Execute(SID_PASTE, SfxCallMode::SYNCHRON);
 
     // Undo all of this.
     sw::UndoManager& rUndoManager = pDoc->GetUndoManager();
@@ -3015,7 +3621,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf128603)
     rUndoManager.Undo();
 
     // Make sure the content indexes still match.
-    const SwFrameFormats& rSpzFrameFormats = *pDoc->GetSpzFrameFormats();
+    const auto& rSpzFrameFormats = *pDoc->GetSpzFrameFormats();
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(6), rSpzFrameFormats.size());
     const SwNodeIndex* pIndex4 = rSpzFrameFormats[4]->GetContent().GetContentIdx();
     CPPUNIT_ASSERT(pIndex4);
@@ -3152,7 +3758,7 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf129655)
 {
     createSwDoc("tdf129655-vtextbox.odt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    assertXPath(pXmlDoc, "//anchored/fly/txt[@WritingMode='Vertical']", 1);
+    assertXPath(pXmlDoc, "//anchored/fly/txt[@WritingMode='Vertical']"_ostr, 1);
 }
 
 static uno::Reference<text::XTextRange> getAssociatedTextRange(uno::Any object)
@@ -3296,7 +3902,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf93747)
         { { "Rows", uno::Any(sal_Int32(2)) }, { "Columns", uno::Any(sal_Int32(2)) } }));
 
     dispatchCommand(mxComponent, ".uno:InsertTable", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     pWrtSh->Insert("Col1");
 
@@ -3356,7 +3961,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf93747)
         getProperty<OUString>(getParagraphOfText(1, xCellB1->getText()), "ParaStyleName"));
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(
         OUString("Table Contents"),
@@ -3367,7 +3971,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf93747)
         getProperty<OUString>(getParagraphOfText(1, xCellB1->getText()), "ParaStyleName"));
 
     dispatchCommand(mxComponent, ".uno:Undo", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_EQUAL(
         OUString("Table Contents"),
@@ -3388,7 +3991,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145151)
         { { "Rows", uno::Any(sal_Int32(2)) }, { "Columns", uno::Any(sal_Int32(2)) } }));
 
     dispatchCommand(mxComponent, ".uno:InsertTable", aArgs);
-    Scheduler::ProcessEventsToIdle();
 
     pWrtSh->Insert("Col1");
 
@@ -3418,7 +4020,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145151)
     pWrtSh->Right(SwCursorSkipMode::Chars, /*bSelect=*/true, 1, /*bBasicCall=*/false);
 
     dispatchCommand(mxComponent, ".uno:DefaultNumbering", {});
-    Scheduler::ProcessEventsToIdle();
 
     // B1 should now have a numbering style, but A1 should not be affected.
     OUString sNumStyleB1
@@ -3431,7 +4032,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145151)
 
     // Toggle it back off
     dispatchCommand(mxComponent, ".uno:DefaultNumbering", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT_MESSAGE(
         "Cell B1 must be able to toggle numbering on and off.",
@@ -3444,7 +4044,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145151)
 
     // Toggle on bullet numbering
     dispatchCommand(mxComponent, ".uno:DefaultBullet", {});
-    Scheduler::ProcessEventsToIdle();
 
     // sanity check - both cells have bullets turned on.
     OUString sNumStyleA1
@@ -3460,7 +4059,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145151)
 
     // Toggle off bullet numbering
     dispatchCommand(mxComponent, ".uno:DefaultBullet", {});
-    Scheduler::ProcessEventsToIdle();
 
     // B1 should now have removed all numbering, while A1 should still have the bullet.
     CPPUNIT_ASSERT(
@@ -3473,7 +4071,6 @@ CPPUNIT_TEST_FIXTURE(SwUiWriterTest5, testTdf145151)
 
     // Toggle it back on
     dispatchCommand(mxComponent, ".uno:DefaultBullet", {});
-    Scheduler::ProcessEventsToIdle();
 
     CPPUNIT_ASSERT(
         !getProperty<OUString>(getParagraphOfText(1, xCellB1->getText()), "NumberingStyleName")

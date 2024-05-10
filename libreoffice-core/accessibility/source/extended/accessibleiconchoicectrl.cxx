@@ -23,6 +23,7 @@
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <vcl/toolkit/ivctrl.hxx>
 #include <cppuhelper/supportsservice.hxx>
 
@@ -42,13 +43,10 @@ namespace accessibility
     // Ctor() and Dtor()
 
     AccessibleIconChoiceCtrl::AccessibleIconChoiceCtrl( SvtIconChoiceCtrl const & _rIconCtrl, const Reference< XAccessible >& _xParent ) :
-        VCLXAccessibleComponent( _rIconCtrl.GetWindowPeer() ),
+        ImplInheritanceHelper( _rIconCtrl.GetWindowPeer() ),
         m_xParent       ( _xParent )
     {
     }
-
-    IMPLEMENT_FORWARD_XINTERFACE2(AccessibleIconChoiceCtrl, VCLXAccessibleComponent, AccessibleIconChoiceCtrl_BASE)
-    IMPLEMENT_FORWARD_XTYPEPROVIDER2(AccessibleIconChoiceCtrl, VCLXAccessibleComponent, AccessibleIconChoiceCtrl_BASE)
 
     void AccessibleIconChoiceCtrl::ProcessWindowEvent( const VclWindowEvent& rVclWindowEvent )
     {
@@ -166,8 +164,7 @@ namespace accessibility
         if ( !pEntry )
             throw RuntimeException("getAccessibleChild: Entry "
                                    + OUString::number(i) + " not found",
-                static_cast<css::lang::XTypeProvider*>(
-                    static_cast<VCLXAccessibleComponent_BASE*>(this)));
+                getXWeak());
 
         return new AccessibleIconChoiceCtrlEntry( *pCtrl, i, this );
     }

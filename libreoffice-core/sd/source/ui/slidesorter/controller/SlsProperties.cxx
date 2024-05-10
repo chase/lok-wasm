@@ -24,56 +24,15 @@
 namespace sd::slidesorter::controller {
 
 Properties::Properties()
-    : mbIsHighlightCurrentSlide(false),
-      mbIsShowSelection(true),
-      mbIsShowFocus(true),
-      mbIsCenterSelection(false),
-      mbIsSmoothSelectionScrolling(true),
-      mbIsSuspendPreviewUpdatesDuringFullScreenPresentation(true),
-      maBackgroundColor(Application::GetSettings().GetStyleSettings().GetWindowColor()),
-      maTextColor(Application::GetSettings().GetStyleSettings().GetActiveTextColor()),
-      maSelectionColor(Application::GetSettings().GetStyleSettings().GetHighlightColor()),
-      maHighlightColor(Application::GetSettings().GetStyleSettings().GetMenuHighlightColor()),
-      mbIsUIReadOnly(false)
+    : maBackgroundColor(Application::GetSettings().GetStyleSettings().GetWindowColor()),
+      maSelectionColor(Application::GetSettings().GetStyleSettings().GetHighlightColor())
 {
 }
 
 void Properties::HandleDataChangeEvent()
 {
     maBackgroundColor = Application::GetSettings().GetStyleSettings().GetWindowColor();
-    maTextColor = Application::GetSettings().GetStyleSettings().GetActiveTextColor();
     maSelectionColor = Application::GetSettings().GetStyleSettings().GetHighlightColor();
-    maHighlightColor = Application::GetSettings().GetStyleSettings().GetMenuHighlightColor();
-}
-
-void Properties::SetHighlightCurrentSlide (const bool bIsHighlightCurrentSlide)
-{
-    mbIsHighlightCurrentSlide = bIsHighlightCurrentSlide;
-}
-
-void Properties::SetShowSelection (const bool bIsShowSelection)
-{
-    mbIsShowSelection = bIsShowSelection;
-}
-
-void Properties::SetShowFocus (const bool bIsShowFocus)
-{
-    mbIsShowFocus = bIsShowFocus;
-}
-
-void Properties::SetCenterSelection (const bool bIsCenterSelection)
-{
-    mbIsCenterSelection = bIsCenterSelection;
-}
-
-void Properties::SetSmoothSelectionScrolling (const bool bIsSmoothSelectionScrolling)
-{
-    mbIsSmoothSelectionScrolling = bIsSmoothSelectionScrolling;
-}
-
-void Properties::SetSuspendPreviewUpdatesDuringFullScreenPresentation (const bool bFlag)
-{
-    mbIsSuspendPreviewUpdatesDuringFullScreenPresentation = bFlag;
 }
 
 void Properties::SetBackgroundColor (const Color& rColor)
@@ -81,24 +40,9 @@ void Properties::SetBackgroundColor (const Color& rColor)
     maBackgroundColor = rColor;
 }
 
-void Properties::SetTextColor (const Color& rColor)
-{
-    maTextColor = rColor;
-}
-
 void Properties::SetSelectionColor (const Color& rColor)
 {
     maSelectionColor = rColor;
-}
-
-void Properties::SetHighlightColor (const Color& rColor)
-{
-    maHighlightColor = rColor;
-}
-
-void Properties::SetUIReadOnly (const bool bIsUIReadOnly)
-{
-    mbIsUIReadOnly = bIsUIReadOnly;
 }
 
 } // end of namespace ::sd::slidesorter::controller

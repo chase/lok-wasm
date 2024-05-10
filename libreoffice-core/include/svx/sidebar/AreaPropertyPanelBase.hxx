@@ -20,6 +20,7 @@
 #define INCLUDED_SVX_SOURCE_SIDEBAR_AREA_AREAPROPERTYPANELBASE_HXX
 
 #include <memory>
+#include <sfx2/sidebar/IContextChangeReceiver.hxx>
 #include <svx/sidebar/AreaTransparencyGradientPopup.hxx>
 #include <sfx2/sidebar/ControllerItem.hxx>
 #include <svx/colorbox.hxx>
@@ -33,6 +34,7 @@
 #include <sfx2/sidebar/PanelLayout.hxx>
 #include <svl/intitem.hxx>
 #include <svx/svxdllapi.h>
+#include <vcl/EnumContext.hxx>
 
 class ToolbarUnoDispatcher;
 class XFillFloatTransparenceItem;
@@ -48,6 +50,7 @@ namespace svx::sidebar {
 
 class SVX_DLLPUBLIC AreaPropertyPanelBase
 :   public PanelLayout,
+    public ::sfx2::sidebar::IContextChangeReceiver,
     public ::sfx2::sidebar::ControllerItem::ItemUpdateReceiverInterface
 {
 public:
@@ -99,9 +102,11 @@ public:
 
 private:
     void Initialize();
+    virtual void HandleContextChange(const vcl::EnumContext& rContext) override;
 
 protected:
     const css::uno::Reference<css::frame::XFrame>&      mxFrame;
+    vcl::EnumContext                                    maContext;
 
     sal_uInt16                                          meLastXFS;
 
@@ -109,6 +114,7 @@ protected:
     sal_Int32                                           mnLastPosBitmap;
     sal_Int32                                           mnLastPosPattern;
     sal_uInt16                                          mnLastTransSolid;
+    OUString                                            msUseBackgroundText;
 
     basegfx::BGradient                                  maGradientLinear;
     basegfx::BGradient                                  maGradientAxial;
@@ -151,7 +157,7 @@ protected:
     std::unique_ptr< XFillFloatTransparenceItem >   mpFloatTransparenceItem;
     std::unique_ptr< SfxUInt16Item >                mpTransparenceItem;
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops maColorStops;
 
     DECL_DLLPRIVATE_LINK(SelectFillTypeHdl, weld::ComboBox&, void );
@@ -162,14 +168,14 @@ protected:
     DECL_DLLPRIVATE_LINK(ModifyTransparentHdl_Impl, weld::MetricSpinButton&, void);
     DECL_DLLPRIVATE_LINK(ModifyTransSliderHdl, weld::Scale&, void);
     DECL_DLLPRIVATE_LINK(ClickImportBitmapHdl, weld::Button&, void);
-    DECL_DLLPRIVATE_LINK(ToolbarHdl_Impl, const OString&, void);
+    DECL_DLLPRIVATE_LINK(ToolbarHdl_Impl, const OUString&, void);
 
     void ImpUpdateTransparencies();
     void SetTransparency(sal_uInt16 nVal);
     void SelectFillAttrHdl_Impl();
     void FillStyleChanged(bool bUpdateModel);
 
-    // MCGR: Preserve in-between ColorStops until we have an UI to edit these
+    // MCGR: Preserve ColorStops until we have a UI to edit these
     basegfx::BColorStops createColorStops();
 };
 

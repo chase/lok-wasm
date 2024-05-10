@@ -23,7 +23,7 @@
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/awt/Point.hpp>
 #include <comphelper/accessiblecomponenthelper.hxx>
-#include <cppuhelper/implbase2.hxx>
+#include <cppuhelper/implbase.hxx>
 #include <tools/link.hxx>
 #include <vcl/vclptr.hxx>
 
@@ -33,22 +33,21 @@ class Menu;
 class VclSimpleEvent;
 class VclMenuEvent;
 
+class OAccessibleMenuItemComponent;
 
-typedef ::cppu::ImplHelper2<
-    css::accessibility::XAccessible,
-    css::lang::XServiceInfo > OAccessibleMenuBaseComponent_BASE;
-
-class OAccessibleMenuBaseComponent : public comphelper::OAccessibleExtendedComponentHelper,
-                                     public OAccessibleMenuBaseComponent_BASE
+class OAccessibleMenuBaseComponent : public cppu::ImplInheritanceHelper<
+                                         comphelper::OAccessibleExtendedComponentHelper,
+                                         css::accessibility::XAccessible,
+                                         css::lang::XServiceInfo>
 {
     friend class OAccessibleMenuItemComponent;
     friend class VCLXAccessibleMenuItem;
     friend class VCLXAccessibleMenu;
 
 protected:
-    typedef std::vector< css::uno::Reference< css::accessibility::XAccessible > > AccessibleChildren;
+    typedef std::vector< rtl::Reference< OAccessibleMenuItemComponent > > AccessibleChildren;
 
-    AccessibleChildren      m_aAccessibleChildren;
+    AccessibleChildren      m_aAccessibleChildren1;
     VclPtr<Menu>            m_pMenu;
 
     bool                    m_bEnabled;
@@ -75,6 +74,7 @@ protected:
     void                    UpdateSelected( sal_Int32 i, bool bSelected );
     void                    UpdateChecked( sal_Int32 i, bool bChecked );
     void                    UpdateAccessibleName( sal_Int32 i );
+    void                    UpdateItemRole(sal_Int32 i);
     void                    UpdateItemText( sal_Int32 i );
 
     sal_Int64               GetChildCount() const;
@@ -111,12 +111,6 @@ public:
     virtual ~OAccessibleMenuBaseComponent() override;
 
     void                    SetStates();
-
-    // XInterface
-    DECLARE_XINTERFACE()
-
-    // XTypeProvider
-    DECLARE_XTYPEPROVIDER()
 
     // XServiceInfo
     virtual sal_Bool SAL_CALL supportsService( const OUString& rServiceName ) override;

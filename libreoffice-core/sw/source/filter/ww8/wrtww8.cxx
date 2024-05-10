@@ -703,14 +703,14 @@ void WW8Export::ExportDopTypography(WW8DopTypography &rTypo)
                           !lcl_CmpBeginEndChars
                             (
                                 pForbidden->endLine,
-                                OUString(WW8DopTypography::JapanNotEndLevel1).getStr(),
+                                WW8DopTypography::JapanNotEndLevel1.getStr(),
                                 WW8DopTypography::nMaxLeading * sizeof(sal_Unicode)
                             )
                         &&
                           !lcl_CmpBeginEndChars
                             (
                                 pForbidden->beginLine,
-                                OUString(WW8DopTypography::JapanNotBeginLevel1).getStr(),
+                                WW8DopTypography::JapanNotBeginLevel1.getStr(),
                                 WW8DopTypography::nMaxFollowing * sizeof(sal_Unicode)
                             )
                         )
@@ -1517,7 +1517,7 @@ std::unique_ptr<SvxBrushItem> MSWordExportBase::getBackground()
     if (SfxItemState::SET == eState)
     {
         // The 'color' is set for the first page style - take it and use it as the background color of the entire DOCX
-        if (aBrush->GetColor() != COL_AUTO)
+        if (aBrush->GetColor() != COL_AUTO || aBrush->GetGraphicObject())
             return aBrush;
     }
     return nullptr;
@@ -1911,6 +1911,7 @@ void MSWordExportBase::SaveData( SwNodeOffset nStt, SwNodeOffset nEnd )
     aData.pOldFlyOffset = m_pFlyOffset;
     aData.eOldAnchorType = m_eNewAnchorType;
 
+    aData.bOldWriteAll = false;
     aData.bOldOutTable = m_bOutTable;
     aData.bOldFlyFrameAttrs = m_bOutFlyFrameAttrs;
     aData.bOldStartTOX = m_bStartTOX;
@@ -3265,9 +3266,6 @@ void MSWordExportBase::AddLinkTarget(std::u16string_view rURL)
         return;
 
     sCmp = sCmp.toAsciiLowerCase();
-    SwNodeOffset nIdx(0);
-    bool noBookmark = false;
-
     if( sCmp == "outline" )
     {
         SwPosition aPos(*m_pCurPam->GetPoint());
@@ -3276,100 +3274,69 @@ void MSWordExportBase::AddLinkTarget(std::u16string_view rURL)
         // save the name of the bookmark and the
         // node index number of where it points to
         if( m_rDoc.GotoOutline( aPos, aName ) )
-        {
-            nIdx = aPos.GetNodeIndex();
-            noBookmark = true;
-        }
+            m_aImplicitBookmarks.emplace_back(aURL, aPos.GetNodeIndex());
     }
     else if( sCmp == "graphic" )
     {
-        SwNodeIndex* pIdx;
         OUString aName(BookmarkToWriter(aURL.subView(0, nPos)));
-        const SwFlyFrameFormat* pFormat = m_rDoc.FindFlyByName(aName, SwNodeType::Grf);
-        if (pFormat && nullptr != (pIdx = const_cast<SwNodeIndex*>(pFormat->GetContent().GetContentIdx())))
-        {
-            nIdx = pIdx->GetNext()->GetIndex();
-            noBookmark = true;
-        }
+        if (const SwFlyFrameFormat* pFormat = m_rDoc.FindFlyByName(aName, SwNodeType::Grf))
+            if (const SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx())
+                m_aImplicitBookmarks.emplace_back(aURL, pIdx->GetNext()->GetIndex());
     }
     else if( sCmp == "frame" )
     {
-        SwNodeIndex* pIdx;
         OUString aName(BookmarkToWriter(aURL.subView(0, nPos)));
-        const SwFlyFrameFormat* pFormat = m_rDoc.FindFlyByName(aName, SwNodeType::Text);
-        if (pFormat && nullptr != (pIdx = const_cast<SwNodeIndex*>(pFormat->GetContent().GetContentIdx())))
-        {
-            nIdx = pIdx->GetIndex() + 1;
-            noBookmark = true;
-        }
+        if (const SwFlyFrameFormat* pFormat = m_rDoc.FindFlyByName(aName, SwNodeType::Text))
+            if (const SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx())
+                m_aImplicitBookmarks.emplace_back(aURL, pIdx->GetIndex() + 1);
     }
     else if( sCmp == "ole" )
     {
-        SwNodeIndex* pIdx;
         OUString aName(BookmarkToWriter(aURL.subView(0, nPos)));
-        const SwFlyFrameFormat* pFormat = m_rDoc.FindFlyByName(aName, SwNodeType::Ole);
-        if (pFormat && nullptr != (pIdx = const_cast<SwNodeIndex*>(pFormat->GetContent().GetContentIdx())))
-        {
-            nIdx = pIdx->GetNext()->GetIndex();
-            noBookmark = true;
-        }
+        if (const SwFlyFrameFormat* pFormat = m_rDoc.FindFlyByName(aName, SwNodeType::Ole))
+            if (const SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx())
+                m_aImplicitBookmarks.emplace_back(aURL, pIdx->GetNext()->GetIndex());
     }
     else if( sCmp == "region" )
     {
-        SwNodeIndex* pIdx;
         OUString aName(BookmarkToWriter(aURL.subView(0, nPos)));
         for (const SwSectionFormat* pFormat : m_rDoc.GetSections())
         {
-            if (aName == pFormat->GetSection()->GetSectionName()
-                && nullptr != (pIdx = const_cast<SwNodeIndex*>(pFormat->GetContent().GetContentIdx())))
+            if (aName == pFormat->GetSection()->GetSectionName())
             {
-                nIdx = pIdx->GetIndex() + 1;
-                noBookmark = true;
-                break;
+                if (const SwNodeIndex* pIdx = pFormat->GetContent().GetContentIdx())
+                {
+                    m_aImplicitBookmarks.emplace_back(aURL, pIdx->GetIndex() + 1);
+                    break;
+                }
             }
         }
     }
     else if( sCmp == "table" )
     {
         OUString aName(BookmarkToWriter(aURL.subView(0, nPos)));
-        const SwTable* pTable = SwTable::FindTable(m_rDoc.FindTableFormatByName(aName));
-        if (pTable)
-        {
-            SwTableNode* pTableNode = const_cast<SwTableNode*>(pTable->GetTabSortBoxes()[1]->GetSttNd()->FindTableNode());
-            if (pTableNode)
-            {
-                nIdx = pTableNode->GetIndex() + 2;
-                noBookmark = true;
-            }
-        }
+        if (const SwTable* pTable = SwTable::FindTable(m_rDoc.FindTableFormatByName(aName)))
+            if (const SwTableNode* pTableNode = pTable->GetTabSortBoxes()[1]->GetSttNd()->FindTableNode())
+                m_aImplicitBookmarks.emplace_back(aURL, pTableNode->GetIndex() + 2);
     }
     else if (sCmp == "toxmark")
     {
         OUString const name(aURL.copy(0, nPos));
         OUString const nameDecoded(INetURLObject::decode(name,
                                INetURLObject::DecodeMechanism::WithCharset));
-        std::optional<std::pair<SwTOXMark, sal_Int32>> const tmp(
-            sw::PrepareJumpToTOXMark(m_rDoc, nameDecoded));
-        if (tmp)
+        if (const auto tmp = sw::PrepareJumpToTOXMark(m_rDoc, nameDecoded))
         {
             SwTOXMark const* pMark(&tmp->first);
             for (sal_Int32 i = 0; i < tmp->second; ++i)
             {
                 pMark = &m_rDoc.GotoTOXMark(*pMark, TOX_SAME_NXT, true);
             }
-            if (pMark != &tmp->first)
+            if (!SfxPoolItem::areSame(pMark, &tmp->first))
             {
                 m_TOXMarkBookmarksByURL.emplace(aURL, name);
                 m_TOXMarkBookmarksByTOXMark.emplace(pMark, nameDecoded);
             }
         }
-    }
-    if (noBookmark)
-    {
-        aBookmarkPair aImplicitBookmark;
-        aImplicitBookmark.first = aURL;
-        aImplicitBookmark.second = nIdx;
-        m_aImplicitBookmarks.push_back(aImplicitBookmark);
     }
 }
 
@@ -3464,7 +3431,7 @@ ErrCode MSWordExportBase::ExportDocument( bool bWriteAll )
     m_pRedlAuthors = nullptr;
     m_aTOXArr.clear();
 
-    if ( !m_pOLEExp )
+    if ( !m_oOLEExp )
     {
         sal_uInt32 nSvxMSDffOLEConvFlags = 0;
         const SvtFilterOptions& rOpt = SvtFilterOptions::Get();
@@ -3477,7 +3444,7 @@ ErrCode MSWordExportBase::ExportDocument( bool bWriteAll )
         if ( rOpt.IsImpress2PowerPoint() )
             nSvxMSDffOLEConvFlags |= OLE_STARIMPRESS_2_POWERPOINT;
 
-        m_pOLEExp.reset(new SvxMSExportOLEObjects( nSvxMSDffOLEConvFlags ));
+        m_oOLEExp.emplace( nSvxMSDffOLEConvFlags );
     }
 
     if ( !m_pOCXExp && m_rDoc.GetDocShell() )
@@ -3511,6 +3478,7 @@ ErrCode MSWordExportBase::ExportDocument( bool bWriteAll )
     if ( m_rDoc.getIDocumentDrawModelAccess().GetDrawModel() )
         m_rDoc.getIDocumentDrawModelAccess().GetDrawModel()->GetPage( 0 )->RecalcObjOrdNums();
 
+    InitBookmarkLookup(); // MACRO-1786
     ErrCode err = ExportDocument_Impl();
 
     m_aFrames.clear();
@@ -3534,7 +3502,7 @@ bool SwWW8Writer::InitStd97CodecUpdateMedium( ::msfilter::MSCodec_Std97& rCodec 
 
     if ( mpMedium )
     {
-        const SfxUnoAnyItem* pEncryptionDataItem = SfxItemSet::GetItem<SfxUnoAnyItem>(mpMedium->GetItemSet(), SID_ENCRYPTIONDATA, false);
+        const SfxUnoAnyItem* pEncryptionDataItem = mpMedium->GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
         if ( pEncryptionDataItem && ( pEncryptionDataItem->GetValue() >>= aEncryptionData ) && !rCodec.InitCodec( aEncryptionData ) )
         {
             OSL_ENSURE( false, "Unexpected EncryptionData!" );
@@ -3544,14 +3512,16 @@ bool SwWW8Writer::InitStd97CodecUpdateMedium( ::msfilter::MSCodec_Std97& rCodec 
         if ( !aEncryptionData.hasElements() )
         {
             // try to generate the encryption data based on password
-            const SfxStringItem* pPasswordItem = SfxItemSet::GetItem<SfxStringItem>(mpMedium->GetItemSet(), SID_PASSWORD, false);
+            const SfxStringItem* pPasswordItem = mpMedium->GetItemSet().GetItem(SID_PASSWORD, false);
             if ( pPasswordItem && !pPasswordItem->GetValue().isEmpty() && pPasswordItem->GetValue().getLength() <= 15 )
             {
                 // Generate random number with a seed of time as salt.
                 rtlRandomPool aRandomPool = rtl_random_createPool ();
                 sal_uInt8 pDocId[ 16 ];
-                rtl_random_getBytes( aRandomPool, pDocId, 16 );
-
+                if (rtl_random_getBytes(aRandomPool, pDocId, 16) != rtl_Random_E_None)
+                {
+                    throw uno::RuntimeException("rtl_random_getBytes failed");
+                }
                 rtl_random_destroyPool( aRandomPool );
 
                 sal_uInt16 aPassword[16] = {};
@@ -3563,12 +3533,12 @@ bool SwWW8Writer::InitStd97CodecUpdateMedium( ::msfilter::MSCodec_Std97& rCodec 
                 rCodec.InitKey( aPassword, pDocId );
                 aEncryptionData = rCodec.GetEncryptionData();
 
-                mpMedium->GetItemSet()->Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
+                mpMedium->GetItemSet().Put( SfxUnoAnyItem( SID_ENCRYPTIONDATA, uno::Any( aEncryptionData ) ) );
             }
         }
 
         if ( aEncryptionData.hasElements() )
-            mpMedium->GetItemSet()->ClearItem( SID_PASSWORD );
+            mpMedium->GetItemSet().ClearItem( SID_PASSWORD );
     }
 
     // nonempty encryption data means here that the codec was successfully initialized
@@ -3823,7 +3793,7 @@ void WW8Export::PrepareStorage()
         sfx2::SaveOlePropertySet( xDocProps, &GetWriter().GetStorage() );
 }
 
-ErrCode SwWW8Writer::WriteStorage()
+ErrCodeMsg SwWW8Writer::WriteStorage()
 {
     tools::SvRef<SotStorage> pOrigStg;
     uno::Reference< packages::XPackageEncryption > xPackageEncryption;
@@ -3832,7 +3802,7 @@ ErrCode SwWW8Writer::WriteStorage()
     if (mpMedium)
     {
         // Check for specific encryption requests
-        const SfxUnoAnyItem* pEncryptionDataItem = SfxItemSet::GetItem<SfxUnoAnyItem>(mpMedium->GetItemSet(), SID_ENCRYPTIONDATA, false);
+        const SfxUnoAnyItem* pEncryptionDataItem = mpMedium->GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
         if (pEncryptionDataItem && (pEncryptionDataItem->GetValue() >>= aEncryptionData))
         {
             ::comphelper::SequenceAsHashMap aHashData(aEncryptionData);
@@ -3957,16 +3927,16 @@ ErrCode SwWW8Writer::WriteStorageImpl()
     return err;
 }
 
-ErrCode SwWW8Writer::WriteMedium( SfxMedium& )
+ErrCodeMsg SwWW8Writer::WriteMedium( SfxMedium& )
 {
     return WriteStorage();
 }
 
-ErrCode SwWW8Writer::Write( SwPaM& rPaM, SfxMedium& rMed,
+ErrCodeMsg SwWW8Writer::Write( SwPaM& rPaM, SfxMedium& rMed,
                           const OUString* pFileName )
 {
     mpMedium = &rMed;
-    ErrCode nRet = StgWriter::Write( rPaM, rMed, pFileName );
+    ErrCodeMsg nRet = StgWriter::Write( rPaM, rMed, pFileName );
     mpMedium = nullptr;
     return nRet;
 }
@@ -4035,7 +4005,7 @@ MSWordExportBase::~MSWordExportBase()
         m_pUsedNumTable->erase(m_pUsedNumTable->begin(), m_pUsedNumTable->begin() + m_pUsedNumTable->size() - m_nUniqueList);
         m_pUsedNumTable.reset();
     }
-    m_pOLEExp.reset();
+    m_oOLEExp.reset();
     m_pOCXExp.reset();
 }
 

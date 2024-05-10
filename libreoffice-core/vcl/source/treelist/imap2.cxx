@@ -96,8 +96,7 @@ void IMapCircleObject::WriteCERN( SvStream& rOStm ) const
     OStringBuffer aStrBuf("circle ");
 
     AppendCERNCoords(aStrBuf, aCenter);
-    aStrBuf.append(nRadius);
-    aStrBuf.append(' ');
+    aStrBuf.append(OString::number(nRadius) + " ");
     AppendCERNURL(aStrBuf);
 
     rOStm.WriteLine(aStrBuf);
@@ -246,7 +245,7 @@ void ImageMap::ImpReadCERNLine( std::string_view rLine  )
 {
     OString aStr( comphelper::string::stripStart(rLine, ' ') );
     aStr = comphelper::string::stripStart(aStr, '\t');
-    aStr = aStr.replaceAll(";", "");
+    aStr = aStr.replaceAll(";"_ostr, ""_ostr);
     aStr = aStr.toAsciiLowerCase();
 
     const char* pStr = aStr.getStr();
@@ -379,7 +378,7 @@ void ImageMap::ImpReadNCSALine( std::string_view rLine )
 {
     OString aStr( comphelper::string::stripStart(rLine, ' ') );
     aStr = comphelper::string::stripStart(aStr, '\t');
-    aStr = aStr.replaceAll(";", "");
+    aStr = aStr.replaceAll(";"_ostr, ""_ostr);
     aStr = aStr.toAsciiLowerCase();
 
     const char* pStr = aStr.getStr();
@@ -411,8 +410,7 @@ void ImageMap::ImpReadNCSALine( std::string_view rLine )
         const OUString  aURL( ImpReadNCSAURL( &pStr ) );
         const Point     aCenter( ImpReadNCSACoords( &pStr ) );
         const Point     aDX( aCenter - ImpReadNCSACoords( &pStr ) );
-        tools::Long            nRadius = static_cast<tools::Long>(sqrt( static_cast<double>(aDX.X()) * aDX.X() +
-                                               static_cast<double>(aDX.Y()) * aDX.Y() ));
+        tools::Long            nRadius = static_cast<tools::Long>(std::hypot( aDX.X(), aDX.Y()));
 
         maList.emplace_back( new IMapCircleObject( aCenter, nRadius, aURL, OUString(), OUString(), OUString(), OUString() ) );
     }

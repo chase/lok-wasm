@@ -31,7 +31,7 @@ void WrapOle1InOle2(SvStream& rOle1, sal_uInt32 nOle1Size, SvStream& rOle2,
     SvGlobalName aName;
     if (rClassName == "PBrush")
     {
-        aAnsiUserType = "Bitmap Image";
+        aAnsiUserType = "Bitmap Image"_ostr;
         aName = SvGlobalName(0x0003000A, 0, 0, 0xc0, 0, 0, 0, 0, 0, 0, 0x46);
     }
     else
@@ -40,7 +40,7 @@ void WrapOle1InOle2(SvStream& rOle1, sal_uInt32 nOle1Size, SvStream& rOle2,
         {
             SAL_WARN("filter.ms", "WrapOle1InOle2: unexpected class name: '" << rClassName << "'");
         }
-        aAnsiUserType = "OLE Package";
+        aAnsiUserType = "OLE Package"_ostr;
         aName = SvGlobalName(0x0003000C, 0, 0, 0xc0, 0, 0, 0, 0, 0, 0, 0x46);
     }
     pStorage->SetClass(aName, SotClipboardFormatId::NONE, "");
@@ -180,20 +180,17 @@ OString OutChar(sal_Unicode c, int* pUCMode, rtl_TextEncoding eDestEnc, bool* pS
                 {
                     if (*pUCMode != nLen)
                     {
-                        aBuf.append("\\uc");
-                        aBuf.append(nLen);
+                        aBuf.append("\\uc" + OString::number(nLen));
                         // #i47831# add an additional whitespace, so that "document whitespaces" are not ignored.
                         aBuf.append(' ');
                         *pUCMode = nLen;
                     }
-                    aBuf.append("\\u");
-                    aBuf.append(static_cast<sal_Int32>(c));
+                    aBuf.append("\\u" + OString::number(static_cast<sal_Int32>(c)));
                 }
 
                 for (sal_Int32 nI = 0; nI < nLen; ++nI)
                 {
-                    aBuf.append("\\'");
-                    aBuf.append(OutHex(sConverted[nI], 2));
+                    aBuf.append("\\'" + OutHex(sConverted[nI], 2));
                 }
             }
     }
@@ -213,19 +210,17 @@ OString OutChar(sal_Unicode c, int* pUCMode, rtl_TextEncoding eDestEnc, bool* pS
     return aBuf.makeStringAndClear();
 }
 
-OString OutString(const OUString& rStr, rtl_TextEncoding eDestEnc, bool bUnicode)
+OString OutString(std::u16string_view rStr, rtl_TextEncoding eDestEnc, bool bUnicode)
 {
-    SAL_INFO("filter.ms", __func__ << ", rStr = '" << rStr << "'");
     OStringBuffer aBuf;
     int nUCMode = 1;
-    for (sal_Int32 n = 0; n < rStr.getLength(); ++n)
+    for (size_t n = 0; n < rStr.size(); ++n)
         aBuf.append(OutChar(rStr[n], &nUCMode, eDestEnc, nullptr, bUnicode));
     if (nUCMode != 1)
     {
-        aBuf.append(OOO_STRING_SVTOOLS_RTF_UC);
-        aBuf.append(sal_Int32(1));
         aBuf.append(
-            " "); // #i47831# add an additional whitespace, so that "document whitespaces" are not ignored.;
+            OOO_STRING_SVTOOLS_RTF_UC + OString::number(sal_Int32(1))
+            + " "); // #i47831# add an additional whitespace, so that "document whitespaces" are not ignored.;
     }
     return aBuf.makeStringAndClear();
 }
@@ -244,7 +239,7 @@ static bool TryOutString(std::u16string_view rStr, rtl_TextEncoding eDestEnc)
     return true;
 }
 
-OString OutStringUpr(const char* pToken, const OUString& rStr, rtl_TextEncoding eDestEnc)
+OString OutStringUpr(std::string_view pToken, std::u16string_view rStr, rtl_TextEncoding eDestEnc)
 {
     if (TryOutString(rStr, eDestEnc))
         return OString::Concat("{") + pToken + " " + OutString(rStr, eDestEnc) + "}";
@@ -295,7 +290,7 @@ OString WriteHex(const sal_uInt8* pData, sal_uInt32 nSize, SvStream* pStream, sa
         if (++nBreak == nLimit)
         {
             if (pStream)
-                pStream->WriteCharPtr(SAL_NEWLINE_STRING);
+                pStream->WriteOString(SAL_NEWLINE_STRING);
             else
                 aRet.append(SAL_NEWLINE_STRING);
             nBreak = 0;

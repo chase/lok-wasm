@@ -21,6 +21,7 @@
 
 #include <interpre.hxx>
 
+#include <sal/log.hxx>
 #include <o3tl/safeint.hxx>
 #include <rtl/math.hxx>
 #include <sfx2/app.hxx>
@@ -50,6 +51,7 @@
 #include <addincol.hxx>
 #include <document.hxx>
 #include <dociter.hxx>
+#include <docsh.hxx>
 #include <docoptio.hxx>
 #include <scmatrix.hxx>
 #include <adiasync.hxx>
@@ -179,7 +181,9 @@ double ScInterpreter::GetCellValue( const ScAddress& rPos, ScRefCellValue& rCell
     FormulaError nErr = nGlobalError;
     nGlobalError = FormulaError::NONE;
     double nVal = GetCellValueOrZero(rPos, rCell);
-    if ( nGlobalError == FormulaError::NONE || nGlobalError == FormulaError::CellNoValue )
+    // Propagate previous error, if any; nGlobalError==CellNoValue is not an
+    // error here, preserve previous error or non-error.
+    if (nErr != FormulaError::NONE || nGlobalError == FormulaError::CellNoValue)
         nGlobalError = nErr;
     return nVal;
 }
@@ -1456,14 +1460,16 @@ void ScInterpreter::ConvertMatrixJumpConditionToMatrix()
 bool ScInterpreter::ConvertMatrixParameters()
 {
     sal_uInt16 nParams = pCur->GetParamCount();
-    OSL_ENSURE( nParams <= sp, "ConvertMatrixParameters: stack/param count mismatch");
+    SAL_WARN_IF( nParams > sp, "sc.core", "ConvertMatrixParameters: stack/param count mismatch:  eOp: "
+            << static_cast<int>(pCur->GetOpCode()) << "  sp: " << sp << "  nParams: " << nParams);
+    assert(nParams <= sp);
     SCSIZE nJumpCols = 0, nJumpRows = 0;
     for ( sal_uInt16 i=1; i <= nParams && i <= sp; ++i )
     {
         const FormulaToken* p = pStack[ sp - i ];
         if ( p->GetOpCode() != ocPush && p->GetOpCode() != ocMissing)
         {
-            OSL_FAIL( "ConvertMatrixParameters: not a push");
+            assert(!"ConvertMatrixParameters: not a push");
         }
         else
         {
@@ -1588,7 +1594,7 @@ bool ScInterpreter::ConvertMatrixParameters()
                 }
                 break;
                 default:
-                    OSL_FAIL( "ConvertMatrixParameters: unknown parameter type");
+                    assert(!"ConvertMatrixParameters: unknown parameter type");
             }
         }
     }
@@ -1604,7 +1610,16 @@ bool ScInterpreter::ConvertMatrixParameters()
             xNew = (*aMapIter).second;
         else
         {
-            auto pJumpMat = std::make_shared<ScJumpMatrix>( pCur->GetOpCode(), nJumpCols, nJumpRows);
+            std::shared_ptr<ScJumpMatrix> pJumpMat;
+            try
+            {
+                pJumpMat = std::make_shared<ScJumpMatrix>( pCur->GetOpCode(), nJumpCols, nJumpRows);
+            }
+            catch (const std::bad_alloc&)
+            {
+                SAL_WARN("sc.core", "std::bad_alloc in ScJumpMatrix ctor with " << nJumpCols << " columns and " << nJumpRows << " rows");
+                return false;
+            }
             pJumpMat->SetAllJumps( 1.0, nStart, nNext, nStop);
             // pop parameters and store in ScJumpMatrix, push in JumpMatrix()
             ScTokenVec aParams(nParams);
@@ -2214,6 +2229,23 @@ sal_Int32 ScInterpreter::GetInt32WithDefault( sal_Int32 nDefault )
     return double_to_int32(fVal);
 }
 
+sal_Int32 ScInterpreter::GetFloor32()
+{
+    double fVal = GetDouble();
+    if (!std::isfinite(fVal))
+    {
+        SetError( GetDoubleErrorValue( fVal));
+        return SAL_MAX_INT32;
+    }
+    fVal = rtl::math::approxFloor( fVal);
+    if (fVal < SAL_MIN_INT32 || SAL_MAX_INT32 < fVal)
+    {
+        SetError( FormulaError::IllegalArgument);
+        return SAL_MAX_INT32;
+    }
+    return static_cast<sal_Int32>(fVal);
+}
+
 sal_Int16 ScInterpreter::GetInt16()
 {
     double fVal = GetDouble();
@@ -2741,7 +2773,7 @@ void ScInterpreter::ScExternal()
 
         if ( aCall.NeedsCaller() && GetError() == FormulaError::NONE )
         {
-            SfxObjectShell* pShell = mrDoc.GetDocumentShell();
+            ScDocShell* pShell = mrDoc.GetDocumentShell();
             if (pShell)
                 aCall.SetCallerFromObjectShell( pShell );
             else
@@ -3216,7 +3248,7 @@ void ScInterpreter::ScMacro()
     sal_uInt8 nParamCount = GetByte();
     OUString aMacro( pCur->GetExternal() );
 
-    SfxObjectShell* pDocSh = mrDoc.GetDocumentShell();
+    ScDocShell* pDocSh = mrDoc.GetDocumentShell();
     if ( !pDocSh )
     {
         PushNoValue();      // without DocShell no CallBasic
@@ -3856,9 +3888,8 @@ void ScInterpreter::Init( ScFormulaCell* pCell, const ScAddress& rPos, ScTokenAr
     aCode.ReInit(rTokArray);
     aPos = rPos;
     pArr = &rTokArray;
-    xResult = nullptr;
     pJumpMatrix = nullptr;
-    maTokenMatrixMap.clear();
+    DropTokenCaches();
     pMyFormulaCell = pCell;
     pCur = nullptr;
     nGlobalError = FormulaError::NONE;
@@ -3873,6 +3904,12 @@ void ScInterpreter::Init( ScFormulaCell* pCell, const ScAddress& rPos, ScTokenAr
     mnStringNoValueError = FormulaError::NoValue;
     mnSubTotalFlags = SubtotalFlags::NONE;
     cPar = 0;
+}
+
+void ScInterpreter::DropTokenCaches()
+{
+    xResult = nullptr;
+    maTokenMatrixMap.clear();
 }
 
 ScCalcConfig& ScInterpreter::GetOrCreateGlobalConfig()
@@ -3949,6 +3986,7 @@ bool IsErrFunc(OpCode oc)
         case ocAggregate:       // may ignore errors depending on option
         case ocIfs_MS:
         case ocSwitch_MS:
+        case ocXLookup:
             return true;
         default:
             return false;
@@ -4004,9 +4042,20 @@ StackVar ScInterpreter::Interpret()
                 (*aTokenMatrixMapIter).second->GetType() != svJumpMatrix)
         {
             // Path already calculated, reuse result.
-            nStackBase = sp - pCur->GetParamCount();
-            if ( nStackBase > sp )
-                nStackBase = sp;        // underflow?!?
+            if (sp >= pCur->GetParamCount())
+                nStackBase = sp - pCur->GetParamCount();
+            else
+            {
+                SAL_WARN("sc.core", "Stack anomaly with calculated path at "
+                        << aPos.Tab() << "," << aPos.Col() << "," << aPos.Row()
+                        << "  " << aPos.Format(
+                            ScRefFlags::VALID | ScRefFlags::FORCE_DOC | ScRefFlags::TAB_3D, &mrDoc)
+                        << "  eOp: " << static_cast<int>(eOp)
+                        << "  params: " << static_cast<int>(pCur->GetParamCount())
+                        << "  nStackBase: " << nStackBase << "  sp: " << sp);
+                nStackBase = sp;
+                assert(!"underflow");
+            }
             sp = nStackBase;
             PushTokenRef( (*aTokenMatrixMapIter).second);
         }
@@ -4035,7 +4084,8 @@ StackVar ScInterpreter::Interpret()
                     nStackBase = sp - pCur->GetParamCount();
                 else
                 {
-                    SAL_WARN("sc.core", "Stack anomaly at " << aPos.Format(
+                    SAL_WARN("sc.core", "Stack anomaly at " << aPos.Tab() << "," << aPos.Col() << "," << aPos.Row()
+                            << "  " << aPos.Format(
                                 ScRefFlags::VALID | ScRefFlags::FORCE_DOC | ScRefFlags::TAB_3D, &mrDoc)
                             << "  eOp: " << static_cast<int>(eOp)
                             << "  params: " << static_cast<int>(pCur->GetParamCount())
@@ -4083,6 +4133,9 @@ StackVar ScInterpreter::Interpret()
                 case ocRandom           : ScRandom();                   break;
                 case ocRandomNV         : ScRandom();                   break;
                 case ocRandbetweenNV    : ScRandbetween();              break;
+                case ocFilter           : ScFilter();                   break;
+                case ocSort             : ScSort();                     break;
+                case ocSortBy           : ScSortBy();                   break;
                 case ocTrue             : ScTrue();                     break;
                 case ocFalse            : ScFalse();                    break;
                 case ocGetActDate       : ScGetActDate();               break;
@@ -4273,6 +4326,7 @@ StackVar ScInterpreter::Interpret()
                 case ocIndirect         : ScIndirect();                 break;
                 case ocAddress          : ScAddressFunc();              break;
                 case ocMatch            : ScMatch();                    break;
+                case ocXMatch           : ScXMatch();                   break;
                 case ocCountEmptyCells  : ScCountEmptyCells();          break;
                 case ocCountIf          : ScCountIf();                  break;
                 case ocSumIf            : ScSumIf();                    break;
@@ -4282,6 +4336,7 @@ StackVar ScInterpreter::Interpret()
                 case ocCountIfs         : ScCountIfs();                 break;
                 case ocLookup           : ScLookup();                   break;
                 case ocVLookup          : ScVLookup();                  break;
+                case ocXLookup          : ScXLookup();                  break;
                 case ocHLookup          : ScHLookup();                  break;
                 case ocIndex            : ScIndex();                    break;
                 case ocMultiArea        : ScMultiArea();                break;

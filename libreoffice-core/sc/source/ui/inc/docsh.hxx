@@ -54,7 +54,6 @@ class ScPaintLockData;
 class ScChangeAction;
 class ScImportOptions;
 class ScDocShellModificator;
-class ScOptSolverSave;
 class ScSheetSaveData;
 class ScFlatBoolRowSegments;
 struct ScColWidthParam;
@@ -103,7 +102,6 @@ class SC_DLLPUBLIC ScDocShell final: public SfxObjectShell, public SfxListener
 
     std::unique_ptr<ScAutoStyleList>    m_pAutoStyleList;
     std::unique_ptr<ScPaintLockData>    m_pPaintLockData;
-    std::unique_ptr<ScOptSolverSave>    m_pSolverSaveData;
     std::unique_ptr<ScSheetSaveData>    m_pSheetSaveData;
     std::unique_ptr<ScFormatSaveData>   m_pFormatSaveData;
 
@@ -139,7 +137,7 @@ class SC_DLLPUBLIC ScDocShell final: public SfxObjectShell, public SfxListener
 
     SAL_DLLPRIVATE ErrCode       DBaseImport( const OUString& rFullFileName, rtl_TextEncoding eCharSet,
                                              std::map<SCCOL, ScColWidthParam>& aColWidthParam, ScFlatBoolRowSegments& rRowHeightsRecalc );
-    SAL_DLLPRIVATE ErrCode       DBaseExport(
+    SAL_DLLPRIVATE ErrCodeMsg    DBaseExport(
                                     const OUString& rFullFileName, rtl_TextEncoding eCharSet, bool& bHasMemo );
 
     SAL_DLLPRIVATE static bool       MoveFile( const INetURLObject& rSource, const INetURLObject& rDest );
@@ -268,8 +266,11 @@ public:
     void            ErrorMessage(TranslateId pGlobStrId);
     bool            IsEditable() const;
 
+    /// check config if on file-open optimal row heights should run, or if the user should be asked
+    bool            GetRecalcRowHeightsMode();
     bool            AdjustRowHeight( SCROW nStartRow, SCROW nEndRow, SCTAB nTab );
     void            UpdateAllRowHeights( const ScMarkData* pTabMark = nullptr );
+    void            UpdateAllRowHeights(const bool bOnlyUsedRows);
     void            UpdatePendingRowHeights( SCTAB nUpdateTab, bool bBefore = false );
 
     void            RefreshPivotTables( const ScRange& rSource );
@@ -280,7 +281,7 @@ public:
                                     ScMarkData& rMark, bool bRecord = true);
     void            ModifyScenario(SCTAB nTab, const OUString& rName, const OUString& rComment,
                                     const Color& rColor, ScScenarioFlags nFlags);
-    sal_uLong TransferTab( ScDocShell& rSrcDocShell, SCTAB nSrcPos,
+    bool TransferTab( ScDocShell& rSrcDocShell, SCTAB nSrcPos,
                                 SCTAB nDestPos, bool bInsertNew,
                                 bool bNotifyAndPaint );
 
@@ -408,7 +409,7 @@ public:
     static OUString   GetDBaseFilterName();
     static OUString   GetDifFilterName();
     static bool       HasAutomaticTableName( std::u16string_view rFilter );
-    static void       LOKCommentNotify(LOKCommentNotificationType nType, const ScDocument* pDocument, const ScAddress& rPos, const ScPostIt* pNote);
+    static void       LOKCommentNotify(LOKCommentNotificationType nType, const ScDocument& rDocument, const ScAddress& rPos, const ScPostIt* pNote);
 
     DECL_DLLPRIVATE_LINK( RefreshDBDataHdl, Timer*, void );
 
@@ -417,8 +418,6 @@ public:
 
     virtual HiddenInformation GetHiddenInformationState( HiddenInformation nStates ) override;
 
-    const ScOptSolverSave* GetSolverSaveData() const    { return m_pSolverSaveData.get(); }     // may be null
-    void            SetSolverSaveData( std::unique_ptr<ScOptSolverSave> pData );
     ScSheetSaveData* GetSheetSaveData();
     ScFormatSaveData* GetFormatSaveData();
 
@@ -435,6 +434,8 @@ public:
     void SnapVisArea( tools::Rectangle& rRect ) const;
 
     void RegisterAutomationWorkbookObject(css::uno::Reference< ooo::vba::excel::XWorkbook > const& xWorkbook);
+
+    ScModelObj* GetModel() const { return static_cast<ScModelObj*>(SfxObjectShell::GetModel().get()); }
 };
 
 void UpdateAcceptChangesDialog();
@@ -495,11 +496,6 @@ namespace HelperNotifyChanges
         return false;
     }
 
-    inline ScModelObj* getModel(const ScDocShell &rDocShell)
-    {
-        return comphelper::getFromUnoTunnel<ScModelObj>(rDocShell.GetModel());
-    }
-
     inline bool getMustPropagateChangesModel(ScModelObj* pModelObj)
     {
         return pModelObj && pModelObj->HasChangesListeners();
@@ -516,7 +512,7 @@ namespace HelperNotifyChanges
     inline void NotifyIfChangesListeners(const ScDocShell &rDocShell, const ScRange &rRange,
         const OUString &rType = OUString("cell-change"))
     {
-        ScModelObj* pModelObj = getModel(rDocShell);
+        ScModelObj* pModelObj = rDocShell.GetModel();
         ScRangeList aChangeRanges(rRange);
 
         if (getMustPropagateChangesModel(pModelObj))

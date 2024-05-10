@@ -34,6 +34,7 @@ ScSortParam::ScSortParam()
 
 ScSortParam::ScSortParam( const ScSortParam& r ) :
         nCol1(r.nCol1),nRow1(r.nRow1),nCol2(r.nCol2),nRow2(r.nRow2),
+        nSourceTab(r.nSourceTab),
         aDataAreaExtras(r.aDataAreaExtras),
         nUserIndex(r.nUserIndex),
         bHasHeader(r.bHasHeader),bByRow(r.bByRow),bCaseSens(r.bCaseSens),
@@ -55,6 +56,7 @@ void ScSortParam::Clear()
 
     nCol1=nCol2=nDestCol = 0;
     nRow1=nRow2=nDestRow = 0;
+    nSourceTab = 0;
     aDataAreaExtras = ScDataAreaExtras();
     aDataAreaExtras.mbCellDrawObjects = true;
     aDataAreaExtras.mbCellFormats = true;
@@ -69,6 +71,7 @@ void ScSortParam::Clear()
     aKeyState.bDoSort = false;
     aKeyState.nField = 0;
     aKeyState.bAscending = true;
+    aKeyState.aColorSortMode = ScColorSortMode::None;
 
     // Initialize to default size
     maKeyState.assign( DEFSORT, aKeyState );
@@ -80,6 +83,7 @@ ScSortParam& ScSortParam::operator=( const ScSortParam& r )
     nRow1           = r.nRow1;
     nCol2           = r.nCol2;
     nRow2           = r.nRow2;
+    nSourceTab      = r.nSourceTab;
     aDataAreaExtras = r.aDataAreaExtras;
     nUserIndex      = r.nUserIndex;
     bHasHeader      = r.bHasHeader;
@@ -124,6 +128,7 @@ bool ScSortParam::operator==( const ScSortParam& rOther ) const
         && (nRow1           == rOther.nRow1)
         && (nCol2           == rOther.nCol2)
         && (nRow2           == rOther.nRow2)
+        && (nSourceTab      == rOther.nSourceTab)
         && (aDataAreaExtras == rOther.aDataAreaExtras)
         && (bHasHeader      == rOther.bHasHeader)
         && (bByRow          == rOther.bByRow)
@@ -155,6 +160,7 @@ bool ScSortParam::operator==( const ScSortParam& rOther ) const
 
 ScSortParam::ScSortParam( const ScSubTotalParam& rSub, const ScSortParam& rOld ) :
         nCol1(rSub.nCol1),nRow1(rSub.nRow1),nCol2(rSub.nCol2),nRow2(rSub.nRow2),
+        nSourceTab(0),
         aDataAreaExtras(rOld.aDataAreaExtras),
         nUserIndex(rSub.nUserIndex),
         bHasHeader(true),bByRow(true),bCaseSens(rSub.bCaseSens),bNaturalSort(rOld.bNaturalSort),
@@ -178,6 +184,7 @@ ScSortParam::ScSortParam( const ScSubTotalParam& rSub, const ScSortParam& rOld )
                 key.bDoSort = true;
                 key.nField = rSub.nField[i];
                 key.bAscending = rSub.bAscending;
+                key.aColorSortMode = ScColorSortMode::None;
                 maKeyState.push_back(key);
             }
 
@@ -196,13 +203,16 @@ ScSortParam::ScSortParam( const ScSubTotalParam& rSub, const ScSortParam& rOld )
                 key.bDoSort = true;
                 key.nField = nThisField;
                 key.bAscending = rOld.maKeyState[i].bAscending;
+                key.aColorSortMode = ScColorSortMode::None;
                 maKeyState.push_back(key);
             }
         }
 }
 
 ScSortParam::ScSortParam( const ScQueryParam& rParam, SCCOL nCol ) :
-        nCol1(nCol),nRow1(rParam.nRow1),nCol2(nCol),nRow2(rParam.nRow2),nUserIndex(0),
+        nCol1(nCol),nRow1(rParam.nRow1),nCol2(nCol),nRow2(rParam.nRow2),
+        nSourceTab(rParam.nTab),
+        nUserIndex(0),
         bHasHeader(rParam.bHasHeader),bByRow(true),bCaseSens(rParam.bCaseSens),
         bNaturalSort(false),
 //TODO: what about Locale and Algorithm?
@@ -216,6 +226,7 @@ ScSortParam::ScSortParam( const ScQueryParam& rParam, SCCOL nCol ) :
     aKeyState.bDoSort = true;
     aKeyState.nField = nCol;
     aKeyState.bAscending = true;
+    aKeyState.aColorSortMode = ScColorSortMode::None;
 
     maKeyState.push_back( aKeyState );
 

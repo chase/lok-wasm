@@ -20,7 +20,6 @@
 #include <unolinebreak.hxx>
 
 #include <cppuhelper/supportsservice.hxx>
-#include <comphelper/servicehelper.hxx>
 #include <sal/log.hxx>
 #include <svl/listener.hxx>
 #include <svl/itemprop.hxx>
@@ -238,9 +237,7 @@ uno::Any SAL_CALL SwXLineBreak::getPropertyValue(const OUString& rPropertyName)
 
     if (rPropertyName != UNO_NAME_CLEAR)
     {
-        beans::UnknownPropertyException aExcept;
-        aExcept.Message = rPropertyName;
-        throw aExcept;
+        throw beans::UnknownPropertyException(rPropertyName);
     }
 
     if (m_pImpl->m_bIsDescriptor)
@@ -281,17 +278,6 @@ void SAL_CALL SwXLineBreak::removeVetoableChangeListener(
     const uno::Reference<beans::XVetoableChangeListener>& /*xListener*/)
 {
     SAL_WARN("sw.uno", "SwXLineBreak::removeVetoableChangeListener: not implemented");
-}
-
-sal_Int64 SAL_CALL SwXLineBreak::getSomething(const css::uno::Sequence<sal_Int8>& rIdentifier)
-{
-    return comphelper::getSomethingImpl<SwXLineBreak>(rIdentifier, this);
-}
-
-const uno::Sequence<sal_Int8>& SwXLineBreak::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSwXLineBreakUnoTunnelId;
-    return theSwXLineBreakUnoTunnelId.getSeq();
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

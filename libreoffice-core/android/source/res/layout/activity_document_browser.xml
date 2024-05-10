@@ -14,12 +14,11 @@
     android:orientation="vertical">
 
     <!-- The toolbar -->
-    <androidx.appcompat.widget.Toolbar
+    <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:elevation="3dp"
-        android:background="@color/toolbar_background"
         app:theme="@style/LibreOfficeTheme.Toolbar"
         tools:theme="@style/LibreOfficeTheme.Toolbar"
         app:popupTheme="@style/LibreOfficeTheme"
@@ -30,7 +29,7 @@
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-    </androidx.appcompat.widget.Toolbar>
+    </com.google.android.material.appbar.MaterialToolbar>
 
 
     <androidx.drawerlayout.widget.DrawerLayout
@@ -68,25 +67,15 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-                <!--Icon and text to open system file picker via Intent -->
-                <LinearLayout
-                    android:id="@+id/system_file_picker_layout"
+                <Button
+                    android:id="@+id/open_file_button"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="?attr/colorButtonNormal"
-                    android:orientation="horizontal"
-                    app:layout_constraintTop_toBottomOf="@id/toolbar">
-
-                    <TextView
-                        android:id="@+id/open_file_view"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center_vertical"
-                        android:text="@string/select_file_to_open"
-                        android:textSize="14dp"
-                        app:drawableLeftCompat="@drawable/ic_folder_grey_48dp" />
-                </LinearLayout>
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:text="@string/select_file_to_open"
+                    android:textSize="14dp"
+                    app:drawableLeftCompat="@drawable/ic_folder_48dp" />
 
                 <TextView
                     android:layout_width="match_parent"
@@ -116,14 +105,15 @@
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/editFAB"
+        android:contentDescription="@string/create_file"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:clickable="true"
-        app:backgroundTint="@color/background_normal"
+        app:backgroundTint="@color/background_floating"
         app:fabSize="normal"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:srcCompat="@drawable/ic_add_black_24dp"
+        app:srcCompat="@drawable/ic_add_24dp"
         app:useCompatPadding="true" />
 
     <LinearLayout
@@ -151,7 +141,7 @@
             android:layout_marginBottom="@dimen/new_doc_fab_tweak_bottom"
             android:layout_marginTop="@dimen/new_doc_fab_tweak_top"
             android:clickable="true"
-            app:backgroundTint="@color/background_normal"
+            app:backgroundTint="@color/background_floating"
             app:fabSize="mini"
             app:srcCompat="@drawable/writer"
             app:useCompatPadding="true" />
@@ -183,7 +173,7 @@
             android:layout_marginBottom="@dimen/new_doc_fab_tweak_bottom"
             android:layout_marginTop="@dimen/new_doc_fab_tweak_top"
             android:clickable="true"
-            app:backgroundTint="@color/background_normal"
+            app:backgroundTint="@color/background_floating"
             app:fabSize="mini"
             app:srcCompat="@drawable/impress"
             app:useCompatPadding="true" />
@@ -215,7 +205,7 @@
             android:layout_marginBottom="@dimen/new_doc_fab_tweak_bottom"
             android:layout_marginTop="@dimen/new_doc_fab_tweak_top"
             android:clickable="true"
-            app:backgroundTint="@color/background_normal"
+            app:backgroundTint="@color/background_floating"
             app:fabSize="mini"
             app:srcCompat="@drawable/calc"
             app:useCompatPadding="true" />
@@ -247,7 +237,7 @@
             android:layout_marginBottom="@dimen/new_doc_fab_tweak_bottom"
             android:layout_marginTop="@dimen/new_doc_fab_tweak_top"
             android:clickable="true"
-            app:backgroundTint="@color/background_normal"
+            app:backgroundTint="@color/background_floating"
             app:fabSize="mini"
             app:srcCompat="@drawable/draw"
             app:useCompatPadding="true" />

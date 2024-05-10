@@ -195,8 +195,7 @@ Sequence< OUString > StringResourceImpl::implGetResourceIDs( LocaleItem* pLocale
         int iTarget = 0;
         for( const auto& rEntry : rHashMap )
         {
-            OUString aStr = rEntry.first;
-            pStrings[iTarget] = aStr;
+            pStrings[iTarget] = rEntry.first;
             iTarget++;
         }
     }
@@ -603,7 +602,7 @@ void StringResourceImpl::implModified(std::unique_lock<std::mutex>& rGuard)
 void StringResourceImpl::implNotifyListeners(std::unique_lock<std::mutex>& rGuard)
 {
     EventObject aEvent;
-    aEvent.Source = static_cast< XInterface* >( static_cast<OWeakObject*>(this) );
+    aEvent.Source = getXWeak();
     m_aListenerContainer.forEach(rGuard,
         [&aEvent](const css::uno::Reference<XModifyListener>& xListener)
         {
@@ -665,7 +664,7 @@ Sequence< OUString > StringResourcePersistenceImpl::getSupportedServiceNames(  )
 // XInitialization base functionality for derived classes
 
 
-constexpr OUStringLiteral aNameBaseDefaultStr = u"strings";
+constexpr OUString aNameBaseDefaultStr = u"strings"_ustr;
 
 void StringResourcePersistenceImpl::implInitializeCommonParameters
     ( std::unique_lock<std::mutex>& rGuard, const Sequence< Any >& aArguments )

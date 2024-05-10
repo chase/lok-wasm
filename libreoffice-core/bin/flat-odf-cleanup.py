@@ -79,12 +79,24 @@ def remove_unused_styles(root, usedstyles, styles, name):
             except ValueError:
                 root.find(".//{urn:oasis:names:tc:opendocument:xmlns:office:1.0}styles").remove(style)
 
+def remove_unused_drawings(root, useddrawings, drawings, name):
+    for drawing in drawings:
+        print(drawing.get("{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}name"))
+        if not(drawing.get("{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}name") in useddrawings):
+            print("removing unused " + name + " " + drawing.get("{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}name"))
+            root.find(".//{urn:oasis:names:tc:opendocument:xmlns:office:1.0}styles").remove(drawing)
+
 def collect_all_attribute(usedstyles, attribute):
     for element in root.findall(".//*[@" + attribute + "]"):
         usedstyles.add(element.get(attribute))
 
+def collect_all_attribute_list(usedstyles, attribute):
+    for element in root.findall(".//*[@" + attribute + "]"):
+        for style in element.get(attribute).split(" "):
+            usedstyles.add(style)
+
 def remove_unused(root):
-    # 1) find all elements that may reference page styles - this gets rid of some paragaraphs
+    # 1) find all elements that may reference page styles - this gets rid of some paragraphs
     usedpstyles = get_used_p_styles(root)
     print(usedpstyles)
     usedtstyles = set()
@@ -134,7 +146,7 @@ def remove_unused(root):
     # 3) unused list styles - keep referenced from still used paragraph styles
     usedliststyles = set()
     for style in root.findall(".//*[@{urn:oasis:names:tc:opendocument:xmlns:style:1.0}list-style-name]"):
-        usedliststyles.add(style.get("{urn:oasis:names:tc:opendocument:xmlns:style:1.0}list-style-name)"))
+        usedliststyles.add(style.get("{urn:oasis:names:tc:opendocument:xmlns:style:1.0}list-style-name"))
     for list_ in root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}list[@{urn:oasis:names:tc:opendocument:xmlns:text:1.0}style-name]"):
         usedliststyles.add(list_.get("{urn:oasis:names:tc:opendocument:xmlns:text:1.0}style-name"))
     for listitem in root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}list-item[@{urn:oasis:names:tc:opendocument:xmlns:text:1.0}style-override]"):
@@ -215,9 +227,7 @@ def remove_unused(root):
     usedpresentationstyles = set()
 
     collect_all_attribute(usedpresentationstyles, "{urn:oasis:names:tc:opendocument:xmlns:presentation:1.0}style-name")
-    for element in root.findall(".//*[@{urn:oasis:names:tc:opendocument:xmlns:presentation:1.0}class-names]"):
-        for style in element.get("{urn:oasis:names:tc:opendocument:xmlns:presentation:1.0}class-names").split(" "):
-            usedpresentationstyles.add(style)
+    collect_all_attribute_list(usedpresentationstyles, "{urn:oasis:names:tc:opendocument:xmlns:presentation:1.0}class-names")
 
     presentationstyles = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}style[@{urn:oasis:names:tc:opendocument:xmlns:style:1.0}family='presentation']")
     add_parent_styles(usedpresentationstyles, presentationstyles)
@@ -238,9 +248,7 @@ def remove_unused(root):
             useddrawingpagestyles.add(style)
         else:
             usedgraphicstyles.add(style)
-    for element in root.findall(".//*[@{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}class-names]"):
-        for style in element.get("{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}class-names").split(" "):
-            usedgraphicstyles.add(style)
+    collect_all_attribute_list(usedgraphicstyles, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}class-names")
 
     graphicstyles = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}style[@{urn:oasis:names:tc:opendocument:xmlns:style:1.0}family='graphic']")
     add_parent_styles(usedgraphicstyles, graphicstyles)
@@ -251,6 +259,107 @@ def remove_unused(root):
     add_parent_styles(useddrawingpagestyles, drawingpagestyles)
     remove_unused_styles(root, useddrawingpagestyles, drawingpagestyles, "drawing-page style")
 
+    # 10) page layouts
+    usedpagelayouts = set()
+    collect_all_attribute(usedpagelayouts, "{urn:oasis:names:tc:opendocument:xmlns:style:1.0}page-layout-name")
+    pagelayouts = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}page-layout")
+    remove_unused_styles(root, usedpagelayouts, pagelayouts, "page layout")
+
+    # 11) presentation page layouts
+    usedpresentationpagelayouts = set()
+    collect_all_attribute(usedpresentationpagelayouts, "{urn:oasis:names:tc:opendocument:xmlns:presentation:1.0}presentation-page-layout-name")
+    presentationpagelayouts = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}presentation-page-layout")
+    remove_unused_styles(root, usedpresentationpagelayouts, presentationpagelayouts, "presentation page layout")
+
+    # 12) table (column/row/cell) styles
+    usedtablestyles = set()
+    usedtablecolumnstyles = set()
+    usedtablerowstyles = set()
+    usedtablecellstyles = set()
+
+    tables = {
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}table",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}table:background",
+    }
+    tablecells = {
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}covered-table-cell",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}table-cell",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}body",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}even-columns",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}even-rows",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}first-column",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}first-row",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}last-column",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}last-row",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}odd-columns",
+        "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}odd-rows",
+    }
+    for element in root.findall(".//*[@{urn:oasis:names:tc:opendocument:xmlns:table:1.0}style-name]"):
+        style = element.get("{urn:oasis:names:tc:opendocument:xmlns:table:1.0}style-name")
+        if element.tag == "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}table-column":
+            usedtablecolumnstyles.add(style)
+        elif element.tag == "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}table-row":
+            usedtablerowstyles.add(style)
+        elif element.tag in tables:
+            usedtablestyles.add(style)
+        elif element.tag in tablecells:
+            usedtablecellstyles.add(style)
+
+    for element in root.findall(".//*[@{urn:oasis:names:tc:opendocument:xmlns:database:1.0}style-name]"):
+        style = element.get("{urn:oasis:names:tc:opendocument:xmlns:database:1.0}style-name")
+        if element.tag == "{urn:oasis:names:tc:opendocument:xmlns:database:1.0}column":
+            usedtablecolumnstyles.add(style)
+        else: # db:query db:table-representation
+            usedtablestyles.add(style)
+
+    collect_all_attribute(usedtablerowstyles, "{urn:oasis:names:tc:opendocument:xmlns:database:1.0}default-row-style-name")
+    collect_all_attribute(usedtablecellstyles, "{urn:oasis:names:tc:opendocument:xmlns:database:1.0}default-cell-style-name")
+    collect_all_attribute(usedtablecellstyles, "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}default-cell-style-name")
+
+    tablecolumstyles = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}style[@{urn:oasis:names:tc:opendocument:xmlns:style:1.0}family='table-column']")
+    tablerowstyles = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}style[@{urn:oasis:names:tc:opendocument:xmlns:style:1.0}family='table-row']")
+    tablecellstyles = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:style:1.0}style[@{urn:oasis:names:tc:opendocument:xmlns:style:1.0}family='table-cell']")
+    add_parent_styles(usedtablestyles, tstyles)
+    add_parent_styles(usedtablecolumnstyles, tablecolumstyles)
+    add_parent_styles(usedtablerowstyles, tablerowstyles)
+    add_parent_styles(usedtablecellstyles, tablecellstyles)
+    remove_unused_styles(root, usedtstyles, tstyles, "table style")
+    remove_unused_styles(root, usedtablecolumnstyles, tablecolumstyles, "table column style")
+    remove_unused_styles(root, usedtablerowstyles, tablerowstyles, "table row style")
+    remove_unused_styles(root, usedtablecellstyles, tablecellstyles, "table cell style")
+
+    # 13) gradients
+    usedgradients = set()
+    collect_all_attribute(usedgradients, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}fill-gradient-name")
+    collect_all_attribute(usedgradients, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}opacity-name")
+    gradients = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}gradient")
+    remove_unused_drawings(root, usedgradients, gradients, "gradient")
+
+    # 14) hatchs
+    usedhatchs = set()
+    collect_all_attribute(usedhatchs, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}fill-hatch-name")
+    hatchs = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}hatch")
+    remove_unused_drawings(root, usedhatchs, hatchs, "hatch")
+
+    # 15) bitmaps
+    usedbitmaps = set()
+    collect_all_attribute(usedbitmaps, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}fill-image-name")
+    bitmaps = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}bitmap")
+    remove_unused_drawings(root, usedbitmaps, bitmaps, "bitmap")
+
+    # 16) markers
+    usedmarkers = set()
+    collect_all_attribute(usedmarkers, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}marker-start")
+    collect_all_attribute(usedmarkers, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}marker-end")
+    markers = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}marker")
+    remove_unused_drawings(root, usedmarkers, markers, "marker")
+
+    # 17) stroke-dash
+    usedstrokedashs = set()
+    collect_all_attribute(usedstrokedashs, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}stroke-dash")
+    collect_all_attribute_list(usedstrokedashs, "{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}stroke-dash-names")
+    strokedashs = root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:drawing:1.0}stroke-dash")
+    remove_unused_drawings(root, usedstrokedashs, strokedashs, "stroke-dash")
 
     # TODO 3 other styles
 
@@ -277,6 +386,17 @@ def remove_unused(root):
                 print("removing paragraph-rsid from " + style.get("{urn:oasis:names:tc:opendocument:xmlns:style:1.0}name"))
                 del tp.attrib["{http://openoffice.org/2009/office}paragraph-rsid"]
 
+    # 15) unused user field decls
+    useduserfields = set()
+    for field in root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}user-field-get"):
+        useduserfields.add(field.get("{urn:oasis:names:tc:opendocument:xmlns:text:1.0}name"))
+    for field in root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}user-field-input"):
+        useduserfields.add(field.get("{urn:oasis:names:tc:opendocument:xmlns:text:1.0}name"))
+    for field in root.findall(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}user-field-decl"):
+        if not(field.get("{urn:oasis:names:tc:opendocument:xmlns:text:1.0}name") in useduserfields):
+            print("removing unused user-field-decl " + field.get("{urn:oasis:names:tc:opendocument:xmlns:text:1.0}name"))
+            root.find(".//{urn:oasis:names:tc:opendocument:xmlns:text:1.0}user-field-decls").remove(field)
+
     # remove office:settings
     settings = root.find(".//{urn:oasis:names:tc:opendocument:xmlns:office:1.0}settings")
     if settings is not None:
@@ -286,6 +406,11 @@ def remove_unused(root):
     scripts = root.find(".//{urn:oasis:names:tc:opendocument:xmlns:office:1.0}scripts")
     if scripts is not None:
         root.remove(scripts)
+
+    # remove theme
+    theme = root.find(".//{urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0}theme")
+    if theme is not None:
+        theme.getparent().remove(theme)
 
     # TODO: replace embedded image with some tiny one
     # TODO: perhaps replace text with xxx (optionally)?
@@ -306,38 +431,10 @@ if __name__ == "__main__":
     TODO
     chart:style-name
     -> chart
-    db:style-name
-    -> table-column, table
-    db:default-row-style-name
-    -> table-row
-    db:default-cell-style-name
-    -> cell
     style:data-style-name
     -> data style
-    presentation:presentation-page-layout-name
-    -> presentation-page-layout
-    style:page-layout-name
-    -> "page layout style" ?
     style:percentage-data-style-name
     -> data style
-    table:default-cell-style-name
-    -> cell
-
-    draw:stroke-dash-names
-    -> draw:stroke-dash
-
-    draw:fill-gradient-name
-    -> gradient
-    draw:fill-hatch-name
-    -> hatch
-    draw:fill-image-name
-    -> bitmap
-    draw:opacity-name
-    -> gradient
-    draw:stroke-dash
-    -> draw:stroke-dash
-    draw:marker-start
-    draw:marker-end
     """
 
 # vim: set shiftwidth=4 softtabstop=4 expandtab:

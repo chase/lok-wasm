@@ -46,7 +46,6 @@ namespace dbaui
     using ::com::sun::star::sdbc::SQLException;
     using ::com::sun::star::uno::Exception;
     using ::com::sun::star::sdbc::XConnection;
-    using ::com::sun::star::sdb::tools::XObjectNames;
     using ::com::sun::star::sdb::tools::XConnectionTools;
     using ::com::sun::star::uno::UNO_QUERY;
 
@@ -59,9 +58,8 @@ namespace dbaui
     {
         void lcl_fillNameExistsError( std::u16string_view _rObjectName, SQLExceptionInfo& _out_rErrorToDisplay )
         {
-            SQLException aError;
             OUString sErrorMessage = DBA_RES(STR_NAMED_OBJECT_ALREADY_EXISTS);
-            aError.Message = sErrorMessage.replaceAll("$#$", _rObjectName);
+            SQLException aError(sErrorMessage.replaceAll("$#$", _rObjectName), {}, {}, 0, {});
             _out_rErrorToDisplay = aError;
         }
 
@@ -88,8 +86,7 @@ namespace dbaui
             OUStringBuffer aCompleteName;
             if ( !msRelativeRoot.isEmpty() )
             {
-                aCompleteName.append( msRelativeRoot );
-                aCompleteName.append( "/" );
+                aCompleteName.append( msRelativeRoot + "/" );
             }
             aCompleteName.append( _rObjectName );
 

@@ -155,11 +155,11 @@ sub generate_sources_version_file($$)
 
 sub generate_tarball($$$)
 {
-    my ($dir, $tarball, $tar_compress_option) = @_;
+    my ($dir, $tarball, $compressor_option) = @_;
 
     print "Creating $tarball...";
     # generate the tarball in the current directory; avoid "./" prefix in the stored paths; show progress
-    system ("tar -c $tar_compress_option -f $tarball -C $dir $lo_topdir_name") && 
+    system ("tar -c -C $dir $lo_topdir_name | $compressor_option $tarball") &&
         die "Error: releasing failed: $!\n";
     print "\n";
 }
@@ -274,19 +274,45 @@ sub prepare_module_sources($$$$)
 
 sub pack_module_sources($$$$)
 {
-    my ($temp_dir, $md5, $tarball, $tar_compress_option) = @_;
+    my ($temp_dir, $md5, $tarball, $compressor_option) = @_;
 
-    generate_tarball($temp_dir, $tarball, $tar_compress_option);
+    generate_tarball($temp_dir, $tarball, $compressor_option);
     generate_md5($tarball) if (defined $md5);
 }
 
 sub generate_module_tarball($$$$$$$$)
 {
     my ($source_dir, $release_version, $module, $md5, $bzip2, $xz, $lo_topdir_name, $module_tarball_name) = @_;
+	 my $PARALLELISM =  $ENV{'PARALLELISM'};
+	 my $CPUS_XZ = 0;
+	 my $CPUS_BZ2 = "";
+	 my $bzip_arguments;
+
+	 # Set CPUS_ to the number of CPUs that should be used. If PARALLELISM
+    # is set then this is used otherwise autodetect is used.
+    if (defined $PARALLELISM) {
+        if ($PARALLELISM > 0) {
+            $CPUS_XZ = $PARALLELISM;
+            $CPUS_BZ2 = "-p$PARALLELISM";
+        } else {
+            $CPUS_XZ = 1;
+            $CPUS_BZ2 = "-p1";
+		  }
+    }
+
+	 if (defined $bzip2) {
+		  my $exit_code = system("pbzip2 --version >/dev/null 2>&1");
+		  if ($exit_code == 0) {
+			  $bzip_arguments = "pbzip2 -z -b20 $CPUS_BZ2";
+		  } else {
+			  $bzip_arguments = "bzip2 -z --best";
+			  print("Consider installing pbzip2, using bzip2 now.\n");
+		  }
+	 }
 
     my $temp_dir = prepare_module_sources($source_dir, $release_version, $module, $lo_topdir_name);
-    pack_module_sources($temp_dir, $md5, "$module_tarball_name.tar.bz2", "--bzip2") if (defined $bzip2);
-    pack_module_sources($temp_dir, $md5, "$module_tarball_name.tar.xz", "--xz") if (defined $xz);
+    pack_module_sources($temp_dir, $md5, "$module_tarball_name.tar.bz2", "$bzip_arguments > ") if (defined $bzip2);
+    pack_module_sources($temp_dir, $md5, "$module_tarball_name.tar.xz", "xz -z -T$CPUS_XZ -e > ") if (defined $xz);
     remove_tempdir($temp_dir);
 }
 

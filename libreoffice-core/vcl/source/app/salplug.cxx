@@ -137,6 +137,7 @@ SalInstance* tryInstance( const OUString& rModuleBase, bool bForce = false )
                  */
                 if (aUsedModuleBase == "gtk4" || aUsedModuleBase == "gtk3" ||
                     aUsedModuleBase == "gtk3_kde5" || aUsedModuleBase == "kf5" ||
+                    aUsedModuleBase == "kf6" ||
                     aUsedModuleBase == "qt5" || aUsedModuleBase == "qt6" ||
                     aUsedModuleBase == "win")
                 {
@@ -216,6 +217,26 @@ const char* const* autodetect_plugin_list()
         nullptr
     };
 
+    static const char* const pPlasma6FallbackList[] =
+    {
+#if ENABLE_KF6
+        "kf6",
+#endif
+#if ENABLE_KF5
+        "kf5",
+#endif
+#if ENABLE_GTK3_KDE5
+        "gtk3_kde5",
+#endif
+#if ENABLE_GTK3
+        "gtk3",
+#endif
+#if ENABLE_GEN
+        "gen",
+#endif
+        nullptr
+    };
+
     static const char* const pStandardFallbackList[] =
     {
 #if ENABLE_GTK3
@@ -251,6 +272,8 @@ const char* const* autodetect_plugin_list()
         pList = pStandardFallbackList;
     else if (desktop == DESKTOP_PLASMA5 || desktop == DESKTOP_LXQT)
         pList = pKDEFallbackList;
+    else if (desktop == DESKTOP_PLASMA6)
+        pList = pPlasma6FallbackList;
 
     return pList;
 }
@@ -337,6 +360,9 @@ SalInstance *CreateSalInstance()
 #endif
 #if ENABLE_QT5
         "qt5",
+#endif
+#if ENABLE_KF6
+        "kf6",
 #endif
 #if ENABLE_QT6
         "qt6",
@@ -426,7 +452,7 @@ const OUString& SalGetDesktopEnvironment()
     // Order to match desktops.hxx' DesktopType
     static const char * const desktop_strings[] = {
         "none", "unknown", "GNOME", "UNITY",
-        "XFCE", "MATE", "PLASMA5", "LXQT" };
+        "XFCE", "MATE", "PLASMA5", "PLASMA6", "LXQT" };
     static OUString aDesktopEnvironment;
     if( aDesktopEnvironment.isEmpty())
     {

@@ -22,6 +22,7 @@
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <comphelper/base64.hxx>
+#include <comphelper/mediamimetype.hxx>
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/text/TextContentAnchorType.hpp>
@@ -55,7 +56,6 @@
 #include <xmloff/XMLEventsImportContext.hxx>
 #include <XMLImageMapContext.hxx>
 #include "XMLTextFrameContext.hxx"
-#include <xmloff/attrlist.hxx>
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/polygon/b2dpolypolygon.hxx>
@@ -307,14 +307,14 @@ XMLTextFrameContourContext_Impl::XMLTextFrameContourContext_Impl(
         xPropSet->setPropertyValue( sContourPolyPolygon, Any(aPointSequenceSequence) );
     }
 
-    static const OUStringLiteral sIsPixelContour(u"IsPixelContour");
+    static constexpr OUString sIsPixelContour(u"IsPixelContour"_ustr);
 
     if( xPropSetInfo->hasPropertyByName( sIsPixelContour ) )
     {
         xPropSet->setPropertyValue( sIsPixelContour, Any(bPixelWidth) );
     }
 
-    static const OUStringLiteral sIsAutomaticContour(u"IsAutomaticContour");
+    static constexpr OUString sIsAutomaticContour(u"IsAutomaticContour"_ustr);
 
     if( xPropSetInfo->hasPropertyByName( sIsAutomaticContour ) )
     {
@@ -1261,10 +1261,10 @@ void XMLTextFrameContext_Impl::SetHyperlink( const OUString& rHRef,
                        const OUString& rTargetFrameName,
                        bool bMap )
 {
-    static constexpr OUStringLiteral s_HyperLinkURL = u"HyperLinkURL";
-    static constexpr OUStringLiteral s_HyperLinkName = u"HyperLinkName";
-    static constexpr OUStringLiteral s_HyperLinkTarget = u"HyperLinkTarget";
-    static constexpr OUStringLiteral s_ServerMap = u"ServerMap";
+    static constexpr OUString s_HyperLinkURL = u"HyperLinkURL"_ustr;
+    static constexpr OUString s_HyperLinkName = u"HyperLinkName"_ustr;
+    static constexpr OUString s_HyperLinkTarget = u"HyperLinkTarget"_ustr;
+    static constexpr OUString s_ServerMap = u"ServerMap"_ustr;
     if( !xPropSet.is() )
         return;
 
@@ -1505,7 +1505,7 @@ css::uno::Reference< css::xml::sax::XFastContextHandler > XMLTextFrameContext::c
                     {
                         if( aIter.getToken() == XML_ELEMENT(DRAW, XML_MIME_TYPE) )
                         {
-                            if( aIter.toView() == "application/vnd.sun.star.media" )
+                            if (::comphelper::IsMediaMimeType(aIter.toView()))
                                 bMedia = true;
 
                             // leave this loop

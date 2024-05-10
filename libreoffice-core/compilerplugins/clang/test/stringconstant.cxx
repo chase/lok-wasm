@@ -102,10 +102,6 @@ int main() {
 
     (void) OUString("xxx", 2, RTL_TEXTENCODING_ASCII_US); // expected-error {{suspicious 'rtl::OUString' constructor with literal of length 3 and non-matching length argument 2 [loplugin:stringconstant]}}
 
-#if !defined __cpp_char8_t
-    (void) OUString(u8"xxx", 3, RTL_TEXTENCODING_ASCII_US); // expected-error {{simplify construction of 'OUString' with string constant argument [loplugin:stringconstant]}}
-#endif
-
     (void) OUString("\x80", 1, RTL_TEXTENCODING_UTF8); // expected-error {{suspicious 'rtl::OUString' constructor with text encoding 'RTL_TEXTENCODING_UTF8' but non-UTF-8 content [loplugin:stringconstant]}}
 
     (void) OUString("\xC2\x80", 2, RTL_TEXTENCODING_UTF8); // expected-error {{simplify construction of 'OUString' with UTF-8 content as OUString(u"\u0080") [loplugin:stringconstant]}}
@@ -128,6 +124,17 @@ int main() {
     ub.append(static_cast<char const *>(sc2)); // at runtime: append "foo"
     ub.append(static_cast<char const *>(sc3)); // at runtime: assert
     ub.append(static_cast<char const *>(sc4)); // at runtime: UB
+
+    // expected-error-re@+1 {{in call of 'rtl::OString::getStr', replace default-constructed '{{(rtl::)?}}OString' directly with an empty ordinary string literal}}
+    OString().getStr();
+    // expected-error-re@+1 {{in call of 'rtl::OString::getStr', replace '{{(rtl::)?}}OString' constructed from a string literal directly with the string literal}}
+    OString("foo").getStr();
+    // expected-error-re@+1 {{in call of 'rtl::OString::getStr', replace '{{(rtl::)?}}OString' constructed from a string literal directly with the string literal}}
+    (OString(("foo"))).getStr();
+    // expected-error-re@+1 {{in call of 'rtl::OUString::getStr', replace default-constructed '{{(rtl::)?}}OUString' directly with an empty UTF-16 string literal}}
+    OUString().getStr();
+    // expected-error-re@+1 {{in call of 'rtl::OUString::getStr', replace '{{(rtl::)?}}OUString' constructed from a string literal directly with a UTF-16 string literal}}
+    OUString("foo").getStr();
 }
 
 

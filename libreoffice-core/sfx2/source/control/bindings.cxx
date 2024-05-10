@@ -29,12 +29,12 @@
 #include <svl/eitem.hxx>
 #include <svl/intitem.hxx>
 #include <svl/stritem.hxx>
+#include <svl/voiditem.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/timer.hxx>
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/frame/XDispatchProvider.hpp>
 #include <com/sun/star/frame/DispatchResultState.hpp>
-#include <itemdel.hxx>
 
 //Includes below due to nInReschedule
 #include <sfx2/bindings.hxx>
@@ -857,10 +857,10 @@ void SfxBindings::Release( SfxControllerItem& rItem )
 }
 
 
-const SfxPoolItem* SfxBindings::ExecuteSynchron( sal_uInt16 nId, const SfxPoolItem** ppItems )
+SfxPoolItemHolder SfxBindings::ExecuteSynchron( sal_uInt16 nId, const SfxPoolItem** ppItems )
 {
     if( !nId || !pDispatcher )
-        return nullptr;
+        return SfxPoolItemHolder();
 
     return Execute_Impl( nId, ppItems, 0, SfxCallMode::SYNCHRON, nullptr );
 }
@@ -870,11 +870,11 @@ bool SfxBindings::Execute( sal_uInt16 nId, const SfxPoolItem** ppItems, SfxCallM
     if( !nId || !pDispatcher )
         return false;
 
-    const SfxPoolItem* pRet = Execute_Impl( nId, ppItems, 0, nCallMode, nullptr );
-    return ( pRet != nullptr );
+    const SfxPoolItemHolder aRet(Execute_Impl(nId, ppItems, 0, nCallMode, nullptr));
+    return (nullptr != aRet.getItem());
 }
 
-const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem** ppItems, sal_uInt16 nModi, SfxCallMode nCallMode,
+SfxPoolItemHolder SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem** ppItems, sal_uInt16 nModi, SfxCallMode nCallMode,
                         const SfxPoolItem **ppInternalArgs, bool bGlobalOnly )
 {
     SfxStateCache *pCache = GetStateCache( nId );
@@ -916,15 +916,13 @@ const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem*
 
         // cache binds to an external dispatch provider
         sal_Int16 eRet = pCache->Dispatch( aReq.GetArgs(), nCallMode == SfxCallMode::SYNCHRON );
-        std::unique_ptr<SfxPoolItem> pPool;
+        SfxPoolItem* pPoolItem(nullptr);
         if ( eRet == css::frame::DispatchResultState::DONTKNOW )
-            pPool.reset( new SfxVoidItem( nId ) );
+            pPoolItem = new SfxVoidItem( nId );
         else
-            pPool.reset( new SfxBoolItem( nId, eRet == css::frame::DispatchResultState::SUCCESS) );
+            pPoolItem = new SfxBoolItem( nId, eRet == css::frame::DispatchResultState::SUCCESS);
 
-        auto pTemp = pPool.get();
-        DeleteItemOnIdle( std::move(pPool) );
-        return pTemp;
+        return SfxPoolItemHolder(rPool, pPoolItem, true);
     }
 
     // slot is handled internally by SfxDispatcher
@@ -937,7 +935,7 @@ const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem*
     const SfxSlotServer* pServer = pCache->GetSlotServer( rDispatcher, pImpl->xProv );
     if ( !pServer )
     {
-        return nullptr;
+        return SfxPoolItemHolder();
     }
     else
     {
@@ -947,7 +945,7 @@ const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem*
 
     if ( bGlobalOnly )
         if ( dynamic_cast< const SfxModule *>( pShell ) == nullptr && dynamic_cast< const SfxApplication *>( pShell ) == nullptr && dynamic_cast< const SfxViewFrame *>( pShell ) == nullptr )
-            return nullptr;
+            return SfxPoolItemHolder();
 
     SfxItemPool &rPool = pShell->GetPool();
     SfxRequest aReq( nId, nCallMode, rPool );
@@ -965,15 +963,12 @@ const SfxPoolItem* SfxBindings::Execute_Impl( sal_uInt16 nId, const SfxPoolItem*
 
     Execute_Impl( aReq, pSlot, pShell );
 
-    const SfxPoolItem* pRet = aReq.GetReturnValue();
-    if ( !pRet )
-    {
-        std::unique_ptr<SfxPoolItem> pVoid(new SfxVoidItem( nId ));
-        pRet = pVoid.get();
-        DeleteItemOnIdle( std::move(pVoid) );
-    }
+    const SfxPoolItemHolder& rRetval(aReq.GetReturnValue());
 
-    return pRet;
+    if (nullptr == rRetval.getItem())
+        return SfxPoolItemHolder(rPool, new SfxVoidItem( nId ), true);
+
+    return rRetval;
 }
 
 void SfxBindings::Execute_Impl( SfxRequest& aReq, const SfxSlot* pSlot, SfxShell* pShell )
@@ -1315,13 +1310,13 @@ bool SfxBindings::NextJob_Impl(Timer const * pTimer)
 }
 
 
-sal_uInt16 SfxBindings::EnterRegistrations(const char *pFile, int nLine)
+sal_uInt16 SfxBindings::EnterRegistrations(std::string_view pFile, int nLine)
 {
     SAL_INFO(
         "sfx.control",
         std::setw(std::min(nRegLevel, sal_uInt16(8))) << ' ' << "this = " << this
             << " Level = " << nRegLevel << " SfxBindings::EnterRegistrations "
-            << (pFile
+            << (!pFile.empty()
                 ? SAL_STREAM("File: " << pFile << " Line: " << nLine) : ""));
 
     // When bindings are locked, also lock sub bindings.
@@ -1356,7 +1351,7 @@ sal_uInt16 SfxBindings::EnterRegistrations(const char *pFile, int nLine)
 }
 
 
-void SfxBindings::LeaveRegistrations( const char *pFile, int nLine )
+void SfxBindings::LeaveRegistrations(  std::string_view pFile, int nLine )
 {
     DBG_ASSERT( nRegLevel, "Leave without Enter" );
 
@@ -1417,7 +1412,7 @@ void SfxBindings::LeaveRegistrations( const char *pFile, int nLine )
         "sfx.control",
         std::setw(std::min(nRegLevel, sal_uInt16(8))) << ' ' << "this = " << this
             << " Level = " << nRegLevel << " SfxBindings::LeaveRegistrations "
-            << (pFile
+            << (!pFile.empty()
                 ? SAL_STREAM("File: " << pFile << " Line: " << nLine) : ""));
 }
 
@@ -1518,13 +1513,13 @@ SfxItemState SfxBindings::QueryState( sal_uInt16 nSlot, std::unique_ptr<SfxPoolI
     if ( xDisp.is() || !pCache )
     {
         const SfxSlot* pSlot = SfxSlotPool::GetSlotPool( pDispatcher->GetFrame() ).GetSlot( nSlot );
-        if ( !pSlot || !pSlot->pUnoName )
+        if ( !pSlot || pSlot->pUnoName.isEmpty() )
             return SfxItemState::DISABLED;
 
         css::util::URL aURL;
         OUString aCmd( ".uno:" );
         aURL.Protocol = aCmd;
-        aURL.Path = OUString::createFromAscii(pSlot->GetUnoName());
+        aURL.Path = pSlot->GetUnoName();
         aCmd += aURL.Path;
         aURL.Complete = aCmd;
         aURL.Main = aCmd;
@@ -1534,7 +1529,7 @@ SfxItemState SfxBindings::QueryState( sal_uInt16 nSlot, std::unique_ptr<SfxPoolI
 
         if ( xDisp.is() )
         {
-            if (!comphelper::getFromUnoTunnel<SfxOfficeDispatch>(xDisp))
+            if (!dynamic_cast<SfxOfficeDispatch*>(xDisp.get()))
             {
                 bool bDeleteCache = false;
                 if ( !pCache )
@@ -1600,17 +1595,18 @@ SfxItemState SfxBindings::QueryState( sal_uInt16 nSlot, std::unique_ptr<SfxPoolI
     // Then test at the dispatcher to check if the returned items from
     // there are always DELETE_ON_IDLE, a copy of it has to be made in
     // order to allow for transition of ownership.
-    const SfxPoolItem *pItem = nullptr;
-    SfxItemState eState = pDispatcher->QueryState( nSlot, pItem );
-    if ( eState == SfxItemState::SET )
+    SfxPoolItemHolder aResult;
+    const SfxItemState eState(pDispatcher->QueryState(nSlot, aResult));
+
+    if (SfxItemState::SET == eState)
     {
-        DBG_ASSERT( pItem, "SfxItemState::SET but no item!" );
-        if ( pItem )
-            rpState.reset(pItem->Clone());
+        DBG_ASSERT( aResult.getItem(), "SfxItemState::SET but no item!" );
+        if ( nullptr != aResult.getItem() )
+            rpState.reset(aResult.getItem()->Clone());
     }
-    else if ( eState == SfxItemState::DEFAULT && pItem )
+    else if (SfxItemState::DEFAULT == eState && nullptr != aResult.getItem())
     {
-        rpState.reset(pItem->Clone());
+        rpState.reset(aResult.getItem()->Clone());
     }
 
     return eState;
@@ -1653,15 +1649,10 @@ sal_uInt16 SfxBindings::QuerySlotId( const util::URL& aURL )
     if (!xDispatch.is())
         return 0;
 
-    css::uno::Reference<css::lang::XUnoTunnel> xTunnel(xDispatch, css::uno::UNO_QUERY);
-    if (!xTunnel.is())
+    SfxOfficeDispatch* pDispatch = dynamic_cast<SfxOfficeDispatch*>(xDispatch.get());
+    if (!pDispatch)
         return 0;
 
-    sal_Int64 nHandle = xTunnel->getSomething(SfxOfficeDispatch::getUnoTunnelId());
-    if (!nHandle)
-        return 0;
-
-    SfxOfficeDispatch* pDispatch = reinterpret_cast<SfxOfficeDispatch*>(sal::static_int_cast<sal_IntPtr>(nHandle));
     return pDispatch->GetId();
 }
 

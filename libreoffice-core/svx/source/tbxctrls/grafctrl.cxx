@@ -64,7 +64,7 @@ using namespace ::com::sun::star::util;
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::lang;
 
-constexpr OUStringLiteral TOOLBOX_NAME = u"colorbar";
+constexpr OUString TOOLBOX_NAME = u"colorbar"_ustr;
 #define RID_SVXSTR_UNDO_GRAFCROP    RID_SVXSTR_GRAFCROP
 
 namespace {
@@ -156,15 +156,15 @@ namespace {
 struct CommandToRID
 {
     const char* pCommand;
-    rtl::OUStringConstExpr sResId;
+    OUString sResId;
 };
 
 }
 
 static OUString ImplGetRID( std::u16string_view aCommand )
 {
-    static constexpr OUStringLiteral EMPTY = u"";
-    static const CommandToRID aImplCommandToResMap[] =
+    static constexpr OUString EMPTY = u""_ustr;
+    static constexpr CommandToRID aImplCommandToResMap[] =
     {
         { ".uno:GrafRed",           RID_SVXBMP_GRAF_RED             },
         { ".uno:GrafGreen",         RID_SVXBMP_GRAF_GREEN           },
@@ -210,7 +210,7 @@ ImplGrafControl::ImplGrafControl(
 
     SetBackground( Wallpaper() ); // transparent background
 
-    mxField->set_help_id(OUStringToOString(rCmd, RTL_TEXTENCODING_UTF8));
+    mxField->set_help_id(rCmd);
     mxField->get_widget().connect_key_press(LINK(this, ImplGrafControl, KeyInputHdl));
     mxField->connect_value_changed(LINK(this, ImplGrafControl, ValueChangedHdl));
 
@@ -499,7 +499,7 @@ VclPtr<InterimItemWindow> SvxGrafModeToolBoxControl::CreateItemWindow( vcl::Wind
 
 void SvxGrafAttrHelper::ExecuteGrafAttr( SfxRequest& rReq, SdrView& rView )
 {
-    SfxItemPool&    rPool = rView.GetModel()->GetItemPool();
+    SfxItemPool&    rPool = rView.GetModel().GetItemPool();
     SfxItemSetFixed<SDRATTR_GRAF_FIRST, SDRATTR_GRAF_LAST> aSet( rPool );
     OUString        aUndoStr;
     const bool      bUndo = rView.IsUndoEnabled();
@@ -689,19 +689,19 @@ void SvxGrafAttrHelper::ExecuteGrafAttr( SfxRequest& rReq, SdrView& rView )
                                 // #106181# rotate snap rect before setting it
                                 const GeoStat& aGeo = pObj->GetGeoStat();
 
-                                if (aGeo.nRotationAngle || aGeo.nShearAngle)
+                                if (aGeo.m_nRotationAngle || aGeo.m_nShearAngle)
                                 {
                                     tools::Polygon aPol(aNewRect);
 
                                     // also transform origin offset
-                                    if (aGeo.nShearAngle)
+                                    if (aGeo.m_nShearAngle)
                                     {
                                         ShearPoly(aPol,
                                                 aNewRect.TopLeft(),
                                                 aGeo.mfTanShearAngle);
                                         ShearPoint(aOffset, Point(0,0), aGeo.mfTanShearAngle);
                                     }
-                                    if (aGeo.nRotationAngle)
+                                    if (aGeo.m_nRotationAngle)
                                     {
                                         RotatePoly(aPol,
                                                 aNewRect.TopLeft(),
@@ -725,7 +725,7 @@ void SvxGrafAttrHelper::ExecuteGrafAttr( SfxRequest& rReq, SdrView& rView )
                                     if( bUndo )
                                     {
                                         rView.BegUndo( aUndoStr );
-                                        rView.AddUndo( rView.GetModel()->GetSdrUndoFactory().CreateUndoGeoObject( *pObj ) );
+                                        rView.AddUndo(rView.GetModel().GetSdrUndoFactory().CreateUndoGeoObject(*pObj));
                                     }
                                     pObj->SetSnapRect( aNewRect );
                                     rView.SetAttributes( aSet );
@@ -770,7 +770,7 @@ void SvxGrafAttrHelper::ExecuteGrafAttr( SfxRequest& rReq, SdrView& rView )
 
 void SvxGrafAttrHelper::GetGrafAttrState( SfxItemSet& rSet, SdrView const & rView )
 {
-    SfxItemPool&    rPool = rView.GetModel()->GetItemPool();
+    SfxItemPool&    rPool = rView.GetModel().GetItemPool();
     SfxItemSet      aAttrSet( rPool );
     SfxWhichIter    aIter( rSet );
     sal_uInt16      nWhich = aIter.FirstWhich();

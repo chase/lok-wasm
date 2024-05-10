@@ -143,7 +143,7 @@ public:
         }
     }
 
-    void updateParagraphAttibutes(SwTextNode* pTextNode)
+    void updateParagraphAttributes(SwTextNode* pTextNode)
     {
         if (!pTextNode->HasSwAttrSet())
             return;
@@ -222,7 +222,7 @@ public:
             return;
 
         updateHints(pNode->GetTextNode());
-        updateParagraphAttibutes(pNode->GetTextNode());
+        updateParagraphAttributes(pNode->GetTextNode());
     }
 
     void handleSdrObject(SdrObject* pObject) override
@@ -353,15 +353,15 @@ void ThemeColorChanger::doApply(std::shared_ptr<model::ColorSet> const& pColorSe
         auto& rPageDesc = pDocument->GetPageDesc(nIndex);
         SwFrameFormat& rPageFormat = rPageDesc.GetMaster();
         const SwAttrSet& rAttrSet = rPageFormat.GetAttrSet();
-        std::unique_ptr<SfxItemSet> pNewSet = rAttrSet.Clone();
+        SwAttrSet aNewSet = rAttrSet.CloneAsValue();
 
         bool bChanged = false;
-        bChanged = bChanged || changeBackground(rAttrSet, *pNewSet, *pColorSet);
-        bChanged = bChanged || changeBox(rAttrSet, *pNewSet, *pColorSet);
+        bChanged = bChanged || changeBackground(rAttrSet, aNewSet, *pColorSet);
+        bChanged = bChanged || changeBox(rAttrSet, aNewSet, *pColorSet);
 
         if (bChanged)
         {
-            rPageFormat.SetFormatAttr(*pNewSet);
+            rPageFormat.SetFormatAttr(aNewSet);
             pDocument->ChgPageDesc(nIndex, rPageDesc);
         }
     }
@@ -377,14 +377,14 @@ void ThemeColorChanger::doApply(std::shared_ptr<model::ColorSet> const& pColorSe
         if (pFrameFormat)
         {
             const SwAttrSet& rAttrSet = pFrameFormat->GetAttrSet();
-            std::unique_ptr<SfxItemSet> pNewSet = rAttrSet.Clone();
+            SwAttrSet aNewSet = rAttrSet.CloneAsValue();
 
             bool bChanged = false;
-            bChanged = changeBackground(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeBox(rAttrSet, *pNewSet, *pColorSet) || bChanged;
+            bChanged = changeBackground(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeBox(rAttrSet, aNewSet, *pColorSet) || bChanged;
 
             if (bChanged)
-                pDocument->ChgFormat(*pFrameFormat, *pNewSet);
+                pDocument->ChgFormat(*pFrameFormat, aNewSet);
         }
         pStyle = static_cast<SwDocStyleSheet*>(pPool->Next());
     }
@@ -397,17 +397,20 @@ void ThemeColorChanger::doApply(std::shared_ptr<model::ColorSet> const& pColorSe
         if (pTextFormatCollection)
         {
             const SwAttrSet& rAttrSet = pTextFormatCollection->GetAttrSet();
-            std::unique_ptr<SfxItemSet> pNewSet = rAttrSet.Clone();
+            SwAttrSet aNewSet = rAttrSet.CloneAsValue();
 
             bool bChanged = false;
-            bChanged = changeColor(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeOverlineColor(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeUnderlineColor(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeBox(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeBackground(rAttrSet, *pNewSet, *pColorSet) || bChanged;
+            bChanged = changeColor(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeOverlineColor(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeUnderlineColor(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeBox(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeBackground(rAttrSet, aNewSet, *pColorSet) || bChanged;
 
             if (bChanged)
-                pDocument->ChgFormat(*pTextFormatCollection, *pNewSet);
+            {
+                pDocument->ChgFormat(*pTextFormatCollection, aNewSet);
+                pPool->Broadcast(SfxStyleSheetHint(SfxHintId::StyleSheetModified, *pStyle));
+            }
         }
         pStyle = static_cast<SwDocStyleSheet*>(pPool->Next());
     }
@@ -420,14 +423,14 @@ void ThemeColorChanger::doApply(std::shared_ptr<model::ColorSet> const& pColorSe
         if (pCharFormat)
         {
             const SwAttrSet& rAttrSet = pCharFormat->GetAttrSet();
-            std::unique_ptr<SfxItemSet> pNewSet = rAttrSet.Clone();
+            SwAttrSet aNewSet = rAttrSet.CloneAsValue();
 
             bool bChanged = false;
-            bChanged = changeColor(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeOverlineColor(rAttrSet, *pNewSet, *pColorSet) || bChanged;
-            bChanged = changeUnderlineColor(rAttrSet, *pNewSet, *pColorSet) || bChanged;
+            bChanged = changeColor(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeOverlineColor(rAttrSet, aNewSet, *pColorSet) || bChanged;
+            bChanged = changeUnderlineColor(rAttrSet, aNewSet, *pColorSet) || bChanged;
             if (bChanged)
-                pDocument->ChgFormat(*pCharFormat, *pNewSet);
+                pDocument->ChgFormat(*pCharFormat, aNewSet);
         }
         pStyle = static_cast<SwDocStyleSheet*>(pPool->Next());
     }

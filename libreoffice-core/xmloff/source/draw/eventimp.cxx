@@ -35,7 +35,6 @@
 #include <xmloff/namespacemap.hxx>
 #include "eventimp.hxx"
 
-using namespace ::std;
 using namespace ::cppu;
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::xml;
@@ -211,6 +210,9 @@ SdXMLEventContext::SdXMLEventContext( SvXMLImport& rImp,
 
     if( maData.mbValid )
         maData.mbValid = !sEventName.isEmpty();
+
+    if (!maData.msMacroName.isEmpty())
+        rImp.NotifyMacroEventRead();
 }
 
 css::uno::Reference< css::xml::sax::XFastContextHandler > SdXMLEventContext::createFastChildContext(

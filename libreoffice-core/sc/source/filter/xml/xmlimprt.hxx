@@ -23,6 +23,7 @@
 #include <xmloff/xmlprmap.hxx>
 #include "xmlsubti.hxx"
 #include <formula/grammar.hxx>
+#include <vcl/svapp.hxx>
 #include <dociter.hxx>
 
 #include <com/sun/star/sheet/ValidationAlertStyle.hpp>
@@ -49,6 +50,7 @@ class ScEditEngineDefaulter;
 class ScDocumentImport;
 class ScMyImpDetectiveOpArray;
 class SdrPage;
+class ScModelObj;
 
 namespace sc {
 struct ImportPostProcessData;
@@ -60,7 +62,6 @@ class ScDrawObjData;
 class SvXMLTokenMap;
 class XMLShapeImportHelper;
 class ScXMLChangeTrackingImportHelper;
-class SolarMutexGuard;
 
 struct ScMyNamedExpression
 {
@@ -110,6 +111,7 @@ struct ScMyImportValidation
 typedef std::vector<ScMyImportValidation>           ScMyImportValidations;
 class ScMyStylesImportHelper;
 class ScXMLEditAttributeMap;
+class ScCellRangesObj;
 
 class ScXMLImport: public SvXMLImport
 {
@@ -146,14 +148,14 @@ class ScXMLImport: public SvXMLImport
     ScMyLabelRanges            maMyLabelRanges;
     ScMyImportValidations      maValidations;
     std::unique_ptr<ScMyImpDetectiveOpArray>    pDetectiveOpArray;
-    std::unique_ptr<SolarMutexGuard>        pSolarMutexGuard;
+    std::optional<SolarMutexGuard> moSolarMutexGuard;
 
     std::unique_ptr<XMLNumberFormatAttributesExportHelper> pNumberFormatAttributesExportHelper;
     std::unique_ptr<ScMyStyleNumberFormats> pStyleNumberFormats;
     css::uno::Reference <css::util::XNumberFormats> xNumberFormats;
     css::uno::Reference <css::util::XNumberFormatTypes> xNumberFormatTypes;
 
-    css::uno::Reference <css::sheet::XSheetCellRangeContainer> xSheetCellRanges;
+    rtl::Reference<ScCellRangesObj> mxSheetCellRanges; // css::sheet::XSheetCellRangeContainer
 
     OUString           sPrevStyleName;
     OUString           sPrevCurrency;
@@ -204,6 +206,8 @@ public:
 
     ScDocument*          GetDocument()           { return pDoc; }
     const ScDocument*    GetDocument() const     { return pDoc; }
+
+    ScModelObj* GetScModel() const;
 
     ScMyTables& GetTables() { return aTables; }
 
@@ -296,7 +300,7 @@ public:
     void LockSolarMutex();
     void UnlockSolarMutex();
 
-    sal_Int32 GetByteOffset() const;
+    sal_Int64 GetByteOffset() const;
 
     void SetRangeOverflowType(ErrCode nType);
 

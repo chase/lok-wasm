@@ -11,6 +11,7 @@
 
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
+#include <com/sun/star/drawing/BitmapMode.hpp>
 #include <com/sun/star/drawing/FillStyle.hpp>
 #include <com/sun/star/drawing/LineDash.hpp>
 #include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
@@ -169,7 +170,7 @@ DECLARE_WW8EXPORT_TEST(testTdf104596_wrapInHeaderTable, "tdf104596_wrapInHeaderT
 {
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
 
-    sal_Int32 nRowHeight = getXPath(pXmlDoc, "//header/tab/row[1]/infos/bounds", "height").toInt32();
+    sal_Int32 nRowHeight = getXPath(pXmlDoc, "//header/tab/row[1]/infos/bounds"_ostr, "height"_ostr).toInt32();
     // The fly is supposed to be no-wrap, so the text should come underneath it, not wrap-through,
     // thus making the row much higher. Before, height was 706. Now it is 1067.
     CPPUNIT_ASSERT_MESSAGE("Text must wrap under green box", nRowHeight > 1000);
@@ -191,7 +192,7 @@ DECLARE_WW8EXPORT_TEST(testGutterLeft, "gutter-left.doc")
 CPPUNIT_TEST_FIXTURE(Test, testGutterTop)
 {
     createSwDoc("gutter-top.doc");
-    reload(mpFilter, "gutter-top.doc");
+    saveAndReload("MS Word 97");
     uno::Reference<lang::XMultiServiceFactory> xFactory(mxComponent, uno::UNO_QUERY);
     uno::Reference<beans::XPropertySet> xSettings(
         xFactory->createInstance("com.sun.star.document.Settings"), uno::UNO_QUERY);
@@ -251,7 +252,7 @@ CPPUNIT_TEST_FIXTURE(SwModelTestBase, testArabicZeroNumberingFootnote)
                                                                 uno::UNO_QUERY);
     xTextContentAppend->appendTextContent(xFootnote, {});
 
-    reload("MS Word 97", "");
+    saveAndReload("MS Word 97");
     xFootnotesSupplier.set(mxComponent, uno::UNO_QUERY);
     sal_uInt16 nExpected = style::NumberingType::ARABIC_ZERO;
     auto nActual = getProperty<sal_uInt16>(xFootnotesSupplier->getFootnoteSettings(), "NumberingType");
@@ -281,7 +282,7 @@ CPPUNIT_TEST_FIXTURE(SwModelTestBase, testChicagoNumberingFootnote)
                                                                 uno::UNO_QUERY);
     xTextContentAppend->appendTextContent(xFootnote, {});
 
-    reload("MS Word 97", "");
+    saveAndReload("MS Word 97");
     xFootnotesSupplier.set(mxComponent, uno::UNO_QUERY);
     sal_uInt16 nExpected = style::NumberingType::SYMBOL_CHICAGO;
     auto nActual = getProperty<sal_uInt16>(xFootnotesSupplier->getFootnoteSettings(), "NumberingType");
@@ -621,6 +622,12 @@ DECLARE_WW8EXPORT_TEST(testTdf101826_xattrTextBoxFill, "tdf101826_xattrTextBoxFi
     CPPUNIT_ASSERT_MESSAGE("background color", Color(0xFF, 0xFF, 0x00) != getProperty<Color>(getShape(4), "BackColor"));
     //Basic Picture Fill: Tux image
     CPPUNIT_ASSERT_EQUAL_MESSAGE("background image", drawing::FillStyle_BITMAP, getProperty<drawing::FillStyle>(getShape(5), "FillStyle"));
+    // Basic Pattern fill: many thin, green, vertical stripes on yellow background
+    auto eMode = getProperty<drawing::BitmapMode>(getShapeByName(u"Frame2"), "FillBitmapMode");
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("tiled pattern", drawing::BitmapMode_REPEAT, eMode);
+    // Basic Texture fill: tiled blue denim texture
+    eMode = getProperty<drawing::BitmapMode>(getShapeByName(u"Frame6"), "FillBitmapMode");
+    CPPUNIT_ASSERT_EQUAL_MESSAGE("tiled texture", drawing::BitmapMode_REPEAT, eMode);
 }
 
 DECLARE_WW8EXPORT_TEST(testTdf123433_fillStyleStop, "tdf123433_fillStyleStop.doc")
@@ -679,9 +686,9 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf94009_zeroPgMargin)
 
 DECLARE_WW8EXPORT_TEST(testTdf108518_CRnumformatting, "tdf108518_CRnumformatting.doc")
 {
-    CPPUNIT_ASSERT_EQUAL(OUString("6.2.3."), parseDump("//body/txt[4]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::Number']", "expand"));
+    CPPUNIT_ASSERT_EQUAL(OUString("6.2.3."), parseDump("//body/txt[4]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::Number']"_ostr, "expand"_ostr));
     //Without this fix in place, it would become 200 (and non-bold).
-    CPPUNIT_ASSERT_EQUAL(OUString("220"), parseDump("//body/txt[4]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::Number']", "font-height"));
+    CPPUNIT_ASSERT_EQUAL(OUString("220"), parseDump("//body/txt[4]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::Number']/SwFont"_ostr, "height"_ostr));
 }
 
 DECLARE_WW8EXPORT_TEST(testTdf120711_joinedParagraphWithChangeTracking, "tdf120711.doc")
@@ -852,6 +859,11 @@ DECLARE_WW8EXPORT_TEST(testPresetDash, "tdf127166_prstDash_Word97.doc")
                         && aPresetLineDash.Distance == aShapeLineDash.Distance;
         CPPUNIT_ASSERT_MESSAGE("LineDash differ", bIsEqual);
     }
+
+    const auto& pLayout = parseLayoutDump();
+    // Ensure that there is no tabstop in the first paragraph (despite chapter numbering's setting)
+    // This is a pre-emptive test to ensure something visibly correct is not broken.
+    assertXPath(pLayout, "//body/txt[1]//SwFixPortion"_ostr, 0);
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testRtlGutter)
@@ -867,14 +879,14 @@ CPPUNIT_TEST_FIXTURE(Test, testRtlGutter)
     // Then make sure the section's gutter is still RTL:
     // Without the accompanying fix in place, this test would have failed as the SPRM was missing.
     verify();
-    reload(mpFilter, "rtl-gutter.doc");
+    saveAndReload("MS Word 97");
     verify();
 }
 
 DECLARE_WW8EXPORT_TEST(testTdf94326_notOutlineNumbering, "tdf94326_notOutlineNumbering.doc")
 {
     // The directly applied numbering list must not be lost.
-    uno::Reference<beans::XPropertySet> xPara(getParagraph(2, u"ОБЩИЕ ПОЛОЖЕНИЯ"), uno::UNO_QUERY);
+    uno::Reference<beans::XPropertySet> xPara(getParagraph(2, u"ОБЩИЕ ПОЛОЖЕНИЯ"_ustr), uno::UNO_QUERY);
     CPPUNIT_ASSERT_EQUAL(OUString("1."), getProperty<OUString>(xPara, "ListLabelString"));
 }
 
@@ -1061,6 +1073,7 @@ CPPUNIT_TEST_FIXTURE(Test, testTdf79186_noLayoutInCell)
     CPPUNIT_ASSERT_EQUAL(1, getPages());
 
     CPPUNIT_ASSERT(!getProperty<bool>(getShape(1), "IsFollowingTextFlow"));
+    CPPUNIT_ASSERT(getProperty<bool>(getShape(1), "SurroundContour")); // tdf#140508
 }
 
 CPPUNIT_TEST_FIXTURE(Test, testClearingBreak)
@@ -1090,7 +1103,7 @@ CPPUNIT_TEST_FIXTURE(Test, testClearingBreak)
     createSwDoc("clearing-break.doc");
     // Then make sure that the clear property of the break is not ignored:
     verify();
-    reload(mpFilter, "clearing-break.doc");
+    saveAndReload("MS Word 97");
     // Make sure that the clear property of the break is not ignored during export:
     verify();
 }

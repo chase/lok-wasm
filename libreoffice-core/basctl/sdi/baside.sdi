@@ -248,6 +248,18 @@ shell basctl_Shell
         StateMethod = GetState;
     ]
 
+    SID_BASICIDE_WATCH
+    [
+        ExecMethod  = ExecuteGlobal;
+        StateMethod = GetState;
+    ]
+
+    SID_BASICIDE_STACK
+    [
+        ExecMethod  = ExecuteGlobal;
+        StateMethod = GetState;
+    ]
+
     SID_BASICIDE_CREATEMACRO
     [
         ExecMethod  = ExecuteGlobal;
@@ -332,6 +344,18 @@ shell basctl_Shell
     ]
 
     SID_ATTR_ZOOMSLIDER
+    [
+        ExecMethod      = ExecuteGlobal;
+        StateMethod     = GetState;
+    ]
+
+    SID_ZOOM_IN
+    [
+        ExecMethod      = ExecuteGlobal;
+        StateMethod     = GetState;
+    ]
+
+    SID_ZOOM_OUT
     [
         ExecMethod      = ExecuteGlobal;
         StateMethod     = GetState;

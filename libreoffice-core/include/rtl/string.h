@@ -568,9 +568,9 @@ SAL_DLLPUBLIC sal_Int32 SAL_CALL rtl_str_trim_WithLength(
 
 /** Create the string representation of a boolean.
 
-    If b is true, the buffer is filled with the string "true" and 5 is
+    If b is true, the buffer is filled with the string "true" and 4 is
     returned.  If b is false, the buffer is filled with the string "false" and
-    6 is returned.  This function cannot be used for language-specific
+    5 is returned.  This function cannot be used for language-specific
     operations.
 
     @param str
@@ -864,10 +864,6 @@ SAL_DLLPUBLIC double SAL_CALL rtl_str_toDouble(
 
 /* ======================================================================= */
 
-#ifdef _WIN32
-#   pragma pack(push, 8)
-#endif
-
 /** @cond INTERNAL */
 /** The implementation of a byte string.
  */
@@ -878,10 +874,6 @@ typedef struct _rtl_String
     char            buffer[1];
 } rtl_String;
 /** @endcond */
-
-#if defined(_WIN32)
-#pragma pack(pop)
-#endif
 
 /* ----------------------------------------------------------------------- */
 

@@ -26,10 +26,12 @@
 #include <dlgedpage.hxx>
 #include <dlgedview.hxx>
 #include <dlgedobj.hxx>
+#include <com/sun/star/awt/XVclWindowPeer.hpp>
 #include <com/sun/star/accessibility/AccessibleEventId.hpp>
 #include <com/sun/star/accessibility/AccessibleRole.hpp>
 #include <com/sun/star/accessibility/AccessibleStateType.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
+#include <comphelper/accessiblecontexthelper.hxx>
 #include <cppuhelper/supportsservice.hxx>
 #include <tools/debug.hxx>
 #include <unotools/accessiblerelationsethelper.hxx>
@@ -83,11 +85,10 @@ AccessibleDialogWindow::AccessibleDialogWindow (basctl::DialogWindow* pDialogWin
         return;
 
     SdrPage& rPage = m_pDialogWindow->GetPage();
-    const size_t nCount = rPage.GetObjCount();
 
-    for ( size_t i = 0; i < nCount; ++i )
+    for (const rtl::Reference<SdrObject>& pObj : rPage)
     {
-        if (DlgEdObj* pDlgEdObj = dynamic_cast<DlgEdObj*>(rPage.GetObj(i)))
+        if (DlgEdObj* pDlgEdObj = dynamic_cast<DlgEdObj*>(pObj.get()))
         {
             ChildDescriptor aDesc( pDlgEdObj );
             if ( IsChildVisible( aDesc ) )
@@ -118,13 +119,8 @@ void AccessibleDialogWindow::UpdateFocused()
 {
     for (const ChildDescriptor & i : m_aAccessibleChildren)
     {
-        Reference< XAccessible > xChild( i.rxAccessible );
-        if ( xChild.is() )
-        {
-            AccessibleDialogControlShape* pShape = static_cast< AccessibleDialogControlShape* >( xChild.get() );
-            if ( pShape )
-                pShape->SetFocused( pShape->IsFocused() );
-        }
+        if ( i.mxAccessible )
+            i.mxAccessible->SetFocused( i.mxAccessible->IsFocused() );
     }
 }
 
@@ -135,13 +131,8 @@ void AccessibleDialogWindow::UpdateSelected()
 
     for (const ChildDescriptor & i : m_aAccessibleChildren)
     {
-        Reference< XAccessible > xChild( i.rxAccessible );
-        if ( xChild.is() )
-        {
-            AccessibleDialogControlShape* pShape = static_cast< AccessibleDialogControlShape* >( xChild.get() );
-            if ( pShape )
-                pShape->SetSelected( pShape->IsSelected() );
-        }
+        if ( i.mxAccessible )
+            i.mxAccessible->SetSelected( i.mxAccessible->IsSelected() );
     }
 }
 
@@ -150,13 +141,8 @@ void AccessibleDialogWindow::UpdateBounds()
 {
     for (const ChildDescriptor & i : m_aAccessibleChildren)
     {
-        Reference< XAccessible > xChild( i.rxAccessible );
-        if ( xChild.is() )
-        {
-            AccessibleDialogControlShape* pShape = static_cast< AccessibleDialogControlShape* >( xChild.get() );
-            if ( pShape )
-                pShape->SetBounds( pShape->GetBounds() );
-        }
+        if ( i.mxAccessible )
+            i.mxAccessible->SetBounds( i.mxAccessible->GetBounds() );
     }
 }
 
@@ -242,7 +228,7 @@ void AccessibleDialogWindow::RemoveChild( const ChildDescriptor& rDesc )
         return;
 
     // get the accessible of the removed child
-    Reference< XAccessible > xChild( aIter->rxAccessible );
+    rtl::Reference< AccessibleDialogControlShape > xChild( aIter->mxAccessible );
 
     // remove entry from child list
     m_aAccessibleChildren.erase( aIter );
@@ -251,12 +237,11 @@ void AccessibleDialogWindow::RemoveChild( const ChildDescriptor& rDesc )
     if ( xChild.is() )
     {
         Any aOldValue, aNewValue;
-        aOldValue <<= xChild;
+        aOldValue <<= uno::Reference<XAccessible>(xChild);
         NotifyAccessibleEvent( AccessibleEventId::CHILD, aOldValue, aNewValue );
 
-        Reference< XComponent > xComponent( xChild, UNO_QUERY );
-        if ( xComponent.is() )
-            xComponent->dispose();
+        if ( xChild )
+            xChild->dispose();
     }
 }
 
@@ -281,8 +266,8 @@ void AccessibleDialogWindow::UpdateChildren()
     if ( m_pDialogWindow )
     {
         SdrPage& rPage = m_pDialogWindow->GetPage();
-        for ( size_t i = 0, nCount = rPage.GetObjCount(); i < nCount; ++i )
-            if (DlgEdObj* pDlgEdObj = dynamic_cast<DlgEdObj*>(rPage.GetObj(i)))
+        for (const rtl::Reference<SdrObject>& pObj : rPage)
+            if (DlgEdObj* pDlgEdObj = dynamic_cast<DlgEdObj*>(pObj.get()))
                 UpdateChild( ChildDescriptor( pDlgEdObj ) );
     }
 }
@@ -378,9 +363,8 @@ void AccessibleDialogWindow::ProcessWindowEvent( const VclWindowEvent& rVclWindo
                 // dispose all children
                 for (const ChildDescriptor & i : m_aAccessibleChildren)
                 {
-                    Reference< XComponent > xComponent( i.rxAccessible, UNO_QUERY );
-                    if ( xComponent.is() )
-                        xComponent->dispose();
+                    if ( i.mxAccessible )
+                        i.mxAccessible->dispose();
                 }
                 m_aAccessibleChildren.clear();
             }
@@ -492,18 +476,6 @@ void AccessibleDialogWindow::Notify( SfxBroadcaster&, const SfxHint& rHint )
 }
 
 
-// XInterface
-
-
-IMPLEMENT_FORWARD_XINTERFACE2( AccessibleDialogWindow, OAccessibleExtendedComponentHelper, AccessibleDialogWindow_BASE )
-
-
-// XTypeProvider
-
-
-IMPLEMENT_FORWARD_XTYPEPROVIDER2( AccessibleDialogWindow, OAccessibleExtendedComponentHelper, AccessibleDialogWindow_BASE )
-
-
 // XComponent
 
 
@@ -524,9 +496,8 @@ void AccessibleDialogWindow::disposing()
     // dispose all children
     for (const ChildDescriptor & i : m_aAccessibleChildren)
     {
-        Reference< XComponent > xComponent( i.rxAccessible, UNO_QUERY );
-        if ( xComponent.is() )
-            xComponent->dispose();
+        if ( i.mxAccessible )
+            i.mxAccessible->dispose();
     }
     m_aAccessibleChildren.clear();
 }
@@ -569,7 +540,7 @@ Reference< XAccessible > AccessibleDialogWindow::getAccessibleChild( sal_Int64 i
     if ( i < 0 || i >= getAccessibleChildCount() )
         throw IndexOutOfBoundsException();
 
-    Reference< XAccessible > xChild = m_aAccessibleChildren[i].rxAccessible;
+    rtl::Reference< AccessibleDialogControlShape > xChild = m_aAccessibleChildren[i].mxAccessible;
     if ( !xChild.is() )
     {
         if ( m_pDialogWindow )
@@ -580,7 +551,7 @@ Reference< XAccessible > AccessibleDialogWindow::getAccessibleChild( sal_Int64 i
                 xChild = new AccessibleDialogControlShape( m_pDialogWindow, pDlgEdObj );
 
                 // insert into child list
-                m_aAccessibleChildren[i].rxAccessible = xChild;
+                m_aAccessibleChildren[i].mxAccessible = xChild;
             }
         }
     }

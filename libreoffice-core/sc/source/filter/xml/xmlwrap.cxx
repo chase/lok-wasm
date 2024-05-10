@@ -94,18 +94,14 @@ uno::Reference <task::XStatusIndicator> ScXMLImportWrapper::GetStatusIndicator()
     uno::Reference<task::XStatusIndicator> xStatusIndicator;
     if (pMedium)
     {
-        SfxItemSet* pSet = pMedium->GetItemSet();
-        if (pSet)
-        {
-            const SfxUnoAnyItem* pItem = pSet->GetItem<SfxUnoAnyItem>(SID_PROGRESS_STATUSBAR_CONTROL);
-            if (pItem)
-                xStatusIndicator.set(pItem->GetValue(), uno::UNO_QUERY);
-        }
+        const SfxUnoAnyItem* pItem = pMedium->GetItemSet().GetItem(SID_PROGRESS_STATUSBAR_CONTROL);
+        if (pItem)
+            xStatusIndicator.set(pItem->GetValue(), uno::UNO_QUERY);
     }
     return xStatusIndicator;
 }
 
-ErrCode ScXMLImportWrapper::ImportFromComponent(const uno::Reference<uno::XComponentContext>& xContext,
+ErrCodeMsg ScXMLImportWrapper::ImportFromComponent(const uno::Reference<uno::XComponentContext>& xContext,
     const uno::Reference<frame::XModel>& xModel,
     xml::sax::InputSource& aParserInput,
     const OUString& sComponentName, const OUString& sDocName,
@@ -159,7 +155,7 @@ ErrCode ScXMLImportWrapper::ImportFromComponent(const uno::Reference<uno::XCompo
         xInfoSet->setPropertyValue( "StreamName", uno::Any( sStream ) );
     }
 
-    ErrCode nReturn = ERRCODE_NONE;
+    ErrCodeMsg nReturn = ERRCODE_NONE;
     rDoc.SetRangeOverflowType(ERRCODE_NONE);   // is modified by the importer if limits are exceeded
 
     uno::Reference<XInterface> xImportInterface =
@@ -223,7 +219,7 @@ ErrCode ScXMLImportWrapper::ImportFromComponent(const uno::Reference<uno::XCompo
 
             if( !sDocName.isEmpty() )
             {
-                nReturn = *new TwoStringErrorInfo(
+                nReturn = ErrCodeMsg(
                                 (bMustBeSuccessful ? SCERR_IMPORT_FILE_ROWCOL
                                                         : SCWARN_IMPORT_FILE_ROWCOL),
                                 sDocName, sErr,
@@ -232,7 +228,7 @@ ErrCode ScXMLImportWrapper::ImportFromComponent(const uno::Reference<uno::XCompo
             else
             {
                 OSL_ENSURE( bMustBeSuccessful, "Warnings are not supported" );
-                nReturn = *new StringErrorInfo( SCERR_IMPORT_FORMAT_ROWCOL, sErr,
+                nReturn = ErrCodeMsg( SCERR_IMPORT_FORMAT_ROWCOL, sErr,
                                  DialogMask::ButtonsOk | DialogMask::MessageError );
             }
         }
@@ -283,7 +279,7 @@ ErrCode ScXMLImportWrapper::ImportFromComponent(const uno::Reference<uno::XCompo
     return nReturn;
 }
 
-bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
+bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCodeMsg& rError )
 {
     uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
 
@@ -313,8 +309,8 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
         { OUString("ScriptConfiguration"), 0, cppu::UnoType<container::XNameAccess>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0},
         { OUString("OrganizerMode"), 0, cppu::UnoType<bool>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
         { OUString("SourceStorage"), 0, cppu::UnoType<embed::XStorage>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
-        { OUString(SC_UNO_ODS_LOCK_SOLAR_MUTEX), 0, cppu::UnoType<bool>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
-        { OUString(SC_UNO_ODS_IMPORT_STYLES), 0, cppu::UnoType<bool>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
+        { SC_UNO_ODS_LOCK_SOLAR_MUTEX, 0, cppu::UnoType<bool>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
+        { SC_UNO_ODS_IMPORT_STYLES, 0, cppu::UnoType<bool>::get(), css::beans::PropertyAttribute::MAYBEVOID, 0 },
     };
     uno::Reference< beans::XPropertySet > xInfoSet( comphelper::GenericPropertySet_CreateInstance( new comphelper::PropertySetInfo( aImportInfoMap ) ) );
 
@@ -358,10 +354,10 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
     OUString aName;
     if (SfxObjectCreateMode::EMBEDDED == mrDocShell.GetCreateMode())
     {
-        if ( pMedium && pMedium->GetItemSet() )
+        if ( pMedium )
         {
             const SfxStringItem* pDocHierarchItem =
-                pMedium->GetItemSet()->GetItem(SID_DOC_HIERARCHICALNAME);
+                pMedium->GetItemSet().GetItem(SID_DOC_HIERARCHICALNAME);
             if ( pDocHierarchItem )
                 aName = pDocHierarchItem->GetValue();
         }
@@ -414,7 +410,7 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
     }
 
     // #i103539#: always read meta.xml for generator
-    ErrCode nMetaRetval(ERRCODE_NONE);
+    ErrCodeMsg nMetaRetval(ERRCODE_NONE);
     if (nMode & ImportFlags::Metadata)
     {
         uno::Sequence<uno::Any> aMetaArgs { Any(xInfoSet) };
@@ -452,7 +448,7 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
         Any(xObjectResolver)
     };
 
-    ErrCode nSettingsRetval(ERRCODE_NONE);
+    ErrCodeMsg nSettingsRetval(ERRCODE_NONE);
     if (nMode & ImportFlags::Settings)
     {
         //  Settings must be loaded first because of the printer setting,
@@ -471,7 +467,7 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
         SAL_INFO( "sc.filter", "settings import end" );
     }
 
-    ErrCode nStylesRetval(ERRCODE_NONE);
+    ErrCodeMsg nStylesRetval(ERRCODE_NONE);
     if (nMode & ImportFlags::Styles)
     {
         SAL_INFO( "sc.filter", "styles import start" );
@@ -485,7 +481,7 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
         SAL_INFO( "sc.filter", "styles import end" );
     }
 
-    ErrCode nDocRetval(ERRCODE_NONE);
+    ErrCodeMsg nDocRetval(ERRCODE_NONE);
     if (nMode & ImportFlags::Content)
     {
         if (mrDocShell.GetCreateMode() == SfxObjectCreateMode::INTERNAL)
@@ -588,7 +584,7 @@ bool ScXMLImportWrapper::Import( ImportFlags nMode, ErrCode& rError )
 
 static bool lcl_HasValidStream(const ScDocument& rDoc)
 {
-    SfxObjectShell* pObjSh = rDoc.GetDocumentShell();
+    ScDocShell* pObjSh = rDoc.GetDocumentShell();
     if ( pObjSh->IsDocShared() )
         return false;                       // never copy stream from shared file
 
@@ -660,7 +656,8 @@ bool ScXMLImportWrapper::ExportToComponent(const uno::Reference<uno::XComponentC
 
     if ( xFilter.is() )
     {
-        ScXMLExport* pExport = static_cast<ScXMLExport*>(comphelper::getFromUnoTunnel<SvXMLExport>(xFilter));
+        ScXMLExport* pExport = static_cast<ScXMLExport*>(dynamic_cast<SvXMLExport*>(xFilter.get()));
+        assert(pExport && "can only succeed");
         pExport->SetSharedData(std::move(pSharedData));
 
         // if there are sheets to copy, get the source stream
@@ -743,7 +740,7 @@ bool ScXMLImportWrapper::Export(bool bStylesOnly)
     OUString sFileName;
     if (pMedium)
         sFileName = pMedium->GetName();
-    SfxObjectShell* pObjSh = rDoc.GetDocumentShell();
+    ScDocShell* pObjSh = rDoc.GetDocumentShell();
     uno::Sequence<beans::PropertyValue> aDescriptor( comphelper::InitPropertySequence({
             { "FileName", uno::Any(sFileName) }
         }));
@@ -821,10 +818,10 @@ bool ScXMLImportWrapper::Export(bool bStylesOnly)
         if( SfxObjectCreateMode::EMBEDDED == pObjSh->GetCreateMode() )
         {
             OUString aName("dummyObjectName");
-            if ( pMedium && pMedium->GetItemSet() )
+            if ( pMedium )
             {
                 const SfxStringItem* pDocHierarchItem =
-                    pMedium->GetItemSet()->GetItem(SID_DOC_HIERARCHICALNAME);
+                    pMedium->GetItemSet().GetItem(SID_DOC_HIERARCHICALNAME);
                 if ( pDocHierarchItem )
                     aName = pDocHierarchItem->GetValue();
             }

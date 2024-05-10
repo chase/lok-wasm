@@ -24,6 +24,7 @@
 #include <vcl/bitmapex.hxx>
 #include <vcl/customweld.hxx>
 #include <vcl/dibtools.hxx>
+#include <vcl/lineinfo.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/event.hxx>
@@ -43,28 +44,52 @@
 
 namespace {
 
+void DrawRect(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
+{
+    tools::Rectangle aRect(rRect);
+    rRenderContext.SetFillColor(COL_BLACK);
+    rRenderContext.SetLineColor();
+    rRenderContext.DrawRect(aRect);
+    aRect.Move(1, 1);
+    aRect.AdjustRight(-2);
+    aRect.AdjustBottom(-2);
+    rRenderContext.SetFillColor();
+    rRenderContext.SetLineColor(COL_WHITE);
+    rRenderContext.DrawRect(aRect);
+}
+
 void DrawRectangles(vcl::RenderContext& rRenderContext, Point const & rUL, Point const & rBR)
 {
-    int nMiddleX, nMiddleY;
-    Point aBL, aUR;
+    Point aUR(rBR.X(), rUL.Y());
+    Point aBL(rUL.X(), rBR.Y());
+    int nMiddleX = (rBR.X() - rUL.X()) / 2 + rUL.X();
+    int nMiddleY = (rBR.Y() - rUL.Y()) / 2 + rUL.Y();
 
-    aUR = Point(rBR.X(), rUL.Y());
-    aBL = Point(rUL.X(), rBR.Y());
-    nMiddleX = (rBR.X() - rUL.X()) / 2 + rUL.X();
-    nMiddleY = (rBR.Y() - rUL.Y()) / 2 + rUL.Y();
-
+    rRenderContext.SetLineColor(COL_WHITE);
     rRenderContext.DrawLine(rUL, aBL);
     rRenderContext.DrawLine(aBL, rBR);
     rRenderContext.DrawLine(rBR, aUR);
     rRenderContext.DrawLine(aUR, rUL);
-    rRenderContext.DrawRect(tools::Rectangle(rUL, Size(RECT_SIZE_PIX,RECT_SIZE_PIX)));
-    rRenderContext.DrawRect(tools::Rectangle(aBL, Size(RECT_SIZE_PIX, -RECT_SIZE_PIX)));
-    rRenderContext.DrawRect(tools::Rectangle(rBR, Size(-RECT_SIZE_PIX, -RECT_SIZE_PIX)));
-    rRenderContext.DrawRect(tools::Rectangle(aUR, Size(-RECT_SIZE_PIX, RECT_SIZE_PIX )));
-    rRenderContext.DrawRect(tools::Rectangle(Point(nMiddleX - RECT_SIZE_PIX / 2, rUL.Y()), Size(RECT_SIZE_PIX, RECT_SIZE_PIX)));
-    rRenderContext.DrawRect(tools::Rectangle(Point(nMiddleX - RECT_SIZE_PIX / 2, rBR.Y()), Size(RECT_SIZE_PIX, -RECT_SIZE_PIX)));
-    rRenderContext.DrawRect(tools::Rectangle(Point(rUL.X(), nMiddleY - RECT_SIZE_PIX / 2), Size(RECT_SIZE_PIX, RECT_SIZE_PIX)));
-    rRenderContext.DrawRect(tools::Rectangle(Point(rBR.X(), nMiddleY - RECT_SIZE_PIX / 2), Size(-RECT_SIZE_PIX, RECT_SIZE_PIX)));
+
+    rRenderContext.SetLineColor(COL_BLACK);
+    LineInfo aInfo(LineStyle::Dash, 1);
+    aInfo.SetDistance(8);
+    aInfo.SetDotLen(4);
+    aInfo.SetDotCount(1);
+    rRenderContext.DrawLine(rUL, aBL, aInfo);
+    rRenderContext.DrawLine(aBL, rBR, aInfo);
+    rRenderContext.DrawLine(rBR, aUR, aInfo);
+    rRenderContext.DrawLine(aUR, rUL, aInfo);
+
+    Size aSize(RECT_SIZE_PIX, RECT_SIZE_PIX);
+    DrawRect(rRenderContext, tools::Rectangle(rUL, aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(aBL.X(), aBL.Y() - RECT_SIZE_PIX), aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(rBR.X() - RECT_SIZE_PIX, rBR.Y() - RECT_SIZE_PIX), aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(aUR.X() - RECT_SIZE_PIX, aUR.Y()), aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(nMiddleX - RECT_SIZE_PIX / 2, rUL.Y()), aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(nMiddleX - RECT_SIZE_PIX / 2, rBR.Y() - RECT_SIZE_PIX), aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(rUL.X(), nMiddleY - RECT_SIZE_PIX / 2), aSize));
+    DrawRect(rRenderContext, tools::Rectangle(Point(rBR.X() - RECT_SIZE_PIX, nMiddleY - RECT_SIZE_PIX / 2), aSize));
 }
 
 }
@@ -77,13 +102,11 @@ private:
 
     BitmapEx  maPreviewBitmapEx;
     tools::Rectangle maPreviewRect;
-    Point     maLastUL, maLastBR;
     Point     maTopLeft, maBottomRight;
     Point     maMinTopLeft, maMaxBottomRight;
     SaneDlg*  mpParentDialog;
     DragDirection meDragDirection;
     bool      mbDragEnable;
-    bool      mbDragDrawn;
     bool      mbIsDragging;
 
 public:
@@ -92,7 +115,6 @@ public:
         , mpParentDialog(nullptr)
         , meDragDirection(TopLeft)
         , mbDragEnable(false)
-        , mbDragDrawn(false)
         , mbIsDragging(false)
     {
     }
@@ -924,7 +946,6 @@ void ScanPreview::Paint(vcl::RenderContext& rRenderContext, const tools::Rectang
     // check for sane values
     rRenderContext.DrawBitmapEx(maPreviewRect.TopLeft(), maPreviewRect.GetSize(), maPreviewBitmapEx);
 
-    mbDragDrawn = false;
     DrawDrag(rRenderContext);
 }
 
@@ -1012,8 +1033,8 @@ void SaneDlg::EstablishQuantumRange()
             mxQuantumRangeBox->set_active_text( OUString( pBuf, strlen(pBuf), osl_getThreadTextEncoding() ) );
         }
         mxQuantumRangeBox->show();
-        OUString aText( mrSane.GetOptionName( mnCurrentOption ) + " " );
-        aText += mrSane.GetOptionUnitName( mnCurrentOption );
+        OUString aText = mrSane.GetOptionName( mnCurrentOption ) + " "
+            + mrSane.GetOptionUnitName( mnCurrentOption );
         mxOptionDescTxt->set_label(aText);
         mxOptionDescTxt->show();
     }
@@ -1029,8 +1050,8 @@ void SaneDlg::EstablishNumericOption()
         return;
 
     char pBuf[256];
-    OUString aText( mrSane.GetOptionName( mnCurrentOption ) + " " );
-    aText += mrSane.GetOptionUnitName( mnCurrentOption );
+    OUString aText = mrSane.GetOptionName( mnCurrentOption ) + " "
+        + mrSane.GetOptionUnitName( mnCurrentOption );
     if( mfMin != mfMax )
     {
         o3tl::sprintf( pBuf, " < %g ; %g >", mfMin, mfMax );
@@ -1185,19 +1206,10 @@ void ScanPreview::DrawDrag(vcl::RenderContext& rRenderContext)
     if (!mbDragEnable)
         return;
 
-    RasterOp eROP = rRenderContext.GetRasterOp();
-    rRenderContext.SetRasterOp(RasterOp::Invert);
     rRenderContext.SetMapMode(MapMode(MapUnit::MapPixel));
 
-    if (mbDragDrawn)
-        DrawRectangles(rRenderContext, maLastUL, maLastBR);
-
-    maLastUL = maTopLeft;
-    maLastBR = maBottomRight;
     DrawRectangles(rRenderContext, maTopLeft, maBottomRight);
 
-    mbDragDrawn = true;
-    rRenderContext.SetRasterOp(eROP);
     rRenderContext.SetMapMode(MapMode(MapUnit::MapAppFont));
 }
 
@@ -1271,8 +1283,8 @@ bool SaneDlg::LoadState()
     if( ! aConfig.HasGroup( "SANE" ) )
         return false;
 
-    aConfig.SetGroup( "SANE" );
-    OString aString = aConfig.ReadKey( "SO_LastSaneDevice" );
+    aConfig.SetGroup( "SANE"_ostr );
+    OString aString = aConfig.ReadKey( "SO_LastSaneDevice"_ostr );
     for( i = 0; i < Sane::CountDevices() && aString != OUStringToOString(Sane::GetName(i), osl_getThreadTextEncoding()); i++ ) ;
     if( i == Sane::CountDevices() )
         return false;
@@ -1344,8 +1356,8 @@ void SaneDlg::SaveState()
 
     Config aConfig( aFileName );
     aConfig.DeleteGroup( "SANE" );
-    aConfig.SetGroup( "SANE" );
-    aConfig.WriteKey( "SO_LastSANEDevice",
+    aConfig.SetGroup( "SANE"_ostr );
+    aConfig.WriteKey( "SO_LastSANEDevice"_ostr,
         OUStringToOString(mxDeviceBox->get_active_text(), RTL_TEXTENCODING_UTF8) );
 
     static char const* pSaveOptions[] = {

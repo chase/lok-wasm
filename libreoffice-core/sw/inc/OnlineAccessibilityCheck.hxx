@@ -24,7 +24,7 @@ namespace sw
 {
 /// Contains the node and tracks if the node gets deleted.
 /// Note: the node needs to extend sw::BroadcastingModify.
-class WeakNodeContainer : public SvtListener
+class WeakNodeContainer final : public SvtListener
 {
 private:
     SwNode* m_pNode;
@@ -57,7 +57,7 @@ private:
 
     void runAccessibilityCheck(SwNode* pNode);
     void updateStatusbar();
-    void updateNodeStatus(SwNode* pContentNode);
+    void updateNodeStatus(SwNode* pContentNode, bool bIssueObjectNameChanged = false);
     void initialCheck();
     void lookForPreviousNodeAndUpdate(SwPosition const& rNewPos);
     void clearAccessibilityIssuesFromAllNodes();
@@ -66,9 +66,15 @@ private:
 public:
     OnlineAccessibilityCheck(SwDoc& rDocument);
     void update(SwPosition const& rNewPos);
-    void resetAndQueue(SwNode* pNode);
+    void resetAndQueue(SwNode* pNode, bool bIssueObjectNameChanged = false);
+    void resetAndQueueDocumentLevel();
     void updateCheckerActivity();
     sal_Int32 getNumberOfAccessibilityIssues() { return m_nAccessibilityIssues; }
+    sal_Int32 getNumberOfDocumentLevelAccessibilityIssues()
+    {
+        return m_pDocumentAccessibilityIssues ? m_pDocumentAccessibilityIssues->getIssues().size()
+                                              : sal_Int32(0);
+    }
 };
 
 } // end sw

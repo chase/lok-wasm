@@ -530,7 +530,7 @@ void tokenizeSQL( const OString & sql, std::vector< OString > &vec  )
                 {
                     if( i - start )
                         vec.push_back( OString( &sql.getStr()[start], i - start ) );
-                    vec.push_back( OString( "." ) );
+                    vec.push_back( "."_ostr );
                     start = i + 1;
                 }
             }
@@ -943,19 +943,17 @@ OUString sqltype2string( const Reference< XPropertySet > & desc )
         case css::sdbc::DataType::VARCHAR:
         case css::sdbc::DataType::CHAR:
         {
-            typeName.append( "(" );
-            typeName.append( precision );
-            typeName.append( ")" );
+            typeName.append( "(" + OUString::number(precision) + ")" );
             break;
         }
         case css::sdbc::DataType::DECIMAL:
         case css::sdbc::DataType::NUMERIC:
         {
-            typeName.append( "(" );
-            typeName.append( precision );
-            typeName.append( "," );
-            typeName.append( extractIntProperty( desc, getStatics().SCALE ) );
-            typeName.append( ")" );
+            typeName.append( "("
+                + OUString::number(precision)
+                + ","
+                + OUString::number(extractIntProperty( desc, getStatics().SCALE ))
+                + ")" );
             break;
         }
         default:

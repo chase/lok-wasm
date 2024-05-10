@@ -18,6 +18,7 @@
  */
 
 #include <ChartController.hxx>
+#include <ChartView.hxx>
 #include <chartview/DrawModelWrapper.hxx>
 #include <chartview/ChartSfxItemIds.hxx>
 #include <ObjectIdentifier.hxx>
@@ -46,6 +47,7 @@
 #include <ChartModel.hxx>
 #include <ColorPerPointHelper.hxx>
 #include <DataSeries.hxx>
+#include <DataSeriesProperties.hxx>
 #include <DiagramHelper.hxx>
 #include <Diagram.hxx>
 #include <ControllerLockGuard.hxx>
@@ -70,6 +72,7 @@ namespace chart
 {
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
+using namespace ::chart::DataSeriesProperties;
 using ::com::sun::star::uno::Reference;
 
 namespace
@@ -156,7 +159,7 @@ wrapper::ItemConverter* createItemConverter(
                 ExplicitIncrementData aExplicitIncrement;
                 if( pExplicitValueProvider )
                     pExplicitValueProvider->getExplicitValuesForAxis(
-                        uno::Reference< XAxis >( xObjectProperties, uno::UNO_QUERY ),
+                        dynamic_cast< Axis* >( xObjectProperties.get() ),
                         aExplicitScale, aExplicitIncrement );
 
                 pItemConverter =  new wrapper::AxisItemConverter(
@@ -203,8 +206,8 @@ wrapper::ItemConverter* createItemConverter(
                 rtl::Reference< DataSeries > xSeries = ObjectIdentifier::getDataSeriesForCID( aObjectCID, xChartModel );
                 rtl::Reference< ChartType > xChartType = ChartModelHelper::getChartTypeOfSeries( xChartModel, xSeries );
 
-                rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartModel );
-                sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+                rtl::Reference< Diagram > xDiagram = xChartModel->getFirstChartDiagram();
+                sal_Int32 nDimensionCount = xDiagram->getDimension();
                 if( !ChartTypeHelper::isSupportingAreaProperties( xChartType, nDimensionCount ) )
                     eMapTo = wrapper::GraphicObjectType::LineDataPoint;
 
@@ -219,7 +222,8 @@ wrapper::ItemConverter* createItemConverter(
                     nPointIndex = o3tl::toInt32(aParticleID);
                     bool bVaryColorsByPoint = false;
                     if( xSeries.is() &&
-                        (xSeries->getPropertyValue("VaryColorsByPoint") >>= bVaryColorsByPoint) &&
+                        // "VaryColorsByPoint"
+                        (xSeries->getFastPropertyValue(PROP_DATASERIES_VARY_COLORS_BY_POINT) >>= bVaryColorsByPoint) &&
                         bVaryColorsByPoint )
                     {
                         if( !ColorPerPointHelper::hasPointOwnColor( xSeries, nPointIndex, xObjectProperties ) )
@@ -351,7 +355,7 @@ OUString lcl_getTitleCIDForCommand( std::string_view rDispatchCommand, const rtl
     else if( rDispatchCommand == "SecondaryYTitle" )
         nTitleType = TitleHelper::SECONDARY_Y_AXIS_TITLE;
 
-    uno::Reference< XTitle > xTitle( TitleHelper::getTitle( nTitleType, xChartModel ) );
+    rtl::Reference< Title > xTitle( TitleHelper::getTitle( nTitleType, xChartModel ) );
     return ObjectIdentifier::createClassifiedIdentifierForObject( xTitle, xChartModel );
 }
 
@@ -383,14 +387,14 @@ OUString lcl_getAxisCIDForCommand( std::string_view rDispatchCommand, const rtl:
         nDimensionIndex=1; bMainAxis=false;
     }
 
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartModel );
+    rtl::Reference< Diagram > xDiagram = xChartModel->getFirstChartDiagram();
     rtl::Reference< Axis > xAxis = AxisHelper::getAxis( nDimensionIndex, bMainAxis, xDiagram );
     return ObjectIdentifier::createClassifiedIdentifierForObject( xAxis, xChartModel );
 }
 
 OUString lcl_getGridCIDForCommand( std::string_view rDispatchCommand, const rtl::Reference<::chart::ChartModel>& xChartModel )
 {
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartModel );
+    rtl::Reference< Diagram > xDiagram = xChartModel->getFirstChartDiagram();
 
     if( rDispatchCommand == "DiagramGridAll")
         return ObjectIdentifier::createClassifiedIdentifier( OBJECTTYPE_GRID, u"ALLELEMENTS" );
@@ -699,24 +703,22 @@ void ChartController::executeDlg_ObjectProperties( const OUString& rSelectedObje
 {
     OUString aObjectCID = lcl_getFormatCIDforSelectedCID( rSelectedObjectCID );
 
-    UndoGuard aUndoGuard( ActionDescriptionProvider::createDescription(
-                ActionDescriptionProvider::ActionType::Format,
-                ObjectNameProvider::getName( ObjectIdentifier::getObjectType( aObjectCID ))),
-            m_xUndoManager );
+    auto aUndoGuard = std::make_shared<UndoGuard>(
+        ActionDescriptionProvider::createDescription(
+            ActionDescriptionProvider::ActionType::Format,
+            ObjectNameProvider::getName( ObjectIdentifier::getObjectType( aObjectCID ))),
+        m_xUndoManager );
 
-    bool bSuccess = ChartController::executeDlg_ObjectProperties_withoutUndoGuard( aObjectCID, false );
-    if( bSuccess )
-        aUndoGuard.commit();
+    ChartController::executeDlg_ObjectProperties_withUndoGuard( aUndoGuard, aObjectCID, false );
 }
 
-bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
-    const OUString& rObjectCID, bool bSuccessOnUnchanged )
+void ChartController::executeDlg_ObjectProperties_withUndoGuard(
+    std::shared_ptr<UndoGuard> aUndoGuard,const OUString& rObjectCID, bool bSuccessOnUnchanged )
 {
     //return true if the properties were changed successfully
-    bool bRet = false;
     if( rObjectCID.isEmpty() )
     {
-       return bRet;
+       return;
     }
     try
     {
@@ -724,12 +726,12 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
         ObjectType eObjectType = ObjectIdentifier::getObjectType( rObjectCID );
         if( eObjectType==OBJECTTYPE_UNKNOWN )
         {
-            return bRet;
+            return;
         }
         if( eObjectType==OBJECTTYPE_DIAGRAM_WALL || eObjectType==OBJECTTYPE_DIAGRAM_FLOOR )
         {
-            if( !DiagramHelper::isSupportingFloorAndWall( getFirstDiagram() ) )
-                return bRet;
+            if( !getFirstDiagram()->isSupportingFloorAndWall() )
+                return;
         }
 
         //convert properties to ItemSet
@@ -738,14 +740,14 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
 
         rtl::Reference<::chart::ChartModel> xChartDoc(getChartModel());
 
-        std::unique_ptr<wrapper::ItemConverter> pItemConverter(
+        std::shared_ptr<wrapper::ItemConverter> pItemConverter(
             createItemConverter( rObjectCID, xChartDoc, m_xCC,
                                  m_pDrawModelWrapper->getSdrModel(),
-                                 comphelper::getFromUnoTunnel<ExplicitValueProvider>(m_xChartView),
+                                 m_xChartView.get(),
                                  pRefSizeProv.get()));
 
         if (!pItemConverter)
-            return bRet;
+            return;
 
         SfxItemSet aItemSet = pItemConverter->CreateEmptyItemSet();
 
@@ -760,10 +762,10 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
         ViewElementListProvider aViewElementListProvider( m_pDrawModelWrapper.get() );
 
         SolarMutexGuard aGuard;
-        SchAttribTabDlg aDlg(
-                GetChartFrame(), &aItemSet, &aDialogParameter,
-                &aViewElementListProvider,
-                xChartDoc );
+        std::shared_ptr<SchAttribTabDlg> aDlgPtr = std::make_shared<SchAttribTabDlg>(
+            GetChartFrame(), &aItemSet, &aDialogParameter,
+            &aViewElementListProvider,
+            xChartDoc);
 
         if(aDialogParameter.HasSymbolProperties())
         {
@@ -782,25 +784,26 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
             sal_Int32 const nStandardSymbol=0;//@todo get from somewhere
             std::optional<Graphic> oAutoSymbolGraphic(std::in_place, aViewElementListProvider.GetSymbolGraphic( nStandardSymbol, &aSymbolShapeProperties ) );
             // note: the dialog takes the ownership of pSymbolShapeProperties and pAutoSymbolGraphic
-            aDlg.setSymbolInformation( std::move(aSymbolShapeProperties), std::move(oAutoSymbolGraphic) );
+            aDlgPtr->setSymbolInformation( std::move(aSymbolShapeProperties), std::move(oAutoSymbolGraphic) );
         }
         if( aDialogParameter.HasStatisticProperties() )
         {
-            aDlg.SetAxisMinorStepWidthForErrorBarDecimals(
+            aDlgPtr->SetAxisMinorStepWidthForErrorBarDecimals(
                 InsertErrorBarsDialog::getAxisMinorStepWidthForErrorBarDecimals( xChartDoc, m_xChartView, rObjectCID ) );
         }
 
         //open the dialog
-        if (aDlg.run() == RET_OK || (bSuccessOnUnchanged && aDlg.DialogWasClosedWithOK()))
+        SfxTabDialogController::runAsync(aDlgPtr, [aDlgPtr, xChartDoc, pItemConverter, bSuccessOnUnchanged, aUndoGuard] (int nResult)
         {
-            const SfxItemSet* pOutItemSet = aDlg.GetOutputItemSet();
-            if(pOutItemSet)
-            {
-                ControllerLockGuardUNO aCLGuard(xChartDoc);
-                (void)pItemConverter->ApplyItemSet(*pOutItemSet); //model should be changed now
-                bRet = true;
+            if (nResult == RET_OK || (bSuccessOnUnchanged && aDlgPtr->DialogWasClosedWithOK())) {
+                const SfxItemSet* pOutItemSet = aDlgPtr->GetOutputItemSet();
+                if(pOutItemSet) {
+                    ControllerLockGuardUNO aCLGuard(xChartDoc);
+                    (void)pItemConverter->ApplyItemSet(*pOutItemSet); //model should be changed now
+                    aUndoGuard->commit();
+                }
             }
-        }
+        });
     }
     catch( const util::CloseVetoException& )
     {
@@ -808,7 +811,6 @@ bool ChartController::executeDlg_ObjectProperties_withoutUndoGuard(
     catch( const uno::RuntimeException& )
     {
     }
-    return bRet;
 }
 
 void ChartController::executeDispatch_View3D()

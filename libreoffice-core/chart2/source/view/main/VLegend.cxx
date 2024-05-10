@@ -23,6 +23,7 @@
 #include <PropertyMapper.hxx>
 #include <ChartModel.hxx>
 #include <ObjectIdentifier.hxx>
+#include <FormattedString.hxx>
 #include <RelativePositionHelper.hxx>
 #include <ShapeFactory.hxx>
 #include <RelativeSizeHelper.hxx>
@@ -160,22 +161,17 @@ awt::Size lcl_createTextShapes(
         try
         {
             OUString aLabelString;
-            Sequence< Reference< XFormattedString2 > > aLabelSeq = rEntry.aLabel;
-            for( sal_Int32 i = 0; i < aLabelSeq.getLength(); ++i )
+            if (rEntry.xLabel)
             {
-                // todo: support more than one text range
-                if( i == 1 )
-                    break;
-
                 // tdf#150034 limit legend label text
-                if (aLabelSeq[i]->getString().getLength() > 520)
+                if (rEntry.xLabel->getString().getLength() > 520)
                 {
-                    sal_Int32 nIndex = aLabelSeq[i]->getString().indexOf(' ', 500);
-                    aLabelSeq[i]->setString(
-                        aLabelSeq[i]->getString().copy(0, nIndex > 500 ? nIndex : 500));
+                    sal_Int32 nIndex = rEntry.xLabel->getString().indexOf(' ', 500);
+                    rEntry.xLabel->setString(
+                        rEntry.xLabel->getString().copy(0, nIndex > 500 ? nIndex : 500));
                 }
 
-                aLabelString += aLabelSeq[i]->getString();
+                aLabelString += rEntry.xLabel->getString();
                 // workaround for Issue #i67540#
                 if( aLabelString.isEmpty())
                     aLabelString = " ";
@@ -424,8 +420,8 @@ awt::Size lcl_placeLegendEntries(
                 {
                     try
                     {
-                        OUString aLabelString = rEntries[0].aLabel[0]->getString();
-                        static const OUStringLiteral sDots = u"...";
+                        OUString aLabelString = rEntries[0].xLabel->getString();
+                        static constexpr OUString sDots = u"..."_ustr;
                         for (sal_Int32 nNewLen = aLabelString.getLength() - sDots.getLength(); nNewLen > 0; )
                         {
                             OUString aNewLabel = aLabelString.subView(0, nNewLen) + sDots;
@@ -439,7 +435,7 @@ awt::Size lcl_placeLegendEntries(
                                 if (rRemainingSpace.Width - nWidth >= 0)
                                 {
                                     aTextShapes.push_back(xEntry);
-                                    rEntries[0].aLabel[0]->setString(aNewLabel);
+                                    rEntries[0].xLabel->setString(aNewLabel);
                                     aRowHeights[0] = nSumHeight;
                                     aColumnWidths[0] = nWidth;
                                     break;
@@ -811,7 +807,7 @@ bool lcl_shouldSymbolsBePlacedOnTheLeftSide( const Reference< beans::XPropertySe
     bool bSymbolsLeftSide = true;
     try
     {
-        if( SvtCTLOptions().IsCTLFontEnabled() )
+        if( SvtCTLOptions::IsCTLFontEnabled() )
         {
             if(xLegendProp.is())
             {

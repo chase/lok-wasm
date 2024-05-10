@@ -35,35 +35,121 @@
 #include <toxmgr.hxx>
 #include <swabstdlg.hxx>
 
+#include <ndtxt.hxx>
+#include <fmtfld.hxx>
+#include <IDocumentFieldsAccess.hxx>
+
 void SwTextShell::ExecIdx(SfxRequest const &rReq)
 {
-    const SfxItemSet *pArgs = rReq.GetArgs();
+    const SfxItemSet* pArgs = rReq.GetArgs();
     const SfxPoolItem* pItem = nullptr;
     const sal_uInt16 nSlot = rReq.GetSlot();
-    if(pArgs)
-       pArgs->GetItemState(nSlot, false, &pItem );
+    if (pArgs)
+        pArgs->GetItemState(nSlot, false, &pItem);
 
-    SfxViewFrame* pVFrame = GetView().GetViewFrame();
+    SfxViewFrame& rVFrame = GetView().GetViewFrame();
 
-    switch( nSlot )
+    switch (nSlot)
     {
-        case FN_EDIT_AUTH_ENTRY_DLG :
+        case FN_EDIT_AUTH_ENTRY_DLG:
         {
-            SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
-            ScopedVclPtr<VclAbstractDialog> pDlg(pFact->CreateSwAutoMarkDialog(GetView().GetFrameWeld(), GetShell()));
-            pDlg->Execute();
+            SwWrtShell& rShell = GetShell();
+
+            const bool bWasViewLocked = rShell.IsViewLocked();
+            rShell.LockView(true);
+
+            if (const SwField* const pCurrentField = rShell.GetCurField();
+                !rShell.HasReadonlySel() && pCurrentField != nullptr
+                && pCurrentField->GetTyp()->Which() == SwFieldIds::TableOfAuthorities)
+            {
+                // Since the cursor is on a bibliography mark (e.g. "[1]"), open the edit dialog as usual
+                SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
+                ScopedVclPtr<VclAbstractDialog> pDlg(
+                    pFact->CreateSwAutoMarkDialog(GetView().GetFrameWeld(), rShell));
+                pDlg->Execute();
+            }
+            else if (const SwTOXBase* const pCurrentTOX = rShell.GetCurTOX();
+                     pCurrentTOX != nullptr && pCurrentTOX->GetType() == TOX_AUTHORITIES
+                     && (rShell.GetCursor()->GetPoint()->GetNode()
+                            .FindSectionNode()->GetSection().GetType()
+                         == SectionType::ToxContent))
+            {
+                // Since the cursor is in the bibliography table, find the first mark that would match the given row
+                const SwNode* const pTableRowNode = &rShell.GetCursor()->GetPoint()->GetNode();
+                const OUString& rTableRowText
+                    = static_cast<const SwTextNode*>(pTableRowNode)->GetText();
+
+                const SwFieldType* pAuthField
+                    = rShell.GetDoc()->getIDocumentFieldsAccess().GetFieldType(
+                        SwFieldIds::TableOfAuthorities, OUString(), false);
+
+                if (pAuthField)
+                {
+                    bool bMatchingMarkFound = false;
+                    {
+                        std::vector<SwFormatField*> vFields;
+                        pAuthField->GatherFields(vFields);
+                        for (auto pFormatField : vFields)
+                        {
+                            if (const SwField* pIteratedField = nullptr;
+                                pFormatField != nullptr
+                                && (pIteratedField = pFormatField->GetField()) != nullptr
+                                && (pIteratedField->GetTyp()->Which()
+                                    == SwFieldIds::TableOfAuthorities))
+                            {
+                                OUString sMarkText
+                                    = static_cast<const SwAuthorityField*>(pIteratedField)
+                                          ->GetAuthority(rShell.GetLayout(),
+                                                         &pCurrentTOX->GetTOXForm());
+
+                                if (sMarkText == rTableRowText)
+                                {
+                                    // Since the text generated from the mark would match the given row
+                                    //  move cursor to it, set bMatchingMarkFound and break
+                                    rShell.GotoFormatField(*pFormatField);
+                                    bMatchingMarkFound = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (bMatchingMarkFound)
+                    {
+                        // Since matching mark has been found and cursor has been moved to it,
+                        //  open the edit dialog
+                        SwAbstractDialogFactory* pFact = SwAbstractDialogFactory::Create();
+                        ScopedVclPtr<VclAbstractDialog> pDlg(
+                            pFact->CreateSwAutoMarkDialog(GetView().GetFrameWeld(), rShell));
+                        pDlg->Execute();
+
+                        // Refresh TOX
+                        rShell.GetCursor_()->GetPoint()->Assign(*pTableRowNode);
+                        rShell.UpdateTableOf(*pCurrentTOX);
+                    }
+                    else
+                    {
+                        // I think this ideally should be a pop-up warning, right?
+                        SAL_WARN("sw", "No matching bibliography mark found. "
+                                        "This feature is only guaranteed to work if the bibliography table is up to date.");
+                    }
+                }
+            }
+
+            if (!bWasViewLocked)
+                rShell.LockView(false);
         }
         break;
         case FN_INSERT_AUTH_ENTRY_DLG:
         {
             // no BASIC support
-            pVFrame->ToggleChildWindow(FN_INSERT_AUTH_ENTRY_DLG);
+            rVFrame.ToggleChildWindow(FN_INSERT_AUTH_ENTRY_DLG);
             Invalidate(rReq.GetSlot());
         }
         break;
         case FN_INSERT_IDX_ENTRY_DLG:
         {
-            pVFrame->ToggleChildWindow(FN_INSERT_IDX_ENTRY_DLG);
+            rVFrame.ToggleChildWindow(FN_INSERT_IDX_ENTRY_DLG);
             Invalidate(rReq.GetSlot());
         }
         break;
@@ -150,11 +236,11 @@ void SwTextShell::ExecIdx(SfxRequest const &rReq)
 void SwTextShell::GetIdxState(SfxItemSet &rSet)
 {
     SwWrtShell& rSh = GetShell();
-    SfxViewFrame* pVFrame = GetView().GetViewFrame();
+    SfxViewFrame& rVFrame = GetView().GetViewFrame();
     SwInsertIdxMarkWrapper *pIdxMrk = static_cast<SwInsertIdxMarkWrapper*>(
-                        pVFrame->GetChildWindow(FN_INSERT_IDX_ENTRY_DLG));
+                        rVFrame.GetChildWindow(FN_INSERT_IDX_ENTRY_DLG));
 
-    SfxChildWindow* pAuthMark = pVFrame->GetChildWindow(FN_INSERT_AUTH_ENTRY_DLG);
+    SfxChildWindow* pAuthMark = rVFrame.GetChildWindow(FN_INSERT_AUTH_ENTRY_DLG);
 
     const bool bHtmlMode = 0 != ::GetHtmlMode( GetView().GetDocShell() );
     const SwTOXBase* pBase = nullptr;
@@ -169,7 +255,10 @@ void SwTextShell::GetIdxState(SfxItemSet &rSet)
         }
 
         rSet.DisableItem( FN_EDIT_IDX_ENTRY_DLG );
-        rSet.DisableItem( FN_EDIT_AUTH_ENTRY_DLG );
+        if(pBase == nullptr // tdf#72955: Hide the "Bibliography Entry" command if there is no TOX in the selection
+            || pBase->GetType() != TOX_AUTHORITIES // or if it is not a bibliography table
+            || (rSh.GetCursor()->GetPoint()->GetNode().FindSectionNode()->GetSection().GetType() != SectionType::ToxContent)) // or if it's the heading
+            rSet.DisableItem(FN_EDIT_AUTH_ENTRY_DLG);
 
         if(!pIdxMrk)
             rSet.DisableItem( FN_INSERT_IDX_ENTRY_DLG );

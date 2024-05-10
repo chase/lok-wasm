@@ -435,6 +435,7 @@ continue-numbering
 contour-path
 contour-polygon
 contrast
+contributor
 control
 conversion-mode
 conversion-type
@@ -459,6 +460,7 @@ countnums
 country
 country-asian
 country-complex
+coverage
 covered-table-cell
 create-date
 create-date-string
@@ -1540,6 +1542,7 @@ rel-height
 rel-height-rel
 rel-width
 rel-width-rel
+relation
 relative
 relative-tab-stop-position
 reln
@@ -1561,6 +1564,7 @@ right-text
 right-to-left
 right-arc
 right-circle
+rights
 ring
 role
 roll-from-bottom
@@ -3224,13 +3228,17 @@ display-units
 display-units-built-in-unit
 external-data
 exponent-interval
+exponent-lowercase
 forced-exponent-sign
+blank-exponent-digits
 min-decimal-places
 max-denominator-value
 max-numerator-digits
 zeros-numerator-digits
 zeros-denominator-digits
 integer-fraction-delimiter
+max-blank-integer-digits
+blank-width-char
 reference-language
 newline
 creator-initials
@@ -3240,6 +3248,8 @@ page-content-top
 page-content-bottom
 margin-gutter
 local-url
+target-type
+target-url
 dir
 displaystyle
 infinity

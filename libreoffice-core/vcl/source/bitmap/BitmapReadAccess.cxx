@@ -24,7 +24,12 @@
 #include <svdata.hxx>
 #include <salinst.hxx>
 
-BitmapReadAccess::BitmapReadAccess(Bitmap& rBitmap, BitmapAccessMode nMode)
+BitmapReadAccess::BitmapReadAccess(const AlphaMask& rBitmap, BitmapAccessMode nMode)
+    : BitmapReadAccess(rBitmap.GetBitmap(), nMode)
+{
+}
+
+BitmapReadAccess::BitmapReadAccess(const Bitmap& rBitmap, BitmapAccessMode nMode)
     : BitmapInfoAccess(rBitmap, nMode)
     , mFncGetPixel(nullptr)
     , mFncSetPixel(nullptr)
@@ -58,8 +63,6 @@ FncGetPixel BitmapReadAccess::GetPixelFunction(ScanlineFormat nFormat)
     {
         case ScanlineFormat::N1BitMsbPal:
             return GetPixelForN1BitMsbPal;
-        case ScanlineFormat::N1BitLsbPal:
-            return GetPixelForN1BitLsbPal;
         case ScanlineFormat::N8BitPal:
             return GetPixelForN8BitPal;
         case ScanlineFormat::N24BitTcBgr:
@@ -100,8 +103,6 @@ FncSetPixel BitmapReadAccess::SetPixelFunction(ScanlineFormat nFormat)
     {
         case ScanlineFormat::N1BitMsbPal:
             return SetPixelForN1BitMsbPal;
-        case ScanlineFormat::N1BitLsbPal:
-            return SetPixelForN1BitLsbPal;
         case ScanlineFormat::N8BitPal:
             return SetPixelForN8BitPal;
         case ScanlineFormat::N24BitTcBgr:
@@ -261,23 +262,6 @@ void BitmapReadAccess::SetPixelForN1BitMsbPal(const Scanline pScanline, tools::L
         rByte |= 1 << (7 - (nX & 7));
     else
         rByte &= ~(1 << (7 - (nX & 7)));
-}
-
-BitmapColor BitmapReadAccess::GetPixelForN1BitLsbPal(ConstScanline pScanline, tools::Long nX,
-                                                     const ColorMask&)
-{
-    return BitmapColor(pScanline[nX >> 3] & (1 << (nX & 7)) ? 1 : 0);
-}
-
-void BitmapReadAccess::SetPixelForN1BitLsbPal(const Scanline pScanline, tools::Long nX,
-                                              const BitmapColor& rBitmapColor, const ColorMask&)
-{
-    sal_uInt8& rByte = pScanline[nX >> 3];
-
-    if (rBitmapColor.GetIndex() & 1)
-        rByte |= 1 << (nX & 7);
-    else
-        rByte &= ~(1 << (nX & 7));
 }
 
 BitmapColor BitmapReadAccess::GetPixelForN8BitPal(ConstScanline pScanline, tools::Long nX,

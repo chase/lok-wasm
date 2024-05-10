@@ -161,14 +161,14 @@ void SwDocShell::ToggleLayoutMode(SwView* pView)
     GetDoc()->getIDocumentSettingAccess().set(DocumentSettingId::BROWSE_MODE, rViewOptions.getBrowseMode());
     UpdateFontList();  // Why is this necessary here?
 
-    pView->GetViewFrame()->GetBindings().Invalidate(FN_SHADOWCURSOR);
+    pView->GetViewFrame().GetBindings().Invalidate(FN_SHADOWCURSOR);
     if( !GetDoc()->getIDocumentDeviceAccess().getPrinter( false ) )
         pView->SetPrinter( GetDoc()->getIDocumentDeviceAccess().getPrinter( false ), SfxPrinterChangeFlags::PRINTER | SfxPrinterChangeFlags::JOBSETUP );
     GetDoc()->CheckDefaultPageFormat();
     SfxViewFrame *pTmpFrame = SfxViewFrame::GetFirst(this, false);
     while (pTmpFrame)
     {
-        if( pTmpFrame != pView->GetViewFrame() )
+        if( pTmpFrame != &pView->GetViewFrame() )
         {
             pTmpFrame->DoClose();
             pTmpFrame = SfxViewFrame::GetFirst(this, false);
@@ -506,7 +506,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                         nSlotId = SID_VIEWSHELL2;
 
                     if( pCurrView && pCurrView->GetDocShell() == this )
-                        pTmpFrame = pCurrView->GetViewFrame();
+                        pTmpFrame = &pCurrView->GetViewFrame();
                     else
                         pTmpFrame = SfxViewFrame::GetFirst( this );
 
@@ -631,7 +631,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     aOpt.SetMerge( !bMerge );
 
                     SetError(LoadStylesFromFile(aFileName, aOpt, false));
-                    if ( !GetError() )
+                    if ( !GetErrorIgnoreWarning() )
                         rReq.Done();
                 }
             }
@@ -641,7 +641,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 SfxViewShell* pViewShell = GetView()
                                             ? static_cast<SfxViewShell*>(GetView())
                                             : SfxViewShell::Current();
-                SfxViewFrame*  pViewFrame = pViewShell->GetViewFrame();
+                SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
                 SwSrcView* pSrcView = dynamic_cast< SwSrcView *>( pViewShell );
                 if(!pSrcView)
                 {
@@ -660,7 +660,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                         std::shared_ptr<const SfxFilter> pFlt = GetMedium()->GetFilter();
                         if(!pFlt || pFlt->GetUserData() != pHtmlFlt->GetUserData())
                         {
-                            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(pViewFrame->GetFrameWeld(), "modules/swriter/ui/saveashtmldialog.ui"));
+                            std::unique_ptr<weld::Builder> xBuilder(Application::CreateBuilder(rViewFrame.GetFrameWeld(), "modules/swriter/ui/saveashtmldialog.ui"));
                             std::unique_ptr<weld::MessageDialog> xQuery(xBuilder->weld_message_dialog("SaveAsHTMLDialog"));
                             if (RET_YES == xQuery->run())
                                 bLocalHasName = false;
@@ -683,10 +683,11 @@ void SwDocShell::Execute(SfxRequest& rReq)
                         OUString sPath = aDlgHelper.GetPath();
                         SfxStringItem aName(SID_FILE_NAME, sPath);
                         SfxStringItem aFilter(SID_FILTER_NAME, pHtmlFlt->GetName());
-                        const SfxBoolItem* pBool = static_cast<const SfxBoolItem*>(
-                                pViewFrame->GetDispatcher()->ExecuteList(
-                                        SID_SAVEASDOC, SfxCallMode::SYNCHRON,
-                                        { &aName, &aFilter }));
+                        const SfxPoolItemHolder aResult(
+                            rViewFrame.GetDispatcher()->ExecuteList(
+                            SID_SAVEASDOC, SfxCallMode::SYNCHRON,
+                            { &aName, &aFilter }));
+                        const SfxBoolItem* pBool(static_cast<const SfxBoolItem*>(aResult.getItem()));
                         if(!pBool || !pBool->GetValue())
                             break;
                     }
@@ -723,8 +724,8 @@ void SwDocShell::Execute(SfxRequest& rReq)
                         nSlot = SID_VIEWSHELL0;
                     }
                 }
-                if(nSlot)
-                    pViewFrame->GetDispatcher()->Execute(nSlot, SfxCallMode::SYNCHRON);
+                if (nSlot)
+                    rViewFrame.GetDispatcher()->Execute(nSlot, SfxCallMode::SYNCHRON);
                 if(bSetModified)
                     GetDoc()->getIDocumentState().SetModified();
                 if(pSavePrinter)
@@ -732,10 +733,10 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     GetDoc()->getIDocumentDeviceAccess().setPrinter( pSavePrinter, true, true);
                     //pSavePrinter must not be deleted again
                 }
-                pViewFrame->GetBindings().SetState(SfxBoolItem(SID_SOURCEVIEW, false)); // not SID_VIEWSHELL2
-                pViewFrame->GetBindings().Invalidate( SID_NEWWINDOW );
-                pViewFrame->GetBindings().Invalidate( SID_BROWSER_MODE );
-                pViewFrame->GetBindings().Invalidate( FN_PRINT_LAYOUT );
+                rViewFrame.GetBindings().SetState(SfxBoolItem(SID_SOURCEVIEW, false)); // not SID_VIEWSHELL2
+                rViewFrame.GetBindings().Invalidate( SID_NEWWINDOW );
+                rViewFrame.GetBindings().Invalidate( SID_BROWSER_MODE );
+                rViewFrame.GetBindings().Invalidate( FN_PRINT_LAYOUT );
             }
             break;
             case SID_GET_COLORLIST:
@@ -768,7 +769,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                     SvMemoryStream *pStrm = new SvMemoryStream();
                     pStrm->SetBufferSize( 16348 );
                     SwWriter aWrt( *pStrm, *pSmryDoc );
-                    ErrCode eErr = aWrt.Write( xWrt );
+                    ErrCodeMsg eErr = aWrt.Write( xWrt );
                     if( !eErr.IgnoreWarning() )
                     {
                         uno::Reference< uno::XComponentContext > xContext = ::comphelper::getProcessComponentContext();
@@ -826,7 +827,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 std::unique_ptr<SvMemoryStream> pStrm (new SvMemoryStream());
                 pStrm->SetBufferSize( 16348 );
                 SwWriter aWrt( *pStrm, *GetDoc() );
-                ErrCode eErr = aWrt.Write( xWrt );
+                ErrCodeMsg eErr = aWrt.Write( xWrt );
                 EnableSetModified( bEnable );
                 if( !eErr.IgnoreWarning() )
                 {
@@ -874,8 +875,11 @@ void SwDocShell::Execute(SfxRequest& rReq)
             }
             break;
             case SID_SPELLCHECKER_CHANGED:
+            {
                 //! false, true, true is on the save side but a probably overdone
                 SwModule::CheckSpellChanges(false, true, true, false );
+                Broadcast(SfxHint(SfxHintId::LanguageChanged));
+            }
             break;
 
         case SID_MAIL_PREPAREEXPORT:
@@ -1137,7 +1141,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
                                 //search for the view that created the call
                                 if(pViewShell->GetObjectShell() == this && pViewShell->GetDispatcher())
                                 {
-                                    SfxFrameItem aFrameItem( SID_DOCFRAME, pViewShell->GetViewFrame() );
+                                    SfxFrameItem aFrameItem(SID_DOCFRAME, &pViewShell->GetViewFrame());
                                     SfxDispatcher* pDispatch = pViewShell->GetDispatcher();
                                     pDispatch->ExecuteList(SID_OPENDOC,
                                         SfxCallMode::ASYNCHRON,
@@ -1279,8 +1283,8 @@ void SwDocShell::Execute(SfxRequest& rReq)
                 else
                 {
                     SfxViewShell* pViewShell = GetView() ? GetView() : SfxViewShell::Current();
-                    SfxBindings& rBindings( pViewShell->GetViewFrame()->GetBindings() );
-                    auto xDlg = std::make_shared<SwWatermarkDialog>(pViewShell->GetViewFrame()->GetFrameWeld(),
+                    SfxBindings& rBindings( pViewShell->GetViewFrame().GetBindings() );
+                    auto xDlg = std::make_shared<SwWatermarkDialog>(pViewShell->GetViewFrame().GetFrameWeld(),
                                                                                   rBindings);
                     weld::DialogController::runAsync(xDlg, [](sal_Int32 /*nResult*/){});
                 }
@@ -1291,7 +1295,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
         {
             const SfxStringItem* pFile = rReq.GetArg<SfxStringItem>( SID_NOTEBOOKBAR );
             SfxViewShell* pViewShell = GetView()? GetView(): SfxViewShell::Current();
-            SfxBindings& rBindings( pViewShell->GetViewFrame()->GetBindings() );
+            SfxBindings& rBindings( pViewShell->GetViewFrame().GetBindings() );
 
             if ( SfxNotebookBar::IsActive() )
                 sfx2::SfxNotebookBar::ExecMethod( rBindings, pFile ? pFile->GetValue() : "" );
@@ -1328,13 +1332,13 @@ void SwDocShell::Execute(SfxRequest& rReq)
                         SwTableNode* pTableNd =
                             pRedline->GetPoint()->GetNode().FindTableNode();
                         if ( pTableNd && pTableNd !=
-                                pOldTableNd && pTableNd->GetTable().HasDeletedRow() )
+                                pOldTableNd && pTableNd->GetTable().HasDeletedRowOrCell() )
                         {
                             SfxBoolItem aShow(FN_REDLINE_SHOW, true);
                             SfxViewShell* pViewShell = GetView()
                                     ? GetView()
                                     : SfxViewShell::Current();
-                            pViewShell->GetViewFrame()->GetDispatcher()->ExecuteList(
+                            pViewShell->GetViewFrame().GetDispatcher()->ExecuteList(
                                     FN_REDLINE_SHOW, SfxCallMode::SYNCHRON|SfxCallMode::RECORD,
                                     { &aShow });
                             bChangedHideChanges = true;
@@ -1361,7 +1365,7 @@ void SwDocShell::Execute(SfxRequest& rReq)
             {
                 SfxBoolItem aShow(FN_REDLINE_SHOW, false);
                 SfxViewShell* pViewShell = GetView()? GetView(): SfxViewShell::Current();
-                pViewShell->GetViewFrame()->GetDispatcher()->ExecuteList(
+                pViewShell->GetViewFrame().GetDispatcher()->ExecuteList(
                         FN_REDLINE_SHOW, SfxCallMode::SYNCHRON|SfxCallMode::RECORD, { &aShow });
             }
 
@@ -1392,6 +1396,8 @@ bool SwDocShell::DdeSetData( const OUString& rItem, const OUString& /*rMimeType*
 
 ::sfx2::SvLinkSource* SwDocShell::DdeCreateLinkSource( const OUString& rItem )
 {
+    if(officecfg::Office::Common::Security::Scripting::DisableActiveContent::get())
+        return nullptr;
     return m_xDoc->getIDocumentLinksAdministration().CreateLinkSource( rItem );
 }
 
@@ -1465,14 +1471,14 @@ void SwDocShell::UpdateChildWindows()
     // if necessary newly initialize Fielddlg (i.e. for TYP_SETVAR)
     if(!GetView())
         return;
-    SfxViewFrame* pVFrame = GetView()->GetViewFrame();
-    SwFieldDlgWrapper *pWrp = static_cast<SwFieldDlgWrapper*>(pVFrame->
+    SfxViewFrame& rVFrame = GetView()->GetViewFrame();
+    SwFieldDlgWrapper *pWrp = static_cast<SwFieldDlgWrapper*>(rVFrame.
             GetChildWindow( SwFieldDlgWrapper::GetChildWindowId() ));
     if( pWrp )
         pWrp->ReInitDlg( this );
 
     // if necessary newly initialize RedlineDlg
-    SwRedlineAcceptChild *pRed = static_cast<SwRedlineAcceptChild*>(pVFrame->
+    SwRedlineAcceptChild *pRed = static_cast<SwRedlineAcceptChild*>(rVFrame.
             GetChildWindow( SwRedlineAcceptChild::GetChildWindowId() ));
     if( pRed )
         pRed->ReInitDlg( this );
@@ -1526,7 +1532,7 @@ void SwDocShell::ReloadFromHtml( const OUString& rStreamName, SwSrcView* pSrcVie
                     SfxUnoAnyItem aShellItem( SID_BASICIDE_ARG_DOCUMENT_MODEL, Any( GetModel() ) );
                     OUString aLibName( pBasic->GetName() );
                     SfxStringItem aLibNameItem( SID_BASICIDE_ARG_LIBNAME, aLibName );
-                    pSrcView->GetViewFrame()->GetDispatcher()->ExecuteList(
+                    pSrcView->GetViewFrame().GetDispatcher()->ExecuteList(
                                             SID_BASICIDE_LIBREMOVED,
                                             SfxCallMode::SYNCHRON,
                                             { &aShellItem, &aLibNameItem });
@@ -1565,8 +1571,8 @@ void SwDocShell::ReloadFromHtml( const OUString& rStreamName, SwSrcView* pSrcVie
 
     SfxViewShell* pViewShell = GetView() ? static_cast<SfxViewShell*>(GetView())
                                          : SfxViewShell::Current();
-    SfxViewFrame*  pViewFrame = pViewShell->GetViewFrame();
-    pViewFrame->GetDispatcher()->Execute( SID_VIEWSHELL0, SfxCallMode::SYNCHRON );
+    SfxViewFrame& rViewFrame = pViewShell->GetViewFrame();
+    rViewFrame.GetDispatcher()->Execute( SID_VIEWSHELL0, SfxCallMode::SYNCHRON );
 
     SubInitNew();
 
@@ -1600,9 +1606,9 @@ void SwDocShell::ReloadFromHtml( const OUString& rStreamName, SwSrcView* pSrcVie
         m_xDoc->getIDocumentState().ResetModified();
 }
 
-ErrCode SwDocShell::LoadStylesFromFile(const OUString& rURL, SwgReaderOption& rOpt, bool bUnoCall)
+ErrCodeMsg SwDocShell::LoadStylesFromFile(const OUString& rURL, SwgReaderOption& rOpt, bool bUnoCall)
 {
-    ErrCode nErr = ERRCODE_NONE;
+    ErrCodeMsg nErr = ERRCODE_NONE;
 
     // Set filter:
     SfxFilterMatcher aMatcher( SwDocShell::Factory().GetFactoryName() );
@@ -1729,7 +1735,7 @@ int SwFindDocShell( SfxObjectShellRef& xDocSh,
         if( pMed && pMed->GetURLObject() == aTmpObj )
         {
             const SfxPoolItem* pItem;
-            if( ( SfxItemState::SET == pMed->GetItemSet()->GetItemState(
+            if( ( SfxItemState::SET == pMed->GetItemSet().GetItemState(
                                             SID_VERSION, false, &pItem ) )
                     ? (nVersion == static_cast<const SfxInt16Item*>(pItem)->GetValue())
                     : !nVersion )
@@ -1756,7 +1762,7 @@ int SwFindDocShell( SfxObjectShellRef& xDocSh,
         xMed->Download(); // Touch the medium (download it)
 
     std::shared_ptr<const SfxFilter> pSfxFlt;
-    if (!xMed->GetError())
+    if (!xMed->GetErrorIgnoreWarning())
     {
         SfxFilterMatcher aMatcher( rFilter == "writerglobal8"
             ? SwGlobalDocShell::Factory().GetFactoryName()
@@ -1769,10 +1775,10 @@ int SwFindDocShell( SfxObjectShellRef& xDocSh,
         }
 
         if( nVersion )
-            xMed->GetItemSet()->Put( SfxInt16Item( SID_VERSION, nVersion ));
+            xMed->GetItemSet().Put( SfxInt16Item( SID_VERSION, nVersion ));
 
         if( !rPasswd.isEmpty() )
-            xMed->GetItemSet()->Put( SfxStringItem( SID_PASSWORD, rPasswd ));
+            xMed->GetItemSet().Put( SfxStringItem( SID_PASSWORD, rPasswd ));
 
         if( !pSfxFlt )
             aMatcher.DetectFilter( *xMed, pSfxFlt );

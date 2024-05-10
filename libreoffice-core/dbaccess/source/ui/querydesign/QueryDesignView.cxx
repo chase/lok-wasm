@@ -97,7 +97,7 @@ namespace
                                     bool bHaving,
                                     bool _bAddOrOnOneLine);
 
-    OUString quoteTableAlias(bool _bQuote, const OUString& _sAliasName, const OUString& _sQuote)
+    OUString quoteTableAlias(bool _bQuote, const OUString& _sAliasName, std::u16string_view _sQuote)
     {
         OUString sRet;
         if ( _bQuote && !_sAliasName.isEmpty() )
@@ -161,12 +161,8 @@ namespace
             OUString aSourceFieldName(_aDragLeft->GetField());
             OUString aDestFieldName(_aDragRight->GetField());
             // the connection could point on the other side
-            if(pConn->GetSourceWin() == _aDragRight->GetTabWindow())
-            {
-                OUString aTmp(aSourceFieldName);
-                aSourceFieldName = aDestFieldName;
-                aDestFieldName = aTmp;
-            }
+            if (pConn->GetSourceWin() == _aDragRight->GetTabWindow())
+                std::swap(aSourceFieldName, aDestFieldName);
             pConn->GetData()->AppendConnLine( aSourceFieldName,aDestFieldName);
             pConn->UpdateLineList();
             // Modified-Flag
@@ -291,11 +287,12 @@ namespace
                 {
                     if(!aCondition.isEmpty())
                         aCondition.append(C_AND);
-                    aCondition.append(quoteTableAlias(true,pData->GetAliasName(JTCS_FROM),aQuote));
-                    aCondition.append(::dbtools::quoteName(aQuote, lineData->GetFieldName(JTCS_FROM) ));
-                    aCondition.append(" = ");
-                    aCondition.append(quoteTableAlias(true,pData->GetAliasName(JTCS_TO),aQuote));
-                    aCondition.append(::dbtools::quoteName(aQuote, lineData->GetFieldName(JTCS_TO) ));
+                    aCondition.append(
+                        quoteTableAlias(true,pData->GetAliasName(JTCS_FROM),aQuote)
+                        + ::dbtools::quoteName(aQuote, lineData->GetFieldName(JTCS_FROM) )
+                        + " = "
+                        + quoteTableAlias(true,pData->GetAliasName(JTCS_TO),aQuote)
+                        + ::dbtools::quoteName(aQuote, lineData->GetFieldName(JTCS_TO) ));
                 }
             }
             catch(SQLException&)
@@ -668,8 +665,7 @@ namespace
                         field->isNumericOrAggregateFunction()      ||
                         field->isOtherFunction()))
                     {
-                        aTmpStr.append(" AS ");
-                        aTmpStr.append(::dbtools::quoteName(aQuote, rFieldAlias));
+                        aTmpStr.append(" AS " + ::dbtools::quoteName(aQuote, rFieldAlias));
                     }
                     aFieldListStr.append(aTmpStr);
                     aTmpStr.setLength(0);
@@ -2771,14 +2767,11 @@ OUString OQueryDesignView::getStatement()
     OUStringBuffer aSqlCmd("SELECT ");
     if(rController.isDistinct())
         aSqlCmd.append(" DISTINCT ");
-    aSqlCmd.append(aFieldListStr);
-    aSqlCmd.append(" FROM ");
-    aSqlCmd.append(aTableListStr);
+    aSqlCmd.append(aFieldListStr + " FROM " + aTableListStr);
 
     if (!aCriteriaListStr.isEmpty())
     {
-        aSqlCmd.append(" WHERE ");
-        aSqlCmd.append(aCriteriaListStr);
+        aSqlCmd.append(" WHERE " + aCriteriaListStr);
     }
     Reference<XDatabaseMetaData> xMeta;
     if ( xConnection.is() )
@@ -2791,8 +2784,7 @@ OUString OQueryDesignView::getStatement()
     // ----------------- construct GroupBy and attach ------------
     if(!aHavingStr.isEmpty())
     {
-        aSqlCmd.append(" HAVING ");
-        aSqlCmd.append(aHavingStr);
+        aSqlCmd.append(" HAVING " + aHavingStr);
     }
     // ----------------- construct sorting and attach ------------
     OUString sOrder;

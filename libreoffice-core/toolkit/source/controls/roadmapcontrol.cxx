@@ -20,7 +20,7 @@
 
 #include <controls/roadmapcontrol.hxx>
 #include <controls/roadmapentry.hxx>
-#include <toolkit/helper/property.hxx>
+#include <helper/property.hxx>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 
@@ -38,18 +38,6 @@ namespace toolkit
 
 
 //  helper
-
-
-static void lcl_throwIllegalArgumentException( )
-{   // throwing is expensive (in terms of code size), thus we hope the compiler does not inline this...
-    throw IllegalArgumentException();
-}
-
-static void lcl_throwIndexOutOfBoundsException( )
-{   // throwing is expensive (in terms of code size), thus we hope the compiler does not inline this...
-    throw IndexOutOfBoundsException();
-}
-
 
     // = UnoControlRoadmapModel
 
@@ -128,18 +116,14 @@ static void lcl_throwIndexOutOfBoundsException( )
 
     Reference< XInterface > SAL_CALL UnoControlRoadmapModel::createInstance(  )
     {
-        rtl::Reference<ORoadmapEntry> pRoadmapItem = new ORoadmapEntry();
-        Reference< XInterface > xNewRoadmapItem = static_cast<cppu::OWeakObject*>(pRoadmapItem.get());
-        return xNewRoadmapItem;
+        return cppu::getXWeak(new ORoadmapEntry());
     }
 
 
     Reference< XInterface > SAL_CALL UnoControlRoadmapModel::createInstanceWithArguments( const Sequence< Any >& /*aArguments*/ )
     {
         // Todo: implementation of the arguments handling
-        rtl::Reference<ORoadmapEntry> pRoadmapItem = new ORoadmapEntry();
-        Reference< XInterface > xNewRoadmapItem = static_cast<cppu::OWeakObject*>(pRoadmapItem.get());
-        return xNewRoadmapItem;
+        return cppu::getXWeak(new ORoadmapEntry());
     }
 
 
@@ -179,7 +163,7 @@ static void lcl_throwIndexOutOfBoundsException( )
     Any SAL_CALL UnoControlRoadmapModel::getByIndex( sal_Int32 Index )
     {
         if ((Index < 0) || ( o3tl::make_unsigned(Index) >= maRoadmapItems.size()))
-            lcl_throwIndexOutOfBoundsException( );
+            throw IndexOutOfBoundsException();
         Any aAny( maRoadmapItems.at( Index ) );
         return aAny;
     }
@@ -188,13 +172,13 @@ static void lcl_throwIndexOutOfBoundsException( )
     void UnoControlRoadmapModel::MakeRMItemValidation( sal_Int32 Index, const Reference< XInterface >& xRoadmapItem )
     {
         if (( Index < 0 ) || (o3tl::make_unsigned(Index) > maRoadmapItems.size()) )
-            lcl_throwIndexOutOfBoundsException( );
+            throw IndexOutOfBoundsException();
         if ( !xRoadmapItem.is() )
-            lcl_throwIllegalArgumentException();
+            throw IllegalArgumentException();
         Reference< XServiceInfo > xServiceInfo( xRoadmapItem, UNO_QUERY );
         bool bIsRoadmapItem = xServiceInfo->supportsService("com.sun.star.awt.RoadmapItem");
         if ( !bIsRoadmapItem )
-            lcl_throwIllegalArgumentException();
+            throw IllegalArgumentException();
     }
 
 
@@ -268,7 +252,7 @@ static void lcl_throwIndexOutOfBoundsException( )
     void SAL_CALL UnoControlRoadmapModel::insertByIndex( const sal_Int32 Index, const Any& Element)
     {
         if ( ( Index >= ( static_cast<sal_Int32>(maRoadmapItems.size()) + 1 ) ) || (Index < 0))
-            lcl_throwIndexOutOfBoundsException( );
+            throw IndexOutOfBoundsException();
         Reference< XInterface > xRoadmapItem;
         Element >>= xRoadmapItem;
         MakeRMItemValidation( Index, xRoadmapItem);
@@ -289,7 +273,7 @@ static void lcl_throwIndexOutOfBoundsException( )
     void SAL_CALL UnoControlRoadmapModel::removeByIndex( sal_Int32 Index)
     {
         if ((Index < 0) || ( o3tl::make_unsigned(Index) > maRoadmapItems.size()))
-            lcl_throwIndexOutOfBoundsException( );
+            throw IndexOutOfBoundsException();
         Reference< XInterface > xRoadmapItem;
         maRoadmapItems.erase( maRoadmapItems.begin() + Index );
         ContainerEvent aEvent = GetContainerEvent(Index, xRoadmapItem);
@@ -362,7 +346,14 @@ static void lcl_throwIndexOutOfBoundsException( )
     }
 
 IMPLEMENT_FORWARD_XTYPEPROVIDER2( UnoRoadmapControl, UnoControlRoadmap_Base, UnoControlRoadmap_IBase )
-IMPLEMENT_FORWARD_XINTERFACE2( UnoRoadmapControl, UnoControlRoadmap_Base, UnoControlRoadmap_IBase )
+
+css::uno::Any UnoRoadmapControl::queryAggregation(css::uno::Type const & aType) {
+    auto ret = UnoControlRoadmap_Base::queryAggregation(aType);
+    if (!ret.hasValue()) {
+        ret = UnoControlRoadmap_IBase::queryInterface(aType);
+    }
+    return ret;
+}
 
 
 sal_Bool SAL_CALL UnoRoadmapControl::setModel(const Reference< XControlModel >& _rModel)
@@ -390,7 +381,7 @@ sal_Bool SAL_CALL UnoRoadmapControl::setModel(const Reference< XControlModel >& 
     void UnoRoadmapControl::dispose()
     {
         EventObject aEvt;
-        aEvt.Source = static_cast<cppu::OWeakObject*>(this);
+        aEvt.Source = getXWeak();
         maItemListeners.disposeAndClear( aEvt );
         UnoControl::dispose();
     }

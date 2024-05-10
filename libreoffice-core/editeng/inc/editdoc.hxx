@@ -122,7 +122,6 @@ public:
     const SfxItemSet&       GetPrevParaAttribs() const  { return aPrevParaAttribs; }
     const CharAttribsType&  GetPrevCharAttribs() const  { return aPrevCharAttribs; }
 
-    void RemoveAllCharAttribsFromPool(SfxItemPool& rPool) const;
     void AppendCharAttrib(EditCharAttrib* pNew);
 };
 
@@ -196,7 +195,7 @@ public:
 
     void            dumpAsXml(xmlTextWriterPtr pWriter) const;
 
-    void            DeleteEmptyAttribs(  SfxItemPool& rItemPool );
+    void            DeleteEmptyAttribs();
 
     const EditCharAttrib* FindAttrib( sal_uInt16 nWhich, sal_Int32 nPos ) const;
     EditCharAttrib* FindAttrib( sal_uInt16 nWhich, sal_Int32 nPos );
@@ -207,7 +206,7 @@ public:
 
 
     void            ResortAttribs();
-    void            OptimizeRanges( SfxItemPool& rItemPool );
+    void            OptimizeRanges();
 
     sal_Int32 Count() const;
 
@@ -257,8 +256,8 @@ public:
     CharAttribList& GetCharAttribs()        { return aCharAttribList; }
     const CharAttribList& GetCharAttribs() const { return aCharAttribList; }
 
-    void            ExpandAttribs( sal_Int32 nIndex, sal_Int32 nNewChars, SfxItemPool& rItemPool );
-    void            CollapseAttribs( sal_Int32 nIndex, sal_Int32 nDelChars, SfxItemPool& rItemPool );
+    void            ExpandAttribs( sal_Int32 nIndex, sal_Int32 nNewChars );
+    void            CollapseAttribs( sal_Int32 nIndex, sal_Int32 nDelChars );
     void            AppendAttribs( ContentNode* pNextNode );
     void            CopyAndCutAttribs( ContentNode* pPrevNode, SfxItemPool& rPool, bool bKeepEndingAttribs );
 
@@ -296,6 +295,8 @@ public:
     OUString Copy(sal_Int32 nPos) const;
     OUString Copy(sal_Int32 nPos, sal_Int32 nCount) const;
     sal_Unicode GetChar(sal_Int32 nPos) const;
+
+    void checkAndDeleteEmptyAttribs() const;
 };
 
 
@@ -661,7 +662,9 @@ public:
 class ParaPortionList
 {
     mutable sal_Int32 nLastCache;
-    std::vector<std::unique_ptr<ParaPortion>> maPortions;
+    typedef std::vector<std::unique_ptr<ParaPortion>> ParaPortionContainerType;
+    ParaPortionContainerType maPortions;
+
 public:
                     ParaPortionList();
                     ~ParaPortionList();
@@ -682,6 +685,16 @@ public:
     void Insert(sal_Int32 nPos, std::unique_ptr<ParaPortion> p);
     void Append(std::unique_ptr<ParaPortion> p);
     sal_Int32 Count() const;
+
+    ParaPortion& getRef(sal_Int32 nPosition) { return *maPortions[nPosition]; }
+    ParaPortion const& getRef(sal_Int32 nPosition) const { return *maPortions[nPosition]; }
+
+    sal_Int32 lastIndex() const { return Count() - 1; }
+
+    ParaPortionContainerType::iterator begin() { return maPortions.begin(); }
+    ParaPortionContainerType::iterator end() { return maPortions.end(); }
+    ParaPortionContainerType::const_iterator cbegin() const { return maPortions.cbegin(); }
+    ParaPortionContainerType::const_iterator cend() const { return maPortions.cend(); }
 
 #if OSL_DEBUG_LEVEL > 0 && !defined NDEBUG
     // temporary:
@@ -760,9 +773,6 @@ private:
     bool            bModified:1;
     bool            bDisableAttributeExpanding:1;
 
-private:
-    void            ImplDestroyContents();
-
 public:
                     EditDoc( SfxItemPool* pItemPool );
                     ~EditDoc();
@@ -812,8 +822,6 @@ public:
 
     SfxItemPool&        GetItemPool()                   { return *pItemPool; }
     const SfxItemPool&  GetItemPool() const             { return *pItemPool; }
-
-    void RemoveItemsFromPool(const ContentNode& rNode);
 
     void            InsertAttrib( const SfxPoolItem& rItem, ContentNode* pNode, sal_Int32 nStart, sal_Int32 nEnd );
     void            InsertAttrib( ContentNode* pNode, sal_Int32 nStart, sal_Int32 nEnd, const SfxPoolItem& rPoolItem );

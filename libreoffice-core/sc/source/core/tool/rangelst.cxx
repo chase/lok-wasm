@@ -133,6 +133,10 @@ void ScRangeList::Format( OUString& rStr, ScRefFlags nFlags, const ScDocument& r
                           formula::FormulaGrammar::AddressConvention eConv,
                           sal_Unicode cDelimiter, bool bFullAddressNotation ) const
 {
+    // LO's AddressConverter::parseOoxAddress2d cannot import a short-hand address,
+    // so definitely do not export that way.
+    assert(eConv != FormulaGrammar::CONV_XL_OOX || bFullAddressNotation);
+
     if (!cDelimiter)
         cDelimiter = ScCompiler::GetNativeSymbolChar(ocSep);
 
@@ -1268,12 +1272,11 @@ void ScRangePairList::UpdateReference( UpdateRefMode eUpdateRefMode,
 // Delete entries that have the labels (first range) on nTab
 void ScRangePairList::DeleteOnTab( SCTAB nTab )
 {
-    maPairs.erase(std::remove_if(maPairs.begin(), maPairs.end(),
+    std::erase_if(maPairs,
         [&nTab](const ScRangePair& rR) {
             const ScRange & rRange = rR.GetRange(0);
             return (rRange.aStart.Tab() == nTab) && (rRange.aEnd.Tab() == nTab);
-        }),
-        maPairs.end());
+        });
 }
 
 ScRangePair* ScRangePairList::Find( const ScAddress& rAdr )

@@ -18,6 +18,7 @@
  */
 
 #include <OutlineViewShell.hxx>
+#include <Outliner.hxx>
 
 #include <helpids.h>
 #include <app.hrc>
@@ -31,6 +32,7 @@
 #include <editeng/editview.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/flditem.hxx>
+#include <editeng/editund2.hxx>
 #include <sfx2/shell.hxx>
 #include <sfx2/request.hxx>
 #include <svx/hlnkitem.hxx>
@@ -82,15 +84,14 @@
 
 #include <memory>
 
+#define ShellClass_OutlineViewShell
+using namespace sd;
+#include <sdslots.hxx>
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::lang;
 using namespace ::com::sun::star::linguistic2;
-
-using namespace sd;
-
-#define ShellClass_OutlineViewShell
-#include <sdslots.hxx>
 
 namespace sd {
 
@@ -409,7 +410,7 @@ void OutlineViewShell::FuSupport(SfxRequest &rReq)
         GetDocSh()->SetStyleFamily(static_cast<SfxStyleFamily>(rReq.GetArgs()->Get( SID_STYLE_FAMILY ).GetValue()));
 
     bool bPreviewState = false;
-    sal_uLong nSlot = rReq.GetSlot();
+    sal_uInt16 nSlot = rReq.GetSlot();
 
     std::unique_ptr<OutlineViewModelChangeGuard, o3tl::default_delete<OutlineViewModelChangeGuard>> aGuard;
     if( pOlView && (
@@ -820,7 +821,7 @@ void OutlineViewShell::GetMenuState( SfxItemSet &rSet )
     // if not, the templates must not be edited
     SfxItemSetFixed<SID_STATUS_LAYOUT, SID_STATUS_LAYOUT> aSet(*rSet.GetPool());
     GetStatusBarState(aSet);
-    OUString aTest = static_cast<const SfxStringItem&>(aSet.Get(SID_STATUS_LAYOUT)).GetValue();
+    OUString aTest = aSet.Get(SID_STATUS_LAYOUT).GetValue();
     if (aTest.isEmpty())
     {
         bUnique = false;
@@ -1320,7 +1321,10 @@ void OutlineViewShell::GetStatusBarState(SfxItemSet& rSet)
 
         SdrPage* pPage = GetDoc()->GetSdPage( static_cast<sal_uInt16>(nPos), PageKind::Standard );
 
-        aPageStr = SdResId(STR_SD_PAGE_COUNT);
+        if (GetDoc()->GetDocumentType() == DocumentType::Draw)
+            aPageStr = SdResId(STR_SD_PAGE_COUNT_DRAW);
+        else
+            aPageStr = SdResId(STR_SD_PAGE_COUNT);
 
         aPageStr = aPageStr.replaceFirst("%1", OUString::number(static_cast<sal_Int32>(nPos + 1)));
         aPageStr = aPageStr.replaceFirst("%2", OUString::number(nPageCount));
@@ -1332,7 +1336,7 @@ void OutlineViewShell::GetStatusBarState(SfxItemSet& rSet)
         //Now, CurrentPage property change is already sent for DrawView and OutlineView, so it is not necessary to send again here
         if(m_StrOldPageName!=aPageStr)
         {
-            GetViewShellBase().GetDrawController().fireSwitchCurrentPage(nPos);
+            GetViewShellBase().GetDrawController()->fireSwitchCurrentPage(nPos);
             m_StrOldPageName = aPageStr;
         }
     }
@@ -1465,7 +1469,7 @@ void OutlineViewShell::GetAttrState( SfxItemSet& rSet )
                 {
                     SfxItemSetFixed<SID_STATUS_LAYOUT, SID_STATUS_LAYOUT> aSet(*rSet.GetPool());
                     GetStatusBarState(aSet);
-                    OUString aRealStyle = static_cast<const SfxStringItem&>(aSet.Get(SID_STATUS_LAYOUT)).GetValue();
+                    OUString aRealStyle = aSet.Get(SID_STATUS_LAYOUT).GetValue();
                     if (aRealStyle.isEmpty())
                     {
                         // no unique layout name found
@@ -1812,7 +1816,7 @@ void OutlineViewShell::VisAreaChanged(const ::tools::Rectangle& rRect)
 {
     ViewShell::VisAreaChanged( rRect );
 
-    GetViewShellBase().GetDrawController().FireVisAreaChanged(rRect);
+    GetViewShellBase().GetDrawController()->FireVisAreaChanged(rRect);
 }
 
 /** If there is a valid controller then create a new instance of
@@ -1870,7 +1874,7 @@ void OutlineViewShell::SetCurrentPage (SdPage* pPage)
             false);
     GetDoc()->SetSelected (pPage, true);
 
-    DrawController& rController(GetViewShellBase().GetDrawController());
+    DrawController& rController(*GetViewShellBase().GetDrawController());
     rController.FireSelectionChangeListener();
     rController.FireSwitchCurrentPage (pPage);
 

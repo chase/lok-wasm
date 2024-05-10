@@ -50,13 +50,13 @@ namespace sdr::properties
         const SfxItemSet& E3dSceneProperties::GetMergedItemSet() const
         {
             // prepare ItemSet
-            if(mxItemSet)
+            if(moItemSet)
             {
                 // filter for SDRATTR_3DSCENE_ items, only keep those items
-                SfxItemSetFixed<SDRATTR_3DSCENE_FIRST, SDRATTR_3DSCENE_LAST> aNew(*mxItemSet->GetPool());
-                aNew.Put(*mxItemSet);
-                mxItemSet->ClearItem();
-                mxItemSet->Put(aNew);
+                SfxItemSetFixed<SDRATTR_3DSCENE_FIRST, SDRATTR_3DSCENE_LAST> aNew(*moItemSet->GetPool());
+                aNew.Put(*moItemSet);
+                moItemSet->ClearItem();
+                moItemSet->Put(aNew);
             }
             else
             {
@@ -67,38 +67,36 @@ namespace sdr::properties
             // collect all ItemSets of contained 3d objects
             const SdrObjList* pSub(static_cast<const E3dScene&>(GetSdrObject()).GetSubList());
             OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
-            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
 
-            for(size_t a = 0; a < nCount; ++a)
-            {
-                SdrObject* pObj = pSub->GetObj(a);
-
-                if(dynamic_cast<const E3dCompoundObject* >(pObj))
+            if (pSub)
+                for (const rtl::Reference<SdrObject>& pObj : *pSub)
                 {
-                    const SfxItemSet& rSet = pObj->GetMergedItemSet();
-                    SfxWhichIter aIter(rSet);
-                    sal_uInt16 nWhich(aIter.FirstWhich());
-
-                    while(nWhich)
+                    if(dynamic_cast<const E3dCompoundObject* >(pObj.get()))
                     {
-                        // Leave out the SDRATTR_3DSCENE_ range, this would only be double
-                        // and always equal.
-                        if(nWhich <= SDRATTR_3DSCENE_FIRST || nWhich >= SDRATTR_3DSCENE_LAST)
-                        {
-                            if(SfxItemState::DONTCARE == aIter.GetItemState(false))
-                            {
-                                mxItemSet->InvalidateItem(nWhich);
-                            }
-                            else
-                            {
-                                mxItemSet->MergeValue(rSet.Get(nWhich), true);
-                            }
-                        }
+                        const SfxItemSet& rSet = pObj->GetMergedItemSet();
+                        SfxWhichIter aIter(rSet);
+                        sal_uInt16 nWhich(aIter.FirstWhich());
 
-                        nWhich = aIter.NextWhich();
+                        while(nWhich)
+                        {
+                            // Leave out the SDRATTR_3DSCENE_ range, this would only be double
+                            // and always equal.
+                            if(nWhich <= SDRATTR_3DSCENE_FIRST || nWhich >= SDRATTR_3DSCENE_LAST)
+                            {
+                                if(SfxItemState::DONTCARE == aIter.GetItemState(false))
+                                {
+                                    moItemSet->InvalidateItem(nWhich);
+                                }
+                                else
+                                {
+                                    moItemSet->MergeValue(rSet.Get(nWhich), true);
+                                }
+                            }
+
+                            nWhich = aIter.NextWhich();
+                        }
                     }
                 }
-            }
 
             // call parent
             return E3dProperties::GetMergedItemSet();
@@ -124,11 +122,9 @@ namespace sdr::properties
 
                 if(xNewSet->Count())
                 {
-                    for(size_t a = 0; a < nCount; ++a)
+                    for (const rtl::Reference<SdrObject>& pObj : *pSub)
                     {
-                        SdrObject* pObj = pSub->GetObj(a);
-
-                        if(dynamic_cast<const E3dCompoundObject* >(pObj))
+                        if(dynamic_cast<const E3dCompoundObject* >(pObj.get()))
                         {
                             // set merged ItemSet at contained 3d object.
                             pObj->SetMergedItemSet(*xNewSet, bClearAllItems);
@@ -145,12 +141,9 @@ namespace sdr::properties
         {
             const SdrObjList* pSub(static_cast<const E3dScene&>(GetSdrObject()).GetSubList());
             OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
-            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
-
-            for(size_t a = 0; a < nCount; ++a)
-            {
-                pSub->GetObj(a)->SetMergedItem(rItem);
-            }
+            if (pSub)
+                for (const rtl::Reference<SdrObject>& pObj : *pSub)
+                    pObj->SetMergedItem(rItem);
 
             // #i43809# call parent. This will set items on local object, too.
             E3dProperties::SetMergedItem(rItem);
@@ -160,12 +153,9 @@ namespace sdr::properties
         {
             const SdrObjList* pSub(static_cast<const E3dScene&>(GetSdrObject()).GetSubList());
             OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
-            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
-
-            for(size_t a = 0; a < nCount; ++a)
-            {
-                pSub->GetObj(a)->ClearMergedItem(nWhich);
-            }
+            if (pSub)
+                for (const rtl::Reference<SdrObject>& pObj : *pSub)
+                    pObj->ClearMergedItem(nWhich);
 
             // #i43809# call parent. This will clear items on local object, too.
             E3dProperties::ClearMergedItem(nWhich);
@@ -234,14 +224,14 @@ namespace sdr::properties
         {
             const SdrObjList* pSub(static_cast<const E3dScene&>(GetSdrObject()).GetSubList());
             OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
-            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
-
-            for(size_t a = 0; a < nCount; ++a)
+            if (!pSub)
+                return;
+            for (const rtl::Reference<SdrObject>& pObj : *pSub)
             {
                 if(bBroadcast)
-                    pSub->GetObj(a)->SetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
+                    pObj->SetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
                 else
-                    pSub->GetObj(a)->NbcSetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
+                    pObj->NbcSetStyleSheet(pNewStyleSheet, bDontRemoveHardAttr);
             }
         }
 
@@ -251,11 +241,11 @@ namespace sdr::properties
 
             const SdrObjList* pSub(static_cast<const E3dScene&>(GetSdrObject()).GetSubList());
             OSL_ENSURE(nullptr != pSub, "Children of SdrObject expected (!)");
-            const size_t nCount(nullptr == pSub ? 0 : pSub->GetObjCount());
-
-            for(size_t a = 0; a < nCount; ++a)
+            if (!pSub)
+                return pRetval;
+            for (const rtl::Reference<SdrObject>& pObj : *pSub)
             {
-                SfxStyleSheet* pCandidate = pSub->GetObj(a)->GetStyleSheet();
+                SfxStyleSheet* pCandidate = pObj->GetStyleSheet();
 
                 if(pRetval)
                 {
@@ -283,13 +273,13 @@ namespace sdr::properties
             const Camera3D& aSceneCam(rObj.GetCamera());
 
             // ProjectionType
-            mxItemSet->Put(Svx3DPerspectiveItem(aSceneCam.GetProjection()));
+            moItemSet->Put(Svx3DPerspectiveItem(aSceneCam.GetProjection()));
 
             // CamPos
-            mxItemSet->Put(makeSvx3DDistanceItem(static_cast<sal_uInt32>(aSceneCam.GetPosition().getZ() + 0.5)));
+            moItemSet->Put(makeSvx3DDistanceItem(static_cast<sal_uInt32>(aSceneCam.GetPosition().getZ() + 0.5)));
 
             // FocalLength
-            mxItemSet->Put(makeSvx3DFocalLengthItem(static_cast<sal_uInt32>((aSceneCam.GetFocalLength() * 100.0) + 0.5)));
+            moItemSet->Put(makeSvx3DFocalLengthItem(static_cast<sal_uInt32>((aSceneCam.GetFocalLength() * 100.0) + 0.5)));
         }
 } // end of namespace
 

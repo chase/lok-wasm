@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <config_version.h>
+
 #include <unx/gtk/gtkframe.hxx>
 #include <unx/gtk/gtkdata.hxx>
 #include <unx/gtk/gtkinst.hxx>
@@ -31,6 +33,7 @@
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <vcl/toolkit/floatwin.hxx>
+#include <vcl/toolkit/unowrap.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <vcl/window.hxx>
@@ -42,6 +45,7 @@
 #include <X11/Xutil.h>
 #include <unx/gtk/gtkbackend.hxx>
 
+#include <strings.hrc>
 #include <window.h>
 
 #include <basegfx/vector/b2ivector.hxx>
@@ -62,6 +66,8 @@
 
 #include <com/sun/star/awt/MouseButton.hpp>
 #include <com/sun/star/datatransfer/dnd/DNDConstants.hpp>
+#include <com/sun/star/frame/Desktop.hpp>
+#include <com/sun/star/util/XModifiable.hpp>
 
 #if !GTK_CHECK_VERSION(4, 0, 0)
 #   define GDK_ALT_MASK GDK_MOD1_MASK
@@ -217,6 +223,8 @@ sal_uInt16 GtkSalFrame::GetKeyCode(guint keyval)
             case GDK_KEY_quoteright:   nCode = KEY_QUOTERIGHT;   break;
             case GDK_KEY_braceright:   nCode = KEY_RIGHTCURLYBRACKET;   break;
             case GDK_KEY_numbersign:   nCode = KEY_NUMBERSIGN; break;
+            case GDK_KEY_Forward:      nCode = KEY_XF86FORWARD; break;
+            case GDK_KEY_Back:         nCode = KEY_XF86BACK; break;
             case GDK_KEY_colon:    nCode = KEY_COLON;    break;
             // some special cases, also see saldisp.cxx
             // - - - - - - - - - - - - -  Apollo - - - - - - - - - - - - - 0x1000
@@ -631,7 +639,6 @@ void on_registrar_unavailable( GDBusConnection * /*connection*/,
 
     SAL_INFO("vcl.unity", "on_registrar_unavailable");
 
-    //pSessionBus = NULL;
     GtkSalFrame* pSalFrame = static_cast< GtkSalFrame* >( user_data );
 
     SalMenu* pSalMenu = pSalFrame->GetMenu();
@@ -721,6 +728,15 @@ GtkSalFrame::~GtkSalFrame()
 
         if (m_pSettingsPortal)
             g_object_unref(m_pSettingsPortal);
+
+        if (m_nSessionClientSignalId)
+            g_signal_handler_disconnect(m_pSessionClient, m_nSessionClientSignalId);
+
+        if (m_pSessionClient)
+            g_object_unref(m_pSessionClient);
+
+        if (m_pSessionManager)
+            g_object_unref(m_pSessionManager);
     }
 
     GtkWidget *pEventWidget = getMouseEventWidget();
@@ -861,19 +877,14 @@ ooo_fixed_get_preferred_width(GtkWidget*, gint *minimum, gint *natural)
     *minimum = 0;
     *natural = 0;
 }
-#endif
 
 static void
 ooo_fixed_class_init(GtkFixedClass *klass)
 {
-#if !GTK_CHECK_VERSION(4,0,0)
     GtkWidgetClass *widget_class = GTK_WIDGET_CLASS(klass);
     widget_class->get_accessible = ooo_fixed_get_accessible;
     widget_class->get_preferred_height = ooo_fixed_get_preferred_height;
     widget_class->get_preferred_width = ooo_fixed_get_preferred_width;
-#else
-    (void)klass;
-#endif
 }
 
 /*
@@ -909,6 +920,8 @@ ooo_fixed_get_type()
     return type;
 }
 
+#endif
+
 void GtkSalFrame::updateScreenNumber()
 {
 #if !GTK_CHECK_VERSION(4,0,0)
@@ -943,7 +956,10 @@ void GtkSalFrame::InitCommon()
     m_nGrabLevel = 0;
     m_bSalObjectSetPosSize = false;
     m_nPortalSettingChangedSignalId = 0;
+    m_nSessionClientSignalId = 0;
     m_pSettingsPortal = nullptr;
+    m_pSessionManager = nullptr;
+    m_pSessionClient = nullptr;
 
     m_aDamageHandler.handle = this;
     m_aDamageHandler.damaged = ::damaged;
@@ -971,7 +987,11 @@ void GtkSalFrame::InitCommon()
     m_pDrawingArea = m_pFixedContainer;
 #else
     m_pOverlay = GTK_OVERLAY(gtk_overlay_new());
+#if GTK_CHECK_VERSION(4,9,0)
+    m_pFixedContainer = GTK_FIXED(g_object_new( ooo_fixed_get_type(), nullptr ));
+#else
     m_pFixedContainer = GTK_FIXED(gtk_fixed_new());
+#endif
     m_pDrawingArea = GTK_DRAWING_AREA(gtk_drawing_area_new());
 #endif
     if (GTK_IS_WINDOW(m_pWindow))
@@ -1374,6 +1394,26 @@ void GtkSalFrame::SetColorScheme(GVariant* variant)
     g_object_set(pSettings, "gtk-application-prefer-dark-theme", bDarkIconTheme, nullptr);
 }
 
+bool GtkSalFrame::GetUseDarkMode() const
+{
+    if (!m_pWindow)
+        return false;
+    GtkSettings* pSettings = gtk_widget_get_settings(m_pWindow);
+    gboolean bDarkIconTheme = false;
+    g_object_get(pSettings, "gtk-application-prefer-dark-theme", &bDarkIconTheme, nullptr);
+    return bDarkIconTheme;
+}
+
+bool GtkSalFrame::GetUseReducedAnimation() const
+{
+    if (!m_pWindow)
+        return false;
+    GtkSettings* pSettings = gtk_widget_get_settings(m_pWindow);
+    gboolean bAnimations;
+    g_object_get(pSettings, "gtk-enable-animations", &bAnimations, nullptr);
+    return !bAnimations;
+}
+
 static void settings_portal_changed_cb(GDBusProxy*, const char*, const char* signal_name,
                                        GVariant* parameters, gpointer frame)
 {
@@ -1411,7 +1451,149 @@ void GtkSalFrame::ListenPortalSettings()
 
     UpdateDarkMode();
 
+    if (!m_pSettingsPortal)
+        return;
+
     m_nPortalSettingChangedSignalId = g_signal_connect(m_pSettingsPortal, "g-signal", G_CALLBACK(settings_portal_changed_cb), this);
+}
+
+static void session_client_response(GDBusProxy* client_proxy)
+{
+    g_dbus_proxy_call(client_proxy,
+                      "EndSessionResponse",
+                      g_variant_new ("(bs)", true, ""),
+                      G_DBUS_CALL_FLAGS_NONE,
+                      G_MAXINT,
+                      nullptr, nullptr, nullptr);
+}
+
+// unset documents "modify" flag so they won't veto closing
+static void clear_modify_and_terminate()
+{
+    css::uno::Reference<css::uno::XComponentContext> xContext = ::comphelper::getProcessComponentContext();
+    uno::Reference<frame::XDesktop> xDesktop(frame::Desktop::create(xContext));
+    uno::Reference<css::container::XEnumeration> xComponents = xDesktop->getComponents()->createEnumeration();
+    while (xComponents->hasMoreElements())
+    {
+        css::uno::Reference<css::util::XModifiable> xModifiable(xComponents->nextElement(), css::uno::UNO_QUERY);
+        if (xModifiable)
+            xModifiable->setModified(false);
+    }
+    xDesktop->terminate();
+}
+
+static void session_client_signal(GDBusProxy* client_proxy, const char*, const char* signal_name,
+                                  GVariant* /*parameters*/, gpointer frame)
+{
+    GtkSalFrame* pThis = static_cast<GtkSalFrame*>(frame);
+
+    if (g_str_equal (signal_name, "QueryEndSession"))
+    {
+        css::uno::Reference<css::uno::XComponentContext> xContext = ::comphelper::getProcessComponentContext();
+        uno::Reference<frame::XDesktop2> xDesktop(frame::Desktop::create(xContext));
+
+        bool bModified = false;
+
+        // find the XModifiable for this GtkSalFrame
+        if (UnoWrapperBase* pWrapper = UnoWrapperBase::GetUnoWrapper(false))
+        {
+            VclPtr<vcl::Window> xThisWindow = pThis->GetWindow();
+            css::uno::Reference<css::container::XIndexAccess> xList = xDesktop->getFrames();
+            sal_Int32 nFrameCount = xList->getCount();
+            for (sal_Int32 i = 0; i < nFrameCount; ++i)
+            {
+                css::uno::Reference<css::frame::XFrame> xFrame;
+                xList->getByIndex(i) >>= xFrame;
+                if (!xFrame)
+                    continue;
+                VclPtr<vcl::Window> xWin = pWrapper->GetWindow(xFrame->getContainerWindow());
+                if (!xWin)
+                   continue;
+                if (xWin->GetFrameWindow() != xThisWindow)
+                    continue;
+                css::uno::Reference<css::frame::XController> xController = xFrame->getController();
+                if (!xController)
+                    break;
+                css::uno::Reference<css::util::XModifiable> xModifiable(xController->getModel(), css::uno::UNO_QUERY);
+                if (!xModifiable)
+                    break;
+                bModified = xModifiable->isModified();
+                break;
+            }
+        }
+
+        pThis->SessionManagerInhibit(bModified, APPLICATION_INHIBIT_LOGOUT, VclResId(STR_UNSAVED_DOCUMENTS),
+                                     gtk_window_get_icon_name(GTK_WINDOW(pThis->getWindow())));
+
+        session_client_response(client_proxy);
+    }
+    else if (g_str_equal (signal_name, "CancelEndSession"))
+    {
+        // restore back to uninhibited (to set again if queried), so frames
+        // that go away before the next logout don't affect that logout
+        pThis->SessionManagerInhibit(false, APPLICATION_INHIBIT_LOGOUT, VclResId(STR_UNSAVED_DOCUMENTS),
+                                     gtk_window_get_icon_name(GTK_WINDOW(pThis->getWindow())));
+    }
+    else if (g_str_equal (signal_name, "EndSession"))
+    {
+        session_client_response(client_proxy);
+        clear_modify_and_terminate();
+    }
+    else if (g_str_equal (signal_name, "Stop"))
+    {
+        clear_modify_and_terminate();
+    }
+}
+
+void GtkSalFrame::ListenSessionManager()
+{
+    EnsureSessionBus();
+
+    if (!pSessionBus)
+        return;
+
+    m_pSessionManager = g_dbus_proxy_new_sync(pSessionBus,
+                                              G_DBUS_PROXY_FLAGS_NONE,
+                                              nullptr,
+                                              "org.gnome.SessionManager",
+                                              "/org/gnome/SessionManager",
+                                              "org.gnome.SessionManager",
+                                              nullptr,
+                                              nullptr);
+
+    if (!m_pSessionManager)
+        return;
+
+    GVariant* res = g_dbus_proxy_call_sync(m_pSessionManager,
+                                 "RegisterClient",
+                                 g_variant_new ("(ss)", "org.libreoffice", ""),
+                                 G_DBUS_CALL_FLAGS_NONE,
+                                 G_MAXINT,
+                                 nullptr,
+                                 nullptr);
+
+    if (!res)
+        return;
+
+    gchar* client_path;
+    g_variant_get(res, "(o)", &client_path);
+    g_variant_unref(res);
+
+    m_pSessionClient = g_dbus_proxy_new_sync(pSessionBus,
+                                             G_DBUS_PROXY_FLAGS_NONE,
+                                             nullptr,
+                                             "org.gnome.SessionManager",
+                                             client_path,
+                                             "org.gnome.SessionManager.ClientPrivate",
+                                             nullptr,
+                                             nullptr);
+
+    g_free(client_path);
+
+    if (!m_pSessionClient)
+        return;
+
+    m_nSessionClientSignalId = g_signal_connect(m_pSessionClient, "g-signal", G_CALLBACK(session_client_signal), this);
 }
 
 void GtkSalFrame::UpdateDarkMode()
@@ -1604,6 +1786,9 @@ void GtkSalFrame::Init( SalFrame* pParent, SalFrameStyleFlags nStyle )
 
         // Listen to portal settings for e.g. prefer dark theme
         ListenPortalSettings();
+
+        // Listen to session manager for e.g. query-end
+        ListenSessionManager();
     }
 }
 
@@ -2047,17 +2232,17 @@ void GtkSalFrame::GetClientSize( tools::Long& rWidth, tools::Long& rHeight )
         rWidth = rHeight = 0;
 }
 
-void GtkSalFrame::GetWorkArea( tools::Rectangle& rRect )
+void GtkSalFrame::GetWorkArea( AbsoluteScreenPixelRectangle& rRect )
 {
     GdkRectangle aRect;
 #if !GTK_CHECK_VERSION(4, 0, 0)
     GdkScreen  *pScreen = gtk_widget_get_screen(m_pWindow);
-    tools::Rectangle aRetRect;
+    AbsoluteScreenPixelRectangle aRetRect;
     int max = gdk_screen_get_n_monitors (pScreen);
     for (int i = 0; i < max; ++i)
     {
         gdk_screen_get_monitor_workarea(pScreen, i, &aRect);
-        tools::Rectangle aMonitorRect(aRect.x, aRect.y, aRect.x+aRect.width, aRect.y+aRect.height);
+        AbsoluteScreenPixelRectangle aMonitorRect(aRect.x, aRect.y, aRect.x+aRect.width, aRect.y+aRect.height);
         aRetRect.Union(aMonitorRect);
     }
     rRect = aRetRect;
@@ -2066,7 +2251,7 @@ void GtkSalFrame::GetWorkArea( tools::Rectangle& rRect )
     GdkSurface* gdkWindow = widget_get_surface(m_pWindow);
     GdkMonitor* pMonitor = gdk_display_get_monitor_at_surface(pDisplay, gdkWindow);
     gdk_monitor_get_geometry(pMonitor, &aRect);
-    rRect = tools::Rectangle(aRect.x, aRect.y, aRect.x+aRect.width, aRect.y+aRect.height);
+    rRect = AbsoluteScreenPixelRectangle(aRect.x, aRect.y, aRect.x+aRect.width, aRect.y+aRect.height);
 #endif
 }
 
@@ -2464,23 +2649,24 @@ void GtkSalFrame::ShowFullScreen( bool bFullScreen, sal_Int32 nScreen )
     }
 }
 
-void GtkSalFrame::StartPresentation( bool bStart )
+void GtkSalFrame::SessionManagerInhibit(bool bStart, ApplicationInhibitFlags eType, std::u16string_view sReason, const char* application_id)
 {
-    std::optional<guint> aWindow;
+    guint nWindow(0);
     std::optional<Display*> aDisplay;
 
-    bool bX11 = DLSYM_GDK_IS_X11_DISPLAY(getGdkDisplay());
-    if (bX11)
+    if (DLSYM_GDK_IS_X11_DISPLAY(getGdkDisplay()))
     {
-        aWindow = GtkSalFrame::GetNativeWindowHandle(m_pWindow);
+        nWindow = GtkSalFrame::GetNativeWindowHandle(m_pWindow);
         aDisplay = gdk_x11_display_get_xdisplay(getGdkDisplay());
     }
 
-    m_ScreenSaverInhibitor.inhibit( bStart,
-                                    u"presentation",
-                                    bX11,
-                                    aWindow,
-                                    aDisplay );
+    m_SessionManagerInhibitor.inhibit(bStart, sReason, eType,
+                                      nWindow, aDisplay, application_id);
+}
+
+void GtkSalFrame::StartPresentation( bool bStart )
+{
+    SessionManagerInhibit(bStart, APPLICATION_INHIBIT_IDLE, u"presentation", nullptr);
 }
 
 void GtkSalFrame::SetAlwaysOnTop( bool bOnTop )
@@ -2698,6 +2884,8 @@ void GtkSalFrame::KeyCodeToGdkKey(const vcl::KeyCode& rKeyCode,
             case KEY_QUOTERIGHT:    nKeyCode = GDK_KEY_quoteright;      break;
             case KEY_RIGHTCURLYBRACKET: nKeyCode = GDK_KEY_braceright;      break;
             case KEY_NUMBERSIGN: nKeyCode = GDK_KEY_numbersign;         break;
+            case KEY_XF86FORWARD:   nKeyCode = GDK_KEY_Forward;         break;
+            case KEY_XF86BACK:      nKeyCode = GDK_KEY_Back;            break;
             case KEY_COLON:         nKeyCode = GDK_KEY_colon;           break;
 
             // Special cases
@@ -2718,7 +2906,7 @@ OUString GtkSalFrame::GetKeyName( sal_uInt16 nKeyCode )
     KeyCodeToGdkKey(nKeyCode, &nGtkKeyCode, &nGtkModifiers );
 
     gchar* pName = gtk_accelerator_get_label(nGtkKeyCode, nGtkModifiers);
-    OUString aRet(pName, rtl_str_getLength(pName), RTL_TEXTENCODING_UTF8);
+    OUString aRet = OStringToOUString(pName, RTL_TEXTENCODING_UTF8);
     g_free(pName);
     return aRet;
 }
@@ -2907,8 +3095,12 @@ void GtkSalFrame::EndSetClipRegion()
 
 void GtkSalFrame::PositionByToolkit(const tools::Rectangle& rRect, FloatWinPopupFlags nFlags)
 {
-    if (ImplGetSVData()->maNWFData.mbCanDetermineWindowPosition)
+    if ( ImplGetSVData()->maNWFData.mbCanDetermineWindowPosition &&
+        // tdf#152155 cannot determine window positions of popup listboxes on sidebar
+        nFlags != LISTBOX_FLOATWINPOPUPFLAGS )
+    {
         return;
+    }
 
     m_aFloatRect = rRect;
     m_nFloatFlags = nFlags;
@@ -3760,13 +3952,25 @@ void GtkSalFrame::signalRealize(GtkWidget*, gpointer frame)
         swapDirection(menu_anchor);
     }
 
-    tools::Rectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(pVclParent, pThis->m_aFloatRect);
-    if (gdk_window_get_window_type(widget_get_surface(pThis->m_pParent->m_pWindow)) != GDK_WINDOW_TOPLEVEL)
+    AbsoluteScreenPixelRectangle aFloatRect = FloatingWindow::ImplConvertToAbsPos(pVclParent, pThis->m_aFloatRect);
+    switch (gdk_window_get_window_type(widget_get_surface(pThis->m_pParent->m_pWindow)))
     {
-        // See tdf#152155 for an example
-        gtk_coord nX(0), nY(0.0);
-        gtk_widget_translate_coordinates(pThis->m_pParent->m_pWindow, widget_get_toplevel(pThis->m_pParent->m_pWindow), 0, 0, &nX, &nY);
-        aFloatRect.Move(nX, nY);
+        case GDK_WINDOW_TOPLEVEL:
+            break;
+        case GDK_WINDOW_CHILD:
+        {
+            // See tdf#152155 for an example
+            gtk_coord nX(0), nY(0.0);
+            gtk_widget_translate_coordinates(pThis->m_pParent->m_pWindow, widget_get_toplevel(pThis->m_pParent->m_pWindow), 0, 0, &nX, &nY);
+            aFloatRect.Move(nX, nY);
+            break;
+        }
+        default:
+        {
+            // See tdf#154072 for an example
+            aFloatRect.Move(-pThis->m_pParent->maGeometry.x(), -pThis->m_pParent->maGeometry.y());
+            break;
+        }
     }
 
     GdkRectangle rect {static_cast<int>(aFloatRect.Left()), static_cast<int>(aFloatRect.Top()),
@@ -4864,7 +5068,7 @@ public:
             OUString aStr;
             gchar *pText = reinterpret_cast<gchar*>(gtk_selection_data_get_text(m_pData));
             if (pText)
-                aStr = OUString(pText, rtl_str_getLength(pText), RTL_TEXTENCODING_UTF8);
+                aStr = OStringToOUString(pText, RTL_TEXTENCODING_UTF8);
             g_free(pText);
             aRet <<= aStr.replaceAll("\r\n", "\n");
         }
@@ -5906,10 +6110,10 @@ gboolean GtkSalFrame::IMHandler::signalIMDeleteSurrounding( GtkIMContext*, gint 
     return true;
 }
 
-Size GtkSalDisplay::GetScreenSize( int nDisplayScreen )
+AbsoluteScreenPixelSize GtkSalDisplay::GetScreenSize( int nDisplayScreen )
 {
-    tools::Rectangle aRect = m_pSys->GetDisplayScreenPosSizePixel( nDisplayScreen );
-    return Size( aRect.GetWidth(), aRect.GetHeight() );
+    AbsoluteScreenPixelRectangle aRect = m_pSys->GetDisplayScreenPosSizePixel( nDisplayScreen );
+    return AbsoluteScreenPixelSize( aRect.GetWidth(), aRect.GetHeight() );
 }
 
 sal_uIntPtr GtkSalFrame::GetNativeWindowHandle(GtkWidget *pWidget)

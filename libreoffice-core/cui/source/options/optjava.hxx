@@ -75,7 +75,9 @@ private:
     std::unique_ptr<SvxJavaClassPathDlg> m_xPathDlg;
 
     std::unique_ptr<weld::CheckButton> m_xExperimentalCB;
+    std::unique_ptr<weld::Widget> m_xExperimentalImg;
     std::unique_ptr<weld::CheckButton> m_xMacroCB;
+    std::unique_ptr<weld::Widget> m_xMacroImg;
 
     std::unique_ptr<weld::Label> m_xAddDialogText;
 
@@ -107,6 +109,8 @@ public:
     virtual ~SvxJavaOptionsPage() override;
 
     static std::unique_ptr<SfxTabPage> Create( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rSet );
+
+    virtual OUString GetAllStrings() override;
 
     virtual bool            FillItemSet( SfxItemSet* rSet ) override;
     virtual void            Reset( const SfxItemSet* rSet ) override;
@@ -200,7 +204,9 @@ public:
     void             SetFocus() { m_xPathList->grab_focus(); }
 
     OUString                GetClassPath() const;
+#if HAVE_FEATURE_JAVA
     void                    SetClassPath( const OUString& _rPath );
+#endif
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -88,7 +88,7 @@ void SwAsciiOptions::Reset()
     m_bIncludeHidden = !utl::ConfigManager::IsFuzzing() && officecfg::Office::Writer::FilterFlags::ASCII::IncludeHiddenText::get();
 }
 
-ErrCode SwReader::Read( const Reader& rOptions )
+ErrCodeMsg SwReader::Read( const Reader& rOptions )
 {
     // copy variables
     Reader* po = const_cast<Reader*>(&rOptions);
@@ -109,7 +109,7 @@ ErrCode SwReader::Read( const Reader& rOptions )
         return ERR_SWG_FILE_FORMAT_ERROR;
     }
 
-    ErrCode nError = ERRCODE_NONE;
+    ErrCodeMsg nError = ERRCODE_NONE;
 
     GetDoc();
 
@@ -245,7 +245,7 @@ ErrCode SwReader::Read( const Reader& rOptions )
                                    rNd.FindFooterStartNode();
 
             // search all new Fly's, and store them as individual Undo Objects
-            for( SwFrameFormats::size_type n = 0; n < mxDoc->GetSpzFrameFormats()->size(); ++n )
+            for( sw::FrameFormats<sw::SpzFrameFormat*>::size_type n = 0; n < mxDoc->GetSpzFrameFormats()->size(); ++n )
             {
                 SwFrameFormat* pFrameFormat = (*mxDoc->GetSpzFrameFormats())[ n ];
                 const SwFormatAnchor& rAnchor = pFrameFormat->GetAnchor();
@@ -736,7 +736,13 @@ SwWriter::SwWriter(SfxMedium& rMedium, SwDoc &rDocument)
 {
 }
 
-ErrCode SwWriter::Write( WriterRef const & rxWriter, const OUString* pRealFileName )
+static bool isFlyNode(const SwPaM& pam)
+{
+    return *pam.GetPoint() == *pam.GetMark()
+           && (pam.GetPoint()->GetNode().IsOLENode() || pam.GetPoint()->GetNode().IsGrfNode());
+}
+
+ErrCodeMsg SwWriter::Write( WriterRef const & rxWriter, const OUString* pRealFileName )
 {
     // #i73788#
     SwPauseThreadStarting aPauseThreadStarting;
@@ -777,13 +783,11 @@ ErrCode SwWriter::Write( WriterRef const & rxWriter, const OUString* pRealFileNa
         SwPaM *pEnd = pPam;
 
         // 1st round: Check if there is a selection
-        while(true)
+        do
         {
-            bHasMark = bHasMark || pPam->HasMark();
+            bHasMark = pPam->HasMark() || isFlyNode(*pPam);
             pPam = pPam->GetNext();
-            if(bHasMark || pPam == pEnd)
-                break;
-        }
+        } while (!bHasMark && pPam != pEnd);
 
         // if there is no selection, select the whole document
         if(!bHasMark)
@@ -863,7 +867,7 @@ ErrCode SwWriter::Write( WriterRef const & rxWriter, const OUString* pRealFileNa
     std::unique_ptr<PurgeGuard, o3tl::default_delete<PurgeGuard>> xGuard(new PurgeGuard(*pOutDoc));
 
     pOutDoc->SetInWriting(true);
-    ErrCode nError = ERRCODE_NONE;
+    ErrCodeMsg nError = ERRCODE_NONE;
     if( m_pMedium )
         nError = rxWriter->Write( *pPam, *m_pMedium, pRealFileName );
     else if( m_pStrm )

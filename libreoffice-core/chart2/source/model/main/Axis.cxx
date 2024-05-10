@@ -18,7 +18,7 @@
  */
 
 #include <Axis.hxx>
-#include "GridProperties.hxx"
+#include <GridProperties.hxx>
 #include <CharacterProperties.hxx>
 #include <LinePropertiesHelper.hxx>
 #include <UserDefinedProperties.hxx>
@@ -27,6 +27,7 @@
 #include <AxisHelper.hxx>
 #include <EventListenerHelper.hxx>
 #include <ModifyListenerHelper.hxx>
+#include <Title.hxx>
 #include <unonames.hxx>
 
 #include <com/sun/star/chart/ChartAxisArrangeOrderType.hpp>
@@ -204,116 +205,75 @@ void lcl_AddPropertiesToVector(
                   | beans::PropertyAttribute::MAYBEVOID );
 
 }
+} // namespace
 
-struct StaticAxisDefaults_Initializer
+namespace chart
 {
-    ::chart::tPropertyValueMap* operator()()
-    {
-        static ::chart::tPropertyValueMap aStaticDefaults;
-        lcl_AddDefaultsToMap( aStaticDefaults );
-        return &aStaticDefaults;
-    }
-private:
-    static void lcl_AddDefaultsToMap( ::chart::tPropertyValueMap & rOutMap )
-    {
-        ::chart::CharacterProperties::AddDefaultsToMap( rOutMap );
-        ::chart::LinePropertiesHelper::AddDefaultsToMap( rOutMap );
-
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_SHOW, true );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_CROSSOVER_POSITION, css::chart::ChartAxisPosition_ZERO );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_DISPLAY_LABELS, true );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_LINK_NUMBERFORMAT_TO_SOURCE, true );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_LABEL_POSITION, css::chart::ChartAxisLabelPosition_NEAR_AXIS );
-        ::chart::PropertyHelper::setPropertyValueDefault< double >( rOutMap, PROP_AXIS_TEXT_ROTATION, 0.0 );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_TEXT_BREAK, false );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_TEXT_OVERLAP, false );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_TEXT_STACKED, false );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_TEXT_ARRANGE_ORDER, css::chart::ChartAxisArrangeOrderType_AUTO );
-
-        float fDefaultCharHeight = 10.0;
-        ::chart::PropertyHelper::setPropertyValue( rOutMap, ::chart::CharacterProperties::PROP_CHAR_CHAR_HEIGHT, fDefaultCharHeight );
-        ::chart::PropertyHelper::setPropertyValue( rOutMap, ::chart::CharacterProperties::PROP_CHAR_ASIAN_CHAR_HEIGHT, fDefaultCharHeight );
-        ::chart::PropertyHelper::setPropertyValue( rOutMap, ::chart::CharacterProperties::PROP_CHAR_COMPLEX_CHAR_HEIGHT, fDefaultCharHeight );
-
-        ::chart::PropertyHelper::setPropertyValueDefault< sal_Int32 >( rOutMap, PROP_AXIS_MAJOR_TICKMARKS, 2 /* CHAXIS_MARK_OUTER */ );
-        ::chart::PropertyHelper::setPropertyValueDefault< sal_Int32 >( rOutMap, PROP_AXIS_MINOR_TICKMARKS, 0 /* CHAXIS_MARK_NONE */ );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_MARK_POSITION, css::chart::ChartAxisMarkPosition_AT_LABELS_AND_AXIS );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_DISPLAY_UNITS, false );
-        ::chart::PropertyHelper::setPropertyValueDefault( rOutMap, PROP_AXIS_TRY_STAGGERING_FIRST, false );
-    }
-};
-
-struct StaticAxisDefaults : public rtl::StaticAggregate< ::chart::tPropertyValueMap, StaticAxisDefaults_Initializer >
+const ::chart::tPropertyValueMap &  StaticAxisDefaults()
 {
-};
-
-struct StaticAxisInfoHelper_Initializer
-{
-    ::cppu::OPropertyArrayHelper* operator()()
-    {
-        static ::cppu::OPropertyArrayHelper aPropHelper( lcl_GetPropertySequence() );
-        return &aPropHelper;
-    }
-
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        lcl_AddPropertiesToVector( aProperties );
-        ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticAxisInfoHelper : public rtl::StaticAggregate< ::cppu::OPropertyArrayHelper, StaticAxisInfoHelper_Initializer >
-{
-};
-
-struct StaticAxisInfo_Initializer
-{
-    uno::Reference< beans::XPropertySetInfo >* operator()()
-    {
-        static uno::Reference< beans::XPropertySetInfo > xPropertySetInfo(
-            ::cppu::OPropertySetHelper::createPropertySetInfo(*StaticAxisInfoHelper::get() ) );
-        return &xPropertySetInfo;
-    }
-};
-
-struct StaticAxisInfo : public rtl::StaticAggregate< uno::Reference< beans::XPropertySetInfo >, StaticAxisInfo_Initializer >
-{
-};
-
-typedef uno::Reference< beans::XPropertySet > lcl_tSubGridType;
-
-void lcl_CloneSubGrids(
-    const uno::Sequence< lcl_tSubGridType > & rSource, uno::Sequence< lcl_tSubGridType > & rDestination )
-{
-    rDestination.realloc( rSource.getLength());
-    lcl_tSubGridType * pDestBegin = rDestination.getArray();
-    lcl_tSubGridType * pDestEnd   = pDestBegin + rDestination.getLength();
-    lcl_tSubGridType * pDestIt    = pDestBegin;
-
-    for( Reference< beans::XPropertySet > const & i : rSource )
-    {
-        Reference< beans::XPropertySet > xSubGrid( i );
-        if( xSubGrid.is())
+    static ::chart::tPropertyValueMap aStaticDefaults = []()
         {
-            Reference< util::XCloneable > xCloneable( xSubGrid, uno::UNO_QUERY );
-            if( xCloneable.is())
-                xSubGrid.set( xCloneable->createClone(), uno::UNO_QUERY );
-        }
+            ::chart::tPropertyValueMap aMap;
+            ::chart::CharacterProperties::AddDefaultsToMap( aMap );
+            ::chart::LinePropertiesHelper::AddDefaultsToMap( aMap );
 
-        (*pDestIt) = xSubGrid;
-        OSL_ASSERT( pDestIt != pDestEnd );
-        ++pDestIt;
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_SHOW, true );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_CROSSOVER_POSITION, css::chart::ChartAxisPosition_ZERO );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_DISPLAY_LABELS, true );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_LINK_NUMBERFORMAT_TO_SOURCE, true );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_LABEL_POSITION, css::chart::ChartAxisLabelPosition_NEAR_AXIS );
+            ::chart::PropertyHelper::setPropertyValueDefault< double >( aMap, PROP_AXIS_TEXT_ROTATION, 0.0 );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_TEXT_BREAK, false );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_TEXT_OVERLAP, false );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_TEXT_STACKED, false );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_TEXT_ARRANGE_ORDER, css::chart::ChartAxisArrangeOrderType_AUTO );
+
+            float fDefaultCharHeight = 10.0;
+            ::chart::PropertyHelper::setPropertyValue( aMap, ::chart::CharacterProperties::PROP_CHAR_CHAR_HEIGHT, fDefaultCharHeight );
+            ::chart::PropertyHelper::setPropertyValue( aMap, ::chart::CharacterProperties::PROP_CHAR_ASIAN_CHAR_HEIGHT, fDefaultCharHeight );
+            ::chart::PropertyHelper::setPropertyValue( aMap, ::chart::CharacterProperties::PROP_CHAR_COMPLEX_CHAR_HEIGHT, fDefaultCharHeight );
+
+            ::chart::PropertyHelper::setPropertyValueDefault< sal_Int32 >( aMap, PROP_AXIS_MAJOR_TICKMARKS, 2 /* CHAXIS_MARK_OUTER */ );
+            ::chart::PropertyHelper::setPropertyValueDefault< sal_Int32 >( aMap, PROP_AXIS_MINOR_TICKMARKS, 0 /* CHAXIS_MARK_NONE */ );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_MARK_POSITION, css::chart::ChartAxisMarkPosition_AT_LABELS_AND_AXIS );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_DISPLAY_UNITS, false );
+            ::chart::PropertyHelper::setPropertyValueDefault( aMap, PROP_AXIS_TRY_STAGGERING_FIRST, false );
+            return aMap;
+        }();
+    return aStaticDefaults;
+};
+} // namespace chart
+
+namespace
+{
+::cppu::OPropertyArrayHelper& StaticAxisInfoHelper()
+{
+    static ::cppu::OPropertyArrayHelper aPropHelper = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            lcl_AddPropertiesToVector( aProperties );
+            ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
+
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropHelper;
+};
+
+std::vector< rtl::Reference< ::chart::GridProperties > > lcl_CloneSubGrids(
+    const std::vector< rtl::Reference< ::chart::GridProperties > > & rSource )
+{
+    std::vector< rtl::Reference< ::chart::GridProperties > > aDestination;
+    aDestination.reserve( rSource.size());
+    for( rtl::Reference< ::chart::GridProperties > const & i : rSource )
+    {
+        aDestination.push_back(new ::chart::GridProperties(*i));
     }
-    OSL_ASSERT( pDestIt == pDestEnd );
+    return aDestination;
 }
 
 } // anonymous namespace
@@ -345,18 +305,20 @@ Axis::Axis( const Axis & rOther ) :
     m_xModifyEventForwarder( new ModifyEventForwarder() ),
     m_aScaleData( rOther.m_aScaleData )
 {
-    m_xGrid.set( CloneHelper::CreateRefClone< beans::XPropertySet >()( rOther.m_xGrid ));
+    if (rOther.m_xGrid)
+        m_xGrid = new ::chart::GridProperties(*rOther.m_xGrid);
     if( m_xGrid.is())
         ModifyListenerHelper::addListener( m_xGrid, m_xModifyEventForwarder );
 
     if( m_aScaleData.Categories.is())
         ModifyListenerHelper::addListener( m_aScaleData.Categories, m_xModifyEventForwarder );
 
-    if( rOther.m_aSubGridProperties.hasElements() )
-        lcl_CloneSubGrids( rOther.m_aSubGridProperties, m_aSubGridProperties );
-    ModifyListenerHelper::addListenerToAllSequenceElements( m_aSubGridProperties, m_xModifyEventForwarder );
+    if( !rOther.m_aSubGridProperties.empty() )
+        m_aSubGridProperties = lcl_CloneSubGrids( rOther.m_aSubGridProperties );
+    ModifyListenerHelper::addListenerToAllElements( m_aSubGridProperties, m_xModifyEventForwarder );
 
-    m_xTitle.set( CloneHelper::CreateRefClone< chart2::XTitle >()( rOther.m_xTitle ));
+    if ( rOther.m_xTitle )
+        m_xTitle = new Title( *rOther.m_xTitle );
     if( m_xTitle.is())
         ModifyListenerHelper::addListener( m_xTitle, m_xModifyEventForwarder );
 }
@@ -373,12 +335,12 @@ Axis::~Axis()
     try
     {
         ModifyListenerHelper::removeListener( m_xGrid, m_xModifyEventForwarder );
-        ModifyListenerHelper::removeListenerFromAllSequenceElements( m_aSubGridProperties, m_xModifyEventForwarder );
+        ModifyListenerHelper::removeListenerFromAllElements( m_aSubGridProperties, m_xModifyEventForwarder );
         ModifyListenerHelper::removeListener( m_xTitle, m_xModifyEventForwarder );
         if( m_aScaleData.Categories.is())
         {
             ModifyListenerHelper::removeListener( m_aScaleData.Categories, m_xModifyEventForwarder );
-            m_aScaleData.Categories.set(nullptr);
+            m_aScaleData.Categories.clear();
         }
     }
     catch( const uno::Exception & )
@@ -386,7 +348,7 @@ Axis::~Axis()
         DBG_UNHANDLED_EXCEPTION("chart2");
     }
 
-    m_aSubGridProperties.realloc(0);
+    m_aSubGridProperties.clear();
     m_xGrid = nullptr;
     m_xTitle = nullptr;
 }
@@ -395,32 +357,31 @@ void Axis::AllocateSubGrids()
 {
     Reference< util::XModifyListener > xModifyEventForwarder;
     Reference< lang::XEventListener > xEventListener;
-    std::vector< Reference< beans::XPropertySet > > aOldBroadcasters;
-    std::vector< Reference< beans::XPropertySet > > aNewBroadcasters;
+    std::vector< rtl::Reference< GridProperties > > aOldBroadcasters;
+    std::vector< rtl::Reference< GridProperties > > aNewBroadcasters;
     {
         MutexGuard aGuard( m_aMutex );
         xModifyEventForwarder = m_xModifyEventForwarder;
         xEventListener = this;
 
         sal_Int32 nNewSubIncCount = m_aScaleData.IncrementData.SubIncrements.getLength();
-        sal_Int32 nOldSubIncCount = m_aSubGridProperties.getLength();
+        sal_Int32 nOldSubIncCount = m_aSubGridProperties.size();
 
         if( nOldSubIncCount > nNewSubIncCount )
         {
             // remove superfluous entries
             for( sal_Int32 i = nNewSubIncCount; i < nOldSubIncCount; ++i )
                 aOldBroadcasters.push_back( m_aSubGridProperties[ i ] );
-            m_aSubGridProperties.realloc( nNewSubIncCount );
+            m_aSubGridProperties.resize( nNewSubIncCount );
         }
         else if( nOldSubIncCount < nNewSubIncCount )
         {
-            m_aSubGridProperties.realloc( nNewSubIncCount );
-            auto pSubGridProperties = m_aSubGridProperties.getArray();
+            m_aSubGridProperties.resize( nNewSubIncCount );
 
             // allocate new entries
             for( sal_Int32 i = nOldSubIncCount; i < nNewSubIncCount; ++i )
             {
-                pSubGridProperties[ i ] = new GridProperties();
+                m_aSubGridProperties[ i ] = new GridProperties();
                 LinePropertiesHelper::SetLineInvisible( m_aSubGridProperties[ i ] );
                 LinePropertiesHelper::SetLineColor( m_aSubGridProperties[ i ], static_cast<sal_Int32>(0xdddddd) ); //gray2
                 aNewBroadcasters.push_back( m_aSubGridProperties[ i ] );
@@ -475,7 +436,18 @@ Reference< beans::XPropertySet > SAL_CALL Axis::getGridProperties()
     MutexGuard aGuard( m_aMutex );
     return m_xGrid;
 }
+rtl::Reference< ::chart::GridProperties > Axis::getGridProperties2()
+{
+    MutexGuard aGuard( m_aMutex );
+    return m_xGrid;
+}
 Sequence< Reference< beans::XPropertySet > > SAL_CALL Axis::getSubGridProperties()
+{
+    MutexGuard aGuard( m_aMutex );
+    return comphelper::containerToSequence<Reference< beans::XPropertySet >>(m_aSubGridProperties);
+}
+
+std::vector< rtl::Reference< GridProperties > > Axis::getSubGridProperties2()
 {
     MutexGuard aGuard( m_aMutex );
     return m_aSubGridProperties;
@@ -494,10 +466,23 @@ Reference< chart2::XTitle > SAL_CALL Axis::getTitleObject()
     return m_xTitle;
 }
 
+rtl::Reference< Title > Axis::getTitleObject2() const
+{
+    MutexGuard aGuard( m_aMutex );
+    return m_xTitle;
+}
+
 void SAL_CALL Axis::setTitleObject( const Reference< chart2::XTitle >& xNewTitle )
 {
+    rtl::Reference<Title> xTitle = dynamic_cast<Title*>(xNewTitle.get());
+    assert(!xNewTitle || xTitle);
+    setTitleObject(xTitle);
+}
+
+void Axis::setTitleObject( const rtl::Reference< Title >& xNewTitle )
+{
     Reference< util::XModifyListener > xModifyEventForwarder;
-    Reference< chart2::XTitle > xOldTitle;
+    rtl::Reference< Title > xOldTitle;
     {
         MutexGuard aGuard( m_aMutex );
         xOldTitle = m_xTitle;
@@ -560,7 +545,7 @@ void Axis::fireModifyEvent()
 // ____ OPropertySet ____
 void Axis::GetDefaultValue( sal_Int32 nHandle, uno::Any& rAny ) const
 {
-    const tPropertyValueMap& rStaticDefaults = *StaticAxisDefaults::get();
+    const tPropertyValueMap& rStaticDefaults = StaticAxisDefaults();
     tPropertyValueMap::const_iterator aFound( rStaticDefaults.find( nHandle ) );
     if( aFound == rStaticDefaults.end() )
         rAny.clear();
@@ -570,13 +555,15 @@ void Axis::GetDefaultValue( sal_Int32 nHandle, uno::Any& rAny ) const
 
 ::cppu::IPropertyArrayHelper & SAL_CALL Axis::getInfoHelper()
 {
-    return *StaticAxisInfoHelper::get();
+    return StaticAxisInfoHelper();
 }
 
 // ____ XPropertySet ____
 Reference< beans::XPropertySetInfo > SAL_CALL Axis::getPropertySetInfo()
 {
-    return *StaticAxisInfo::get();
+    static uno::Reference< beans::XPropertySetInfo > xPropertySetInfo(
+        ::cppu::OPropertySetHelper::createPropertySetInfo(StaticAxisInfoHelper() ) );
+    return xPropertySetInfo;
 }
 
 using impl::Axis_Base;

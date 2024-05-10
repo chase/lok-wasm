@@ -23,6 +23,7 @@
 #include <o3tl/string_view.hxx>
 
 #include <officecfg/Inet.hxx>
+#include <officecfg/Office/Security.hxx>
 
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/io/Pipe.hpp>
@@ -165,15 +166,6 @@ struct CurlOption
         }
     }
 };
-
-// NOBODY will prevent logging the response body in ProcessRequest() exception
-// handler, so only use it if logging is disabled
-const CurlOption g_NoBody{ CURLOPT_NOBODY,
-                           sal_detail_log_report(SAL_DETAIL_LOG_LEVEL_INFO, "ucb.ucp.webdav.curl")
-                                   == SAL_DETAIL_LOG_ACTION_IGNORE
-                               ? 1L
-                               : 0L,
-                           nullptr };
 
 /// combined guard class to ensure things are released in correct order,
 /// particularly in ProcessRequest() error handling
@@ -659,31 +651,32 @@ CurlSession::CurlSession(uno::Reference<uno::XComponentContext> xContext,
     rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_HEADERFUNCTION, &header_callback);
     assert(rc == CURLE_OK);
     ::InitCurl_easy(m_pCurl.get());
+    if (officecfg::Office::Security::Net::AllowInsecureProtocols::get())
+    {
     // tdf#149921 by default, with schannel (WNT) connection fails if revocation
     // lists cannot be checked; try to limit the checking to when revocation
     // lists can actually be retrieved (usually not the case for self-signed CA)
 #if CURL_AT_LEAST_VERSION(7, 70, 0)
-    rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT);
-    assert(rc == CURLE_OK);
-    rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_PROXY_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT);
-    assert(rc == CURLE_OK);
+        rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT);
+        assert(rc == CURLE_OK);
+        rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_PROXY_SSL_OPTIONS,
+                              CURLSSLOPT_REVOKE_BEST_EFFORT);
+        assert(rc == CURLE_OK);
 #endif
+    }
     // set this initially, may be overwritten during authentication
     rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_HTTPAUTH, CURLAUTH_ANY);
     assert(rc == CURLE_OK); // ANY is always available
     // always set CURLOPT_PROXY to suppress proxy detection in libcurl
-    OString const utf8Proxy(OUStringToOString(m_Proxy.aName, RTL_TEXTENCODING_UTF8));
+    OString const utf8Proxy(OUStringToOString(m_Proxy, RTL_TEXTENCODING_UTF8));
     rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_PROXY, utf8Proxy.getStr());
     if (rc != CURLE_OK)
     {
         SAL_WARN("ucb.ucp.webdav.curl", "CURLOPT_PROXY failed: " << GetErrorString(rc));
-        throw DAVException(DAVException::DAV_SESSION_CREATE,
-                           ConnectionEndPointString(m_Proxy.aName, m_Proxy.nPort));
+        throw DAVException(DAVException::DAV_SESSION_CREATE, m_Proxy);
     }
-    if (!m_Proxy.aName.isEmpty())
+    if (!m_Proxy.isEmpty())
     {
-        rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_PROXYPORT, static_cast<long>(m_Proxy.nPort));
-        assert(rc == CURLE_OK);
         // set this initially, may be overwritten during authentication
         rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_PROXYAUTH, CURLAUTH_ANY);
         assert(rc == CURLE_OK); // ANY is always available
@@ -728,7 +721,7 @@ auto CurlSession::CanUse(OUString const& rURI, uno::Sequence<beans::NamedValue> 
 auto CurlSession::UsesProxy() -> bool
 {
     assert(m_URI.GetScheme() == "http" || m_URI.GetScheme() == "https");
-    return !m_Proxy.aName.isEmpty();
+    return !m_Proxy.isEmpty();
 }
 
 auto CurlSession::abort() -> void
@@ -946,9 +939,7 @@ auto CurlProcessor::ProcessRequestImpl(
             case CURLE_UNSUPPORTED_PROTOCOL:
                 throw DAVException(DAVException::DAV_UNSUPPORTED);
             case CURLE_COULDNT_RESOLVE_PROXY:
-                throw DAVException(
-                    DAVException::DAV_HTTP_LOOKUP,
-                    ConnectionEndPointString(rSession.m_Proxy.aName, rSession.m_Proxy.nPort));
+                throw DAVException(DAVException::DAV_HTTP_LOOKUP, rSession.m_Proxy);
             case CURLE_COULDNT_RESOLVE_HOST:
                 throw DAVException(
                     DAVException::DAV_HTTP_LOOKUP,
@@ -1199,12 +1190,12 @@ auto CurlProcessor::ProcessRequest(
     };
     ::std::optional<Auth> oAuth;
     ::std::optional<Auth> oAuthProxy;
-    if (pEnv && !rSession.m_isAuthenticatedProxy && !rSession.m_Proxy.aName.isEmpty())
+    if (pEnv && !rSession.m_isAuthenticatedProxy && !rSession.m_Proxy.isEmpty())
     {
         try
         {
             // the hope is that this must be a URI
-            CurlUri const uri(rSession.m_Proxy.aName);
+            CurlUri const uri(rSession.m_Proxy);
             if (!uri.GetUser().isEmpty() || !uri.GetPassword().isEmpty())
             {
                 oAuthProxy.emplace(uri.GetUser(), uri.GetPassword(), CURLAUTH_ANY);
@@ -1340,9 +1331,9 @@ auto CurlProcessor::ProcessRequest(
                     {
                         static char const hexDigit[16] = { '0', '1', '2', '3', '4', '5', '6', '7',
                                                            '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-                        buf.append("\\x");
-                        buf.append(hexDigit[static_cast<sal_uInt8>(bytes[i]) >> 4]);
-                        buf.append(hexDigit[bytes[i] & 0x0F]);
+                        buf.append(OString::Concat("\\x")
+                                   + OStringChar(hexDigit[static_cast<sal_uInt8>(bytes[i]) >> 4])
+                                   + OStringChar(hexDigit[bytes[i] & 0x0F]));
                     }
                     else
                     {
@@ -1437,7 +1428,7 @@ auto CurlProcessor::ProcessRequest(
                             auto const ret = pEnv->m_xAuthListener->authenticate(
                                 oRealm ? *oRealm : "",
                                 statusCode == SC_UNAUTHORIZED ? rSession.m_URI.GetHost()
-                                                              : rSession.m_Proxy.aName,
+                                                              : rSession.m_Proxy,
                                 userName, passWord, isSystemCredSupported);
 
                             if (ret == 0)
@@ -1526,9 +1517,8 @@ auto CurlSession::OPTIONS(OUString const& rURIReference,
     DAVResource result;
     ::std::pair<::std::vector<OUString> const&, DAVResource&> const headers(headerNames, result);
 
-    ::std::vector<CurlOption> const options{
-        g_NoBody, { CURLOPT_CUSTOMREQUEST, "OPTIONS", "CURLOPT_CUSTOMREQUEST" }
-    };
+    ::std::vector<CurlOption> const options{ { CURLOPT_CUSTOMREQUEST, "OPTIONS",
+                                               "CURLOPT_CUSTOMREQUEST" } };
 
     CurlProcessor::ProcessRequest(*this, uri, "OPTIONS", options, &rEnv, nullptr, nullptr, nullptr,
                                   &headers);
@@ -1598,13 +1588,13 @@ auto CurlProcessor::PropFind(
     switch (nDepth)
     {
         case DAVZERO:
-            depth = "Depth: 0";
+            depth = "Depth: 0"_ostr;
             break;
         case DAVONE:
-            depth = "Depth: 1";
+            depth = "Depth: 1"_ostr;
             break;
         case DAVINFINITY:
-            depth = "Depth: infinity";
+            depth = "Depth: infinity"_ostr;
             break;
         default:
             assert(false);
@@ -1624,7 +1614,7 @@ auto CurlProcessor::PropFind(
     xWriter->setOutputStream(xRequestOutStream);
     xWriter->startDocument();
     rtl::Reference<::comphelper::AttributeList> const pAttrList(new ::comphelper::AttributeList);
-    pAttrList->AddAttribute("xmlns", "CDATA", "DAV:");
+    pAttrList->AddAttribute("xmlns", "DAV:");
     xWriter->startElement("propfind", pAttrList);
     if (o_pResourceInfos)
     {
@@ -1646,7 +1636,7 @@ auto CurlProcessor::PropFind(
                 SerfPropName name;
                 DAVProperties::createSerfPropName(rName, name);
                 pAttrList->Clear();
-                pAttrList->AddAttribute("xmlns", "CDATA", OUString::createFromAscii(name.nspace));
+                pAttrList->AddAttribute("xmlns", OUString::createFromAscii(name.nspace));
                 xWriter->startElement(OUString::createFromAscii(name.name), pAttrList);
                 xWriter->endElement(OUString::createFromAscii(name.name));
             }
@@ -1765,7 +1755,7 @@ auto CurlSession::PROPPATCH(OUString const& rURIReference,
     xWriter->setOutputStream(xRequestOutStream);
     xWriter->startDocument();
     rtl::Reference<::comphelper::AttributeList> const pAttrList(new ::comphelper::AttributeList);
-    pAttrList->AddAttribute("xmlns", "CDATA", "DAV:");
+    pAttrList->AddAttribute("xmlns", "DAV:");
     xWriter->startElement("propertyupdate", pAttrList);
     for (ProppatchValue const& rPropValue : rValues)
     {
@@ -1777,7 +1767,7 @@ auto CurlSession::PROPPATCH(OUString const& rURIReference,
         SerfPropName name;
         DAVProperties::createSerfPropName(rPropValue.name, name);
         pAttrList->Clear();
-        pAttrList->AddAttribute("xmlns", "CDATA", OUString::createFromAscii(name.nspace));
+        pAttrList->AddAttribute("xmlns", OUString::createFromAscii(name.nspace));
         xWriter->startElement(OUString::createFromAscii(name.name), pAttrList);
         if (rPropValue.operation == PROPSET)
         {
@@ -1836,7 +1826,13 @@ auto CurlSession::HEAD(OUString const& rURIReference, ::std::vector<OUString> co
 
     CurlUri const uri(CurlProcessor::URIReferenceToURI(*this, rURIReference));
 
-    ::std::vector<CurlOption> const options{ g_NoBody };
+    ::std::vector<CurlOption> const options{
+        // NOBODY will prevent logging the response body in ProcessRequest()
+        // exception, but omitting it here results in a long timeout until the
+        // server closes the connection, which is worse
+        { CURLOPT_NOBODY, 1L, nullptr },
+        { CURLOPT_CUSTOMREQUEST, "HEAD", "CURLOPT_CUSTOMREQUEST" }
+    };
 
     ::std::pair<::std::vector<OUString> const&, DAVResource&> const headers(rHeaderNames,
                                                                             io_rResource);
@@ -2071,9 +2067,8 @@ auto CurlSession::MKCOL(OUString const& rURIReference, DAVRequestEnvironment con
 
     CurlUri const uri(CurlProcessor::URIReferenceToURI(*this, rURIReference));
 
-    ::std::vector<CurlOption> const options{
-        g_NoBody, { CURLOPT_CUSTOMREQUEST, "MKCOL", "CURLOPT_CUSTOMREQUEST" }
-    };
+    ::std::vector<CurlOption> const options{ { CURLOPT_CUSTOMREQUEST, "MKCOL",
+                                               "CURLOPT_CUSTOMREQUEST" } };
 
     CurlProcessor::ProcessRequest(*this, uri, "MKCOL", options, &rEnv, nullptr, nullptr, nullptr,
                                   nullptr);
@@ -2101,9 +2096,8 @@ auto CurlProcessor::MoveOrCopy(CurlSession& rSession, std::u16string_view rSourc
         throw uno::RuntimeException("curl_slist_append failed");
     }
 
-    ::std::vector<CurlOption> const options{
-        g_NoBody, { CURLOPT_CUSTOMREQUEST, pMethod, "CURLOPT_CUSTOMREQUEST" }
-    };
+    ::std::vector<CurlOption> const options{ { CURLOPT_CUSTOMREQUEST, pMethod,
+                                               "CURLOPT_CUSTOMREQUEST" } };
 
     CurlProcessor::ProcessRequest(rSession, uriSource, OUString::createFromAscii(pMethod), options,
                                   &rEnv, ::std::move(pList), nullptr, nullptr, nullptr);
@@ -2133,9 +2127,8 @@ auto CurlSession::DESTROY(OUString const& rURIReference, DAVRequestEnvironment c
 
     CurlUri const uri(CurlProcessor::URIReferenceToURI(*this, rURIReference));
 
-    ::std::vector<CurlOption> const options{
-        g_NoBody, { CURLOPT_CUSTOMREQUEST, "DELETE", "CURLOPT_CUSTOMREQUEST" }
-    };
+    ::std::vector<CurlOption> const options{ { CURLOPT_CUSTOMREQUEST, "DELETE",
+                                               "CURLOPT_CUSTOMREQUEST" } };
 
     CurlProcessor::ProcessRequest(*this, uri, "DESTROY", options, &rEnv, nullptr, nullptr, nullptr,
                                   nullptr);
@@ -2236,7 +2229,7 @@ auto CurlSession::LOCK(OUString const& rURIReference, ucb::Lock /*const*/& rLock
     xWriter->setOutputStream(xRequestOutStream);
     xWriter->startDocument();
     rtl::Reference<::comphelper::AttributeList> const pAttrList(new ::comphelper::AttributeList);
-    pAttrList->AddAttribute("xmlns", "CDATA", "DAV:");
+    pAttrList->AddAttribute("xmlns", "DAV:");
     xWriter->startElement("lockinfo", pAttrList);
     xWriter->startElement("lockscope", nullptr);
     switch (rLock.Scope)
@@ -2282,13 +2275,13 @@ auto CurlSession::LOCK(OUString const& rURIReference, ucb::Lock /*const*/& rLock
     switch (rLock.Depth)
     {
         case ucb::LockDepth_ZERO:
-            depth = "Depth: 0";
+            depth = "Depth: 0"_ostr;
             break;
         case ucb::LockDepth_ONE:
-            depth = "Depth: 1";
+            depth = "Depth: 1"_ostr;
             break;
         case ucb::LockDepth_INFINITY:
-            depth = "Depth: infinity";
+            depth = "Depth: infinity"_ostr;
             break;
         default:
             assert(false);
@@ -2302,10 +2295,10 @@ auto CurlSession::LOCK(OUString const& rURIReference, ucb::Lock /*const*/& rLock
     switch (rLock.Timeout)
     {
         case -1:
-            timeout = "Timeout: Infinite";
+            timeout = "Timeout: Infinite"_ostr;
             break;
         case 0:
-            timeout = "Timeout: Second-180";
+            timeout = "Timeout: Second-180"_ostr;
             break;
         default:
             timeout = "Timeout: Second-" + OString::number(rLock.Timeout);

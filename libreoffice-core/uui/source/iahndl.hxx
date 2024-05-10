@@ -127,13 +127,6 @@ private:
                 css::uno::Reference< css::task::XInteractionRequest > const &  rRequest
             );
 
-    bool
-    tryOtherInteractionHandler(
-        css::uno::Reference< css::task::XInteractionRequest > const & rRequest);
-
-    void
-    getInteractionHandlerList(InteractionHandlerDataList &rdataList);
-
     static bool
     isInformationalErrorMessageRequest(
         css::uno::Sequence<
@@ -190,7 +183,7 @@ private:
 
     void
     handleGenericErrorRequest(
-        ErrCode nErrorCode,
+        ErrCodeMsg nErrorCode,
         css::uno::Sequence<
             css::uno::Reference< css::task::XInteractionContinuation > > const &  rContinuations,
         bool bObtainErrorStringOnly,

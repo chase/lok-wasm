@@ -79,7 +79,7 @@ private:
 
 namespace sd {
 
-class SdNavigatorFloat : public SfxNavigator
+class SdNavigatorFloat final : public SfxNavigator
 {
 private:
     std::unique_ptr<SdNavigatorWin> m_xNavWin;
@@ -151,19 +151,19 @@ private:
     static OUString             GetDragTypeSdBmpId(NavigatorDragType eDT);
     NavDocInfo*                 GetDocInfo();
 
-                                DECL_DLLPRIVATE_LINK( SelectToolboxHdl, const OString&, void );
-                                DECL_DLLPRIVATE_LINK( DropdownClickToolBoxHdl, const OString&, void );
+                                DECL_DLLPRIVATE_LINK( SelectToolboxHdl, const OUString&, void );
+                                DECL_DLLPRIVATE_LINK( DropdownClickToolBoxHdl, const OUString&, void );
                                 DECL_DLLPRIVATE_LINK( ClickObjectHdl, weld::TreeView&, bool );
                                 DECL_DLLPRIVATE_LINK( SelectDocumentHdl, weld::ComboBox&, void );
-                                DECL_DLLPRIVATE_LINK( MenuSelectHdl, const OString&, void );
-                                DECL_DLLPRIVATE_LINK( ShapeFilterCallback, const OString&, void );
+                                DECL_DLLPRIVATE_LINK( MenuSelectHdl, const OUString&, void );
+                                DECL_DLLPRIVATE_LINK( ShapeFilterCallback, const OUString&, void );
                                 DECL_DLLPRIVATE_LINK( KeyInputHdl, const KeyEvent&, bool );
     DECL_DLLPRIVATE_STATIC_LINK(SdNavigatorWin, MouseReleaseHdl, const MouseEvent&, bool);
     DECL_LINK(CommandHdl, const CommandEvent&, bool);
 
     void                        SetDragImage();
 
-    void ExecuteContextMenuAction(std::string_view rSelectedPopupEntry);
+    void ExecuteContextMenuAction(std::u16string_view rSelectedPopupEntry);
 
 public:
     //when object is marked , fresh the corresponding entry tree .
@@ -175,7 +175,7 @@ public:
 /**
  * ControllerItem for Navigator
  */
-class SdNavigatorControllerItem : public SfxControllerItem
+class SdNavigatorControllerItem final : public SfxControllerItem
 {
 public:
     SdNavigatorControllerItem( sal_uInt16, SdNavigatorWin*, SfxBindings*,
@@ -193,7 +193,7 @@ private:
 /**
  * ControllerItem for Navigator to show the page in the TreeLB
  */
-class SdPageNameControllerItem : public SfxControllerItem
+class SdPageNameControllerItem final : public SfxControllerItem
 {
 public:
     SdPageNameControllerItem( sal_uInt16, SdNavigatorWin*, SfxBindings*);

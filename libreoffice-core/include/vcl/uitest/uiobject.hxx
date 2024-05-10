@@ -235,7 +235,7 @@ private:
     virtual OUString get_name() const override;
 };
 
-class ExpanderUIObject : public WindowUIObject
+class ExpanderUIObject final : public WindowUIObject
 {
     VclPtr<VclExpander> mxExpander;
 
@@ -492,7 +492,7 @@ class TreeListEntryUIObject final : public UIObject
 {
 public:
 
-    TreeListEntryUIObject(const VclPtr<SvTreeListBox>& xTreeList, SvTreeListEntry* pEntry);
+    TreeListEntryUIObject(const VclPtr<SvTreeListBox>& xTreeList, std::vector<sal_Int32> nTreePath);
 
     virtual StringMap get_state() override;
 
@@ -507,9 +507,11 @@ public:
 
 private:
 
+    SvTreeListEntry* getEntry() const;
+
     VclPtr<SvTreeListBox> mxTreeList;
 
-    SvTreeListEntry* const mpEntry;
+    std::vector<sal_Int32> maTreePath;
 };
 
 class IconViewUIObject final : public TreeListUIObject

@@ -44,6 +44,7 @@ namespace uno
 {
 
 class Type;
+template<class interface_type> class Reference;
 
 /** C++ class representing an IDL any.
     This class is used to transport any type defined in IDL. The class inherits from the
@@ -86,8 +87,8 @@ public:
     explicit inline Any(rtl::OUStringConcat<T1, T2> && value);
     template<typename T1, typename T2>
     explicit Any(rtl::OUStringConcat<T1, T2> const &) = delete;
-    template<typename T> explicit inline Any(rtl::OUStringNumber<T> && value);
-    template<typename T> explicit Any(rtl::OUStringNumber<T> const &) = delete;
+    template<std::size_t nBufSize> explicit inline Any(rtl::StringNumber<sal_Unicode, nBufSize> && value);
+    template<std::size_t nBufSize> explicit Any(rtl::StringNumber<sal_Unicode, nBufSize> const &) = delete;
     template <std::size_t N> explicit inline Any(const rtl::OUStringLiteral<N>& value);
 #endif
 
@@ -286,6 +287,14 @@ public:
         @return true if both any contains unequal values
     */
     inline bool SAL_CALL operator != ( const Any & rAny ) const;
+
+#if defined LIBO_INTERNAL_ONLY
+    // Similar to Reference::query/queryThrow, these allow to simplify calling constructors of
+    // Reference taking Any. queryThrow is functionally similar to get(), but doesn't require
+    // to specify the full Reference type explicitly, only the interface type.
+    template<class interface_type> inline Reference<interface_type> query() const;
+    template<class interface_type> inline Reference<interface_type> queryThrow() const;
+#endif
 
 private:
 #if !defined LIBO_INTERNAL_ONLY

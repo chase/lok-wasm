@@ -78,7 +78,6 @@ public:
 
     PointerStyle                    mePointerStyle;         // currently active pointer style
 
-    NSTrackingRectTag               mnTrackingRectTag;      // used to get enter/leave messages
     NSRect                          maTrackingRect;
 
     CGMutablePathRef                mrClippingPath;         // used for "shaping"
@@ -126,7 +125,7 @@ public:
         override;
     virtual void                SetPosSize( tools::Long nX, tools::Long nY, tools::Long nWidth, tools::Long nHeight, sal_uInt16 nFlags ) override;
     virtual void                GetClientSize( tools::Long& rWidth, tools::Long& rHeight ) override;
-    virtual void                GetWorkArea( tools::Rectangle& rRect ) override;
+    virtual void                GetWorkArea( AbsoluteScreenPixelRectangle& rRect ) override;
     virtual SalFrame*           GetParent() const override;
     virtual void SetWindowState(const vcl::WindowData*) override;
     virtual bool GetWindowState(vcl::WindowData*) override;
@@ -167,6 +166,8 @@ public:
     // done setting up the clipregion
     virtual void EndSetClipRegion() override;
     virtual void UpdateDarkMode() override;
+    virtual bool GetUseDarkMode() const override;
+    virtual bool GetUseReducedAnimation() const override;
 
     void UpdateFrameGeometry();
 

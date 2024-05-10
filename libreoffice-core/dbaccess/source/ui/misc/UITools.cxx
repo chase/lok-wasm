@@ -763,11 +763,12 @@ bool callColumnFormatDialog(weld::Widget* _pParent,
     // UNO->ItemSet
     static SfxItemInfo aItemInfos[] =
     {
-        { 0, false },
-        { SID_ATTR_NUMBERFORMAT_VALUE,      true },
-        { SID_ATTR_ALIGN_HOR_JUSTIFY,       true },
-        { SID_ATTR_NUMBERFORMAT_INFO,       true },
-        { SID_ATTR_NUMBERFORMAT_ONE_AREA,   true }
+        // _nSID, _bNeedsPoolRegistration, _bShareable
+        { 0,                                false, true },    // SBA_DEF_RANGEFORMAT
+        { SID_ATTR_NUMBERFORMAT_VALUE,      false, true },    // SBA_DEF_FMTVALUE
+        { SID_ATTR_ALIGN_HOR_JUSTIFY,       false, true },    // SBA_ATTR_ALIGN_HOR_JUSTIFY
+        { SID_ATTR_NUMBERFORMAT_INFO,       false, true },    // SID_ATTR_NUMBERFORMAT_INFO
+        { SID_ATTR_NUMBERFORMAT_ONE_AREA,   false, true }     // SID_ATTR_NUMBERFORMAT_ONE_AREA
     };
     static const auto aAttrMap = svl::Items<
         SBA_DEF_RANGEFORMAT, SBA_ATTR_ALIGN_HOR_JUSTIFY,
@@ -928,7 +929,7 @@ void notifySystemWindow(vcl::Window const * _pWindow, vcl::Window* _pToRegister,
 void adjustBrowseBoxColumnWidth( ::svt::EditBrowseBox* _pBox, sal_uInt16 _nColId )
 {
     sal_Int32 nColSize = -1;
-    sal_uInt32 nDefaultWidth = _pBox->GetDefaultColumnWidth( _pBox->GetColumnTitle( _nColId ) );
+    ::tools::Long nDefaultWidth = _pBox->GetDefaultColumnWidth( _pBox->GetColumnTitle( _nColId ) );
     if ( nDefaultWidth != _pBox->GetColumnWidth( _nColId ) )
     {
         Size aSizeMM = _pBox->PixelToLogic( Size( _pBox->GetColumnWidth( _nColId ), 0 ), MapMode( MapUnit::MapMM ) );
@@ -1046,29 +1047,40 @@ void setEvalDateFormatForFormatter(Reference< css::util::XNumberFormatter > cons
     }
 }
 
+static bool TypeIsGreater(const TOTypeInfoSP& lhs, const TOTypeInfoSP& rhs)
+{
+    assert(lhs);
+    if (!rhs)
+        return true;
+    if (lhs->nNumPrecRadix == rhs->nNumPrecRadix)
+        return lhs->nPrecision > rhs->nPrecision;
+    if (lhs->nPrecision == rhs->nPrecision)
+        return lhs->nNumPrecRadix > rhs->nNumPrecRadix;
+    if ((lhs->nNumPrecRadix > rhs->nNumPrecRadix) == (lhs->nPrecision > rhs->nPrecision))
+        return lhs->nPrecision > rhs->nPrecision;
+    return std::pow(lhs->nNumPrecRadix, lhs->nPrecision)
+           > std::pow(rhs->nNumPrecRadix, rhs->nPrecision);
+}
+
 TOTypeInfoSP queryPrimaryKeyType(const OTypeInfoMap& _rTypeInfo)
 {
-    TOTypeInfoSP pTypeInfo;
-    // first we search for a type which supports autoIncrement
+    TOTypeInfoSP pTypeInfo, pFallback;
+    // first we search for a largest type which supports autoIncrement
     for (auto const& elem : _rTypeInfo)
     {
-        // OJ: we don't want to set an autoincrement column to be key
-        // because we don't have the possibility to know how to create
-        // such auto increment column later on
-        // so until we know how to do it, we create a column without autoincrement
-        // therefore we have searched
-        if ( elem.second->nType == DataType::INTEGER )
-        {
-            pTypeInfo = elem.second; // alternative
-            break;
-        }
-        else if ( !pTypeInfo && elem.second->nType == DataType::DOUBLE )
-            pTypeInfo = elem.second; // alternative
-        else if ( !pTypeInfo && elem.second->nType == DataType::REAL )
-            pTypeInfo = elem.second; // alternative
+        if (elem.second->bAutoIncrement && TypeIsGreater(elem.second, pTypeInfo))
+            pTypeInfo = elem.second;
+        if (pTypeInfo)
+            continue;
+        if (elem.second->nType == DataType::INTEGER)
+            pFallback = elem.second; // default alternative
+        else if (!pFallback && elem.second->nType == DataType::DOUBLE)
+            pFallback = elem.second; // alternative
+        else if (!pFallback && elem.second->nType == DataType::REAL)
+            pFallback = elem.second; // alternative
     }
     if ( !pTypeInfo ) // just a fallback
-        pTypeInfo = queryTypeInfoByType(DataType::VARCHAR,_rTypeInfo);
+        pTypeInfo = pFallback ? pFallback : queryTypeInfoByType(DataType::VARCHAR, _rTypeInfo);
 
     OSL_ENSURE(pTypeInfo,"checkColumns: can't find a type which is usable as a key!");
     return pTypeInfo;
@@ -1323,7 +1335,7 @@ bool insertHierarchyElement(weld::Window* pParent, const Reference< XComponentCo
             {"Parent", uno::Any(xNameAccess)},
             {PROPERTY_EMBEDDEDOBJECT, uno::Any(_xContent)},
         }));
-        OUString sServiceName(_bCollection ? (_bForm ? OUString(SERVICE_NAME_FORM_COLLECTION) : OUString(SERVICE_NAME_REPORT_COLLECTION)) : OUString(SERVICE_SDB_DOCUMENTDEFINITION));
+        OUString sServiceName(_bCollection ? (_bForm ? SERVICE_NAME_FORM_COLLECTION : SERVICE_NAME_REPORT_COLLECTION) : SERVICE_SDB_DOCUMENTDEFINITION);
 
         Reference<XContent > xNew( xORB->createInstanceWithArguments( sServiceName, aArguments ), UNO_QUERY_THROW );
         Reference< XNameContainer > xNameContainer( xNameAccess, UNO_QUERY_THROW );

@@ -410,7 +410,7 @@ void SAL_CALL SdrLightEmbeddedClient_Impl::deactivatedUI()
     css::uno::Reference< css::frame::XLayoutManager > xLayoutManager(getLayoutManager());
     if ( xLayoutManager.is() )
     {
-        static constexpr OUStringLiteral aMenuBarURL = u"private:resource/menubar/menubar";
+        static constexpr OUString aMenuBarURL = u"private:resource/menubar/menubar"_ustr;
         if ( !xLayoutManager->isElementVisible( aMenuBarURL ) )
             xLayoutManager->createElement( aMenuBarURL );
     }
@@ -1469,9 +1469,7 @@ OUString SdrOle2Obj::TakeObjNameSingul() const
 
     if (!aName.isEmpty())
     {
-        sName.append(" '");
-        sName.append(aName);
-        sName.append('\'');
+        sName.append(" '" + aName + "\'");
     }
 
     return sName.makeStringAndClear();
@@ -1544,8 +1542,8 @@ void SdrOle2Obj::ImpSetVisAreaSize()
             MapUnit aMapUnit = VCLUnoHelper::UnoEmbed2VCLMapUnit( mpImpl->mxObjRef->getMapUnit( GetAspect() ) );
             Size aVisSize;
             if (sal_Int32(aScaleWidth) != 0 && sal_Int32(aScaleHeight) != 0) // avoid div by zero
-                aVisSize = Size( static_cast<tools::Long>( Fraction( maRect.GetWidth() ) / aScaleWidth ),
-                                 static_cast<tools::Long>( Fraction( maRect.GetHeight() ) / aScaleHeight ) );
+                aVisSize = Size( static_cast<tools::Long>( Fraction( getRectangle().GetWidth() ) / aScaleWidth ),
+                                 static_cast<tools::Long>( Fraction( getRectangle().GetHeight() ) / aScaleHeight ) );
 
             aVisSize = OutputDevice::LogicToLogic(
                 aVisSize,
@@ -1571,18 +1569,15 @@ void SdrOle2Obj::ImpSetVisAreaSize()
                 // server changed VisArea to its liking and the VisArea is different than the suggested one
                 // store the new value as given by the object
                 MapUnit aNewMapUnit = VCLUnoHelper::UnoEmbed2VCLMapUnit( mpImpl->mxObjRef->getMapUnit( GetAspect() ) );
-                maRect.SetSize(
-                    OutputDevice::LogicToLogic(
-                        aAcceptedVisArea.GetSize(),
-                        MapMode(aNewMapUnit),
-                        MapMode(getSdrModelFromSdrObject().GetScaleUnit())));
+                auto aSize = OutputDevice::LogicToLogic(aAcceptedVisArea.GetSize(), MapMode(aNewMapUnit), MapMode(getSdrModelFromSdrObject().GetScaleUnit()));
+                setRectangleSize(aSize.Width(), aSize.Height());
             }
 
             // make the new object area known to the client
             // compared to the "else" branch aRect might have been changed by the object and no additional scaling was applied
             // WHY this -> OSL_ASSERT( pClient );
             if( pClient )
-                pClient->SetObjArea(maRect);
+                pClient->SetObjArea(getRectangle());
 
             // we need a new replacement image as the object has resized itself
 
@@ -1603,7 +1598,7 @@ void SdrOle2Obj::ImpSetVisAreaSize()
             {
                 if ( pClient )
                 {
-                    tools::Rectangle aScaleRect(maRect.TopLeft(), aObjAreaSize);
+                    tools::Rectangle aScaleRect(getRectangle().TopLeft(), aObjAreaSize);
                     pClient->SetObjAreaAndScale( aScaleRect, aScaleWidth, aScaleHeight);
                 }
                 else
@@ -1624,8 +1619,8 @@ void SdrOle2Obj::ImpSetVisAreaSize()
             const MapUnit aMapUnit(
                 VCLUnoHelper::UnoEmbed2VCLMapUnit(
                     mpImpl->mxObjRef->getMapUnit(GetAspect())));
-            const Point aTL( maRect.TopLeft() );
-            const Point aBR( maRect.BottomRight() );
+            const Point aTL( getRectangle().TopLeft() );
+            const Point aBR( getRectangle().BottomRight() );
             const Point aTL2(
                 OutputDevice::LogicToLogic(
                     aTL,
@@ -1922,8 +1917,7 @@ bool SdrOle2Obj::IsCalc() const
 
 uno::Reference< frame::XModel > SdrOle2Obj::GetParentXModel() const
 {
-    uno::Reference< frame::XModel > xDoc(getSdrModelFromSdrObject().getUnoModel(), uno::UNO_QUERY);
-    return xDoc;
+    return getSdrModelFromSdrObject().getUnoModel();
 }
 
 bool SdrOle2Obj::CalculateNewScaling( Fraction& aScaleWidth, Fraction& aScaleHeight, Size& aObjAreaSize )
@@ -1936,13 +1930,21 @@ bool SdrOle2Obj::CalculateNewScaling( Fraction& aScaleWidth, Fraction& aScaleHei
     MapMode aMapMode(getSdrModelFromSdrObject().GetScaleUnit());
     aObjAreaSize = mpImpl->mxObjRef.GetSize( &aMapMode );
 
-    Size aSize = maRect.GetSize();
-    aScaleWidth = Fraction(aSize.Width(),  aObjAreaSize.Width() );
-    aScaleHeight = Fraction(aSize.Height(), aObjAreaSize.Height() );
-
-    // reduce to 10 binary digits
-    aScaleHeight.ReduceInaccurate(10);
-    aScaleWidth.ReduceInaccurate(10);
+    Size aSize = getRectangle().GetSize();
+    if (!aObjAreaSize.Width() || !aObjAreaSize.Height())
+    {
+        // avoid invalid fractions
+        aScaleWidth = Fraction(1,1);
+        aScaleHeight = Fraction(1,1);
+    }
+    else
+    {
+        aScaleWidth = Fraction(aSize.Width(),  aObjAreaSize.Width() );
+        aScaleHeight = Fraction(aSize.Height(), aObjAreaSize.Height() );
+        // reduce to 10 binary digits
+        aScaleHeight.ReduceInaccurate(10);
+        aScaleWidth.ReduceInaccurate(10);
+    }
 
     return true;
 }

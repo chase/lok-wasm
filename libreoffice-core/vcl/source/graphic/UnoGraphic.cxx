@@ -50,27 +50,19 @@ void Graphic::init(const ::Graphic& rGraphic)
     unographic::GraphicDescriptor::init(maGraphic);
 }
 
-uno::Any SAL_CALL Graphic::queryAggregation( const uno::Type& rType )
+uno::Any SAL_CALL Graphic::queryInterface( const uno::Type & rType )
 {
     uno::Any aAny;
     if( rType == cppu::UnoType<graphic::XGraphic>::get())
         aAny <<= uno::Reference< graphic::XGraphic >( this );
     else if( rType == cppu::UnoType<awt::XBitmap>::get())
         aAny <<= uno::Reference< awt::XBitmap >( this );
-    else if( rType == cppu::UnoType<lang::XUnoTunnel>::get())
-        aAny <<= uno::Reference< lang::XUnoTunnel >(this);
+    else if( rType == cppu::UnoType<graphic::XGraphicTransformer>::get())
+        aAny <<= uno::Reference< graphic::XGraphicTransformer >(this);
     else
-        aAny = ::unographic::GraphicDescriptor::queryAggregation( rType );
+        aAny = ::unographic::GraphicDescriptor::queryInterface( rType );
 
     return aAny;
-}
-
-uno::Any SAL_CALL Graphic::queryInterface( const uno::Type & rType )
-{
-    css::uno::Any aReturn = ::unographic::GraphicDescriptor::queryInterface( rType );
-    if ( !aReturn.hasValue() )
-        aReturn = ::cppu::queryInterface ( rType, static_cast< graphic::XGraphicTransformer*>( this ) );
-    return aReturn;
 }
 
 void SAL_CALL Graphic::acquire()
@@ -173,7 +165,7 @@ uno::Sequence<sal_Int8> SAL_CALL Graphic::getMaskDIB()
     {
         SvMemoryStream aMemoryStream;
 
-        WriteDIB(maGraphic.GetBitmapEx().GetAlpha(), aMemoryStream, false, true);
+        WriteDIB(maGraphic.GetBitmapEx().GetAlphaMask().GetBitmap(), aMemoryStream, false, true);
         return css::uno::Sequence<sal_Int8>( static_cast<sal_Int8 const *>(aMemoryStream.GetData()), aMemoryStream.Tell() );
     }
     else
@@ -181,12 +173,6 @@ uno::Sequence<sal_Int8> SAL_CALL Graphic::getMaskDIB()
         return uno::Sequence<sal_Int8>();
     }
 }
-
-sal_Int64 SAL_CALL Graphic::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, &maGraphic);
-}
-
 
 // XGraphicTransformer
 uno::Reference< graphic::XGraphic > SAL_CALL Graphic::colorChange(
@@ -211,7 +197,7 @@ uno::Reference< graphic::XGraphic > SAL_CALL Graphic::colorChange(
 
         if (aBitmapEx.IsAlpha())
         {
-            aBitmapEx.setAlphaFrom( cIndexFrom, 0xff - nAlphaTo );
+            aBitmapEx.ChangeColorAlpha( cIndexFrom, nAlphaTo );
             aBitmapEx.Replace(aColorFrom, aColorTo, nTolerance);
             aReturnGraphic = ::Graphic(aBitmapEx);
         }
@@ -220,13 +206,12 @@ uno::Reference< graphic::XGraphic > SAL_CALL Graphic::colorChange(
             if ((nAlphaTo == 0) || (nAlphaTo == sal::static_int_cast< sal_Int8 >(0xff)))
             {
                 Bitmap aBitmap(aBitmapEx.GetBitmap());
-                Bitmap aMask(aBitmap.CreateMask(aColorFrom, nTolerance));
+                AlphaMask aMask(aBitmap.CreateAlphaMask(aColorFrom, nTolerance));
                 aBitmap.Replace(aColorFrom, aColorTo, nTolerance);
                 aReturnGraphic = ::Graphic(BitmapEx(aBitmap, aMask));
             }
             else
             {
-                aBitmapEx.setAlphaFrom(cIndexFrom, nAlphaTo);
                 aBitmapEx.Replace(aColorFrom, aColorTo, nTolerance);
                 aReturnGraphic = ::Graphic(aBitmapEx);
             }
@@ -244,7 +229,7 @@ uno::Reference< graphic::XGraphic > SAL_CALL Graphic::applyDuotone(
     ::Graphic aReturnGraphic;
 
     BitmapEx    aBitmapEx( aGraphic.GetBitmapEx() );
-    AlphaMask   aMask( aBitmapEx.GetAlpha() );
+    AlphaMask   aMask( aBitmapEx.GetAlphaMask() );
 
     BitmapEx    aTmpBmpEx(aBitmapEx.GetBitmap());
     BitmapFilter::Filter(aTmpBmpEx,

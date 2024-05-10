@@ -10,6 +10,7 @@
 #include <sal/config.h>
 
 #include <memory>
+#include <thread>
 
 #include <config_features.h>
 
@@ -51,8 +52,7 @@
 #include <vcl/menu.hxx>
 #include <vcl/ImageTree.hxx>
 #include <vcl/BitmapEmbossGreyFilter.hxx>
-
-#include <bitmap/BitmapWriteAccess.hxx>
+#include <vcl/BitmapWriteAccess.hxx>
 
 #include <basegfx/numeric/ftools.hxx>
 #include <basegfx/matrix/b2dhommatrix.hxx>
@@ -148,7 +148,7 @@ public:
         maIntroBW = maIntro.GetBitmap();
 
         BitmapEx aTmpBmpEx(maIntroBW);
-        BitmapFilter::Filter(aTmpBmpEx, BitmapEmbossGreyFilter(0, 0));
+        BitmapFilter::Filter(aTmpBmpEx, BitmapEmbossGreyFilter(0_deg100, 0_deg100));
         maIntroBW = aTmpBmpEx.GetBitmap();
 
         InitRenderers();
@@ -1095,7 +1095,7 @@ public:
             if (static_cast<int>(eType) < RENDER_AS_BITMAPEX)
                 pNested = VclPtr<VirtualDevice>::Create(rDev).get();
             else
-                pNested = VclPtr<VirtualDevice>::Create(rDev,DeviceFormat::DEFAULT,DeviceFormat::DEFAULT).get();
+                pNested = VclPtr<VirtualDevice>::Create(rDev,DeviceFormat::WITH_ALPHA).get();
 
             pNested->SetOutputSizePixel(r.GetSize());
             tools::Rectangle aWhole(Point(0,0), r.GetSize());
@@ -1306,10 +1306,10 @@ public:
             AlphaMask aMask(aSrc.GetSizePixel());
             Bitmap aRecovered(aSrc.GetSizePixel(), vcl::PixelFormat::N24_BPP);
             {
-                AlphaScopedWriteAccess pMaskAcc(aMask);
+                BitmapScopedWriteAccess pMaskAcc(aMask);
                 BitmapScopedWriteAccess pRecAcc(aRecovered);
-                Bitmap::ScopedReadAccess pAccW(aWhiteBmp); // a * pix + (1-a)
-                Bitmap::ScopedReadAccess pAccB(aBlackBmp); // a * pix + 0
+                BitmapScopedReadAccess pAccW(aWhiteBmp); // a * pix + (1-a)
+                BitmapScopedReadAccess pAccB(aBlackBmp); // a * pix + 0
                 int nSizeX = aSrc.GetSizePixel().Width();
                 int nSizeY = aSrc.GetSizePixel().Height();
                 for (int y = 0; y < nSizeY; y++)
@@ -1386,7 +1386,7 @@ public:
                     aAbove.Move(aSrc.GetSizePixel().Width(),0);
                     rDev.DrawBitmap(aAbove, aSrc.GetBitmap());
                     aAbove.Move(aSrc.GetSizePixel().Width(),0);
-                    rDev.DrawBitmap(aAbove, aSrc.GetAlpha());
+                    rDev.DrawBitmap(aAbove, aSrc.GetAlphaMask().GetBitmap());
 
                     // intermediates middle
                     BitmapEx aResult = AlphaRecovery(rDev, aLocation, aSrc);
@@ -1405,8 +1405,7 @@ public:
                     rDev.DrawBitmap(aBelow, aGrey);
 
                     aBelow.Move(aGrey.GetSizePixel().Width(),0);
-                    BitmapEx aGreyMask(aSrc.GetBitmap(),
-                                       aSrc.GetAlpha());
+                    BitmapEx aGreyMask(aSrc);
                     rDev.DrawBitmapEx(aBelow, aGreyMask);
 
                     aLocation.Move(aSrc.GetSizePixel().Width()*6,0);
@@ -1730,7 +1729,7 @@ class DemoWin : public WorkWindow
         }
         virtual void execute() override
         {
-            wait(std::chrono::seconds(mnDelaySecs));
+            std::this_thread::sleep_for(std::chrono::seconds(mnDelaySecs));
 
             SolarMutexGuard aGuard;
             fprintf (stderr, "render from a different thread\n");

@@ -20,7 +20,6 @@
 #ifndef INCLUDED_SW_SOURCE_CORE_INC_UNOFOOTNOTE_HXX
 #define INCLUDED_SW_SOURCE_CORE_INC_UNOFOOTNOTE_HXX
 
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
@@ -34,8 +33,7 @@ class SwDoc;
 class SwFormatFootnote;
 
 typedef ::cppu::WeakImplHelper
-<   css::lang::XUnoTunnel
-,   css::lang::XServiceInfo
+<   css::lang::XServiceInfo
 ,   css::beans::XPropertySet
 ,   css::container::XEnumerationAccess
 ,   css::text::XFootnote
@@ -51,8 +49,6 @@ class SwXFootnote final
     ::sw::UnoImplPtr<Impl> m_pImpl;
 
     virtual const SwStartNode *GetStartNode() const override;
-
-    virtual css::uno::Reference< css::text::XTextCursor > CreateCursor() override;
 
     virtual ~SwXFootnote() override;
 
@@ -76,12 +72,6 @@ public:
         SAL_CALL getTypes() override;
     virtual css::uno::Sequence< sal_Int8 > SAL_CALL
         getImplementationId() override;
-
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-
-    // XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething(
-            const css::uno::Sequence< sal_Int8 >& rIdentifier) override;
 
     // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
@@ -136,12 +126,9 @@ public:
     virtual void SAL_CALL setLabel(const OUString& rLabel) override;
 
     // XSimpleText
-    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL
-        createTextCursor() override;
-    virtual css::uno::Reference< css::text::XTextCursor >  SAL_CALL
-        createTextCursorByRange(
-            const css::uno::Reference< css::text::XTextRange > & xTextPosition) override;
-
+    virtual rtl::Reference< SwXTextCursor > createXTextCursor() override;
+    virtual rtl::Reference< SwXTextCursor > createXTextCursorByRange(
+            const ::css::uno::Reference< ::css::text::XTextRange >& aTextPosition ) override;
 };
 
 #endif // INCLUDED_SW_SOURCE_CORE_INC_UNOFOOTNOTE_HXX

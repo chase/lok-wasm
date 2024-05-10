@@ -23,7 +23,7 @@
 #include <tools/helpers.hxx>
 #include <o3tl/hash_combine.hxx>
 #include <o3tl/lru_map.hxx>
-
+#include <unotools/configmgr.hxx>
 #include <vcl/lazydelete.hxx>
 #include <vcl/metaact.hxx>
 #include <vcl/settings.hxx>
@@ -276,6 +276,14 @@ void OutputDevice::ImplDrawWaveTextLine( tools::Long nBaseX, tools::Long nBaseY,
                                          Color aColor,
                                          bool bIsAbove )
 {
+    static bool bFuzzing = utl::ConfigManager::IsFuzzing();
+    if (bFuzzing && nWidth > 10000)
+    {
+        SAL_WARN("vcl.gdi", "drawLine, skipping suspicious WaveTextLine of length: "
+                                << nWidth << " for fuzzing performance");
+        return;
+    }
+
     LogicalFontInstance* pFontInstance = mpFontInstance.get();
     tools::Long            nLineHeight;
     tools::Long            nLinePos;
@@ -344,6 +352,14 @@ void OutputDevice::ImplDrawStraightTextLine( tools::Long nBaseX, tools::Long nBa
                                              Color aColor,
                                              bool bIsAbove )
 {
+    static bool bFuzzing = utl::ConfigManager::IsFuzzing();
+    if (bFuzzing && nWidth > 100000)
+    {
+        SAL_WARN("vcl.gdi", "drawLine, skipping suspicious TextLine of length: "
+                                << nWidth << " for fuzzing performance");
+        return;
+    }
+
     LogicalFontInstance*  pFontInstance = mpFontInstance.get();
     tools::Long            nLineHeight = 0;
     tools::Long            nLinePos  = 0;
@@ -709,7 +725,7 @@ void OutputDevice::ImplDrawStrikeoutChar( tools::Long nBaseX, tools::Long nBaseY
     SetTextColor( aColor );
     ImplInitTextColor();
 
-    pLayout->DrawBase() = DevicePoint(nBaseX + mnTextOffX, nBaseY + mnTextOffY);
+    pLayout->DrawBase() = basegfx::B2DPoint(nBaseX + mnTextOffX, nBaseY + mnTextOffY);
 
     tools::Rectangle aPixelRect;
     aPixelRect.SetLeft( nBaseX+mnTextOffX );
@@ -738,7 +754,7 @@ void OutputDevice::ImplDrawStrikeoutChar( tools::Long nBaseX, tools::Long nBaseY
 }
 
 void OutputDevice::ImplDrawTextLine( tools::Long nX, tools::Long nY,
-                                     tools::Long nDistX, DeviceCoordinate nWidth,
+                                     tools::Long nDistX, double nWidth,
                                      FontStrikeout eStrikeout,
                                      FontLineStyle eUnderline,
                                      FontLineStyle eOverline,
@@ -810,12 +826,12 @@ void OutputDevice::ImplDrawTextLines( SalLayout& rSalLayout, FontStrikeout eStri
     if( bWordLine )
     {
         // draw everything relative to the layout base point
-        const DevicePoint aStartPt = rSalLayout.DrawBase();
+        const basegfx::B2DPoint aStartPt = rSalLayout.DrawBase();
 
         // calculate distance of each word from the base point
-        DevicePoint aPos;
-        DeviceCoordinate nDist = 0;
-        DeviceCoordinate nWidth = 0;
+        basegfx::B2DPoint aPos;
+        double nDist = 0;
+        double nWidth = 0;
         const GlyphItem* pGlyph;
         int nStart = 0;
         while (rSalLayout.GetNextGlyph(&pGlyph, aPos, nStart))
@@ -829,7 +845,7 @@ void OutputDevice::ImplDrawTextLines( SalLayout& rSalLayout, FontStrikeout eStri
                     nDist = aPos.getX() - aStartPt.getX();
                     if( mpFontInstance->mnOrientation )
                     {
-                        const DeviceCoordinate nDY = aPos.getY() - aStartPt.getY();
+                        const double nDY = aPos.getY() - aStartPt.getY();
                         const double fRad = toRadians(mpFontInstance->mnOrientation);
                         nDist = FRound( nDist*cos(fRad) - nDY*sin(fRad) );
                     }
@@ -856,7 +872,7 @@ void OutputDevice::ImplDrawTextLines( SalLayout& rSalLayout, FontStrikeout eStri
     }
     else
     {
-        DevicePoint aStartPt = rSalLayout.GetDrawPosition();
+        basegfx::B2DPoint aStartPt = rSalLayout.GetDrawPosition();
         ImplDrawTextLine( aStartPt.getX(), aStartPt.getY(), 0,
                           rSalLayout.GetTextWidth(),
                           eStrikeout, eUnderline, eOverline, bUnderlineAbove );
@@ -868,8 +884,6 @@ void OutputDevice::ImplDrawMnemonicLine( tools::Long nX, tools::Long nY, tools::
     tools::Long nBaseX = nX;
     if( /*HasMirroredGraphics() &&*/ IsRTLEnabled() )
     {
-        // add some strange offset
-        nX += 2;
         // revert the hack that will be done later in ImplDrawTextLine
         nX = nBaseX - nWidth - (nX - nBaseX - 1);
     }
@@ -899,7 +913,7 @@ void OutputDevice::SetTextLineColor( const Color& rColor )
     maTextLineColor = aColor;
 
     if( mpAlphaVDev )
-        mpAlphaVDev->SetTextLineColor( COL_BLACK );
+        mpAlphaVDev->SetTextLineColor( COL_ALPHA_OPAQUE );
 }
 
 void OutputDevice::SetOverlineColor()
@@ -924,7 +938,7 @@ void OutputDevice::SetOverlineColor( const Color& rColor )
     maOverlineColor = aColor;
 
     if( mpAlphaVDev )
-        mpAlphaVDev->SetOverlineColor( COL_BLACK );
+        mpAlphaVDev->SetOverlineColor( COL_ALPHA_OPAQUE );
 }
 
 void OutputDevice::DrawTextLine( const Point& rPos, tools::Long nWidth,
@@ -959,8 +973,7 @@ void OutputDevice::DrawTextLine( const Point& rPos, tools::Long nWidth,
         return;
 
     Point aPos = ImplLogicToDevicePixel( rPos );
-    DeviceCoordinate fWidth;
-    fWidth = LogicWidthToDeviceCoordinate( nWidth );
+    double fWidth = ImplLogicWidthToDeviceSubPixel(nWidth);
     aPos += Point( mnTextOffX, mnTextOffY );
     ImplDrawTextLine( aPos.X(), aPos.X(), 0, fWidth, eStrikeout, eUnderline, eOverline, bUnderlineAbove );
 
@@ -1042,8 +1055,7 @@ void OutputDevice::DrawWaveLine(const Point& rStartPos, const Point& rEndPos, to
             size_t nWordLength = nEndX - nStartX;
             // start with something big to avoid updating it frequently
             nWordLength = nWordLength < 1024 ? 1024 : nWordLength;
-            ScopedVclPtrInstance< VirtualDevice > pVirtDev( *this, DeviceFormat::DEFAULT,
-                                                           DeviceFormat::DEFAULT );
+            ScopedVclPtrInstance< VirtualDevice > pVirtDev( *this, DeviceFormat::WITH_ALPHA );
             pVirtDev->SetOutputSizePixel( Size( nWordLength, nWaveHeight * 2 ), false );
             pVirtDev->SetLineColor( GetLineColor() );
             pVirtDev->SetBackground( Wallpaper( COL_TRANSPARENT ) );
@@ -1058,7 +1070,7 @@ void OutputDevice::DrawWaveLine(const Point& rStartPos, const Point& rEndPos, to
             // the alpha surface and use it to blend the original solid line color
             Bitmap aSolidColor(aBitmapEx.GetBitmap());
             aSolidColor.Erase(GetLineColor());
-            aBitmapEx = BitmapEx(aSolidColor, aBitmapEx.GetAlpha());
+            aBitmapEx = BitmapEx(aSolidColor, aBitmapEx.GetAlphaMask());
 
             rLineCache.insert( aBitmapEx, GetLineColor(), nLineWidth, nWaveHeight, nWordLength, aWavylinebmp );
         }

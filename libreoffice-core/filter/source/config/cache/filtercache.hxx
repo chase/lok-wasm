@@ -22,6 +22,7 @@
 #include <memory>
 
 #include "cacheitem.hxx"
+#include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/util/URL.hpp>
 #include <com/sun/star/uno/XInterface.hpp>
 #include <com/sun/star/container/XNameAccess.hpp>
@@ -362,8 +363,8 @@ class FilterCache : public cppu::BaseMutex
                         any longer, because any operation before damage it.
          */
         std::vector<OUString> getMatchingItemsByProps( EItemType  eType,
-                                                     o3tl::span< const css::beans::NamedValue > lIProps,
-                                                     o3tl::span< const css::beans::NamedValue > lEProps = {}) const;
+                                                     std::span< const css::beans::NamedValue > lIProps,
+                                                     std::span< const css::beans::NamedValue > lEProps = {}) const;
 
 
         /** @short      indicates if the requested sub container

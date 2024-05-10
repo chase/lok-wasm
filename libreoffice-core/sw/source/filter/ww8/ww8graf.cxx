@@ -58,6 +58,7 @@
 #include <svx/svdogrp.hxx>
 #include <svx/svdograf.hxx>
 #include <svx/svdoole2.hxx>
+#include <editeng/colritem.hxx>
 #include <editeng/ulspitem.hxx>
 #include <editeng/brushitem.hxx>
 #include <editeng/opaqitem.hxx>
@@ -636,7 +637,7 @@ void SwWW8ImplReader::InsertAttrsAsDrawingAttrs(WW8_CP nStartCp, WW8_CP nEndCp,
                 if ( (68 == aRes.nSprmId) || (0x6A03 == aRes.nSprmId) )
                 {
                     Read_PicLoc(aRes.nSprmId, aRes.pMemPos +
-                        m_xSprmParser->DistanceToData(aRes.nSprmId), 4);
+                        m_oSprmParser->DistanceToData(aRes.nSprmId), 4);
                      // Ok, that's what we were looking for.  Now let's get
                      // out of here!
                     break;
@@ -1086,7 +1087,7 @@ void SwWW8ImplReader::InsertTxbxText(SdrTextObj* pTextObj,
                         WW8PLCFx_Cp_FKP* pChp = m_xPlcxMan->GetChpPLCF();
                         WW8PLCFxDesc aDesc;
                         pChp->GetSprms( &aDesc );
-                        WW8SprmIter aSprmIter(aDesc.pMemPos, aDesc.nSprmsLen, *m_xSprmParser);
+                        WW8SprmIter aSprmIter(aDesc.pMemPos, aDesc.nSprmsLen, *m_oSprmParser);
 
                         for( int nLoop = 0; nLoop < 2; ++nLoop )
                         {
@@ -2011,7 +2012,7 @@ void SwWW8ImplReader::MapWrapIntoFlyFormat(const SvxMSDffImportRec& rRecord,
     if (rRecord.nDxWrapDistLeft || rRecord.nDxWrapDistRight)
     {
         SvxLRSpaceItem aLR(writer_cast<sal_uInt16>(rRecord.nDxWrapDistLeft),
-                           writer_cast<sal_uInt16>(rRecord.nDxWrapDistRight), 0, 0, RES_LR_SPACE);
+                           writer_cast<sal_uInt16>(rRecord.nDxWrapDistRight), 0, RES_LR_SPACE);
         AdjustLRWrapForWordMargins(rRecord, aLR);
         rFlyFormat.SetFormatAttr(aLR);
     }
@@ -2104,11 +2105,22 @@ void SwWW8ImplReader::MapWrapIntoFlyFormat(const SvxMSDffImportRec& rRecord,
     }
     else if (rFlyFormat.GetSurround().IsContour())
     {
-        // Contour is enabled, but no polygon is set: disable contour, because Word does not
-        // Writer-style auto-contour in that case.
-        SwFormatSurround aSurround(rFlyFormat.GetSurround());
-        aSurround.SetContour(false);
-        rFlyFormat.SetFormatAttr(aSurround);
+        const SdrObject* pSdrObj = rFlyFormat.FindSdrObject();
+        SdrObjKind eKind = pSdrObj ? pSdrObj->GetObjIdentifier() : SdrObjKind::Graphic;
+        switch (eKind)
+        {
+            case SdrObjKind::Text:
+                break;
+            case SdrObjKind::SwFlyDrawObjIdentifier:
+            default:
+            {
+                // Contour is enabled, but no polygon is set: disable contour, because Word does not
+                // Writer-style auto-contour in that case.
+                SwFormatSurround aSurround(rFlyFormat.GetSurround());
+                aSurround.SetContour(false);
+                rFlyFormat.SetFormatAttr(aSurround);
+            }
+        }
     }
 }
 
@@ -2362,8 +2374,12 @@ RndStdIds SwWW8ImplReader::ProcessEscherAlign(SvxMSDffImportRec& rRecord, WW8_FS
         text::RelOrientation::TEXT_LINE   // 3 is relative to line
     };
 
-    sal_Int16 eHoriOri = aHoriOriTab[ nXAlign ];
-    sal_Int16 eHoriRel = aHoriRelOriTab[ nXRelTo ];
+    // If the image is inline, then the relative orientation means nothing,
+    // so set it up so that if the user changes it into an anchor, it positions usefully.
+    sal_Int16 eHoriOri
+        = IsInlineEscherHack() ? text::HoriOrientation::CENTER : aHoriOriTab[ nXAlign ];
+    sal_Int16 eHoriRel
+        = IsInlineEscherHack() ? text::RelOrientation::FRAME : aHoriRelOriTab[nXRelTo];
 
     // #i36649# - adjustments for certain alignments
     if (eHoriOri == text::HoriOrientation::LEFT && eHoriRel == text::RelOrientation::PAGE_FRAME)
@@ -2383,6 +2399,12 @@ RndStdIds SwWW8ImplReader::ProcessEscherAlign(SvxMSDffImportRec& rRecord, WW8_FS
         const tools::Long nWidth = rFSPA.nXaRight - rFSPA.nXaLeft;
         rFSPA.nXaLeft = 0;
         rFSPA.nXaRight = nWidth;
+    }
+    else if ((eHoriOri == text::HoriOrientation::LEFT || eHoriOri == text::HoriOrientation::RIGHT)
+             && eHoriRel == text::RelOrientation::FRAME)
+    {
+        // relative left/right honors paragraph margins, but not with center or none/absolute offset
+        eHoriRel = text::RelOrientation::PRINT_AREA;
     }
 
     // #i24255# - position of floating screen objects in
@@ -2618,7 +2640,11 @@ SwFrameFormat* SwWW8ImplReader::Read_GrafLayer( tools::Long nGrafAnchorCp )
             eSurround = css::text::WrapTextMode_NONE;
             break;
         case 3: // 3 wrap as if no object present
-            eSurround = css::text::WrapTextMode_THROUGH;
+            // Special case: on export, inline images are wrapped through as a hack for old formats.
+            // That is irrelevant for Writer, so instead use the default wrap in that case,
+            // so that when the user changes it into an anchor, it wraps nicely, and not through.
+            if (!IsInlineEscherHack())
+                eSurround = css::text::WrapTextMode_THROUGH;
             break;
         case 4: // 4 wrap tightly around object
         case 5: // 5 wrap tightly, but allow holes

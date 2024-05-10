@@ -92,21 +92,6 @@
         </info>
       </prop>
     </group>
-    <group oor:name="DialogSize">
-      <info>
-        <desc>Contains the width and height of the dialog size.</desc>
-      </info>
-      <prop oor:name="Height" oor:type="xs:int">
-        <info>
-          <desc>Contains the height of the dialog [UNIT=pixel].</desc>
-        </info>
-      </prop>
-      <prop oor:name="Width" oor:type="xs:int">
-        <info>
-          <desc>Contains the width of the dialog [UNIT=pixel].</desc>
-        </info>
-      </prop>
-    </group>
     <group oor:name="Font">
       <info>
         <desc>Describes the characteristics of a font.</desc>
@@ -532,117 +517,6 @@
         <value>false</value>
       </prop>
     </group>
-    <group oor:name="GraphicSize">
-      <info>
-        <deprecated>Use LogicalGraphicSize instead of this.</deprecated>
-        <desc>Specifies the size of a graphic. [UNIT=1/100 mm].</desc>
-      </info>
-      <prop oor:name="Width" oor:type="xs:int" oor:nillable="false">
-        <info>
-          <desc>Specifies the width of graphic. [UNIT=1/100 mm].</desc>
-        </info>
-        <constraints>
-          <minInclusive oor:value="100">
-            <info>
-              <desc>Represents the highest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </minInclusive>
-          <maxInclusive oor:value="99999">
-            <info>
-              <desc>Represents the lowest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </maxInclusive>
-        </constraints>
-        <value>10000</value>
-      </prop>
-      <prop oor:name="Height" oor:type="xs:int" oor:nillable="false">
-        <info>
-          <desc>Specifies the height of graphic. [UNIT=1/100 mm].</desc>
-        </info>
-        <constraints>
-          <minInclusive oor:value="100">
-            <info>
-              <desc>Represents the lowest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </minInclusive>
-          <maxInclusive oor:value="99999">
-            <info>
-              <desc>Represents the highest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </maxInclusive>
-        </constraints>
-        <value>10000</value>
-      </prop>
-    </group>
-    <group oor:name="LogicalGraphicSize">
-      <info>
-        <desc>Specifies the logical size of a graphic. [UNIT=1/100 mm].</desc>
-      </info>
-      <prop oor:name="LogicalWidth" oor:type="xs:int" oor:nillable="false">
-        <info>
-          <desc>Specifies the logical width of a graphic.
-          [UNIT=1/100 mm].</desc>
-        </info>
-        <constraints>
-          <minInclusive oor:value="100">
-            <info>
-              <desc>Represents the lowest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </minInclusive>
-          <maxInclusive oor:value="99999">
-            <info>
-              <desc>Represents the highest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </maxInclusive>
-        </constraints>
-        <value>10000</value>
-      </prop>
-      <prop oor:name="LogicalHeight" oor:type="xs:int" oor:nillable="false">
-        <info>
-          <desc>Specifies the logical height of graphic. [UNIT=1/100 mm].</desc>
-        </info>
-        <constraints>
-          <minInclusive oor:value="100">
-            <info>
-              <desc>Represents the lowest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </minInclusive>
-          <maxInclusive oor:value="99999">
-            <info>
-              <desc>Represents the highest value that can be entered in the
-              dialog.</desc>
-            </info>
-          </maxInclusive>
-        </constraints>
-        <value>10000</value>
-      </prop>
-    </group>
-    <group oor:name="ObjectNames">
-      <info>
-        <deprecated>Replaced by
-        org.openoffice.Office.Embedding/ObjectName.</deprecated>
-        <desc>Deprecated</desc>
-      </info>
-      <prop oor:name="Name" oor:type="xs:string" oor:localized="true">
-        <info>
-          <deprecated/>
-          <desc>Deprecated</desc>
-        </info>
-      </prop>
-      <prop oor:name="Key" oor:type="xs:string">
-        <info>
-          <deprecated/>
-          <desc>Deprecated</desc>
-        </info>
-      </prop>
-    </group>
     <group oor:name="RecoveryEntry">
       <info>
         <desc>Specifies an entry of the recovery list which is then used by
@@ -684,47 +558,6 @@
           line.</desc>
         </info>
       </prop>
-    </group>
-    <group oor:name="NameCounter">
-      <info>
-        <desc>Stores an association between a numeric value and a name.</desc>
-      </info>
-      <prop oor:name="Name" oor:type="xs:string">
-        <info>
-          <desc>Specifies a name that is associated with a counter.</desc>
-        </info>
-      </prop>
-      <prop oor:name="Counter" oor:type="xs:int">
-        <info>
-          <desc>Specifies a number that is associated with a name.</desc>
-        </info>
-      </prop>
-    </group>
-    <group oor:name="JobDescription">
-      <info>
-        <deprecated>Use cfg package Jobs instead of this.</deprecated>
-        <desc>Use cfg package Jobs instead of this.</desc>
-      </info>
-      <prop oor:name="ServiceName" oor:type="xs:string">
-        <info>
-          <desc>Use cfg package Jobs instead of this.</desc>
-        </info>
-      </prop>
-      <prop oor:name="UserInteraction" oor:type="xs:boolean">
-        <info>
-          <desc>Use cfg package Jobs instead of this.</desc>
-        </info>
-      </prop>
-      <prop oor:name="AllowAsync" oor:type="xs:boolean">
-        <info>
-          <desc>Use cfg package Jobs instead of this.</desc>
-        </info>
-      </prop>
-      <group oor:name="ExecutionArguments" oor:extensible="true">
-        <info>
-          <desc>Use cfg package Jobs instead of this.</desc>
-        </info>
-      </group>
     </group>
     <group oor:name="TrustedAuthor">
       <info>
@@ -777,7 +610,7 @@
       <prop oor:name="DynamicBorderColors" oor:type="xs:boolean" oor:nillable="false">
         <info>
           <desc>specifies whether the controls should use dynamic border
-          coloring, if possible. Dymamic border coloring means that when the
+          coloring, if possible. Dynamic border coloring means that when the
           mouse is hovered over a control, and when a control receives the
           focus, this is indicated with special border colors.</desc>
         </info>
@@ -797,56 +630,6 @@
           the option might better be disabled.&lt;p&gt;</desc>
         </info>
         <value>true</value>
-      </prop>
-    </group>
-    <group oor:name="ProductVersionID">
-      <info>
-        <desc>Stores registration data which is related to a specific product
-        version.</desc>
-      </info>
-      <prop oor:name="InstanceUUID" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>An instance UUID associated with the product version ID.</desc>
-        </info>
-        <value/>
-      </prop>
-    </group>
-    <group oor:name="PersonasEntry">
-      <info>
-        <desc>Stores the details of the installed personas.</desc>
-      </info>
-      <prop oor:name="Slug" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Unique pretty id of the persona, also part of its url</desc>
-        </info>
-      </prop>
-      <prop oor:name="Name" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>The Persona's name</desc>
-        </info>
-      </prop>
-      <prop oor:name="Preview" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Name of the preview file for the Persona to show in the UI</desc>
-        </info>
-      </prop>
-      <prop oor:name="Header" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Name of the header file for the Persona</desc>
-        </info>
-        <value/>
-      </prop>
-      <prop oor:name="Footer" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Name of the footer file for the Persona</desc>
-        </info>
-        <value/>
-      </prop>
-      <prop oor:name="TextColor" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Value of the text color for the Persona</desc>
-        </info>
-        <value/>
       </prop>
     </group>
     <group oor:name="LastDirectory">
@@ -923,20 +706,6 @@
         <value>15</value>
       </prop>
     </group>
-    <group oor:name="InternalMSExport">
-      <info>
-        <desc>Contains internal MSExport settings that are common for all
-        apps.</desc>
-      </info>
-      <prop oor:name="UseOldExport" oor:type="xs:boolean" oor:nillable="false">
-        <info>
-          <desc>Specifies if an old (5.0 format) way instead of a new one (6.0
-          OLE embedded document) should be used for export of inplace objects in
-          case MS-filters are not used for them.</desc>
-        </info>
-        <value>false</value>
-      </prop>
-    </group>
     <group oor:name="Passwords">
       <info>
         <desc>Contains a description of the persistent password
@@ -990,18 +759,6 @@
           in "AuthenticateUsingSystemCredentials" list or not).</desc>
         </info>
         <value>true</value>
-      </prop>
-    </group>
-    <group oor:name="Dictionaries">
-      <info>
-        <desc>Contains settings related to dictionaries.</desc>
-      </info>
-      <prop oor:name="RepositoryURL" oor:type="xs:string" oor:nillable="false">
-        <info>
-          <desc>Specifies a repository URL where users can download additional
-          dictionaries.</desc>
-        </info>
-        <value/>
       </prop>
     </group>
     <group oor:name="Drawinglayer">
@@ -1335,6 +1092,16 @@
         </info>
         <value>true</value>
       </prop>
+      <prop oor:name="SetDOIAttribute" oor:type="xs:boolean" oor:nillable="false">
+        <!-- UIHints: Tools  AutoCorrect/AutoFormat  Options - DOI
+             recognition -->
+        <info>
+          <desc>Specifies if character strings which could represent a DOI
+          should be converted to a hyperlink.</desc>
+          <label>Detect DOI</label>
+        </info>
+        <value>true</value>
+      </prop>
       <prop oor:name="ChangeOrdinalNumber" oor:type="xs:boolean" oor:nillable="false">
         <!-- UIHints: Tools  AutoCorrect/AutoFormat  Options - Replace
              1st... -->
@@ -1523,33 +1290,6 @@
           <desc>Specifies a group of graphic manager cache options.</desc>
           <label>Image Manager Cache</label>
         </info>
-        <prop oor:name="TotalCacheSize" oor:type="xs:int" oor:nillable="false">
-          <info>
-            <deprecated>Not used anymore</deprecated>
-            <desc>Specifies the maximum cache size for all graphical display
-            objects.</desc>
-            <label>Total Image Cache Size</label>
-          </info>
-          <value>400000000</value>
-        </prop>
-        <prop oor:name="ObjectCacheSize" oor:type="xs:int" oor:nillable="false">
-          <info>
-            <deprecated>Not used anymore</deprecated>
-            <desc>Specifies the maximum cache size for a single graphic display
-            object.</desc>
-            <label>Image Object Cache Size</label>
-          </info>
-          <value>12600000</value>
-        </prop>
-        <prop oor:name="ObjectReleaseTime" oor:type="xs:int" oor:nillable="false">
-          <info>
-            <deprecated>Not used anymore</deprecated>
-            <desc>Specifies the time in seconds after which a cached object is
-            freed from the cache.</desc>
-            <label>Image Object Release Timeout</label>
-          </info>
-          <value>600</value>
-        </prop>
         <prop oor:name="GraphicSwappingEnabled" oor:type="xs:boolean" oor:nillable="false">
           <info>
             <desc>Whether graphics will be swapped to disk when `GraphicMemoryLimit`
@@ -1754,22 +1494,6 @@
           <value>
             <it>$(progpath)/plugin</it>
           </value>
-        </prop>
-        <prop oor:name="Storage" oor:type="xs:string" oor:nillable="false">
-          <info>
-            <deprecated>Without replacement.</deprecated>
-            <desc>Specifies the location where misc data are stored.</desc>
-          </info>
-          <value>$(userpath)/store</value>
-        </prop>
-        <prop oor:name="Temp" oor:type="xs:string">
-          <info>
-            <deprecated>Replaced by
-            org.openoffice.Office.Paths/Temp</deprecated>
-            <desc>Specifies the base directory used by the Office to store temp
-            files.</desc>
-          </info>
-          <value/>
         </prop>
         <prop oor:name="Template" oor:type="oor:string-list">
           <info>
@@ -2082,12 +1806,6 @@
         </prop>
       </group>
     </group>
-    <group oor:name="Gallery">
-      <info>
-        <desc>Specifies Gallery options.</desc>
-        <label>Gallery Options</label>
-      </info>
-    </group>
     <group oor:name="Menus">
       <info>
         <desc>Contains information about configurable menus.</desc>
@@ -2162,6 +1880,11 @@
           <desc>Specifies the URL for a privacy policy.</desc>
         </info>
       </prop>
+      <prop oor:name="ExtensionsURL" oor:type="xs:string" oor:nillable="false">
+        <info>
+          <desc>Specifies the URL used for Extensions box.</desc>
+        </info>
+      </prop>
     </group>
     <group oor:name="History">
       <info>
@@ -2233,6 +1956,13 @@
         </info>
         <value>true</value>
       </prop>
+      <prop oor:name="ShowCurrentModuleOnly" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>The entry specifies if the recent document list should show only
+          files that can be handled by the current module.</desc>
+        </info>
+        <value>false</value>
+      </prop>
       <set oor:name="HelpBookmarks" oor:node-type="HistoryType">
         <info>
           <desc>Contains the most recently opened help documents.</desc>
@@ -2302,11 +2032,8 @@
           <value>true</value>
         </prop>
         <prop oor:name="AutoSave" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: Tools  Options - General  Save - [Section] Save -->
           <info>
-            <desc>Specifies whether all modified documents are automatically
-            saved in a time interval.</desc>
-            <label>AutoSave every</label>
+            <deprecated>Not used anymore</deprecated>
           </info>
           <value>false</value>
         </prop>
@@ -2326,6 +2053,15 @@
             document is saved.</desc>
             <label>Always create backup copy</label>
           </info>
+          <value>true</value>
+        </prop>
+        <prop oor:name="BackupIntoDocumentFolder" oor:type="xs:boolean" oor:nillable="false">
+          <!-- UIHints: Tools  Options - General  Save - [Section] Save -->
+          <info>
+            <desc>Specifies whether to save the backup copy into the same folder
+                as the original document.</desc>
+            <label>Place backup in same folder as document</label>
+          </info>
           <value>false</value>
         </prop>
         <prop oor:name="EditProperty" oor:type="xs:boolean" oor:nillable="false">
@@ -2337,33 +2073,10 @@
           </info>
           <value>false</value>
         </prop>
-        <prop oor:name="AutoSavePrompt" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: Tools  Options - General  Save - [Section] Save -->
-          <info>
-            <desc>Shows a prompt during AutoSave,even when the document has a
-            filename.</desc>
-            <label>Prompt to save</label>
-          </info>
-          <value>true</value>
-        </prop>
         <prop oor:name="AutoSaveTimeIntervall" oor:type="xs:int" oor:nillable="false">
-          <!-- UIHints: Tools  Options - General  Save - [Section] Save -->
           <info>
-            <desc>Specifies the AutoSave time interval in minutes.</desc>
-            <label>Minutes</label>
+            <deprecated>Not used anymore</deprecated>
           </info>
-          <constraints>
-            <minInclusive oor:value="1">
-              <info>
-                <desc>Specifies that the minimum time interval is 1 minute.</desc>
-              </info>
-            </minInclusive>
-            <maxInclusive oor:value="60">
-              <info>
-                <desc>Specifies that the maximum time interval is 60 minutes.</desc>
-              </info>
-            </maxInclusive>
-          </constraints>
           <value>10</value>
         </prop>
         <prop oor:name="ViewInfo" oor:type="xs:boolean" oor:nillable="false">
@@ -2558,13 +2271,13 @@
         </info>
         <value>true</value>
       </prop>
-      <prop oor:name="ShowOfficeUpdateDialog" oor:type="xs:boolean" oor:nillable="false">
+      <prop oor:name="ViewPositionForAnyUser" oor:type="xs:boolean" oor:nillable="false">
         <info>
-          <desc>Specifies whether the office update dialog should be shown in
-          case the loaded document has newer ODF version than the maximal
-          supported one.</desc>
+          <desc>Determines if the view position of the document is loaded with
+          a document even if it was saved by a different user.
+          </desc>
         </info>
-        <value>true</value>
+        <value>false</value>
       </prop>
       <prop oor:name="DetectWebDAVRedirection" oor:type="xs:boolean" oor:nillable="false">
         <info>
@@ -2643,51 +2356,6 @@
           </info>
           <value/>
         </prop>
-        <prop oor:name="OfficeBasic" oor:type="xs:int" oor:nillable="false">
-          <!-- UIHints: Tools - Options - Browser -->
-          <info>
-            <desc>Determines how Office Basic scripts should be handled.</desc>
-          </info>
-          <constraints>
-            <enumeration oor:value="0">
-              <info>
-                <desc>Never</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="1">
-              <info>
-                <desc>According to Path List</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="2">
-              <info>
-                <desc>Always</desc>
-              </info>
-            </enumeration>
-          </constraints>
-          <value>1</value>
-        </prop>
-        <prop oor:name="ExecutePlugins" oor:type="xs:boolean" oor:nillable="false">
-          <info>
-            <desc>Specifies whether execution of plugins found inside a document
-            is allowed.</desc>
-          </info>
-          <value>true</value>
-        </prop>
-        <prop oor:name="Warning" oor:type="xs:boolean" oor:nillable="false">
-          <info>
-            <desc>Specifies whether a warning box should be displayed before
-            executing a script.</desc>
-          </info>
-          <value>false</value>
-        </prop>
-        <prop oor:name="Confirmation" oor:type="xs:boolean" oor:nillable="false">
-          <info>
-            <desc>Specifies whether the user must confirm before a basic script
-            can be executed.</desc>
-          </info>
-          <value>true</value>
-        </prop>
         <prop oor:name="WarnSaveOrSendDoc" oor:type="xs:boolean" oor:nillable="false">
           <info>
             <desc>Specifies whether to warn when saving or sending documents with
@@ -2711,6 +2379,12 @@
           <info>
             <desc>Contains the last path manually selected by the user for the CertDir property.</desc>
           </info>
+        </prop>
+        <prop oor:name="CertMgrPath" oor:type="xs:string" oor:nillable="false">
+          <info>
+            <desc>Contains the path of certificate manager if specified.</desc>
+          </info>
+          <value></value>
         </prop>
         <prop oor:name="TSAURLs" oor:type="oor:string-list">
           <info>
@@ -2738,12 +2412,68 @@
           </info>
           <value>false</value>
         </prop>
+        <prop oor:name="KeepRedlineInfoOnSaving" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>
+              Specifies whether to keep track changed information on
+              saving if RemovePersonalInfoOnSaving is true.
+            </desc>
+          </info>
+          <value>false</value>
+        </prop>
+        <prop oor:name="KeepDocUserInfoOnSaving" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>
+              Specifies whether to keep document user information on
+              saving if RemovePersonalInfoOnSaving is true.
+            </desc>
+          </info>
+          <value>false</value>
+        </prop>
+        <prop oor:name="KeepNoteAuthorDateInfoOnSaving" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>
+              Specifies whether to keep note author and date information on
+              saving if RemovePersonalInfoOnSaving is true.
+            </desc>
+          </info>
+          <value>false</value>
+        </prop>
+        <prop oor:name="KeepDocVersionInfoOnSaving" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>
+              Specifies whether to keep document version information on
+              saving if RemovePersonalInfoOnSaving is true.
+            </desc>
+          </info>
+          <value>false</value>
+        </prop>
         <prop oor:name="RecommendPasswordProtection" oor:type="xs:boolean" oor:nillable="false">
           <info>
             <desc>Specifies whether to recommend password protection when saving
             documents.</desc>
           </info>
           <value>false</value>
+        </prop>
+        <prop oor:name="PasswordPolicy" oor:type="xs:string">
+          <info>
+            <desc>Specifies the password policy regular expression to be forced
+            when a password is being entered. If the password doesn't match the
+            regular expression it is denied.
+
+            For example a policy that enforces minimum eight characters, at
+            least one uppercase, one lowercase letter and one number would be:
+            ^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$
+            </desc>
+          </info>
+        </prop>
+        <prop oor:name="PasswordPolicyErrorMessage" oor:type="xs:string" oor:localized="true" oor:nillable="false">
+          <info>
+            <desc>Specifies the displayed error message when the entered
+            password doesn't meet the password policy. Should describe the
+            password policy.</desc>
+          </info>
+          <value>Password does not meet the password policy.</value>
         </prop>
         <prop oor:name="HyperlinksWithCtrlClick" oor:type="xs:boolean" oor:nillable="false">
           <info>
@@ -2787,6 +2517,13 @@
           </info>
           <value>false</value>
         </prop>
+        <prop oor:name="DisableActiveContent" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>Specifies whether or not to disable active content. Right now
+            only disables active embedded content (OLE) and DDE.</desc>
+          </info>
+          <value>false</value>
+        </prop>
         <prop oor:name="CheckDocumentEvents" oor:type="xs:boolean" oor:nillable="false">
           <info>
             <desc>Warn on load when a document binds an event to a macro</desc>
@@ -2814,6 +2551,131 @@
             <desc>List with trusted authors.</desc>
           </info>
         </set>
+        <group oor:name="WindowsSecurityZone">
+          <info>
+            <desc>Contains security settings regarding Basic scripts.</desc>
+          </info>
+          <prop oor:name="ZoneLocal" oor:type="xs:int" oor:nillable="false">
+            <info>
+              <desc>Action needed for opening document with macro with Windows zone
+              identifier URLZONE_LOCAL_MACHINE (0, local machine).</desc>
+            </info>
+            <constraints>
+              <enumeration oor:value="0">
+                <info>
+                  <desc>Ask</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="1">
+                <info>
+                  <desc>Allow</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="2">
+                <info>
+                  <desc>Deny</desc>
+                </info>
+              </enumeration>
+            </constraints>
+            <value>0</value>
+          </prop>
+          <prop oor:name="ZoneIntranet" oor:type="xs:int" oor:nillable="false">
+            <info>
+              <desc>Action needed for opening document with macro with Windows zone
+              identifier URLZONE_INTRANET (1, local machine).</desc>
+            </info>
+            <constraints>
+              <enumeration oor:value="0">
+                <info>
+                  <desc>Ask</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="1">
+                <info>
+                  <desc>Allow</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="2">
+                <info>
+                  <desc>Deny</desc>
+                </info>
+              </enumeration>
+            </constraints>
+            <value>0</value>
+          </prop>
+          <prop oor:name="ZoneTrusted" oor:type="xs:int" oor:nillable="false">
+            <info>
+              <desc>Action needed for opening document with macro with Windows zone
+              identifier URLZONE_TRUSTED (2, trusted).</desc>
+            </info>
+            <constraints>
+              <enumeration oor:value="0">
+                <info>
+                  <desc>Ask</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="1">
+                <info>
+                  <desc>Allow</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="2">
+                <info>
+                  <desc>Deny</desc>
+                </info>
+              </enumeration>
+            </constraints>
+            <value>0</value>
+          </prop>
+          <prop oor:name="ZoneInternet" oor:type="xs:int" oor:nillable="false">
+            <info>
+              <desc>Action needed for opening document with macro with Windows zone
+              identifier URLZONE_INTERNET (3, internet).</desc>
+            </info>
+            <constraints>
+              <enumeration oor:value="0">
+                <info>
+                  <desc>Ask</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="1">
+                <info>
+                  <desc>Allow</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="2">
+                <info>
+                  <desc>Deny</desc>
+                </info>
+              </enumeration>
+            </constraints>
+            <value>0</value>
+          </prop>
+          <prop oor:name="ZoneUntrusted" oor:type="xs:int" oor:nillable="false">
+            <info>
+              <desc>Action needed for opening document with macro with Windows zone
+              identifier URLZONE_UNTRUSTED (3, untrusted source).</desc>
+            </info>
+            <constraints>
+              <enumeration oor:value="0">
+                <info>
+                  <desc>Ask</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="1">
+                <info>
+                  <desc>Allow</desc>
+                </info>
+              </enumeration>
+              <enumeration oor:value="2">
+                <info>
+                  <desc>Deny</desc>
+                </info>
+              </enumeration>
+            </constraints>
+            <value>0</value>
+          </prop>
+        </group>
       </group>
     </group>
     <group oor:name="View">
@@ -2832,65 +2694,11 @@
           <value>false</value>
         </prop>
       </group>
-      <group oor:name="AppWindow">
-        <info>
-          <desc>Contains settings on how the application window should be
-          displayed.</desc>
-        </info>
-        <prop oor:name="FullScreen" oor:type="xs:boolean" oor:nillable="false">
-          <info>
-            <desc>Specifies whether the application window should be opened in
-            Fullscreen mode.</desc>
-          </info>
-          <value>false</value>
-        </prop>
-        <prop oor:name="Preference" oor:type="xs:int" oor:nillable="false">
-          <info>
-            <desc>Specifies the preferred view of the application window.</desc>
-          </info>
-          <constraints>
-            <enumeration oor:value="0">
-              <info>
-                <desc>Use last setting</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="1">
-              <info>
-                <desc>Show in task bar</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="2">
-              <info>
-                <desc>Open in Fullscreen mode</desc>
-              </info>
-            </enumeration>
-          </constraints>
-          <value>0</value>
-        </prop>
-      </group>
       <group oor:name="Dialog">
         <info>
           <desc>Contains settings which specify how dialogs and toolbars should
           be displayed.</desc>
         </info>
-        <prop oor:name="ButtonLarge" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: Tools  Options - General  View  [Section] Buttons -->
-          <info>
-            <desc>Specifies whether toolbar buttons should be drawn large or
-            small. True means large.</desc>
-            <label>Large buttons</label>
-          </info>
-          <value>false</value>
-        </prop>
-        <prop oor:name="ButtonFlat" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: Tools  Options - General  View  [Section] Buttons -->
-          <info>
-            <desc>Specifies whether toolbox buttons should be drawn with a flat
-            or 3D design. True means flat design.</desc>
-            <label>Flat buttons</label>
-          </info>
-          <value>true</value>
-        </prop>
         <prop oor:name="MousePositioning" oor:type="xs:short" oor:nillable="false">
           <!-- UIHints: Tools  Options - General  View  [Section] Mouse
                positioning -->
@@ -3038,81 +2846,6 @@
             </enumeration>
           </constraints>
           <value>2</value>
-        </prop>
-        <prop oor:name="Key" oor:type="xs:int">
-          <!-- Notice: LM: Description is missing
-               5962Window=V1,995/150/280/321,H,0,AL:(16,4,0/0/400/250)#100 -->
-          <info>
-            <deprecated/>
-            <desc>Deprecated.</desc>
-          </info>
-        </prop>
-        <prop oor:name="Version" oor:type="xs:string" oor:nillable="false">
-          <!-- Notice: LM: Description is missing -->
-          <info>
-            <deprecated/>
-            <desc>Deprecated.</desc>
-          </info>
-          <value/>
-          <!-- JB: Empty default inserted into empty property node. Remove if
-               NIL was intended -->
-        </prop>
-        <prop oor:name="State" oor:type="xs:boolean" oor:nillable="false">
-          <!-- Notice: LM: Description is missing -->
-          <info>
-            <deprecated/>
-            <desc>Deprecated.</desc>
-          </info>
-          <value>false</value>
-        </prop>
-        <prop oor:name="Flag" oor:type="xs:int">
-          <!-- Notice: LM: Description is missing -->
-          <info>
-            <deprecated/>
-            <desc>Deprecated.</desc>
-          </info>
-          <constraints>
-            <enumeration oor:value="01">
-              <info>
-                <desc>ZoomIn</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="02">
-              <info>
-                <desc>Small</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="04">
-              <info>
-                <desc>ForceDock</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="08">
-              <info>
-                <desc>AutoHide</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="10">
-              <info>
-                <desc>Task</desc>
-              </info>
-            </enumeration>
-            <enumeration oor:value="20">
-              <info>
-                <desc>CantGetFocus</desc>
-              </info>
-            </enumeration>
-          </constraints>
-        </prop>
-        <prop oor:name="UserData" oor:type="xs:string" oor:nillable="false">
-          <!-- Notice: LM: Description is missing -->
-          <info>
-            <deprecated/>
-            <desc>Deprecated.</desc>
-          </info>
-          <value/>
-          <!-- JB: Empty default inserted into empty property node. Remove if
-               NIL was intended -->
         </prop>
       </group>
       <group oor:name="FontAntiAliasing">
@@ -3345,12 +3078,8 @@
             <value>false</value>
           </prop>
           <prop oor:name="PDFAsStandardPrintJobFormat" oor:type="xs:boolean" oor:nillable="false">
-            <!-- UIHints: Tools  Options - General  Print  [Section]
-                 PrintFileOptions -->
             <info>
-              <desc>Indicates whether PDF should be the Standard Print Job
-              format</desc>
-              <label>(PrinterOptions) PDFAsStandardPrintJobFormat</label>
+              <deprecated>Not used anymore</deprecated>
             </info>
             <value>true</value>
           </prop>
@@ -3463,12 +3192,8 @@
             <value>false</value>
           </prop>
           <prop oor:name="PDFAsStandardPrintJobFormat" oor:type="xs:boolean" oor:nillable="false">
-            <!-- UIHints: Tools  Options - General  Print  [Section]
-                 PrintFileOptions -->
             <info>
-              <desc>Indicates whether PDF should be the Standard Print Job
-              format</desc>
-              <label>(PrintFileOptions) PDFAsStandardPrintJobFormat</label>
+              <deprecated>Not used anymore</deprecated>
             </info>
             <value>true</value>
           </prop>
@@ -3491,40 +3216,6 @@
           <value>false</value>
         </prop>
       </group>
-    </group>
-    <group oor:name="AddXMLToStorage">
-      <info>
-        <desc>Contains settings specifying if a XML package is added to the
-        applications binary files.</desc>
-      </info>
-      <prop oor:name="Writer" oor:type="xs:boolean">
-        <!-- UIHints: no -->
-        <info>
-          <desc>Defines if a XML package is added to the Writer binary
-          files.</desc>
-        </info>
-      </prop>
-      <prop oor:name="Calc" oor:type="xs:boolean">
-        <!-- UIHints: no -->
-        <info>
-          <desc>Defines if a XML package is added to the Calc binary
-          files.</desc>
-        </info>
-      </prop>
-      <prop oor:name="Impress" oor:type="xs:boolean">
-        <!-- UIHints: no -->
-        <info>
-          <desc>Defines if a XML package is added to the Impress binary
-          files.</desc>
-        </info>
-      </prop>
-      <prop oor:name="Draw" oor:type="xs:boolean">
-        <!-- UIHints: no -->
-        <info>
-          <desc>Defines if a XML package is added to the Draw binary
-          files.</desc>
-        </info>
-      </prop>
     </group>
     <group oor:name="UserColors">
       <info>
@@ -3690,8 +3381,7 @@
         </info>
         <prop oor:name="AddFeatureURL" oor:type="xs:string" oor:nillable="false">
           <info>
-            <desc>Contains a string specifying the URL to be browsed for
-            additional features (e.g. extensions)</desc>
+            <deprecated>Not used anymore</deprecated>
           </info>
           <value/>
         </prop>
@@ -3699,13 +3389,6 @@
           <info>
             <desc>Contains a string specifying the URL to be browsed for
             information about the product</desc>
-          </info>
-          <value/>
-        </prop>
-        <prop oor:name="TemplateRepositoryURL" oor:type="xs:string" oor:nillable="false">
-          <info>
-            <desc>Contains a string specifying the URL to be browsed for
-            additional template documents</desc>
           </info>
           <value/>
         </prop>
@@ -3722,20 +3405,6 @@
             <desc>Specifies the text color of the thumbnail area in the start center.</desc>
           </info>
           <value>15658734</value>
-        </prop>
-        <prop oor:name="StartCenterThumbnailsHighlightColor" oor:type="xs:int" oor:nillable="false">
-          <!-- Default 14540253 = 0xdddddd as specified in tdf#90452, comment 45 -->
-          <info>
-            <desc>Specifies the background color of the highlight of a thumbnail in the start center.</desc>
-          </info>
-          <value>14540253</value>
-        </prop>
-        <prop oor:name="StartCenterThumbnailsHighlightTextColor" oor:type="xs:int" oor:nillable="false">
-          <!-- Default 3355443 = 0x333333 as specified in tdf#90452, comment 45 -->
-          <info>
-            <desc>Specifies the text color of the highlight of a thumbnail in the start center.</desc>
-          </info>
-          <value>3355443</value>
         </prop>
       </group>
     </group>
@@ -4764,7 +4433,7 @@
             <constraints>
               <enumeration oor:value="0">
                 <info>
-                  <desc>Html 3.2</desc>
+                  <desc>Obsolete; equivalent to 4</desc>
                 </info>
               </enumeration>
               <enumeration oor:value="1">
@@ -4774,7 +4443,7 @@
               </enumeration>
               <enumeration oor:value="2">
                 <info>
-                  <desc>Netscape 3.0</desc>
+                  <desc>Obsolete; equivalent to 4</desc>
                 </info>
               </enumeration>
               <enumeration oor:value="3">
@@ -4812,7 +4481,7 @@
             <!-- UIHints: Tools  Options - Browser  HTML [Section] Export -->
             <info>
               <desc>Specifies whether images are copied to the Internet server when
-              uploading via FTP.</desc>
+              uploading via a network protocol.</desc>
               <label>Copy local images to Internet</label>
             </info>
             <value>true</value>
@@ -4845,15 +4514,6 @@
           <info>
             <desc>Specifies default settings of PDF export dialog.</desc>
           </info>
-          <prop oor:name="CompressMode" oor:type="xs:int" oor:nillable="false">
-            <info>
-              <deprecated>Use following properties instead:
-              UseLosslessCompression, Quality, UseResolutionReduction,
-              ResolutionReduction</deprecated>
-              <desc>Deprecated.</desc>
-            </info>
-            <value>1</value>
-          </prop>
           <prop oor:name="UseLosslessCompression" oor:type="xs:boolean" oor:nillable="false">
             <info>
               <desc>Specifies if graphics are exported to PDF using a lossless
@@ -4931,7 +4591,7 @@
               <desc>Determines if PDF are created by using special tags also
               known as Tagged PDF.</desc>
             </info>
-            <value>false</value>
+            <value>true</value>
           </prop>
           <prop oor:name="ExportNotes" oor:type="xs:boolean" oor:nillable="false">
             <info>
@@ -5314,7 +4974,7 @@
             <constraints>
               <enumeration oor:value="0">
                 <info>
-                  <desc>PDF 1.6 (default selection).</desc>
+                  <desc>PDF 1.7 (default selection).</desc>
                 </info>
               </enumeration>
               <enumeration oor:value="15">
@@ -5477,13 +5137,6 @@
           be open at the same time. NIL will be interpreted as infinite!</desc>
         </info>
       </prop>
-      <prop oor:name="EmojiFont" oor:type="xs:string" oor:nillable="false">
-        <!-- UIHints: Emoji Control -->
-        <info>
-          <desc>Special font for rendering of emojis</desc>
-        </info>
-        <value>Segoe UI Emoji,Apple Color Emoji,Noto Color Emoji</value>
-      </prop>
       <prop oor:name="FontsUseWinMetrics" oor:type="oor:string-list" oor:nillable="false">
         <info>
           <desc>
@@ -5496,6 +5149,9 @@
           <it>Celticmd,1571,-567,1571,-547,2126,559</it>
           <!-- DIN Light (ttf version) has odd metrics. The otf version works fine. -->
           <it>DIN Light,1509,-503,1509,-483,1997,483</it>
+          <!-- tdf#155297 -->
+	  <it>B Nazanin,1343,-705,1990,-1045,1990,1045</it> <!-- Regular -->
+	  <it>B Nazanin,1341,-707,2126,-1120,2126,1120</it> <!-- Bold -->
         </value>
       </prop>
       <prop oor:name="FontsDontUseUnderlineMetrics" oor:type="oor:string-list" oor:nillable="false">
@@ -5635,6 +5291,13 @@
               <desc>The last shown Tip-of-the-Day.</desc>
           </info>
           <value>-1</value>
+      </prop>
+      <prop oor:name="QuerySetInsMode" oor:type="xs:boolean" oor:nillable="false">
+        <!-- UIHints: Tools - Options - General -->
+        <info>
+          <desc>Determines whether to query when switching into the overwrite mode.</desc>
+        </info>
+        <value>true</value>
       </prop>
       <prop oor:name="PerformFileExtCheck" oor:type="xs:boolean" oor:nillable="false">
         <!-- UIHints: Tools - Options - General -->
@@ -5797,25 +5460,6 @@
         </info>
         <value/>
       </prop>
-      <prop oor:name="ToolboxStyle" oor:type="xs:short" oor:nillable="false">
-        <!-- UIHints: Tools  Options General View -->
-        <info>
-          <desc>Specifies which button style the toolbars should use.</desc>
-        </info>
-        <constraints>
-          <enumeration oor:value="0">
-            <info>
-              <desc>3D style</desc>
-            </info>
-          </enumeration>
-          <enumeration oor:value="1">
-            <info>
-              <desc>Flat style</desc>
-            </info>
-          </enumeration>
-        </constraints>
-        <value>1</value>
-      </prop>
       <prop oor:name="FormControlPilotsEnabled" oor:type="xs:boolean" oor:nillable="false">
         <info>
           <desc>Enables/Disables the usage of AutoPilots for form
@@ -5867,11 +5511,6 @@
           <desc>List of names of the CMIS servers in the place edition dialog.</desc>
         </info>
       </prop>
-      <set oor:name="PersonasList" oor:node-type="PersonasEntry">
-        <info>
-          <desc>Contains the Personas installed through extensions</desc>
-        </info>
-      </set>
       <prop oor:name="FindReplaceRememberedSearches" oor:type="xs:int" oor:nillable="false">
         <info>
           <desc>Number of saved searches in the Find and Replace dialog.</desc>
@@ -5948,13 +5587,6 @@
           <desc>specifies settings for the property browser used for forms and
           form controls.</desc>
         </info>
-        <prop oor:name="ExperimentalProperties" oor:type="xs:boolean" oor:nillable="false">
-          <info>
-            <desc>Enables or disables the property browser's access to
-            form/control properties which are not officially supported.</desc>
-          </info>
-          <value>false</value>
-        </prop>
         <prop oor:name="DirectHelp" oor:type="xs:boolean" oor:nillable="false">
           <info>
             <desc>Enables or disables a help section at the bottom of the
@@ -6424,12 +6056,6 @@
          <value>false</value>
        </prop>
     </group>
-    <group oor:name="ExternalApps" oor:extensible="true">
-      <info>
-        <deprecated>Without replacement.</deprecated>
-        <desc>Specifies external helper applications / protocol handlers.</desc>
-      </info>
-    </group>
     <group oor:name="ExternalMailer">
       <info>
         <desc>Specifies an external mail application to be used for Send as
@@ -6446,20 +6072,6 @@
       <info>
         <desc>Contains various language/localization specific settings.</desc>
       </info>
-      <group oor:name="InputMethod">
-        <info>
-          <desc>Contains settings for (language/localization specific) input
-          methods.</desc>
-        </info>
-        <prop oor:name="ShowStatusWindow" oor:type="xs:boolean">
-          <info>
-            <desc>Controls the behavior of the IIIMP status window on Unix. If
-            true, the status window is always displayed. If false, the status
-            window is never displayed. If nil (the default), the status window
-            is displayed depending on the current locale.</desc>
-          </info>
-        </prop>
-      </group>
       <group oor:name="CJK">
         <info>
           <desc>Contains settings for the Asian languages (Chinese, Japanese,
@@ -6529,14 +6141,6 @@
           </info>
           <value>false</value>
         </prop>
-        <prop oor:name="VerticalCallOut" oor:type="xs:boolean" oor:nillable="false">
-          <!-- UIHints: setup -->
-          <info>
-            <desc>Specifies whether vertical call out objects are available
-            (true) or not (false).</desc>
-          </info>
-          <value>false</value>
-        </prop>
       </group>
       <group oor:name="CTL">
         <info>
@@ -6602,24 +6206,6 @@
           </info>
         </prop>
       </group>
-    </group>
-    <group oor:name="Startup">
-      <info>
-        <deprecated>Use cfg package Jobs instead of this.</deprecated>
-        <desc>Uses cfg package Jobs instead of this component.</desc>
-      </info>
-      <set oor:name="Run" oor:node-type="JobDescription">
-        <info>
-          <deprecated>Use cfg package Jobs instead of this.</deprecated>
-          <desc>Uses cfg package Jobs instead of this component.</desc>
-        </info>
-      </set>
-      <set oor:name="RunOnce" oor:node-type="JobDescription">
-        <info>
-          <deprecated>Use cfg package Jobs instead of this.</deprecated>
-          <desc>Uses cfg package Jobs instead of this component.</desc>
-        </info>
-      </set>
     </group>
     <group oor:name="SmartTags">
       <info>

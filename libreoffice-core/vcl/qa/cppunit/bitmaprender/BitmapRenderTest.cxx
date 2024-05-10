@@ -152,7 +152,7 @@ void BitmapRenderTest::testDrawAlphaBitmapEx()
     {
         CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N24_BPP, aBitmapEx.GetBitmap().getPixelFormat());
         CPPUNIT_ASSERT_EQUAL(true, aBitmapEx.IsAlpha());
-        CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N8_BPP, aBitmapEx.GetAlpha().getPixelFormat());
+        CPPUNIT_ASSERT_EQUAL(vcl::PixelFormat::N8_BPP, aBitmapEx.GetAlphaMask().getPixelFormat());
     }
 
     // Check the bitmap has pixels we expect
@@ -182,8 +182,8 @@ void BitmapRenderTest::testAlphaVirtualDevice()
 // TODO: This unit test is not executed for macOS unless bitmap scaling is implemented
 #ifndef MACOSX
     // Create an alpha virtual device
-    ScopedVclPtr<VirtualDevice> pAlphaVirtualDevice(VclPtr<VirtualDevice>::Create(
-        *Application::GetDefaultDevice(), DeviceFormat::DEFAULT, DeviceFormat::DEFAULT));
+    ScopedVclPtr<VirtualDevice> pAlphaVirtualDevice(
+        VclPtr<VirtualDevice>::Create(*Application::GetDefaultDevice(), DeviceFormat::WITH_ALPHA));
 
     // Set it up
     pAlphaVirtualDevice->SetOutputSizePixel(Size(4, 4));
@@ -260,7 +260,7 @@ void BitmapRenderTest::testTdf116888()
     Bitmap aBitmap = aGraphic.GetBitmapEx().GetBitmap();
     CPPUNIT_ASSERT(!aBitmap.IsEmpty());
     aBitmap.Scale(0.8, 0.8); // This scaling discards mpUserData,
-    Bitmap::ScopedReadAccess pAccess(aBitmap); // forcing ReadTexture() here.
+    BitmapScopedReadAccess pAccess(aBitmap); // forcing ReadTexture() here.
     // Check that there is mpUserBuffer content.
     CPPUNIT_ASSERT(pAccess);
     const ScanlineFormat eFormat = pAccess->GetScanlineFormat();

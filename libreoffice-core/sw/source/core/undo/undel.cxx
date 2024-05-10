@@ -54,17 +54,16 @@
     ( == AUTO ), if the anchor frame has be moved via MoveNodes(..) and
     DelFrames(..)
 */
-static void lcl_MakeAutoFrames( const SwFrameFormats& rSpzArr, SwNodeOffset nMovedIndex )
+static void lcl_MakeAutoFrames(const sw::FrameFormats<sw::SpzFrameFormat*>& rSpzs, SwNodeOffset nMovedIndex )
 {
-    for( size_t n = 0; n < rSpzArr.size(); ++n )
+    for(auto pSpz: rSpzs)
     {
-        SwFrameFormat * pFormat = rSpzArr[n];
-        const SwFormatAnchor* pAnchor = &pFormat->GetAnchor();
+        const SwFormatAnchor* pAnchor = &pSpz->GetAnchor();
         if (pAnchor->GetAnchorId() == RndStdIds::FLY_AT_CHAR)
         {
             const SwNode* pAnchorNode = pAnchor->GetAnchorNode();
             if( pAnchorNode && nMovedIndex == pAnchorNode->GetIndex() )
-                pFormat->MakeFrames();
+                pSpz->MakeFrames();
         }
     }
 }
@@ -267,8 +266,8 @@ SwUndoDelete::SwUndoDelete(
     if( pSttTextNd && pEndTextNd && pSttTextNd != pEndTextNd )
     {
         // two different TextNodes, thus save also the TextFormatCollection
-        m_pHistory->Add( pSttTextNd->GetTextColl(),pStt->GetNodeIndex(), SwNodeType::Text );
-        m_pHistory->Add( pEndTextNd->GetTextColl(),pEnd->GetNodeIndex(), SwNodeType::Text );
+        m_pHistory->AddColl(pSttTextNd->GetTextColl(), pStt->GetNodeIndex(), SwNodeType::Text);
+        m_pHistory->AddColl(pEndTextNd->GetTextColl(), pEnd->GetNodeIndex(), SwNodeType::Text);
 
         if( !m_bJoinNext )        // Selection from bottom to top
         {
@@ -540,6 +539,7 @@ bool SwUndoDelete::CanGrouping( SwDoc& rDoc, const SwPaM& rDelPam )
         if( m_bGroup && !m_bBackSp ) return false;
         m_bBackSp = true;
     }
+    // note: compare m_nSttContent here because the text isn't there any more!
     else if( pStt->GetContentIndex() == m_nSttContent )
     {
         if( m_bGroup && m_bBackSp ) return false;
@@ -566,6 +566,30 @@ bool SwUndoDelete::CanGrouping( SwDoc& rDoc, const SwPaM& rDelPam )
     if (IsFlySelectedByCursor(rDoc, *pStt, *pEnd))
     {
         return false;
+    }
+
+    if ((m_DeleteFlags & SwDeleteFlags::ArtificialSelection) && m_pHistory)
+    {
+        IDocumentMarkAccess const& rIDMA(*rDoc.getIDocumentMarkAccess());
+        for (auto i = m_pHistory->Count(); 0 < i; )
+        {
+            --i;
+            SwHistoryHint const*const pHistory((*m_pHistory)[i]);
+            if (pHistory->Which() == HSTRY_BOOKMARK)
+            {
+                SwHistoryBookmark const*const pHistoryBM(
+                        static_cast<SwHistoryBookmark const*>(pHistory));
+                auto const ppMark(rIDMA.findMark(pHistoryBM->GetName()));
+                if (ppMark != rIDMA.getAllMarksEnd()
+                    && (m_bBackSp
+                            ? ((**ppMark).GetMarkPos() == *pStt)
+                            : ((**ppMark).IsExpanded()
+                                && (**ppMark).GetOtherMarkPos() == *pEnd)))
+                {   // prevent grouping that would delete this mark on Redo()
+                    return false;
+                }
+            }
+        }
     }
 
     {
@@ -817,25 +841,20 @@ SwRewriter SwUndoDelete::GetRewriter() const
 }
 
 // Every object, anchored "AtContent" will be reanchored at rPos
-static void lcl_ReAnchorAtContentFlyFrames( const SwFrameFormats& rSpzArr, const SwPosition &rPos, SwNodeOffset nOldIdx )
+static void lcl_ReAnchorAtContentFlyFrames(const sw::FrameFormats<sw::SpzFrameFormat*>& rSpzs, const SwPosition &rPos, SwNodeOffset nOldIdx )
 {
-    if( rSpzArr.empty() )
-        return;
-
-    SwFrameFormat* pFormat;
     const SwFormatAnchor* pAnchor;
-    for( size_t n = 0; n < rSpzArr.size(); ++n )
+    for(auto pSpz: rSpzs)
     {
-        pFormat = rSpzArr[n];
-        pAnchor = &pFormat->GetAnchor();
+        pAnchor = &pSpz->GetAnchor();
         if (pAnchor->GetAnchorId() == RndStdIds::FLY_AT_PARA)
         {
-            SwNode* pAnchorNode =  pAnchor->GetAnchorNode();
+            SwNode* pAnchorNode = pAnchor->GetAnchorNode();
             if( pAnchorNode && nOldIdx == pAnchorNode->GetIndex() )
             {
                 SwFormatAnchor aAnch( *pAnchor );
                 aAnch.SetAnchor( &rPos );
-                pFormat->SetFormatAttr( aAnch );
+                pSpz->SetFormatAttr( aAnch );
             }
         }
     }
@@ -1133,14 +1152,25 @@ void SwUndoDelete::UndoImpl(::sw::UndoRedoContext & rContext)
         SwNode& start(*rDoc.GetNodes()[m_nSttNode +
             ((m_bDelFullPara || !rDoc.GetNodes()[m_nSttNode]->IsTextNode() || pInsNd)
                  ? 0 : 1)]);
-        // don't include end node in the range: it may have been merged already
-        // by the start node, or it may be merged by one of the moved nodes,
-        // but if it isn't merged, its current frame(s) should be good...
-        SwNode& end(*rDoc.GetNodes()[ m_bDelFullPara
-            ? delFullParaEndNode
-            // tdf#147310 SwDoc::DeleteRowCol() may delete whole table - end must be node following table!
-            : (m_nEndNode + (rDoc.GetNodes()[m_nSttNode]->IsTableNode() && rDoc.GetNodes()[m_nEndNode]->IsEndNode() ? 1 : 0))]);
-        ::MakeFrames(&rDoc, start, end);
+        // tdf#158740 fix crash by checking the end node's index
+        // I don't know why m_nEndNode is larger than the size of the node
+        // array, but adjusting m_nEndNode to the last element in the node
+        // array stops the crashing.
+        SwNodeOffset nCount(rDoc.GetNodes().Count());
+        if (nCount > SwNodeOffset(0))
+        {
+            if (m_nEndNode > nCount - 1)
+                m_nEndNode = nCount - 1;
+
+            // don't include end node in the range: it may have been merged already
+            // by the start node, or it may be merged by one of the moved nodes,
+            // but if it isn't merged, its current frame(s) should be good...
+            SwNode& end(*rDoc.GetNodes()[ m_bDelFullPara
+                ? delFullParaEndNode
+                // tdf#147310 SwDoc::DeleteRowCol() may delete whole table - end must be node following table!
+                : (m_nEndNode + (rDoc.GetNodes()[m_nSttNode]->IsTableNode() && rDoc.GetNodes()[m_nEndNode]->IsEndNode() ? 1 : 0))]);
+            ::MakeFrames(&rDoc, start, end);
+        }
     }
 
     if (pMovedNode)
@@ -1300,7 +1330,6 @@ void SwUndoDelete::RedoImpl(::sw::UndoRedoContext & rContext)
         rDoc.getIDocumentContentOperations().DelFullPara( rPam );
     }
     else
-        // FIXME: this ends up calling DeleteBookmarks() on the entire rPam which deletes too many!
         rDoc.getIDocumentContentOperations().DeleteAndJoin(rPam, m_DeleteFlags);
 }
 

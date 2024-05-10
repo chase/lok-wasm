@@ -121,11 +121,11 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL
         ScXMLBodyContext::createFastChildContext( sal_Int32 nElement,
         const uno::Reference< xml::sax::XFastAttributeList > & xAttrList )
 {
-    ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetScImport().GetModel())->GetSheetSaveData();
+    ScSheetSaveData* pSheetData = GetScImport().GetScModel()->GetSheetSaveData();
     if ( pSheetData && pSheetData->HasStartPos() )
     {
         // stream part to copy ends before the next child element
-        sal_Int32 nEndOffset = GetScImport().GetByteOffset();
+        sal_Int64 nEndOffset = GetScImport().GetByteOffset();
         pSheetData->EndStreamPos( nEndOffset );
     }
 
@@ -195,11 +195,11 @@ uno::Reference< xml::sax::XFastContextHandler > SAL_CALL
 
 void SAL_CALL ScXMLBodyContext::characters(const OUString &)
 {
-    ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetScImport().GetModel())->GetSheetSaveData();
+    ScSheetSaveData* pSheetData = GetScImport().GetScModel()->GetSheetSaveData();
     if ( pSheetData && pSheetData->HasStartPos() )
     {
         // stream part to copy ends before any content (whitespace) within the spreadsheet element
-        sal_Int32 nEndOffset = GetScImport().GetByteOffset();
+        sal_Int64 nEndOffset = GetScImport().GetByteOffset();
         pSheetData->EndStreamPos( nEndOffset );
     }
     // otherwise ignore
@@ -207,11 +207,11 @@ void SAL_CALL ScXMLBodyContext::characters(const OUString &)
 
 void SAL_CALL ScXMLBodyContext::endFastElement(sal_Int32 nElement)
 {
-    ScSheetSaveData* pSheetData = comphelper::getFromUnoTunnel<ScModelObj>(GetScImport().GetModel())->GetSheetSaveData();
+    ScSheetSaveData* pSheetData = GetScImport().GetScModel()->GetSheetSaveData();
     if ( pSheetData && pSheetData->HasStartPos() )
     {
         // stream part to copy ends before the closing tag of spreadsheet element
-        sal_Int32 nEndOffset = GetScImport().GetByteOffset();
+        sal_Int64 nEndOffset = GetScImport().GetByteOffset();
         pSheetData->EndStreamPos( nEndOffset );
     }
 

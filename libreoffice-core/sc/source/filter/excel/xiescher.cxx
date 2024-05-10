@@ -102,6 +102,7 @@
 
 #include <document.hxx>
 #include <drwlayer.hxx>
+#include <docsh.hxx>
 #include <userdat.hxx>
 #include <unonames.hxx>
 #include <convuno.hxx>
@@ -378,6 +379,11 @@ void XclImpDrawObjBase::SetAnchor( const XclObjAnchor& rAnchor )
     mbHasAnchor = true;
 }
 
+const tools::Rectangle& XclImpDrawObjBase::GetDffRect() const
+{
+    return maDffRect;
+}
+
 void XclImpDrawObjBase::SetDffData(
     const DffObjData& rDffObjData, const OUString& rObjName, const OUString& rHyperlink,
     bool bVisible, bool bAutoMargin )
@@ -388,6 +394,7 @@ void XclImpDrawObjBase::SetDffData(
     maHyperlink = rHyperlink;
     mbVisible = bVisible;
     mbAutoMargin = bAutoMargin;
+    maDffRect = rDffObjData.aChildAnchor;
 }
 
 OUString XclImpDrawObjBase::GetObjName() const
@@ -469,7 +476,7 @@ rtl::Reference<SdrObject> XclImpDrawObjBase::CreateSdrObject( XclImpDffConverter
             {
                 const Reference< XControlModel >& xCtrlModel = pSdrUnoObj->GetUnoControlModel();
                 Reference< XPropertySet > xPropSet(xCtrlModel,UNO_QUERY);
-                static constexpr OUStringLiteral sPropertyName(u"ControlTypeinMSO");
+                static constexpr OUString sPropertyName(u"ControlTypeinMSO"_ustr);
 
                 enum { eCreateFromOffice = 0, eCreateFromMSTBXControl, eCreateFromMSOCXControl };
 
@@ -517,7 +524,7 @@ void XclImpDrawObjBase::NotifyMacroEventRead()
 {
     if (mbNotifyMacroEventRead)
         return;
-    SfxObjectShell* pDocShell = GetDocShell();
+    ScDocShell* pDocShell = GetDocShell();
     if (!pDocShell)
         return;
     comphelper::DocumentInfo::notifyMacroEventRead(pDocShell->GetModel());
@@ -1754,7 +1761,7 @@ std::size_t XclImpChartObj::DoGetProgressSize() const
 rtl::Reference<SdrObject> XclImpChartObj::DoCreateSdrObj( XclImpDffConverter& rDffConv, const tools::Rectangle& rAnchorRect ) const
 {
     rtl::Reference<SdrObject> xSdrObj;
-    SfxObjectShell* pDocShell = GetDocShell();
+    ScDocShell* pDocShell = GetDocShell();
     if( rDffConv.SupportsOleObjects() && SvtModuleOptions().IsChart() && pDocShell && mxChart && !mxChart->IsPivotChart() )
     {
         // create embedded chart object
@@ -1869,8 +1876,8 @@ void XclImpNoteObj::DoPreProcessSdrObj( XclImpDffConverter& rDffConv, SdrObject&
         // create cell note with all data from drawing object
         ScNoteUtil::CreateNoteFromObjectData(
             GetDoc(), maScPos,
-            rSdrObj.GetMergedItemSet().CloneAsValue(),             // new object on heap expected
-            *pOutlinerObj,
+            rSdrObj.GetMergedItemSet(),
+            OUString(), *pOutlinerObj,
             rSdrObj.GetLogicRect(),
             ::get_flag( mnNoteFlags, EXC_NOTE_VISIBLE ) );
     }
@@ -1908,12 +1915,12 @@ void XclImpControlHelper::ApplySheetLinkProps() const
         return;
 
    // sheet links
-    SfxObjectShell* pDocShell = mrRoot.GetDocShell();
+    ScDocShell* pDocShell = mrRoot.GetDocShell();
     if(!pDocShell)
         return;
 
-    Reference< XMultiServiceFactory > xFactory( pDocShell->GetModel(), UNO_QUERY );
-    if( !xFactory.is() )
+    ScModelObj* pModelObj = pDocShell->GetModel();
+    if( !pModelObj )
         return;
 
     // cell link
@@ -1939,7 +1946,7 @@ void XclImpControlHelper::ApplySheetLinkProps() const
             case EXC_CTRL_BINDPOSITION: aServiceName = SC_SERVICENAME_LISTCELLBIND;  break;
         }
         Reference< XValueBinding > xBinding(
-            xFactory->createInstanceWithArguments( aServiceName, aArgs ), UNO_QUERY_THROW );
+            pModelObj->createInstanceWithArguments( aServiceName, aArgs ), UNO_QUERY_THROW );
         xBindable->setValueBinding( xBinding );
     }
     catch( const Exception& )
@@ -1965,7 +1972,7 @@ void XclImpControlHelper::ApplySheetLinkProps() const
         Sequence< Any > aArgs{ Any(aValue) };
 
         // create the EntrySource instance and set at the control model
-        Reference< XListEntrySource > xEntrySource( xFactory->createInstanceWithArguments(
+        Reference< XListEntrySource > xEntrySource( pModelObj->createInstanceWithArguments(
             SC_SERVICENAME_LISTSOURCE, aArgs ), UNO_QUERY_THROW );
         xEntrySink->setListEntrySource( xEntrySource );
     }
@@ -2084,6 +2091,16 @@ void XclImpTbxObjBase::SetDffProperties( const DffPropSet& rDffPropSet )
     maLineData.mnStyle = rDffPropSet.GetPropertyBool( DFF_Prop_fLine ) ? EXC_OBJ_LINE_SOLID : EXC_OBJ_LINE_NONE;
     lclExtractColor( maLineData.mnColorIdx, rDffPropSet, DFF_Prop_lineColor );
     ::set_flag( maLineData.mnAuto, EXC_OBJ_FILL_AUTO, false );
+}
+
+void XclImpControlHelper::SetStringProperty(const OUString& sName, const OUString& sVal)
+{
+    Reference<XControlModel> xCtrlModel = XclControlHelper::GetControlModel(mxShape);
+    if (!xCtrlModel.is())
+        return;
+
+    ScfPropertySet aProps(xCtrlModel);
+    aProps.SetStringProperty(sName, sVal);
 }
 
 bool XclImpTbxObjBase::FillMacroDescriptor( ScriptEventDescriptor& rDescriptor ) const
@@ -2391,6 +2408,11 @@ OUString XclImpOptionButtonObj::DoGetServiceName() const
 XclTbxEventType XclImpOptionButtonObj::DoGetEventType() const
 {
     return EXC_TBX_EVENT_ACTION;
+}
+
+bool XclImpOptionButtonObj::IsInGroup() const
+{
+    return mnNextInGroup;
 }
 
 XclImpLabelObj::XclImpLabelObj( const XclImpRoot& rRoot ) :
@@ -3319,7 +3341,7 @@ XclImpDffConverter::XclImpDffConvData::XclImpDffConvData(
 {
 }
 
-constexpr OUStringLiteral gaStdFormName( u"Standard" ); /// Standard name of control forms.
+constexpr OUString gaStdFormName( u"Standard"_ustr ); /// Standard name of control forms.
 
 XclImpDffConverter::XclImpDffConverter( const XclImpRoot& rRoot, SvStream& rDffStrm ) :
     XclImpSimpleDffConverter( rRoot, rDffStrm ),
@@ -4070,6 +4092,43 @@ const XclImpObjTextData* XclImpDrawing::FindTextData( const DffRecordHeader& rHe
     return nullptr;
 }
 
+void XclImpDrawing::ApplyGroupBoxes()
+{
+    // sorted: smallest to largest - looking for smallest contained-in GroupBox
+    // multimap: allows duplicate key values - may have identical areas.
+    std::multimap<double, XclImpDrawObjRef> aGroupBoxAreaMap;
+    for (auto& rGroupBox : maObjMapId)
+    {
+        if (rGroupBox.second->GetObjType() != EXC_OBJTYPE_GROUPBOX)
+            continue;
+        const tools::Rectangle& rRect = rGroupBox.second->GetDffRect();
+        const double fArea = double(rRect.GetWidth()) * rRect.GetHeight();
+        aGroupBoxAreaMap.insert(std::pair<double, XclImpDrawObjRef>(fArea, rGroupBox.second));
+    }
+
+    for (auto& rGroupedObj : maObjMapId)
+    {
+        auto pRadioButton = dynamic_cast<XclImpOptionButtonObj*>(rGroupedObj.second.get());
+        if (!pRadioButton || pRadioButton->IsInGroup())
+            continue;
+
+        OUString sGroupName("autoGroup_");
+        for (auto& rGroupBox : aGroupBoxAreaMap)
+        {
+            assert(pRadioButton->GetTab() == rGroupBox.second->GetTab() && "impossible right?");
+            if (!rGroupBox.second->GetDffRect().Contains(pRadioButton->GetDffRect()))
+                continue;
+
+            sGroupName = rGroupBox.second->GetObjName();
+            if (sGroupName.isEmpty())
+                sGroupName += "autoGroup_" + OUString::number(rGroupBox.second->GetObjId());
+            // I ASSUME the smallest box wins in MS Word. (otherwise first? last?)
+            break;
+        }
+        pRadioButton->SetStringProperty("GroupName", sGroupName);
+    }
+}
+
 void XclImpDrawing::SetSkipObj( sal_uInt16 nObjId )
 {
     maSkipObjs.push_back( nObjId );
@@ -4097,6 +4156,8 @@ void XclImpDrawing::ImplConvertObjects( XclImpDffConverter& rDffConv, SdrModel& 
     rDffConv.ProcessDrawing( maRawObjs );
     // process all objects in the DFF stream
     rDffConv.ProcessDrawing( maDffStrm );
+    // assign groups based on being contained in the same GroupBox/sheet
+    ApplyGroupBoxes();
     // unregister this drawing manager at the passed (global) DFF manager
     rDffConv.FinalizeDrawing();
     rSdrModel.EnableUndo(bOrigUndoStatus);
@@ -4395,11 +4456,11 @@ void XclImpObjectManager::ConvertObjects()
 
 OUString XclImpObjectManager::GetDefaultObjName( const XclImpDrawObjBase& rDrawObj ) const
 {
-    OUStringBuffer aDefName;
+    OUString aDefName;
     DefObjNameMap::const_iterator aIt = maDefObjNames.find( rDrawObj.GetObjType() );
     if( aIt != maDefObjNames.end() )
-        aDefName.append(aIt->second);
-    return aDefName.append(' ').append(static_cast<sal_Int32>(rDrawObj.GetObjId())).makeStringAndClear();
+        aDefName = aIt->second;
+    return aDefName + " " + OUString::number(static_cast<sal_Int32>(rDrawObj.GetObjId()));
 }
 
 ScRange XclImpObjectManager::GetUsedArea( SCTAB nScTab ) const

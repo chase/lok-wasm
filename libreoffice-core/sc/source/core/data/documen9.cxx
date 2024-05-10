@@ -38,6 +38,7 @@
 
 #include <document.hxx>
 #include <docoptio.hxx>
+#include <docsh.hxx>
 #include <table.hxx>
 #include <drwlayer.hxx>
 #include <markdata.hxx>
@@ -45,6 +46,7 @@
 #include <rechead.hxx>
 #include <poolhelp.hxx>
 #include <docpool.hxx>
+#include <stlpool.hxx>
 #include <editutil.hxx>
 #include <charthelper.hxx>
 #include <conditio.hxx>
@@ -76,6 +78,12 @@ void ScDocument::TransferDrawPage(const ScDocument& rSrcDoc, SCTAB nSrcPos, SCTA
             SdrObject* pOldObject = aIter.Next();
             while (pOldObject)
             {
+                // Copy style sheet
+                auto pStyleSheet = pOldObject->GetStyleSheet();
+                if (pStyleSheet)
+                    GetStyleSheetPool()->CopyStyleFrom(rSrcDoc.GetStyleSheetPool(),
+                                                       pStyleSheet->GetName(), pStyleSheet->GetFamily(), true);
+
                 // Clone to target SdrModel
                 rtl::Reference<SdrObject> pNewObject(pOldObject->CloneSdrObject(*mpDrawLayer));
                 pNewObject->NbcMove(Size(0,0));
@@ -95,7 +103,7 @@ void ScDocument::TransferDrawPage(const ScDocument& rSrcDoc, SCTAB nSrcPos, SCTA
     ScChartHelper::UpdateChartsOnDestinationPage(*this, nDestPos);
 }
 
-void ScDocument::InitDrawLayer( SfxObjectShell* pDocShell )
+void ScDocument::InitDrawLayer( ScDocShell* pDocShell )
 {
     if (pDocShell && !mpShell)
     {
@@ -130,6 +138,7 @@ void ScDocument::InitDrawLayer( SfxObjectShell* pDocShell )
             OSL_ENSURE(!pLocalPool->GetSecondaryPool(), "OOps, already a secondary pool set where the DrawingLayer ItemPool is to be placed (!)");
             pLocalPool->SetSecondaryPool(&mpDrawLayer->GetItemPool());
         }
+        mpDrawLayer->CreateDefaultStyles();
     }
 
     //  Drawing pages are accessed by table number, so they must also be present
@@ -138,11 +147,11 @@ void ScDocument::InitDrawLayer( SfxObjectShell* pDocShell )
 
     SCTAB nDrawPages = 0;
     SCTAB nTab;
-    for (nTab=0; nTab < static_cast<SCTAB>(maTabs.size()); nTab++)
+    for (nTab = 0; nTab < GetTableCount(); nTab++)
         if (maTabs[nTab])
             nDrawPages = nTab + 1;          // needed number of pages
 
-    for (nTab=0; nTab<nDrawPages && nTab < static_cast<SCTAB>(maTabs.size()); nTab++)
+    for (nTab = 0; nTab < nDrawPages && nTab < GetTableCount(); nTab++)
     {
         mpDrawLayer->ScAddPage( nTab );     // always add page, with or without the table
         if (maTabs[nTab])
@@ -194,10 +203,8 @@ void ScDocument::UpdateDrawPrinter()
 
 void ScDocument::SetDrawPageSize(SCTAB nTab)
 {
-    if (!ValidTab(nTab) || nTab >= static_cast<SCTAB>(maTabs.size()) || !maTabs[nTab])
-        return;
-
-    maTabs[nTab]->SetDrawPageSize();
+    if (ScTable* pTable = FetchTable(nTab))
+        pTable->SetDrawPageSize();
 }
 
 bool ScDocument::IsChart( const SdrObject* pObject )
@@ -224,24 +231,6 @@ IMPL_LINK( ScDocument, GetUserDefinedColor, sal_uInt16, nColorIndex, Color* )
         xColorList = pColorList;
     }
     return const_cast<Color*>(&(xColorList->GetColor(nColorIndex)->GetColor()));
-}
-
-void ScDocument::DeleteDrawLayer()
-{
-    ScMutationGuard aGuard(*this, ScMutationGuardFlags::CORE);
-
-    // remove DrawingLayer's SfxItemPool from Calc's SfxItemPool where
-    // it is registered as secondary pool
-    if (mxPoolHelper.is() && !IsClipOrUndo()) //Using IsClipOrUndo as a proxy for SharePooledResources called
-    {
-        ScDocumentPool* pLocalPool = mxPoolHelper->GetDocPool();
-
-        if(pLocalPool && pLocalPool->GetSecondaryPool())
-        {
-            pLocalPool->SetSecondaryPool(nullptr);
-        }
-    }
-    mpDrawLayer.reset();
 }
 
 bool ScDocument::DrawGetPrintArea( ScRange& rRange, bool bSetHor, bool bSetVer ) const
@@ -281,7 +270,7 @@ bool ScDocument::HasOLEObjectsInArea( const ScRange& rRange, const ScMarkData* p
         return false;
 
     SCTAB nStartTab = 0;
-    SCTAB nEndTab = static_cast<SCTAB>(maTabs.size());
+    SCTAB nEndTab = GetTableCount();
     if ( !pTabMark )
     {
         nStartTab = rRange.aStart.Tab();
@@ -400,7 +389,7 @@ SdrObject* ScDocument::GetObjectAtPoint( SCTAB nTab, const Point& rPos )
 {
     //  for Drag&Drop on draw object
     SdrObject* pFound = nullptr;
-    if (mpDrawLayer && nTab < static_cast<SCTAB>(maTabs.size()) && maTabs[nTab])
+    if (mpDrawLayer && nTab < GetTableCount() && maTabs[nTab])
     {
         SdrPage* pPage = mpDrawLayer->GetPage(static_cast<sal_uInt16>(nTab));
         OSL_ENSURE(pPage,"Page ?");
@@ -451,13 +440,8 @@ bool ScDocument::IsPrintEmpty( SCCOL nStartCol, SCROW nStartRow,
         //  keep vertical part of aMMRect, only update horizontal position
         aMMRect = *pLastMM;
 
-        tools::Long nLeft = 0;
-        SCCOL i;
-        for (i=0; i<nStartCol; i++)
-            nLeft += GetColWidth(i,nTab);
-        tools::Long nRight = nLeft;
-        for (i=nStartCol; i<=nEndCol; i++)
-            nRight += GetColWidth(i,nTab);
+        tools::Long nLeft = GetColWidth(0, nStartCol-1, nTab);
+        tools::Long nRight = nLeft + GetColWidth(nStartCol,nEndCol, nTab);
 
         aMMRect.SetLeft(o3tl::convert(nLeft, o3tl::Length::twip, o3tl::Length::mm100));
         aMMRect.SetRight(o3tl::convert(nRight, o3tl::Length::twip, o3tl::Length::mm100));
@@ -600,7 +584,7 @@ void ScDocument::SetImportingXML( bool bVal )
     {
         // #i57869# after loading, do the real RTL mirroring for the sheets that have the LoadingRTL flag set
 
-        for ( SCTAB nTab=0; nTab< static_cast<SCTAB>(maTabs.size()) && maTabs[nTab]; nTab++ )
+        for (SCTAB nTab = 0; nTab < GetTableCount() && maTabs[nTab]; nTab++)
             if ( maTabs[nTab]->IsLoadingRTL() )
             {
                 // SetLayoutRTL => SetDrawPageSize => ScDrawLayer::SetPageSize, includes RTL-mirroring;

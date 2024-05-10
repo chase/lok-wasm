@@ -11,8 +11,9 @@
 
 #include <config_crypto.h>
 
-#if defined(LINUX) && !defined(SYSTEM_OPENSSL)
-#include <com/sun/star/uno/RuntimeException.hpp>
+// Also include/systools/curlinit.hxx needs GetCABundleFile() if
+// !defined(SYSTEM_CURL) it defines LO_CURL_NEEDS_CA_BUNDLE.
+#if !defined(_WIN32) && (!defined(SYSTEM_OPENSSL) || defined(LO_CURL_NEEDS_CA_BUNDLE))
 
 #include <unistd.h>
 
@@ -25,6 +26,7 @@ static char const* GetCABundleFile()
         "/etc/pki/tls/certs/ca-bundle.trust.crt",
         "/etc/ssl/certs/ca-certificates.crt",
         "/var/lib/ca-certificates/ca-bundle.pem",
+        "/etc/ssl/cert.pem", // macOS has one at this location
     };
     for (char const* const candidate : candidates)
     {

@@ -308,7 +308,6 @@
         <menu:menupopup>
           <menu:menuitem menu:id=".uno:InsertFrameInteract"/>
           <menu:menuitem menu:id=".uno:InsertFrame"/>
-          <menu:menuitem menu:id=".uno:InsertObjectFloatingFrame"/>
         </menu:menupopup>
       </menu:menu>
       <menu:menuitem menu:id=".uno:FontworkGalleryFloater"/>
@@ -427,6 +426,13 @@
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:FormatPaintbrush"/>
       <menu:menuitem menu:id=".uno:ResetAttributes"/>
+      <menu:menu menu:id=".uno:SpotlightMenu">
+        <menu:menupopup>
+          <menu:menuitem menu:id=".uno:HighlightCharDF"/>
+          <menu:menuitem menu:id=".uno:SpotlightParaStyles"/>
+          <menu:menuitem menu:id=".uno:SpotlightCharStyles"/>
+        </menu:menupopup>
+      </menu:menu>
       <menu:menuseparator/>
       <menu:menuitem menu:id=".uno:FontDialog"/>
       <menu:menuitem menu:id=".uno:ParagraphDialog"/>
@@ -778,6 +784,7 @@
           <menu:menuitem menu:id=".uno:UpdateAll"/>
           <menu:menuseparator/>
           <menu:menuitem menu:id=".uno:Repaginate"/>
+          <menu:menuitem menu:id=".uno:UpdateSelectedField"/>
           <menu:menuitem menu:id=".uno:UpdateFields"/>
           <menu:menuitem menu:id=".uno:UpdateAllIndexes"/>
           <menu:menuitem menu:id=".uno:UpdateCurIndex"/>

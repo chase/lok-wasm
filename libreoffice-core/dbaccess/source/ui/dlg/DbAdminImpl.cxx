@@ -62,6 +62,7 @@
 #include <iterator>
 #include <functional>
 #include <o3tl/functional.hxx>
+#include <comphelper/string.hxx>
 
 namespace dbaui
 {
@@ -523,6 +524,39 @@ OUString ODbDataSourceAdministrationHelper::getConnectionURL() const
                 sNewUrl = pCollection->cutPrefix(pUrlItem->GetValue()) + lcl_createHostWithPort(nullptr,pPortNumber);
             }
             break;
+        case ::dbaccess::DST_POSTGRES:
+            {
+                sNewUrl = pCollection->cutPrefix(pUrlItem->GetValue());
+                OUString rURL(comphelper::string::stripEnd(pUrlItem->GetValue(), '*'));
+                const SfxStringItem* pHostName = m_pItemSetHelper->getOutputSet()->GetItem<SfxStringItem>(DSID_CONN_HOSTNAME);
+                const SfxInt32Item* pPortNumber = m_pItemSetHelper->getOutputSet()->GetItem<SfxInt32Item>(DSID_POSTGRES_PORTNUMBER);
+                const SfxStringItem* pDatabaseName = m_pItemSetHelper->getOutputSet()->GetItem<SfxStringItem>(DSID_DATABASENAME);
+                if (pHostName && pHostName->GetValue().getLength())
+                {
+                    OUString hostname( pHostName->GetValue() );
+                    hostname = hostname.replaceAll( "\\", "\\\\");
+                    hostname = hostname.replaceAll( "\'", "\\'");
+                    hostname = "'" + hostname + "'";
+                    rURL += " host=" + hostname;
+                }
+                // tdf#157260: if port is already in the URL, don't add another one
+                if (pPortNumber && pPortNumber->GetValue() && (rURL.indexOf("port=") == -1))
+                {
+                    OUString port = "'" + OUString::number(pPortNumber->GetValue()) + "'";
+                    rURL += " port=" + port;
+                }
+                if (pDatabaseName && pDatabaseName->GetValue().getLength())
+                {
+                    OUString dbname( pDatabaseName->GetValue() );
+                    dbname = dbname.replaceAll( "\\", "\\\\");
+                    dbname = dbname.replaceAll( "\'", "\\'");
+                    dbname = "'" + dbname + "'";
+                    rURL += " dbname=" + dbname;
+                }
+                sNewUrl = rURL;
+                return sNewUrl;
+            }
+            break;
         case  ::dbaccess::DST_JDBC:
             // run through
         default:
@@ -631,7 +665,7 @@ void ODbDataSourceAdministrationHelper::translateProperties(const SfxItemSet& _r
     try { xInfo = _rxDest->getPropertySetInfo(); }
     catch(Exception&) { }
 
-    static const OUStringLiteral sUrlProp(u"URL");
+    static constexpr OUStringLiteral sUrlProp(u"URL");
     // transfer the direct properties
     for (auto const& elem : m_aDirectPropTranslator)
     {
@@ -860,8 +894,7 @@ OString ODbDataSourceAdministrationHelper::translatePropertyId( sal_Int32 _nId )
             aString = indirectPos->second;
     }
 
-    OString aReturn( aString.getStr(), aString.getLength(), RTL_TEXTENCODING_ASCII_US );
-    return aReturn;
+    return OUStringToOString( aString, RTL_TEXTENCODING_ASCII_US );
 }
 template<class T> static bool checkItemType(const SfxPoolItem* pItem){ return dynamic_cast<const T*>(pItem) != nullptr;}
 
@@ -914,7 +947,7 @@ void ODbDataSourceAdministrationHelper::implTranslateProperty( SfxItemSet& _rSet
             {
                 sal_Int32 nValue = 0;
                 _rValue >>= nValue;
-                _rSet.Put( SfxInt32Item( _nId, nValue ) );
+                _rSet.Put( SfxInt32Item( TypedWhichId<SfxInt32Item>(_nId), nValue ) );
             }
             else {
                 SAL_WARN( "dbaccess", "ODbDataSourceAdministrationHelper::implTranslateProperty: invalid property value ("
@@ -981,7 +1014,7 @@ void ODbDataSourceAdministrationHelper::convertUrl(SfxItemSet& _rDest)
     ::dbaccess::ODsnTypeCollection* pCollection = pTypeCollection->getCollection();
     OSL_ENSURE(pCollection, "ODbAdminDialog::getDatasourceType: invalid type collection!");
 
-    sal_uInt16 nPortNumberId    = 0;
+    TypedWhichId<SfxInt32Item> nPortNumberId(0);
     sal_Int32 nPortNumber   = -1;
     OUString sNewHostName;
     OUString sUrlPart;
@@ -1000,6 +1033,9 @@ void ODbDataSourceAdministrationHelper::convertUrl(SfxItemSet& _rDest)
             break;
         case  ::dbaccess::DST_LDAP:
             nPortNumberId = DSID_CONN_LDAP_PORTNUMBER;
+            break;
+        case ::dbaccess::DST_POSTGRES:
+            nPortNumberId = DSID_POSTGRES_PORTNUMBER;
             break;
         default:
             break;
@@ -1021,7 +1057,7 @@ void ODbDataSourceAdministrationHelper::convertUrl(SfxItemSet& _rDest)
     if ( !sNewHostName.isEmpty() )
         _rDest.Put(SfxStringItem(DSID_CONN_HOSTNAME, sNewHostName));
 
-    if ( nPortNumber != -1 && nPortNumberId != 0 )
+    if ( nPortNumber != -1 && nPortNumberId != TypedWhichId<SfxInt32Item>(0) )
         _rDest.Put(SfxInt32Item(nPortNumberId, nPortNumber));
 
 }

@@ -53,11 +53,11 @@
 // iterates over all views and unmarks this SdrObject if it is marked
 static void ImplUnmarkObject( SdrObject* pObj )
 {
-    SdrViewIter aIter( pObj );
-    for ( SdrView* pView = aIter.FirstView(); pView; pView = aIter.NextView() )
-    {
-        pView->MarkObj( pObj, pView->GetSdrPageView(), true );
-    }
+    SdrViewIter::ForAllViews( pObj,
+        [&pObj] (SdrView* pView)
+        {
+            pView->MarkObj( pObj, pView->GetSdrPageView(), true );
+        });
 }
 
 SdrUndoAction::SdrUndoAction(SdrModel& rNewMod)
@@ -263,12 +263,11 @@ SdrUndoAttrObj::SdrUndoAttrObj(SdrObject& rNewObj, bool bStyleSheet1, bool bSave
     {
         // it's a group object!
         pUndoGroup.reset(new SdrUndoGroup(mxObj->getSdrModelFromSdrObject()));
-        const size_t nObjCount(pOL->GetObjCount());
 
-        for(size_t nObjNum = 0; nObjNum < nObjCount; ++nObjNum)
+        for (const rtl::Reference<SdrObject>& pObj : *pOL)
         {
             pUndoGroup->AddAction(
-                std::make_unique<SdrUndoAttrObj>(*pOL->GetObj(nObjNum), bStyleSheet1));
+                std::make_unique<SdrUndoAttrObj>(*pObj, bStyleSheet1));
         }
     }
 
@@ -328,7 +327,7 @@ void SdrUndoAttrObj::Undo()
         if(bStyleSheet)
         {
             mxRedoStyleSheet = mxObj->GetStyleSheet();
-            SfxStyleSheet* pSheet = dynamic_cast< SfxStyleSheet* >(mxUndoStyleSheet.get());
+            SfxStyleSheet* pSheet = mxUndoStyleSheet.get();
 
             if(pSheet && mxObj->getSdrModelFromSdrObject().GetStyleSheetPool())
             {
@@ -416,7 +415,7 @@ void SdrUndoAttrObj::Redo()
         if(bStyleSheet)
         {
             mxUndoStyleSheet = mxObj->GetStyleSheet();
-            SfxStyleSheet* pSheet = dynamic_cast< SfxStyleSheet* >(mxRedoStyleSheet.get());
+            SfxStyleSheet* pSheet = mxRedoStyleSheet.get();
 
             if(pSheet && mxObj->getSdrModelFromSdrObject().GetStyleSheetPool())
             {
@@ -566,10 +565,8 @@ SdrUndoGeoObj::SdrUndoGeoObj(SdrObject& rNewObj)
         // If this were 3D scene, we'd only add an Undo for the scene itself
         // (which we do elsewhere).
         pUndoGroup.reset(new SdrUndoGroup(mxObj->getSdrModelFromSdrObject()));
-        const size_t nObjCount = pOL->GetObjCount();
-        for (size_t nObjNum = 0; nObjNum<nObjCount; ++nObjNum) {
-            pUndoGroup->AddAction(std::make_unique<SdrUndoGeoObj>(*pOL->GetObj(nObjNum)));
-        }
+        for (const rtl::Reference<SdrObject>& pObj : *pOL)
+            pUndoGroup->AddAction(std::make_unique<SdrUndoGeoObj>(*pObj));
     }
     else
     {
@@ -1216,6 +1213,31 @@ OUString SdrUndoObjStrAttr::GetComment() const
     return aStr;
 }
 
+SdrUndoObjDecorative::SdrUndoObjDecorative(SdrObject & rObj, bool const WasDecorative)
+    : SdrUndoObj(rObj)
+    , m_WasDecorative(WasDecorative)
+{
+}
+
+void SdrUndoObjDecorative::Undo()
+{
+    ImpShowPageOfThisObject();
+
+    mxObj->SetDecorative(m_WasDecorative);
+}
+
+void SdrUndoObjDecorative::Redo()
+{
+    mxObj->SetDecorative(!m_WasDecorative);
+
+    ImpShowPageOfThisObject();
+}
+
+OUString SdrUndoObjDecorative::GetComment() const
+{
+    return ImpGetDescriptionStr(STR_UndoObjDecorative);
+}
+
 
 SdrUndoLayer::SdrUndoLayer(sal_uInt16 nLayerNum, SdrLayerAdmin& rNewLayerAdmin, SdrModel& rNewModel)
     : SdrUndoAction(rNewModel)
@@ -1712,6 +1734,12 @@ std::unique_ptr<SdrUndoAction> SdrUndoFactory::CreateUndoObjectStrAttr( SdrObjec
                                                         const OUString& sNewStr )
 {
     return std::make_unique<SdrUndoObjStrAttr>( rObject, eObjStrAttrType, sOldStr, sNewStr );
+}
+
+std::unique_ptr<SdrUndoAction> SdrUndoFactory::CreateUndoObjectDecorative(
+        SdrObject& rObject, bool const WasDecorative)
+{
+    return std::make_unique<SdrUndoObjDecorative>(rObject, WasDecorative);
 }
 
 

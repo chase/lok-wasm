@@ -176,7 +176,7 @@ namespace frm
         vcl::Window* pParentWin = nullptr;
         if ( _rParentPeer.is() )
         {
-            VCLXWindow* pParentXWin = comphelper::getFromUnoTunnel<VCLXWindow>( _rParentPeer );
+            VCLXWindow* pParentXWin = dynamic_cast<VCLXWindow*>( _rParentPeer.get() );
             if ( pParentXWin )
                 pParentWin = pParentXWin->GetWindow();
             DBG_ASSERT( pParentWin, "ORichTextControl::createPeer: could not obtain the VCL-level parent window!" );
@@ -257,7 +257,7 @@ namespace frm
 
         // the EditEngine of the model
         RichTextEngine* pEngine = ORichTextModel::getEditEngine( _rxModel );
-        OSL_ENSURE( pEngine, "ORichTextPeer::Create: could not obtaine the edit engine from the model!" );
+        OSL_ENSURE( pEngine, "ORichTextPeer::Create: could not obtain the edit engine from the model!" );
         if ( !pEngine )
             return nullptr;
 

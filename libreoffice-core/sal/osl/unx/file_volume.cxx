@@ -23,7 +23,6 @@
 
 #include <osl/diagnose.h>
 #include <osl/thread.h>
-#include <rtl/alloc.h>
 
 #include "file_error_transl.hxx"
 #include "file_url.hxx"
@@ -32,11 +31,8 @@
 
 #include <errno.h>
 #include <limits.h>
-#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/wait.h>
-#include <sal/macros.h>
 
 #ifdef HAVE_STATFS_H
 #undef HAVE_STATFS_H
@@ -54,9 +50,7 @@
 #define  HAVE_STATFS_H
 
 #elif defined(LINUX)
-
-#include <mntent.h>
-#include <sys/vfs.h>
+#include <sys/statfs.h>
 #define  HAVE_STATFS_H
 
 #elif defined(NETBSD) || defined(FREEBSD) || defined(OPENBSD) || defined(DRAGONFLY)

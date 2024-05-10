@@ -39,9 +39,9 @@ using namespace ::com::sun::star::awt;
 
 using ::std::vector;
 
-constexpr OUStringLiteral FIXEDTEXT_SERVICENAME = u"com.sun.star.awt.UnoControlFixedText";
-constexpr OUStringLiteral FIXEDTEXT_MODELNAME = u"com.sun.star.awt.UnoControlFixedTextModel";
-constexpr OUStringLiteral CONTROLNAME_TEXT = u"Text";   // identifier the control in container
+constexpr OUString FIXEDTEXT_SERVICENAME = u"com.sun.star.awt.UnoControlFixedText"_ustr;
+constexpr OUString FIXEDTEXT_MODELNAME = u"com.sun.star.awt.UnoControlFixedTextModel"_ustr;
+constexpr OUString CONTROLNAME_TEXT = u"Text"_ustr;   // identifier the control in container
 constexpr OUStringLiteral CONTROLNAME_PROGRESSBAR = u"ProgressBar";
 constexpr OUStringLiteral BUTTON_SERVICENAME = u"com.sun.star.awt.UnoControlButton";
 constexpr OUStringLiteral CONTROLNAME_BUTTON = u"Button";
@@ -112,20 +112,20 @@ ProgressMonitor::~ProgressMonitor()
 //  XInterface
 Any SAL_CALL ProgressMonitor::queryInterface( const Type& rType )
 {
-    // Attention:
-    //  Don't use mutex or guard in this method!!! Is a method of XInterface.
-    Any aReturn;
-    css::uno::Reference< XInterface > xDel = BaseContainerControl::impl_getDelegator();
-    if ( xDel.is() )
+    // Ask for my own supported interfaces ...
+    // Attention: XTypeProvider and XInterface are supported by WeakComponentImplHelper!
+    Any aReturn ( ::cppu::queryInterface( rType ,
+                                          static_cast< XLayoutConstrains* > ( this ) ,
+                                          static_cast< XButton*           > ( this ) ,
+                                          static_cast< XProgressMonitor*  > ( this )
+                                        )
+                );
+
+    // If searched interface not supported by this class ...
+    if ( !aReturn.hasValue() )
     {
-        // If a delegator exists, forward question to its queryInterface.
-        // Delegator will ask its own queryAggregation!
-        aReturn = xDel->queryInterface( rType );
-    }
-    else
-    {
-        // If a delegator is unknown, forward question to own queryAggregation.
-        aReturn = queryAggregation( rType );
+        // ... ask baseclasses.
+        aReturn = BaseControl::queryInterface( rType );
     }
 
     return aReturn;
@@ -161,28 +161,6 @@ Sequence< Type > SAL_CALL ProgressMonitor::getTypes()
                 BaseContainerControl::getTypes() );
 
     return ourTypeCollection.getTypes();
-}
-
-//  XAggregation
-Any SAL_CALL ProgressMonitor::queryAggregation( const Type& aType )
-{
-    // Ask for my own supported interfaces ...
-    // Attention: XTypeProvider and XInterface are supported by OComponentHelper!
-    Any aReturn ( ::cppu::queryInterface( aType ,
-                                          static_cast< XLayoutConstrains* > ( this ) ,
-                                          static_cast< XButton*           > ( this ) ,
-                                          static_cast< XProgressMonitor*  > ( this )
-                                        )
-                );
-
-    // If searched interface not supported by this class ...
-    if ( !aReturn.hasValue() )
-    {
-        // ... ask baseclasses.
-        aReturn = BaseControl::queryAggregation( aType );
-    }
-
-    return aReturn;
 }
 
 //  XProgressMonitor

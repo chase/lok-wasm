@@ -228,7 +228,7 @@ void SwVisibleCursor::SetPosAndShow(SfxViewShell const * pViewShell)
         {
             m_nPageLastTime = nPage;
             OString aPayload = OString::number(nPage - 1);
-            m_pCursorShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload.getStr());
+            m_pCursorShell->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_SET_PART, aPayload);
         }
 
         // This may get called often, so instead of sending data on each update, just notify
@@ -448,7 +448,7 @@ void SwSelPaintRects::Show(std::vector<OString>* pSelectionRectangles)
     {
         if(!aNewRanges.empty())
         {
-            static_cast<sdr::overlay::OverlaySelection*>(m_pCursorOverlay.get())->setRanges(std::move(aNewRanges));
+            m_pCursorOverlay->setRanges(std::move(aNewRanges));
         }
         else
         {
@@ -725,8 +725,8 @@ void SwSelPaintRects::HighlightContentControl()
                 aJson.put("alias", pContentControl->GetAlias());
             }
 
-            std::unique_ptr<char, o3tl::free_delete> pJson(aJson.extractData());
-            GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CONTENT_CONTROL, pJson.get());
+            OString pJson(aJson.finishAndGetAsOString());
+            GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CONTENT_CONTROL, pJson);
         }
         if (m_pContentControlOverlay)
         {
@@ -819,8 +819,8 @@ void SwSelPaintRects::HighlightContentControl()
         {
             tools::JsonWriter aJson;
             aJson.put("action", "hide");
-            std::unique_ptr<char, o3tl::free_delete> pJson(aJson.extractData());
-            GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CONTENT_CONTROL, pJson.get());
+            OString pJson(aJson.finishAndGetAsOString());
+            GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_CONTENT_CONTROL, pJson);
         }
         m_pContentControlOverlay.reset();
 
@@ -954,7 +954,9 @@ void SwShellCursor::FillRects()
         (GetMark()->GetNode() == GetPoint()->GetNode() ||
         (GetMark()->GetNode().IsContentNode() &&
          GetMark()->GetNode().GetContentNode()->getLayoutFrame( GetShell()->GetLayout() ) )   ))
-        GetShell()->GetLayout()->CalcFrameRects( *this );
+    {
+        GetShell()->GetLayout()->CalcFrameRects(*this, *this);
+    }
 }
 
 void SwShellCursor::Show(SfxViewShell const * pViewShell)
@@ -986,7 +988,7 @@ void SwShellCursor::Show(SfxViewShell const * pViewShell)
     }
     else
     {
-        GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRect.getStr());
+        GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRect);
         SfxLokHelper::notifyOtherViews(GetShell()->GetSfxViewShell(), LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", sRect);
     }
 }

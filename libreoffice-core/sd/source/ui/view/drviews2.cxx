@@ -336,10 +336,9 @@ public:
         for (sal_uInt16 nPageIndex = 0; nPageIndex < nCount; ++nPageIndex)
         {
             SdPage* pMasterPage = m_rDrawViewShell.GetDoc()->GetMasterSdPage(nPageIndex, PageKind::Standard);
-            for (size_t nObject = 0; nObject < pMasterPage->GetObjCount(); ++nObject)
+            for (const rtl::Reference<SdrObject>& pObject : *pMasterPage)
             {
-                SdrObject* pObject = pMasterPage->GetObj(nObject);
-                SdrRectObj* pRectObject = dynamic_cast<SdrRectObj*>(pObject);
+                SdrRectObj* pRectObject = dynamic_cast<SdrRectObj*>(pObject.get());
                 if (pRectObject && pRectObject->GetTextKind() == SdrObjKind::Text)
                 {
                     OutlinerParaObject* pOutlinerParagraphObject = pRectObject->GetOutlinerParaObject();
@@ -375,10 +374,9 @@ private:
         for (sal_uInt16 nPageIndex = 0; nPageIndex < nCount; ++nPageIndex)
         {
             SdPage* pMasterPage = m_rDrawViewShell.GetDoc()->GetMasterSdPage(nPageIndex, PageKind::Standard);
-            for (size_t nObject = 0; nObject < pMasterPage->GetObjCount(); ++nObject)
+            for (const rtl::Reference<SdrObject>& pObject : *pMasterPage)
             {
-                SdrObject* pObject = pMasterPage->GetObj(nObject);
-                SdrRectObj* pRectObject = dynamic_cast<SdrRectObj*>(pObject);
+                SdrRectObj* pRectObject = dynamic_cast<SdrRectObj*>(pObject.get());
                 if (pRectObject && pRectObject->GetTextKind() == SdrObjKind::Text)
                 {
                     OutlinerParaObject* pOutlinerParagraphObject = pRectObject->GetOutlinerParaObject();
@@ -547,9 +545,8 @@ public:
     }
 };
 
-    void lcl_convertStringArguments(sal_uInt16 nSlot, const std::unique_ptr<SfxItemSet>& pArgs)
+    void lcl_convertStringArguments(const std::unique_ptr<SfxItemSet>& pArgs)
     {
-        Color aColor;
         const SfxPoolItem* pItem = nullptr;
 
         if (SfxItemState::SET == pArgs->GetItemState(SID_ATTR_LINE_WIDTH_ARG, false, &pItem))
@@ -561,32 +558,6 @@ public:
 
             XLineWidthItem aItem(nValue);
             pArgs->Put(aItem);
-        }
-        if (SfxItemState::SET == pArgs->GetItemState(SID_ATTR_COLOR_STR, false, &pItem))
-        {
-            OUString sColor = static_cast<const SfxStringItem*>(pItem)->GetValue();
-
-            if (sColor == "transparent")
-                aColor = COL_TRANSPARENT;
-            else
-                aColor = Color(ColorTransparency, sColor.toInt32(16));
-
-            switch (nSlot)
-            {
-                case SID_ATTR_LINE_COLOR:
-                {
-                    XLineColorItem aLineColorItem(OUString(), aColor);
-                    pArgs->Put(aLineColorItem);
-                    break;
-                }
-
-                case SID_ATTR_FILL_COLOR:
-                {
-                    XFillColorItem aFillColorItem(OUString(), aColor);
-                    pArgs->Put(aFillColorItem);
-                    break;
-                }
-            }
         }
         if (SfxItemState::SET == pArgs->GetItemState(SID_FILL_GRADIENT_JSON, false, &pItem))
         {
@@ -689,7 +660,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if( rReq.GetArgs() )
             {
                 std::unique_ptr<SfxItemSet> pNewArgs = rReq.GetArgs()->Clone();
-                lcl_convertStringArguments(rReq.GetSlot(), pNewArgs);
+                lcl_convertStringArguments(pNewArgs);
                 mpDrawView->SetAttributes(*pNewArgs);
                 rReq.Done();
             }
@@ -880,7 +851,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                     SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                     ScopedVclPtr<AbstractSvxNameDialog> aNameDlg(pFact->CreateSvxNameDialog(GetFrameWeld(), aPageName, aDescr));
                     aNameDlg->SetText( aTitle );
-                    aNameDlg->SetCheckNameHdl( LINK( this, DrawViewShell, RenameSlideHdl ), true );
+                    aNameDlg->SetCheckNameHdl( LINK( this, DrawViewShell, RenameSlideHdl ) );
                     aNameDlg->SetEditHelpId( HID_SD_NAMEDIALOG_PAGE );
 
                     if( aNameDlg->Execute() == RET_OK )
@@ -1231,13 +1202,9 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if (mpDrawView->IsTextEdit())
             {
-                // First make sure the field is selected
                 OutlinerView* pOutView = mpDrawView->GetTextEditOutlinerView();
                 if (pOutView)
-                {
-                    pOutView->SelectFieldAtCursor();
                     URLFieldHelper::RemoveURLField(pOutView->GetEditView());
-                }
             }
         }
         Cancel();
@@ -1967,7 +1934,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 while( bLoop && pDlg->Execute() == RET_OK )
                 {
                     pDlg->GetAttr( aNewAttr );
-                    aLayerName   = static_cast<const SfxStringItem &>( aNewAttr.Get (ATTR_LAYER_NAME)).GetValue ();
+                    aLayerName   = aNewAttr.Get(ATTR_LAYER_NAME).GetValue ();
 
                     if( rLayerAdmin.GetLayer( aLayerName )
                         || aLayerName.isEmpty()
@@ -1991,8 +1958,8 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 }
                 else
                 {
-                    aLayerTitle  = static_cast<const SfxStringItem &>( aNewAttr.Get (ATTR_LAYER_TITLE)).GetValue ();
-                    aLayerDesc   = static_cast<const SfxStringItem &>( aNewAttr.Get (ATTR_LAYER_DESC)).GetValue ();
+                    aLayerTitle  = aNewAttr.Get(ATTR_LAYER_TITLE).GetValue();
+                    aLayerDesc   = aNewAttr.Get(ATTR_LAYER_DESC).GetValue ();
                     bIsVisible   = static_cast<const SfxBoolItem &>( aNewAttr.Get (ATTR_LAYER_VISIBLE)).GetValue ();
                     bIsLocked    = static_cast<const SfxBoolItem &>( aNewAttr.Get (ATTR_LAYER_LOCKED)).GetValue () ;
                     bIsPrintable = static_cast<const SfxBoolItem &>( aNewAttr.Get (ATTR_LAYER_PRINTABLE)).GetValue () ;
@@ -2124,7 +2091,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                     if (nRet != RET_OK)
                         break;
                     pDlg->GetAttr( aNewAttr );
-                    aLayerName   = static_cast<const SfxStringItem &>( aNewAttr.Get (ATTR_LAYER_NAME)).GetValue ();
+                    aLayerName   = aNewAttr.Get(ATTR_LAYER_NAME).GetValue ();
                     if (bDelete)
                     {
                         if( (rLayerAdmin.GetLayer( aLayerName ) && aLayerName != aOldLayerName)
@@ -2147,8 +2114,8 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 switch (nRet)
                 {
                     case RET_OK :
-                        aLayerTitle  = static_cast<const SfxStringItem &>( aNewAttr.Get (ATTR_LAYER_TITLE)).GetValue ();
-                        aLayerDesc   = static_cast<const SfxStringItem &>( aNewAttr.Get (ATTR_LAYER_DESC)).GetValue ();
+                        aLayerTitle  = aNewAttr.Get(ATTR_LAYER_TITLE).GetValue ();
+                        aLayerDesc   = aNewAttr.Get(ATTR_LAYER_DESC).GetValue ();
                         bIsVisible   = static_cast<const SfxBoolItem &>( aNewAttr.Get (ATTR_LAYER_VISIBLE)).GetValue ();
                         bIsLocked    = static_cast<const SfxBoolItem &>( aNewAttr.Get (ATTR_LAYER_LOCKED)).GetValue ();
                         bIsPrintable = static_cast<const SfxBoolItem &>( aNewAttr.Get (ATTR_LAYER_PRINTABLE)).GetValue ();
@@ -2211,6 +2178,25 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         }
         break;
 
+        case SID_TOGGLELAYERVISIBILITY:
+        {
+            // tdf#113439; duplicates LayerTabBar::MouseButtonDown()
+            sal_uInt16 aTabId = GetLayerTabControl()->GetCurPageId();
+            OUString aName( GetLayerTabControl()->GetLayerName(aTabId) );
+
+            SdrPageView* pPV = mpDrawView->GetSdrPageView();
+            bool bVisible = !pPV->IsLayerVisible(aName);
+
+            pPV->SetLayerVisible(aName, bVisible);
+
+            ResetActualLayer();
+            GetDoc()->SetChanged();
+
+            Cancel();
+            rReq.Ignore ();
+        }
+        break;
+
         case SID_RENAMELAYER:
         {
             if ( mpDrawView->IsTextEdit() )
@@ -2251,7 +2237,9 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             OutlinerView* pOutView = mpDrawView->GetTextEditOutlinerView();
             if ( pOutView )
             {
-                const SvxFieldData* pField = pOutView->GetFieldAtCursor();
+                const SvxFieldItem* pFieldItem
+                    = pOutView->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+                const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
                 if( auto pURLField = dynamic_cast< const SvxURLField *>( pField ) )
                 {
                     SfxStringItem aUrl( SID_FILE_NAME, pURLField->GetURL() );
@@ -2269,8 +2257,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                     SfxBoolItem aNewView( SID_OPEN_NEW_VIEW, false );
                     SfxBoolItem aBrowsing( SID_BROWSE, true );
 
-                    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-                    if (pViewFrm)
+                    if (SfxViewFrame* pViewFrm = SfxViewFrame::Current())
                     {
                         pViewFrm->GetDispatcher()->ExecuteList(SID_OPENDOC,
                             SfxCallMode::ASYNCHRON | SfxCallMode::RECORD,
@@ -2289,7 +2276,9 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             OutlinerView* pOutView = mpDrawView->GetTextEditOutlinerView();
             if ( pOutView )
             {
-                const SvxFieldData* pField = pOutView->GetFieldAtCursor();
+                const SvxFieldItem* pFieldItem
+                    = pOutView->GetFieldAtSelection(/*AlsoCheckBeforeCursor=*/true);
+                const SvxFieldData* pField = pFieldItem ? pFieldItem->GetField() : nullptr;
                 if (const SvxURLField* pURLField = dynamic_cast<const SvxURLField*>(pField))
                 {
                     uno::Reference<datatransfer::clipboard::XClipboard> xClipboard
@@ -2706,17 +2695,20 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
                 OSL_ENSURE(pSelected, "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aTitle(pSelected->GetTitle());
                 OUString aDescription(pSelected->GetDescription());
+                bool isDecorative(pSelected->IsDecorative());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
                 ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
-                            GetFrameWeld(), aTitle, aDescription));
+                            GetFrameWeld(), aTitle, aDescription, isDecorative));
 
                 if(RET_OK == pDlg->Execute())
                 {
                     pDlg->GetTitle(aTitle);
                     pDlg->GetDescription(aDescription);
+                    pDlg->IsDecorative(isDecorative);
                     pSelected->SetTitle(aTitle);
                     pSelected->SetDescription(aDescription);
+                    pSelected->SetDecorative(isDecorative);
                 }
             }
 
@@ -3267,8 +3259,7 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if ( rReq.GetArgs() )
                 GetViewFrame()->SetChildWindow(SvxColorChildWindow::GetChildWindowId(),
-                                        static_cast<const SfxBoolItem&>(rReq.GetArgs()->
-                                        Get(SID_COLOR_CONTROL)).GetValue());
+                                        rReq.GetArgs()->Get(SID_COLOR_CONTROL).GetValue());
             else
                 GetViewFrame()->ToggleChildWindow(SvxColorChildWindow::GetChildWindowId() );
 

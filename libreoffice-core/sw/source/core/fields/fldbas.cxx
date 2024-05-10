@@ -24,6 +24,7 @@
 #include <libxml/xmlwriter.h>
 
 #include <rtl/math.hxx>
+#include <comphelper/string.hxx>
 #include <svl/numformat.hxx>
 #include <svl/zforlist.hxx>
 #include <svl/zformat.hxx>
@@ -42,17 +43,17 @@
 #include <calbck.hxx>
 #include <viewsh.hxx>
 #include <hints.hxx>
+#include <unofield.hxx>
 
 using namespace ::com::sun::star;
 using namespace nsSwDocInfoSubType;
 
-static LanguageType lcl_GetLanguageOfFormat( LanguageType nLng, sal_uLong nFormat,
-                                const SvNumberFormatter& rFormatter )
+static LanguageType lcl_GetLanguageOfFormat(LanguageType nLng, sal_uLong nFormat)
 {
     if( nLng == LANGUAGE_NONE ) // Bug #60010
         nLng = LANGUAGE_SYSTEM;
     else if( nLng == ::GetAppLanguage() )
-        switch( rFormatter.GetIndexTableOffset( nFormat ))
+        switch( SvNumberFormatter::GetIndexTableOffset( nFormat ))
         {
         case NF_NUMBER_SYSTEM:
         case NF_DATE_SYSTEM_SHORT:
@@ -210,10 +211,19 @@ void SwFieldType::GatherDdeTables(std::vector<SwDDETable*>& rvTables) const
     CallSwClientNotify(sw::GatherDdeTablesHint(rvTables));
 }
 
+void SwFieldType::UpdateDocPos(const SwTwips nDocPos)
+{
+    CallSwClientNotify(sw::DocPosUpdate(nDocPos));
+}
 void SwFieldType::UpdateFields()
 {
     CallSwClientNotify(sw::LegacyModifyHint(nullptr, nullptr));
 };
+
+void SwFieldType::SetXObject(rtl::Reference<SwXFieldMaster> const& xFieldMaster)
+{
+    m_wXFieldMaster = xFieldMaster.get();
+}
 
 void SwFieldTypes::dumpAsXml(xmlTextWriterPtr pWriter) const
 {
@@ -223,6 +233,8 @@ void SwFieldTypes::dumpAsXml(xmlTextWriterPtr pWriter) const
         (*this)[nType]->dumpAsXml(pWriter);
     (void)xmlTextWriterEndElement(pWriter);
 }
+
+
 
 // Base class for all fields.
 // A field (multiple can exist) references a field type (can exists only once)
@@ -243,16 +255,6 @@ SwField::SwField(
 SwField::~SwField()
 {
 }
-
-// instead of indirectly via the type
-
-#ifdef DBG_UTIL
-SwFieldIds SwField::Which() const
-{
-    assert(m_pType);
-    return m_pType->Which();
-}
-#endif
 
 SwFieldTypesEnum SwField::GetTypeId() const
 {
@@ -419,20 +421,14 @@ bool SwField::HasClickHdl() const
     case SwFieldIds::GetRef:
     case SwFieldIds::Macro:
     case SwFieldIds::Input:
-    case SwFieldIds::Dropdown :
+    case SwFieldIds::Dropdown:
+    case SwFieldIds::TableOfAuthorities:
         bRet = true;
         break;
 
     case SwFieldIds::SetExp:
         bRet = static_cast<const SwSetExpField*>(this)->GetInputFlag();
         break;
-
-    case SwFieldIds::TableOfAuthorities:
-    {
-        const auto pAuthorityField = static_cast<const SwAuthorityField*>(this);
-        bRet = pAuthorityField->HasURL();
-        break;
-    }
 
     default: break;
     }
@@ -586,7 +582,7 @@ OUString SwValueFieldType::ExpandValue( const double& rVal,
     const Color* pCol = nullptr;
 
     // Bug #60010
-    LanguageType nFormatLng = ::lcl_GetLanguageOfFormat( nLng, nFormat, *pFormatter );
+    LanguageType nFormatLng = ::lcl_GetLanguageOfFormat( nLng, nFormat );
 
     if( nFormat < SV_COUNTRY_LANGUAGE_OFFSET && LANGUAGE_SYSTEM != nFormatLng )
     {
@@ -648,6 +644,22 @@ OUString SwValueFieldType::DoubleToString( const double &rVal,
     pFormatter->ChangeIntl( nLng ); // get separator in the correct language
     return ::rtl::math::doubleToUString( rVal, rtl_math_StringFormat_F, 12,
                                     pFormatter->GetNumDecimalSep()[0], true );
+}
+
+OUString SwValueFieldType::GetInputOrDateTime( const OUString& rInput, const double& rVal, sal_uInt32 nFormat ) const
+{
+    if (nFormat && nFormat != SAL_MAX_UINT32 && UseFormat())
+    {
+        SvNumberFormatter* pFormatter = m_pDoc->GetNumberFormatter();
+        const SvNumberformat* pEntry = pFormatter->GetEntry(nFormat);
+        if (pEntry && (pEntry->GetType() & SvNumFormatType::DATETIME))
+        {
+            OUString aEdit;
+            pFormatter->GetInputLineString( rVal, nFormat, aEdit);
+            return aEdit;
+        }
+    }
+    return rInput;
 }
 
 SwValueField::SwValueField( SwValueFieldType* pFieldType, sal_uInt32 nFormat,
@@ -739,8 +751,7 @@ void SwValueField::SetLanguage( LanguageType nLng )
     {
         // Bug #60010
         SvNumberFormatter* pFormatter = GetDoc()->GetNumberFormatter();
-        LanguageType nFormatLng = ::lcl_GetLanguageOfFormat( nLng, GetFormat(),
-                                                    *pFormatter );
+        LanguageType nFormatLng = ::lcl_GetLanguageOfFormat( nLng, GetFormat() );
 
         if( (GetFormat() >= SV_COUNTRY_LANGUAGE_OFFSET ||
              LANGUAGE_SYSTEM != nFormatLng ) &&
@@ -861,6 +872,26 @@ OUString SwFormulaField::GetExpandedFormula() const
     }
     else
         return GetFormula();
+}
+
+OUString SwFormulaField::GetInputOrDateTime() const
+{
+    // GetFormula() leads to problems with date formats because only the
+    // number string without formatting is returned (additionally that may or
+    // may not use a localized decimal separator due to the convoluted handling
+    // of "formula"). It must be used for expressions though because otherwise
+    // with GetPar2() only the value calculated by SwCalc would be displayed
+    // (instead of test2 = test + 1).
+    // Force a formatted edit value for date+time formats, assuming they are
+    // not editable calculated expressions if the formula doesn't contain
+    // arithmetic operators or assignment.
+
+    const OUString aFormula( GetFormula());
+
+    if (comphelper::string::indexOfAny( aFormula, u"=+-*/", 0) == -1)
+        return static_cast<SwValueFieldType*>(GetTyp())->GetInputOrDateTime( aFormula, GetValue(), GetFormat());
+
+    return aFormula;
 }
 
 OUString SwField::GetDescription() const

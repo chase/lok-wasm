@@ -35,7 +35,7 @@ public:
 CPPUNIT_TEST_FIXTURE(Test, testChartExportToPdf)
 {
     // Given a Calc document with a chart in it:
-    loadFromURL(u"chart.ods");
+    loadFromFile(u"chart.ods");
     uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent, uno::UNO_QUERY);
     uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPagesSupplier->getDrawPages()->getByIndex(0),
                                                  uno::UNO_QUERY);
@@ -62,7 +62,7 @@ CPPUNIT_TEST_FIXTURE(Test, testGraphicObjectResolver)
     OUString aURL = createFileURL(u"GraphicObjectResolverTest.zip");
     uno::Reference<embed::XStorage> xStorage
         = comphelper::OStorageHelper::GetStorageOfFormatFromURL(ZIP_STORAGE_FORMAT_STRING, aURL,
-                                                                embed::ElementModes::READWRITE);
+                                                                embed::ElementModes::READ);
     CPPUNIT_ASSERT(xStorage.is());
 
     rtl::Reference<SvXMLGraphicHelper> xGraphicHelper

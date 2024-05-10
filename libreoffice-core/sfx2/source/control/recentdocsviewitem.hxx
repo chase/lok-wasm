@@ -20,8 +20,9 @@ namespace sfx2
 class RecentDocsViewItem final : public ThumbnailViewItem
 {
 public:
-    RecentDocsViewItem(sfx2::RecentDocsView &rView, const OUString &rURL,
-        const OUString &rTitle, std::u16string_view sThumbnailBase64, sal_uInt16 nId, tools::Long nThumbnailSize, bool isReadOnly);
+    RecentDocsViewItem(sfx2::RecentDocsView& rView, const OUString& rURL, const OUString& rTitle,
+                       std::u16string_view sThumbnailBase64, sal_uInt16 nId,
+                       tools::Long nThumbnailSize, bool isReadOnly, bool isPinned);
 
     /** Updates own highlight status based on the aPoint position.
 
@@ -42,11 +43,14 @@ public:
     /// Called when the user clicks a document - it will open it.
     void OpenDocument();
 
+    bool isPinned () const { return m_bPinned; }
+
 private:
     sfx2::RecentDocsView& mrParentView;
 
     /// Return area where is the icon to remove document from the recent documents.
     tools::Rectangle getRemoveIconArea() const;
+    tools::Rectangle getPinnedIconArea() const;
 
     OUString maURL;
 
@@ -60,6 +64,11 @@ private:
     BitmapEx m_aRemoveRecentBitmap;
 
     BitmapEx m_aRemoveRecentBitmapHighlighted;
+
+    bool m_bPinned;
+    bool m_bPinnedIconHighlighted;
+    BitmapEx m_aPinnedDocumentBitmap;
+    BitmapEx m_aPinnedDocumentBitmapHiglighted;
 };
 
 #endif // INCLUDED_SFX2_RECENTDOCSVIEWITEM_HXX

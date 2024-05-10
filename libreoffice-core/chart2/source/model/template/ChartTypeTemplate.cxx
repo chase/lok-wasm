@@ -23,7 +23,9 @@
 #include <ChartTypeHelper.hxx>
 #include <ChartType.hxx>
 #include <DataSeries.hxx>
+#include <DataSeriesProperties.hxx>
 #include <DataSource.hxx>
+#include <GridProperties.hxx>
 
 #include <Axis.hxx>
 #include <AxisHelper.hxx>
@@ -46,6 +48,7 @@
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::chart2;
+using namespace ::chart::DataSeriesProperties;
 
 using ::com::sun::star::uno::Sequence;
 using ::com::sun::star::uno::Reference;
@@ -183,7 +186,7 @@ void ChartTypeTemplate::changeDiagram( const rtl::Reference< Diagram >& xDiagram
     try
     {
         std::vector< std::vector< rtl::Reference< DataSeries > > > aSeriesSeq =
-            DiagramHelper::getDataSeriesGroups( xDiagram );
+            xDiagram->getDataSeriesGroups();
         std::vector< rtl::Reference< DataSeries > > aFlatSeriesSeq( FlattenSequence( aSeriesSeq ));
         const sal_Int32 nFormerSeriesCount = aFlatSeriesSeq.size();
 
@@ -191,7 +194,7 @@ void ChartTypeTemplate::changeDiagram( const rtl::Reference< Diagram >& xDiagram
         rtl::Reference< DataInterpreter > xInterpreter( getDataInterpreter2());
         InterpretedData aData;
         aData.Series = aSeriesSeq;
-        aData.Categories = DiagramHelper::getCategoriesFromDiagram( xDiagram );
+        aData.Categories = xDiagram->getCategories();
 
         if( xInterpreter->isDataCompatible( aData ) )
         {
@@ -224,7 +227,7 @@ void ChartTypeTemplate::changeDiagram( const rtl::Reference< Diagram >& xDiagram
 
         // remove charttype groups from all coordinate systems
         std::vector< rtl::Reference< ChartType > > aOldChartTypesSeq =
-            DiagramHelper::getChartTypesFromDiagram(xDiagram);
+            xDiagram->getChartTypes();
 
         for( rtl::Reference< BaseCoordinateSystem > const & coords : xDiagram->getBaseCoordinateSystems() )
         {
@@ -252,7 +255,7 @@ void ChartTypeTemplate::changeDiagramData(
     {
         // interpret new data and re-use existing series
         std::vector< rtl::Reference< DataSeries > > aFlatSeriesSeq =
-            DiagramHelper::getDataSeriesFromDiagram( xDiagram );
+            xDiagram->getDataSeries();
         const sal_Int32 nFormerSeriesCount = aFlatSeriesSeq.size();
         rtl::Reference< DataInterpreter > xInterpreter( getDataInterpreter2());
         InterpretedData aData =
@@ -271,10 +274,10 @@ void ChartTypeTemplate::changeDiagramData(
             }
 
         // categories
-        DiagramHelper::setCategoriesToDiagram( aData.Categories, xDiagram, true, supportsCategories() );
+        xDiagram->setCategories( aData.Categories, true, supportsCategories() );
 
         std::vector< rtl::Reference< ChartType > > aChartTypes =
-            DiagramHelper::getChartTypesFromDiagram( xDiagram );
+            xDiagram->getChartTypes();
         sal_Int32 nMax = std::min( aChartTypes.size(), aData.Series.size());
         for( sal_Int32 i=0; i<nMax; ++i )
         {
@@ -379,7 +382,8 @@ void ChartTypeTemplate::applyStyle2(
             lcl_ensureCorrectLabelPlacement( xSeries, aAvailablePlacements );
 
             uno::Sequence< sal_Int32 > aAttributedDataPointIndexList;
-            if( xSeries->getPropertyValue( "AttributedDataPoints" ) >>= aAttributedDataPointIndexList )
+            // "AttributedDataPoints"
+            if( xSeries->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS ) >>= aAttributedDataPointIndexList )
                 for(sal_Int32 nN=aAttributedDataPointIndexList.getLength();nN--;)
                     lcl_ensureCorrectLabelPlacement( xSeries->getDataPointByIndex(aAttributedDataPointIndexList[nN]), aAvailablePlacements );
         }
@@ -394,7 +398,7 @@ void ChartTypeTemplate::applyStyles( const rtl::Reference< ::chart::Diagram >& x
 {
     // apply chart-type specific styles, like "symbols on" for example
     std::vector< std::vector< rtl::Reference< DataSeries > > > aNewSeriesSeq(
-        DiagramHelper::getDataSeriesGroups( xDiagram ));
+        xDiagram->getDataSeriesGroups());
     for( std::size_t i=0; i<aNewSeriesSeq.size(); ++i )
     {
         const sal_Int32 nNumSeries = aNewSeriesSeq[i].size();
@@ -443,7 +447,8 @@ void ChartTypeTemplate::resetStyles2( const rtl::Reference< ::chart::Diagram >& 
                 lcl_resetLabelPlacementIfDefault( xSeries, nDefaultPlacement );
 
                 uno::Sequence< sal_Int32 > aAttributedDataPointIndexList;
-                if( xSeries->getPropertyValue( "AttributedDataPoints" ) >>= aAttributedDataPointIndexList )
+                // "AttributedDataPoints"
+                if( xSeries->getFastPropertyValue( PROP_DATASERIES_ATTRIBUTED_DATA_POINTS ) >>= aAttributedDataPointIndexList )
                     for(sal_Int32 nN=aAttributedDataPointIndexList.getLength();nN--;)
                         lcl_resetLabelPlacementIfDefault( xSeries->getDataPointByIndex(aAttributedDataPointIndexList[nN]), nDefaultPlacement );
             }
@@ -494,7 +499,7 @@ void ChartTypeTemplate::createCoordinateSystems(
     {
         rtl::Reference< Axis > xAxis = xCooSys->getAxisByDimension2( 1, 0 );
         if( xAxis.is())
-            AxisHelper::makeGridVisible( xAxis->getGridProperties() );
+            AxisHelper::makeGridVisible( xAxis->getGridProperties2() );
     }
 
     std::vector< rtl::Reference< BaseCoordinateSystem > > aCoordinateSystems(

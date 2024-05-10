@@ -29,7 +29,7 @@
 #include <com/sun/star/style/XStyleSupplier.hpp>
 #include "charttoolsdllapi.hxx"
 
-#include <map>
+#include <unordered_map>
 
 namespace property
 {
@@ -105,7 +105,7 @@ protected:
         ( css::uno::Any & rConvertedValue,
           css::uno::Any & rOldValue,
           sal_Int32 nHandle,
-          const css::uno::Any& rValue ) override;
+          const css::uno::Any& rValue ) override final;
 
     /** The same as setFastPropertyValue; nHandle is always valid.
         The changes must not be broadcasted in this method.
@@ -138,15 +138,15 @@ protected:
         ( css::uno::Any& rValue,
           sal_Int32 nHandle ) const override;
 
-    /// make original interface function visible again
-    using ::com::sun::star::beans::XFastPropertySet::getFastPropertyValue;
-
     /** implement this method in derived classes to get called when properties
         change.
      */
     virtual void firePropertyChangeEvent();
 
 public:
+    /// make original interface function visible again
+    using ::cppu::OPropertySetHelper::getFastPropertyValue;
+
     // Interfaces
 
     // ____ XInterface ____
@@ -160,35 +160,35 @@ public:
 
     // ____ XPropertyState ____
     virtual css::beans::PropertyState SAL_CALL
-        getPropertyState( const OUString& PropertyName ) override;
+        getPropertyState( const OUString& PropertyName ) override final;
     virtual css::uno::Sequence< css::beans::PropertyState > SAL_CALL
-        getPropertyStates( const css::uno::Sequence< OUString >& aPropertyName ) override;
+        getPropertyStates( const css::uno::Sequence< OUString >& aPropertyName ) override final;
     virtual void SAL_CALL
-        setPropertyToDefault( const OUString& PropertyName ) override;
+        setPropertyToDefault( const OUString& PropertyName ) override final;
     virtual css::uno::Any SAL_CALL
-        getPropertyDefault( const OUString& aPropertyName ) override;
+        getPropertyDefault( const OUString& aPropertyName ) override final;
 
     // ____ XMultiPropertyStates ____
     // Note: getPropertyStates() is already implemented in XPropertyState with the
     // same signature
     virtual void SAL_CALL
-        setAllPropertiesToDefault() override;
+        setAllPropertiesToDefault() override final;
     virtual void SAL_CALL
-        setPropertiesToDefault( const css::uno::Sequence< OUString >& aPropertyNames ) override;
+        setPropertiesToDefault( const css::uno::Sequence< OUString >& aPropertyNames ) override final;
     virtual css::uno::Sequence< css::uno::Any > SAL_CALL
-        getPropertyDefaults( const css::uno::Sequence< OUString >& aPropertyNames ) override;
+        getPropertyDefaults( const css::uno::Sequence< OUString >& aPropertyNames ) override final;
 
     // ____ XStyleSupplier ____
-    virtual css::uno::Reference< css::style::XStyle > SAL_CALL getStyle() override;
-    virtual void SAL_CALL setStyle( const css::uno::Reference< css::style::XStyle >& xStyle ) override;
+    virtual css::uno::Reference< css::style::XStyle > SAL_CALL getStyle() override final;
+    virtual void SAL_CALL setStyle( const css::uno::Reference< css::style::XStyle >& xStyle ) override final;
 
     // ____ XMultiPropertySet ____
     virtual void SAL_CALL setPropertyValues(
         const css::uno::Sequence< OUString >& PropertyNames,
-        const css::uno::Sequence< css::uno::Any >& Values ) override;
+        const css::uno::Sequence< css::uno::Any >& Values ) override final;
 
     // ____ XFastPropertySet ____
-    virtual void SAL_CALL setFastPropertyValue( sal_Int32 nHandle, const css::uno::Any& rValue ) override;
+    virtual void SAL_CALL setFastPropertyValue( sal_Int32 nHandle, const css::uno::Any& rValue ) override final;
 
     // Note: it is assumed that the base class implements setPropertyValue by
     // using setFastPropertyValue
@@ -224,8 +224,7 @@ private:
     bool SetStyle( const css::uno::Reference< css::style::XStyle > & xStyle );
 
     bool m_bSetNewValuesExplicitlyEvenIfTheyEqualDefault;
-    typedef std::map< sal_Int32, css::uno::Any > tPropertyMap;
-    tPropertyMap    m_aProperties;
+    std::unordered_map< sal_Int32, css::uno::Any >    m_aProperties;
     css::uno::Reference< css::style::XStyle > m_xStyle;
 };
 

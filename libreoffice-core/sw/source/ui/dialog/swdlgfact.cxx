@@ -187,6 +187,11 @@ short AbstractTabController_Impl::Execute()
     return m_xDlg->run();
 }
 
+short AbstractNumBulletDialog_Impl::Execute()
+{
+    return m_xDlg->run();
+}
+
 short AbstractSwConvertTableDlg_Impl::Execute()
 {
     return m_xDlg->run();
@@ -235,6 +240,11 @@ short AbstractSwFieldDlg_Impl::Execute()
 short AbstractSwRenameXNamedDlg_Impl::Execute()
 {
     return m_xDlg->run();
+}
+
+bool AbstractSwRenameXNamedDlg_Impl::StartExecuteAsync(VclAbstractDialog::AsyncContext& rCtx)
+{
+    return weld::DialogController::runAsync(m_xDlg, rCtx.maEndDialogFn);
 }
 
 bool AbstractSwContentControlListItemDlg_Impl::StartExecuteAsync(VclAbstractDialog::AsyncContext& rCtx)
@@ -327,7 +337,7 @@ short AbstractAuthMarkFloatDlg_Impl::Execute()
     return m_xDlg->run();
 }
 
-void AbstractTabController_Impl::SetCurPageId( const OString &rName )
+void AbstractTabController_Impl::SetCurPageId( const OUString &rName )
 {
     m_xDlg->SetCurPageId( rName );
 }
@@ -354,6 +364,42 @@ bool AbstractTabController_Impl::StartExecuteAsync(AsyncContext &rCtx)
 
 //From class Window.
 void AbstractTabController_Impl::SetText( const OUString& rStr )
+{
+    m_xDlg->set_title(rStr);
+}
+
+void AbstractNumBulletDialog_Impl::SetCurPageId( const OUString &rName )
+{
+    m_xDlg->SetCurPageId( rName );
+}
+
+const SfxItemSet* AbstractNumBulletDialog_Impl::GetOutputItemSet() const
+{
+    return m_xDlg->GetOutputItemSet();
+}
+
+const SfxItemSet* AbstractNumBulletDialog_Impl::GetInputItemSet() const
+{
+    return m_xDlg->GetInputItemSet();
+}
+
+WhichRangesContainer AbstractNumBulletDialog_Impl::GetInputRanges(const SfxItemPool& pItem )
+{
+    return m_xDlg->GetInputRanges( pItem );
+}
+
+void AbstractNumBulletDialog_Impl::SetInputSet( const SfxItemSet* pInSet )
+{
+     m_xDlg->SetInputSet( pInSet );
+}
+
+bool AbstractNumBulletDialog_Impl::StartExecuteAsync(AsyncContext &rCtx)
+{
+    return SfxTabDialogController::runAsync(m_xDlg, rCtx.maEndDialogFn);
+}
+
+//From class Window.
+void AbstractNumBulletDialog_Impl::SetText( const OUString& rStr )
 {
     m_xDlg->set_title(rStr);
 }
@@ -480,7 +526,7 @@ bool AbstractDropDownFieldDialog_Impl::NextButtonPressed() const
     return m_xDlg->NextButtonPressed();
 }
 
-void AbstractSwLabDlg_Impl::SetCurPageId( const OString &rName )
+void AbstractSwLabDlg_Impl::SetCurPageId( const OUString &rName )
 {
     m_xDlg->SetCurPageId( rName );
 }
@@ -535,7 +581,7 @@ std::unique_ptr<SwTableAutoFormat> AbstractSwAutoFormatDlg_Impl::FillAutoFormatO
     return m_xDlg->FillAutoFormatOfIndex();
 }
 
-void AbstractSwFieldDlg_Impl::SetCurPageId( const OString &rName )
+void AbstractSwFieldDlg_Impl::SetCurPageId( const OUString &rName )
 {
     m_xDlg->SetCurPageId( rName );
 }
@@ -677,7 +723,7 @@ OUString AbstractInsFootNoteDlg_Impl::GetStr()
     return m_xDlg->GetStr();
 }
 
-void AbstractInsFootNoteDlg_Impl::SetHelpId(const OString& rHelpId)
+void AbstractInsFootNoteDlg_Impl::SetHelpId(const OUString& rHelpId)
 {
     m_xDlg->set_help_id(rHelpId);
 }
@@ -876,9 +922,8 @@ sal_uInt16 AbstractMailMergeWizard_Impl::GetRestartPage() const
 
 std::optional<SwLanguageListItem> AbstractSwTranslateLangSelectDlg_Impl::GetSelectedLanguage()
 {
-#if !ENABLE_WASM_STRIP_EXTRA
-    SwTranslateLangSelectDlg* pDlg = dynamic_cast<SwTranslateLangSelectDlg*>(m_xDlg.get());
-    return pDlg->GetSelectedLanguage();
+#if HAVE_FEATURE_CURL && !ENABLE_WASM_STRIP_EXTRA
+    return SwTranslateLangSelectDlg::GetSelectedLanguage();
 #else
     return {};
 #endif
@@ -945,7 +990,7 @@ std::shared_ptr<AbstractSwBreakDlg> SwAbstractDialogFactory_Impl::CreateSwBreakD
 
 std::shared_ptr<AbstractSwTranslateLangSelectDlg> SwAbstractDialogFactory_Impl::CreateSwTranslateLangSelectDlg(weld::Window* pParent, SwWrtShell &rSh)
 {
-#if !ENABLE_WASM_STRIP_EXTRA
+#if HAVE_FEATURE_CURL && !ENABLE_WASM_STRIP_EXTRA
     return std::make_shared<AbstractSwTranslateLangSelectDlg_Impl>(std::make_unique<SwTranslateLangSelectDlg>(pParent, rSh));
 #else
     (void) pParent;
@@ -1038,7 +1083,7 @@ SwLabDlgMethod SwAbstractDialogFactory_Impl::GetSwLabDlgStaticMethod ()
 VclPtr<SfxAbstractTabDialog> SwAbstractDialogFactory_Impl::CreateSwParaDlg(weld::Window *pParent, SwView& rVw,
                                                                            const SfxItemSet& rCoreSet,
                                                                            bool bDraw ,
-                                                                           const OString& sDefPage)
+                                                                           const OUString& sDefPage)
 {
     return VclPtr<AbstractTabController_Impl>::Create(std::make_shared<SwParaDlg>(pParent, rVw, rCoreSet, DLG_STD, nullptr, bDraw, sDefPage));
 }
@@ -1135,19 +1180,19 @@ VclPtr<VclAbstractDialog> SwAbstractDialogFactory_Impl::CreateTableMergeDialog(w
 }
 
 VclPtr<SfxAbstractTabDialog> SwAbstractDialogFactory_Impl::CreateFrameTabDialog(const OUString &rDialogType,
-                                                SfxViewFrame *pFrame, weld::Window *pParent,
+                                                SfxViewFrame& rFrame, weld::Window *pParent,
                                                 const SfxItemSet& rCoreSet,
                                                 bool        bNewFrame,
-                                                const OString&  sDefPage )
+                                                const OUString&  sDefPage )
 {
-    return VclPtr<AbstractTabController_Impl>::Create(std::make_shared<SwFrameDlg>(pFrame, pParent, rCoreSet, bNewFrame, rDialogType, false/*bFormat*/, sDefPage, nullptr));
+    return VclPtr<AbstractTabController_Impl>::Create(std::make_shared<SwFrameDlg>(rFrame, pParent, rCoreSet, bNewFrame, rDialogType, false/*bFormat*/, sDefPage, nullptr));
 }
 
 VclPtr<SfxAbstractApplyTabDialog> SwAbstractDialogFactory_Impl::CreateTemplateDialog(
                                                 weld::Window *pParent,
                                                 SfxStyleSheetBase&  rBase,
                                                 SfxStyleFamily      nRegion,
-                                                const OString&      sPage,
+                                                const OUString&     sPage,
                                                 SwWrtShell*         pActShell,
                                                 bool                bNew )
 {
@@ -1155,10 +1200,10 @@ VclPtr<SfxAbstractApplyTabDialog> SwAbstractDialogFactory_Impl::CreateTemplateDi
                                                                                                      sPage, pActShell, bNew));
 }
 
-VclPtr<AbstractGlossaryDlg> SwAbstractDialogFactory_Impl::CreateGlossaryDlg(SfxViewFrame* pViewFrame, SwGlossaryHdl* pGlosHdl,
+VclPtr<AbstractGlossaryDlg> SwAbstractDialogFactory_Impl::CreateGlossaryDlg(SfxViewFrame& rViewFrame, SwGlossaryHdl* pGlosHdl,
                                                                             SwWrtShell *pWrtShell)
 {
-    return VclPtr<AbstractGlossaryDlg_Impl>::Create(std::make_unique<SwGlossaryDlg>(pViewFrame, pGlosHdl, pWrtShell));
+    return VclPtr<AbstractGlossaryDlg_Impl>::Create(std::make_unique<SwGlossaryDlg>(rViewFrame, pGlosHdl, pWrtShell));
 }
 
 VclPtr<AbstractFieldInputDlg> SwAbstractDialogFactory_Impl::CreateFieldInputDlg(weld::Widget *pParent,
@@ -1219,11 +1264,11 @@ VclPtr<VclAbstractDialog> SwAbstractDialogFactory_Impl::CreateMultiTOXMarkDlg(we
     return VclPtr<AbstractMultiTOXMarkDlg_Impl>::Create(std::make_unique<SwMultiTOXMarkDlg>(pParent, rTOXMgr));
 }
 
-VclPtr<SfxAbstractTabDialog> SwAbstractDialogFactory_Impl::CreateSvxNumBulletTabDialog(weld::Window* pParent,
-                                                const SfxItemSet* pSwItemSet,
+VclPtr<AbstractNumBulletDialog> SwAbstractDialogFactory_Impl::CreateSvxNumBulletTabDialog(weld::Window* pParent,
+                                                const SfxItemSet& rSwItemSet,
                                                 SwWrtShell & rWrtSh)
 {
-    return VclPtr<AbstractTabController_Impl>::Create(std::make_shared<SwSvxNumBulletTabDialog>(pParent, pSwItemSet, rWrtSh));
+    return VclPtr<AbstractNumBulletDialog_Impl>::Create(std::make_shared<SwSvxNumBulletTabDialog>(pParent, rSwItemSet, rWrtSh));
 }
 
 VclPtr<SfxAbstractTabDialog> SwAbstractDialogFactory_Impl::CreateOutlineTabDialog(weld::Window* pParent,

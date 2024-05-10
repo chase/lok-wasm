@@ -23,6 +23,7 @@
 #include <DiagramHelper.hxx>
 #include <Diagram.hxx>
 #include <RegressionCurveHelper.hxx>
+#include <RegressionCurveModel.hxx>
 #include <Axis.hxx>
 #include <AxisHelper.hxx>
 #include <chartview/ExplicitValueProvider.hxx>
@@ -31,6 +32,7 @@
 #include <ChartModel.hxx>
 #include <DataSeries.hxx>
 #include <DataSeriesHelper.hxx>
+#include <GridProperties.hxx>
 #include <LegendHelper.hxx>
 #include <chartview/DrawModelWrapper.hxx>
 #include <unonames.hxx>
@@ -111,7 +113,7 @@ void ObjectHierarchy::createTree( const rtl::Reference<::chart::ChartModel>& xCh
         return;
 
     //@todo: change ObjectIdentifier to take an XChartDocument rather than XModel
-    rtl::Reference< Diagram > xDiagram = ChartModelHelper::findDiagram( xChartDocument );
+    rtl::Reference< Diagram > xDiagram = xChartDocument->getFirstChartDiagram();
     ObjectIdentifier aDiaOID;
     if( xDiagram.is() )
         aDiaOID = ObjectIdentifier( ObjectIdentifier::createClassifiedIdentifierForObject( static_cast<cppu::OWeakObject*>(xDiagram.get()), xChartDocument ) );
@@ -211,8 +213,8 @@ void ObjectHierarchy::createAxesTree(
     const rtl::Reference<::chart::ChartModel> & xChartDoc,
     const rtl::Reference< Diagram > & xDiagram  )
 {
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
-    rtl::Reference< ChartType > xChartType( DiagramHelper::getChartTypeByIndex( xDiagram, 0 ) );
+    sal_Int32 nDimensionCount = xDiagram->getDimension();
+    rtl::Reference< ChartType > xChartType( xDiagram->getChartTypeByIndex( 0 ) );
     bool bSupportsAxesGrids = ChartTypeHelper::isSupportingMainAxis( xChartType, nDimensionCount, 0 );
     if( !bSupportsAxesGrids )
         return;
@@ -257,19 +259,17 @@ void ObjectHierarchy::createAxesTree(
             lcl_addAxisTitle( xAxis, rContainer, xChartDoc );
         }
 
-        Reference< beans::XPropertySet > xGridProperties( xAxis->getGridProperties() );
+        rtl::Reference< ::chart::GridProperties > xGridProperties( xAxis->getGridProperties2() );
         if( AxisHelper::isGridVisible( xGridProperties ) )
         {
             //main grid
             rContainer.emplace_back( ObjectIdentifier::createClassifiedIdentifierForGrid( xAxis, xChartDoc ) );
         }
 
-        Sequence< Reference< beans::XPropertySet > > aSubGrids( xAxis->getSubGridProperties() );
-        sal_Int32 nSubGrid = 0;
-        for( nSubGrid = 0; nSubGrid < aSubGrids.getLength(); ++nSubGrid )
+        std::vector< rtl::Reference< ::chart::GridProperties > > aSubGrids( xAxis->getSubGridProperties2() );
+        for( size_t nSubGrid = 0; nSubGrid < aSubGrids.size(); ++nSubGrid )
         {
-            Reference< beans::XPropertySet > xSubGridProperties( aSubGrids[nSubGrid] );
-            if( AxisHelper::isGridVisible( xSubGridProperties ) )
+            if( AxisHelper::isGridVisible( aSubGrids[nSubGrid] ) )
             {
                 //sub grid
                 rContainer.emplace_back( ObjectIdentifier::createClassifiedIdentifierForGrid( xAxis, xChartDoc, nSubGrid ) );
@@ -282,9 +282,9 @@ void ObjectHierarchy::createWallAndFloor(
     tChildContainer & rContainer,
     const rtl::Reference< Diagram > & xDiagram )
 {
-    sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+    sal_Int32 nDimensionCount = xDiagram->getDimension();
     bool bIsThreeD = ( nDimensionCount == 3 );
-    bool bHasWall = DiagramHelper::isSupportingFloorAndWall( xDiagram );
+    bool bHasWall = xDiagram->isSupportingFloorAndWall();
     if( bHasWall && bIsThreeD )
     {
         rContainer.emplace_back( ObjectIdentifier::createClassifiedIdentifier( OBJECTTYPE_DIAGRAM_WALL, u"" ) );
@@ -320,7 +320,7 @@ void ObjectHierarchy::createDataSeriesTree(
 {
     try
     {
-        sal_Int32 nDimensionCount = DiagramHelper::getDimension( xDiagram );
+        sal_Int32 nDimensionCount = xDiagram->getDimension();
         std::vector< rtl::Reference< BaseCoordinateSystem > > aCooSysSeq(
             xDiagram->getBaseCoordinateSystems());
         for( std::size_t nCooSysIdx=0; nCooSysIdx<aCooSysSeq.size(); ++nCooSysIdx )
@@ -356,12 +356,12 @@ void ObjectHierarchy::createDataSeriesTree(
                     // Statistics
                     if( ChartTypeHelper::isSupportingStatisticProperties( xChartType, nDimensionCount ) )
                     {
-                        Sequence< Reference< chart2::XRegressionCurve > > aCurves( xSeries->getRegressionCurves());
-                        for( sal_Int32 nCurveIdx=0; nCurveIdx<aCurves.getLength(); ++nCurveIdx )
+                        const std::vector< rtl::Reference< RegressionCurveModel > > & rCurves( xSeries->getRegressionCurves2());
+                        for( size_t nCurveIdx=0; nCurveIdx<rCurves.size(); ++nCurveIdx )
                         {
-                            bool bIsAverageLine = RegressionCurveHelper::isMeanValueLine( aCurves[nCurveIdx] );
+                            bool bIsAverageLine = RegressionCurveHelper::isMeanValueLine( rCurves[nCurveIdx] );
                             aSeriesSubContainer.emplace_back( ObjectIdentifier::createDataCurveCID( aSeriesParticle, nCurveIdx, bIsAverageLine ) );
-                            if( RegressionCurveHelper::hasEquation( aCurves[nCurveIdx] ) )
+                            if( RegressionCurveHelper::hasEquation( rCurves[nCurveIdx] ) )
                             {
                                 aSeriesSubContainer.emplace_back( ObjectIdentifier::createDataCurveEquationCID( aSeriesParticle, nCurveIdx ) );
                             }

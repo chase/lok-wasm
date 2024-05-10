@@ -47,19 +47,19 @@ using namespace com::sun::star;
 using namespace com::sun::star::uno;
 using namespace connectivity::dbase;
 
-constexpr OUStringLiteral SCFILTEROPTIONSOBJ_SERVICE = u"com.sun.star.ui.dialogs.FilterOptionsDialog";
+constexpr OUString SCFILTEROPTIONSOBJ_SERVICE = u"com.sun.star.ui.dialogs.FilterOptionsDialog"_ustr;
 constexpr OUStringLiteral SCFILTEROPTIONSOBJ_IMPLNAME = u"com.sun.star.comp.Calc.FilterOptionsDialog";
 
 SC_SIMPLE_SERVICE_INFO( ScFilterOptionsObj, SCFILTEROPTIONSOBJ_IMPLNAME, SCFILTEROPTIONSOBJ_SERVICE )
 
 constexpr OUStringLiteral SC_UNONAME_FILENAME = u"URL";
 constexpr OUStringLiteral SC_UNONAME_FILTERNAME = u"FilterName";
-constexpr OUStringLiteral SC_UNONAME_FILTEROPTIONS = u"FilterOptions";
+constexpr OUString SC_UNONAME_FILTEROPTIONS = u"FilterOptions"_ustr;
 constexpr OUStringLiteral SC_UNONAME_INPUTSTREAM = u"InputStream";
 
-constexpr OUStringLiteral DBF_CHAR_SET = u"CharSet";
-constexpr OUStringLiteral DBF_SEP_PATH_IMPORT = u"Office.Calc/Dialogs/DBFImport";
-constexpr OUStringLiteral DBF_SEP_PATH_EXPORT = u"Office.Calc/Dialogs/DBFExport";
+constexpr OUString DBF_CHAR_SET = u"CharSet"_ustr;
+constexpr OUString DBF_SEP_PATH_IMPORT = u"Office.Calc/Dialogs/DBFImport"_ustr;
+constexpr OUString DBF_SEP_PATH_EXPORT = u"Office.Calc/Dialogs/DBFExport"_ustr;
 
 namespace
 {
@@ -215,6 +215,8 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
                 aBuf.append(static_cast<sal_Int32>(static_cast<sal_uInt16>(eLang)));
                 aBuf.append(' ');
                 aBuf.append(pDlg->IsDateConversionSet() ? u'1' : u'0');
+                aBuf.append(' ');
+                aBuf.append(pDlg->IsScientificConversionSet() ? u'1' : u'0');
                 aFilterOptions = aBuf.makeStringAndClear();
                 nRet = ui::dialogs::ExecutableDialogResults::OK;
             }
@@ -231,6 +233,7 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
         rtl_TextEncoding eEncoding = RTL_TEXTENCODING_DONTKNOW;
 
         OUString aTitle;
+        bool bIncludeBOM = false;
 
         if ( aFilterString == ScDocShell::GetAsciiFilterName() )
         {
@@ -245,6 +248,10 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
 
             aTitle = ScResId( STR_EXPORT_ASCII );
             bAscii = true;
+
+            ScAsciiOptions aOptions;
+            aOptions.ReadFromString(aFilterOptions);
+            bIncludeBOM = aOptions.GetIncludeBOM();
         }
         else if ( aFilterString == ScDocShell::GetLotusFilterName() )
         {
@@ -299,6 +306,7 @@ sal_Int16 SAL_CALL ScFilterOptionsObj::execute()
         }
 
         ScImportOptions aOptions( cAsciiDel, cStrDel, eEncoding);
+        aOptions.bIncludeBOM = bIncludeBOM;
         if(skipDialog)
         {
             // TODO: check we are not missing some of the stuff that ScImportOptionsDlg::GetImportOptions

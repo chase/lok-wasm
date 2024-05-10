@@ -39,6 +39,9 @@
 #include "TextConnectionHelper.hxx"
 #include <osl/diagnose.h>
 
+#include <IItemSetHelper.hxx>
+#include <comphelper/string.hxx>
+
 namespace dbaui
 {
 using namespace ::com::sun::star;
@@ -236,9 +239,13 @@ using namespace ::com::sun::star;
         if ( bHasMySQLNative )
             m_xNATIVEDatabase->show();
 
-        // if any of the options is checked, then there's nothing to do
+        // tdf#103068: if any of the options is checked, then just update the selected kind:
+        // it could happen that the selection and the wizard path are not in sync
         if ( m_xODBCDatabase->get_active() || m_xJDBCDatabase->get_active() || m_xNATIVEDatabase->get_active() )
+        {
+            maClickHdl.Call(this);
             return;
+        }
 
         // prefer "native" or "JDBC"
         if ( bHasMySQLNative )
@@ -448,7 +455,7 @@ using namespace ::com::sun::star;
         OGenericAdministrationPage::implInitControls(_rSet, _bSaveValue);
 
         // to get the correct value when saveValue was called by base class
-        if ( m_xETDriverClass->get_text().trim().isEmpty() )
+        if ( o3tl::trim(m_xETDriverClass->get_text()).empty() )
         {
             m_xETDriverClass->set_text(m_sDefaultJdbcDriverName);
             m_xETDriverClass->save_value();
@@ -467,7 +474,7 @@ using namespace ::com::sun::star;
 #if HAVE_FEATURE_JAVA
         try
         {
-            if ( !m_xETDriverClass->get_text().trim().isEmpty() )
+            if ( !o3tl::trim(m_xETDriverClass->get_text()).empty() )
             {
 // TODO change jvmaccess
                 ::rtl::Reference< jvmaccess::VirtualMachine > xJVM = ::connectivity::getJavaVM( m_pAdminDialog->getORB() );
@@ -488,8 +495,8 @@ using namespace ::com::sun::star;
     void OGeneralSpecialJDBCConnectionPageSetup::callModifiedHdl(weld::Widget* pControl)
     {
         if (pControl == m_xETDriverClass.get())
-            m_xPBTestJavaDriver->set_sensitive( !m_xETDriverClass->get_text().trim().isEmpty() );
-        bool bRoadmapState = ((!m_xETDatabasename->get_text().isEmpty() ) && ( !m_xETHostname->get_text().isEmpty() ) && (!m_xNFPortNumber->get_text().isEmpty() ) && ( !m_xETDriverClass->get_text().trim().isEmpty() ));
+            m_xPBTestJavaDriver->set_sensitive( !o3tl::trim(m_xETDriverClass->get_text()).empty() );
+        bool bRoadmapState = ((!m_xETDatabasename->get_text().isEmpty() ) && ( !m_xETHostname->get_text().isEmpty() ) && (!m_xNFPortNumber->get_text().isEmpty() ) && ( !o3tl::trim(m_xETDriverClass->get_text()).empty() ));
         SetRoadmapStateValue(bRoadmapState);
         OGenericAdministrationPage::callModifiedHdl();
     }
@@ -497,6 +504,129 @@ using namespace ::com::sun::star;
     std::unique_ptr<OGenericAdministrationPage> OJDBCConnectionPageSetup::CreateJDBCTabPage(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& _rAttrSet)
     {
         return std::make_unique<OJDBCConnectionPageSetup>(pPage, pController, _rAttrSet);
+    }
+
+    // OPostgresConnectionPageSetup
+    OPostgresConnectionPageSetup::OPostgresConnectionPageSetup( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& _rCoreAttrs , sal_uInt16 _nPortId )
+        : OGenericAdministrationPage(pPage, pController, "dbaccess/ui/postgrespage.ui", "SpecialPostgresPage", _rCoreAttrs)
+        , m_nPortId(_nPortId)
+        , m_xETDatabasename(m_xBuilder->weld_entry("dbNameEntry"))
+        , m_xETHostname(m_xBuilder->weld_entry("hostNameEntry"))
+        , m_xNFPortNumber(m_xBuilder->weld_spin_button("portNumEntry"))
+        , m_xConnectionURL(new OConnectionURLEdit(m_xBuilder->weld_entry("browseurl"), m_xBuilder->weld_label("browselabel")))
+    {
+        m_xETDatabasename->connect_changed(LINK(this, OGenericAdministrationPage, OnControlEntryModifyHdl));
+        m_xETHostname->connect_changed(LINK(this, OGenericAdministrationPage, OnControlEntryModifyHdl));
+        m_xNFPortNumber->connect_value_changed(LINK(this, OGenericAdministrationPage, OnControlSpinButtonModifyHdl));
+        const DbuTypeCollectionItem* pCollectionItem = dynamic_cast<const DbuTypeCollectionItem*>( _rCoreAttrs.GetItem(DSID_TYPECOLLECTION) );
+        if (pCollectionItem)
+            m_pCollection = pCollectionItem->getCollection();
+        OSL_ENSURE(m_pCollection, "OConnectionHelper::OConnectionHelper : really need a DSN type collection !");
+        m_xConnectionURL->SetTypeCollection(m_pCollection);
+
+        SetRoadmapStateValue(false);
+    }
+
+    OPostgresConnectionPageSetup::~OPostgresConnectionPageSetup()
+    {
+    }
+
+    std::unique_ptr<OGenericAdministrationPage> OPostgresConnectionPageSetup::CreatePostgresTabPage( weld::Container* pPage, weld::DialogController* pController, const SfxItemSet& _rAttrSet )
+    {
+        return std::make_unique<OPostgresConnectionPageSetup>(pPage, pController,
+                                                          _rAttrSet,
+                                                          DSID_POSTGRES_PORTNUMBER);
+    }
+
+    void OPostgresConnectionPageSetup::fillControls(std::vector< std::unique_ptr<ISaveValueWrapper> >& _rControlList)
+    {
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::Entry>(m_xETDatabasename.get()));
+        _rControlList.emplace_back( new OSaveValueWidgetWrapper<OConnectionURLEdit>( m_xConnectionURL.get() ) );
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::Entry>(m_xETHostname.get()));
+        _rControlList.emplace_back(new OSaveValueWidgetWrapper<weld::SpinButton>(m_xNFPortNumber.get()));
+    }
+
+    bool OPostgresConnectionPageSetup::FillItemSet( SfxItemSet* _rSet )
+    {
+        bool bChangedSomething = false;
+        fillString(*_rSet,m_xConnectionURL.get(), DSID_CONNECTURL, bChangedSomething);
+        fillString(*_rSet,m_xETHostname.get(),DSID_CONN_HOSTNAME,bChangedSomething);
+        fillString(*_rSet,m_xETDatabasename.get(),DSID_DATABASENAME,bChangedSomething);
+        fillInt32(*_rSet,m_xNFPortNumber.get(),m_nPortId,bChangedSomething );
+        return bChangedSomething;
+    }
+
+    void OPostgresConnectionPageSetup::fillWindows(std::vector< std::unique_ptr<ISaveValueWrapper> >& /*_rControlList*/)
+    {
+    }
+
+    void OPostgresConnectionPageSetup::implInitControls(const SfxItemSet& _rSet, bool _bSaveValue)
+    {
+        // check whether or not the selection is invalid or readonly (invalid implies readonly, but not vice versa)
+        SetRoadmapStateValue(true);
+        bool bValid, bReadonly;
+        getFlags(_rSet, bValid, bReadonly);
+
+        m_xConnectionURL->show();
+        m_xConnectionURL->ShowPrefix( false);
+
+        const SfxStringItem* pDatabaseName = _rSet.GetItem<SfxStringItem>(DSID_DATABASENAME);
+        const SfxStringItem* pUrlItem = _rSet.GetItem<SfxStringItem>(DSID_CONNECTURL);
+        const SfxStringItem* pHostName = _rSet.GetItem<SfxStringItem>(DSID_CONN_HOSTNAME);
+        const SfxInt32Item* pPortNumber = _rSet.GetItem<SfxInt32Item>(m_nPortId);
+
+        if ( bValid )
+        {
+            m_xETDatabasename->set_text(pDatabaseName->GetValue());
+            m_xETDatabasename->save_value();
+
+            OUString sUrl = pUrlItem->GetValue();
+            setURL( sUrl );
+            m_xConnectionURL->save_value();
+
+            m_xETHostname->set_text(pHostName->GetValue());
+            m_xETHostname->save_value();
+
+            m_xNFPortNumber->set_value(pPortNumber->GetValue());
+            m_xNFPortNumber->save_value();
+        }
+
+        OGenericAdministrationPage::implInitControls(_rSet, _bSaveValue);
+
+        callModifiedHdl();
+    }
+
+    bool OPostgresConnectionPageSetup::commitPage( ::vcl::WizardTypes::CommitPageReason /*_eReason*/ )
+    {
+        return commitURL();
+    }
+
+    bool OPostgresConnectionPageSetup::commitURL()
+    {
+        OUString sURL = m_xConnectionURL->GetTextNoPrefix();
+        setURLNoPrefix(sURL);
+        m_xConnectionURL->SaveValueNoPrefix();
+        return true;
+    }
+
+    void OPostgresConnectionPageSetup::impl_setURL( std::u16string_view _rURL, bool _bPrefix )
+    {
+        OUString sURL( comphelper::string::stripEnd(_rURL, '*') );
+        OSL_ENSURE( m_pCollection, "OConnectionHelper::impl_setURL: have no interpreter for the URLs!" );
+        if ( _bPrefix )
+            m_xConnectionURL->SetText( sURL );
+        else
+            m_xConnectionURL->SetTextNoPrefix( sURL );
+    }
+
+    void OPostgresConnectionPageSetup::setURLNoPrefix( std::u16string_view _rURL )
+    {
+        impl_setURL( _rURL,false);
+    }
+
+    void OPostgresConnectionPageSetup::setURL( std::u16string_view _rURL )
+    {
+        impl_setURL( _rURL, true);
     }
 
     // OMySQLJDBCConnectionPageSetup

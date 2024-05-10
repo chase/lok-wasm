@@ -122,8 +122,6 @@ public:
 
     /** Returns the caption text of this note. */
     OUString     GetText() const;
-    /** Returns true, if the caption text of this note contains line breaks. */
-    bool                HasMultiLineText() const;
     /** Changes the caption text of this note. All text formatting will be lost. */
     void                SetText( const ScAddress& rPos, const OUString& rText );
 
@@ -208,6 +206,8 @@ public:
             The underlying ScPostIt::ScNoteData::ScCaptionPtr takes managing
             ownership of the pointer.
 
+        @param bHasStyle  Is there a drawing style set for the note.
+
         @return  Pointer to the new cell note object if insertion was
             successful (i.e. the passed cell position was valid), null
             otherwise. The Calc document is the owner of the note object. The
@@ -216,7 +216,7 @@ public:
      */
     static ScPostIt*    CreateNoteFromCaption(
                             ScDocument& rDoc, const ScAddress& rPos,
-                            SdrCaptionObj* pCaption );
+                            SdrCaptionObj* pCaption, bool bHasStyle );
 
     /** Creates a cell note based on the passed caption object data.
 
@@ -231,6 +231,8 @@ public:
             formatting attributes of the caption object. This function takes
             ownership of the passed item set.
 
+        @param rStyleName  Drawing style associated with the caption object.
+
         @param rOutlinerObj  An outliner object containing (formatted) text
             for the caption object.
 
@@ -244,7 +246,7 @@ public:
      */
     static ScPostIt*    CreateNoteFromObjectData(
                             ScDocument& rDoc, const ScAddress& rPos,
-                            SfxItemSet&& oItemSet,
+                            const SfxItemSet& rItemSet, const OUString& rStyleName,
                             const OutlinerParaObject& rOutlinerObj,
                             const tools::Rectangle& rCaptionRect, bool bShown );
 

@@ -30,10 +30,6 @@
 #include <cppuhelper/supportsservice.hxx>
 #include <unotools/charclass.hxx>
 
-using namespace ::com::sun::star;
-using ::com::sun::star::uno::Reference;
-using ::com::sun::star::uno::Any;
-
 #include <nameuno.hxx>
 #include <miscuno.hxx>
 #include <cellsuno.hxx>
@@ -48,7 +44,11 @@ using ::com::sun::star::uno::Any;
 
 #include <scui_def.hxx>
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetNamedRangeMap()
+using namespace ::com::sun::star;
+using ::com::sun::star::uno::Reference;
+using ::com::sun::star::uno::Any;
+
+static std::span<const SfxItemPropertyMapEntry> lcl_GetNamedRangeMap()
 {
     static const SfxItemPropertyMapEntry aNamedRangeMap_Impl[] =
     {
@@ -60,7 +60,7 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetNamedRangeMap()
     return aNamedRangeMap_Impl;
 }
 
-static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetNamedRangesMap()
+static std::span<const SfxItemPropertyMapEntry> lcl_GetNamedRangesMap()
 {
     static const SfxItemPropertyMapEntry aNamedRangesMap_Impl[] =
     {
@@ -69,16 +69,17 @@ static o3tl::span<const SfxItemPropertyMapEntry> lcl_GetNamedRangesMap()
     return aNamedRangesMap_Impl;
 }
 
-constexpr OUStringLiteral SCNAMEDRANGEOBJ_SERVICE = u"com.sun.star.sheet.NamedRange";
+constexpr OUString SCNAMEDRANGEOBJ_SERVICE = u"com.sun.star.sheet.NamedRange"_ustr;
 
 SC_SIMPLE_SERVICE_INFO( ScLabelRangeObj, "ScLabelRangeObj", "com.sun.star.sheet.LabelRange" )
 SC_SIMPLE_SERVICE_INFO( ScLabelRangesObj, "ScLabelRangesObj", "com.sun.star.sheet.LabelRanges" )
 SC_SIMPLE_SERVICE_INFO( ScNamedRangesObj, "ScNamedRangesObj", "com.sun.star.sheet.NamedRanges" )
 
+// Database named ranges are not considered by getCount, hasByName, removeByName and getElementNames
+// Note that hidden named ranges are considered by these methods
 static bool lcl_UserVisibleName(const ScRangeData& rData)
 {
     //! as method to ScRangeData
-
     return !rData.HasType(ScRangeData::Type::Database);
 }
 
@@ -293,6 +294,7 @@ sal_Int32 SAL_CALL ScNamedRangeObj::getType()
         if ( pData->HasType(ScRangeData::Type::PrintArea) ) nType |= sheet::NamedRangeFlag::PRINT_AREA;
         if ( pData->HasType(ScRangeData::Type::ColHeader) ) nType |= sheet::NamedRangeFlag::COLUMN_HEADER;
         if ( pData->HasType(ScRangeData::Type::RowHeader) ) nType |= sheet::NamedRangeFlag::ROW_HEADER;
+        if ( pData->HasType(ScRangeData::Type::Hidden) )    nType |= sheet::NamedRangeFlag::HIDDEN;
     }
     return nType;
 }
@@ -305,6 +307,7 @@ void SAL_CALL ScNamedRangeObj::setType( sal_Int32 nUnoType )
     if ( nUnoType & sheet::NamedRangeFlag::PRINT_AREA )         nNewType |= ScRangeData::Type::PrintArea;
     if ( nUnoType & sheet::NamedRangeFlag::COLUMN_HEADER )      nNewType |= ScRangeData::Type::ColHeader;
     if ( nUnoType & sheet::NamedRangeFlag::ROW_HEADER )         nNewType |= ScRangeData::Type::RowHeader;
+    if ( nUnoType & sheet::NamedRangeFlag::HIDDEN )             nNewType |= ScRangeData::Type::Hidden;
 
     // GRAM_API for API compatibility.
     Modify_Impl( nullptr, nullptr, nullptr, nullptr, &nNewType,formula::FormulaGrammar::GRAM_API );
@@ -419,20 +422,6 @@ uno::Sequence<OUString> SAL_CALL ScNamedRangeObj::getSupportedServiceNames()
     return {SCNAMEDRANGEOBJ_SERVICE, SCLINKTARGET_SERVICE};
 }
 
-// XUnoTunnel
-
-sal_Int64 SAL_CALL ScNamedRangeObj::getSomething(
-                const uno::Sequence<sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
-const uno::Sequence<sal_Int8>& ScNamedRangeObj::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theScNamedRangeObjUnoTunnelId;
-    return theScNamedRangeObjUnoTunnelId.getSeq();
-}
-
 ScNamedRangesObj::ScNamedRangesObj(ScDocShell* pDocSh) :
     mbModifyAndBroadcast(true),
     pDocShell( pDocSh )
@@ -472,6 +461,7 @@ void SAL_CALL ScNamedRangesObj::addNewByName( const OUString& aName,
     if ( nUnoType & sheet::NamedRangeFlag::PRINT_AREA )         nNewType |= ScRangeData::Type::PrintArea;
     if ( nUnoType & sheet::NamedRangeFlag::COLUMN_HEADER )      nNewType |= ScRangeData::Type::ColHeader;
     if ( nUnoType & sheet::NamedRangeFlag::ROW_HEADER )         nNewType |= ScRangeData::Type::RowHeader;
+    if ( nUnoType & sheet::NamedRangeFlag::HIDDEN )             nNewType |= ScRangeData::Type::Hidden;
 
     bool bDone = false;
     if (pDocShell)
@@ -483,12 +473,12 @@ void SAL_CALL ScNamedRangesObj::addNewByName( const OUString& aName,
             case ScRangeData::IsNameValidType::NAME_INVALID_CELL_REF:
                 throw uno::RuntimeException(
                     "Invalid name. Reference to a cell, or a range of cells not allowed",
-                    uno::Reference<uno::XInterface>(static_cast<::cppu::OWeakObject*>(this)));
+                    getXWeak());
                 break;
             case ScRangeData::IsNameValidType::NAME_INVALID_BAD_STRING:
                 throw uno::RuntimeException(
                     "Invalid name. Start with a letter, use only letters, numbers and underscore",
-                    uno::Reference<uno::XInterface>(static_cast<::cppu::OWeakObject*>(this)));
+                    getXWeak());
                 break;
             case ScRangeData::IsNameValidType::NAME_VALID:
                 if (ScRangeName* pNames = GetRangeName_Impl();

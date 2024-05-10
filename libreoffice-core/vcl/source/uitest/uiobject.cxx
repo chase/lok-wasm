@@ -398,7 +398,7 @@ OUString WindowUIObject::get_type() const
 
 namespace {
 
-vcl::Window* findChild(vcl::Window* pParent, const OUString& rID, bool bRequireVisible = false)
+vcl::Window* findChild(vcl::Window* pParent, const OUString& rID, bool bRequireVisible = false, OUStringBuffer* debug = nullptr)
 {
     if (!pParent || pParent->isDisposed())
         return nullptr;
@@ -417,7 +417,10 @@ vcl::Window* findChild(vcl::Window* pParent, const OUString& rID, bool bRequireV
         if (pChild->get_id() == rID)
             return pChild;
 
-        vcl::Window* pResult = findChild(pChild, rID);
+        if (debug)
+            debug->append(pChild->get_id() + " ");
+
+        vcl::Window* pResult = findChild(pChild, rID, bRequireVisible, debug);
         if (pResult)
             return pResult;
     }
@@ -455,15 +458,16 @@ std::unique_ptr<UIObject> WindowUIObject::get_child(const OUString& rID)
     // in a first step try the real children before moving to the top level parent
     // This makes it easier to handle cases with the same ID as there is a way
     // to resolve conflicts
-    vcl::Window* pWindow = findChild(mxWindow.get(), rID);
+    OUStringBuffer debug;
+    vcl::Window* pWindow = findChild(mxWindow.get(), rID, false, &debug);
     if (!pWindow)
     {
         vcl::Window* pDialogParent = get_top_parent(mxWindow.get());
-        pWindow = findChild(pDialogParent, rID);
+        pWindow = findChild(pDialogParent, rID, false, &debug);
     }
 
     if (!pWindow)
-        throw css::uno::RuntimeException("Could not find child with id: " + rID);
+        throw css::uno::RuntimeException("Could not find child with id: " + rID + " children were " + std::u16string_view(debug));
 
     FactoryFunction aFunction = pWindow->GetUITestFactory();
     return aFunction(pWindow);
@@ -1220,6 +1224,7 @@ StringMap ComboBoxUIObject::get_state()
 {
     StringMap aMap = WindowUIObject::get_state();
     aMap["SelectedText"] = mxComboBox->GetSelected();
+    aMap["EntryCount"] = OUString::number(mxComboBox->GetEntryCount());
     return aMap;
 }
 
@@ -1616,7 +1621,7 @@ void VerticalTabControlUIObject::execute(const OUString& rAction,
         {
             auto itr = rParameters.find("POS");
             sal_uInt32 nPos = itr->second.toUInt32();
-            OString xid = mxTabControl->GetPageId(nPos);
+            OUString xid = mxTabControl->GetPageId(nPos);
             mxTabControl->SetCurPageId(xid);
         }
     }
@@ -1629,7 +1634,7 @@ StringMap VerticalTabControlUIObject::get_state()
     StringMap aMap = WindowUIObject::get_state();
     aMap["PageCount"] = OUString::number(mxTabControl->GetPageCount());
 
-    OString nPageId = mxTabControl->GetCurPageId();
+    OUString nPageId = mxTabControl->GetCurPageId();
     aMap["CurrPageTitel"] = mxTabControl->GetPageText(nPageId);
     aMap["CurrPagePos"] = OUString::number(mxTabControl->GetPagePos(nPageId));
 
@@ -1724,7 +1729,7 @@ StringMap MenuButtonUIObject::get_state()
 {
     StringMap aMap = WindowUIObject::get_state();
     aMap["Label"] = mxMenuButton->GetDisplayText();
-    aMap["CurrentItem"] = OUString::createFromAscii(mxMenuButton->GetCurItemIdent());
+    aMap["CurrentItem"] = mxMenuButton->GetCurItemIdent();
     return aMap;
 }
 
@@ -1743,6 +1748,7 @@ void MenuButtonUIObject::execute(const OUString& rAction,
     else if (rAction == "OPENFROMLIST")
     {
         auto itr = rParameters.find("POS");
+        assert(itr != rParameters.end());
         sal_uInt32 nPos = itr->second.toUInt32();
 
         sal_uInt32 nId = mxMenuButton->GetPopupMenu()->GetItemId(nPos);

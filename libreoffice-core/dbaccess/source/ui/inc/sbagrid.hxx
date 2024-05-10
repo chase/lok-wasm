@@ -25,7 +25,7 @@
 
 #include <com/sun/star/frame/XDispatch.hpp>
 #include <com/sun/star/util/URL.hpp>
-#include <comphelper/multiinterfacecontainer3.hxx>
+#include <comphelper/multiinterfacecontainer4.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <comphelper/uno3.hxx>
 #include "sbamultiplex.hxx"
@@ -62,8 +62,8 @@ namespace dbaui
         virtual ~SbaXGridControl() override;
 
         // UNO
-        DECLARE_UNO3_DEFAULTS(SbaXGridControl, FmXGridControl)
-        virtual css::uno::Any  SAL_CALL queryInterface(const css::uno::Type& _rType) override;
+        DECLARE_UNO3_AGG_DEFAULTS(SbaXGridControl, FmXGridControl)
+        virtual css::uno::Any  SAL_CALL queryAggregation(const css::uno::Type& _rType) override;
 
         // XTypeProvider
         virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes(  ) override;
@@ -93,8 +93,8 @@ namespace dbaui
                 :public FmXGridPeer
                 ,public css::frame::XDispatch
     {
-        comphelper::OMultiTypeInterfaceContainerHelperVar3< css::frame::XStatusListener,
-            css::util::URL, SbaURLCompare>  m_aStatusListeners;
+        comphelper::OMultiTypeInterfaceContainerHelperVar4< css::util::URL, css::frame::XStatusListener,
+            SbaURLCompare>  m_aStatusListeners;
 
     public:
         SbaXGridPeer(const css::uno::Reference< css::uno::XComponentContext >&);
@@ -106,8 +106,6 @@ namespace dbaui
         virtual css::uno::Any  SAL_CALL queryInterface(const css::uno::Type& _rType) override;
 
         virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes() override;
-
-        UNO3_GETIMPLEMENTATION_DECL(SbaXGridPeer)
 
         // css::frame::XDispatch
         virtual void SAL_CALL dispatch(const css::util::URL& aURL, const css::uno::Sequence< css::beans::PropertyValue >& aArgs) override;
@@ -165,7 +163,7 @@ namespace dbaui
         virtual void    PreExecuteColumnContextMenu(sal_uInt16 nColId, weld::Menu& rMenu,
                                                     weld::Menu& rInsertMenu, weld::Menu& rChangeMenu,
                                                     weld::Menu& rShowMenu) override;
-        virtual void    PostExecuteColumnContextMenu(sal_uInt16 nColId, const weld::Menu& rMenu, const OString& rExecutionResult) override;
+        virtual void    PostExecuteColumnContextMenu(sal_uInt16 nColId, const weld::Menu& rMenu, const OUString& rExecutionResult) override;
 
     private:
         // DragSourceHelper overridables
@@ -256,7 +254,7 @@ namespace dbaui
 
         // DbGridControl overridables
         virtual void PreExecuteRowContextMenu(weld::Menu& rMenu) override;
-        virtual void PostExecuteRowContextMenu(const OString& rExecutionResult) override;
+        virtual void PostExecuteRowContextMenu(const OUString& rExecutionResult) override;
 
         // DbGridControl overridables
         virtual void onRowChange() override;

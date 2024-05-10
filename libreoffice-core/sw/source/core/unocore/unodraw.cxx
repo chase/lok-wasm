@@ -60,7 +60,6 @@
 #include <editeng/ulspitem.hxx>
 #include <o3tl/any.hxx>
 #include <o3tl/safeint.hxx>
-#include <svx/shapepropertynotifier.hxx>
 #include <crstate.hxx>
 #include <comphelper/extract.hxx>
 #include <comphelper/profilezone.hxx>
@@ -103,9 +102,6 @@ class SwShapeDescriptor_Impl
     SwShapeDescriptor_Impl& operator=(const SwShapeDescriptor_Impl&) = delete;
 
 public:
-    bool    m_bInitializedPropertyNotifier;
-
-public:
     SwShapeDescriptor_Impl(SwDoc const*const pDoc)
         : m_isInReading(pDoc && pDoc->IsInReading())
      // #i32349# - no defaults, in order to determine on
@@ -118,7 +114,6 @@ public:
                             text::WrapInfluenceOnPosition::ONCE_CONCURRENT) )
      // #i28749#
         , mnPositionLayoutDir(text::PositionLayoutDir::PositionInLayoutDirOfAnchor)
-        , m_bInitializedPropertyNotifier(false)
      {}
 
     SwFormatAnchor*    GetAnchor(bool bCreate = false)
@@ -338,17 +333,17 @@ uno::Reference< drawing::XShape > SwFmDrawPage::CreateShape( SdrObject *pObj ) c
                 const SwNode* pNd = pDoc->GetNodes()[ pIdx->GetIndex() + 1 ];
                 if(!pNd->IsNoTextNode())
                 {
-                    xRet.set(static_cast<cppu::OWeakObject*>(SwXTextFrame::CreateXTextFrame(*pDoc, pFlyFormat).get()),
+                    xRet.set(cppu::getXWeak(SwXTextFrame::CreateXTextFrame(*pDoc, pFlyFormat).get()),
                             uno::UNO_QUERY);
                 }
                 else if( pNd->IsGrfNode() )
                 {
-                    xRet.set(static_cast<cppu::OWeakObject*>(SwXTextGraphicObject::CreateXTextGraphicObject(
+                    xRet.set(cppu::getXWeak(SwXTextGraphicObject::CreateXTextGraphicObject(
                                 *pDoc, pFlyFormat).get()), uno::UNO_QUERY);
                 }
                 else if( pNd->IsOLENode() )
                 {
-                    xRet.set(static_cast<cppu::OWeakObject*>(SwXTextEmbeddedObject::CreateXTextEmbeddedObject(
+                    xRet.set(cppu::getXWeak(SwXTextEmbeddedObject::CreateXTextEmbeddedObject(
                                 *pDoc, pFlyFormat).get()), uno::UNO_QUERY);
                 }
             }
@@ -364,7 +359,7 @@ uno::Reference< drawing::XShape > SwFmDrawPage::CreateShape( SdrObject *pObj ) c
         // own block - temporary object has to be destroyed before
         // the delegator is set #81670#
         {
-            xRet = SvxFmDrawPage::CreateShape( pObj );
+            xRet = SvxDrawPage::CreateShape( pObj );
         }
         uno::Reference< XUnoTunnel > xShapeTunnel(xRet, uno::UNO_QUERY);
         //don't create an SwXShape if it already exists
@@ -425,7 +420,7 @@ void SwFmDrawPage::setPropertyValue(const OUString& rPropertyName, const uno::An
             break;
 
         default:
-            throw beans::UnknownPropertyException(rPropertyName, static_cast<cppu::OWeakObject*>(this));
+            throw beans::UnknownPropertyException(rPropertyName, getXWeak());
     }
 }
 
@@ -470,7 +465,7 @@ uno::Any SwFmDrawPage::getPropertyValue(const OUString& rPropertyName)
             break;
 
         default:
-            throw beans::UnknownPropertyException(rPropertyName, static_cast<cppu::OWeakObject*>(this));
+            throw beans::UnknownPropertyException(rPropertyName, getXWeak());
     }
     return aAny;
 }
@@ -587,22 +582,6 @@ uno::Sequence< OUString > SwFmDrawPage::getSupportedServiceNames()
     return { "com.sun.star.drawing.GenericDrawPage" };
 }
 
-uno::Any SwFmDrawPage::queryInterface( const uno::Type& aType )
-{
-    uno::Any aRet = SvxFmDrawPage::queryInterface(aType);
-    if(!aRet.hasValue())
-        aRet = SwFmDrawPage_Base::queryInterface(aType);
-    return aRet;
-}
-
-uno::Sequence< uno::Type > SwFmDrawPage::getTypes()
-{
-    return comphelper::concatSequences(
-                SvxFmDrawPage::getTypes(),
-                SwFmDrawPage_Base::getTypes(),
-                uno::Sequence { cppu::UnoType<form::XFormsSupplier2>::get() });
-}
-
 sal_Int32 SwFmDrawPage::getCount()
 {
     SolarMutexGuard aGuard;
@@ -637,7 +616,7 @@ sal_Bool SwFmDrawPage::hasElements()
         throw uno::RuntimeException();
     if(!m_pDoc->getIDocumentDrawModelAccess().GetDrawModel())
         return false;
-    return SvxFmDrawPage::hasElements();
+    return SvxDrawPage::hasElements();
 }
 
 void SwFmDrawPage::add(const uno::Reference< drawing::XShape > & xShape)
@@ -652,7 +631,7 @@ void SwFmDrawPage::add(const uno::Reference< drawing::XShape > & xShape)
     // this is not a writer shape
     if(!pShape)
         throw uno::RuntimeException("illegal object",
-                                    static_cast< cppu::OWeakObject * > ( this ) );
+                                    getXWeak() );
 
     // we're already registered in the model / SwXDrawPage::add() already called
     if(pShape->m_pPage || !pShape->m_bDescriptor )
@@ -666,7 +645,7 @@ void SwFmDrawPage::add(const uno::Reference< drawing::XShape > & xShape)
             return;
         }
     }
-    SvxFmDrawPage::add(xShape);
+    SvxDrawPage::add(xShape);
 
     OSL_ENSURE(pSvxShape, "Why is here no SvxShape?");
     // this position is definitely in 1/100 mm
@@ -919,14 +898,6 @@ sal_Int64 SAL_CALL SwXShape::getSomething( const uno::Sequence< sal_Int8 >& rId 
     }
     return 0;
 }
-namespace
-{
-    void lcl_addShapePropertyEventFactories( SdrObject& _rObj, SwXShape& _rShape )
-    {
-        auto pProvider = std::make_unique<svx::PropertyValueProvider>( _rShape, "AnchorType" );
-        _rObj.getShapePropertyChangeNotifier().registerProvider( svx::ShapePropertyProviderId::TextDocAnchor, std::move(pProvider) );
-    }
-}
 
 SwXShape::SwXShape(
         uno::Reference<uno::XInterface> & xShape,
@@ -956,16 +927,8 @@ SwXShape::SwXShape(
     xShape = nullptr;
     osl_atomic_increment(&m_refCount);
     if( m_xShapeAgg.is() )
-        m_xShapeAgg->setDelegator( static_cast<cppu::OWeakObject*>(this) );
+        m_xShapeAgg->setDelegator( getXWeak() );
     osl_atomic_decrement(&m_refCount);
-
-    SdrObject* pObj = SdrObject::getSdrObjectFromXShape(m_xShapeAgg);
-    if(pObj)
-    {
-        lcl_addShapePropertyEventFactories( *pObj, *this );
-        m_pImpl->m_bInitializedPropertyNotifier = true;
-    }
-
 }
 
 SwFrameFormat* SwXShape::GetFrameFormat() const
@@ -991,12 +954,6 @@ void SwXShape::AddExistingShapeToFormat( SdrObject const & _rObj )
         {
             if ( pSwShape->m_bDescriptor )
                 pSwShape->m_bDescriptor = false;
-
-            if ( !pSwShape->m_pImpl->m_bInitializedPropertyNotifier )
-            {
-                lcl_addShapePropertyEventFactories( *pCurrent, *pSwShape );
-                pSwShape->m_pImpl->m_bInitializedPropertyNotifier = true;
-            }
         }
     }
 }
@@ -1011,7 +968,6 @@ SwXShape::~SwXShape()
         m_xShapeAgg->setDelegator(xRef);
     }
     m_pImpl.reset();
-    EndListeningAll();
     if(m_pPage)
        const_cast<SwFmDrawPage*>(m_pPage)->RemoveShape(this);
 }
@@ -1101,7 +1057,7 @@ void SwXShape::setPropertyValue(const OUString& rPropertyName, const uno::Any& a
     if(pEntry)
     {
         if ( pEntry->nFlags & beans::PropertyAttribute::READONLY)
-            throw beans::PropertyVetoException ("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+            throw beans::PropertyVetoException ("Property is read-only: " + rPropertyName, getXWeak() );
         // with the layout it is possible to move the anchor without changing the position
         if(pFormat)
         {
@@ -1113,7 +1069,7 @@ void SwXShape::setPropertyValue(const OUString& rPropertyName, const uno::Any& a
                 uno::Reference<text::XTextFrame> xFrame;
                 if(aValue >>= xFrame)
                 {
-                    SwXFrame* pFrame = comphelper::getFromUnoTunnel<SwXFrame>(xFrame);
+                    SwXFrame* pFrame = dynamic_cast<SwXFrame*>(xFrame.get());
                     if(pFrame && pFrame->GetFrameFormat() &&
                         pFrame->GetFrameFormat()->GetDoc() == pDoc)
                     {
@@ -1977,7 +1933,7 @@ void SwXShape::setPropertyToDefault( const OUString& rPropertyName )
     if(pEntry)
     {
         if ( pEntry->nFlags & beans::PropertyAttribute::READONLY)
-            throw uno::RuntimeException("Property is read-only: " + rPropertyName, static_cast < cppu::OWeakObject * > ( this ) );
+            throw uno::RuntimeException("Property is read-only: " + rPropertyName, getXWeak() );
         if(pFormat)
         {
             const SfxItemSet& rSet = pFormat->GetAttrSet();
@@ -2100,14 +2056,6 @@ void SwXShape::removeVetoableChangeListener(
     OSL_FAIL("not implemented");
 }
 
-void SwXShape::Notify(const SfxHint& rHint)
-{
-    if(rHint.GetId() == SfxHintId::Dying)
-    {
-        EndListeningAll();
-    }
-}
-
 void SwXShape::attach(const uno::Reference< text::XTextRange > & xTextRange)
 {
     SolarMutexGuard aGuard;
@@ -2115,22 +2063,17 @@ void SwXShape::attach(const uno::Reference< text::XTextRange > & xTextRange)
     // get access to SwDoc
     // (see also SwXTextRange::XTextRangeToSwPaM)
     const SwDoc* pDoc = nullptr;
-    uno::Reference<lang::XUnoTunnel> xRangeTunnel( xTextRange, uno::UNO_QUERY);
-    if(xRangeTunnel.is())
-    {
-        if (auto pRange = comphelper::getFromUnoTunnel<SwXTextRange>(xRangeTunnel))
-            pDoc = &pRange->GetDoc();
-        else if (auto pText = comphelper::getFromUnoTunnel<SwXText>(xRangeTunnel))
-            pDoc = pText->GetDoc();
-        else if (auto pCursor = comphelper::getFromUnoTunnel<OTextCursorHelper>(xRangeTunnel))
-            pDoc = pCursor->GetDoc();
-        else if (auto pPortion = comphelper::getFromUnoTunnel<SwXTextPortion>(xRangeTunnel))
-            pDoc = &pPortion->GetCursor().GetDoc();
-        else if (auto pParagraph = comphelper::getFromUnoTunnel<SwXParagraph>(xRangeTunnel);
-                 pParagraph && pParagraph->GetTextNode())
-            pDoc = &pParagraph->GetTextNode()->GetDoc();
-
-    }
+    if (auto pRange = dynamic_cast<SwXTextRange*>(xTextRange.get()))
+        pDoc = &pRange->GetDoc();
+    else if (auto pText = dynamic_cast<SwXText*>(xTextRange.get()))
+        pDoc = pText->GetDoc();
+    else if (auto pCursor = dynamic_cast<OTextCursorHelper*>(xTextRange.get()))
+        pDoc = pCursor->GetDoc();
+    else if (auto pPortion = dynamic_cast<SwXTextPortion*>(xTextRange.get()))
+        pDoc = &pPortion->GetCursor().GetDoc();
+    else if (auto pParagraph = dynamic_cast<SwXParagraph*>(xTextRange.get());
+             pParagraph && pParagraph->GetTextNode())
+        pDoc = &pParagraph->GetTextNode()->GetDoc();
 
     if(!pDoc)
         throw uno::RuntimeException();
@@ -2148,7 +2091,7 @@ void SwXShape::attach(const uno::Reference< text::XTextRange > & xTextRange)
             uno::Any aPos;
             aPos <<= xTextRange;
             setPropertyValue("TextRange", aPos);
-            uno::Reference< drawing::XShape > xTemp( static_cast<cppu::OWeakObject*>(this), uno::UNO_QUERY );
+            uno::Reference< drawing::XShape > xTemp( getXWeak(), uno::UNO_QUERY );
             xDP->add( xTemp );
         }
     }
@@ -2583,9 +2526,10 @@ drawing::HomogenMatrix3 SwXShape::ConvertTransformationToLayoutDir(
                 aTempMatrix.set(1, 0, aMatrix.Line2.Column1 );
                 aTempMatrix.set(1, 1, aMatrix.Line2.Column2 );
                 aTempMatrix.set(1, 2, aMatrix.Line2.Column3 );
-                aTempMatrix.set(2, 0, aMatrix.Line3.Column1 );
-                aTempMatrix.set(2, 1, aMatrix.Line3.Column2 );
-                aTempMatrix.set(2, 2, aMatrix.Line3.Column3 );
+                // For this to be a valid 2D transform matrix, the last row must be [0,0,1]
+                assert( aMatrix.Line3.Column1 == 0 );
+                assert( aMatrix.Line3.Column2 == 0 );
+                assert( aMatrix.Line3.Column3 == 1 );
                 // #i73079#
                 aTempMatrix.translate( aTranslateDiff.X, aTranslateDiff.Y );
                 aMatrix.Line1.Column1 = aTempMatrix.get(0, 0);
@@ -2594,9 +2538,9 @@ drawing::HomogenMatrix3 SwXShape::ConvertTransformationToLayoutDir(
                 aMatrix.Line2.Column1 = aTempMatrix.get(1, 0);
                 aMatrix.Line2.Column2 = aTempMatrix.get(1, 1);
                 aMatrix.Line2.Column3 = aTempMatrix.get(1, 2);
-                aMatrix.Line3.Column1 = aTempMatrix.get(2, 0);
-                aMatrix.Line3.Column2 = aTempMatrix.get(2, 1);
-                aMatrix.Line3.Column3 = aTempMatrix.get(2, 2);
+                aMatrix.Line3.Column1 = 0;
+                aMatrix.Line3.Column2 = 0;
+                aMatrix.Line3.Column3 = 1;
             }
         }
     }
@@ -2621,7 +2565,7 @@ void SwXShape::AdjustPositionProperties( const awt::Point& rPosition )
     if ( eTextAnchorType != text::TextContentAnchorType_AS_CHARACTER )
     {
         // determine current x-position
-        static const OUStringLiteral aHoriPosPropStr(u"HoriOrientPosition");
+        static constexpr OUString aHoriPosPropStr(u"HoriOrientPosition"_ustr);
         uno::Any aHoriPos( getPropertyValue( aHoriPosPropStr ) );
         sal_Int32 dCurrX = 0;
         aHoriPos >>= dCurrX;
@@ -2630,7 +2574,7 @@ void SwXShape::AdjustPositionProperties( const awt::Point& rPosition )
         {
             // adjust x-position orientation to text::HoriOrientation::NONE, if needed
             // Note: has to be done before setting x-position attribute
-            static const OUStringLiteral aHoriOrientPropStr(u"HoriOrient");
+            static constexpr OUString aHoriOrientPropStr(u"HoriOrient"_ustr);
             uno::Any aHoriOrient( getPropertyValue( aHoriOrientPropStr ) );
             sal_Int16 eHoriOrient;
             if (aHoriOrient >>= eHoriOrient) // may be void
@@ -2651,7 +2595,7 @@ void SwXShape::AdjustPositionProperties( const awt::Point& rPosition )
     // handle y-position
     {
         // determine current y-position
-        static const OUStringLiteral aVertPosPropStr(u"VertOrientPosition");
+        static constexpr OUString aVertPosPropStr(u"VertOrientPosition"_ustr);
         uno::Any aVertPos( getPropertyValue( aVertPosPropStr ) );
         sal_Int32 dCurrY = 0;
         aVertPos >>= dCurrY;
@@ -2660,7 +2604,7 @@ void SwXShape::AdjustPositionProperties( const awt::Point& rPosition )
         {
             // adjust y-position orientation to text::VertOrientation::NONE, if needed
             // Note: has to be done before setting y-position attribute
-            static const OUStringLiteral aVertOrientPropStr(u"VertOrient");
+            static constexpr OUString aVertOrientPropStr(u"VertOrient"_ustr);
             uno::Any aVertOrient( getPropertyValue( aVertOrientPropStr ) );
             sal_Int16 eVertOrient;
             if (aVertOrient >>= eVertOrient) // may be void

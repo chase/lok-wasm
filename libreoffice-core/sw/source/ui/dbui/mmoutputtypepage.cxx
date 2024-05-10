@@ -24,6 +24,7 @@
 #include <bitmaps.hlst>
 #include <swtypes.hxx>
 
+#include <osl/diagnose.h>
 #include <rtl/ref.hxx>
 #include <com/sun/star/mail/XSmtpService.hpp>
 #include <vcl/idle.hxx>
@@ -474,7 +475,7 @@ void SwSendMailDialog::DocumentSent( uno::Reference< mail::XMailMessage> const &
         Application::PostUserEvent( LINK( this, SwSendMailDialog,
                                           StopSendMails ), this );
     }
-    OUString sInsertImg(bResult ? OUString(RID_BMP_FORMULA_APPLY) : OUString(RID_BMP_FORMULA_CANCEL));
+    OUString sInsertImg(bResult ? RID_BMP_FORMULA_APPLY : RID_BMP_FORMULA_CANCEL);
 
     OUString sMessage = m_sSendingTo;
     m_xStatus->append();

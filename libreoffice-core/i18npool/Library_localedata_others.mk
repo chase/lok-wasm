@@ -13,6 +13,7 @@ $(eval $(call gb_Library_set_plugin_for_nodep,localedata_others,i18npool))
 
 $(eval $(call gb_Library_use_libraries,localedata_others,\
 	localedata_en \
+	sal \
 ))
 
 $(eval $(call gb_Library_use_common_precompiled_header,localedata_others))
@@ -93,6 +94,7 @@ $(eval $(call gb_Library_add_generated_exception_objects,localedata_others,\
 	CustomTarget/i18npool/localedata/localedata_lo_LA \
 	CustomTarget/i18npool/localedata/localedata_mai_IN \
 	CustomTarget/i18npool/localedata/localedata_mdw_CG \
+	CustomTarget/i18npool/localedata/localedata_mfe_MU \
 	CustomTarget/i18npool/localedata/localedata_min_ID \
 	CustomTarget/i18npool/localedata/localedata_mkw_CG \
 	CustomTarget/i18npool/localedata/localedata_ml_IN \
@@ -120,6 +122,7 @@ $(eval $(call gb_Library_add_generated_exception_objects,localedata_others,\
 	CustomTarget/i18npool/localedata/localedata_pui_CO \
 	CustomTarget/i18npool/localedata/localedata_puu_CG \
 	CustomTarget/i18npool/localedata/localedata_rw_RW \
+	CustomTarget/i18npool/localedata/localedata_sat_IN \
 	CustomTarget/i18npool/localedata/localedata_sdj_CG \
 	CustomTarget/i18npool/localedata/localedata_sg_CF \
 	CustomTarget/i18npool/localedata/localedata_shs_CA \

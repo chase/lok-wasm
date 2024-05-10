@@ -33,15 +33,12 @@
 class AccWindowEventListener : public AccEventListener
 {
 public:
-    AccWindowEventListener(css::accessibility::XAccessible* pAcc, AccObjectManagerAgent* Agent);
+    AccWindowEventListener(css::accessibility::XAccessible* pAcc, AccObjectWinManager* pManager);
     virtual ~AccWindowEventListener() override;
 
     // XAccessibleEventListener
     virtual void SAL_CALL
     notifyEvent(const css::accessibility::AccessibleEventObject& aEvent) override;
-
-    //for child changed event
-    virtual void HandleChildChangedEvent(css::uno::Any oldValue, css::uno::Any newValue);
 
     //state changed
     virtual void SetComponentState(sal_Int64 state, bool enable) override;

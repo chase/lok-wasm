@@ -62,14 +62,11 @@ private:
     css::uno::Reference< css::container::XContainerQuery > const & GetFilterQuery();
     css::uno::Reference< css::frame::XModuleManager2 > const & GetModuleManager();
 
-    bool m_xDialogUsed;
     bool m_bRemote;
     bool m_bPreselectPassword;
     bool m_bDialogUsed;
     bool m_bSetStandardName;
     sal_Int16 m_nStoreMode;
-
-    DECL_LINK(FilterDialogClosedHdl, css::ui::dialogs::DialogClosedEvent*, void);
 
     static bool FinishGUIStoreModel(::comphelper::SequenceAsHashMap::const_iterator& aFileNameIter,
                              ModelData_Impl& aModelData, bool bRemote, sal_Int16 nStoreMode,

@@ -44,25 +44,6 @@ ThumbnailViewAcc::~ThumbnailViewAcc()
 {
 }
 
-const uno::Sequence< sal_Int8 >& ThumbnailViewAcc::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theSfxValueSetAccUnoTunnelId;
-    return theSfxValueSetAccUnoTunnelId.getSeq();
-}
-
-ThumbnailViewAcc* ThumbnailViewAcc::getImplementation( const uno::Reference< uno::XInterface >& rxData )
-    noexcept
-{
-    try
-    {
-        return comphelper::getFromUnoTunnel<ThumbnailViewAcc>(rxData);
-    }
-    catch(const css::uno::Exception&)
-    {
-        return nullptr;
-    }
-}
-
 uno::Reference< accessibility::XAccessibleContext > SAL_CALL ThumbnailViewAcc::getAccessibleContext()
 {
     ThrowIfDisposed();
@@ -131,7 +112,7 @@ sal_Int64 SAL_CALL ThumbnailViewAcc::getAccessibleIndexInParent()
     }
     catch (const uno::Exception&)
     {
-        TOOLS_WARN_EXCEPTION( "sfx", "OAccessibleContextHelper::getAccessibleIndexInParent" );
+        TOOLS_WARN_EXCEPTION( "sfx", "ThumbnailViewAcc::getAccessibleIndexInParent" );
     }
 
     return nRet;
@@ -450,11 +431,6 @@ void SAL_CALL ThumbnailViewAcc::deselectAccessibleChild( sal_Int64 nChildIndex)
 //FIXME TODO        ;
 }
 
-sal_Int64 SAL_CALL ThumbnailViewAcc::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
-}
-
 void ThumbnailViewAcc::disposing(std::unique_lock<std::mutex>& rGuard)
 {
     ::std::vector<uno::Reference<accessibility::XAccessibleEventListener> > aListenerListCopy;
@@ -508,7 +484,7 @@ void ThumbnailViewAcc::ThrowIfDisposed()
         SAL_WARN("sfx", "Calling disposed object. Throwing exception:");
         throw lang::DisposedException (
             "object has been already disposed",
-            static_cast<uno::XWeak*>(this));
+            getXWeak());
     }
     else
     {
@@ -541,9 +517,10 @@ void ThumbnailViewAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOld
     accessibility::AccessibleEventObject aEvtObject;
 
     aEvtObject.EventId = nEventId;
-    aEvtObject.Source = static_cast<uno::XWeak*>(this);
+    aEvtObject.Source = getXWeak();
     aEvtObject.NewValue = rNewValue;
     aEvtObject.OldValue = rOldValue;
+    aEvtObject.IndexHint = -1;
 
     for (auto const& tmpListener : aTmpListeners)
     {
@@ -554,25 +531,6 @@ void ThumbnailViewAcc::FireAccessibleEvent( short nEventId, const uno::Any& rOld
         catch(const uno::Exception&)
         {
         }
-    }
-}
-
-const uno::Sequence< sal_Int8 >& ThumbnailViewItemAcc::getUnoTunnelId()
-{
-    static const comphelper::UnoIdInit theValueItemAccUnoTunnelId;
-    return theValueItemAccUnoTunnelId.getSeq();
-}
-
-ThumbnailViewItemAcc* ThumbnailViewItemAcc::getImplementation( const uno::Reference< uno::XInterface >& rxData )
-    noexcept
-{
-    try
-    {
-        return comphelper::getFromUnoTunnel<ThumbnailViewItemAcc>(rxData);
-    }
-    catch(const css::uno::Exception&)
-    {
-        return nullptr;
     }
 }
 
@@ -708,15 +666,14 @@ sal_Int64 SAL_CALL ThumbnailViewItemAcc::getAccessibleStateSet()
         if ( !mbIsTransientChildrenDisabled )
             nStateSet |= accessibility::AccessibleStateType::TRANSIENT;
 
-        // SELECTABLE
         nStateSet |= accessibility::AccessibleStateType::SELECTABLE;
-        //      pStateSet->AddState( accessibility::AccessibleStateType::FOCUSABLE );
+        nStateSet |= accessibility::AccessibleStateType::FOCUSABLE;
 
-        // SELECTED
         if( mpParent->isSelected() )
         {
             nStateSet |= accessibility::AccessibleStateType::SELECTED;
-            //              pStateSet->AddState( accessibility::AccessibleStateType::FOCUSED );
+            if (mpParent->mrParent.HasChildFocus())
+                nStateSet |= accessibility::AccessibleStateType::FOCUSED;
         }
     }
 
@@ -878,11 +835,6 @@ sal_Int32 SAL_CALL ThumbnailViewItemAcc::getForeground(  )
 sal_Int32 SAL_CALL ThumbnailViewItemAcc::getBackground(  )
 {
     return static_cast<sal_Int32>(Application::GetSettings().GetStyleSettings().GetWindowColor());
-}
-
-sal_Int64 SAL_CALL ThumbnailViewItemAcc::getSomething( const uno::Sequence< sal_Int8 >& rId )
-{
-    return comphelper::getSomethingImpl(rId, this);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

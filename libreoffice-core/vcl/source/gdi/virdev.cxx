@@ -154,7 +154,7 @@ void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
         (void)pOutDev->AcquireGraphics();
     pGraphics = pOutDev->mpGraphics;
     if ( pGraphics )
-        mpVirDev = pSVData->mpDefInst->CreateVirtualDevice(*pGraphics, nDX, nDY, meFormat, pData);
+        mpVirDev = pSVData->mpDefInst->CreateVirtualDevice(*pGraphics, nDX, nDY, meFormatAndAlpha, pData);
     else
         mpVirDev = nullptr;
     if ( !mpVirDev )
@@ -200,14 +200,12 @@ void VirtualDevice::ImplInitVirDev( const OutputDevice* pOutDev,
     pSVData->maGDIData.mpFirstVirDev = this;
 }
 
-VirtualDevice::VirtualDevice(const OutputDevice* pCompDev, DeviceFormat eFormat,
-                             DeviceFormat eAlphaFormat, OutDevType eOutDevType)
+VirtualDevice::VirtualDevice(const OutputDevice* pCompDev, DeviceFormat eFormatAndAlpha,
+                             OutDevType eOutDevType)
     : OutputDevice(eOutDevType)
-    , meFormat(eFormat)
-    , meAlphaFormat(eAlphaFormat)
+    , meFormatAndAlpha(eFormatAndAlpha)
 {
-    SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat)
-                            << ", " << static_cast<int>(eAlphaFormat)
+    SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormatAndAlpha)
                             << ", " << static_cast<int>(eOutDevType) << " )" );
 
     ImplInitVirDev(pCompDev ? pCompDev : Application::GetDefaultDevice(), 0, 0);
@@ -216,8 +214,7 @@ VirtualDevice::VirtualDevice(const OutputDevice* pCompDev, DeviceFormat eFormat,
 VirtualDevice::VirtualDevice(const SystemGraphicsData& rData, const Size &rSize,
                              DeviceFormat eFormat)
     : OutputDevice(OUTDEV_VIRDEV)
-    , meFormat(eFormat)
-    , meAlphaFormat(DeviceFormat::NONE)
+    , meFormatAndAlpha(eFormat)
 {
     SAL_INFO( "vcl.virdev", "VirtualDevice::VirtualDevice( " << static_cast<int>(eFormat) << " )" );
 
@@ -303,7 +300,7 @@ bool VirtualDevice::InnerImplSetOutputSizePixel( const Size& rNewSize, bool bEra
 
         assert(mpGraphics);
 
-        pNewVirDev = pSVData->mpDefInst->CreateVirtualDevice(*mpGraphics, nNewWidth, nNewHeight, meFormat);
+        pNewVirDev = pSVData->mpDefInst->CreateVirtualDevice(*mpGraphics, nNewWidth, nNewHeight, meFormatAndAlpha);
         if ( pNewVirDev )
         {
             SalGraphics* pGraphics = pNewVirDev->AcquireGraphics();
@@ -344,22 +341,22 @@ bool VirtualDevice::InnerImplSetOutputSizePixel( const Size& rNewSize, bool bEra
 // fill/linecolor state)
 void VirtualDevice::ImplFillOpaqueRectangle( const tools::Rectangle& rRect )
 {
-    // Set line and fill color to black (->opaque),
+    // Set line and fill color to opaque,
     // fill rect with that (linecolor, too, because of
     // those pesky missing pixel problems)
     Push( vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR );
-    SetLineColor( COL_BLACK );
-    SetFillColor( COL_BLACK );
+    SetLineColor( COL_ALPHA_OPAQUE );
+    SetFillColor( COL_ALPHA_OPAQUE );
     DrawRect( rRect );
     Pop();
 }
 
 bool VirtualDevice::ImplSetOutputSizePixel( const Size& rNewSize, bool bErase,
-                                            sal_uInt8 *const pBuffer)
+                                            sal_uInt8 *const pBuffer, bool bAlphaMaskTransparent )
 {
     if( InnerImplSetOutputSizePixel(rNewSize, bErase, pBuffer) )
     {
-        if (meAlphaFormat != DeviceFormat::NONE)
+        if (meFormatAndAlpha != DeviceFormat::WITHOUT_ALPHA)
         {
             // #110958# Setup alpha bitmap
             if(mpAlphaVDev && mpAlphaVDev->GetOutputSizePixel() != rNewSize)
@@ -369,16 +366,18 @@ bool VirtualDevice::ImplSetOutputSizePixel( const Size& rNewSize, bool bErase,
 
             if( !mpAlphaVDev )
             {
-                mpAlphaVDev = VclPtr<VirtualDevice>::Create(*this, meAlphaFormat);
+                mpAlphaVDev = VclPtr<VirtualDevice>::Create(*this, meFormatAndAlpha);
                 mpAlphaVDev->InnerImplSetOutputSizePixel(rNewSize, bErase, nullptr);
+                mpAlphaVDev->SetBackground( Wallpaper(bAlphaMaskTransparent ? COL_ALPHA_TRANSPARENT : COL_ALPHA_OPAQUE) );
+                mpAlphaVDev->Erase();
             }
 
             // TODO: copy full outdev state to new one, here. Also needed in outdev2.cxx:DrawOutDev
             if( GetLineColor() != COL_TRANSPARENT )
-                mpAlphaVDev->SetLineColor( COL_BLACK );
+                mpAlphaVDev->SetLineColor( COL_ALPHA_OPAQUE );
 
             if( GetFillColor() != COL_TRANSPARENT )
-                mpAlphaVDev->SetFillColor( COL_BLACK );
+                mpAlphaVDev->SetFillColor( COL_ALPHA_OPAQUE );
 
             mpAlphaVDev->SetMapMode( GetMapMode() );
 
@@ -403,9 +402,9 @@ void VirtualDevice::EnableRTL( bool bEnable )
     OutputDevice::EnableRTL(bEnable);
 }
 
-bool VirtualDevice::SetOutputSizePixel( const Size& rNewSize, bool bErase )
+bool VirtualDevice::SetOutputSizePixel( const Size& rNewSize, bool bErase, bool bAlphaMaskTransparent )
 {
-    return ImplSetOutputSizePixel(rNewSize, bErase, nullptr);
+    return ImplSetOutputSizePixel(rNewSize, bErase, nullptr, bAlphaMaskTransparent);
 }
 
 bool VirtualDevice::SetOutputSizePixelScaleOffsetAndLOKBuffer(

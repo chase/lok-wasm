@@ -23,7 +23,6 @@
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/compbase.hxx>
 
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/accessibility/XAccessible.hpp>
 #include <com/sun/star/accessibility/XAccessibleContext.hpp>
 #include <com/sun/star/accessibility/XAccessibleComponent.hpp>
@@ -40,8 +39,7 @@ typedef comphelper::WeakComponentImplHelper<
     css::accessibility::XAccessibleEventBroadcaster,
     css::accessibility::XAccessibleContext,
     css::accessibility::XAccessibleComponent,
-    css::accessibility::XAccessibleSelection,
-    css::lang::XUnoTunnel >
+    css::accessibility::XAccessibleSelection >
     ValueSetAccComponentBase;
 
 class ThumbnailViewAcc :
@@ -57,8 +55,6 @@ public:
                               const css::uno::Any& rNewValue );
 
     bool HasAccessibleListeners() const { return( mxEventListeners.size() > 0 ); }
-
-    static ThumbnailViewAcc* getImplementation( const css::uno::Reference< css::uno::XInterface >& rxData ) noexcept;
 
 public:
     /** Called by the corresponding ValueSet when it gets the focus.
@@ -110,10 +106,6 @@ public:
     virtual css::uno::Reference< css::accessibility::XAccessible > SAL_CALL getSelectedAccessibleChild( sal_Int64 nSelectedChildIndex ) override;
     virtual void SAL_CALL deselectAccessibleChild( sal_Int64 nSelectedChildIndex ) override;
 
-    // XUnoTunnel
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& rId ) override;
-
 private:
     ::std::vector< css::uno::Reference<
         css::accessibility::XAccessibleEventListener > >   mxEventListeners;
@@ -153,8 +145,7 @@ private:
 class ThumbnailViewItemAcc : public ::cppu::WeakImplHelper< css::accessibility::XAccessible,
                                                      css::accessibility::XAccessibleEventBroadcaster,
                                                      css::accessibility::XAccessibleContext,
-                                                     css::accessibility::XAccessibleComponent,
-                                                     css::lang::XUnoTunnel >
+                                                     css::accessibility::XAccessibleComponent>
 {
 private:
 
@@ -170,8 +161,6 @@ public:
     virtual ~ThumbnailViewItemAcc() override;
 
     void    ParentDestroyed();
-
-    static ThumbnailViewItemAcc* getImplementation( const css::uno::Reference< css::uno::XInterface >& rxData ) noexcept;
 
 public:
 
@@ -204,10 +193,6 @@ public:
     virtual void SAL_CALL grabFocus(  ) override;
     virtual sal_Int32 SAL_CALL getForeground(  ) override;
     virtual sal_Int32 SAL_CALL getBackground(  ) override;
-
-    // XUnoTunnel
-    static const css::uno::Sequence< sal_Int8 >& getUnoTunnelId();
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& rId ) override;
 };
 
 #endif // INCLUDED_SFX2_SOURCE_CONTROL_THUMBNAILVIEWACC_HXX

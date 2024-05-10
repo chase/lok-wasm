@@ -81,9 +81,9 @@ void CPDManager::onNameAcquired (GDBusConnection *connection,
                               G_DBUS_CALL_FLAGS_NONE,
                               -1, nullptr, nullptr, nullptr);
 
-            g_free(contents);
             g_object_unref(proxy);
             g_dbus_node_info_unref(introspection_data);
+            g_free(contents);
         }
         g_free(backend.second);
     }
@@ -122,10 +122,10 @@ void CPDManager::printerAdded (GDBusConnection *connection,
                                            nullptr,
                                            nullptr);
 
-            g_free(contents);
             g_dbus_node_info_unref(introspection_data);
             std::pair<std::string, GDBusProxy *> new_backend (sender_name, proxy);
             current->addBackend(std::move(new_backend));
+            g_free(contents);
         }
     }
     CPDPrinter *pDest = static_cast<CPDPrinter *>(malloc(sizeof(CPDPrinter)));
@@ -136,8 +136,8 @@ void CPDManager::printerAdded (GDBusConnection *connection,
     std::stringstream uniqueName;
     uniqueName << pDest->id << ", " << pDest->backend_name;
     rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
-    OUString aPrinterName = OStringToOUString( printerName.str().c_str(), aEncoding );
-    OUString aUniqueName = OStringToOUString( uniqueName.str().c_str(), aEncoding );
+    OUString aPrinterName = OStringToOUString( printerName.str(), aEncoding );
+    OUString aUniqueName = OStringToOUString( uniqueName.str(), aEncoding );
     current->addNewPrinter(aPrinterName, aUniqueName, pDest);
 }
 
@@ -157,7 +157,7 @@ void CPDManager::printerRemoved (GDBusConnection *,
     std::stringstream uniqueName;
     uniqueName << id << ", " << backend_name;
     rtl_TextEncoding aEncoding = osl_getThreadTextEncoding();
-    OUString aUniqueName = OStringToOUString( uniqueName.str().c_str(), aEncoding );
+    OUString aUniqueName = OStringToOUString( uniqueName.str(), aEncoding );
     std::unordered_map<OUString, CPDPrinter *>::iterator it = pManager->m_aCPDDestMap.find( aUniqueName );
     if (it == pManager->m_aCPDDestMap.end()) {
         SAL_WARN("vcl.unx.print", "CPD trying to remove non-existent printer from list");
@@ -225,7 +225,6 @@ void CPDManager::addNewPrinter(const OUString& aPrinterName, const OUString& aUn
         aPrinter.m_aInfo.m_pParser = c_it->second.getParser();
         aPrinter.m_aInfo.m_aContext = c_it->second;
     }
-    aPrinter.m_aInfo.setDefaultBackend(true);
     aPrinter.m_aInfo.m_aDriverName = "CPD:" + aUniqueName;
     m_aPrinters[ aUniqueName ] = aPrinter;
 }
@@ -263,6 +262,7 @@ CPDManager* CPDManager::tryLoadCPD()
                 {
                     std::pair<std::string, gchar*> new_tbackend (filename, contents);
                     pManager->addTempBackend(new_tbackend);
+                    g_free(contents);
                 }
             }
             g_dir_close(dir);
@@ -625,27 +625,27 @@ void CPDManager::getOptionsFromDocumentSetup( const JobData& rJob, bool bBanner,
             if (!sPayLoad.isEmpty()) {
                 OString aKey = OUStringToOString( pKey->getKey(), RTL_TEXTENCODING_ASCII_US );
                 OString aValue = OUStringToOString( sPayLoad, RTL_TEXTENCODING_ASCII_US );
-                if (aKey.equals("Duplex")) {
-                    aKey = OString("sides");
-                } else if (aKey.equals("Resolution")) {
-                    aKey = OString("printer-resolution");
-                } else if (aKey.equals("PageSize")) {
-                    aKey = OString("media");
+                if (aKey.equals("Duplex"_ostr)) {
+                    aKey = "sides"_ostr;
+                } else if (aKey.equals("Resolution"_ostr)) {
+                    aKey = "printer-resolution"_ostr;
+                } else if (aKey.equals("PageSize"_ostr)) {
+                    aKey = "media"_ostr;
                 }
-                if (aKey.equals("sides")) {
-                    if (aValue.equals("None")) {
-                        aValue = OString("one-sided");
-                    } else if (aValue.equals("DuplexNoTumble")) {
-                        aValue = OString("two-sided-long-edge");
-                    } else if (aValue.equals("DuplexTumble")) {
-                        aValue = OString("two-sided-short-edge");
+                if (aKey.equals("sides"_ostr)) {
+                    if (aValue.equals("None"_ostr)) {
+                        aValue = "one-sided"_ostr;
+                    } else if (aValue.equals("DuplexNoTumble"_ostr)) {
+                        aValue = "two-sided-long-edge"_ostr;
+                    } else if (aValue.equals("DuplexTumble"_ostr)) {
+                        aValue = "two-sided-short-edge"_ostr;
                     }
                 }
                 g_variant_builder_add(builder, "(ss)", aKey.getStr(), aValue.getStr());
             }
         }
     }
-    if( rJob.m_nPDFDevice > 0 && rJob.m_nCopies > 1 )
+    if( rJob.m_nCopies > 1 )
     {
         OString aVal( OString::number( rJob.m_nCopies ) );
         g_variant_builder_add(builder, "(ss)", "copies", aVal.getStr());

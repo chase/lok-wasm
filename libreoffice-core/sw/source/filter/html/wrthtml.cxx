@@ -146,7 +146,6 @@ SwHTMLWriter::SwHTMLWriter( const OUString& rBaseURL, std::u16string_view rFilte
     , m_bNoAlign( false )
     , m_bClearLeft( false )
     , m_bClearRight( false )
-    , m_bLFPossible( false )
     , m_bPreserveForm( false )
     , m_bCfgNetscape4( false )
     , mbSkipImages(false)
@@ -154,7 +153,6 @@ SwHTMLWriter::SwHTMLWriter( const OUString& rBaseURL, std::u16string_view rFilte
     , mbEmbedImages(false)
     , m_bCfgPrintLayout( false )
     , m_bParaDotLeaders( false )
-    , m_bPrettyPrint( true )
 {
     SetBaseURL(rBaseURL);
 
@@ -185,12 +183,8 @@ std::unique_ptr<SwHTMLNumRuleInfo> SwHTMLWriter::ReleaseNextNumInfo()
 
 void SwHTMLWriter::SetupFilterOptions(SfxMedium& rMedium)
 {
-    const SfxItemSet* pSet = rMedium.GetItemSet();
-    if (pSet == nullptr)
-        return;
-
     uno::Sequence<beans::PropertyValue> aArgs = rMedium.GetArgs();
-    if (const SfxStringItem* pItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS ))
+    if (const SfxStringItem* pItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ))
     {
         const OUString sFilterOptions = pItem->GetValue();
 
@@ -237,7 +231,7 @@ void SwHTMLWriter::SetupFilterOptions(std::u16string_view rFilterOptions)
 
     const uno::Sequence<OUString> aOptionSeq
         = comphelper::string::convertCommaSeparated(rFilterOptions);
-    static const OUStringLiteral aXhtmlNsKey(u"xhtmlns=");
+    static constexpr OUString aXhtmlNsKey(u"xhtmlns="_ustr);
     for (const auto& rOption : aOptionSeq)
     {
         if (rOption == "XHTML")
@@ -267,6 +261,12 @@ void SwHTMLWriter::SetupFilterFromPropertyValues(
     if (it != aStoreMap.end())
     {
         it->second >>= m_bExportImagesAsOLE;
+    }
+
+    it = aStoreMap.find("ExportFormulasAsPDF");
+    if (it != aStoreMap.end())
+    {
+        it->second >>= m_bExportFormulasAsPDF;
     }
 
     it = aStoreMap.find("ShapeDPI");
@@ -352,6 +352,16 @@ void SwHTMLWriter::SetupFilterFromPropertyValues(
         it->second >>= nVal;
         m_nLeadingTabWidth.emplace(nVal);
     }
+
+    it = aStoreMap.find("PreserveSpaces");
+    if (it != aStoreMap.end())
+    {
+        // Paragraphs with leading/trailing/repeated whitespace will have "white-space: pre-wrap"
+        // style; whitespace in content will not be altered (except for "LeadingTabWidth" effects)
+        bool bVal = false;
+        it->second >>= bVal;
+        m_bPreserveSpacesOnWrite = bVal;
+    }
 }
 
 ErrCode SwHTMLWriter::WriteStream()
@@ -398,8 +408,8 @@ ErrCode SwHTMLWriter::WriteStream()
     if( HTML_CFG_MSIE == m_nExportMode )
         m_nHTMLMode |= HTMLMODE_NBSP_IN_TABLES;
 
-    if( HTML_CFG_WRITER == m_nExportMode || HTML_CFG_NS40 == m_nExportMode || HTML_CFG_MSIE == m_nExportMode )
-        m_nHTMLMode |= HTMLMODE_ABS_POS_FLY | HTMLMODE_ABS_POS_DRAW;
+    // For all three of HTML_CFG_WRITER, HTML_CFG_NS40, HTML_CFG_MSIE
+    m_nHTMLMode |= HTMLMODE_ABS_POS_FLY | HTMLMODE_ABS_POS_DRAW;
 
     if( HTML_CFG_WRITER == m_nExportMode )
         m_nHTMLMode |= HTMLMODE_FLY_MARGINS;
@@ -428,7 +438,7 @@ ErrCode SwHTMLWriter::WriteStream()
     m_bCfgFormFeed = !IsHTMLMode(HTMLMODE_PRINT_EXT);
     m_bCfgCpyLinkedGrfs = officecfg::Office::Common::Filter::HTML::Export::LocalGraphic::get();
 
-    m_bCfgPrintLayout = SvxHtmlOptions::IsPrintLayoutExtension();
+    m_bCfgPrintLayout = officecfg::Office::Common::Filter::HTML::Export::PrintLayout::get();
 
     // get HTML template
     bool bOldHTMLMode = false;
@@ -459,6 +469,7 @@ ErrCode SwHTMLWriter::WriteStream()
     m_bPreserveForm = false;
     m_bClearLeft = m_bClearRight = false;
     m_bLFPossible = false;
+    m_bSpacePreserve = false;
 
     m_nLeftMargin = m_nDfltLeftMargin = m_nDfltRightMargin = 0;
     m_nDfltTopMargin = m_nDfltBottomMargin = 0;
@@ -470,7 +481,7 @@ ErrCode SwHTMLWriter::WriteStream()
     m_nDefListLvl = 0;
     m_nDefListMargin = ((m_xTemplate.is() && !m_bCfgOutStyles) ? m_xTemplate.get() : m_pDoc)
         ->getIDocumentStylePoolAccess().GetTextCollFromPool( RES_POOLCOLL_HTML_DD, false )
-        ->GetLRSpace().GetTextLeft();
+        ->GetTextLeftMargin().GetTextLeft();
     m_nHeaderFooterSpace = 0;
     m_nTextAttrsToIgnore = 0;
     m_nCSS1OutMode = 0;
@@ -487,8 +498,8 @@ ErrCode SwHTMLWriter::WriteStream()
         m_nCSS1Script = CSS1_OUTMODE_WESTERN;
         break;
     }
-    m_eLang = static_cast<const SvxLanguageItem&>(m_pDoc
-            ->GetDefault(GetLangWhichIdFromScript(m_nCSS1Script))).GetLanguage();
+    const SvxLanguageItem& rLangitem = m_pDoc->GetDefault(GetLangWhichIdFromScript(m_nCSS1Script));
+    m_eLang = rLangitem.GetLanguage();
 
     m_nFootNote = m_nEndNote = 0;
 
@@ -500,17 +511,20 @@ ErrCode SwHTMLWriter::WriteStream()
 
     // respect table and section at document beginning
     {
-        SwTableNode * pTNd = m_pCurrentPam->GetPointNode().FindTableNode();
-        if( pTNd && m_bWriteAll )
+        if (m_bWriteAll)
         {
-            // start with table node !!
-            m_pCurrentPam->GetPoint()->Assign(*pTNd);
+            while (const SwStartNode* pTNd = m_pCurrentPam->GetPointNode().FindTableBoxStartNode())
+            {
+                // start with table node !!
+                m_pCurrentPam->GetPoint()->Assign(*pTNd->FindTableNode());
 
-            if( m_bWriteOnlyFirstTable )
-                m_pCurrentPam->GetMark()->Assign(*pTNd->EndOfSectionNode());
+                if (m_bWriteOnlyFirstTable)
+                    m_pCurrentPam->GetMark()->Assign(
+                        *m_pCurrentPam->GetPointNode().EndOfSectionNode());
+            }
         }
 
-        // first node (with can contain a page break)
+        // first node (which can contain a page break)
         m_pStartNdIdx = new SwNodeIndex( m_pCurrentPam->GetPoint()->GetNode() );
 
         SwSectionNode * pSNd = m_pCurrentPam->GetPointNode().FindSectionNode();
@@ -546,64 +560,74 @@ ErrCode SwHTMLWriter::WriteStream()
     m_aHTMLPosFlyFrames.clear();
     CollectFlyFrames();
     m_nLastParaToken = HtmlTokenId::NONE;
-    GetControls();
-    CollectLinkTargets();
 
-    sal_uInt16 nHeaderAttrs = 0;
-    m_pCurrPageDesc = MakeHeader( nHeaderAttrs );
-
-    m_bLFPossible = true;
-
-    // output forms which contain only HiddenControls
-    OutHiddenForms();
-
-    if( !aStartTags.isEmpty() )
-        Strm().WriteOString( aStartTags );
-
-    const SwFormatHeader *pFormatHeader;
-    const SfxItemSet& rPageItemSet = m_pCurrPageDesc->GetMaster().GetAttrSet();
-    if( !m_bWriteClipboardDoc && m_pDoc->GetDocShell() &&
-         (!m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE) &&
-          !m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::BROWSE_MODE)) &&
-        (pFormatHeader = rPageItemSet.GetItemIfSet( RES_HEADER )) )
+    if (mbReqIF && !m_bWriteAll
+        && *m_pCurrentPam->GetPoint() == *m_pCurrentPam->GetMark()
+        && m_pCurrentPam->GetPoint()->GetNode().IsOLENode() && m_aHTMLPosFlyFrames.size() == 1)
     {
-        const SwFrameFormat *pHeaderFormat = pFormatHeader->GetHeaderFormat();
-        if( pHeaderFormat )
-            OutHTML_HeaderFooter( *this, *pHeaderFormat, true );
+        // A single OLE object selection must be output: do it directly (without replacement)
+        OutHTML_FrameFormatOLENodeGrf(*this, m_aHTMLPosFlyFrames[0]->GetFormat(), true, false);
     }
-
-    m_nTextAttrsToIgnore = nHeaderAttrs;
-    Out_SwDoc( m_pOrigPam );
-    m_nTextAttrsToIgnore = 0;
-
-    if( mxFormComps.is() )
-        OutForm( false, mxFormComps );
-
-    if( m_xFootEndNotes )
-        OutFootEndNotes();
-
-    const SwFormatFooter* pFormatFooter;
-    if( !m_bWriteClipboardDoc && m_pDoc->GetDocShell() &&
-        (!m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE) && !m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::BROWSE_MODE))  &&
-        (pFormatFooter = rPageItemSet.GetItemIfSet( RES_FOOTER )) )
+    else
     {
-        const SwFrameFormat *pFooterFormat = pFormatFooter->GetFooterFormat();
-        if( pFooterFormat )
-            OutHTML_HeaderFooter( *this, *pFooterFormat, false );
-    }
+        GetControls();
+        CollectLinkTargets();
 
-    if( m_bLFPossible )
-        OutNewLine();
-    if (!mbSkipHeaderFooter)
-    {
-        HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_body), false );
-        OutNewLine();
-        HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_html), false );
-    }
-    else if (mbReqIF)
-        // ReqIF: end xhtml.BlkStruct.class.
-        HTMLOutFuncs::Out_AsciiTag(Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_division), false);
+        sal_uInt16 nHeaderAttrs = 0;
+        m_pCurrPageDesc = MakeHeader( nHeaderAttrs );
 
+        SetLFPossible(true);
+
+        // output forms which contain only HiddenControls
+        OutHiddenForms();
+
+        if( !aStartTags.isEmpty() )
+            Strm().WriteOString( aStartTags );
+
+        const SwFormatHeader *pFormatHeader;
+        const SfxItemSet& rPageItemSet = m_pCurrPageDesc->GetMaster().GetAttrSet();
+        if( !m_bWriteClipboardDoc && m_pDoc->GetDocShell() &&
+             (!m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE) &&
+              !m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::BROWSE_MODE)) &&
+            (pFormatHeader = rPageItemSet.GetItemIfSet( RES_HEADER )) )
+        {
+            const SwFrameFormat *pHeaderFormat = pFormatHeader->GetHeaderFormat();
+            if( pHeaderFormat )
+                OutHTML_HeaderFooter( *this, *pHeaderFormat, true );
+        }
+
+        m_nTextAttrsToIgnore = nHeaderAttrs;
+        Out_SwDoc( m_pOrigPam );
+        m_nTextAttrsToIgnore = 0;
+
+        if( mxFormComps.is() )
+            OutForm( false, mxFormComps );
+
+        if( m_xFootEndNotes )
+            OutFootEndNotes();
+
+        const SwFormatFooter* pFormatFooter;
+        if( !m_bWriteClipboardDoc && m_pDoc->GetDocShell() &&
+            (!m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::HTML_MODE) && !m_pDoc->getIDocumentSettingAccess().get(DocumentSettingId::BROWSE_MODE))  &&
+            (pFormatFooter = rPageItemSet.GetItemIfSet( RES_FOOTER )) )
+        {
+            const SwFrameFormat *pFooterFormat = pFormatFooter->GetFooterFormat();
+            if( pFooterFormat )
+                OutHTML_HeaderFooter( *this, *pFooterFormat, false );
+        }
+
+        if (IsLFPossible())
+            OutNewLine();
+        if (!mbSkipHeaderFooter)
+        {
+            HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_body), false );
+            OutNewLine();
+            HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_html), false );
+        }
+        else if (mbReqIF)
+            // ReqIF: end xhtml.BlkStruct.class.
+            HTMLOutFuncs::Out_AsciiTag(Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_division), false);
+    }
     // delete the table with floating frames
     OSL_ENSURE( m_aHTMLPosFlyFrames.empty(), "Were not all frames output?" );
     m_aHTMLPosFlyFrames.clear();
@@ -712,11 +736,10 @@ static void lcl_html_OutSectionStartTag( SwHTMLWriter& rHTMLWrt,
 {
     OSL_ENSURE( pCol || !bContinued, "Continuation of DIV" );
 
-    if( rHTMLWrt.m_bLFPossible )
+    if (rHTMLWrt.IsLFPossible())
         rHTMLWrt.OutNewLine();
 
-    OStringBuffer sOut;
-    sOut.append("<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division);
+    OStringBuffer sOut("<" + rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division);
 
     const OUString& rName = rSection.GetSectionName();
     if( !rName.isEmpty() && !bContinued )
@@ -754,11 +777,11 @@ static void lcl_html_OutSectionStartTag( SwHTMLWriter& rHTMLWrt,
         HTMLOutFuncs::Out_String( rHTMLWrt.Strm(), aEncURL );
         const char* const pDelim = "&#255;";
         if( !aFilter.isEmpty() || !aSection.isEmpty() || bURLContainsDelim )
-            rHTMLWrt.Strm().WriteCharPtr( pDelim );
+            rHTMLWrt.Strm().WriteOString( pDelim );
         if( !aFilter.isEmpty() )
             HTMLOutFuncs::Out_String( rHTMLWrt.Strm(), aFilter );
         if( !aSection.isEmpty() || bURLContainsDelim  )
-                rHTMLWrt.Strm().WriteCharPtr( pDelim );
+                rHTMLWrt.Strm().WriteOString( pDelim );
         if( !aSection.isEmpty() )
         {
             aSection = aSection.replaceAll(u"%", u"%25");
@@ -773,11 +796,7 @@ static void lcl_html_OutSectionStartTag( SwHTMLWriter& rHTMLWrt,
         sal_uInt16 nGutter = pCol->GetGutterWidth( true );
         if( nGutter!=USHRT_MAX )
         {
-            if( nGutter && Application::GetDefaultDevice() )
-            {
-                nGutter = o3tl::narrowing<sal_uInt16>(Application::GetDefaultDevice()
-                                ->LogicToPixel( Size(nGutter, 0), MapMode(MapUnit::MapTwip) ).Width());
-            }
+            nGutter = SwHTMLWriter::ToPixel(nGutter);
             sOut.append(" " OOO_STRING_SVTOOLS_HTML_O_gutter "=\"" + OString::number(nGutter) + "\"");
         }
     }
@@ -789,7 +808,7 @@ static void lcl_html_OutSectionStartTag( SwHTMLWriter& rHTMLWrt,
 
     rHTMLWrt.Strm().WriteChar( '>' );
 
-    rHTMLWrt.m_bLFPossible = true;
+    rHTMLWrt.SetLFPossible(true);
     if( !rName.isEmpty() && !bContinued )
         rHTMLWrt.OutImplicitMark( rName, "region" );
 
@@ -799,20 +818,18 @@ static void lcl_html_OutSectionStartTag( SwHTMLWriter& rHTMLWrt,
 static void lcl_html_OutSectionEndTag( SwHTMLWriter& rHTMLWrt )
 {
     rHTMLWrt.DecIndentLevel();
-    if( rHTMLWrt.m_bLFPossible )
+    if (rHTMLWrt.IsLFPossible())
         rHTMLWrt.OutNewLine();
     HTMLOutFuncs::Out_AsciiTag( rHTMLWrt.Strm(), Concat2View(rHTMLWrt.GetNamespace() + OOO_STRING_SVTOOLS_HTML_division), false );
-    rHTMLWrt.m_bLFPossible = true;
+    rHTMLWrt.SetLFPossible(true);
 }
 
-static Writer& OutHTML_Section( Writer& rWrt, const SwSectionNode& rSectNd )
+static SwHTMLWriter& OutHTML_Section( SwHTMLWriter& rWrt, const SwSectionNode& rSectNd )
 {
-    SwHTMLWriter& rHTMLWrt = static_cast<SwHTMLWriter&>(rWrt);
-
     // End <PRE> and any <DL>, because a definition list's level may
     // change inside the section.
-    rHTMLWrt.ChangeParaToken( HtmlTokenId::NONE );
-    rHTMLWrt.OutAndSetDefList( 0 );
+    rWrt.ChangeParaToken( HtmlTokenId::NONE );
+    rWrt.OutAndSetDefList( 0 );
 
     const SwSection& rSection = rSectNd.GetSection();
     const SwSectionFormat *pFormat = rSection.GetFormat();
@@ -832,11 +849,11 @@ static Writer& OutHTML_Section( Writer& rWrt, const SwSectionNode& rSectNd )
     {
         // If the next node is a columned section node, too, don't export
         // an empty section.
-        if( lcl_html_IsMultiColStart( rHTMLWrt, nSectSttIdx+1 ) )
+        if( lcl_html_IsMultiColStart( rWrt, nSectSttIdx+1 ) )
             bStartTag = false;
 
         // The same applies if the section end with another columned section.
-        if( lcl_html_IsMultiColEnd( rHTMLWrt, nSectEndIdx-1 ) )
+        if( lcl_html_IsMultiColEnd( rWrt, nSectEndIdx-1 ) )
             bEndTag = false;
 
         // is there a columned section around this one?
@@ -864,31 +881,31 @@ static Writer& OutHTML_Section( Writer& rWrt, const SwSectionNode& rSectNd )
     // opened, except that it start immediately before the current one or
     // another end immediately before the current one
     if( pSurrCol && nSectSttIdx - pSurrSectNd->GetIndex() > SwNodeOffset(1) &&
-        !lcl_html_IsMultiColEnd( rHTMLWrt, nSectSttIdx-1 ) )
-        lcl_html_OutSectionEndTag( rHTMLWrt );
+        !lcl_html_IsMultiColEnd( rWrt, nSectSttIdx-1 ) )
+        lcl_html_OutSectionEndTag( rWrt );
 
     if( bStartTag )
-        lcl_html_OutSectionStartTag( rHTMLWrt, rSection, *pFormat, pCol );
+        lcl_html_OutSectionStartTag( rWrt, rSection, *pFormat, pCol );
 
     {
-        HTMLSaveData aSaveData( rHTMLWrt,
-            rHTMLWrt.m_pCurrentPam->GetPoint()->GetNodeIndex()+1,
+        HTMLSaveData aSaveData( rWrt,
+            rWrt.m_pCurrentPam->GetPoint()->GetNodeIndex()+1,
             rSectNd.EndOfSectionIndex(),
             false, pFormat );
-        rHTMLWrt.Out_SwDoc( rHTMLWrt.m_pCurrentPam.get() );
+        rWrt.Out_SwDoc( rWrt.m_pCurrentPam.get() );
     }
 
-    rHTMLWrt.m_pCurrentPam->GetPoint()->Assign(*rSectNd.EndOfSectionNode());
+    rWrt.m_pCurrentPam->GetPoint()->Assign(*rSectNd.EndOfSectionNode());
 
     if( bEndTag )
-        lcl_html_OutSectionEndTag( rHTMLWrt );
+        lcl_html_OutSectionEndTag( rWrt );
 
     // The surrounding section must be started again, except that it ends
     // immediately behind the current one.
     if( pSurrCol &&
         pSurrSectNd->EndOfSectionIndex() - nSectEndIdx > SwNodeOffset(1) &&
-        !lcl_html_IsMultiColStart( rHTMLWrt, nSectEndIdx+1 ) )
-        lcl_html_OutSectionStartTag( rHTMLWrt, *pSurrSection, *pSurrFormat,
+        !lcl_html_IsMultiColStart( rWrt, nSectEndIdx+1 ) )
+        lcl_html_OutSectionStartTag( rWrt, *pSurrSection, *pSurrFormat,
                                      pSurrCol, true );
 
     return rWrt;
@@ -1085,7 +1102,7 @@ const SwPageDesc *SwHTMLWriter::MakeHeader( sal_uInt16 &rHeaderAttrs )
             sOut.append(OOO_STRING_SVTOOLS_HTML_doctype " " OOO_STRING_SVTOOLS_XHTML_doctype11);
         else
             sOut.append(OOO_STRING_SVTOOLS_HTML_doctype " " OOO_STRING_SVTOOLS_HTML_doctype5);
-        HTMLOutFuncs::Out_AsciiTag( Strm(), sOut.makeStringAndClear().getStr() ); // No GetNamespace() here.
+        HTMLOutFuncs::Out_AsciiTag( Strm(), sOut.makeStringAndClear() ); // No GetNamespace() here.
 
         // build prelude
         OutNewLine();
@@ -1219,14 +1236,13 @@ void SwHTMLWriter::OutAnchor( const OUString& rName )
         return;
     }
 
-    OStringBuffer sOut;
-    sOut.append("<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor " ");
+    OStringBuffer sOut("<" + GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor " ");
     if (!mbXHTML)
     {
         sOut.append(OOO_STRING_SVTOOLS_HTML_O_name "=\"");
         Strm().WriteOString( sOut );
         sOut.setLength(0);
-        HTMLOutFuncs::Out_String( Strm(), rName ).WriteCharPtr( "\">" );
+        HTMLOutFuncs::Out_String( Strm(), rName ).WriteOString( "\">" );
     }
     else
     {
@@ -1235,7 +1251,7 @@ void SwHTMLWriter::OutAnchor( const OUString& rName )
         sOut.append(OOO_STRING_SVTOOLS_HTML_O_id "=\"");
         Strm().WriteOString( sOut );
         sOut.setLength(0);
-        HTMLOutFuncs::Out_String( Strm(), rName.replace(' ', '_') ).WriteCharPtr( "\">" );
+        HTMLOutFuncs::Out_String( Strm(), rName.replace(' ', '_') ).WriteOString( "\">" );
     }
     HTMLOutFuncs::Out_AsciiTag( Strm(), Concat2View(GetNamespace() + OOO_STRING_SVTOOLS_HTML_anchor), false );
 }
@@ -1309,7 +1325,7 @@ void SwHTMLWriter::OutPointFieldmarks( const SwPosition& rPos )
         OOO_STRING_SVTOOLS_HTML_O_type
         "=\""
         OOO_STRING_SVTOOLS_HTML_IT_checkbox
-        "\"");
+        "\""_ostr);
 
     if (pCheckBox->IsChecked())
     {
@@ -1399,8 +1415,8 @@ void SwHTMLWriter::OutBackground( const SvxBrushItem *pBrushItem, bool bGraphic 
             {
                 m_nWarn = WARN_SWG_POOR_LOAD;
             }
-            Strm().WriteCharPtr( " " OOO_STRING_SVTOOLS_HTML_O_background "=\"" );
-            Strm().WriteCharPtr( OOO_STRING_SVTOOLS_HTML_O_data ":" );
+            Strm().WriteOString( " " OOO_STRING_SVTOOLS_HTML_O_background "=\"" );
+            Strm().WriteOString( OOO_STRING_SVTOOLS_HTML_O_data ":" );
             HTMLOutFuncs::Out_String( Strm(), aGraphicInBase64 ).WriteChar( '\"' );
         }
     }
@@ -1411,9 +1427,9 @@ void SwHTMLWriter::OutBackground( const SvxBrushItem *pBrushItem, bool bGraphic 
             CopyLocalFileToINet( GraphicURL );
         }
         OUString s( URIHelper::simpleNormalizedMakeRelative( GetBaseURL(), GraphicURL));
-        Strm().WriteCharPtr(" " OOO_STRING_SVTOOLS_HTML_O_background "=\"" );
+        Strm().WriteOString(" " OOO_STRING_SVTOOLS_HTML_O_background "=\"" );
         HTMLOutFuncs::Out_String( Strm(), s );
-        Strm().WriteCharPtr("\"");
+        Strm().WriteOString("\"");
 
     }
 }
@@ -1426,9 +1442,9 @@ void SwHTMLWriter::OutBackground( const SfxItemSet& rItemSet, bool bGraphic )
     }
 }
 
-sal_uInt16 SwHTMLWriter::GetLangWhichIdFromScript( sal_uInt16 nScript )
+TypedWhichId<SvxLanguageItem> SwHTMLWriter::GetLangWhichIdFromScript( sal_uInt16 nScript )
 {
-    sal_uInt16 nWhichId;
+    TypedWhichId<SvxLanguageItem> nWhichId(0);
     switch( nScript )
     {
     case CSS1_OUTMODE_CJK:
@@ -1450,8 +1466,7 @@ void SwHTMLWriter::OutLanguage( LanguageType nLang )
     if (!(LANGUAGE_DONTKNOW != nLang && !mbReqIF))
         return;
 
-    OStringBuffer sOut;
-    sOut.append(' ');
+    OStringBuffer sOut(" ");
     if (mbXHTML)
         sOut.append(OOO_STRING_SVTOOLS_XHTML_O_lang);
     else
@@ -1505,11 +1520,11 @@ OString SwHTMLWriter::convertDirection(SvxFrameDirection nDir)
     {
     case SvxFrameDirection::Horizontal_LR_TB:
     case SvxFrameDirection::Vertical_LR_TB:
-        sConverted = "ltr";
+        sConverted = "ltr"_ostr;
         break;
     case SvxFrameDirection::Horizontal_RL_TB:
     case SvxFrameDirection::Vertical_RL_TB:
-        sConverted = "rtl";
+        sConverted = "rtl"_ostr;
         break;
     default: break;
     }
@@ -1537,14 +1552,14 @@ void SwHTMLWriter::OutNewLine( bool bCheck )
 {
     if( !bCheck || (Strm().Tell()-m_nLastLFPos) > m_nIndentLvl )
     {
-        Strm().WriteCharPtr( SAL_NEWLINE_STRING );
+        Strm().WriteOString( SAL_NEWLINE_STRING );
         m_nLastLFPos = Strm().Tell();
     }
 
     if( m_nIndentLvl && m_nIndentLvl <= MAX_INDENT_LEVEL)
     {
         sIndentTabs[m_nIndentLvl] = 0;
-        Strm().WriteCharPtr( sIndentTabs );
+        Strm().WriteOString( sIndentTabs );
         sIndentTabs[m_nIndentLvl] = '\t';
     }
 }

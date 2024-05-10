@@ -17,8 +17,59 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <svx/gallerystoragelocations.hxx>
+#include <gallerystoragelocations.hxx>
+#include <svx/galmisc.hxx>
 
-GalleryStorageLocations::~GalleryStorageLocations(){};
+INetURLObject GalleryStorageLocations::ImplGetURLIgnoreCase(const INetURLObject& rURL)
+{
+    INetURLObject aURL(rURL);
+
+    // check original file name
+    if (!FileExists(aURL))
+    {
+        // check upper case file name
+        aURL.setName(aURL.getName().toAsciiUpperCase());
+
+        if (!FileExists(aURL))
+        {
+            // check lower case file name
+            aURL.setName(aURL.getName().toAsciiLowerCase());
+        }
+    }
+
+    return aURL;
+}
+
+void GalleryStorageLocations::SetThmExtension(INetURLObject& aURL)
+{
+    aURL.setExtension(u"thm");
+    maThmURL = ImplGetURLIgnoreCase(aURL);
+}
+
+void GalleryStorageLocations::SetSdgExtension(INetURLObject& aURL)
+{
+    aURL.setExtension(u"sdg");
+    maSdgURL = ImplGetURLIgnoreCase(aURL);
+}
+
+void GalleryStorageLocations::SetSdvExtension(INetURLObject& aURL)
+{
+    aURL.setExtension(u"sdv");
+    maSdvURL = ImplGetURLIgnoreCase(aURL);
+}
+
+void GalleryStorageLocations::SetStrExtension(INetURLObject& aURL)
+{
+    aURL.setExtension(u"str");
+    maStrURL = ImplGetURLIgnoreCase(aURL);
+}
+
+void GalleryStorageLocations::SetStorageLocations(INetURLObject& rURL)
+{
+    SetThmExtension(rURL);
+    SetSdgExtension(rURL);
+    SetSdvExtension(rURL);
+    SetStrExtension(rURL);
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -74,7 +74,7 @@ struct ScFuncDescCore
     /*
      * Help ID, HID_FUNC_...
      */
-    const char* pHelpId;
+    OUString pHelpId;
     /*
      * Number of parameters. VAR_ARGS if variable number, or
      * VAR_ARGS+number if number of fixed parameters and variable
@@ -161,8 +161,7 @@ OUString ScFuncDesc::GetParamList() const
                 aSig.append(maDefArgNames[i]);
                 if ( i != nArgCount-1 )
                 {
-                    aSig.append(sep);
-                    aSig.append( " " );
+                    aSig.append(sep + " " );
                 }
             }
             // If only suppressed parameters follow the last added parameter,
@@ -175,46 +174,35 @@ OUString ScFuncDesc::GetParamList() const
         {
             for ( sal_uInt16 nArg = 0; nArg < nVarArgsStart; nArg++ )
             {
-                aSig.append(maDefArgNames[nArg]);
-                aSig.append(sep);
-                aSig.append( " " );
+                aSig.append(maDefArgNames[nArg] + sep + " ");
             }
             /* NOTE: Currently there are no suppressed var args parameters. If
              * there were, we'd have to cope with it here and above for the fix
              * parameters. For now parameters are always added, so no special
              * treatment of a trailing "; " necessary. */
-            aSig.append(maDefArgNames[nVarArgsStart]);
-            aSig.append('1');
-            aSig.append(sep);
-            aSig.append(' ');
-            aSig.append(maDefArgNames[nVarArgsStart]);
-            aSig.append('2');
-            aSig.append(sep);
-            aSig.append(" ... ");
+            aSig.append(maDefArgNames[nVarArgsStart]
+                + "1"
+                + sep + " "
+                + maDefArgNames[nVarArgsStart]
+                + "2"
+                + sep + " ... ");
         }
         else
         {
             for ( sal_uInt16 nArg = 0; nArg < nVarArgsStart; nArg++ )
             {
-                aSig.append(maDefArgNames[nArg]);
-                aSig.append(sep);
-                aSig.append( " " );
+                aSig.append(maDefArgNames[nArg] + sep + " ");
             }
 
-            aSig.append(maDefArgNames[nVarArgsStart]);
-            aSig.append('1');
-            aSig.append(sep);
-            aSig.append(maDefArgNames[nVarArgsStart+1]);
-            aSig.append('1');
-            aSig.append(sep);
-            aSig.append( " " );
-            aSig.append(maDefArgNames[nVarArgsStart]);
-            aSig.append('2');
-            aSig.append(sep);
-            aSig.append(maDefArgNames[nVarArgsStart+1]);
-            aSig.append('2');
-            aSig.append(sep);
-            aSig.append( " ... " );
+            aSig.append(maDefArgNames[nVarArgsStart]
+                + "1" + sep
+                + maDefArgNames[nVarArgsStart+1]
+                + "1" + sep
+                + " "
+                + maDefArgNames[nVarArgsStart]
+                + "2" + sep
+                + maDefArgNames[nVarArgsStart+1]
+                + "2" + sep + " ... " );
         }
     }
 
@@ -232,11 +220,9 @@ OUString ScFuncDesc::getSignature() const
         OUString aParamList = GetParamList();
         if( !aParamList.isEmpty() )
         {
-            aSig.append( "( " );
-            aSig.append(aParamList);
+            aSig.append( "( " + aParamList
             // U+00A0 (NBSP) prevents automatic line break
-            aSig.append( u'\x00A0' );
-            aSig.append( ")" );
+                + u"\x00A0" ")" );
         }
         else
             aSig.append( "()" );
@@ -252,9 +238,7 @@ OUString ScFuncDesc::getFormula( const ::std::vector< OUString >& _aArguments ) 
 
     if(mxFuncName)
     {
-        aFormula.append( *mxFuncName );
-
-        aFormula.append( "(" );
+        aFormula.append( *mxFuncName + "(" );
         if ( nArgCount > 0 && !_aArguments.empty() && !_aArguments[0].isEmpty())
         {
             ::std::vector< OUString >::const_iterator aIter = _aArguments.begin();
@@ -264,8 +248,7 @@ OUString ScFuncDesc::getFormula( const ::std::vector< OUString >& _aArguments ) 
             ++aIter;
             while( aIter != aEnd && !aIter->isEmpty() )
             {
-                aFormula.append( sep );
-                aFormula.append( *aIter );
+                aFormula.append( sep + *aIter );
                 ++aIter;
             }
         }
@@ -350,7 +333,7 @@ void ScFuncDesc::initArgumentInfo()  const
     }
 }
 
-OString ScFuncDesc::getHelpId() const
+OUString ScFuncDesc::getHelpId() const
 {
     return sHelpId;
 }
@@ -692,6 +675,8 @@ ScFunctionList::ScFunctionList( bool bEnglishFunctionNames )
         { SC_OPCODE_CELL, ENTRY(SC_OPCODE_CELL_ARY), 0, ID_FUNCTION_GRP_INFO, HID_FUNC_ZELLE, 2, { 0, 1 }, 0 },
         { SC_OPCODE_ISPMT, ENTRY(SC_OPCODE_ISPMT_ARY), 0, ID_FUNCTION_GRP_FINANCIAL, HID_FUNC_ISPMT, 4, { 0, 0, 0, 0 }, 0 },
         { SC_OPCODE_HYPERLINK, ENTRY(SC_OPCODE_HYPERLINK_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_HYPERLINK, 2, { 0, 1 }, 0 },
+        { SC_OPCODE_X_LOOKUP, ENTRY(SC_OPCODE_X_LOOKUP_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_XLOOKUP_MS, 6, { 0, 0, 0, 1, 1, 1 }, 0 },
+        { SC_OPCODE_X_MATCH, ENTRY(SC_OPCODE_X_MATCH_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_XMATCH_MS, 4, { 0, 0, 1, 1 }, 0 },
         { SC_OPCODE_GET_PIVOT_DATA, ENTRY(SC_OPCODE_GET_PIVOT_DATA_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_GETPIVOTDATA, VAR_ARGS+2, { 0, 0, 1 }, 0 },
         { SC_OPCODE_EUROCONVERT, ENTRY(SC_OPCODE_EUROCONVERT_ARY), 0, ID_FUNCTION_GRP_MATH, HID_FUNC_EUROCONVERT, 5, { 0, 0, 0, 1, 1 }, 0 },
         { SC_OPCODE_NUMBERVALUE, ENTRY(SC_OPCODE_NUMBERVALUE_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_NUMBERVALUE, 3, { 0, 1, 1 }, 0 },
@@ -801,7 +786,10 @@ ScFunctionList::ScFunctionList( bool bEnglishFunctionNames )
         { SC_OPCODE_SEARCHB, ENTRY(SC_OPCODE_SEARCHB_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_SEARCHB, 3, { 0, 0, 1 }, 0 },
         { SC_OPCODE_REGEX, ENTRY(SC_OPCODE_REGEX_ARY), 0, ID_FUNCTION_GRP_TEXT, HID_FUNC_REGEX, 4, { 0, 0, 1, 1 }, 0 },
         { SC_OPCODE_FOURIER, ENTRY(SC_OPCODE_FOURIER_ARY), 0, ID_FUNCTION_GRP_MATRIX, HID_FUNC_FOURIER, 5, { 0, 0, 1, 1, 1 }, 0 },
-        { SC_OPCODE_RANDBETWEEN_NV, ENTRY(SC_OPCODE_RANDBETWEEN_NV_ARY), 0, ID_FUNCTION_GRP_MATH, HID_FUNC_RANDBETWEEN_NV, 2, { 0, 0 }, 0 }
+        { SC_OPCODE_RANDBETWEEN_NV, ENTRY(SC_OPCODE_RANDBETWEEN_NV_ARY), 0, ID_FUNCTION_GRP_MATH, HID_FUNC_RANDBETWEEN_NV, 2, { 0, 0 }, 0 },
+        { SC_OPCODE_FILTER, ENTRY(SC_OPCODE_FILTER_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_FILTER_MS, 3, { 0, 0, 1 }, 0 },
+        { SC_OPCODE_SORT, ENTRY(SC_OPCODE_SORT_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_SORT_MS, 4, { 0, 1, 1, 1 }, 0 },
+        { SC_OPCODE_SORTBY, ENTRY(SC_OPCODE_SORTBY_ARY), 0, ID_FUNCTION_GRP_TABLE, HID_FUNC_SORTBY_MS, PAIRED_VAR_ARGS + 1, { 0, 0, 1 }, 0 },
     };
 
     ScFuncDesc* pDesc = nullptr;

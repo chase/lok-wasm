@@ -26,9 +26,9 @@
 #include "types.hxx"
 
 
-inline constexpr OUStringLiteral FNTNAME_TIMES = u"Times New Roman";
-inline constexpr OUStringLiteral FNTNAME_HELV = u"Helvetica";
-inline constexpr OUStringLiteral FNTNAME_COUR = u"Courier";
+inline constexpr OUString FNTNAME_TIMES = u"Times New Roman"_ustr;
+inline constexpr OUString FNTNAME_HELV = u"Helvetica"_ustr;
+inline constexpr OUString FNTNAME_COUR = u"Courier"_ustr;
 #define FNTNAME_MATH    FONTNAME_MATH
 
 
@@ -98,6 +98,7 @@ class SM_DLLPUBLIC SmFormat final : public SfxBroadcaster
     SmHorAlign  eHorAlign;
     sal_Int16       nGreekCharStyle;
     bool        bIsTextmode,
+                bIsRightToLeft,
                 bScaleNormalBrackets;
 
 public:
@@ -125,6 +126,9 @@ public:
 
     bool            IsTextmode() const     { return bIsTextmode; }
     void            SetTextmode(bool bVal) { bIsTextmode = bVal; }
+
+    bool            IsRightToLeft() const     { return bIsRightToLeft; }
+    void            SetRightToLeft(bool bVal) { bIsRightToLeft = bVal; }
 
     sal_Int16       GetGreekCharStyle() const     { return nGreekCharStyle; }
     void            SetGreekCharStyle(sal_Int16 nVal) { nGreekCharStyle = nVal; }

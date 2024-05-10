@@ -293,7 +293,7 @@ IMPL_LINK(CustomAnimationPane,EventMultiplexerListener,
             {
                 if( mrBase.GetMainViewShell()->GetShellType() == ViewShell::ST_IMPRESS )
                 {
-                    mxView.set(mrBase.GetDrawController(), UNO_QUERY);
+                    mxView = mrBase.GetDrawController();
                     onSelectionChanged();
                     onChangeCurrentPage();
                     break;
@@ -851,7 +851,7 @@ void CustomAnimationPane::onDoubleClick()
     showOptions();
 }
 
-void CustomAnimationPane::onContextMenu(const OString &rIdent)
+void CustomAnimationPane::onContextMenu(const OUString &rIdent)
 {
     if (rIdent == "onclick")
         onChangeStart( EffectNodeType::ON_CLICK );
@@ -944,7 +944,7 @@ Any CustomAnimationPane::getProperty1Value( sal_Int32 nType, const CustomAnimati
 
     case nPropertyTypeCharHeight:
         {
-            static const OUStringLiteral aAttributeName( u"CharHeight" );
+            static constexpr OUString aAttributeName( u"CharHeight"_ustr );
             Any aValue( pEffect->getProperty( AnimationNodeType::SET, aAttributeName, EValue::To ) );
             if( !aValue.hasValue() )
                 aValue = pEffect->getProperty( AnimationNodeType::ANIMATE, aAttributeName, EValue::To );
@@ -1017,7 +1017,7 @@ bool CustomAnimationPane::setProperty1Value( sal_Int32 nType, const CustomAnimat
 
     case nPropertyTypeCharHeight:
         {
-            static const OUStringLiteral aAttributeName( u"CharHeight" );
+            static constexpr OUString aAttributeName( u"CharHeight"_ustr );
             bEffectChanged = pEffect->setProperty( AnimationNodeType::SET, aAttributeName, EValue::To, rValue );
             if( !bEffectChanged )
                 bEffectChanged = pEffect->setProperty( AnimationNodeType::ANIMATE, aAttributeName, EValue::To, rValue );
@@ -1606,7 +1606,7 @@ void CustomAnimationPane::changeSelection( STLPropertySet const * pResultSet, ST
     }
 }
 
-void CustomAnimationPane::showOptions(const OString& rPage)
+void CustomAnimationPane::showOptions(const OUString& rPage)
 {
     std::unique_ptr<STLPropertySet> xSet = createSelectionSet();
 

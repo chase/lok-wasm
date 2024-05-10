@@ -38,14 +38,12 @@
 using ::com::sun::star::beans::XPropertySet;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Any;
-using ::com::sun::star::xml::sax::XAttributeList;
-using ::xmloff::token::IsXMLToken;
 using namespace ::xmloff::token;
 
 XMLIndexAlphabeticalSourceContext::XMLIndexAlphabeticalSourceContext(
     SvXMLImport& rImport,
     Reference<XPropertySet> & rPropSet)
-:   XMLIndexSourceBaseContext(rImport, rPropSet, false)
+:   XMLIndexSourceBaseContext(rImport, rPropSet, UseStyles::None)
 ,   bMainEntryStyleNameOK(false)
 ,   bSeparators(false)
 ,   bCombineEntries(true)

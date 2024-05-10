@@ -18,7 +18,7 @@
  */
 
 #include <sal/config.h>
-
+#include <basegfx/vector/b2ivector.hxx>
 #include "pagemanager.hxx"
 
 namespace canvas
@@ -65,10 +65,7 @@ namespace canvas
     {
         // erase the reference to the given fragment from our
         // internal container.
-        FragmentContainer_t::iterator it(
-            std::remove(
-                maFragments.begin(),maFragments.end(),pFragment));
-        maFragments.erase(it,maFragments.end());
+        std::erase(maFragments, pFragment);
 
         // let the fragment itself know about it...
         // we need to pass 'this' as argument since the fragment
@@ -98,7 +95,7 @@ namespace canvas
                 if( *aCurr && !( ( *aCurr )->isNaked() ) )
                 {
                     const ::basegfx::B2ISize& rSize( ( *aCurr )->getSize() );
-                    sal_uInt32                nArea( rSize.getX() * rSize.getY() );
+                    sal_uInt32                nArea( rSize.getWidth() * rSize.getHeight() );
 
                     if( nCurrMaxArea < nArea )
                     {
@@ -145,7 +142,8 @@ namespace canvas
 
     ::basegfx::B2ISize PageManager::getPageSize() const
     {
-        return mpRenderModule->getPageSize();
+        return { mpRenderModule->getPageSize().getX(),
+                 mpRenderModule->getPageSize().getY() };
     }
 }
 

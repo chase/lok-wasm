@@ -39,7 +39,9 @@
 #include <unicode/uchar.h>
 #include <hb-ot.h>
 #include <hb-graphite2.h>
+#include <hb-icu.h>
 
+#include <map>
 #include <memory>
 
 GenericSalLayout::GenericSalLayout(LogicalFontInstance &rFont)
@@ -82,60 +84,17 @@ struct SubRun
 }
 
 namespace {
-#if U_ICU_VERSION_MAJOR_NUM >= 63
-    enum class VerticalOrientation {
-        Upright            = U_VO_UPRIGHT,
-        Rotated            = U_VO_ROTATED,
-        TransformedUpright = U_VO_TRANSFORMED_UPRIGHT,
-        TransformedRotated = U_VO_TRANSFORMED_ROTATED
-    };
-#else
-    #include "VerticalOrientationData.cxx"
-
-    // These must match the values in the file included above.
-    enum class VerticalOrientation {
-        Upright            = 0,
-        Rotated            = 1,
-        TransformedUpright = 2,
-        TransformedRotated = 3
-    };
-#endif
-
-    VerticalOrientation GetVerticalOrientation(sal_UCS4 cCh, const LanguageTag& rTag)
+    int32_t GetVerticalOrientation(sal_UCS4 cCh, const LanguageTag& rTag)
     {
         // Override orientation of fullwidth colon , semi-colon,
         // and Bopomofo tonal marks.
         if ((cCh == 0xff1a || cCh == 0xff1b
            || cCh == 0x2ca || cCh == 0x2cb || cCh == 0x2c7 || cCh == 0x2d9)
                 && rTag.getLanguage() == "zh")
-            return VerticalOrientation::TransformedUpright;
+            return U_VO_TRANSFORMED_UPRIGHT;
 
-#if U_ICU_VERSION_MAJOR_NUM >= 63
-        int32_t nRet = u_getIntPropertyValue(cCh, UCHAR_VERTICAL_ORIENTATION);
-#else
-        uint8_t nRet = 1;
-
-        if (cCh < 0x10000)
-        {
-            nRet = sVerticalOrientationValues[sVerticalOrientationPages[0][cCh >> kVerticalOrientationCharBits]]
-                                  [cCh & ((1 << kVerticalOrientationCharBits) - 1)];
-        }
-        else if (cCh < (kVerticalOrientationMaxPlane + 1) * 0x10000)
-        {
-            nRet = sVerticalOrientationValues[sVerticalOrientationPages[sVerticalOrientationPlanes[(cCh >> 16) - 1]]
-                                                   [(cCh & 0xffff) >> kVerticalOrientationCharBits]]
-                                   [cCh & ((1 << kVerticalOrientationCharBits) - 1)];
-        }
-        else
-        {
-            // Default value for unassigned
-            SAL_WARN("vcl.gdi", "Getting VerticalOrientation for codepoint outside Unicode range");
-        }
-#endif
-
-        return VerticalOrientation(nRet);
+        return u_getIntPropertyValue(cCh, UCHAR_VERTICAL_ORIENTATION);
     }
-
 } // namespace
 
 SalLayoutGlyphs GenericSalLayout::GetGlyphs() const
@@ -170,6 +129,21 @@ void GenericSalLayout::SetNeedFallback(vcl::text::ImplLayoutArgs& rArgs, sal_Int
         mxBreak->previousCharacters(rArgs.mrStr, nCharPos, aLocale,
             i18n::CharacterIteratorMode::SKIPCELL, 1, nDone);
 
+    // tdf#107612
+    // If the start of the fallback run is Mongolian character and the previous
+    // character is NNBSP, we want to include the NNBSP in the fallback since
+    // it has special uses in Mongolian and have to be in the same text run to
+    // work.
+    sal_Int32 nTempPos = nGraphemeStartPos;
+    if (nGraphemeStartPos > 0)
+    {
+        auto nCurrChar = rArgs.mrStr.iterateCodePoints(&nTempPos, 0);
+        auto nPrevChar = rArgs.mrStr.iterateCodePoints(&nTempPos, -1);
+        if (nPrevChar == 0x202F
+            && u_getIntPropertyValue(nCurrChar, UCHAR_SCRIPT) == USCRIPT_MONGOLIAN)
+            nGraphemeStartPos = nTempPos;
+    }
+
     //stay inside the Layout range (e.g. with tdf124116-1.odt)
     nGraphemeStartPos = std::max(rArgs.mnMinCharPos, nGraphemeStartPos);
     nGraphemeEndPos = std::min(rArgs.mnEndCharPos, nGraphemeEndPos);
@@ -181,8 +155,8 @@ void GenericSalLayout::AdjustLayout(vcl::text::ImplLayoutArgs& rArgs)
 {
     SalLayout::AdjustLayout(rArgs);
 
-    if (rArgs.mpNaturalDXArray)
-        ApplyDXArray(rArgs.mpNaturalDXArray, rArgs.mpKashidaArray);
+    if (rArgs.mpDXArray)
+        ApplyDXArray(rArgs.mpDXArray, rArgs.mpKashidaArray);
     else if (rArgs.mnLayoutWidth)
         Justify(rArgs.mnLayoutWidth);
     // apply asian kerning if the glyphs are not already formatted
@@ -218,8 +192,8 @@ bool GenericSalLayout::HasVerticalAlternate(sal_UCS4 aChar, sal_UCS4 aVariationS
         hb_ot_layout_collect_lookups(pHbFace, HB_OT_TAG_GSUB, nullptr, nullptr, pFeatures, pLookups);
         if (!hb_set_is_empty(pLookups))
         {
-            // Find the output glyphs in each lookup (i.e. the glyphs that
-            // would result from applying this lookup).
+            // Find the input glyphs in each lookup (i.e. the glyphs that
+            // this lookup applies to).
             hb_codepoint_t nIdx = HB_SET_VALUE_INVALID;
             while (hb_set_next(pLookups, &nIdx))
             {
@@ -281,12 +255,12 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
     // horizontal text. That is the offset from original baseline to
     // the center of EM box. Maybe we can use OpenType base table to improve this
     // in the future.
-    DeviceCoordinate nBaseOffset = 0;
+    double nBaseOffset = 0;
     if (rArgs.mnFlags & SalLayoutFlags::Vertical)
     {
         hb_font_extents_t extents;
         if (hb_font_get_h_extents(pHbFont, &extents))
-            nBaseOffset = ( extents.ascender + extents.descender ) / 2;
+            nBaseOffset = ( extents.ascender + extents.descender ) / 2.0;
     }
 
     hb_buffer_t* pHbBuffer = hb_buffer_create();
@@ -315,7 +289,7 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
     double nYScale = 0;
     GetFont().GetScale(&nXScale, &nYScale);
 
-    DevicePoint aCurrPos(0, 0);
+    basegfx::B2DPoint aCurrPos(0, 0);
     while (true)
     {
         int nBidiMinRunPos, nBidiEndRunPos;
@@ -358,7 +332,7 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
                     {
                         sal_Int32 nPrevIdx = nIdx;
                         sal_UCS4 aChar = rArgs.mrStr.iterateCodePoints(&nIdx);
-                        VerticalOrientation aVo = GetVerticalOrientation(aChar, rArgs.maLanguageTag);
+                        int32_t aVo = GetVerticalOrientation(aChar, rArgs.maLanguageTag);
 
                         sal_UCS4 aVariationSelector = 0;
                         if (nIdx < nEndRunPos)
@@ -379,9 +353,8 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
                         // they should be shaped in horizontal direction
                         // and then rotated.
                         // See http://unicode.org/reports/tr50/#vo
-                        if (aVo == VerticalOrientation::Upright ||
-                            aVo == VerticalOrientation::TransformedUpright ||
-                            (aVo == VerticalOrientation::TransformedRotated &&
+                        if (aVo == U_VO_UPRIGHT || aVo == U_VO_TRANSFORMED_UPRIGHT ||
+                            (aVo == U_VO_TRANSFORMED_ROTATED &&
                              HasVerticalAlternate(aChar, aVariationSelector)))
                         {
                             aDirection = HB_DIRECTION_TTB;
@@ -548,7 +521,7 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
                 if (hb_glyph_info_get_glyph_flags(&pHbGlyphInfos[i]) & HB_GLYPH_FLAG_SAFE_TO_INSERT_TATWEEL)
                     nGlyphFlags |= GlyphItemFlags::IS_SAFE_TO_INSERT_KASHIDA;
 
-                DeviceCoordinate nAdvance, nXOffset, nYOffset;
+                double nAdvance, nXOffset, nYOffset;
                 if (aSubRun.maDirection == HB_DIRECTION_TTB)
                 {
                     nGlyphFlags |= GlyphItemFlags::IS_VERTICAL;
@@ -561,12 +534,12 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
                     {
                         // We need glyph's advance, top bearing, and height to
                         // correct y offset.
-                        tools::Rectangle aRect;
+                        basegfx::B2DRectangle aRect;
                         // Get cached bound rect value for the font,
                         GetFont().GetGlyphBoundRect(nGlyphIndex, aRect, true);
 
-                        nXOffset = -(aRect.Top() / nXScale  + ( pHbPositions[i].y_advance
-                                    + ( aRect.GetHeight() / nXScale ) ) / 2 );
+                        nXOffset = -(aRect.getMinX() / nXScale  + ( pHbPositions[i].y_advance
+                                    + ( aRect.getHeight() / nXScale ) ) / 2.0 );
                     }
 
                 }
@@ -577,11 +550,17 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
                     nYOffset = -pHbPositions[i].y_offset;
                 }
 
-                nAdvance = std::lround(nAdvance * nXScale);
-                nXOffset = std::lround(nXOffset * nXScale);
-                nYOffset = std::lround(nYOffset * nYScale);
+                nAdvance = nAdvance * nXScale;
+                nXOffset = nXOffset * nXScale;
+                nYOffset = nYOffset * nYScale;
+                if (!GetSubpixelPositioning())
+                {
+                    nAdvance = std::lround(nAdvance);
+                    nXOffset = std::lround(nXOffset);
+                    nYOffset = std::lround(nYOffset);
+                }
 
-                DevicePoint aNewPos(aCurrPos.getX() + nXOffset, aCurrPos.getY() + nYOffset);
+                basegfx::B2DPoint aNewPos(aCurrPos.getX() + nXOffset, aCurrPos.getY() + nYOffset);
                 const GlyphItem aGI(nCharPos, nCharCount, nGlyphIndex, aNewPos, nGlyphFlags,
                                     nAdvance, nXOffset, nYOffset);
                 m_GlyphItems.push_back(aGI);
@@ -600,7 +579,7 @@ bool GenericSalLayout::LayoutText(vcl::text::ImplLayoutArgs& rArgs, const SalLay
     return true;
 }
 
-void GenericSalLayout::GetCharWidths(std::vector<DeviceCoordinate>& rCharWidths, const OUString& rStr) const
+void GenericSalLayout::GetCharWidths(std::vector<double>& rCharWidths, const OUString& rStr) const
 {
     const int nCharCount = mnEndCharPos - mnMinCharPos;
 
@@ -638,7 +617,7 @@ void GenericSalLayout::GetCharWidths(std::vector<DeviceCoordinate>& rCharWidths,
         {
             // More than one grapheme cluster, we want to distribute the glyph
             // width over them.
-            std::vector<DeviceCoordinate> aWidths(nGraphemeCount);
+            std::vector<double> aWidths(nGraphemeCount);
 
             // Check if the glyph has ligature caret positions.
             unsigned int nCarets = nGraphemeCount;
@@ -705,7 +684,7 @@ void GenericSalLayout::GetCharWidths(std::vector<DeviceCoordinate>& rCharWidths,
 void GenericSalLayout::ApplyDXArray(const double* pDXArray, const sal_Bool* pKashidaArray)
 {
     int nCharCount = mnEndCharPos - mnMinCharPos;
-    std::vector<DeviceCoordinate> aOldCharWidths;
+    std::vector<double> aOldCharWidths;
     std::unique_ptr<double[]> const pNewCharWidths(new double[nCharCount]);
 
     // Get the natural character widths (i.e. before applying DX adjustments).
@@ -722,7 +701,7 @@ void GenericSalLayout::ApplyDXArray(const double* pDXArray, const sal_Bool* pKas
 
     // Map of Kashida insertion points (in the glyph items vector) and the
     // requested width.
-    std::map<size_t, std::pair<DeviceCoordinate, DeviceCoordinate>> pKashidas;
+    std::map<size_t, std::pair<double, double>> pKashidas;
 
     // The accumulated difference in X position.
     double nDelta = 0;
@@ -767,21 +746,10 @@ void GenericSalLayout::ApplyDXArray(const double* pDXArray, const sal_Bool* pKas
             m_GlyphItems[i].addNewWidth(nDiff);
             m_GlyphItems[i].adjustLinearPosX(nDelta + nDiff);
 
-            // Warning:
-            // If you are tempted to improve the two loops below, think again.
-            // Even though I wrote this code, I no longer understand how it
-            // works, and every time I think I finally got it, I introduce a
-            // bug. - Khaled
-
             // Adjust the X position of the rest of the glyphs in the cluster.
-            size_t j = i;
-            while (j > 0)
-            {
-                --j;
-                if (!m_GlyphItems[j].IsInCluster())
-                    break;
+            // We iterate backwards since this is an RTL glyph.
+            for (int j = i - 1; j >= 0 && m_GlyphItems[j].IsInCluster(); j--)
                 m_GlyphItems[j].adjustLinearPosX(nDelta + nDiff);
-            }
 
             // This is a Kashida insertion position, mark it. Kashida glyphs
             // will be inserted below.
@@ -805,6 +773,8 @@ void GenericSalLayout::ApplyDXArray(const double* pDXArray, const sal_Bool* pKas
     // Find Kashida glyph width and index.
     sal_GlyphId nKashidaIndex = GetFont().GetGlyphIndex(0x0640);
     double nKashidaWidth = GetFont().GetKashidaWidth();
+    if (!GetSubpixelPositioning())
+        nKashidaWidth = std::ceil(nKashidaWidth);
 
     if (nKashidaWidth <= 0)
     {
@@ -837,7 +807,7 @@ void GenericSalLayout::ApplyDXArray(const double* pDXArray, const sal_Bool* pKas
                 nOverlap = nExcess / (nCopies - 1);
         }
 
-        DevicePoint aPos = pGlyphIter->linearPos();
+        basegfx::B2DPoint aPos = pGlyphIter->linearPos();
         int nCharPos = pGlyphIter->charPos();
         GlyphItemFlags const nFlags = GlyphItemFlags::IS_IN_CLUSTER | GlyphItemFlags::IS_RTL_GLYPH;
         // Move to the left side of the adjusted width and start inserting
@@ -845,7 +815,7 @@ void GenericSalLayout::ApplyDXArray(const double* pDXArray, const sal_Bool* pKas
         aPos.adjustX(-nClusterWidth + pGlyphIter->origWidth());
         while (nCopies--)
         {
-            GlyphItem aKashida(nCharPos, 0, nKashidaIndex, aPos, nFlags, nKashidaWidth, 0, 0);
+            GlyphItem aKashida(nCharPos, 0, nKashidaIndex, aPos, nFlags, 0, 0, 0);
             pGlyphIter = m_GlyphItems.insert(pGlyphIter, aKashida);
             aPos.adjustX(nKashidaWidth - nOverlap);
             ++pGlyphIter;

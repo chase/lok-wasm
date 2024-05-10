@@ -35,12 +35,11 @@ using namespace ::xmloff::token;
 using ::com::sun::star::beans::XPropertySet;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Any;
-using ::com::sun::star::xml::sax::XAttributeList;
 
 XMLIndexTOCSourceContext::XMLIndexTOCSourceContext(
     SvXMLImport& rImport,
     Reference<XPropertySet> & rPropSet)
-:   XMLIndexSourceBaseContext(rImport, rPropSet, true)
+:   XMLIndexSourceBaseContext(rImport, rPropSet, UseStyles::Level)
     // use all chapters by default
 ,   nOutlineLevel(rImport.GetTextImport()->GetChapterNumbering()->getCount())
 ,   bUseOutline(true)

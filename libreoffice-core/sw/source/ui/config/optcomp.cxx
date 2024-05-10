@@ -39,7 +39,6 @@
 using namespace ::com::sun::star::beans;
 using namespace ::com::sun::star::document;
 using namespace ::com::sun::star::uno;
-using namespace ::std;
 
 struct SwCompatibilityOptPage_Impl
 {
@@ -51,17 +50,12 @@ SwCompatibilityOptPage::SwCompatibilityOptPage(weld::Container* pPage, weld::Dia
     , m_pWrtShell(nullptr)
     , m_pImpl(new SwCompatibilityOptPage_Impl)
     , m_nSavedOptions(0)
-    , m_bSavedMSFormsMenuOption(false)
     , m_xMain(m_xBuilder->weld_frame("compatframe"))
-    , m_xGlobalOptionsFrame(m_xBuilder->weld_frame("globalcompatframe"))
     , m_xFormattingLB(m_xBuilder->weld_combo_box("format"))
-    , m_xGlobalOptionsLB(m_xBuilder->weld_combo_box("globaloptions"))
     , m_xOptionsLB(m_xBuilder->weld_tree_view("options"))
-    , m_xGlobalOptionsCLB(m_xBuilder->weld_tree_view("globaloptioncheckbox"))
     , m_xDefaultPB(m_xBuilder->weld_button("default"))
 {
     m_xOptionsLB->enable_toggle_buttons(weld::ColumnToggleType::Check);
-    m_xGlobalOptionsCLB->enable_toggle_buttons(weld::ColumnToggleType::Check);
 
     int nPos = 0;
     for (int i = static_cast<int>(SvtCompatibilityEntry::Index::Module) + 1;
@@ -80,21 +74,6 @@ SwCompatibilityOptPage::SwCompatibilityOptPage(weld::Container* pPage, weld::Dia
     m_sUserEntry = m_xFormattingLB->get_text(m_xFormattingLB->get_count() - 1);
 
     m_xFormattingLB->clear();
-
-    // Set MSOCompatibleFormsMenu entry attributes
-    const bool bReadOnly = officecfg::Office::Compatibility::View::MSCompatibleFormsMenu::isReadOnly();
-    m_xGlobalOptionsCLB->set_sensitive(!bReadOnly);
-
-    m_xGlobalOptionsCLB->append();
-    const bool bChecked = officecfg::Office::Compatibility::View::MSCompatibleFormsMenu::get();
-    m_xGlobalOptionsCLB->set_toggle(0, bChecked ? TRISTATE_TRUE : TRISTATE_FALSE);
-    m_xGlobalOptionsCLB->set_text(0, m_xGlobalOptionsLB->get_text(0), 0);
-
-    m_xGlobalOptionsLB->clear();
-
-    // tdf#125799, we let only the doc options grow/shrink but give this one more than its bare
-    // min request height because there's only one row in it and that looks somewhat abrupt
-    m_xGlobalOptionsCLB->set_size_request(-1, m_xGlobalOptionsCLB->get_preferred_size().Height() * 2);
 
     InitControls( rSet );
 
@@ -123,7 +102,8 @@ static sal_uInt32 convertBools2Ulong_Impl
     bool _bProtectForm,
     bool _bMsWordCompTrailingBlanks,
     bool bSubtractFlysAnchoredAtFlys,
-    bool bEmptyDbFieldHidesPara
+    bool bEmptyDbFieldHidesPara,
+    bool bUseVariableWidthNBSP
 )
 {
     sal_uInt32 nRet = 0;
@@ -173,6 +153,9 @@ static sal_uInt32 convertBools2Ulong_Impl
     nSetBit = nSetBit << 1;
     if (bEmptyDbFieldHidesPara)
         nRet |= nSetBit;
+    nSetBit = nSetBit << 1;
+    if (bUseVariableWidthNBSP)
+        nRet |= nSetBit;
 
     return nRet;
 }
@@ -193,7 +176,6 @@ void SwCompatibilityOptPage::InitControls( const SfxItemSet& rSet )
     else
     {
         m_xMain->set_sensitive(false);
-        m_xGlobalOptionsFrame->set_sensitive(false);
     }
     const OUString& rText = m_xMain->get_label();
     m_xMain->set_label(rText.replaceAll("%DOCNAME", sDocTitle));
@@ -234,7 +216,7 @@ void SwCompatibilityOptPage::InitControls( const SfxItemSet& rSet )
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::NoExtLeading ),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::UseLineSpacing ),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::AddTableSpacing ),
-            rEntry.getValue<bool>(SvtCompatibilityEntry::Index::AddTableLineSpacing),
+            rEntry.getValue<bool>( SvtCompatibilityEntry::Index::AddTableLineSpacing),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::UseObjectPositioning ),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::UseOurTextWrapping ),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::ConsiderWrappingStyle ),
@@ -242,7 +224,8 @@ void SwCompatibilityOptPage::InitControls( const SfxItemSet& rSet )
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::ProtectForm ),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::MsWordTrailingBlanks ),
             rEntry.getValue<bool>( SvtCompatibilityEntry::Index::SubtractFlysAnchoredAtFlys ),
-            rEntry.getValue<bool>( SvtCompatibilityEntry::Index::EmptyDbFieldHidesPara ) );
+            rEntry.getValue<bool>( SvtCompatibilityEntry::Index::EmptyDbFieldHidesPara ),
+            rEntry.getValue<bool>( SvtCompatibilityEntry::Index::UseVariableWidthNBSP ) );
         m_xFormattingLB->append(OUString::number(nOptions), sNewEntry);
     }
 }
@@ -294,9 +277,11 @@ IMPL_LINK_NOARG(SwCompatibilityOptPage, UseAsDefaultHdl, weld::Button&, void)
 void SwCompatibilityOptPage::SetCurrentOptions( sal_uInt32 nOptions )
 {
     const int nCount = m_xOptionsLB->n_children();
+    const OUString aOptionsName = m_xFormattingLB->get_active_text();
     OSL_ENSURE( nCount <= 32, "SwCompatibilityOptPage::Reset(): entry overflow" );
     for (int i = 0; i < nCount; ++i)
     {
+        bool bReadOnly = false;
         bool bChecked = ( ( nOptions & 0x00000001 ) == 0x00000001 );
         TriState value = bChecked ? TRISTATE_TRUE : TRISTATE_FALSE;
         if (i == int(SvtCompatibilityEntry::Index::AddTableSpacing) - 2)
@@ -309,8 +294,22 @@ void SwCompatibilityOptPage::SetCurrentOptions( sal_uInt32 nOptions )
             }
         }
         m_xOptionsLB->set_toggle(i, value);
+
+        int nCoptIdx = i + 2; /* Consider "Name" & "Module" indexes */
+        if (aOptionsName.isEmpty() || aOptionsName == SvtCompatibilityEntry::DEFAULT_ENTRY_NAME)
+        {
+            bReadOnly = m_aConfigItem.GetDefaultPropertyReadOnly(SvtCompatibilityEntry::Index(nCoptIdx));
+        }
+        else
+        {
+            bReadOnly = m_aConfigItem.GetPropertyReadOnly(SvtCompatibilityEntry::Index(nCoptIdx));
+        }
+        m_xOptionsLB->set_sensitive(i, !bReadOnly);
+
         nOptions = nOptions >> 1;
     }
+
+    m_xDefaultPB->set_sensitive(!m_aConfigItem.HaveDefaultReadOnlyProperty());
 }
 
 sal_uInt32 SwCompatibilityOptPage::GetDocumentOptions() const
@@ -334,7 +333,8 @@ sal_uInt32 SwCompatibilityOptPage::GetDocumentOptions() const
             rIDocumentSettingAccess.get( DocumentSettingId::PROTECT_FORM ),
             rIDocumentSettingAccess.get( DocumentSettingId::MS_WORD_COMP_TRAILING_BLANKS ),
             rIDocumentSettingAccess.get( DocumentSettingId::SUBTRACT_FLYS ),
-            rIDocumentSettingAccess.get( DocumentSettingId::EMPTY_DB_FIELD_HIDES_PARA ) );
+            rIDocumentSettingAccess.get( DocumentSettingId::EMPTY_DB_FIELD_HIDES_PARA ),
+            rIDocumentSettingAccess.get( DocumentSettingId::USE_VARIABLE_WIDTH_NBSP ) );
     }
     return nRet;
 }
@@ -349,6 +349,18 @@ void SwCompatibilityOptPage::WriteOptions()
 std::unique_ptr<SfxTabPage> SwCompatibilityOptPage::Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet)
 {
     return std::make_unique<SwCompatibilityOptPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SwCompatibilityOptPage::GetAllStrings()
+{
+    OUString sAllStrings;
+
+    if (const auto& pString = m_xBuilder->weld_label(u"label11"_ustr))
+        sAllStrings += pString->get_label() + " ";
+
+    sAllStrings += m_xDefaultPB->get_label() + " ";
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SwCompatibilityOptPage::FillItemSet( SfxItemSet*  )
@@ -436,6 +448,11 @@ bool SwCompatibilityOptPage::FillItemSet( SfxItemSet*  )
                         m_pWrtShell->SetEmptyDbFieldHidesPara(bChecked);
                         break;
 
+                    case SvtCompatibilityEntry::Index::UseVariableWidthNBSP:
+                        m_pWrtShell->GetDoc()->getIDocumentSettingAccess()
+                            .set(DocumentSettingId::USE_VARIABLE_WIDTH_NBSP, bChecked);
+                        break;
+
                     default:
                         break;
                 }
@@ -449,27 +466,6 @@ bool SwCompatibilityOptPage::FillItemSet( SfxItemSet*  )
     if ( bModified )
         WriteOptions();
 
-    bool bNewMSFormsMenuOption = m_xGlobalOptionsCLB->get_toggle(0);
-    if (m_bSavedMSFormsMenuOption != bNewMSFormsMenuOption)
-    {
-        std::shared_ptr<comphelper::ConfigurationChanges> batch(comphelper::ConfigurationChanges::create());
-        officecfg::Office::Compatibility::View::MSCompatibleFormsMenu::set(bNewMSFormsMenuOption, batch);
-        batch->commit();
-
-        m_bSavedMSFormsMenuOption = bNewMSFormsMenuOption;
-        bModified = true;
-
-        // Show a message about that the option needs a restart to be applied
-        {
-            SolarMutexGuard aGuard;
-            if (svtools::executeRestartDialog(comphelper::getProcessComponentContext(),
-                                              GetFrameWeld(), svtools::RESTART_REASON_MSCOMPATIBLE_FORMS_MENU))
-            {
-                GetDialogController()->response(RET_OK);
-            }
-        }
-    }
-
     return bModified;
 }
 
@@ -480,9 +476,6 @@ void SwCompatibilityOptPage::Reset( const SfxItemSet*  )
     sal_uInt32 nOptions = GetDocumentOptions();
     SetCurrentOptions( nOptions );
     m_nSavedOptions = nOptions;
-
-    m_bSavedMSFormsMenuOption = officecfg::Office::Compatibility::View::MSCompatibleFormsMenu::get();
-    m_xGlobalOptionsCLB->set_toggle(0, m_bSavedMSFormsMenuOption ? TRISTATE_TRUE : TRISTATE_FALSE);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

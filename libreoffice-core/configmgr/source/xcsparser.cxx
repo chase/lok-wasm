@@ -109,12 +109,14 @@ void merge(
 }
 
 XcsParser::XcsParser(int layer, Data & data):
-    valueParser_(layer), data_(data), state_(STATE_START), ignoring_()
+    valueParser_(layer), data_(data), state_(STATE_START), ignoring_(), bIsParsingInfo_(false)
 {}
 
 XcsParser::~XcsParser() {}
 
 xmlreader::XmlReader::Text XcsParser::getTextMode() {
+    if (bIsParsingInfo_)
+        return xmlreader::XmlReader::Text::Raw;
     return valueParser_.getTextMode();
 }
 
@@ -122,6 +124,22 @@ bool XcsParser::startElement(
     xmlreader::XmlReader & reader, int nsId, xmlreader::Span const & name,
     std::set< OUString > const * /*existingDependencies*/)
 {
+    //TODO: ignoring component-schema import, component-schema uses, and
+    // prop constraints; accepting all four at illegal places (and with
+    // illegal content):
+    if (ignoring_ > 0
+        || (nsId == xmlreader::XmlReader::NAMESPACE_NONE
+            && (name == "import" || name == "uses" || name == "constraints" || name == "desc"
+                // the following are unused by LO but valid
+                || name == "deprecated" || name == "author" || name == "label")))
+    {
+        assert(ignoring_ < LONG_MAX);
+        ++ignoring_;
+        return true;
+    }
+
+    if (bIsParsingInfo_)
+        return true;
     if (valueParser_.startElement(reader, nsId, name)) {
         return true;
     }
@@ -135,24 +153,18 @@ bool XcsParser::startElement(
             return true;
         }
     } else {
-        //TODO: ignoring component-schema import, component-schema uses, and
-        // prop constraints; accepting all four at illegal places (and with
-        // illegal content):
-        if (ignoring_ > 0 ||
-            (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
-             (name == "info" || name == "import" ||
-              name == "uses" || name == "constraints")))
-        {
-            assert(ignoring_ < LONG_MAX);
-            ++ignoring_;
-            return true;
-        }
         switch (state_) {
         case STATE_COMPONENT_SCHEMA:
             if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
                 name == "templates")
             {
                 state_ = STATE_TEMPLATES;
+                return true;
+            }
+            if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
+                name == "info")
+            {
+                bIsParsingInfo_ = true;
                 return true;
             }
             [[fallthrough]];
@@ -170,6 +182,12 @@ bool XcsParser::startElement(
             }
             break;
         case STATE_TEMPLATES:
+            if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
+                    name == "info")
+            {
+                bIsParsingInfo_ = true;
+                return true;
+            }
             if (elements_.empty()) {
                 if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
                     name == "group")
@@ -181,6 +199,12 @@ bool XcsParser::startElement(
                     name == "set")
                 {
                     handleSet(reader, true);
+                    return true;
+                }
+                if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
+                    name == "info")
+                {
+                    bIsParsingInfo_ = true;
                     return true;
                 }
                 break;
@@ -195,6 +219,12 @@ bool XcsParser::startElement(
                     name == "value")
                 {
                     handlePropValue(reader, elements_.top().node);
+                    return true;
+                }
+                if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
+                    name == "info")
+                {
+                    bIsParsingInfo_ = true;
                     return true;
                 }
                 break;
@@ -223,6 +253,12 @@ bool XcsParser::startElement(
                     handleSet(reader, false);
                     return true;
                 }
+                if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
+                    name == "info")
+                {
+                    bIsParsingInfo_ = true;
+                    return true;
+                }
                 break;
             case Node::KIND_SET:
                 if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
@@ -231,6 +267,12 @@ bool XcsParser::startElement(
                     handleSetItem(
                         reader,
                         static_cast< SetNode * >(elements_.top().node.get()));
+                    return true;
+                }
+                if (nsId == xmlreader::XmlReader::NAMESPACE_NONE &&
+                    name == "info")
+                {
+                    bIsParsingInfo_ = true;
                     return true;
                 }
                 break;
@@ -251,15 +293,32 @@ bool XcsParser::startElement(
 }
 
 void XcsParser::endElement(xmlreader::XmlReader const & reader) {
+    if (ignoring_ > 0) {
+        --ignoring_;
+        return;
+    }
+    if (bIsParsingInfo_)
+    {
+        bIsParsingInfo_ = false;
+        return;
+    }
     if (valueParser_.endElement()) {
         return;
     }
-    if (ignoring_ > 0) {
-        --ignoring_;
-    } else if (!elements_.empty()) {
+    if (!elements_.empty()) {
         Element top(std::move(elements_.top()));
         elements_.pop();
         if (top.node.is()) {
+            if (top.node->kind() == Node::KIND_PROPERTY
+                || top.node->kind() == Node::KIND_LOCALIZED_PROPERTY)
+            {
+                // Remove whitespace from description_ resulting from line breaks/indentation in xml files
+                OUString desc(description_.makeStringAndClear());
+                desc = desc.trim();
+                while (desc.indexOf("  ") != -1)
+                    desc = desc.replaceAll("  ", " ");
+                top.node->setDescription(desc);
+            }
             if (elements_.empty()) {
                 switch (state_) {
                 case STATE_TEMPLATES:
@@ -316,6 +375,11 @@ void XcsParser::endElement(xmlreader::XmlReader const & reader) {
 }
 
 void XcsParser::characters(xmlreader::Span const & text) {
+    if (bIsParsingInfo_)
+    {
+        description_.append(text.convertFromUtf8());
+        return;
+    }
     valueParser_.characters(text);
 }
 

@@ -33,6 +33,7 @@
 
 #include <officecfg/Office/Common.hxx>
 #include <osl/file.hxx>
+#include <rtl/bootstrap.hxx>
 
 #include <strings.hrc>
 #include <vcl/svapp.hxx>
@@ -76,7 +77,9 @@ SvxJavaOptionsPage::SvxJavaOptionsPage(weld::Container* pPage, weld::DialogContr
     , m_xClassPathBtn(m_xBuilder->weld_button("classpath"))
     , m_xExpertConfigBtn(m_xBuilder->weld_button("expertconfig"))
     , m_xExperimentalCB(m_xBuilder->weld_check_button("experimental"))
+    , m_xExperimentalImg(m_xBuilder->weld_widget("lockexperimental"))
     , m_xMacroCB(m_xBuilder->weld_check_button("macrorecording"))
+    , m_xMacroImg(m_xBuilder->weld_widget("lockmacrorecording"))
     , m_xAddDialogText(m_xBuilder->weld_label("selectruntime"))
     , m_xJavaFrame(m_xBuilder->weld_widget("javaframe"))
 {
@@ -108,10 +111,16 @@ SvxJavaOptionsPage::SvxJavaOptionsPage(weld::Container* pPage, weld::DialogContr
         m_xExpertConfigBtn->set_sensitive(false);
 
     if (officecfg::Office::Common::Misc::MacroRecorderMode::isReadOnly())
+    {
         m_xMacroCB->set_sensitive(false);
+        m_xMacroImg->set_visible(true);
+    }
 
     if (officecfg::Office::Common::Misc::ExperimentalMode::isReadOnly())
+    {
         m_xExperimentalCB->set_sensitive(false);
+        m_xExperimentalImg->set_visible(true);
+    }
 
     xDialogListener->SetDialogClosedLink( LINK( this, SvxJavaOptionsPage, DialogClosedHdl ) );
 
@@ -464,6 +473,36 @@ void SvxJavaOptionsPage::RequestRestart(svtools::RestartReason eReason)
 std::unique_ptr<SfxTabPage> SvxJavaOptionsPage::Create(weld::Container* pPage, weld::DialogController* pController, const SfxItemSet* rAttrSet)
 {
     return std::make_unique<SvxJavaOptionsPage>(pPage, pController, *rAttrSet);
+}
+
+OUString SvxJavaOptionsPage::GetAllStrings()
+{
+    OUString sAllStrings;
+    OUString labels[] = { "label1", "label2", "javapath", "selectruntime", "label12" };
+
+    for (const auto& label : labels)
+    {
+        if (const auto& pString = m_xBuilder->weld_label(label))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString checkButton[] = { "javaenabled", "experimental", "macrorecording" };
+
+    for (const auto& check : checkButton)
+    {
+        if (const auto& pString = m_xBuilder->weld_check_button(check))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    OUString buttons[] = { "add", "parameters", "classpath", "expertconfig" };
+
+    for (const auto& btn : buttons)
+    {
+        if (const auto& pString = m_xBuilder->weld_button(btn))
+            sAllStrings += pString->get_label() + " ";
+    }
+
+    return sAllStrings.replaceAll("_", "");
 }
 
 bool SvxJavaOptionsPage::FillItemSet( SfxItemSet* /*rCoreSet*/ )
@@ -934,6 +973,7 @@ OUString SvxJavaClassPathDlg::GetClassPath() const
     return sPath.makeStringAndClear();
 }
 
+#if HAVE_FEATURE_JAVA
 void SvxJavaClassPathDlg::SetClassPath( const OUString& _rPath )
 {
     if ( m_sOldPath.isEmpty() )
@@ -941,20 +981,27 @@ void SvxJavaClassPathDlg::SetClassPath( const OUString& _rPath )
     m_xPathList->clear();
     if (!_rPath.isEmpty())
     {
-        sal_Int32 nIdx = 0;
-        do
+        std::vector paths = jfw_convertUserPathList(_rPath);
+        for (auto const& path : paths)
         {
-            OUString sToken = _rPath.getToken( 0, CLASSPATH_DELIMITER, nIdx );
             OUString sURL;
-            osl::FileBase::getFileURLFromSystemPath(sToken, sURL); // best effort
+            if (path.startsWith("$"))
+            {
+                sURL = path;
+                rtl::Bootstrap::expandMacros(sURL);
+            }
+            else
+            {
+                osl::FileBase::getFileURLFromSystemPath(path, sURL);
+            }
             INetURLObject aURL( sURL );
-            m_xPathList->append("", sToken, SvFileInformationManager::GetImageId(aURL));
+            m_xPathList->append("", path, SvFileInformationManager::GetImageId(aURL));
         }
-        while (nIdx>=0);
         // select first entry
         m_xPathList->select(0);
     }
     SelectHdl_Impl(*m_xPathList);
 }
+#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -42,7 +42,6 @@
 
 using namespace ::com::sun::star;
 using ::com::sun::star::beans::Property;
-using ::osl::MutexGuard;
 using ::com::sun::star::uno::Any;
 using ::com::sun::star::uno::Reference;
 using ::com::sun::star::uno::Sequence;
@@ -225,35 +224,25 @@ void lcl_AddPropertiesToVector(
                   beans::PropertyAttribute::MAYBEDEFAULT );
 }
 
-struct StaticLegendWrapperPropertyArray_Initializer
+const Sequence< Property >& StaticLegendWrapperPropertyArray()
 {
-    Sequence< Property >* operator()()
-    {
-        static Sequence< Property > aPropSeq( lcl_GetPropertySequence() );
-        return &aPropSeq;
-    }
+    static Sequence< Property > aPropSeq = []()
+        {
+            std::vector< css::beans::Property > aProperties;
+            lcl_AddPropertiesToVector( aProperties );
+            ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
+            ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
+            ::chart::FillProperties::AddPropertiesToVector( aProperties );
+            ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
+            ::chart::wrapper::WrappedAutomaticPositionProperties::addProperties( aProperties );
+            ::chart::wrapper::WrappedScaleTextProperties::addProperties( aProperties );
 
-private:
-    static Sequence< Property > lcl_GetPropertySequence()
-    {
-        std::vector< css::beans::Property > aProperties;
-        lcl_AddPropertiesToVector( aProperties );
-        ::chart::CharacterProperties::AddPropertiesToVector( aProperties );
-        ::chart::LinePropertiesHelper::AddPropertiesToVector( aProperties );
-        ::chart::FillProperties::AddPropertiesToVector( aProperties );
-        ::chart::UserDefinedProperties::AddPropertiesToVector( aProperties );
-        ::chart::wrapper::WrappedAutomaticPositionProperties::addProperties( aProperties );
-        ::chart::wrapper::WrappedScaleTextProperties::addProperties( aProperties );
+            std::sort( aProperties.begin(), aProperties.end(),
+                         ::chart::PropertyNameLess() );
 
-        std::sort( aProperties.begin(), aProperties.end(),
-                     ::chart::PropertyNameLess() );
-
-        return comphelper::containerToSequence( aProperties );
-    }
-};
-
-struct StaticLegendWrapperPropertyArray : public rtl::StaticAggregate< Sequence< Property >, StaticLegendWrapperPropertyArray_Initializer >
-{
+            return comphelper::containerToSequence( aProperties );
+        }();
+    return aPropSeq;
 };
 
 } // anonymous namespace
@@ -263,7 +252,6 @@ namespace chart::wrapper
 
 LegendWrapper::LegendWrapper(std::shared_ptr<Chart2ModelContact> spChart2ModelContact)
     : m_spChart2ModelContact(std::move(spChart2ModelContact))
-    , m_aEventListenerContainer(m_aMutex)
 {
 }
 
@@ -322,23 +310,25 @@ OUString SAL_CALL LegendWrapper::getShapeType()
 // ____ XComponent ____
 void SAL_CALL LegendWrapper::dispose()
 {
+    std::unique_lock g(m_aMutex);
     Reference< uno::XInterface > xSource( static_cast< ::cppu::OWeakObject* >( this ) );
-    m_aEventListenerContainer.disposeAndClear( lang::EventObject( xSource ) );
+    m_aEventListenerContainer.disposeAndClear( g, lang::EventObject( xSource ) );
 
-    MutexGuard aGuard( m_aMutex);
     clearWrappedPropertySet();
 }
 
 void SAL_CALL LegendWrapper::addEventListener(
     const Reference< lang::XEventListener >& xListener )
 {
-    m_aEventListenerContainer.addInterface( xListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.addInterface( g, xListener );
 }
 
 void SAL_CALL LegendWrapper::removeEventListener(
     const Reference< lang::XEventListener >& aListener )
 {
-    m_aEventListenerContainer.removeInterface( aListener );
+    std::unique_lock g(m_aMutex);
+    m_aEventListenerContainer.removeInterface( g, aListener );
 }
 
 //ReferenceSizePropertyProvider
@@ -379,7 +369,7 @@ Reference< beans::XPropertySet > LegendWrapper::getInnerPropertySet()
 
 const Sequence< beans::Property >& LegendWrapper::getPropertySequence()
 {
-    return *StaticLegendWrapperPropertyArray::get();
+    return StaticLegendWrapperPropertyArray();
 }
 
 std::vector< std::unique_ptr<WrappedProperty> > LegendWrapper::createWrappedProperties()

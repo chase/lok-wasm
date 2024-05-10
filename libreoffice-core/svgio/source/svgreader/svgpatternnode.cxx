@@ -47,13 +47,13 @@ namespace svgio::svgreader
 
         const SvgStyleAttributes* SvgPatternNode::getSvgStyleAttributes() const
         {
-            return checkForCssStyle("pattern", maSvgStyleAttributes);
+            return checkForCssStyle(maSvgStyleAttributes);
         }
 
-        void SvgPatternNode::parseAttribute(const OUString& rTokenName, SVGToken aSVGToken, const OUString& aContent)
+        void SvgPatternNode::parseAttribute(SVGToken aSVGToken, const OUString& aContent)
         {
             // call parent
-            SvgNode::parseAttribute(rTokenName, aSVGToken, aContent);
+            SvgNode::parseAttribute(aSVGToken, aContent);
 
             // read style attributes
             maSvgStyleAttributes.parseStyleAttribute(aSVGToken, aContent);
@@ -402,9 +402,9 @@ namespace svgio::svgreader
 
         const SvgUnits* SvgPatternNode::getPatternUnits() const
         {
-            if(mpPatternUnits)
+            if(moPatternUnits)
             {
-                return mpPatternUnits.get();
+                return &*moPatternUnits;
             }
 
             const_cast< SvgPatternNode* >(this)->tryToFindLink();
@@ -422,9 +422,9 @@ namespace svgio::svgreader
 
         const SvgUnits* SvgPatternNode::getPatternContentUnits() const
         {
-            if(mpPatternContentUnits)
+            if(moPatternContentUnits)
             {
-                return mpPatternContentUnits.get();
+                return &*moPatternContentUnits;
             }
 
             const_cast< SvgPatternNode* >(this)->tryToFindLink();

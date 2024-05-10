@@ -28,7 +28,6 @@
 #include <svx/svdview.hxx>
 #include <svx/sdr/contact/displayinfo.hxx>
 #include <svx/sdr/contact/objectcontact.hxx>
-#include <svx/shapepropertynotifier.hxx>
 #include <drawdoc.hxx>
 #include <fmtornt.hxx>
 #include <viewimp.hxx>
@@ -321,9 +320,9 @@ void SwContact::MoveObjToLayer( const bool _bToVisible,
                 static_cast<SdrObjGroup*>(_pDrawObj)->GetSubList();
         if ( pLst )
         {
-            for ( size_t i = 0; i < pLst->GetObjCount(); ++i )
+            for (const rtl::Reference<SdrObject>& pObj : *pLst)
             {
-                MoveObjToLayer( _bToVisible, pLst->GetObj( i ) );
+                MoveObjToLayer( _bToVisible, pObj.get() );
             }
         }
     }
@@ -494,7 +493,7 @@ sal_uInt32 SwFlyDrawContact::GetOrdNumForNewRef(const SwFlyFrame* pFly,
         {
             for (SwAnchoredObject const*const pAnchoredObj : *pObjs)
             {
-                if (&pAnchoredObj->GetFrameFormat() == pDrawFormat)
+                if (pAnchoredObj->GetFrameFormat() == pDrawFormat)
                 {
                     return pAnchoredObj->GetDrawObj()->GetOrdNum() + 1;
                 }
@@ -687,9 +686,9 @@ bool CheckControlLayer( const SdrObject *pObj )
     if (const SdrObjGroup *pObjGroup = dynamic_cast<const SdrObjGroup*>(pObj))
     {
         const SdrObjList *pLst = pObjGroup->GetSubList();
-        for ( size_t i = 0; i < pLst->GetObjCount(); ++i )
+        for (const rtl::Reference<SdrObject>& pChildObj : *pLst)
         {
-            if ( ::CheckControlLayer( pLst->GetObj( i ) ) )
+            if ( ::CheckControlLayer( pChildObj.get() ) )
             {
                 // #i18447# - return correct value ;-)
                 return true;
@@ -751,10 +750,10 @@ SwDrawContact::~SwDrawContact()
 
 void SwDrawContact::GetTextObjectsFromFormat(std::list<SdrTextObj*>& o_rTextObjects, SwDoc& rDoc)
 {
-    for(auto& rpFly : *rDoc.GetSpzFrameFormats())
+    for(sw::SpzFrameFormat* pFly: *rDoc.GetSpzFrameFormats())
     {
-        if(dynamic_cast<const SwDrawFrameFormat*>(rpFly))
-            rpFly->CallSwClientNotify(sw::CollectTextObjectsHint(o_rTextObjects));
+        if(dynamic_cast<const SwDrawFrameFormat*>(pFly))
+            pFly->CallSwClientNotify(sw::CollectTextObjectsHint(o_rTextObjects));
     }
 }
 
@@ -1236,7 +1235,7 @@ void SwDrawContact::Changed_( const SdrObject& rObj,
                 // #i31698# - determine layout direction
                 // via draw frame format.
                 SwFrameFormat::tLayoutDir eLayoutDir =
-                                pAnchoredDrawObj->GetFrameFormat().GetLayoutDir();
+                                pAnchoredDrawObj->GetFrameFormat()->GetLayoutDir();
                 // use geometry of drawing object
                 tools::Rectangle aObjRect( rObj.GetSnapRect() );
                 // If drawing object is a member of a group, the adjustment
@@ -1459,7 +1458,7 @@ void SwDrawContact::SwClientNotify(const SwModify& rMod, const SfxHint& rHint)
                         {
                             // --> #i102752#
                             // assure that a ShapePropertyChangeNotifier exists
-                            maAnchoredDrawObj.DrawObj()->notifyShapePropertyChange(svx::ShapePropertyProviderId::TextDocAnchor);
+                            maAnchoredDrawObj.DrawObj()->notifyShapePropertyChange("AnchorType");
                         }
                         else
                             SAL_WARN("sw.core", "SwDrawContact::Modify: no draw object here?");
@@ -1702,12 +1701,11 @@ void SwDrawContact::DisconnectFromLayout( bool _bMoveMasterToInvisibleLayer )
 
     if ( _bMoveMasterToInvisibleLayer && GetMaster() && GetMaster()->IsInserted() )
     {
-        SdrViewIter aIter( GetMaster() );
-        for( SdrView* pView = aIter.FirstView(); pView;
-                    pView = aIter.NextView() )
-        {
-            pView->MarkObj( GetMaster(), pView->GetSdrPageView(), true );
-        }
+        SdrViewIter::ForAllViews( GetMaster(),
+            [this] (SdrView* pView)
+            {
+                pView->MarkObj( GetMaster(), pView->GetSdrPageView(), true );
+            });
 
         // Instead of removing 'master' object from drawing page, move the
         // 'master' drawing object into the corresponding invisible layer.
@@ -1878,8 +1876,7 @@ void SwDrawContact::ConnectToLayout( const SwFormatAnchor* pAnch )
                         else
                         {
                             const SwNode& rIdx = *pAnch->GetAnchorNode();
-                            SwFrameFormats& rFormats = *(pDrawFrameFormat->GetDoc()->GetSpzFrameFormats());
-                            for( auto pFlyFormat : rFormats )
+                            for(sw::SpzFrameFormat* pFlyFormat :*(pDrawFrameFormat->GetDoc()->GetSpzFrameFormats()))
                             {
                                 if( pFlyFormat->GetContent().GetContentIdx() &&
                                     rIdx == pFlyFormat->GetContent().GetContentIdx()->GetNode() )
@@ -1970,7 +1967,7 @@ void SwDrawContact::ConnectToLayout( const SwFormatAnchor* pAnch )
                                 {
                                     for (const SwAnchoredObject* pAnchoredObj : *pObjs)
                                     {
-                                        if (&pAnchoredObj->GetFrameFormat() == pFlyFormat)
+                                        if (pAnchoredObj->GetFrameFormat() == pFlyFormat)
                                         {
                                             SdrPage* pDrawPage = pAnchoredObj->GetDrawObj()->getSdrPageFromSdrObject();
                                             if (pDrawPage)
@@ -2076,9 +2073,7 @@ void SwDrawContact::ChkPage()
     else
     {
         // --> #i28701# - use methods <GetPageFrame()> and <SetPageFrame>
-        if ( GetPageFrame() )
-            GetPageFrame()->RemoveDrawObjFromPage( maAnchoredDrawObj );
-        pPg->AppendDrawObjToPage( maAnchoredDrawObj );
+        maAnchoredDrawObj.RegisterAtPage(*pPg);
         maAnchoredDrawObj.SetPageFrame( pPg );
     }
 }
@@ -2364,7 +2359,7 @@ void SwDrawVirtObj::AddToDrawingPage(SwFrame const& rAnchorFrame)
         {
             for (SwAnchoredObject const*const pAnchoredObj : *pObjs)
             {
-                if (&pAnchoredObj->GetFrameFormat() == pFlyFormat)
+                if (pAnchoredObj->GetFrameFormat() == pFlyFormat)
                 {
                     assert(dynamic_cast<SwFlyFrame const*>(pAnchoredObj));
 
@@ -2438,24 +2433,24 @@ void SwDrawVirtObj::NbcSetAnchorPos(const Point& rPnt)
 
 const tools::Rectangle& SwDrawVirtObj::GetCurrentBoundRect() const
 {
-    if (m_aOutRect.IsEmpty())
+    if (getOutRectangle().IsEmpty())
     {
         const_cast<SwDrawVirtObj*>(this)->RecalcBoundRect();
     }
 
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 const tools::Rectangle& SwDrawVirtObj::GetLastBoundRect() const
 {
-    return m_aOutRect;
+    return getOutRectangle();
 }
 
 Point SwDrawVirtObj::GetOffset() const
 {
     // do NOT use IsEmpty() here, there is already a useful offset
     // in the position
-    if (m_aOutRect == tools::Rectangle())
+    if (getOutRectangle() == tools::Rectangle())
     {
         return Point();
     }

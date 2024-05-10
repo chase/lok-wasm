@@ -64,7 +64,7 @@ ScAttrDlg::~ScAttrDlg()
 {
 }
 
-void ScAttrDlg::PageCreated(const OString& rPageId, SfxTabPage& rTabPage)
+void ScAttrDlg::PageCreated(const OUString& rPageId, SfxTabPage& rTabPage)
 {
     SfxObjectShell* pDocSh = SfxObjectShell::Current();
     SfxAllItemSet aSet(*(GetInputSetImpl()->GetPool()));
@@ -75,7 +75,7 @@ void ScAttrDlg::PageCreated(const OString& rPageId, SfxTabPage& rTabPage)
     else if (rPageId == "font" && pDocSh)
     {
         const SfxPoolItem* pInfoItem = pDocSh->GetItem( SID_ATTR_CHAR_FONTLIST );
-        assert(pInfoItem && "FontListItem  not found :-(");
+        SAL_WARN_IF(!pInfoItem, "sc.ui", "we should have a FontListItem normally here");
         if (pInfoItem)
         {
             aSet.Put (SvxFontListItem(static_cast<const SvxFontListItem*>(pInfoItem)->GetFontList(), SID_ATTR_CHAR_FONTLIST ));

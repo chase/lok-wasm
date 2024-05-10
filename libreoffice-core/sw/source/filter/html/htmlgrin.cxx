@@ -70,6 +70,7 @@
 #include <frameformats.hxx>
 
 #include <vcl/graphicfilter.hxx>
+#include <tools/UnitConversion.hxx>
 #include <tools/hostfilter.hxx>
 #include <tools/urlobj.hxx>
 #include <unotools/securityoptions.hxx>
@@ -617,19 +618,19 @@ IMAGE_SETEVENT:
     SetFrameFormatAttrs( aItemSet, HtmlFrameFormatFlags::Box, aFrameSet );
 
     Size aTwipSz( bPercentWidth ? 0 : nWidth, bPercentHeight ? 0 : nHeight );
-    if( (aTwipSz.Width() || aTwipSz.Height()) && Application::GetDefaultDevice() )
+    if( aTwipSz.Width() || aTwipSz.Height() )
     {
         if (bWidthProvided || bHeightProvided || // attributes imply pixel!
             aGraphic.GetPrefMapMode().GetMapUnit() == MapUnit::MapPixel)
         {
-            aTwipSz = Application::GetDefaultDevice()
-                    ->PixelToLogic( aTwipSz, MapMode( MapUnit::MapTwip ) );
+            aTwipSz = o3tl::convert(aTwipSz, o3tl::Length::px, o3tl::Length::twip);
         }
         else
         {   // some bitmaps may have a size in metric units (e.g. PNG); use that
             assert(aGraphic.GetPrefMapMode().GetMapUnit() < MapUnit::MapPixel);
-            aTwipSz = OutputDevice::LogicToLogic(aGraphic.GetPrefSize(),
-                    aGraphic.GetPrefMapMode(), MapMode(MapUnit::MapTwip));
+            aTwipSz = o3tl::convert(aGraphic.GetPrefSize(),
+                                    MapToO3tlLength(aGraphic.GetPrefMapMode().GetMapUnit()),
+                                    o3tl::Length::twip);
         }
     }
 
@@ -678,15 +679,15 @@ IMAGE_SETEVENT:
     bool bNeedWidth = (!bPercentWidth && !nWidth) || bRelWidthScale;
     bool bRelHeightScale = bPercentHeight && nHeight == SwFormatFrameSize::SYNCED;
     bool bNeedHeight = (!bPercentHeight && !nHeight) || bRelHeightScale;
-    if ((bNeedWidth || bNeedHeight) && !m_bFuzzing && allowAccessLink(*m_xDoc))
+    if ((bNeedWidth || bNeedHeight) && !bFuzzing && allowAccessLink(*m_xDoc))
     {
         GraphicDescriptor aDescriptor(aGraphicURL);
         if (aDescriptor.Detect(/*bExtendedInfo=*/true))
         {
             // Try to use size info from the image header before defaulting to
             // HTML_DFLT_IMG_WIDTH/HEIGHT.
-            aTwipSz = Application::GetDefaultDevice()->PixelToLogic(aDescriptor.GetSizePixel(),
-                                                                    MapMode(MapUnit::MapTwip));
+            aTwipSz
+                = o3tl::convert(aDescriptor.GetSizePixel(), o3tl::Length::px, o3tl::Length::twip);
             if (!bPercentWidth && !nWidth)
             {
                 nWidth = aTwipSz.getWidth();
@@ -1142,7 +1143,7 @@ void SwHTMLParser::InsertBodyOptions()
         LanguageType eLang = LanguageTag::convertToLanguageTypeWithFallback( aLang );
         if( LANGUAGE_DONTKNOW != eLang )
         {
-            sal_uInt16 nWhich = 0;
+            TypedWhichId<SvxLanguageItem> nWhich(0);
             switch( SvtLanguageOptions::GetScriptTypeOfLanguage( eLang ) )
             {
             case SvtScriptType::LATIN:
@@ -1462,11 +1463,10 @@ void SwHTMLParser::StripTrailingPara()
         if( pCNd && pCNd->StartOfSectionIndex() + 2 <
             pCNd->EndOfSectionIndex() && CanRemoveNode(nNodeIdx))
         {
-            const SwFrameFormats& rFrameFormatTable = *m_xDoc->GetSpzFrameFormats();
 
-            for( auto pFormat : rFrameFormatTable )
+            for(sw::SpzFrameFormat* pSpz: *m_xDoc->GetSpzFrameFormats())
             {
-                SwFormatAnchor const*const pAnchor = &pFormat->GetAnchor();
+                SwFormatAnchor const*const pAnchor = &pSpz->GetAnchor();
                 SwNode const*const pAnchorNode = pAnchor->GetAnchorNode();
                 if (pAnchorNode &&
                     ((RndStdIds::FLY_AT_PARA == pAnchor->GetAnchorId()) ||

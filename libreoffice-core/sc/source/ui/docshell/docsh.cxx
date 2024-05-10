@@ -118,7 +118,6 @@
 #include <scextopt.hxx>
 #include <compiler.hxx>
 #include <warnpassword.hxx>
-#include <optsolver.hxx>
 #include <sheetdata.hxx>
 #include <table.hxx>
 #include <tabprotection.hxx>
@@ -132,6 +131,7 @@
 #include <comphelper/processfactory.hxx>
 #include <comphelper/string.hxx>
 #include <unotools/configmgr.hxx>
+#include <unotools/mediadescriptor.hxx>
 #include <unotools/tempfile.hxx>
 #include <unotools/ucbstreamhelper.hxx>
 #include <uiitems.hxx>
@@ -161,7 +161,7 @@ using ::std::vector;
 
 constexpr OUStringLiteral pFilterSc50 = u"StarCalc 5.0";
 const char pFilterXML[]      = "StarOffice XML (Calc)";
-constexpr OUStringLiteral pFilterLotus = u"Lotus";
+constexpr OUString pFilterLotus = u"Lotus"_ustr;
 const char pFilterQPro6[]    = "Quattro Pro 6.0";
 const char16_t pFilterExcel4[] = u"MS Excel 4.0";
 const char16_t pFilterEx4Temp[] = u"MS Excel 4.0 Vorlage/Template";
@@ -171,11 +171,11 @@ const char pFilterExcel95[]  = "MS Excel 95";
 const char pFilterEx95Temp[] = "MS Excel 95 Vorlage/Template";
 const char pFilterExcel97[]  = "MS Excel 97";
 const char pFilterEx97Temp[] = "MS Excel 97 Vorlage/Template";
-constexpr OUStringLiteral pFilterDBase = u"dBase";
-constexpr OUStringLiteral pFilterDif = u"DIF";
+constexpr OUString pFilterDBase = u"dBase"_ustr;
+constexpr OUString pFilterDif = u"DIF"_ustr;
 const char16_t pFilterSylk[] = u"SYLK";
-constexpr OUStringLiteral pFilterHtml = u"HTML (StarCalc)";
-constexpr OUStringLiteral pFilterHtmlWebQ = u"calc_HTML_WebQuery";
+constexpr OUString pFilterHtml = u"HTML (StarCalc)"_ustr;
+constexpr OUString pFilterHtmlWebQ = u"calc_HTML_WebQuery"_ustr;
 const char16_t pFilterRtf[]  = u"Rich Text Format (StarCalc)";
 
 #define ShellClass_ScDocShell
@@ -455,7 +455,7 @@ void processDataStream( ScDocShell& rShell, const sc::ImportPostProcessData& rDa
         r.meInsertPos == sc::ImportPostProcessData::DataStream::InsertTop ?
         sc::DataStream::MOVE_DOWN : sc::DataStream::RANGE_DOWN;
 
-    sc::DataStream* pStrm = new sc::DataStream(&rShell, r.maURL, aTopRange, nLimit, eMove, 0);
+    sc::DataStream* pStrm = new sc::DataStream(&rShell, r.maURL, aTopRange, nLimit, eMove);
     pStrm->SetRefreshOnEmptyLine(r.mbRefreshOnEmpty);
     sc::DocumentLinkManager& rMgr = rShell.GetDocument().GetDocLinkManager();
     rMgr.setDataStream(pStrm);
@@ -466,7 +466,7 @@ class MessageWithCheck : public weld::MessageDialogController
 private:
     std::unique_ptr<weld::CheckButton> m_xWarningOnBox;
 public:
-    MessageWithCheck(weld::Window *pParent, const OUString& rUIFile, const OString& rDialogId)
+    MessageWithCheck(weld::Window *pParent, const OUString& rUIFile, const OUString& rDialogId)
         : MessageDialogController(pParent, rUIFile, rDialogId, "ask")
         , m_xWarningOnBox(m_xBuilder->weld_check_button("ask"))
     {
@@ -504,6 +504,62 @@ public:
 
 }
 
+bool ScDocShell::GetRecalcRowHeightsMode()
+{
+    const ScRecalcOptions nRecalcMode = static_cast<ScRecalcOptions>(
+        officecfg::Office::Calc::Formula::Load::RecalcOptimalRowHeightMode::get());
+
+    bool bHardRecalc = false;
+    switch (nRecalcMode)
+    {
+        case RECALC_ASK:
+        {
+            if (m_pDocument->IsUserInteractionEnabled())
+            {
+                // Ask if the user wants to perform full re-calculation.
+                MessageWithCheck aQueryBox(ScDocShell::GetActiveDialogParent(),
+                                           "modules/scalc/ui/recalcquerydialog.ui",
+                                           "RecalcQueryDialog");
+                aQueryBox.set_primary_text(ScResId(STR_QUERY_OPT_ROW_HEIGHT_RECALC_ONLOAD));
+                aQueryBox.set_default_response(RET_YES);
+
+                if (officecfg::Office::Calc::Formula::Load::RecalcOptimalRowHeightMode::isReadOnly())
+                    aQueryBox.hide_ask();
+
+                bHardRecalc = aQueryBox.run() == RET_YES;
+
+                if (aQueryBox.get_active())
+                {
+                    // Always perform selected action in the future.
+                    std::shared_ptr<comphelper::ConfigurationChanges> batch(
+                        comphelper::ConfigurationChanges::create());
+                    officecfg::Office::Calc::Formula::Load::RecalcOptimalRowHeightMode::set(
+                        bHardRecalc ? static_cast<sal_Int32>(RECALC_ALWAYS)
+                                    : static_cast<sal_Int32>(RECALC_NEVER),
+                        batch);
+
+                    ScFormulaOptions aOpt = SC_MOD()->GetFormulaOptions();
+                    aOpt.SetReCalcOptiRowHeights(bHardRecalc ? RECALC_ALWAYS : RECALC_NEVER);
+                    SC_MOD()->SetFormulaOptions(aOpt);
+
+                    batch->commit();
+                }
+            }
+        }
+        break;
+        case RECALC_ALWAYS:
+            bHardRecalc = true;
+            break;
+        case RECALC_NEVER:
+            bHardRecalc = false;
+            break;
+        default:
+            SAL_WARN("sc", "unknown optimal row height recalc option!");
+    }
+
+    return bHardRecalc;
+}
+
 bool ScDocShell::LoadXML( SfxMedium* pLoadMedium, const css::uno::Reference< css::embed::XStorage >& xStor )
 {
     LoadMediumGuard aLoadGuard(m_pDocument.get());
@@ -517,7 +573,7 @@ bool ScDocShell::LoadXML( SfxMedium* pLoadMedium, const css::uno::Reference< css
     ScXMLImportWrapper aImport(*this, pLoadMedium, xStor);
 
     bool bRet = false;
-    ErrCode nError = ERRCODE_NONE;
+    ErrCodeMsg nError = ERRCODE_NONE;
     m_pDocument->LockAdjustHeight();
     if (GetCreateMode() == SfxObjectCreateMode::ORGANIZER)
         bRet = aImport.Import(ImportFlags::Styles, nError);
@@ -532,8 +588,7 @@ bool ScDocShell::LoadXML( SfxMedium* pLoadMedium, const css::uno::Reference< css
     //if the document was not generated by LibreOffice, do hard recalc in case some other document
     //generator saved cached formula results that differ from LibreOffice's calculated results or
     //did not use cached formula results.
-    uno::Reference<document::XDocumentPropertiesSupplier> xDPS(GetModel(), uno::UNO_QUERY_THROW);
-    uno::Reference<document::XDocumentProperties> xDocProps = xDPS->getDocumentProperties();
+    uno::Reference<document::XDocumentProperties> xDocProps = GetModel()->getDocumentProperties();
 
     ScRecalcOptions nRecalcMode =
         static_cast<ScRecalcOptions>(officecfg::Office::Calc::Formula::Load::ODFRecalcMode::get());
@@ -660,11 +715,11 @@ bool ScDocShell::Load( SfxMedium& rMedium )
         }
     }
 
-    if (!bRet && !rMedium.GetError())
+    if (!bRet && !rMedium.GetErrorIgnoreWarning())
         rMedium.SetError(SVSTREAM_FILEFORMAT_ERROR);
 
-    if (rMedium.GetError())
-        SetError(rMedium.GetError());
+    if (rMedium.GetErrorIgnoreWarning())
+        SetError(rMedium.GetErrorIgnoreWarning());
 
     InitItems();
     CalcOutputFactor();
@@ -798,7 +853,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                     uno::Reference< task::XJob > xJob( xFactory->createInstanceWithContext( xContext ), uno::UNO_QUERY_THROW );
                                     ScViewData* pViewData = GetViewData();
                                     SfxViewShell* pViewShell = ( pViewData ? pViewData->GetViewShell() : nullptr );
-                                    SfxViewFrame* pViewFrame = ( pViewShell ? pViewShell->GetViewFrame() : nullptr );
+                                    SfxViewFrame* pViewFrame = ( pViewShell ? &pViewShell->GetViewFrame() : nullptr );
                                     SfxFrame* pFrame = ( pViewFrame ? &pViewFrame->GetFrame() : nullptr );
                                     uno::Reference< frame::XController > xController = ( pFrame ? pFrame->GetController() : nullptr );
                                     uno::Reference< sheet::XSpreadsheetView > xSpreadsheetView( xController, uno::UNO_QUERY_THROW );
@@ -929,7 +984,6 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                                 bChangedViewSettings = true;
                                             }
 
-                                            uno::Reference< frame::XStorable > xStor( GetModel(), uno::UNO_QUERY_THROW );
                                             // TODO/LATER: More entries from the MediaDescriptor might be interesting for the merge
                                             uno::Sequence< beans::PropertyValue > aValues{
                                                 comphelper::makePropertyValue(
@@ -937,7 +991,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                                     GetMedium()->GetFilter()->GetFilterName())
                                             };
 
-                                            const SfxStringItem* pPasswordItem = SfxItemSet::GetItem<SfxStringItem>(GetMedium()->GetItemSet(), SID_PASSWORD, false);
+                                            const SfxStringItem* pPasswordItem = GetMedium()->GetItemSet().GetItem(SID_PASSWORD, false);
                                             if ( pPasswordItem && !pPasswordItem->GetValue().isEmpty() )
                                             {
                                                 aValues.realloc( 2 );
@@ -945,7 +999,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                                 pValues[1].Name = "Password";
                                                 pValues[1].Value <<= pPasswordItem->GetValue();
                                             }
-                                            const SfxUnoAnyItem* pEncryptionItem = SfxItemSet::GetItem<SfxUnoAnyItem>(GetMedium()->GetItemSet(), SID_ENCRYPTIONDATA, false);
+                                            const SfxUnoAnyItem* pEncryptionItem = GetMedium()->GetItemSet().GetItem(SID_ENCRYPTIONDATA, false);
                                             if (pEncryptionItem)
                                             {
                                                 aValues.realloc(aValues.getLength() + 1);
@@ -955,7 +1009,7 @@ void ScDocShell::Notify( SfxBroadcaster&, const SfxHint& rHint )
                                             }
 
                                             SC_MOD()->SetInSharedDocSaving( true );
-                                            xStor->storeToURL( GetSharedFileURL(), aValues );
+                                            GetModel()->storeToURL( GetSharedFileURL(), aValues );
                                             SC_MOD()->SetInSharedDocSaving( false );
 
                                             if ( bChangedViewSettings )
@@ -1136,7 +1190,7 @@ bool ScDocShell::LoadFrom( SfxMedium& rMedium )
     return bRet;
 }
 
-static void lcl_parseHtmlFilterOption(const OUString& rOption, LanguageType& rLang, bool& rDateConvert)
+static void lcl_parseHtmlFilterOption(const OUString& rOption, LanguageType& rLang, bool& rDateConvert, bool& rScientificConvert)
 {
     OUStringBuffer aBuf;
     std::vector< OUString > aTokens;
@@ -1164,6 +1218,8 @@ static void lcl_parseHtmlFilterOption(const OUString& rOption, LanguageType& rLa
         rLang = static_cast<LanguageType>(aTokens[0].toInt32());
     if (aTokens.size() > 1)
         rDateConvert = static_cast<bool>(aTokens[1].toInt32());
+    if (aTokens.size() > 2)
+        rScientificConvert = static_cast<bool>(aTokens[2].toInt32());
 }
 
 bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
@@ -1208,10 +1264,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
         else if (aFltName == pFilterLotus)
         {
             OUString sItStr;
-            SfxItemSet*  pSet = rMedium.GetItemSet();
-            const SfxStringItem* pOptionsItem;
-            if ( pSet &&
-                (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS, true )) )
+            if ( const SfxStringItem* pOptionsItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS, true ) )
             {
                 sItStr = pOptionsItem->GetValue();
             }
@@ -1227,7 +1280,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
                                                 ScGlobal::GetCharsetValue(sItStr));
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
 
                 if( eError.IsWarning() )
@@ -1264,7 +1317,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
 
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
@@ -1272,31 +1325,12 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
             else
                 bRet = true;
         }
-        else if (aFltName == "Gnumeric Spreadsheet")
-        {
-            ScOrcusFilters* pOrcus = ScFormatFilter::Get().GetOrcusFilters();
-            if (!pOrcus)
-                return false;
-
-            bRet = pOrcus->importGnumeric(*m_pDocument, rMedium);
-        }
-        else if (aFltName == "MS Excel 2003 XML Orcus")
-        {
-            ScOrcusFilters* pOrcus = ScFormatFilter::Get().GetOrcusFilters();
-            if (!pOrcus)
-                return false;
-
-            bRet = pOrcus->importExcel2003XML(*m_pDocument, rMedium);
-        }
         else if (aFltName == SC_TEXT_CSV_FILTER_NAME)
         {
-            SfxItemSet*  pSet = rMedium.GetItemSet();
-            const SfxStringItem* pOptionsItem;
             ScAsciiOptions aOptions;
             bool bOptInit = false;
 
-            if ( pSet &&
-                (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+            if ( const SfxStringItem* pOptionsItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
             {
                 aOptions.ReadFromString( pOptionsItem->GetValue() );
                 bOptInit = true;
@@ -1332,6 +1366,14 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
                     sc::SetFormulaDirtyContext aCxt;
                     m_pDocument->SetAllFormulasDirty(aCxt);
 
+                    // tdf#82254 - check whether to include a byte-order-mark in the output
+                    if (const bool bIncludeBOM = aImpEx.GetIncludeBOM())
+                    {
+                        aOptions.SetIncludeBOM(bIncludeBOM);
+                        rMedium.GetItemSet().Put(
+                            SfxStringItem(SID_FILE_FILTEROPTIONS, aOptions.WriteToString()));
+                    }
+
                     // for mobile case, we use a copy of the original document and give it a temporary name before editing
                     // Therefore, the sheet name becomes ugly, long and nonsensical.
 #if !(defined ANDROID)
@@ -1359,12 +1401,12 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
 
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
             }
-            else if (!GetError() && (bOverflowRow || bOverflowCol || bOverflowCell))
+            else if (!GetErrorIgnoreWarning() && (bOverflowRow || bOverflowCol || bOverflowCell))
             {
                 // precedence: row, column, cell
                 ErrCode nWarn = (bOverflowRow ? SCWARN_IMPORT_ROW_OVERFLOW :
@@ -1378,10 +1420,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
         else if (aFltName == pFilterDBase)
         {
             OUString sItStr;
-            SfxItemSet*  pSet = rMedium.GetItemSet();
-            const SfxStringItem* pOptionsItem;
-            if ( pSet &&
-                (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+            if ( const SfxStringItem* pOptionsItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
             {
                 sItStr = pOptionsItem->GetValue();
             }
@@ -1401,7 +1440,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
 
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
@@ -1420,10 +1459,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
             {
                 ErrCode eError;
                 OUString sItStr;
-                SfxItemSet*  pSet = rMedium.GetItemSet();
-                const SfxStringItem* pOptionsItem;
-                if ( pSet &&
-                    (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+                if ( const SfxStringItem* pOptionsItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
                 {
                     sItStr = pOptionsItem->GetValue();
                 }
@@ -1440,7 +1476,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
                                     ScGlobal::GetCharsetValue(sItStr));
                 if (eError != ERRCODE_NONE)
                 {
-                    if (!GetError())
+                    if (!GetErrorIgnoreWarning())
                         SetError(eError);
 
                     if( eError.IsWarning() )
@@ -1484,12 +1520,12 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
 
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
             }
-            else if (!GetError() && (bOverflowRow || bOverflowCol || bOverflowCell))
+            else if (!GetErrorIgnoreWarning() && (bOverflowRow || bOverflowCol || bOverflowCell))
             {
                 // precedence: row, column, cell
                 ErrCode nWarn = (bOverflowRow ? SCWARN_IMPORT_ROW_OVERFLOW :
@@ -1506,7 +1542,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
             ErrCode eError = ScFormatFilter::Get().ScImportQuattroPro(rMedium.GetInStream(), *m_pDocument);
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
@@ -1532,7 +1568,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
                     eError = ScFormatFilter::Get().ScImportRTF( *pInStream, rMedium.GetBaseURL(), m_pDocument.get(), aRange );
                     if (eError != ERRCODE_NONE)
                     {
-                        if (!GetError())
+                        if (!GetErrorIgnoreWarning())
                             SetError(eError);
 
                         if( eError.IsWarning() )
@@ -1554,7 +1590,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
 
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
@@ -1571,13 +1607,11 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
                 {
                     LanguageType eLang = LANGUAGE_SYSTEM;
                     bool bDateConvert = false;
-                    SfxItemSet*  pSet = rMedium.GetItemSet();
-                    const SfxStringItem* pOptionsItem;
-                    if ( pSet &&
-                        (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+                    bool bScientificConvert = true;
+                    if ( const SfxStringItem* pOptionsItem = rMedium.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
                     {
                         OUString aFilterOption = pOptionsItem->GetValue();
-                        lcl_parseHtmlFilterOption(aFilterOption, eLang, bDateConvert);
+                        lcl_parseHtmlFilterOption(aFilterOption, eLang, bDateConvert, bScientificConvert);
                     }
 
                     pInStream->Seek( 0 );
@@ -1586,10 +1620,10 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
                     CalcOutputFactor();
                     SvNumberFormatter aNumFormatter( comphelper::getProcessComponentContext(), eLang);
                     eError = ScFormatFilter::Get().ScImportHTML( *pInStream, rMedium.GetBaseURL(), m_pDocument.get(), aRange,
-                                            GetOutputFactor(), !bWebQuery, &aNumFormatter, bDateConvert );
+                                            GetOutputFactor(), !bWebQuery, &aNumFormatter, bDateConvert, bScientificConvert );
                     if (eError != ERRCODE_NONE)
                     {
-                        if (!GetError())
+                        if (!GetErrorIgnoreWarning())
                             SetError(eError);
 
                         if( eError.IsWarning() )
@@ -1610,7 +1644,7 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
 
             if (eError != ERRCODE_NONE)
             {
-                if (!GetError())
+                if (!GetErrorIgnoreWarning())
                     SetError(eError);
                 if( eError.IsWarning() )
                     bRet = true;
@@ -1618,10 +1652,27 @@ bool ScDocShell::ConvertFrom( SfxMedium& rMedium )
         }
         else
         {
-            if (!GetError())
+            ScOrcusFilters* pOrcus = ScFormatFilter::Get().GetOrcusFilters();
+            if (!pOrcus)
+                return false;
+
+            switch (pOrcus->importByName(*m_pDocument, rMedium, aFltName))
             {
-                SAL_WARN("sc.filter", "No match for filter '" << aFltName << "' in ConvertFrom");
-                SetError(SCERR_IMPORT_NI);
+                case ScOrcusFilters::ImportResult::Success:
+                    bRet = true;
+                    break;
+                case ScOrcusFilters::ImportResult::Failure:
+                    bRet = false;
+                    break;
+                case ScOrcusFilters::ImportResult::NotSupported:
+                {
+                    if (!GetErrorIgnoreWarning())
+                    {
+                        SAL_WARN("sc.filter", "No match for filter '" << aFltName << "' in ConvertFrom");
+                        SetError(SCERR_IMPORT_NI);
+                    }
+                    break;
+                }
             }
         }
 
@@ -1709,27 +1760,9 @@ bool ScDocShell::LoadExternal( SfxMedium& rMed )
         if (!pOrcus)
             return false;
 
-        const OUString& rFilterName = pFilter->GetName();
-        if (rFilterName == "gnumeric")
-        {
-            if (!pOrcus->importGnumeric(*m_pDocument, rMed))
-                return false;
-        }
-        else if (rFilterName == "csv")
-        {
-            if (!pOrcus->importCSV(*m_pDocument, rMed))
-                return false;
-        }
-        else if (rFilterName == "xlsx")
-        {
-            if (!pOrcus->importXLSX(*m_pDocument, rMed))
-                return false;
-        }
-        else if (rFilterName == "ods")
-        {
-            if (!pOrcus->importODS(*m_pDocument, rMed))
-                return false;
-        }
+        auto res = pOrcus->importByName(*m_pDocument, rMed, pFilter->GetName());
+        if (res != ScOrcusFilters::ImportResult::Success)
+            return false;
 
         FinishedLoading();
         return true;
@@ -1851,19 +1884,20 @@ bool ScDocShell::SaveAs( SfxMedium& rMedium )
         bNeedsRehash = ScPassHashHelper::needsPassHashRegen(*m_pDocument, PASSHASH_SHA256);
     }
 
-    // skip saving recovery file instead of showing re-type password dialog window
-    if ( bNeedsRehash && rMedium.GetFilter()->GetFilterName() == "calc8" &&
-            // it seems, utl::MediaDescriptor::PROP_AUTOSAVEEVENT is true at Save As, too,
-            // so check the backup path
-            rMedium.GetName().startsWith( SvtPathOptions().GetBackupPath() ) )
-    {
-        SAL_WARN("sc.filter", "Should re-type password for own format, won't export recovery file");
-        rMedium.SetError(ERRCODE_SFX_WRONGPASSWORD);
-        return false;
-    }
-
     if (pViewShell && bNeedsRehash)
     {
+        bool bAutoSaveEvent = false;
+        utl::MediaDescriptor lArgs(rMedium.GetArgs());
+        lArgs[utl::MediaDescriptor::PROP_AUTOSAVEEVENT] >>= bAutoSaveEvent;
+        if (bAutoSaveEvent)
+        {
+            // skip saving recovery file instead of showing re-type password dialog window
+            SAL_WARN("sc.filter",
+                     "Should re-type password for own format, won't export recovery file");
+            rMedium.SetError(ERRCODE_SFX_WRONGPASSWORD);
+            return false;
+        }
+
         if (!pViewShell->ExecuteRetypePassDlg(PASSHASH_SHA1))
             // password re-type cancelled.  Don't save the document.
             return false;
@@ -1970,6 +2004,7 @@ void ScDocShell::AsciiSave( SvStream& rStream, const ScImportOptions& rAsciiOpt,
     bool bSaveNumberAsSuch = rAsciiOpt.bSaveNumberAsSuch;
     bool bSaveAsShown     = rAsciiOpt.bSaveAsShown;
     bool bShowFormulas    = rAsciiOpt.bSaveFormulas;
+    bool bIncludeBOM      = rAsciiOpt.bIncludeBOM;
 
     rtl_TextEncoding eOldCharSet = rStream.GetStreamCharSet();
     rStream.SetStreamCharSet( eCharSet );
@@ -1986,6 +2021,9 @@ void ScDocShell::AsciiSave( SvStream& rStream, const ScImportOptions& rAsciiOpt,
     }
     else
     {
+        // tdf#82254 - check whether to include a byte-order-mark in the output
+        if (bIncludeBOM && eCharSet == RTL_TEXTENCODING_UTF8)
+            rStream.WriteUChar(0xEF).WriteUChar(0xBB).WriteUChar(0xBF);
         aStrDelimEncoded = OString(&cStrDelim, 1, eCharSet);
         aDelimEncoded = OString(&cDelim, 1, eCharSet);
         rtl_TextEncodingInfo aInfo;
@@ -2431,13 +2469,13 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
                 whether they want to save without it. */
             if( (rMed.GetFilter()->GetFilterFlags() & SfxFilterFlags::ENCRYPTION) == SfxFilterFlags::NONE )
             {
-                SfxItemSet* pItemSet = rMed.GetItemSet();
-                if( pItemSet && pItemSet->GetItemState( SID_PASSWORD ) == SfxItemState::SET )
+                SfxItemSet& rItemSet = rMed.GetItemSet();
+                if( rItemSet.GetItemState( SID_PASSWORD ) == SfxItemState::SET )
                 {
                     bDoSave = ScWarnPassword::WarningOnPassword( rMed );
                     // #i42858# remove password from medium (warn only one time)
                     if( bDoSave )
-                        pItemSet->ClearItem( SID_PASSWORD );
+                        rItemSet.ClearItem( SID_PASSWORD );
                 }
             }
 
@@ -2455,7 +2493,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
                 eFormat = ExpBiff8;
             ErrCode eError = ScFormatFilter::Get().ScExportExcel5( rMed, m_pDocument.get(), eFormat, RTL_TEXTENCODING_MS_1252 );
 
-            if( eError && !GetError() )
+            if( eError && !GetErrorIgnoreWarning() )
                 SetError(eError);
 
             // don't return false for warnings
@@ -2470,10 +2508,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
     else if (aFltName == SC_TEXT_CSV_FILTER_NAME)
     {
         OUString sItStr;
-        SfxItemSet*  pSet = rMed.GetItemSet();
-        const SfxStringItem* pOptionsItem;
-        if ( pSet &&
-            (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+        if ( const SfxStringItem* pOptionsItem = rMed.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
         {
             sItStr = pOptionsItem->GetValue();
         }
@@ -2589,7 +2624,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
                 bRet = true;
 
                 if (m_pDocument->GetTableCount() > 1)
-                    if (!rMed.GetError())
+                    if (!rMed.GetErrorIgnoreWarning())
                         rMed.SetError(SCWARN_EXPORT_ASCII);
             }
         }
@@ -2597,10 +2632,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
     else if (aFltName == pFilterDBase)
     {
         OUString sCharSet;
-        SfxItemSet* pSet = rMed.GetItemSet();
-        const SfxStringItem* pOptionsItem;
-        if ( pSet &&
-            (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+        if ( const SfxStringItem* pOptionsItem = rMed.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
         {
             sCharSet = pOptionsItem->GetValue();
         }
@@ -2618,7 +2650,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
         rMed.CloseOutStream();
         bool bHasMemo = false;
 
-        ErrCode eError = DBaseExport(
+        ErrCodeMsg eError = DBaseExport(
             rMed.GetPhysicalName(), ScGlobal::GetCharsetValue(sCharSet), bHasMemo);
 
         INetURLObject aTmpFile( rMed.GetPhysicalName(), INetProtocol::File );
@@ -2626,7 +2658,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
             aTmpFile.setExtension(u"dbt");
         if ( eError != ERRCODE_NONE && !eError.IsWarning() )
         {
-            if (!GetError())
+            if (!GetErrorIgnoreWarning())
                 SetError(eError);
             if ( bHasMemo && IsDocument( aTmpFile ) )
                 KillFile( aTmpFile );
@@ -2636,7 +2668,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
             bRet = true;
             if ( bHasMemo )
             {
-                const SfxStringItem* pNameItem = rMed.GetItemSet()->GetItem<SfxStringItem>( SID_FILE_NAME );
+                const SfxStringItem* pNameItem = rMed.GetItemSet().GetItem<SfxStringItem>( SID_FILE_NAME );
                 assert(pNameItem && "SID_FILE_NAME is required");
                 INetURLObject aDbtFile( pNameItem->GetValue(), INetProtocol::File );
                 aDbtFile.setExtension(u"dbt");
@@ -2646,7 +2678,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
                 if (aDbtFile.GetMainURL( INetURLObject::DecodeMechanism::Unambiguous ) ==
                     aTmpFile.GetMainURL( INetURLObject::DecodeMechanism::Unambiguous ))
                 {
-                    if (eError != ERRCODE_NONE && !GetError())
+                    if (eError != ERRCODE_NONE && !GetErrorIgnoreWarning())
                         SetError(eError);
                     return bRet;
                 }
@@ -2662,7 +2694,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
                         eError = SCERR_EXPORT_DATA;
                 }
             }
-            if (eError != ERRCODE_NONE && !GetError())
+            if (eError != ERRCODE_NONE && !GetErrorIgnoreWarning())
                 SetError(eError);
         }
     }
@@ -2672,10 +2704,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
         if (pStream)
         {
             OUString sItStr;
-            SfxItemSet*  pSet = rMed.GetItemSet();
-            const SfxStringItem* pOptionsItem;
-            if ( pSet &&
-                (pOptionsItem = pSet->GetItemIfSet( SID_FILE_FILTEROPTIONS )) )
+            if ( const SfxStringItem* pOptionsItem = rMed.GetItemSet().GetItemIfSet( SID_FILE_FILTEROPTIONS ) )
             {
                 sItStr = pOptionsItem->GetValue();
             }
@@ -2694,7 +2723,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
             bRet = true;
 
             if (m_pDocument->GetTableCount() > 1)
-                if (!rMed.GetError())
+                if (!rMed.GetErrorIgnoreWarning())
                     rMed.SetError(SCWARN_EXPORT_ASCII);
         }
     }
@@ -2720,10 +2749,9 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
         SvStream* pStream = rMed.GetOutStream();
         if ( pStream )
         {
-            SfxItemSet* pSet = rMed.GetItemSet();
             OUString sFilterOptions;
 
-            if (const SfxStringItem* pOptionsItem = pSet->GetItemIfSet(SID_FILE_FILTEROPTIONS))
+            if (const SfxStringItem* pOptionsItem = rMed.GetItemSet().GetItemIfSet(SID_FILE_FILTEROPTIONS))
                 sFilterOptions = pOptionsItem->GetValue();
 
             weld::WaitObject aWait(GetActiveDialogParent());
@@ -2733,7 +2761,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
             bRet = aImExport.ExportStream(*pStream, rMed.GetBaseURL(true), SotClipboardFormatId::HTML);
             if (bRet && !aImExport.GetNonConvertibleChars().isEmpty())
             {
-                SetError(*new StringErrorInfo(
+                SetError(ErrCodeMsg(
                     SCWARN_EXPORT_NONCONVERTIBLE_CHARS,
                     aImExport.GetNonConvertibleChars(),
                     DialogMask::ButtonsOk | DialogMask::MessageInfo));
@@ -2742,7 +2770,7 @@ bool ScDocShell::ConvertTo( SfxMedium &rMed )
     }
     else
     {
-        if (GetError())
+        if (GetErrorIgnoreWarning())
             SetError(SCERR_IMPORT_NI);
     }
     return bRet;
@@ -2962,7 +2990,6 @@ ScDocShell::~ScDocShell()
 
     m_pPaintLockData.reset();
 
-    m_pSolverSaveData.reset();
     m_pSheetSaveData.reset();
     m_pFormatSaveData.reset();
     m_pOldAutoDBRange.reset();
@@ -3124,11 +3151,6 @@ weld::Window* ScDocShell::GetActiveDialogParent()
     if ( pViewSh )
         return pViewSh->GetDialogParent();
     return Application::GetDefDialogParent();
-}
-
-void ScDocShell::SetSolverSaveData( std::unique_ptr<ScOptSolverSave> pData )
-{
-    m_pSolverSaveData = std::move(pData);
 }
 
 ScSheetSaveData* ScDocShell::GetSheetSaveData()

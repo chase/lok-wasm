@@ -140,6 +140,30 @@ public:
     RedlineUnDelText(sal_Int32 nS, sal_Int32 nL);
 };
 
+/** DocPosUpdate is sent to signal that only the frames from or to a specified document-global position
+   have to be updated. At the moment this is only needed when updating pagenumber fields. */
+class DocPosUpdate final : public SfxHint
+{
+public:
+    const SwTwips m_nDocPos;
+    DocPosUpdate(const SwTwips nDocPos)
+        : SfxHint(SfxHintId::SwDocPosUpdate)
+        , m_nDocPos(nDocPos)
+    {};
+};
+class DocPosUpdateAtIndex final : public SfxHint
+{
+public:
+    const SwTwips m_nDocPos;
+    const SwTextNode& m_rNode;
+    const sal_uInt32 m_nIndex;
+    DocPosUpdateAtIndex(const SwTwips nDocPos, const SwTextNode& rNode, sal_uInt32 nIndex)
+        : SfxHint(SfxHintId::SwDocPosUpdateAtIndex)
+        , m_nDocPos(nDocPos)
+        , m_rNode(rNode)
+        , m_nIndex(nIndex)
+    {};
+};
 class CondCollCondChg final : public SfxHint
 {
 public:
@@ -153,10 +177,24 @@ class GrfRereadAndInCacheHint final : public SfxHint
 
 class PreGraphicArrivedHint final : public SfxHint
 {
+public:
+    PreGraphicArrivedHint() : SfxHint(SfxHintId::SwPreGraphicArrived) {}
 };
 
 class PostGraphicArrivedHint final : public SfxHint
 {
+};
+
+class GraphicPieceArrivedHint final : public SfxHint
+{
+public:
+    GraphicPieceArrivedHint() : SfxHint(SfxHintId::SwGraphicPieceArrived) {}
+};
+
+class LinkedGraphicStreamArrivedHint final : public SfxHint
+{
+public:
+    LinkedGraphicStreamArrivedHint() : SfxHint(SfxHintId::SwLinkedGraphicStreamArrived) {}
 };
 
 class MoveTableLineHint final : public SfxHint
@@ -198,13 +236,65 @@ class NameChanged final : public SfxHint
 public:
     const OUString m_sOld;
     const OUString m_sNew;
-    NameChanged(const OUString& rOld, const OUString& rNew) : SfxHint(SfxHintId::NameChanged), m_sOld(rOld), m_sNew(rNew) {};
+    NameChanged(const OUString& rOld, const OUString& rNew) : SfxHint(SfxHintId::SwNameChanged), m_sOld(rOld), m_sNew(rNew) {};
+};
+class TitleChanged final : public SfxHint
+{
+public:
+    const OUString m_sOld;
+    const OUString m_sNew;
+    TitleChanged(const OUString& rOld, const OUString& rNew) : SfxHint(SfxHintId::SwTitleChanged), m_sOld(rOld), m_sNew(rNew) {};
+};
+class DescriptionChanged final : public SfxHint
+{
+public:
+    DescriptionChanged() : SfxHint(SfxHintId::SwDescriptionChanged) {}
 };
 class SectionHidden final: public SfxHint
 {
 public:
     const bool m_isHidden;
     SectionHidden(const bool isHidden = true) : SfxHint(SfxHintId::SwSectionHidden), m_isHidden(isHidden) {};
+};
+class TableHeadingChange final: public SfxHint
+{
+public:
+    TableHeadingChange() : SfxHint(SfxHintId::SwTableHeadingChange) {};
+};
+class VirtPageNumHint final: public SfxHint
+{
+    const SwPageFrame* m_pPage;
+    const SwPageFrame* m_pOrigPage;
+    const SwFrame* m_pFrame;
+    bool m_bFound;
+    /** Multiple attributes can be attached to a single paragraph / table
+     The frame, in the end, has to decide which attribute takes effect and which physical page it involves */
+public:
+    VirtPageNumHint(const SwPageFrame* pPg);
+    const SwPageFrame* GetPage() const
+        { return m_pPage; }
+    const SwPageFrame* GetOrigPage() const
+        { return m_pOrigPage; }
+    const SwFrame* GetFrame() const
+        { return m_pFrame; }
+    void SetInfo(const SwPageFrame* pPg, const SwFrame *pF)
+        { m_pFrame = pF; m_pPage = pPg; }
+    void SetFound()
+    {
+        assert(!m_bFound);
+        m_bFound = true;
+    }
+    bool IsFound()
+        { return m_bFound; }
+};
+class AutoFormatUsedHint final : public SfxHint
+{
+    bool& m_isUsed;
+    const SwNodes& m_rNodes;
+public:
+    AutoFormatUsedHint(bool& isUsed, const SwNodes& rNodes) : SfxHint(SfxHintId::SwAutoFormatUsedHint), m_isUsed(isUsed), m_rNodes(rNodes) {}
+    void SetUsed() const { m_isUsed = true; }
+    void CheckNode(const SwNode*) const;
 };
 }
 
@@ -241,30 +331,6 @@ public:
     }
 };
 
-/** SwRefMarkFieldUpdate is sent when the referencemarks should be updated.
-     To determine Page- / chapternumbers the current frame has to be asked.
-      For this we need the current outputdevice */
-class SwRefMarkFieldUpdate final : public SwMsgPoolItem
-{
-    VclPtr<OutputDevice> pOut; ///< pointer to the current output device
-public:
-    /** Is sent if reference marks should be updated.
-
-        To get the page/chapter number, the frame has to be asked. For that we need
-        the current OutputDevice.
-    */
-    SwRefMarkFieldUpdate( OutputDevice* );
-};
-
-/** SwDocPosUpdate is sent to signal that only the frames from or to a specified document-global position
-   have to be updated. At the moment this is only needed when updating pagenumber fields. */
-class SwDocPosUpdate final : public SwMsgPoolItem
-{
-public:
-    const SwTwips nDocPos;
-    SwDocPosUpdate( const SwTwips nDocPos );
-};
-
 /// SwTableFormulaUpdate is sent when the table has to be newly calculated or when a table itself is merged or split
 enum TableFormulaUpdateFlags { TBL_CALC = 0,
                          TBL_BOXNAME,
@@ -273,7 +339,7 @@ enum TableFormulaUpdateFlags { TBL_CALC = 0,
                          TBL_MERGETBL,
                          TBL_SPLITTBL
                        };
-class SwTableFormulaUpdate final : public SwMsgPoolItem
+class SwTableFormulaUpdate final
 {
 public:
     const SwTable* m_pTable;         ///< Pointer to the current table
@@ -281,7 +347,6 @@ public:
         const SwTable* pDelTable;  ///< Merge: Pointer to the table to be removed
         const OUString* pNewTableNm; ///< Split: the name of the new table
     } m_aData;
-    SwHistory* m_pHistory;
     sal_uInt16 m_nSplitLine;       ///< Split: from this BaseLine on will be split
     TableFormulaUpdateFlags m_eFlags;
     bool m_bModified : 1;
@@ -289,14 +354,6 @@ public:
 
     /** Is sent if a table should be recalculated */
     SwTableFormulaUpdate( const SwTable* );
-};
-
-class SwAutoFormatGetDocNode final : public SwMsgPoolItem
-{
-public:
-    const SwNodes* pNodes;
-
-    SwAutoFormatGetDocNode( const SwNodes* pNds );
 };
 
 /*
@@ -329,22 +386,6 @@ public:
 #endif
 };
 
-class SwVirtPageNumInfo final : public SwMsgPoolItem
-{
-    const SwPageFrame *m_pPage;
-    const SwPageFrame *m_pOrigPage;
-    const SwFrame     *m_pFrame;
-    /** Multiple attributes can be attached to a single paragraph / table
-     The frame, in the end, has to decide which attribute takes effect and which physical page it involves */
-public:
-    SwVirtPageNumInfo( const SwPageFrame *pPg );
-
-    const SwPageFrame *GetPage() const          { return m_pPage;    }
-    const SwPageFrame *GetOrigPage() const      { return m_pOrigPage;}
-    const SwFrame *GetFrame() const             { return m_pFrame; }
-    void  SetInfo( const SwPageFrame *pPg,
-                   const SwFrame *pF )    { m_pFrame = pF; m_pPage = pPg; }
-};
 
 class SwFindNearestNode final : public SwMsgPoolItem
 {
@@ -356,17 +397,6 @@ public:
     const SwNode* GetFoundNode() const { return m_pFound; }
 };
 
-class SwStringMsgPoolItem final : public SwMsgPoolItem
-{
-    OUString m_sStr;
-public:
-
-    const OUString& GetString() const { return m_sStr; }
-
-    SwStringMsgPoolItem( sal_uInt16 nId, OUString aStr )
-        : SwMsgPoolItem( nId ), m_sStr(std::move( aStr ))
-    {}
-};
 #endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

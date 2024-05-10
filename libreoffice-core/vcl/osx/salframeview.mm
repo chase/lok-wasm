@@ -19,6 +19,8 @@
 
 #include <sal/config.h>
 
+#include <memory>
+
 #include <sal/macros.h>
 #include <tools/helpers.hxx>
 #include <tools/long.hxx>
@@ -165,11 +167,58 @@ static AquaSalFrame* getMouseContainerFrame()
     return pDispatchFrame;
 }
 
+static NSArray *getMergedAccessibilityChildren(NSArray *pDefaultChildren, NSArray *pUnignoredChildrenToAdd)
+{
+    NSArray *pRet = pDefaultChildren;
+
+    if (pUnignoredChildrenToAdd && [pUnignoredChildrenToAdd count])
+    {
+        NSMutableArray *pNewChildren = [NSMutableArray arrayWithCapacity:(pRet ? [pRet count] : 0) + 1];
+        if (pNewChildren)
+        {
+            if (pRet)
+                [pNewChildren addObjectsFromArray:pRet];
+
+            for (AquaA11yWrapper *pWrapper : pUnignoredChildrenToAdd)
+            {
+                if (pWrapper && ![pNewChildren containsObject:pWrapper])
+                    [pNewChildren addObject:pWrapper];
+            }
+
+            pRet = pNewChildren;
+        }
+        else
+        {
+            pRet = pUnignoredChildrenToAdd;
+        }
+    }
+
+    return pRet;
+}
+
+// Update ImplGetSVData()->mpWinData->mbIsLiveResize
+static void updateWinDataInLiveResize(bool bInLiveResize)
+{
+    ImplSVData* pSVData = ImplGetSVData();
+    assert( pSVData );
+    if ( pSVData )
+    {
+        if ( pSVData->mpWinData->mbIsLiveResize != bInLiveResize )
+        {
+            pSVData->mpWinData->mbIsLiveResize = bInLiveResize;
+            Scheduler::Wakeup();
+        }
+    }
+}
+
+@interface NSResponder (SalFrameWindow)
+-(BOOL)accessibilityIsIgnored;
+@end
+
 @implementation SalFrameWindow
 -(id)initWithSalFrame: (AquaSalFrame*)pFrame
 {
     mDraggingDestinationHandler = nil;
-    mbInLiveResize = NO;
     mbInWindowDidResize = NO;
     mpLiveResizeTimer = nil;
     mpFrame = pFrame;
@@ -339,7 +388,6 @@ static AquaSalFrame* getMouseContainerFrame()
 
 -(void)windowDidResize: (NSNotification*)pNotification
 {
-    (void)pNotification;
     SolarMutexGuard aGuard;
 
     if ( mbInWindowDidResize )
@@ -352,23 +400,9 @@ static AquaSalFrame* getMouseContainerFrame()
         mpFrame->UpdateFrameGeometry();
         mpFrame->CallCallback( SalEvent::Resize, nullptr );
 
-        bool bInLiveResize = [self inLiveResize];
-        ImplSVData* pSVData = ImplGetSVData();
-        assert( pSVData );
-        if ( pSVData )
+        updateWinDataInLiveResize( [self inLiveResize] );
+        if ( ImplGetSVData()->mpWinData->mbIsLiveResize )
         {
-            const bool bWasLiveResize = pSVData->mpWinData->mbIsLiveResize;
-            if ( bWasLiveResize != bInLiveResize )
-            {
-                pSVData->mpWinData->mbIsLiveResize = bInLiveResize;
-                Scheduler::Wakeup();
-            }
-        }
-
-        if ( bInLiveResize || mbInLiveResize )
-        {
-            mbInLiveResize = bInLiveResize;
-
 #if HAVE_FEATURE_SKIA
             // Related: tdf#152703 Eliminate empty window with Skia/Metal while resizing
             // The window will clear its background so when Skia/Metal is
@@ -407,7 +441,7 @@ static AquaSalFrame* getMouseContainerFrame()
             [self setMinSize:aMinSize];
             [self setMaxSize:aMaxSize];
 
-            if ( mbInLiveResize )
+            if ( ImplGetSVData()->mpWinData->mbIsLiveResize )
             {
                 // tdf#152703 Force repaint after live resizing ends
                 // Repost this notification so that this selector will be called
@@ -431,8 +465,12 @@ static AquaSalFrame* getMouseContainerFrame()
         else
         {
             [self clearLiveResizeTimer];
-            mpFrame->SendPaintEvent();
         }
+
+        // tdf#158461 eliminate flicker during live resizing
+        // When using Skia/Metal, the window content will flicker while
+        // live resizing a window if we don't send a paint event.
+        mpFrame->SendPaintEvent();
     }
 
     mbInWindowDidResize = NO;
@@ -528,6 +566,20 @@ static AquaSalFrame* getMouseContainerFrame()
 #endif
 }
 
+-(void)windowWillStartLiveResize:(NSNotification *)pNotification
+{
+    SolarMutexGuard aGuard;
+
+    updateWinDataInLiveResize(true);
+}
+
+-(void)windowDidEndLiveResize:(NSNotification *)pNotification
+{
+    SolarMutexGuard aGuard;
+
+    updateWinDataInLiveResize(false);
+}
+
 -(void)dockMenuItemTriggered: (id)sender
 {
     (void)sender;
@@ -540,6 +592,44 @@ static AquaSalFrame* getMouseContainerFrame()
 -(css::uno::Reference < css::accessibility::XAccessibleContext >)accessibleContext
 {
     return mpFrame -> GetWindow() -> GetAccessible() -> getAccessibleContext();
+}
+
+-(BOOL)isIgnoredWindow
+{
+    SolarMutexGuard aGuard;
+
+    // Treat tooltip windows as ignored
+    if( mpFrame && AquaSalFrame::isAlive( mpFrame ) )
+        return (mpFrame->mnStyle & SalFrameStyleFlags::TOOLTIP) != SalFrameStyleFlags::NONE;
+    return YES;
+}
+
+-(id)accessibilityApplicationFocusedUIElement
+{
+    return [self accessibilityFocusedUIElement];
+}
+
+-(id)accessibilityFocusedUIElement
+{
+    // Treat tooltip windows as ignored
+    if ([self isIgnoredWindow])
+        return nil;
+
+    return [super accessibilityFocusedUIElement];
+}
+
+-(BOOL)accessibilityIsIgnored
+{
+    // Treat tooltip windows as ignored
+    if ([self isIgnoredWindow])
+        return YES;
+
+    return [super accessibilityIsIgnored];
+}
+
+-(BOOL)isAccessibilityElement
+{
+    return ![self accessibilityIsIgnored];
 }
 
 -(NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
@@ -616,6 +706,8 @@ static AquaSalFrame* getMouseContainerFrame()
     {
         mDraggingDestinationHandler = nil;
         mpFrame = pFrame;
+        mpChildWrapper = nil;
+        mbNeedChildWrapper = NO;
         mpLastEvent = nil;
         mMarkedRange = NSMakeRange(NSNotFound, 0);
         mSelectedRange = NSMakeRange(NSNotFound, 0);
@@ -636,6 +728,7 @@ static AquaSalFrame* getMouseContainerFrame()
 {
     [self clearLastEvent];
     [self clearLastMarkedText];
+    [self revokeWrapper];
 
     [super dealloc];
 }
@@ -688,13 +781,7 @@ static AquaSalFrame* getMouseContainerFrame()
     if (!mpFrame || !AquaSalFrame::isAlive(mpFrame))
         return;
 
-    const bool bIsLiveResize = [self inLiveResize];
-    const bool bWasLiveResize = pSVData->mpWinData->mbIsLiveResize;
-    if (bWasLiveResize != bIsLiveResize)
-    {
-        pSVData->mpWinData->mbIsLiveResize = bIsLiveResize;
-        Scheduler::Wakeup();
-    }
+    updateWinDataInLiveResize([self inLiveResize]);
 
     AquaSalGraphics* pGraphics = mpFrame->mpGraphics;
     if (pGraphics)
@@ -1008,7 +1095,7 @@ static AquaSalFrame* getMouseContainerFrame()
 
         if( dX != 0.0 )
         {
-            aEvent.mnDelta = static_cast<tools::Long>(floor(dX));
+            aEvent.mnDelta = static_cast<tools::Long>(dX < 0 ? floor(dX) : ceil(dX));
             aEvent.mnNotchDelta = (dX < 0) ? -1 : +1;
             if( aEvent.mnDelta == 0 )
                 aEvent.mnDelta = aEvent.mnNotchDelta;
@@ -1018,7 +1105,7 @@ static AquaSalFrame* getMouseContainerFrame()
         }
         if( dY != 0.0 && AquaSalFrame::isAlive( mpFrame ))
         {
-            aEvent.mnDelta = static_cast<tools::Long>(floor(dY));
+            aEvent.mnDelta = static_cast<tools::Long>(dY < 0 ? floor(dY) : ceil(dY));
             aEvent.mnNotchDelta = (dY < 0) ? -1 : +1;
             if( aEvent.mnDelta == 0 )
                 aEvent.mnDelta = aEvent.mnNotchDelta;
@@ -1067,7 +1154,7 @@ static AquaSalFrame* getMouseContainerFrame()
 
         if( dX != 0.0 )
         {
-            aEvent.mnDelta = static_cast<tools::Long>(floor(dX));
+            aEvent.mnDelta = static_cast<tools::Long>(dX < 0 ? floor(dX) : ceil(dX));
             aEvent.mnNotchDelta = (dX < 0) ? -1 : +1;
             if( aEvent.mnDelta == 0 )
                 aEvent.mnDelta = aEvent.mnNotchDelta;
@@ -1081,7 +1168,7 @@ static AquaSalFrame* getMouseContainerFrame()
         }
         if( dY != 0.0 && AquaSalFrame::isAlive( mpFrame ) )
         {
-            aEvent.mnDelta = static_cast<tools::Long>(floor(dY));
+            aEvent.mnDelta = static_cast<tools::Long>(dY < 0 ? floor(dY) : ceil(dY));
             aEvent.mnNotchDelta = (dY < 0) ? -1 : +1;
             if( aEvent.mnDelta == 0 )
                 aEvent.mnDelta = aEvent.mnNotchDelta;
@@ -1982,7 +2069,7 @@ static AquaSalFrame* getMouseContainerFrame()
         // Skip the posting of SalEvent::ExtTextInput and
         // SalEvent::EndExtTextInput events for private use area characters.
         NSUInteger nLen = [pChars length];
-        unichar pBuf[ nLen + 1 ];
+        auto const pBuf = std::make_unique<unichar[]>( nLen + 1 );
         NSUInteger nBufLen = 0;
         for ( NSUInteger i = 0; i < nLen; i++ )
         {
@@ -1994,7 +2081,7 @@ static AquaSalFrame* getMouseContainerFrame()
         }
         pBuf[nBufLen] = 0;
 
-        pNewMarkedText = [NSString stringWithCharacters:pBuf length:nBufLen];
+        pNewMarkedText = [NSString stringWithCharacters:pBuf.get() length:nBufLen];
         if (!pNewMarkedText || ![pNewMarkedText length])
             bNeedsExtTextInput = false;
     }
@@ -2061,16 +2148,13 @@ static AquaSalFrame* getMouseContainerFrame()
 
 -(css::accessibility::XAccessibleContext *)accessibleContext
 {
-    if ( !maReferenceWrapper.rAccessibleContext ) {
-        // some frames never become visible ..
-        vcl::Window *pWindow = mpFrame -> GetWindow();
-        if ( ! pWindow )
-            return nil;
+    SolarMutexGuard aGuard;
 
-        maReferenceWrapper.rAccessibleContext =  pWindow -> /*GetAccessibleChildWindow( 0 ) ->*/ GetAccessible() -> getAccessibleContext();
-        [ AquaA11yFactory insertIntoWrapperRepository: self forAccessibleContext: maReferenceWrapper.rAccessibleContext ];
-    }
-    return [ super accessibleContext ];
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibleContext];
+
+    return nil;
 }
 
 -(NSWindow*)windowForParent
@@ -2219,6 +2303,291 @@ static AquaSalFrame* getMouseContainerFrame()
 
         [self unmarkText];
     }
+}
+
+-(void)insertRegisteredWrapperIntoWrapperRepository
+{
+    SolarMutexGuard aGuard;
+
+    if (!mbNeedChildWrapper)
+        return;
+
+    vcl::Window *pWindow = mpFrame->GetWindow();
+    if (!pWindow)
+        return;
+
+    mbNeedChildWrapper = NO;
+
+    ::com::sun::star::uno::Reference< ::com::sun::star::accessibility::XAccessibleContext > xAccessibleContext( pWindow->GetAccessible()->getAccessibleContext() );
+    assert(!mpChildWrapper);
+    mpChildWrapper = [[SalFrameViewA11yWrapper alloc] initWithParent:self accessibleContext:xAccessibleContext];
+    [AquaA11yFactory insertIntoWrapperRepository:mpChildWrapper forAccessibleContext:xAccessibleContext];
+}
+
+-(void)registerWrapper
+{
+    [self revokeWrapper];
+
+    mbNeedChildWrapper = YES;
+}
+
+-(void)revokeWrapper
+{
+    mbNeedChildWrapper = NO;
+
+    if (mpChildWrapper)
+    {
+        [AquaA11yFactory revokeWrapper:mpChildWrapper];
+        [mpChildWrapper setAccessibilityParent:nil];
+        [mpChildWrapper release];
+        mpChildWrapper = nil;
+    }
+}
+
+-(id)accessibilityAttributeValue:(NSString *)pAttribute
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityAttributeValue:pAttribute];
+    else
+        return nil;
+}
+
+-(BOOL)accessibilityIsIgnored
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityIsIgnored];
+    else
+        return YES;
+}
+
+-(NSArray *)accessibilityAttributeNames
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityAttributeNames];
+    else
+        return [NSArray array];
+}
+
+-(BOOL)accessibilityIsAttributeSettable:(NSString *)pAttribute
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityIsAttributeSettable:pAttribute];
+    else
+        return NO;
+}
+
+-(NSArray *)accessibilityParameterizedAttributeNames
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityParameterizedAttributeNames];
+    else
+        return [NSArray array];
+}
+
+-(BOOL)accessibilitySetOverrideValue:(id)pValue forAttribute:(NSString *)pAttribute
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilitySetOverrideValue:pValue forAttribute:pAttribute];
+    else
+        return NO;
+}
+
+-(void)accessibilitySetValue:(id)pValue forAttribute:(NSString *)pAttribute
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        [mpChildWrapper accessibilitySetValue:pValue forAttribute:pAttribute];
+}
+
+-(id)accessibilityAttributeValue:(NSString *)pAttribute forParameter:(id)pParameter
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityAttributeValue:pAttribute forParameter:pParameter];
+    else
+        return nil;
+}
+
+-(id)accessibilityFocusedUIElement
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityFocusedUIElement];
+    else
+        return nil;
+}
+
+-(NSString *)accessibilityActionDescription:(NSString *)pAction
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityActionDescription:pAction];
+    else
+        return nil;
+}
+
+-(void)accessibilityPerformAction:(NSString *)pAction
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        [mpChildWrapper accessibilityPerformAction:pAction];
+}
+
+-(NSArray *)accessibilityActionNames
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityActionNames];
+    else
+        return [NSArray array];
+}
+
+-(id)accessibilityHitTest:(NSPoint)aPoint
+{
+    SolarMutexGuard aGuard;
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        return [mpChildWrapper accessibilityHitTest:aPoint];
+    else
+        return nil;
+}
+
+-(id)accessibilityParent
+{
+    return [self window];
+}
+
+-(NSArray *)accessibilityVisibleChildren
+{
+    return [self accessibilityChildren];
+}
+
+-(NSArray *)accessibilitySelectedChildren
+{
+    SolarMutexGuard aGuard;
+
+    NSArray *pRet = [super accessibilityChildren];
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        pRet = getMergedAccessibilityChildren(pRet, [mpChildWrapper accessibilitySelectedChildren]);
+
+    return pRet;
+}
+
+-(NSArray *)accessibilityChildren
+{
+    SolarMutexGuard aGuard;
+
+    NSArray *pRet = [super accessibilityChildren];
+
+    [self insertRegisteredWrapperIntoWrapperRepository];
+    if (mpChildWrapper)
+        pRet = getMergedAccessibilityChildren(pRet, [mpChildWrapper accessibilityChildren]);
+
+    return pRet;
+}
+
+-(NSArray <id<NSAccessibilityElement>> *)accessibilityChildrenInNavigationOrder
+{
+    return [self accessibilityChildren];
+}
+
+@end
+
+@implementation SalFrameViewA11yWrapper
+
+-(id)initWithParent:(SalFrameView *)pParentView accessibleContext:(::com::sun::star::uno::Reference< ::com::sun::star::accessibility::XAccessibleContext >&)rxAccessibleContext
+{
+    [super init];
+
+    maReferenceWrapper.rAccessibleContext = rxAccessibleContext;
+
+    mpParentView = pParentView;
+    if (mpParentView)
+    {
+        [mpParentView retain];
+        [self setAccessibilityParent:mpParentView];
+    }
+
+    return self;
+}
+
+-(void)dealloc
+{
+    if (mpParentView)
+        [mpParentView release];
+
+    [super dealloc];
+}
+
+-(id)parentAttribute
+{
+    if (mpParentView)
+        return NSAccessibilityUnignoredAncestor(mpParentView);
+    else
+        return nil;
+}
+
+-(void)setAccessibilityParent:(id)pObject
+{
+    if (mpParentView)
+    {
+        [mpParentView release];
+        mpParentView = nil;
+    }
+
+    if (pObject && [pObject isKindOfClass:[SalFrameView class]])
+    {
+        mpParentView = static_cast<SalFrameView *>(pObject);
+        [mpParentView retain];
+    }
+
+    [super setAccessibilityParent:mpParentView];
+}
+
+-(id)windowAttribute
+{
+    if (mpParentView)
+        return [mpParentView window];
+    else
+        return nil;
+}
+
+-(NSWindow *)windowForParent
+{
+    return [self windowAttribute];
 }
 
 @end

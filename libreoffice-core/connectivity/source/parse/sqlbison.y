@@ -156,6 +156,7 @@ using namespace connectivity;
 %token <pParseNode> SQL_TOKEN_DAYNAME  SQL_TOKEN_DAYOFMONTH  SQL_TOKEN_DAYOFWEEK  SQL_TOKEN_DAYOFYEAR SQL_TOKEN_EXTRACT
 %token <pParseNode> SQL_TOKEN_HOUR SQL_TOKEN_MILLISECOND SQL_TOKEN_MINUTE  SQL_TOKEN_MONTH  SQL_TOKEN_MONTHNAME SQL_TOKEN_NOW SQL_TOKEN_QUARTER SQL_TOKEN_DATEDIFF
 %token <pParseNode> SQL_TOKEN_SECOND SQL_TOKEN_TIMESTAMPADD SQL_TOKEN_TIMESTAMPDIFF SQL_TOKEN_TIMEVALUE SQL_TOKEN_WEEK SQL_TOKEN_WEEKDAY SQL_TOKEN_YEAR SQL_TOKEN_YEARDAY
+%token <pParseNode> SQL_TOKEN_DATEADD
 
 /* numeric functions */
 %token <pParseNode> SQL_TOKEN_ABS SQL_TOKEN_ACOS SQL_TOKEN_ASIN SQL_TOKEN_ATAN SQL_TOKEN_ATAN2 SQL_TOKEN_CEILING
@@ -218,7 +219,7 @@ using namespace connectivity;
 %type <pParseNode> like_predicate opt_escape test_for_null null_predicate_part_2 in_predicate in_predicate_part_2 character_like_predicate_part_2 other_like_predicate_part_2
 %type <pParseNode> all_or_any_predicate any_all_some existence_test subquery quantified_comparison_predicate_part_2
 %type <pParseNode> scalar_exp_commalist parameter_ref literal parenthesized_boolean_value_expression
-%type <pParseNode> column_ref data_type column cursor parameter range_variable user /*like_check*/
+%type <pParseNode> column_ref data_type column cursor parameter range_variable user /*like_check*/ datetime_unit
 /* new rules at OJ */
 %type <pParseNode> derived_column as_clause table_name num_primary term num_value_exp
 %type <pParseNode> value_exp_primary num_value_fct unsigned_value_spec cast_spec set_fct_spec  scalar_subquery
@@ -1978,6 +1979,7 @@ date_function_1Argument:
 date_function:
 		SQL_TOKEN_TIMESTAMPADD
 	|	SQL_TOKEN_TIMESTAMPDIFF
+	|	SQL_TOKEN_DATEADD
 	;
 numeric_function_0Argument:
 		SQL_TOKEN_PI
@@ -2957,11 +2959,27 @@ interval_value_exp:
 */
 non_second_datetime_field:
 		SQL_TOKEN_YEAR
+	|	SQL_TOKEN_YEARDAY
 	|	SQL_TOKEN_MONTH
+	|	SQL_TOKEN_WEEK
+	|	SQL_TOKEN_WEEKDAY
 	|	SQL_TOKEN_DAY
 	|	SQL_TOKEN_HOUR
 	|	SQL_TOKEN_MINUTE
+	|	SQL_TOKEN_MILLISECOND
 	;
+
+datetime_unit:
+		SQL_TOKEN_YEAR
+	|	SQL_TOKEN_MONTH
+	|	SQL_TOKEN_WEEK
+	|	SQL_TOKEN_DAY
+	|	SQL_TOKEN_HOUR
+	|	SQL_TOKEN_MINUTE
+	|	SQL_TOKEN_SECOND
+	|	SQL_TOKEN_MILLISECOND
+	;
+
 start_field:
 		non_second_datetime_field opt_paren_precision
 		{
@@ -3093,6 +3111,13 @@ function_args_commalist:
 			else
 				YYERROR;
 		}
+	|	datetime_unit ',' function_arg ',' function_arg
+        {
+            $$ = SQL_NEW_COMMALISTRULE;
+            $$->append($1);
+            $$->append($3);
+            $$->append($5);
+        }
 	;
 
 value_exp:
@@ -4493,7 +4518,7 @@ sal_Int32			OSQLParser::s_nRefCount	= 0;
 //	::osl::Mutex		OSQLParser::s_aMutex;
 OSQLScanner*		OSQLParser::s_pScanner = nullptr;
 OSQLParseNodesGarbageCollector*		OSQLParser::s_pGarbageCollector = nullptr;
-css::uno::Reference< css::i18n::XLocaleData4>  OSQLParser::s_xLocaleData = nullptr;
+vcl::DeleteOnDeinit<css::uno::Reference< css::i18n::XLocaleData4>> OSQLParser::s_xLocaleData(vcl::DeleteOnDeinitFlag::Empty);
 
 void setParser(OSQLParser* _pParser)
 {
@@ -4502,7 +4527,6 @@ void setParser(OSQLParser* _pParser)
 
 void OSQLParser::setParseTree(OSQLParseNode* pNewParseTree)
 {
-	::osl::MutexGuard aGuard(getMutex());
 	m_pParseTree.reset(pNewParseTree);
 }
 
@@ -4574,7 +4598,7 @@ std::unique_ptr<OSQLParseNode> OSQLParser::parseTree(OUString& rErrorMessage,
 
 
 	// Guard the parsing
-	::osl::MutexGuard aGuard(getMutex());
+	std::unique_lock aGuard(getMutex());
 	// must be reset
 	setParser(this);
 

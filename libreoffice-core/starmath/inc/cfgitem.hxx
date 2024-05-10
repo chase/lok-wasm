@@ -102,7 +102,7 @@ class SmMathConfig final : public utl::ConfigItem, public SfxBroadcaster
     std::unique_ptr<SmSymbolManager> pSymbolMgr;
     bool bIsOtherModified;
     bool bIsFormatModified;
-    SmFontPickList vFontPickList[7];
+    SmFontPickList vFontPickList[8];
     sal_Int32 m_nCommitLock = 0;
 
     SmMathConfig(const SmMathConfig&) = delete;
@@ -186,6 +186,8 @@ public:
     void SetSaveOnlyUsedSymbols(bool bVal);
     bool IsAutoCloseBrackets() const;
     void SetAutoCloseBrackets(bool bVal);
+    bool IsInlineEditEnable() const;
+    void SetInlineEditEnable(bool bVal);
     bool IsIgnoreSpacesRight() const;
     void SetIgnoreSpacesRight(bool bVal);
     bool IsAutoRedraw() const;
@@ -193,8 +195,8 @@ public:
     bool IsShowFormulaCursor() const;
     void SetShowFormulaCursor(bool bVal);
 
-    sal_uInt16 GetDefaultSmSyntaxVersion() const;
-    void SetDefaultSmSyntaxVersion(sal_uInt16 nVal);
+    sal_Int16 GetDefaultSmSyntaxVersion() const;
+    void SetDefaultSmSyntaxVersion(sal_Int16 nVal);
 
     SmFontPickList& GetFontPickList(sal_uInt16 nIdent) { return vFontPickList[nIdent]; }
 

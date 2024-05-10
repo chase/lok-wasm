@@ -33,6 +33,7 @@
 #include <vector>
 #include <basic/sberrors.hxx>
 #include <comphelper/sequence.hxx>
+#include <comphelper/servicehelper.hxx>
 #include <comphelper/diagnose_ex.hxx>
 
 using namespace ::com::sun::star;
@@ -74,7 +75,7 @@ public:
             css::uno::Any anyEx(cppu::getCaughtException());
             throw lang::WrappedTargetException(
                     "Error creating ScVbaChartObject!",
-                    static_cast < OWeakObject * > ( this ),
+                    getXWeak(),
                     anyEx );
         }
         return ret;
@@ -102,7 +103,7 @@ ScVbaChartObjects::getChartObjectNames() const
     {
         // c++ hackery
         uno::Reference< uno::XInterface > xIf( xDrawPageSupplier, uno::UNO_QUERY_THROW );
-        ScCellRangesBase* pUno= dynamic_cast< ScCellRangesBase* >( xIf.get() );
+        ScCellRangesBase* pUno = dynamic_cast< ScCellRangesBase* >( xIf.get() );
         ScDocShell* pDocShell = nullptr;
         if ( !pUno )
             throw uno::RuntimeException("Failed to obtain the impl class from the drawpage" );
@@ -110,8 +111,7 @@ ScVbaChartObjects::getChartObjectNames() const
         if ( !pDocShell )
             throw uno::RuntimeException("Failed to obtain the docshell implclass" );
 
-        uno::Reference< sheet::XSpreadsheetDocument > xSpreadsheetDocument( pDocShell->GetModel(), uno::UNO_QUERY_THROW );
-        uno::Reference< sheet::XSpreadsheets > xSpreadsheets = xSpreadsheetDocument->getSheets();
+        uno::Reference< sheet::XSpreadsheets > xSpreadsheets = pDocShell->GetModel()->getSheets();
         std::vector< OUString > aChartNamesVector;
 
         const uno::Sequence< OUString > sSheetNames = xSpreadsheets->getElementNames();

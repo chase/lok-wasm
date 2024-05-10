@@ -26,13 +26,12 @@
 #include <com/sun/star/text/XTextField.hpp>
 #include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/container/XContainer.hpp>
-#include <com/sun/star/lang/XUnoTunnel.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/container/XIndexAccess.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/util/XRefreshable.hpp>
 #include <com/sun/star/util/DateTime.hpp>
-#include <comphelper/interfacecontainer3.hxx>
+#include <comphelper/interfacecontainer4.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <cppuhelper/implbase.hxx>
 #include <comphelper/compbase.hxx>
@@ -61,9 +60,9 @@ private:
     ScAddress               aCellPos;
     std::unique_ptr<ScEditSource> mpEditSource;
     /// List of refresh listeners.
-    std::unique_ptr<comphelper::OInterfaceContainerHelper3<css::util::XRefreshListener>> mpRefreshListeners;
+    comphelper::OInterfaceContainerHelper4<css::util::XRefreshListener> maRefreshListeners;
     /// mutex to lock the InterfaceContainerHelper
-    osl::Mutex              aMutex;
+    std::mutex              aMutex;
 
     css::uno::Reference<css::text::XTextField>
             GetObjectByIndex_Impl(sal_Int32 Index) const;
@@ -115,9 +114,9 @@ private:
     std::unique_ptr<ScEditSource> mpEditSource;
 
     /// List of refresh listeners.
-    std::unique_ptr<comphelper::OInterfaceContainerHelper3<css::util::XRefreshListener>> mpRefreshListeners;
+    comphelper::OInterfaceContainerHelper4<css::util::XRefreshListener> maRefreshListeners;
     /// mutex to lock the InterfaceContainerHelper
-    osl::Mutex                  aMutex;
+    std::mutex                  aMutex;
 
     css::uno::Reference< css::text::XTextField>
             GetObjectByIndex_Impl(sal_Int32 Index) const;
@@ -160,7 +159,6 @@ public:
 typedef comphelper::WeakComponentImplHelper<
                             css::text::XTextField,
                             css::beans::XPropertySet,
-                            css::lang::XUnoTunnel,
                             css::lang::XServiceInfo> ScEditFieldObj_Base;
 class ScEditFieldObj final : public ScEditFieldObj_Base
 {
@@ -231,9 +229,6 @@ public:
                                     const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
     virtual void SAL_CALL removeVetoableChangeListener( const OUString& PropertyName,
                                     const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
-
-                            // XUnoTunnel
-    UNO3_GETIMPLEMENTATION_DECL(ScEditFieldObj)
 
                             // XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;

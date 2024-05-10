@@ -1148,8 +1148,10 @@ void ScUndoPaste::DoChange(bool bUndo)
     pDocShell->PostPaint(aDrawRanges, nPaint, nExtFlags);
 
     pDocShell->PostDataChanged();
-    if (pViewShell)
-        pViewShell->CellContentChanged();
+    if (!pViewShell)
+        return;
+
+    pViewShell->CellContentChanged();
 
     if (bColsAffected || bRowsAffected)
         ScTabViewShell::notifyAllViewsSheetGeomInvalidation(
@@ -1604,11 +1606,11 @@ bool ScUndoListNames::CanRepeat(SfxRepeatTarget& rTarget) const
 }
 
 ScUndoConditionalFormat::ScUndoConditionalFormat(ScDocShell* pNewDocShell,
-        ScDocumentUniquePtr pUndoDoc, ScDocumentUniquePtr pRedoDoc, const ScRange& rRange):
+        ScDocumentUniquePtr pUndoDoc, ScDocumentUniquePtr pRedoDoc, SCTAB nTab):
     ScSimpleUndo( pNewDocShell ),
     mpUndoDoc(std::move(pUndoDoc)),
     mpRedoDoc(std::move(pRedoDoc)),
-    maRange(rRange)
+    mnTab(nTab)
 {
 }
 
@@ -1635,9 +1637,25 @@ void ScUndoConditionalFormat::DoChange(ScDocument* pSrcDoc)
 {
     ScDocument& rDoc = pDocShell->GetDocument();
 
-    rDoc.DeleteAreaTab( maRange, InsertDeleteFlags::ALL );
-    pSrcDoc->CopyToDocument(maRange, InsertDeleteFlags::ALL, false, rDoc);
-    pDocShell->PostPaint( maRange, PaintPartFlags::Grid );
+    // Restore all conditional formats in the tab. This is simpler and more reliable, than
+    // restoring formats in a specific range, and then trying to join selectively the restored
+    // formats with the other formats in the tab, to get the correct state.
+    ScRangeList aCombinedRange;
+    if (const auto* pOldList = rDoc.GetCondFormList(mnTab))
+        aCombinedRange = pOldList->GetCombinedRange();
+
+    if (const auto* pNewList = pSrcDoc->GetCondFormList(mnTab))
+    {
+        for (const auto& cond : *pNewList)
+            for (const auto& range : cond->GetRange())
+                aCombinedRange.Join(range);
+        rDoc.SetCondFormList(new ScConditionalFormatList(rDoc, *pNewList), mnTab);
+    }
+    else
+    {
+        rDoc.SetCondFormList(nullptr, mnTab);
+    }
+    pDocShell->PostPaint(aCombinedRange, PaintPartFlags::Grid);
     pDocShell->PostDataChanged();
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
     if (pViewShell)

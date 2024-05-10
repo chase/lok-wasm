@@ -368,6 +368,8 @@ struct WW8LVL   // only THE entries, WE need!
     short   nDxaLeft1;          // first line indent
 
     sal_uInt8   nNFC;               // number format code
+    /// Legal numbering: whether this level overrides the nfc of all inherited level numbers.
+    bool fLegal;
     // Offset of fieldcodes in Num-X-String
     sal_uInt8   aOfsNumsXCH[WW8ListManager::nMaxLevel];
     sal_uInt8   nLenGrpprlChpx; // length, in bytes, of the LVL's grpprlChpx
@@ -662,7 +664,15 @@ bool WW8ListManager::ReadLVL(SwNumFormat& rNumFormat, std::unique_ptr<SfxItemSet
     m_rSt.ReadUChar( aLVL.nNFC );
     m_rSt.ReadUChar( aBits1 );
     if( ERRCODE_NONE != m_rSt.GetError() ) return false;
+    // 1st..2nd bits.
     aLVL.nAlign = (aBits1 & 0x03);
+
+    if (aBits1 & 0x04)
+    {
+        // 3rd bit.
+        aLVL.fLegal = true;
+    }
+
     if( aBits1 & 0x10 ) aLVL.bV6Prev    = true;
     if( aBits1 & 0x20 ) aLVL.bV6PrSp    = true;
     if( aBits1 & 0x40 ) aLVL.bV6        = true;
@@ -898,6 +908,7 @@ bool WW8ListManager::ReadLVL(SwNumFormat& rNumFormat, std::unique_ptr<SfxItemSet
     if( bSetStartNo && 0 <= aLVL.nStartAt)
         rNumFormat.SetStart(o3tl::narrowing<sal_uInt16>(aLVL.nStartAt));
     rNumFormat.SetNumberingType( nType );
+    rNumFormat.SetIsLegal(aLVL.fLegal);
     rNumFormat.SetNumAdjust( eAdj );
 
     if( style::NumberingType::CHAR_SPECIAL == nType )
@@ -1673,10 +1684,12 @@ void UseListIndent(SwWW8StyInf &rStyle, const SwNumFormat &rFormat)
     {
         const auto nAbsLSpace = rFormat.GetAbsLSpace();
         const tools::Long nListFirstLineIndent = GetListFirstLineIndent(rFormat);
-        SvxLRSpaceItem aLR(rStyle.m_pFormat->GetFormatAttr(RES_LR_SPACE));
-        aLR.SetTextLeft(nAbsLSpace);
-        aLR.SetTextFirstLineOffset(writer_cast<short>(nListFirstLineIndent));
-        rStyle.m_pFormat->SetFormatAttr(aLR);
+        SvxFirstLineIndentItem firstLine(rStyle.m_pFormat->GetFormatAttr(RES_MARGIN_FIRSTLINE));
+        SvxTextLeftMarginItem leftMargin(rStyle.m_pFormat->GetFormatAttr(RES_MARGIN_TEXTLEFT));
+        leftMargin.SetTextLeft(nAbsLSpace);
+        firstLine.SetTextFirstLineOffset(writer_cast<short>(nListFirstLineIndent));
+        rStyle.m_pFormat->SetFormatAttr(firstLine);
+        rStyle.m_pFormat->SetFormatAttr(leftMargin);
         rStyle.m_bListRelevantIndentSet = true;
     }
 }
@@ -1686,18 +1699,20 @@ void SetStyleIndent(SwWW8StyInf &rStyle, const SwNumFormat &rFormat)
     if ( rFormat.GetPositionAndSpaceMode() != SvxNumberFormat::LABEL_WIDTH_AND_POSITION ) // #i86652#
         return;
 
-    SvxLRSpaceItem aLR(rStyle.m_pFormat->GetFormatAttr(RES_LR_SPACE));
+    SvxFirstLineIndentItem firstLine(rStyle.m_pFormat->GetFormatAttr(RES_MARGIN_FIRSTLINE));
+    SvxTextLeftMarginItem leftMargin(rStyle.m_pFormat->GetFormatAttr(RES_MARGIN_TEXTLEFT));
     if (rStyle.m_bListRelevantIndentSet)
     {
 
-        SyncIndentWithList( aLR, rFormat, false, false ); // #i103711#, #i105414#
+        SyncIndentWithList(firstLine, leftMargin, rFormat, false, false); // #i103711#, #i105414#
     }
     else
     {
-        aLR.SetTextLeft(0);
-        aLR.SetTextFirstLineOffset(0);
+        leftMargin.SetTextLeft(0);
+        firstLine.SetTextFirstLineOffset(0);
     }
-    rStyle.m_pFormat->SetFormatAttr(aLR);
+    rStyle.m_pFormat->SetFormatAttr(firstLine);
+    rStyle.m_pFormat->SetFormatAttr(leftMargin);
 }
 
 void SwWW8ImplReader::SetStylesList(sal_uInt16 nStyle, sal_uInt16 nCurrentLFO,
@@ -1743,7 +1758,9 @@ void SwWW8ImplReader::RegisterNumFormatOnStyle(sal_uInt16 nStyle)
         return;
 
     //Save old pre-list modified indent, which are the word indent values
-    rStyleInf.maWordLR.reset(rStyleInf.m_pFormat->GetFormatAttr(RES_LR_SPACE).Clone());
+    rStyleInf.m_pWordFirstLine.reset(rStyleInf.m_pFormat->GetFormatAttr(RES_MARGIN_FIRSTLINE).Clone());
+    rStyleInf.m_pWordLeftMargin.reset(rStyleInf.m_pFormat->GetFormatAttr(RES_MARGIN_TEXTLEFT).Clone());
+    rStyleInf.m_pWordRightMargin.reset(rStyleInf.m_pFormat->GetFormatAttr(RES_MARGIN_RIGHT).Clone());
 
     // Phase 2: refresh StyleDef after reading all Lists
     if (rStyleInf.m_nLFOIndex >= USHRT_MAX || rStyleInf.m_nListLevel >= WW8ListManager::nMaxLevel)
@@ -1845,12 +1862,15 @@ void SwWW8ImplReader::RegisterNumFormatOnTextNode(sal_uInt16 nCurrentLFO,
     if (!bApplyListLevelIndentDirectlyAtPara)
         return;
 
-    auto xListIndent = std::make_unique<SfxItemSet>(m_rDoc.GetAttrPool(), svl::Items<RES_LR_SPACE, RES_LR_SPACE>);
-    const SvxLRSpaceItem *pItem = static_cast<const SvxLRSpaceItem*>(
-        GetFormatAttr(RES_LR_SPACE));
+    auto pListIndent = std::make_unique<SfxItemSet>(m_rDoc.GetAttrPool(), svl::Items<RES_MARGIN_FIRSTLINE, RES_MARGIN_TEXTLEFT>);
+    const SfxPoolItem *pItem;
+    pItem = GetFormatAttr(RES_MARGIN_FIRSTLINE);
     OSL_ENSURE(pItem, "impossible");
     if (pItem)
-        xListIndent->Put(*pItem);
+        pListIndent->Put(*pItem);
+    pItem = GetFormatAttr(RES_MARGIN_TEXTLEFT);
+    if (pItem)
+        pListIndent->Put(*pItem);
 
     /*
      Take the original paragraph sprms attached to this list level
@@ -1859,7 +1879,7 @@ void SwWW8ImplReader::RegisterNumFormatOnTextNode(sal_uInt16 nCurrentLFO,
     */
     if (short nLen = static_cast< short >(aParaSprms.size()))
     {
-        std::unique_ptr<SfxItemSet> xOldCurrentItemSet(SetCurrentItemSet(std::move(xListIndent)));
+        std::unique_ptr<SfxItemSet> pOldCurrentItemSet(SetCurrentItemSet(std::move(pListIndent)));
 
         sal_uInt8* pSprms1  = aParaSprms.data();
         while (0 < nLen)
@@ -1869,13 +1889,18 @@ void SwWW8ImplReader::RegisterNumFormatOnTextNode(sal_uInt16 nCurrentLFO,
             pSprms1 += nL1;
         }
 
-        xListIndent = SetCurrentItemSet(std::move(xOldCurrentItemSet));
+        pListIndent = SetCurrentItemSet(std::move(pOldCurrentItemSet));
     }
 
-    if (const SvxLRSpaceItem *pLR = xListIndent->GetItem<SvxLRSpaceItem>(RES_LR_SPACE))
+    if (const SvxFirstLineIndentItem *const pFirstLine = pListIndent->GetItem<SvxFirstLineIndentItem>(RES_MARGIN_FIRSTLINE))
     {
-        m_xCtrlStck->NewAttr(*m_pPaM->GetPoint(), *pLR);
-        m_xCtrlStck->SetAttr(*m_pPaM->GetPoint(), RES_LR_SPACE);
+        m_xCtrlStck->NewAttr(*m_pPaM->GetPoint(), *pFirstLine);
+        m_xCtrlStck->SetAttr(*m_pPaM->GetPoint(), RES_MARGIN_FIRSTLINE);
+    }
+    if (const SvxTextLeftMarginItem *const pLeftMargin = pListIndent->GetItem<SvxTextLeftMarginItem>(RES_MARGIN_TEXTLEFT))
+    {
+        m_xCtrlStck->NewAttr(*m_pPaM->GetPoint(), *pLeftMargin);
+        m_xCtrlStck->SetAttr(*m_pPaM->GetPoint(), RES_MARGIN_TEXTLEFT);
     }
 }
 
@@ -1976,7 +2001,9 @@ void SwWW8ImplReader::Read_LFOPosition(sal_uInt16, const sal_uInt8* pData,
                 m_pCurrentColl->SetFormatAttr(*GetDfltAttr(RES_PARATR_NUMRULE));
 
                 // reset/blank the indent
-                m_pCurrentColl->SetFormatAttr(SvxLRSpaceItem(RES_LR_SPACE));
+                m_pCurrentColl->SetFormatAttr(SvxFirstLineIndentItem(RES_MARGIN_FIRSTLINE));
+                m_pCurrentColl->SetFormatAttr(SvxTextLeftMarginItem(RES_MARGIN_TEXTLEFT));
+                m_pCurrentColl->SetFormatAttr(SvxRightMarginItem(RES_MARGIN_RIGHT));
 
                 // These sprmPIlfos are supposed to indicate "cancel" numbering.
                 // Since m_nLFOPosition is "data - 1", then zero becomes USHRT_MAX
@@ -1993,19 +2020,19 @@ void SwWW8ImplReader::Read_LFOPosition(sal_uInt16, const sal_uInt8* pData,
                 pTextNode->SetAttr( aEmptyRule );
 
                 // create an empty SvxLRSpaceItem
-                std::shared_ptr<SvxLRSpaceItem> aLR(std::make_shared<SvxLRSpaceItem>(RES_LR_SPACE));
+                std::shared_ptr<SvxFirstLineIndentItem> pFirstLine(std::make_shared<SvxFirstLineIndentItem>(RES_MARGIN_FIRSTLINE));
 
                 // replace it with the one of the current node if it exist
-                const SfxPoolItem* pLR = GetFormatAttr(RES_LR_SPACE);
-                if( pLR )
-                    aLR.reset(static_cast<SvxLRSpaceItem*>(pLR->Clone()));
+                if (const SvxFirstLineIndentItem * pItem = GetFormatAttr(RES_MARGIN_FIRSTLINE))
+                    pFirstLine.reset(pItem->Clone());
 
                 // reset/blank the left indent (and only the left)
-                aLR->SetTextLeft(0);
-                aLR->SetTextFirstLineOffset(0);
+                pFirstLine->SetTextFirstLineOffset(0);
+                SvxTextLeftMarginItem leftMargin(0, RES_MARGIN_TEXTLEFT);
 
                 // apply the modified SvxLRSpaceItem to the current paragraph
-                pTextNode->SetAttr( *aLR );
+                pTextNode->SetAttr(*pFirstLine);
+                pTextNode->SetAttr(leftMargin);
             }
 
             m_nLFOPosition = USHRT_MAX;
@@ -2069,7 +2096,7 @@ bool SwWW8ImplReader::ImportFormulaControl(WW8FormulaControl &aFormula,
             if ( (68 == aRes.nSprmId) || (0x6A03 == aRes.nSprmId) )
             {
                 Read_PicLoc( aRes.nSprmId, aRes.pMemPos +
-                    m_xSprmParser->DistanceToData(aRes.nSprmId), 4);
+                    m_oSprmParser->DistanceToData(aRes.nSprmId), 4);
                 break;
             }
         }

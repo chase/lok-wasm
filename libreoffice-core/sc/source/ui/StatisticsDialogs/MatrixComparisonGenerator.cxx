@@ -43,7 +43,7 @@ ScMatrixComparisonGenerator::ScMatrixComparisonGenerator(
                                     SfxBindings* pSfxBindings, SfxChildWindow* pChildWindow,
                                     weld::Window* pParent, ScViewData& rViewData,
                                     const OUString& rUiXmlDescription,
-                                    const OString& rID)
+                                    const OUString& rID)
     : ScStatisticsInputOutputDialog(pSfxBindings, pChildWindow, pParent, rViewData, rUiXmlDescription, rID)
 {}
 
@@ -71,7 +71,7 @@ ScRange ScMatrixComparisonGenerator::ApplyOutput(ScDocShell* pDocShell)
     output.writeString(getLabel());
     output.nextColumn();
 
-    static const OUStringLiteral strWildcardNumber(u"%NUMBER%");
+    static constexpr OUString strWildcardNumber(u"%NUMBER%"_ustr);
 
     // write labels to columns
     for (size_t i = 0; i < aRangeList.size(); i++)

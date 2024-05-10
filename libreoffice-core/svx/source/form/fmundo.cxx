@@ -41,6 +41,7 @@
 #include <com/sun/star/form/binding/XListEntrySink.hpp>
 #include <com/sun/star/sdbc/XConnection.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
+#include <com/sun/star/script/XScriptListener.hpp>
 
 #include <svx/fmtools.hxx>
 #include <tools/debug.hxx>
@@ -52,6 +53,9 @@
 #include <comphelper/types.hxx>
 #include <connectivity/dbtools.hxx>
 #include <vcl/svapp.hxx>
+#include <comphelper/processfactory.hxx>
+#include <cppuhelper/implbase.hxx>
+
 
 using namespace ::com::sun::star::uno;
 using namespace ::com::sun::star::awt;
@@ -66,10 +70,6 @@ using namespace ::com::sun::star::sdbc;
 using namespace ::svxform;
 using namespace ::dbtools;
 
-
-#include <com/sun/star/script/XScriptListener.hpp>
-#include <comphelper/processfactory.hxx>
-#include <cppuhelper/implbase.hxx>
 
 namespace {
 
@@ -151,6 +151,9 @@ struct PropertyInfo
                                             // as if it's transient or persistent
 };
 
+}
+
+
 struct PropertySetInfo
 {
     typedef std::map<OUString, PropertyInfo> AllProperties;
@@ -160,17 +163,11 @@ struct PropertySetInfo
                                             // sal_False -> the set has _no_ such property or its value isn't empty
 };
 
-}
-
-typedef std::map<Reference< XPropertySet >, PropertySetInfo> PropertySetInfoCache;
-
-
 static OUString static_STR_UNDO_PROPERTY;
 
 
 FmXUndoEnvironment::FmXUndoEnvironment(FmFormModel& _rModel)
                    :rModel( _rModel )
-                   ,m_pPropertySetCache( nullptr )
                    ,m_pScriptingEnv( new svxform::FormScriptingEnvironment( _rModel ) )
                    ,m_Locks( 0 )
                    ,bReadOnly( false )
@@ -189,9 +186,6 @@ FmXUndoEnvironment::~FmXUndoEnvironment()
 {
     if ( !m_bDisposed )   // i120746, call FormScriptingEnvironment::dispose to avoid memory leak
         m_pScriptingEnv->dispose();
-
-    if (m_pPropertySetCache)
-        delete static_cast<PropertySetInfoCache*>(m_pPropertySetCache);
 }
 
 void FmXUndoEnvironment::dispose()
@@ -515,10 +509,9 @@ void SAL_CALL FmXUndoEnvironment::disposing(const EventObject& e)
         Reference< XPropertySet > xSourceSet(e.Source, UNO_QUERY);
         if (xSourceSet.is())
         {
-            PropertySetInfoCache* pCache = static_cast<PropertySetInfoCache*>(m_pPropertySetCache);
-            PropertySetInfoCache::iterator aSetPos = pCache->find(xSourceSet);
-            if (aSetPos != pCache->end())
-                pCache->erase(aSetPos);
+            PropertySetInfoCache::iterator aSetPos = m_pPropertySetCache->find(xSourceSet);
+            if (aSetPos != m_pPropertySetCache->end())
+                m_pPropertySetCache->erase(aSetPos);
         }
     }
 }
@@ -536,11 +529,11 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
             return;
 
         // if it's a "default value" property of a control model, set the according "value" property
-        static constexpr rtl::OUStringConstExpr pDefaultValueProperties[] = {
+        static constexpr OUString pDefaultValueProperties[] = {
             FM_PROP_DEFAULT_TEXT, FM_PROP_DEFAULTCHECKED, FM_PROP_DEFAULT_DATE, FM_PROP_DEFAULT_TIME,
             FM_PROP_DEFAULT_VALUE, FM_PROP_DEFAULT_SELECT_SEQ, FM_PROP_EFFECTIVE_DEFAULT
         };
-        static constexpr rtl::OUStringConstExpr aValueProperties[] = {
+        static constexpr OUString aValueProperties[] = {
             FM_PROP_TEXT, FM_PROP_STATE, FM_PROP_DATE, FM_PROP_TIME,
             FM_PROP_VALUE, FM_PROP_SELECT_SEQ, FM_PROP_EFFECTIVE_VALUE
         };
@@ -573,12 +566,11 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
         //   which does not have a "ExternalData" property being <TRUE/>
 
         if (!m_pPropertySetCache)
-            m_pPropertySetCache = new PropertySetInfoCache;
-        PropertySetInfoCache* pCache = static_cast<PropertySetInfoCache*>(m_pPropertySetCache);
+            m_pPropertySetCache = std::make_unique<PropertySetInfoCache>();
 
         // let's see if we know something about the set
-        PropertySetInfoCache::iterator aSetPos = pCache->find(xSet);
-        if (aSetPos == pCache->end())
+        PropertySetInfoCache::iterator aSetPos = m_pPropertySetCache->find(xSet);
+        if (aSetPos == m_pPropertySetCache->end())
         {
             PropertySetInfo aNewEntry;
             if (!::comphelper::hasProperty(FM_PROP_CONTROLSOURCE, xSet))
@@ -597,8 +589,8 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
                     DBG_UNHANDLED_EXCEPTION("svx");
                 }
             }
-            aSetPos = pCache->emplace(xSet,aNewEntry).first;
-            DBG_ASSERT(aSetPos != pCache->end(), "FmXUndoEnvironment::propertyChange : just inserted it ... why it's not there ?");
+            aSetPos = m_pPropertySetCache->emplace(xSet,aNewEntry).first;
+            DBG_ASSERT(aSetPos != m_pPropertySetCache->end(), "FmXUndoEnvironment::propertyChange : just inserted it ... why it's not there ?");
         }
         else
         {   // is it the DataField property ?
@@ -675,7 +667,7 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
                 // TODO: we should cache all those things, else this might be too expensive.
                 // However, this requires we're notified of changes in the value binding
 
-                static constexpr OUStringLiteral s_sExternalData = u"ExternalData";
+                static constexpr OUString s_sExternalData = u"ExternalData"_ustr;
                 if ( xBindingPropsPSI.is() && xBindingPropsPSI->hasPropertyByName( s_sExternalData ) )
                 {
                     bool bExternalData = true;
@@ -711,8 +703,7 @@ void SAL_CALL FmXUndoEnvironment::propertyChange(const PropertyChangeEvent& evt)
         if (m_pPropertySetCache && evt.PropertyName == FM_PROP_CONTROLSOURCE)
         {
             Reference< XPropertySet >  xSet(evt.Source, UNO_QUERY);
-            PropertySetInfoCache* pCache = static_cast<PropertySetInfoCache*>(m_pPropertySetCache);
-            PropertySetInfo& rSetInfo = (*pCache)[xSet];
+            PropertySetInfo& rSetInfo = (*m_pPropertySetCache)[xSet];
             rSetInfo.bHasEmptyControlSource = !evt.NewValue.hasValue() || ::comphelper::getString(evt.NewValue).isEmpty();
         }
     }

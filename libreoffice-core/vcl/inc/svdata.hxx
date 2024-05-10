@@ -20,15 +20,20 @@
 #pragma once
 
 #include <sal/config.h>
-#include <config_version.h>
 
 #include <o3tl/lru_map.hxx>
 #include <o3tl/hash_combine.hxx>
 #include <tools/fldunit.hxx>
 #include <unotools/options.hxx>
 #include <vcl/bitmapex.hxx>
+#include <vcl/cvtgrf.hxx>
+#include <vcl/image.hxx>
 #include <vcl/settings.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/print.hxx>
+#include <vcl/uitest/logger.hxx>
+#include <vcl/virdev.hxx>
+#include <vcl/wrkwin.hxx>
 #include <vcl/window.hxx>
 #include <vcl/task.hxx>
 #include <LibreOfficeKit/LibreOfficeKitTypes.h>
@@ -36,15 +41,17 @@
 
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/i18n/XCharacterClassification.hpp>
-
 #include "vcleventlisteners.hxx"
+#include "print.h"
 #include "salwtype.hxx"
+#include "windowdev.hxx"
 #include "displayconnectiondispatch.hxx"
 
+#include <atomic>
 #include <mutex>
+#include <optional>
 #include <vector>
 #include <unordered_map>
-#include "ControlCacheKey.hxx"
 #include "schedulerimpl.hxx"
 #include <basegfx/DrawCommands.hxx>
 
@@ -76,7 +83,6 @@ class Timer;
 class AutoTimer;
 class Idle;
 class Help;
-class Image;
 class PopupMenu;
 class Application;
 class OutputDevice;
@@ -111,6 +117,9 @@ class UITestLogger;
 #define SV_ICON_ID_TEMPLATE                            11
 #define SV_ICON_ID_DATABASE                            12
 #define SV_ICON_ID_FORMULA                             13
+
+const FloatWinPopupFlags LISTBOX_FLOATWINPOPUPFLAGS = FloatWinPopupFlags::Down |
+    FloatWinPopupFlags::NoHorzPlacement | FloatWinPopupFlags::AllMouseButtonClose;
 
 namespace com::sun::star::datatransfer::clipboard { class XClipboard; }
 
@@ -160,22 +169,13 @@ struct ImplSVAppData
     SystemWindowFlags       mnSysWinMode = SystemWindowFlags(0); // Mode, when SystemWindows should be created
     bool                    mbInAppMain = false;            // is Application::Main() on stack
     bool                    mbInAppExecute = false;         // is Application::Execute() on stack
-    volatile bool           mbAppQuit = false;              // is Application::Quit() called, volatile because we read/write from different threads
+    std::atomic<bool>       mbAppQuit = false;              // is Application::Quit() called, volatile because we read/write from different threads
     bool                    mbSettingsInit = false;         // true: Settings are initialized
     DialogCancelMode meDialogCancel = DialogCancelMode::Off; // true: All Dialog::Execute() calls will be terminated immediately with return false
     bool mbRenderToBitmaps = false; // set via svp / headless plugin
     bool m_bUseSystemLoop = false;
 
-    SvFileStream*       mpEventTestInput = nullptr;
-    Idle*               mpEventTestingIdle = nullptr;
-    int                 mnEventTestLimit = 0;
-
     DECL_STATIC_LINK(ImplSVAppData, ImplQuitMsg, void*, void);
-    DECL_STATIC_LINK(ImplSVAppData, ImplPrepareExitMsg, void*, void);
-    DECL_STATIC_LINK(ImplSVAppData, ImplEndAllDialogsMsg, void*, void);
-    DECL_STATIC_LINK(ImplSVAppData, ImplEndAllPopupsMsg, void*, void);
-    DECL_STATIC_LINK(ImplSVAppData, ImplVclEventTestingHdl, void*, void);
-    DECL_LINK(VclEventTestingHdl, Timer*, void);
 };
 
 /// Cache multiple scalings for the same bitmap
@@ -263,7 +263,7 @@ struct ImplSVWinData
     std::vector<VclPtr<Dialog>> mpExecuteDialogs;           ///< Stack of dialogs that are Execute()'d - the last one is the top most one.
     VclPtr<vcl::Window>     mpExtTextInputWin;              // Window, which is in ExtTextInput
     VclPtr<vcl::Window>     mpTrackWin;                     // window, that is in tracking mode
-    AutoTimer*              mpTrackTimer = nullptr;         // tracking timer
+    std::unique_ptr<AutoTimer> mpTrackTimer;                // tracking timer
     std::vector<Image>      maMsgBoxImgList;                // ImageList for MessageBox
     VclPtr<vcl::Window>     mpAutoScrollWin;                // window, that is in AutoScrollMode mode
     VclPtr<vcl::Window>     mpLastWheelWindow;              // window, that last received a mouse wheel event
@@ -282,8 +282,8 @@ struct ImplSVCtrlData
 {
     std::vector<Image>      maCheckImgList;                 // ImageList for CheckBoxes
     std::vector<Image>      maRadioImgList;                 // ImageList for RadioButtons
-    std::unique_ptr<Image>  mpDisclosurePlus;
-    std::unique_ptr<Image>  mpDisclosureMinus;
+    std::optional<Image>    moDisclosurePlus;
+    std::optional<Image>    moDisclosureMinus;
     ImplTBDragMgr*          mpTBDragMgr = nullptr;          // DragMgr for ToolBox
     sal_uInt16              mnCheckStyle = 0;               // CheckBox-Style for ImageList-Update
     sal_uInt16              mnRadioStyle = 0;               // Radio-Style for ImageList-Update
