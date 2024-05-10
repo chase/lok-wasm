@@ -3,11 +3,11 @@ import { CallbackType } from '@lok/lok_enums';
 import type { DocumentClient } from '@lok/shared';
 import { Show, createSignal, onCleanup } from 'solid-js';
 import './App.css';
-import { OfficeDocument, setCanvasObjectFit } from './OfficeDocument/OfficeDocument';
+import { OfficeDocument } from './OfficeDocument/OfficeDocument';
 import { cleanup } from './OfficeDocument/cleanup';
 import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
-import { updateZoom } from './OfficeDocument/zoom';
+import { ZOOM_STEP, updateZoom } from './OfficeDocument/zoom';
 import { downloadFile } from './utils';
 
 const [loading, setLoading] = createSignal(false);
@@ -43,9 +43,9 @@ async function fileOpen(files: FileList | null) {
 }
 async function saveAsPDF(doc: DocumentClient | null) {
   if (!doc) return;
-  const buffer = await doc.save("pdf")
-  downloadFile("Pdf Export.pdf", buffer, "application/pdf");
-};
+  const buffer = await doc.save('pdf');
+  downloadFile('Pdf Export.pdf', buffer, 'application/pdf');
+}
 
 const MOD = IS_MAC ? 'cmd' : 'ctrl';
 const ignoredShortcuts: Shortcut[] = [
@@ -59,23 +59,7 @@ const ignoredShortcuts: Shortcut[] = [
   },
 ];
 
-/// This gives us good behavior until the render actually finishes
-/// Cover on Zoom In, will stretch the image to fit as 
-/// the canvas size changes 
-const ZOOM_IN_CANVAS_FIT = "cover";
-/// This gives us good behavior until the render actually finishes
-/// Contain on Zoom Out, squeezes the image to fit as
-/// the canvas size changes 
-const ZOOM_OUT_CANVAS_FIT = "contain";
-
-// Helpful to step by 1/8 because of 256 tile size
-// When clipping the zoom we are more likely to get
-// a full tile
-const ZOOM_STEP = .125;
-
-let zoomTimeout: ReturnType<typeof setTimeout> ;
-
-export const [isZooming, setIsZooming] = createSignal(false);
+let zoomTimeout: ReturnType<typeof setTimeout>;
 
 function registerGlobalKeys() {
   async function callback(e: KeyboardEvent) {
@@ -83,13 +67,11 @@ function registerGlobalKeys() {
     switch (e.key) {
       case '=':
         e.preventDefault();
-        setCanvasObjectFit(ZOOM_IN_CANVAS_FIT)
         if (zoomTimeout) clearTimeout(zoomTimeout);
         zoomTimeout = setTimeout(() => updateZoom(getDocThrows, ZOOM_STEP));
         break;
       case '-':
         e.preventDefault();
-        setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
         if (zoomTimeout) clearTimeout(zoomTimeout);
         zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -ZOOM_STEP));
         break;
@@ -97,23 +79,17 @@ function registerGlobalKeys() {
   }
 
   async function wheelCallback(e: WheelEvent) {
-    if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
-    
-    const isAccelerated = IS_MAC ? e.metaKey : e.ctrlKey;
-
-    if (!isAccelerated) return;
+    if (!e.ctrlKey) return;
 
     e.preventDefault();
     e.stopPropagation();
 
     // Scroll Up = Zoom In
     if (e.deltaY < 0) {
-      setCanvasObjectFit(ZOOM_IN_CANVAS_FIT);
       if (zoomTimeout) clearTimeout(zoomTimeout);
       zoomTimeout = setTimeout(() => updateZoom(getDocThrows, ZOOM_STEP));
-    // Scroll Down = Zoom In
+      // Scroll Down = Zoom In
     } else if (e.deltaY > 0) {
-      setCanvasObjectFit(ZOOM_OUT_CANVAS_FIT)
       if (zoomTimeout) clearTimeout(zoomTimeout);
       zoomTimeout = setTimeout(() => updateZoom(getDocThrows, -ZOOM_STEP));
     }
@@ -121,15 +97,13 @@ function registerGlobalKeys() {
 
   document.addEventListener('keydown', callback);
   // By default wheel events are passive and annot be prevented
-  document.addEventListener('wheel', wheelCallback, {passive: false})
+  document.addEventListener('wheel', wheelCallback, { passive: false });
 
   onCleanup(() => {
     document.removeEventListener('keydown', callback);
     document.removeEventListener('wheel', wheelCallback);
   });
 }
-
-export const [scrollAreaRef, setScrollAreaRef] = createSignal<HTMLDivElement | null>(null);
 
 function App() {
   registerGlobalKeys();
@@ -149,10 +123,8 @@ function App() {
         />
       </div>
       <Show when={getDoc()}>
-        <div class = "h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
-          <button onClick={() => saveAsPDF(getDoc())}>
-            Save As PDF
-          </button>
+        <div class="h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
+          <button onClick={() => saveAsPDF(getDoc())}>Save As PDF</button>
         </div>
       </Show>
       <Show when={loading()}>
@@ -161,7 +133,7 @@ function App() {
         </div>
       </Show>
       <Show when={getDoc()} keyed>
-        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} scrollAreaRef={setScrollAreaRef}/>
+        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} />
       </Show>
     </>
   );

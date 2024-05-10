@@ -104,7 +104,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
 
       idleAreaPaint = false;
-      zoom(data.s, data.d, data.y);
+      zoom(data.s, data.d);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
       zoomResetTimeout = setTimeout(() => {
@@ -117,7 +117,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
-function zoom(in_scale: number, in_dpi: number, in_y: number) {
+function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
 
@@ -130,9 +130,6 @@ function zoom(in_scale: number, in_dpi: number, in_y: number) {
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
   scheduledHeightTwips = activeCanvas.height * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
-
-  // Update the top position to the new scale
-  scheduledTopTwips = in_y * scaledTwips;
 
   // Set this as a reference for the new position for the next scroll event
   renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
@@ -151,7 +148,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
 
   scale = data.s;
   dpi = data.dpi;
-  zoom(data.s, dpi, data.y);
+  zoom(data.s, dpi);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;

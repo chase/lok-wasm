@@ -2,11 +2,13 @@ import { twipsToCssPx } from '@lok';
 import { DocumentClient } from '@lok/shared';
 import { Accessor, Signal, createSignal } from 'solid-js';
 import { getOrCreateDPISignal } from './twipConversion';
-import { scrollAreaRef, setIsZooming } from '../App';
 
 export const DEFAULT_ZOOM = 0.8;
 export const MAX_ZOOM = 3;
-export const MIN_ZOOM = 0.4;
+export const MIN_ZOOM = 0.375;
+
+// Stepping by 1/8th seems to keep text relatively crisp
+export const ZOOM_STEP = 0.125;
 
 const docZooms = new WeakMap<DocumentClient, Signal<number>>();
 
@@ -23,13 +25,14 @@ export function getOrCreateZoomSignal(
   return result;
 }
 
-export function setZoom(doc: Accessor<DocumentClient>, level: number, yTop: number) {
+export function setZoom(doc: Accessor<DocumentClient>, level: number) {
   const [, set] = getOrCreateZoomSignal(doc);
   const getDpi = getOrCreateDPISignal();
   const dpi = getDpi();
-  doc().setZoom(level, dpi, yTop);
+  doc().setZoom(level, dpi);
   set(level);
 }
+
 /**
  * @param offset offset from the current zoom level
  * @returns the new zoom level
@@ -44,25 +47,10 @@ export function updateZoom(
   offset: number
 ): number {
   const [zoom] = getOrCreateZoomSignal(doc);
-  setIsZooming(true);
   const roundedZoom = Math.round((zoom() + offset) / Epsilon) * Epsilon;
   const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, roundedZoom));
 
-  const scrollArea = scrollAreaRef();
-  let newScrollTop: number = 0;
-
-  // We need to adjust the scroll position manually
-  // to keep the relative position of the document the same
-  // after the zoom level changes
-  if (scrollArea) {
-    const scrollTop = scrollArea.scrollTop;
-    newScrollTop = scrollTop / zoom() * newZoom;
-    scrollArea.scrollTop =  newScrollTop
-  } else {
-    console.error(`tried to update zoom without scrollAreaRef`)
-  }
-
-  setZoom(doc, newZoom, newScrollTop);
+  setZoom(doc, newZoom);
   return newZoom;
 }
 
@@ -96,7 +84,7 @@ export async function zoomToFit(
       ? Math.min(DEFAULT_ZOOM, scaleFactor * zoom)
       : scaleFactor * zoom;
 
-  setZoom(doc, newZoom, scrollAreaRef()?.scrollTop ?? 0);
+  setZoom(doc, newZoom);
 
   return newZoom;
 }
