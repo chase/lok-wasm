@@ -177,6 +177,10 @@
 #include <unocontentcontrol.hxx>
 #include <unoport.hxx>
 
+// MACRO: Cancellable search {
+#include <SwSearchCancel.hxx>
+// MACRO: Cancellable search }
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::text;
 using namespace ::com::sun::star::i18n;
@@ -788,6 +792,10 @@ SwUnoCursor* SwXTextDocument::FindAny(const Reference< util::XSearchDescriptor >
     const auto pSearch = dynamic_cast<SwXTextSearch*>(xDesc.get());
     if(!IsValid() || !pSearch)
         return nullptr;
+
+    // MACRO: Cancellable search {
+    sw::BumpSearchGeneration();
+    // MACRO: }
 
     auto pUnoCursor(CreateCursorForSearch(xCursor));
 

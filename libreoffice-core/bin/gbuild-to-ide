@@ -592,7 +592,8 @@ class VimIntegrationGenerator(IdeIntegrationGenerator):
         command += file
         # MACRO: fix emscripten includes
         command += ' ' + emscripten_cflags
-        return command
+        # MACRO: drop emscripten flags that make vanilla clang unhappy
+        return re.sub(r'-s [^ =]+=[^ ]+', '', command)
 
 
 class KdevelopIntegrationGenerator(IdeIntegrationGenerator):

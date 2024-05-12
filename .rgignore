@@ -2,7 +2,7 @@ libreoffice-core/translations/
 libreoffice-core/dictionaries/
 libreoffice-core/helpcontent2/
 libreoffice-core/workdir/
-libreoffice-core/instdir/program
+libreoffice-core/instdir/
 *.lock
 *.sqlite3
 .cache/
@@ -25,5 +25,8 @@ libreoffice-core/.cache/
 *.met
 *.ttf
 *.jar
+*.wasm
+*.data
+*.a
 libreoffice-core/compile_commands.json
 __pycache__

@@ -3166,7 +3166,9 @@ if test "$enable_wasm_strip" = "yes"; then
     with_x=no
 
     test "${with_fonts+set}" = set || with_fonts=yes
-    test "${with_locales+set}" = set || with_locales=en
+# MACRO: This breaks search and only reduces soffice.wasm by 2 MiB uncompressed {
+#    test "${with_locales+set}" = set || with_locales=en
+# MACRO: }
 
     AC_DEFINE(ENABLE_WASM_STRIP_ACCESSIBILITY)
     AC_DEFINE(ENABLE_WASM_STRIP_WRITER)

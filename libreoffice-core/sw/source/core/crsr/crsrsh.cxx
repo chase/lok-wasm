@@ -1039,6 +1039,8 @@ static SwFrame* lcl_IsInHeaderFooter( SwNode& rNd, Point& rPt )
         while( pFrame && !pFrame->IsHeaderFrame() && !pFrame->IsFooterFrame() )
             pFrame = pFrame->IsFlyFrame() ? static_cast<SwFlyFrame*>(pFrame)->AnchorFrame()
                                     : pFrame->GetUpper();
+    } else {
+        SAL_WARN("lok", "No content node");
     }
     return pFrame;
 }
@@ -1051,6 +1053,23 @@ bool SwCursorShell::IsInHeaderFooter( bool* pbInHeader ) const
         *pbInHeader = pFrame->IsHeaderFrame();
     return nullptr != pFrame;
 }
+
+// MACRO: Export rect of header/footer frame {
+bool SwCursorShell::IsInHeaderFooter( bool* pbInHeader, SwRect* rect ) const
+{
+    Point aPt;
+    SwFrame* pFrame = ::lcl_IsInHeaderFooter( m_pCurrentCursor->GetPoint()->GetNode(), aPt );
+    if( !pFrame ) return false;
+
+    *pbInHeader = pFrame->IsHeaderFrame();
+    // from paintfrm.cxx, SwHeadFootFrame::GetSubsidiaryLinesPolygon
+    SwRect aArea( pFrame->getFramePrintArea() );
+    aArea.Pos() += pFrame->getFrameArea().Pos();
+    *rect = aArea;
+
+    return true;
+}
+// MACRO: }
 
 int SwCursorShell::SetCursor( const Point &rLPt, bool bOnlyText, bool bBlock )
 {

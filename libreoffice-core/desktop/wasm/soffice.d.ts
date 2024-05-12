@@ -38,6 +38,80 @@ export type TileRenderData = {
   docWidthTwips: Uint32Array;
 };
 
+export type RectArray = [x: number, y: number, width: number, height: number];
+
+export type Comment = {
+  id: number;
+  parentId: number;
+  author: string;
+  text: string;
+  resolved: boolean;
+  dateTime: string;
+  anchorPos: RectArray;
+  textRange: RectArray[];
+  layoutStatus: number;
+};
+
+export type SanitizeOptions = Partial<{
+  documentMetadata: boolean;
+  trackChangesAccept: boolean;
+  trackChangesReject: boolean;
+  comments: boolean;
+}>;
+
+export type HeaderFooterRect = {
+  type: 'header' | 'footer';
+  rect: RectArray;
+};
+
+export type ParagraphStyleList = {
+  userDefined: string[];
+  used: string[];
+  other: string[];
+};
+
+export type FindAllOptions = Partial<{
+  /** the case of letters is important for the match */
+  caseSensitive: boolean;
+  /** only complete words are matched */
+  wholeWords: boolean;
+  /** the mode used to make matches.
+   *
+   * undefined: a normal text search.
+   * wildcard: `*` for any sequence of characters (including empty), `?` for exactly one character. `\` escapes these characters.
+   * regex: a regular expression-based search.
+   * similar: an approximate match/fuzzy search.
+   **/
+  mode: 'wildcard' | 'regex' | 'similar';
+}>;
+
+export type TextRangeDescription = [before: string, term: string, after: string];
+
+export type ITextRanges = {
+  length(): number;
+  rect(index: number): RectArray[];
+  rects(
+    startYPosTwips: number,
+    endYPosTwips: number
+  ): Array<{
+    i: number;
+    rect: RectArray[];
+  }>;
+  isCursorAt(index: number): boolean;
+  indexAtCursor(): number;
+  moveCursorTo(index: number, end: boolean, select: boolean): void;
+  description(index: number): TextRangeDescription | undefined;
+  descriptions(
+    startIndex: number,
+    endIndex: number
+  ): Array<{
+    i: number;
+    desc: TextRangeDescription;
+  }>;
+  replace(index: number, text: string): void;
+  replaceAll(text: string): void;
+}
+
 /** Embind Document class, see main_wasm.cxx */
 export declare class Document {
   constructor(path: string): void;
@@ -46,7 +120,7 @@ export declare class Document {
   valid(): boolean;
   saveAs(path: string, format?: string, filterOptions?: string): boolean;
   getParts(): number;
-  getPartRectangles(): string;
+  pageRects(): RectArray[];
   paintTile(
     tileWidthPx: number,
     tileHeightPx: number,
@@ -102,10 +176,35 @@ export declare class Document {
     viewId: number,
     windowId: number,
     charsBefore: number,
-    charsAfter: number,
+    charsAfter: number
   ): void;
   // NOTE: Disabled until unoembind startup cost is under 1s
   // getXComponent(viewId: number): any;
+
+  comments(): Comment[];
+  addComment(text: string): void;
+  replyComment(parentId: number, text: string): void;
+  deleteCommentThreads(parentIds: number[]): void;
+  deleteComment(commentId: number): void;
+  resolveCommentThread(parentId: number): void;
+  resolveComment(commentId: number): void;
+  sanitize(options: SanitizeOptions): void;
+
+  headerFooterRect(): HeaderFooterRect | undefined;
+
+  getPropertyValue(property: string): any;
+  setPropertyValue(property: string, value: any): void;
+
+  saveCurrentSelection(): void;
+  restoreCurrentSelection(): void;
+  getSelectionText(): string | undefined;
+  getParagraphStyle(
+    name: string,
+    properties: string[]
+  ): undefined | Record<string, any>;
+  paragraphStyles(): ParagraphStyleList;
+
+  findAll(text: string, options: FindAllOptions | undefined): ITextRanges;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

@@ -68,6 +68,9 @@
 #include "unobaseclass.hxx"
 #include "viewopt.hxx"
 
+// MACRO: Extensions
+#include "wasm/IWriterExtensions.hxx"
+
 #include <deque>
 
 class SwDoc;
@@ -135,7 +138,8 @@ SwXTextDocumentBaseClass;
 class SW_DLLPUBLIC SwXTextDocument final : public SwXTextDocumentBaseClass,
     public SvxFmMSFactory,
     public vcl::ITiledRenderable,
-    public css::tiledrendering::XTiledRenderable
+    public css::tiledrendering::XTiledRenderable,
+    public wasm::IWriterExtensions // MACRO: Extensions
 {
 private:
     class Impl;
@@ -498,6 +502,22 @@ public:
                                             css::uno::Reference< css::uno::XInterface > const & xLastResult);
 
     SwDocShell*                 GetDocShell() {return m_pDocShell;}
+
+    /// MACRO-2313: WASM Writer extensions {
+    emscripten::val comments() override;
+    void addComment(const std::string& text) override;
+    void replyComment(int parentId, const std::string& text) override;
+    void deleteCommentThreads(emscripten::val parentIds) override;
+    void deleteComment(int commentId) override;
+    void resolveCommentThread(int parentId) override;
+    void resolveComment(int commentId) override;
+    void sanitize(emscripten::val options) override;
+    emscripten::val pageRects() override;
+    emscripten::val headerFooterRect() override;
+    emscripten::val paragraphStyles() override;
+    std::shared_ptr<wasm::ITextRanges> findAllTextRanges(const std::string& text, emscripten::val flags) override;
+    void cancelFindOrReplace() override;
+    /// MACRO-2313: }
 };
 
 class SwXLinkTargetSupplier final : public cppu::WeakImplHelper

@@ -17,6 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+// MACRO: {
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
+// MACRO: }
+
 #include <officecfg/Office/Common.hxx>
 #include <config_wasm_strip.h>
 
@@ -80,6 +84,7 @@
 #include <comphelper/lok.hxx>
 #include <sfx2/lokhelper.hxx>
 #include <tools/UnitConversion.hxx>
+#include <wrtsh.hxx>
 
 #if !HAVE_FEATURE_DESKTOP
 #include <vcl/sysdata.hxx>
@@ -126,7 +131,10 @@ void SwViewShell::ToggleHeaderFooterEdit()
         mbHeaderFooterEdit = false;
     }
 
-    InvalidatePageAndHFSubsidiaryLines();
+    GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_HEADER_FOOTER, mbHeaderFooterEdit ? "1" : "0");
+
+    // MACRO: Save ourselves an invalidate since we paint the header/footer ourselves
+    // InvalidatePageAndHFSubsidiaryLines();
 }
 
 // Invalidate Subsidiary Lines around headers/footers and page frames to repaint

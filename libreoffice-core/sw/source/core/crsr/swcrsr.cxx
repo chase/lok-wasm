@@ -59,6 +59,10 @@
 
 #include <viewopt.hxx>
 
+// MACRO: Cancellable search {
+#include <SwSearchCancel.hxx>
+// MACRO: }
+
 using namespace ::com::sun::star::i18n;
 
 const sal_uInt16 coSrchRplcThreshold = 60000;
@@ -790,6 +794,10 @@ static sal_Int32 lcl_FindSelection( SwFindParas& rParas, SwCursor* pCurrentCurso
     else
         pSaveCursor = pSaveCursor->GetPrev();
 
+    // MACRO: Cancellable search {
+    int nSearchGen = sw::GetSearchGeneration();
+    // MACRO: }
+
     bool bEnd = false;
     do {
         aRegion.SetMark();
@@ -879,6 +887,11 @@ static sal_Int32 lcl_FindSelection( SwFindParas& rParas, SwCursor* pCurrentCurso
         {
             pPHdl->NextPos( ++pPHdl->nActPos );
         }
+
+        // MACRO: Cancellable search {
+        if ( nSearchGen == sw::GetSearchGeneration() )
+            break;
+        // MACRO: }
 
     } while( pTmpCursor != pSaveCursor && pTmpCursor->GetNext() != pTmpCursor);
 

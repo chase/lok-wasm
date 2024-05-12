@@ -18,15 +18,22 @@ $(eval $(call gb_Module_add_targets,static,\
 ifeq (EMSCRIPTEN,$(OS))
 $(eval $(call gb_Module_add_targets,static,\
     CustomTarget_emscripten_fs_image \
-    CustomTarget_unoembind \
-    Package_unoembind \
-    StaticLibrary_unoembind \
     $(if $(ENABLE_QT5), \
         CustomTarget_wasm-qt5-mandelbrot_moc \
         Executable_wasm-qt5-mandelbrot \
     ) \
 ))
 endif
+
+# MACRO: Disable unoembind API for now since it causes a 1+ second startup delay {
+# ifeq (EMSCRIPTEN,$(OS))
+# $(eval $(call gb_Module_add_targets,static,\
+#     CustomTarget_unoembind \
+#     Package_unoembind \
+#     StaticLibrary_unoembind \
+# ))
+# endif
+# MACRO: }
 
 endif
 

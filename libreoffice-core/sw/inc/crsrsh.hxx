@@ -685,6 +685,10 @@ public:
     // in a headerframe otherwise in a footerframe
     bool IsInHeaderFooter( bool* pbInHeader = nullptr ) const;
 
+    // MACRO: Allow fetching header/footer frame rect as well {
+    bool IsInHeaderFooter( bool* pbInHeader, SwRect* pRect ) const;
+    // MACRO: }
+
     bool GotoNextTOXBase( const OUString* = nullptr );
     bool GotoPrevTOXBase( const OUString* = nullptr );
     void GotoTOXMarkBase();

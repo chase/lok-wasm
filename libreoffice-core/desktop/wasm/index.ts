@@ -1,18 +1,23 @@
 import { CallbackType } from './lok_enums';
 import {
-  WorkerCallback,
+  CallbackHandler,
   DocumentClient,
+  DocumentClientBase,
+  DocumentMethods,
   DocumentRef,
+  DocumentWithViewMethods,
+  ForwardedFromWorker,
+  ForwardedResolver,
+  ForwardingFromWorker,
+  ForwardingId,
+  ForwardingMethod,
   FromWorker,
   Id,
+  KeysMessage,
   Message,
   Ref,
   ToWorker,
-  CallbackHandler,
-  DocumentMethods,
-  ViewId,
-  DocumentClientBase,
-  DocumentWithViewMethods,
+  WorkerCallback,
 } from './shared';
 
 /** rendered tile size in pixels */
@@ -82,17 +87,159 @@ type CallbackHandlers = {
 };
 const subscribedEvents: { [K: number]: CallbackHandlers } = {};
 
+type AllMessages<K extends keyof Message = keyof Message> =
+  | FromWorker<K>
+  | ForwardingFromWorker<K & keyof ForwardingMethod>
+  | ForwardedFromWorker<K & keyof ForwardingMethod>
+  | WorkerCallback
+  | KeysMessage;
+
 function messageIsCallback<K extends keyof Message = keyof Message>(
-  data: FromWorker<K> | WorkerCallback
+  data: AllMessages<K>
 ): data is WorkerCallback {
   return data.f === 'c';
 }
 
+function messageIsForwarding<K extends keyof Message = keyof Message>(
+  data: AllMessages<K>
+): data is ForwardingFromWorker {
+  return (data as ForwardingFromWorker).fwd === true;
+}
+
+function messageIsKeys<K extends keyof Message = keyof Message>(
+  data: AllMessages<K>
+): data is KeysMessage {
+  return data.f === '_keys';
+}
+
+const clientBase: DocumentClientBase = {
+  ref: -1,
+  viewId: -1,
+  on(type: CallbackType, handler: CallbackHandler) {
+    const ref = this.ref;
+    if (subscribedEvents[ref] == null)
+      subscribedEvents[ref] = { [type]: new Set() };
+    if (subscribedEvents[ref][type] == null)
+      subscribedEvents[ref][type] = new Set();
+    const subscribedEvent = subscribedEvents[ref][type];
+    if (subscribedEvent.size === 0) {
+      loadWorkerOnce().postMessage({
+        f: 'subscribe',
+        i: UNUSED_ID,
+        a: [ref, this.viewId ?? -1, type],
+      } as ToWorker);
+    }
+    subscribedEvent.add(handler);
+  },
+  off(type: CallbackType, handler: CallbackHandler) {
+    const ref = this.ref;
+    const subscribedEvent = subscribedEvents[ref]?.[type];
+    if (subscribedEvent != null) return;
+
+    subscribedEvent.delete(handler);
+    if (subscribedEvent.size === 0) {
+      loadWorkerOnce().postMessage({
+        f: 'unsubscribe',
+        i: UNUSED_ID,
+        a: [ref, this.viewId ?? -1, type],
+      } as ToWorker);
+    }
+  },
+  async newView(): Promise<DocumentClient> {
+    const [i, future] = registerFuture<DocumentRef | null>();
+    const message: ToWorker = {
+      f: 'newView',
+      i,
+      a: [],
+    };
+    loadWorkerOnce().postMessage(message);
+
+    return documentClient(this.ref, await future.promise);
+  },
+};
+
+type ForwardedBase = {
+  fwd: ForwardingId;
+};
+
+type ForwardedClient = ForwardedBase & {
+  [K in string]: (...args: any[]) => any;
+};
+
+const forwardedClassBases: Record<ForwardedResolver, ForwardedClient> =
+  {} as any; // any because the class will be completed upon initialization
+
+function registerForwardedMethod(resolver: string, method: string) {
+  let base = forwardedClassBases[resolver];
+  if (base == null) {
+    base = {} as any;
+    forwardedClassBases[resolver] = base;
+  }
+  base[method] = function (...args: any[]) {
+    const [i, future] = registerFuture();
+    loadWorkerOnce().postMessage({
+      f: resolver,
+      i,
+      a: [method, this.fwd, ...args],
+    } as ToWorker);
+    return future.promise;
+  };
+}
+
+function registerClientMethod(prop: string) {
+  clientBase[prop] = function (...args: any[]) {
+    const [i, future] = registerFuture();
+    let transfers: { transfer: Transferable[] } | undefined;
+    if (prop === 'startRendering' || prop === 'resetRendering') {
+      transfers = {
+        transfer: [
+          (
+            args as
+              | Parameters<DocumentWithViewMethods['startRendering']>
+              | Parameters<DocumentWithViewMethods['resetRendering']>
+          )[0],
+        ],
+      };
+    }
+    loadWorkerOnce().postMessage(
+      {
+        f: prop,
+        i,
+        a: WITHOUT_VIEW_ID[prop]
+          ? [this.ref, ...args]
+          : [this.ref, this.viewId, ...args],
+      } as ToWorker,
+      transfers
+    );
+    // automatically assign the view ID after intializing for rendering so that rendering calls have a valid target
+    if (prop === 'initializeForRendering') {
+      future.promise.then(
+        (viewId: FromWorker<'initializeForRendering'>['r']) => {
+          this.viewId = viewId;
+        }
+      );
+    }
+    return future.promise;
+  };
+}
+
 async function handleMessage<K extends keyof Message = keyof Message>({
   data,
-}: MessageEvent<FromWorker<K> | WorkerCallback>) {
+}: MessageEvent<AllMessages<K>>) {
   if (messageIsCallback(data)) {
     subscribedEvents[data.d]?.[data.t]?.forEach((handler) => handler(data.p));
+  } else if (messageIsKeys(data)) {
+    for (const prop of data.keys) {
+      registerClientMethod(prop);
+    }
+    for (const [resolver, methods] of Object.entries(data.forwarded)) {
+      for (const method of methods) {
+        registerForwardedMethod(resolver, method);
+      }
+    }
+  } else if (messageIsForwarding(data)) {
+    callIdToFuture[data.i].resolve(forwardedClient(data.r));
+    callIdToFuture[data.i] = undefined;
   } else if (data.i !== UNUSED_ID) {
     callIdToFuture[data.i].resolve(data.r);
     callIdToFuture[data.i] = undefined;
@@ -120,81 +267,14 @@ function registerFuture<T>(): [Id, Future<T>] {
   return [i, callIdToFuture[i]];
 }
 
-const WITH_VIEW_ID: Record<
-  keyof DocumentWithViewMethods | (string & {}),
-  true
-> = {
-  postKeyEvent: true,
-  postMouseEvent: true,
-  postWindowExtTextInputEvent: true,
-  postTextInput: true,
-  setTextSelection: true,
-  setClipboard: true,
-  getClipboard: true,
-  paste: true,
-  setGraphicSelection: true,
-  resetSelection: true,
-  getCommandValues: true,
-  subscribe: true,
-  unsubscribe: true,
-  dispatchCommand: true,
-  removeText: true,
-  setClientVisibleArea: true,
-  startRendering: true,
-  setScrollTop: true,
-  setVisibleHeight: true,
-  resetRendering: true,
-  stopRendering: true,
-  // NOTE: Disabled until unoembind startup cost is under 1s
-  // getXComponent: true,
-};
-
-const workerProxyHandler: ProxyHandler<{ ref: DocumentRef; viewId: ViewId }> = {
-  get(
-    target,
-    prop: keyof DocumentMethods | keyof DocumentWithViewMethods | (string & {})
-  ) {
-    if (prop in target) return target[prop];
-    // `then` is excluded to avoid trying to resolve the client as a Promise
-    if (prop !== 'then' && typeof prop === 'string') {
-      target[prop] = function (...args: any[]) {
-        const [i, future] = registerFuture();
-        let transfers: { transfer: Transferable[] } | undefined;
-        if (prop === 'startRendering' || prop === 'resetRendering') {
-          transfers = {
-            transfer: [
-              (
-                args as
-                  | Parameters<DocumentWithViewMethods['startRendering']>
-                  | Parameters<DocumentWithViewMethods['resetRendering']>
-              )[0],
-            ],
-          };
-        }
-        loadWorkerOnce().postMessage(
-          {
-            f: prop,
-            i,
-            a: WITH_VIEW_ID[prop]
-              ? [target.ref, target.viewId, ...args]
-              : [target.ref, ...args],
-          } as ToWorker,
-          transfers
-        );
-        // automatically assign the view ID after intializing for rendering so that rendering calls have a valid target
-        if (prop === 'initializeForRendering') {
-          future.promise.then(
-            (viewId: FromWorker<'initializeForRendering'>['r']) => {
-              target.viewId = viewId;
-            }
-          );
-        }
-        return future.promise;
-      };
-      return target[prop];
-    }
-    return undefined;
-  },
+const WITHOUT_VIEW_ID: Record<keyof DocumentMethods, true> = {
+  close: true,
+  save: true,
+  newView: true,
+  parts: true,
+  partRectanglesTwips: true,
+  documentSize: true,
+  initializeForRendering: true,
 };
 
 function documentClient<T extends DocumentClient>(
@@ -202,51 +282,27 @@ function documentClient<T extends DocumentClient>(
   viewId: number | undefined = -1
 ): T | null {
   if (!ref) return null;
-  const clientObject: DocumentClientBase = {
-    ref,
-    // this is set after the first initializeForRendering call
-    viewId: viewId,
-    on(type: CallbackType, handler: CallbackHandler) {
-      if (subscribedEvents[ref] == null)
-        subscribedEvents[ref] = { [type]: new Set() };
-      if (subscribedEvents[ref][type] == null)
-        subscribedEvents[ref][type] = new Set();
-      const subscribedEvent = subscribedEvents[ref][type];
-      if (subscribedEvent.size === 0) {
-        loadWorkerOnce().postMessage({
-          f: 'subscribe',
-          i: UNUSED_ID,
-          a: [ref, this.viewId ?? -1, type],
-        } as ToWorker);
-      }
-      subscribedEvent.add(handler);
+  const clientObject: DocumentClientBase = Object.create(clientBase, {
+    viewId: {
+      value: viewId,
+      writable: true,
     },
-    off(type: CallbackType, handler: CallbackHandler) {
-      const subscribedEvent = subscribedEvents[ref]?.[type];
-      if (subscribedEvent != null) return;
+    ref: {
+      value: ref,
+      writable: true,
+    },
+  });
+  return clientObject as T;
+}
 
-      subscribedEvent.delete(handler);
-      if (subscribedEvent.size === 0) {
-        loadWorkerOnce().postMessage({
-          f: 'unsubscribe',
-          i: UNUSED_ID,
-          a: [ref, this.viewId ?? -1, type],
-        } as ToWorker);
-      }
+function forwardedClient(fwd: ForwardingId): ForwardedClient {
+  const clientBase = forwardedClassBases[fwd[2]];
+  return Object.create(clientBase, {
+    fwd: {
+      value: fwd,
+      writable: true,
     },
-    async newView(): Promise<DocumentClient | null> {
-      const [i, future] = registerFuture<DocumentRef | null>();
-      const message: ToWorker = {
-        f: 'newView',
-        i,
-        a: [],
-      };
-      loadWorkerOnce().postMessage(message);
-
-      return await future.promise.then((id) => documentClient(ref, id));
-    },
-  };
-  return new Proxy(clientObject, workerProxyHandler) as T;
+  });
 }
 
 export async function loadDocument<T extends DocumentClient = DocumentClient>(

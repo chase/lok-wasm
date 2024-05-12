@@ -1,17 +1,43 @@
-#include <emscripten/em_asm.h>
-#include <unordered_set>
 #define LOK_USE_UNSTABLE_API
+#include <unordered_set>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <LibreOfficeKit/LibreOfficeKit.hxx>
 #include <emscripten.h>
+#include <emscripten/em_asm.h>
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 #include <emscripten/promise.h>
 #include <array>
 #include <cstdint>
+#include <vector>
+#include <memory>
 #include <lib/wasm_extensions.hxx>
 #include <sal/log.hxx>
+#include <com/sun/star/uno/Any.hxx>
+#include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/uno/Type.hxx>
+#include <typelib/typedescription.hxx>
+#include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/beans/XPropertyContainer.hpp>
+#include <com/sun/star/document/XDocumentPropertiesSupplier.hpp>
+#include <com/sun/star/document/XDocumentProperties.hpp>
+#include <com/sun/star/beans/PropertyAttribute.hpp>
+#include <com/sun/star/text/XTextRange.hpp>
+#include <com/sun/star/frame/XModel.hpp>
+#include <com/sun/star/text/XTextViewCursorSupplier.hpp>
+#include <com/sun/star/text/XTextViewCursor.hpp>
+#include <com/sun/star/datatransfer/XTransferable.hpp>
+#include <com/sun/star/text/XPageCursor.hdl>
+#include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
+#include <com/sun/star/style/XStyle.hpp>
+#include <com/sun/star/beans/XMultiPropertySet.hpp>
+#include <wasm/IWriterExtensions.hxx>
+#include <vcl/ITiledRenderable.hxx>
+#include <rtl/string.hxx>
+#include <rtl/ustring.hxx>
 
+namespace
+{
 using namespace emscripten;
 
 //static
@@ -27,6 +53,9 @@ lok::Office* instance()
     }
     return instance_;
 }
+
+//static
+void preload() { instance(); }
 
 static constexpr std::string_view TEXT_PLAIN = "text/plain";
 
@@ -44,8 +73,151 @@ SafeString makeSafeString(const char* src)
 
 void freeSafeString(size_t id) { delete[] (char*)id; }
 
-class DocumentClient
+val unoAnyToVal(const css::uno::Any& any);
+void addStructToVal(typelib_CompoundTypeDescription* desc, void const* source, val& obj)
 {
+    if (desc->pBaseTypeDescription != nullptr)
+    {
+        addStructToVal(desc->pBaseTypeDescription, source, obj);
+    }
+    for (sal_Int32 i = 0; i != desc->nMembers; ++i)
+    {
+        css::uno::Any any_val(
+            const_cast<char*>(static_cast<char const*>(source) + desc->pMemberOffsets[i]),
+            desc->ppTypeRefs[i]);
+        obj.set(val::u16string(desc->ppMemberNames[i]->buffer), unoAnyToVal(any_val));
+    }
+}
+
+val unoAnyToVal(const css::uno::Any& any)
+{
+    using namespace css::uno;
+    switch (any.getValueTypeClass())
+    {
+        case TypeClass::TypeClass_VOID:
+            return val::null();
+        case TypeClass::TypeClass_CHAR:
+            return val(*static_cast<sal_Unicode const*>(any.getValue()));
+        case TypeClass::TypeClass_BOOLEAN:
+            return val(any.get<bool>());
+        case TypeClass::TypeClass_BYTE:
+        case TypeClass::TypeClass_SHORT:
+        case TypeClass::TypeClass_LONG:
+        case TypeClass::TypeClass_HYPER:
+            return val(any.get<sal_Int32>());
+        case TypeClass::TypeClass_UNSIGNED_LONG:
+        case TypeClass::TypeClass_UNSIGNED_SHORT:
+        case TypeClass::TypeClass_UNSIGNED_HYPER:
+            return val(any.get<sal_uInt32>());
+        case TypeClass::TypeClass_FLOAT:
+        case TypeClass::TypeClass_DOUBLE:
+            return val(any.get<double>());
+        case TypeClass::TypeClass_STRING:
+            return val::u16string(any.get<rtl::OUString>().getStr());
+        case TypeClass::TypeClass_TYPE:
+            return val(any.get<Type>().getTypeName());
+        case TypeClass::TypeClass_ENUM:
+            return val(any.get<sal_Int32>());
+        case TypeClass::TypeClass_ANY:
+            return val(any.get<sal_Int32>());
+        case TypeClass::TypeClass_STRUCT:
+        case TypeClass::TypeClass_EXCEPTION:
+        {
+            TypeDescription desc(any.getValueTypeRef());
+            if (!desc.is())
+            {
+                EM_ASM({ console.error('invalid uno::struct'); });
+                return val::null();
+            }
+            auto const td = reinterpret_cast<typelib_CompoundTypeDescription*>(desc.get());
+            val obj = val::object();
+            addStructToVal(td, any.getValue(), obj);
+            return obj;
+        }
+        case TypeClass::TypeClass_TYPEDEF:
+        case TypeClass::TypeClass_UNION:
+        case TypeClass::TypeClass_SEQUENCE:
+        case TypeClass::TypeClass_ARRAY:
+        case TypeClass::TypeClass_INTERFACE:
+        case TypeClass::TypeClass_SERVICE:
+        case TypeClass::TypeClass_MODULE:
+        case TypeClass::TypeClass_INTERFACE_METHOD:
+        case TypeClass::TypeClass_INTERFACE_ATTRIBUTE:
+        case TypeClass::TypeClass_UNKNOWN:
+        case TypeClass::TypeClass_PROPERTY:
+        case TypeClass::TypeClass_CONSTANT:
+        case TypeClass::TypeClass_CONSTANTS:
+        case TypeClass::TypeClass_SINGLETON:
+        case TypeClass::TypeClass_MAKE_FIXED_SIZE:
+        {
+            EM_ASM({ console.error('unsupported uno::any type'); });
+            return val::null();
+        }
+    }
+}
+
+css::uno::Any valToUnoAny(const val& obj)
+{
+    using namespace css::uno;
+    if (obj.isNull() || obj.isUndefined())
+        return {};
+    if (obj.isString())
+        return Any(OUString::fromUtf8(std::move(obj.as<std::string>())));
+    if (obj.isNumber())
+        return Any(obj.as<double>());
+    if (obj.isTrue())
+        return Any(true);
+    if (obj.isFalse())
+        return Any(true);
+    EM_ASM({ console.error('unsupported js to uno::any'); });
+    return {};
+}
+
+css::uno::Sequence<rtl::OUString> valStrArrayToSequence(val v)
+{
+    using namespace css::uno;
+    const uint32_t l = v["length"].as<uint32_t>();
+    Sequence<rtl::OUString> rv(l);
+    rtl::OUString* pArray = rv.getArray();
+
+    for (uint32_t i = 0; i < l; ++i)
+    {
+        pArray[i] = OUString::fromUtf8(std::move(v[i].as<std::string>()));
+    }
+
+    return rv;
+}
+
+class DocumentClient final
+{
+private:
+    desktop::WasmDocumentExtension* ext()
+    {
+        return static_cast<desktop::WasmDocumentExtension*>(doc_->get());
+    }
+
+    wasm::IWriterExtensions* writer()
+    {
+        return dynamic_cast<wasm::IWriterExtensions*>(ext()->mxComponent.get());
+    }
+
+    css::uno::Reference<css::container::XNameAccess> _paragraphStyles()
+    {
+        using namespace css;
+        using namespace css::uno;
+        Reference<style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(ext()->mxComponent,
+                                                                        UNO_QUERY_THROW);
+        Reference<container::XNameAccess> xStyleFamilies
+            = xStyleFamiliesSupplier->getStyleFamilies();
+
+        if (!xStyleFamilies.is())
+            return {};
+
+        Reference<container::XNameAccess> xStyles(xStyleFamilies->getByName("ParagraphStyles"),
+                                                  UNO_QUERY);
+        return xStyles;
+    }
+
 public:
     explicit DocumentClient(std::string path)
         : ref_(++document_id_counter)
@@ -140,8 +312,6 @@ public:
         {
             if (!data[i]["mimeType"].isString())
                 continue;
-
-            val dictionary = val::object();
 
             std::string mime_type = data[i]["mimeType"].as<std::string>();
             std::string buffer = data[i]["buffer"].as<std::string>();
@@ -273,15 +443,11 @@ public:
 
     int32_t getViewId() { return doc_->getView(); }
 
-    int32_t newView() {
-        return doc_->createView();
-    }
+    int32_t newView() { return doc_->createView(); }
 
     val startTileRenderer(int32_t viewId, int32_t tileSize)
     {
-        desktop::WasmDocumentExtension* ext
-            = static_cast<desktop::WasmDocumentExtension*>(doc_->get());
-        desktop::TileRendererData& data = ext->startTileRenderer(viewId, tileSize);
+        desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize);
         val result = val::object();
         result.set("viewId", data.viewId);
         result.set("tileSize", data.tileSize);
@@ -324,6 +490,117 @@ public:
     }
     */
 
+    void setClientVisibleArea(int viewId, int x, int y, int width, int height)
+    {
+        doc_->setView(viewId);
+        doc_->setClientVisibleArea(x, y, width, height);
+    }
+
+    val getPropertyValue(std::string property)
+    {
+        using namespace css;
+        using namespace css::uno;
+        Reference<beans::XPropertySet> xProp(ext()->mxComponent, UNO_QUERY_THROW);
+
+        return unoAnyToVal(xProp->getPropertyValue(OUString::fromUtf8(property)));
+    }
+
+    void setPropertyValue(std::string property, val value)
+    {
+        using namespace css;
+        using namespace css::uno;
+        Reference<beans::XPropertySet> xProp(ext()->mxComponent, UNO_QUERY_THROW);
+
+        return xProp->setPropertyValue(OUString::fromUtf8(property), valToUnoAny(value));
+    }
+
+    void saveCurrentSelection()
+    {
+        using namespace css;
+        using namespace css::uno;
+        Reference<frame::XModel> xModel(ext()->mxComponent, UNO_QUERY_THROW);
+        Reference<container::XIndexAccess> xSelections(xModel->getCurrentSelection(),
+                                                       uno::UNO_QUERY);
+        if (!xSelections.is() || xSelections->getCount() < 1)
+        {
+            stored_range_.clear();
+            return;
+        }
+        Reference<text::XTextRange> xSelection(xSelections->getByIndex(0), uno::UNO_QUERY);
+        stored_range_ = xSelection;
+    }
+
+    void restoreCurrentSelection()
+    {
+        using namespace css;
+        using namespace css::uno;
+        if (!stored_range_.is())
+            return;
+
+        Reference<text::XTextViewCursorSupplier> xCursorSupplier(ext()->mxComponent,
+                                                                 UNO_QUERY_THROW);
+        Reference<text::XTextViewCursor> xCursor = xCursorSupplier->getViewCursor();
+        xCursor->gotoRange(stored_range_, false);
+        // xCursor->gotoRange(stored_range_, true); // TODO: necessary?
+    }
+
+    val getSelectionText()
+    {
+        using namespace css;
+        using namespace css::uno;
+        Reference<text::XTextViewCursorSupplier> xCursorSupplier(ext()->mxComponent,
+                                                                 UNO_QUERY_THROW);
+        Reference<text::XTextViewCursor> xCursor = xCursorSupplier->getViewCursor();
+        return val::u16string(xCursor->getString().getStr());
+    }
+
+    val getParagraphStyle(std::string name, val properties)
+    {
+        using namespace css;
+        using namespace css::uno;
+        Reference<container::XNameAccess> xStyles = _paragraphStyles();
+        if (!xStyles.is())
+            return val::undefined();
+
+        Reference<style::XStyle> xStyle(xStyles->getByName(OUString::fromUtf8(name)), UNO_QUERY);
+        Reference<beans::XMultiPropertySet> xStyleProp(xStyle, UNO_QUERY);
+        if (!xStyleProp.is())
+            return val::undefined();
+        const uint32_t len = properties["length"].as<uint32_t>();
+        Sequence<rtl::OUString> names = valStrArrayToSequence(properties);
+        Sequence<Any> values = xStyleProp->getPropertyValues(names);
+        Any* valuesArray = values.getArray();
+        val result = val::object();
+        for (sal_uInt32 i = 0; i < len; ++i)
+        {
+            result.set(properties[i], unoAnyToVal(valuesArray[i]));
+        }
+
+        return result;
+    }
+
+    // Forwarded from IWriterExtensions.hxx, unotxdoc.hxx, wasm/extensions.cxx
+    val comments() { return writer()->comments(); }
+    void addComment(std::string text) { writer()->addComment(std::move(text)); }
+    void replyComment(int parentId, std::string text)
+    {
+        writer()->replyComment(parentId, std::move(text));
+    }
+    void deleteCommentThreads(val parentIds) { writer()->deleteCommentThreads(parentIds); }
+    void deleteComment(int commentId) { writer()->deleteComment(commentId); }
+    void resolveCommentThread(int parentId) { writer()->resolveCommentThread(parentId); }
+    void resolveComment(int commentId) { writer()->resolveComment(commentId); }
+    void sanitize(val options) { writer()->sanitize(std::move(options)); }
+    val pageRects() { return writer()->pageRects(); }
+    val headerFooterRect() { return writer()->headerFooterRect(); }
+    val paragraphStyles() { return writer()->paragraphStyles(); }
+
+    std::shared_ptr<wasm::ITextRanges> findAll(std::string text, val options)
+    {
+        find_text_ranges_ = writer()->findAllTextRanges(text, std::move(options));
+        return find_text_ranges_;
+    }
+
 private:
     struct DocWithId
     {
@@ -339,6 +616,8 @@ private:
     std::unordered_map<int, std::unordered_set<int>> subscribed_events_;
     std::unordered_map<int, bool> callback_registered_;
     bool rendering_tiles_ = false;
+    css::uno::Reference<css::text::XTextRange> stored_range_;
+    std::shared_ptr<wasm::ITextRanges> find_text_ranges_;
 
     static constexpr int MAX_TILE_DIM = 2048; // this is the de facto max dim for WebGL
     static constexpr int BYTES_PER_PIXEL = 4; /** RGBA **/
@@ -387,22 +666,36 @@ private:
     }
 };
 
-//static
-void preload() { instance(); }
+}
 
 EMSCRIPTEN_BINDINGS(lok)
 {
     register_optional<bool>();
     register_optional<std::string>();
+    register_optional<int>();
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
+
+    class_<wasm::ITextRanges>("TextRanges")
+        .smart_ptr<std::shared_ptr<wasm::ITextRanges>>("TextRanges")
+        .function("length", &wasm::ITextRanges::length)
+        .function("rect", &wasm::ITextRanges::rect)
+        .function("rects", &wasm::ITextRanges::rects)
+        .function("isCursorAt", &wasm::ITextRanges::isCursorAt)
+        .function("indexAtCursor", &wasm::ITextRanges::indexAtCursor)
+        .function("moveCursorTo", &wasm::ITextRanges::moveCursorTo)
+        .function("description", &wasm::ITextRanges::description)
+        .function("descriptions", &wasm::ITextRanges::descriptions)
+        .function("replace", &wasm::ITextRanges::replace)
+        .function("replaceAll", &wasm::ITextRanges::replaceAll)
+    ;
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()
         .function("valid", &DocumentClient::valid)
         .function("saveAs", &DocumentClient::saveAs)
         .function("getParts", &DocumentClient::getParts)
-        .function("getPartRectangles", &DocumentClient::getPartRectangles)
+        .function("pageRects", &DocumentClient::pageRects)
         .function("paintTile", &DocumentClient::paintTile)
         .function("getDocumentSize", &DocumentClient::getDocumentSize)
         .function("initializeForRendering", &DocumentClient::initializeForRendering)
@@ -424,8 +717,23 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
         .function("ref", &DocumentClient::ref)
-    /* NOTE: Disabled until unoembind startup cost is under 1s
-        .function("getXComponent", &DocumentClient::getXComponent)
-    */
+        .function("setClientVisibleArea", &DocumentClient::setClientVisibleArea)
+        .function("getSelectionText", &DocumentClient::getSelectionText)
+        .function("getParagraphStyle", &DocumentClient::getParagraphStyle)
+        .function("getPropertyValue", &DocumentClient::getPropertyValue)
+        .function("setPropertyValue", &DocumentClient::setPropertyValue)
+        .function("saveCurrentSelection", &DocumentClient::saveCurrentSelection)
+        .function("restoreCurrentSelection", &DocumentClient::restoreCurrentSelection)
+        .function("headerFooterRect", &DocumentClient::headerFooterRect)
+        .function("paragraphStyles", &DocumentClient::paragraphStyles)
+        .function("findAll", &DocumentClient::findAll)
+        .function("comments", &DocumentClient::comments)
+        .function("addComment", &DocumentClient::addComment)
+        .function("replyComment", &DocumentClient::replyComment)
+        .function("deleteCommentThreads", &DocumentClient::deleteCommentThreads)
+        .function("deleteComment", &DocumentClient::deleteComment)
+        .function("resolveCommentThread", &DocumentClient::resolveCommentThread)
+        .function("resolveComment", &DocumentClient::resolveComment)
+        .function("sanitize", &DocumentClient::sanitize)
         .function("newView", &DocumentClient::newView);
 }

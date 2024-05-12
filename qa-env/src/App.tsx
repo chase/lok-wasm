@@ -10,6 +10,13 @@ import { downloadFile } from './utils';
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
 
+declare global {
+  interface Window {
+    // global for debugging
+    d: DocumentClient | undefined;
+  }
+}
+
 async function fileOpen(files: FileList | null) {
   if (!files || !files[0]) return;
   const name = files[0].name;
@@ -31,6 +38,8 @@ async function fileOpen(files: FileList | null) {
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
   doc.on(CallbackType.TEXT_SELECTION, console.log);
+  doc.on(CallbackType.HEADER_FOOTER, console.log)
+  window.d = doc;
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
 async function saveAsPDF(doc: DocumentClient | null) {

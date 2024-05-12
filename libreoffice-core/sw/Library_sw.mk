@@ -813,6 +813,7 @@ $(eval $(call gb_Library_add_exception_objects,sw,\
     sw/source/uibase/wrtsh/wrtsh3 \
     sw/source/uibase/wrtsh/wrtsh4 \
     sw/source/uibase/wrtsh/wrtundo \
+    sw/source/wasm/extensions \
 ))
 
 ifneq (,$(filter DBCONNECTIVITY,$(BUILD_TYPE)))

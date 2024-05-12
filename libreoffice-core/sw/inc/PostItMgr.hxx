@@ -203,6 +203,7 @@ class SAL_DLLPUBLIC_RTTI SwPostItMgr final : public SfxListener
         void Delete(sal_uInt32 nPostItId);
         void Delete();
         void DeleteCommentThread(sal_uInt32 nPostItId);
+        void DeleteCommentThreads(std::vector<sal_uInt32>& nPostItId); // MACRO-2313: WASM Writer extensions
         void ToggleResolved(sal_uInt32 nPostItId);
         void ToggleResolvedForThread(sal_uInt32 nPostItId);
 

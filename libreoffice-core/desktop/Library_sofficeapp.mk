@@ -37,11 +37,13 @@ $(eval $(call gb_Library_use_custom_headers,sofficeapp,\
 	officecfg/registry \
 ))
 
-ifeq ($(OS),EMSCRIPTEN)
-$(eval $(call gb_Library_use_custom_headers,sofficeapp, \
-    static/unoembind \
-))
-endif
+# MACRO: Disable unoembind API for now since it causes a 1+ second startup delay {
+# ifeq ($(OS),EMSCRIPTEN)
+# $(eval $(call gb_Library_use_custom_headers,sofficeapp, \
+#     static/unoembind \
+# ))
+# endif
+# MACRO: }
 
 $(eval $(call gb_Library_use_api,sofficeapp,\
 	udkapi \

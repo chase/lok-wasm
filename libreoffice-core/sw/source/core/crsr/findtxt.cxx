@@ -54,6 +54,10 @@
 #include <PostItMgr.hxx>
 #include <view.hxx>
 
+// MACRO: {
+#include <SwSearchCancel.hxx>
+// MACRO: }
+
 using namespace ::com::sun::star;
 using namespace util;
 
@@ -387,6 +391,10 @@ bool FindTextImpl(SwPaM & rSearchPam,
     bool bFirst = true;
     SwContentNode * pNode;
 
+    // MACRO: Cancellable search {
+    int nSearchGen = GetSearchGeneration();
+    // MACRO: }
+
     const bool bRegSearch = SearchAlgorithms2::REGEXP == rSearchOpt.AlgorithmType2;
     const bool bChkEmptyPara = bRegSearch && 2 == rSearchOpt.searchString.getLength() &&
                         ( rSearchOpt.searchString == "^$" ||
@@ -401,7 +409,7 @@ bool FindTextImpl(SwPaM & rSearchPam,
     }
 
     // LanguageType eLastLang = 0;
-    while (nullptr != (pNode = ::GetNode(*oPam, bFirst, fnMove, bInReadOnly, pLayout)))
+    while (nullptr != (pNode = ::GetNode(*oPam, bFirst, fnMove, bInReadOnly, pLayout)) && GetSearchGeneration() == nSearchGen)
     {
         if( pNode->IsTextNode() )
         {
@@ -777,9 +785,16 @@ bool DoSearch(SwPaM & rSearchPam,
 
     const AmbiguousIndex nStringEnd = nEnd;
     bool bZeroMatch = false;    // zero-length match, i.e. only $ anchor as regex
-    while ( ((bSrchForward && nStart < nStringEnd) ||
+
+    // MACRO: Cancellable search {
+    int nSearchGen = sw::GetSearchGeneration();
+
+    while ( nSearchGen == sw::GetSearchGeneration() &&
+            ((bSrchForward && nStart < nStringEnd) ||
             (!bSrchForward && nStringEnd < nStart)) && !bZeroMatch )
     {
+    // MACRO: }
+
         // SearchAlgorithms_APPROXIMATE works on a per word base so we have to
         // provide the text searcher with the correct locale, because it uses
         // the break-iterator

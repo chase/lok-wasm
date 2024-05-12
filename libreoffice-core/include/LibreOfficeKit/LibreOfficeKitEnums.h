@@ -117,6 +117,15 @@ LibreOfficeKitOptionalFeatures;
 
 typedef enum
 {
+    // MACRO: Custom callbacks go here to reduce merge conflicts, starting at 1024 {
+    /**
+     * Fires when entering or exiting a header/footer
+     *
+     * 1 if inside a header/footer, 0 if outside a header/footer
+     */
+    LOK_CALLBACK_HEADER_FOOTER = 1024,
+    // MACRO: }
+
     /**
      * Any tiles which are over the rectangle described in the payload are no
      * longer valid.

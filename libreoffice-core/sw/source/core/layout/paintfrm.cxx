@@ -7430,6 +7430,9 @@ std::vector<basegfx::B2DPolygon> SwHeadFootFrame::GetSubsidiaryLinesPolygons(con
 
 void SwHeadFootFrame::PaintSubsidiaryLines(const SwPageFrame*, const SwRect&) const
 {
+    // MACRO: We paint our own header/footer frame
+    return;
+
     if (!gProp.pSGlobalShell->IsHeaderFooterEdit())
         return;
 
