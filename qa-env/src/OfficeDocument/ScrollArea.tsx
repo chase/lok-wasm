@@ -2,6 +2,7 @@ import { splitProps, type JSX, onCleanup } from 'solid-js';
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   onScroll: (yPx: number, xPx: number) => void;
+  padding: boolean;
 }
 
 export function ScrollArea(props_: Props) {
@@ -22,7 +23,7 @@ export function ScrollArea(props_: Props) {
   });
   return (
     <div
-      class={`${local.class} h-full w-full overflow-auto`}
+      class={`${local.class} h-full w-full overflow-auto border border-purple-500`}
       {...others}
       ref={(ref) => {
         (local.ref as Extract<(typeof local)['ref'], Function>)?.(ref);
@@ -31,10 +32,10 @@ export function ScrollArea(props_: Props) {
       }}
     >
       <div
-        style={{
+        style={props_.padding ? {
           /** this is a clever workaround so that the center never changes even with overflow */
           'padding-left': 'calc(100vw - 100%)',
-        }}
+        }: {}}
       >
         {local.children}
       </div>

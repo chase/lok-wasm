@@ -245,7 +245,7 @@ function documentClient<T extends DocumentClient>(
       const message: ToWorker = {
         f: 'newView',
         i,
-        a: []
+        a: [ref]
       };
       loadWorkerOnce().postMessage(message);
 

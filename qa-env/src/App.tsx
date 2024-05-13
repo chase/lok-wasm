@@ -9,9 +9,12 @@ import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
 import { ZOOM_STEP, updateZoom } from './OfficeDocument/zoom';
 import { downloadFile } from './utils';
+import { DocumentPreview } from './DocumentPreview';
 
 const [loading, setLoading] = createSignal(false);
+const [previewDoc, setPreviewDoc] = createSignal<DocumentClient | null>(null);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
+const [initialRender, setInitialRender] = createSignal<boolean>(false); 
 const getDocThrows = () => {
   const doc = getDoc();
   if (!doc) throw new Error('no doc');
@@ -39,6 +42,11 @@ async function fileOpen(files: FileList | null) {
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
 
+  const previewDoc = await doc.newView();
+  await previewDoc?.initializeForRendering({
+    author: 'Macro user',
+  });
+  setPreviewDoc(previewDoc);
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
 async function saveAsPDF(doc: DocumentClient | null) {
@@ -127,14 +135,21 @@ function App() {
           <button onClick={() => saveAsPDF(getDoc())}>Save As PDF</button>
         </div>
       </Show>
-      <Show when={loading()}>
-        <div class="loadsection">
-          <span class="loader" />
-        </div>
-      </Show>
-      <Show when={getDoc()} keyed>
-        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} />
-      </Show>
+      <div class = "w-full h-full relative">
+        <Show when={loading()}>
+          <div class="loadsection">
+            <span class="loader" />
+          </div>
+        </Show>
+        <Show when={getDoc()} keyed>
+          <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} setInitialRender={setInitialRender}/>
+        </Show>
+        <Show when={previewDoc()}>
+          <div class="h-full w-[300px] absolute left-0 top-0">
+            <DocumentPreview doc={previewDoc()!} didMainRender={initialRender()}/>
+          </div>
+        </Show>
+      </div>
     </>
   );
 }

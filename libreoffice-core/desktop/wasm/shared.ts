@@ -55,7 +55,7 @@ export type DocumentMethods = {
   /** returns a copy of the document in the provided `format` */
   save(format: 'docx' | 'pdf'): ArrayBuffer;
   /** returns the id of the new view created */
-  newView(): number;
+  newView(): DocumentRef;
   /** returns the number of pages */
   parts(): number;
   /** returns the rectangles of each page in twips (1/12 pt) */

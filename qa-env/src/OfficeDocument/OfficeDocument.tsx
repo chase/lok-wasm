@@ -34,6 +34,7 @@ const BORDER_WIDTH = 1;
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
+  setInitialRender: (val: boolean) => void;
   ignoreShortcuts?: Shortcut[];
 }
 
@@ -59,7 +60,7 @@ function calcCanvasHeight(heightPx: number | undefined) {
     : undefined;
 }
 
-function observedSize(
+export function observedSize(
   el: Element,
   setter: () => [DocumentClient, Setter<number | undefined>]
 ) {
@@ -175,6 +176,7 @@ export function OfficeDocument(props: Props) {
     if (didInitialRender.has(props.doc)) return;
     const width = docSizePx()?.[0];
     const height = canvasHeight();
+    console.log(`document preview initial height and width ${height} ${width}`);
     const canvas0_ = canvas0();
     const canvas1_ = canvas1();
     if (!width || !height || !canvas0_ || !canvas1_ || !props.doc) return;
@@ -198,6 +200,7 @@ export function OfficeDocument(props: Props) {
       dpi
     );
     didInitialRender.add(props.doc);
+    props.setInitialRender && props.setInitialRender(true);
   });
 
   const [focused, setFocused] = getOrCreateFocusedSignal(() => props.doc);
@@ -257,7 +260,7 @@ export function OfficeDocument(props: Props) {
   return (
     <>
       <div
-        class="flex flex-1 justify-center relative overflow-hidden"
+        class="flex flex-1 justify-center relative overflow-hidden border border-blue-400 h-full"
         use:observedSize={[props.doc, setContainerHeight]}
       >
         {docSizePx() && canvasHeight() && (
