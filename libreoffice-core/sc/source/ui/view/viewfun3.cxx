@@ -462,7 +462,7 @@ rtl::Reference<ScTransferObj> ScViewFunc::CopyToTransferable()
     {
         ScDocumentUniquePtr pClipDoc(new ScDocument(SCDOCMODE_CLIP));
         // This takes care of the input line and calls CopyToClipMultiRange() for us.
-        CopyToClip(pClipDoc.get(), /*bCut=*/false, /*bApi=*/true);
+        CopyToClip(pClipDoc.get(), aRange, /*bCut=*/false, /*bApi=*/true);
         TransferableObjectDescriptor aObjDesc;
         return new ScTransferObj(std::move(pClipDoc), std::move(aObjDesc));
     }
@@ -896,7 +896,8 @@ bool ScViewFunc::PasteFromClip( InsertDeleteFlags nFlags, ScDocument* pClipDoc,
 
     //  undo: save all or no content
     InsertDeleteFlags nContFlags = InsertDeleteFlags::NONE;
-    if (nFlags & InsertDeleteFlags::CONTENTS)
+    // tdf#160765 - save content for undo when pasting notes, even if no content was changed
+    if (nFlags & (InsertDeleteFlags::CONTENTS | InsertDeleteFlags::ADDNOTES))
         nContFlags |= InsertDeleteFlags::CONTENTS;
     if (nFlags & InsertDeleteFlags::ATTRIB)
         nContFlags |= InsertDeleteFlags::ATTRIB;

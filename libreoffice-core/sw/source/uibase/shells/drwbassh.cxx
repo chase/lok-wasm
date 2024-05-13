@@ -60,6 +60,8 @@
 #include <fmtfollowtextflow.hxx>
 #include <textboxhelper.hxx>
 #include <svx/diagram/IDiagramHelper.hxx>
+#include <svl/grabbagitem.hxx>
+#include <IDocumentSettingAccess.hxx>
 
 using namespace ::com::sun::star;
 using namespace css::beans;
@@ -234,6 +236,14 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
                         aSet.Put(SfxInt16Item(SID_ATTR_TRANSFORM_HORI_RELATION, aHOrient.GetRelationOrient() ));
                         aSet.Put(SfxBoolItem(SID_ATTR_TRANSFORM_HORI_MIRROR, aHOrient.IsPosToggle()));
                         aSet.Put(SfxInt32Item(SID_ATTR_TRANSFORM_HORI_POSITION, aHOrient.GetPos()));
+
+                        const IDocumentSettingAccess& rIDSA = pFrameFormat->getIDocumentSettingAccess();
+                        if (rIDSA.get(DocumentSettingId::DO_NOT_MIRROR_RTL_DRAW_OBJS))
+                        {
+                            SfxGrabBagItem aItem(RES_CHRATR_GRABBAG);
+                            aItem.GetGrabBag()["DoNotMirrorRtlDrawObjs"] <<= true;
+                            aSet.Put(aItem);
+                        }
 
                         aSet.Put(SfxUInt16Item(SID_HTML_MODE, nHtmlMode));
 
@@ -584,29 +594,38 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
             if(1 == pSdrView->GetMarkedObjectCount())
             {
                 // #i68101#
-                SdrObject* pSelected = pSdrView->GetMarkedObjectByIndex(0);
+                rtl::Reference<SdrObject> pSelected = pSdrView->GetMarkedObjectByIndex(0);
                 OSL_ENSURE(pSelected, "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
-                OUString aName(pSelected->GetName());
+                OUString aOrigName(pSelected->GetName());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(GetView().GetFrameWeld(), aName));
+                VclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(GetView().GetFrameWeld(), aOrigName));
 
                 pDlg->SetCheckNameHdl(LINK(this, SwDrawBaseShell, CheckGroupShapeNameHdl));
 
-                if(RET_OK == pDlg->Execute())
-                {
-                    const OUString aOrigName = aName;
-                    pDlg->GetName(aName);
-                    pSelected->SetName(aName);
-                    pSh->SetModified();
-
-                    // update accessibility sidebar object name if we modify the object name on the navigator bar
-                    if (!aName.isEmpty() && aOrigName != aName)
+                pDlg->StartExecuteAsync(
+                    [pDlg, pSelected, pSh, aOrigName] (sal_Int32 nResult)->void
                     {
-                        if (SwNode* pSwNode = FindFrameFormat(pSelected)->GetAnchor().GetAnchorNode())
-                            pSwNode->resetAndQueueAccessibilityCheck(true);
+                        if (nResult == RET_OK)
+                        {
+                            OUString aNewName = pDlg->GetName();
+                            pSelected->SetName(aNewName);
+                            pSh->SetModified();
+
+                            // update accessibility sidebar object name if we modify the object name on the navigator bar
+                            if (!aNewName.isEmpty() && aOrigName != aNewName)
+                            {
+                                auto pFrameFormat = FindFrameFormat(pSelected.get());
+                                if (pFrameFormat)
+                                {
+                                    if (SwNode* pSwNode = pFrameFormat->GetAnchor().GetAnchorNode())
+                                        pSwNode->resetAndQueueAccessibilityCheck(true);
+                                }
+                            }
+                        }
+                        pDlg->disposeOnce();
                     }
-                }
+                );
             }
 
             break;
@@ -619,28 +638,38 @@ void SwDrawBaseShell::Execute(SfxRequest const &rReq)
 
             if(1 == pSdrView->GetMarkedObjectCount())
             {
-                SdrObject* pSelected = pSdrView->GetMarkedObjectByIndex(0);
+                rtl::Reference<SdrObject> pSelected = pSdrView->GetMarkedObjectByIndex(0);
                 OSL_ENSURE(pSelected, "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aTitle(pSelected->GetTitle());
                 OUString aDescription(pSelected->GetDescription());
                 bool isDecorative(pSelected->IsDecorative());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
+                VclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(GetView().GetFrameWeld(),
                             aTitle, aDescription, isDecorative));
 
-                if(RET_OK == pDlg->Execute())
-                {
-                    pDlg->GetTitle(aTitle);
-                    pDlg->GetDescription(aDescription);
-                    pDlg->IsDecorative(isDecorative);
+                pDlg->StartExecuteAsync(
+                    [pDlg, pSelected, pSh] (sal_Int32 nResult)->void
+                    {
+                        if (nResult == RET_OK)
+                        {
+                            OUString aNewTitle;
+                            OUString aNewDescription;
+                            bool newIsDecorative;
 
-                    pSelected->SetTitle(aTitle);
-                    pSelected->SetDescription(aDescription);
-                    pSelected->SetDecorative(isDecorative);
+                            pDlg->GetTitle(aNewTitle);
+                            pDlg->GetDescription(aNewDescription);
+                            pDlg->IsDecorative(newIsDecorative);
 
-                    pSh->SetModified();
-                }
+                            pSelected->SetTitle(aNewTitle);
+                            pSelected->SetDescription(aNewDescription);
+                            pSelected->SetDecorative(newIsDecorative);
+
+                            pSh->SetModified();
+                        }
+                        pDlg->disposeOnce();
+                    }
+                );
             }
 
             break;
@@ -717,8 +746,7 @@ IMPL_LINK( SwDrawBaseShell, CheckGroupShapeNameHdl, AbstractSvxObjectNameDialog&
     OSL_ENSURE(rMarkList.GetMarkCount() == 1, "wrong draw selection");
     SdrObject* pObj = rMarkList.GetMark(0)->GetMarkedSdrObj();
     const OUString sCurrentName = pObj->GetName();
-    OUString sNewName;
-    rNameDialog.GetName(sNewName);
+    OUString sNewName = rNameDialog.GetName();
     bool bRet = false;
     if (sNewName.isEmpty() || sCurrentName == sNewName)
         bRet = true;

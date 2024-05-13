@@ -173,6 +173,18 @@ function userCanEdit(doc: Accessor<DocumentClient>) {
   return true;
 }
 
+function keyboardEventToMapKey(evt: KeyboardEvent) {
+  const modifiers: Shortcut['modifiers'] = [];
+  if (evt.metaKey) modifiers.push('cmd');
+  if (evt.ctrlKey) modifiers.push('ctrl');
+  if (evt.altKey) modifiers.push('alt');
+  if (evt.shiftKey) modifiers.push('shift');
+  return shortcutToMapKey({
+    key: evt.key,
+    modifiers,
+  });
+}
+
 export function createKeyHandler(
   doc: Accessor<DocumentClient>,
   textInputFocused: Accessor<boolean>
@@ -200,6 +212,11 @@ export function createKeyHandler(
       }
     },
     handleKeyEvent(evt: KeyboardEvent): void {
+      if (ignoredShortcuts_.has(keyboardEventToMapKey(evt))) {
+        evt.preventDefault();
+        return;
+      }
+
       // Fixes AltGr => Alt + Ctrl on Windows
       if (evt.ctrlKey && evt.altKey) {
         // Ctrl+Alt/(AltGr)+ <char> doesn't give location information
@@ -236,6 +253,18 @@ export function createKeyHandler(
       ) {
         modifiers -= Modifiers.ALT_OR_OPTION;
       }
+
+      // handle Cmd+<char> on macOS
+      // convert Cmd to Ctrl only if Ctrl is not pressed
+      // which accounts for the case where the user presses Cmd+Ctrl+<char>
+      if (
+        IS_MAC && 
+        (modifiers & Modifiers.META_OR_CMD) !== 0 &&
+        (modifiers & Modifiers.CTRL) === 0
+      ) {
+        modifiers &= ~Modifiers.META_OR_CMD;
+        modifiers |= Modifiers.CTRL;
+      };
 
       let vclCode = vclKeyCode(
         evt.code as keyof typeof VCL_KEY_CODES,

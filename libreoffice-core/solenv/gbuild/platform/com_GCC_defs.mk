@@ -38,10 +38,10 @@ endif
 gb_COMPILER_SETUP :=
 
 ifeq ($(strip $(gb_COMPILEROPTFLAGS)),)
-gb_COMPILEROPTFLAGS := \
-	-O3 \
-	$(if $(HARDENING_OPT_CFLAGS),$(HARDENING_OPT_CFLAGS))
+gb_COMPILEROPTFLAGS := -O3
 endif
+
+gb_COMPILEROPTFLAGS += $(if $(ENABLE_HARDENING_FLAGS),$(HARDENING_OPT_CFLAGS))
 
 gb_AFLAGS := $(AFLAGS)
 
@@ -228,7 +228,7 @@ gb_PrecompiledHeader_EXCEPTIONFLAGS := $(gb_LinkTarget_EXCEPTIONFLAGS)
 gb_PrecompiledHeader_ignore_flags_for_flags_file := -Wunused-macros
 
 # optimization level
-gb_COMPILERNOOPTFLAGS := -O0 -fstrict-aliasing -fstrict-overflow
+gb_COMPILERNOOPTFLAGS := -O0 -Wp,-U_FORTIFY_SOURCE -fstrict-aliasing -fstrict-overflow
 gb_COMPILERDEBUGOPTFLAGS := -Og
 
 ifeq ($(OS),ANDROID)

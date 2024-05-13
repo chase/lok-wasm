@@ -428,6 +428,14 @@ public:
     val getCommandValues(int viewId, std::string command)
     {
         doc_->setView(viewId);
+        desktop::WasmDocumentExtension* ext
+            = static_cast<desktop::WasmDocumentExtension*>(doc_->get());
+
+        if (command == ".uno:PageColor") {
+            return val(ext->getPageColor());
+        } else if (command == ".uno:PageOrientation") {
+            return val(ext->getPageOrientation());
+        }
         return val::u8string(doc_->getCommandValues(command.c_str()));
     }
 
@@ -461,6 +469,7 @@ public:
         result.set("invalidationStackHead",
                    typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
         result.set("docWidthTwips", typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
+        result.set("docHeightTwips", typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
 
         return result;
     }

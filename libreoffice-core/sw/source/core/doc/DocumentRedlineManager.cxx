@@ -42,6 +42,7 @@
 #include <osl/diagnose.h>
 #include <editeng/prntitem.hxx>
 #include <comphelper/lok.hxx>
+#include <svl/whichranges.hxx>
 
 using namespace com::sun::star;
 
@@ -953,7 +954,26 @@ namespace
                 if ( pRedl->GetType() == RedlineType::Format )
                 {
                     SwPaM aPam( *(pRedl->Start()), *(pRedl->End()) );
-                    rDoc.ResetAttrs(aPam);
+                    // MACRO : MACRO-1781 {
+                    // Instead of simply resetting all attributes, we only
+                    // reset the attributes that were changed by the redline.
+                    const SwRedlineExtraData_FormatColl* pExtraData =
+                        dynamic_cast<const SwRedlineExtraData_FormatColl*>(pRedl->GetExtraData());
+                    if (pExtraData)
+                    {
+                        o3tl::sorted_vector<sal_uInt16> aResetAttrsArray;
+
+                        WhichRangesContainer rangesContainer = pExtraData->GetItemSet()->GetRanges();
+
+                        for (const auto& [nBegin, nEnd] : rangesContainer)
+                        {
+                            for (sal_uInt16 i = nBegin; i <= nEnd; ++i)
+                                aResetAttrsArray.insert( i );
+                        }
+
+                        rDoc.ResetAttrs(aPam, false, aResetAttrsArray);
+                    }
+                    // MACRO : MACRO-1781 }
                 }
                 else if ( pRedl->GetType() == RedlineType::ParagraphFormat )
                 {
@@ -1983,13 +2003,23 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
 
                     case SwComparePosition::Inside:
                         {
+                            // Redlines have the same start position
                             if( *pRStt == *pStt )
                             {
                                 // #i97421#
                                 // redline w/out extent loops
+                                // new redline has some content
                                 if (*pStt != *pEnd)
                                 {
-                                    pNewRedl->PushData( *pRedl, false );
+
+                                    // MACRO-1723: Fix Author when adding deletion within
+                                    // an existing insertion: {
+                                    // Copy the redline data from the existing redline
+                                    // but keep the author of the new redline
+                                    SwRedlineData pTmp = pRedl->GetRedlineData();
+                                    pTmp.SetAuthor(pNewRedl->GetAuthor());
+                                    pNewRedl->PushData( pTmp, false );
+                                    // MACRO: }
                                     pRedl->SetStart( *pEnd, pRStt );
                                     // re-insert
                                     maRedlineTable.Remove( n );
@@ -1999,7 +2029,14 @@ DocumentRedlineManager::AppendRedline(SwRangeRedline* pNewRedl, bool const bCall
                             }
                             else
                             {
-                                pNewRedl->PushData( *pRedl, false );
+                                // MACRO-1723: Fix Author when adding deletion within
+                                // an existing insertion: {
+                                // Copy the redline data from the existing redline
+                                // but keep the author of the new redline
+                                SwRedlineData pTmp = pRedl->GetRedlineData();
+                                pTmp.SetAuthor(pNewRedl->GetAuthor());
+                                pNewRedl->PushData( pTmp, false );
+                                // MACRO : }
                                 if( *pREnd != *pEnd )
                                 {
                                     pNew = new SwRangeRedline( *pRedl );

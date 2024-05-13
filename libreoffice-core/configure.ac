@@ -513,7 +513,7 @@ AC_DEFINE_UNQUOTED(LIBO_VERSION_MINOR,$LIBO_VERSION_MINOR)
 AC_DEFINE_UNQUOTED(LIBO_VERSION_MICRO,$LIBO_VERSION_MICRO)
 AC_DEFINE_UNQUOTED(LIBO_VERSION_PATCH,$LIBO_VERSION_PATCH)
 
-git_date=`git log -1 --pretty=format:"%cd" --date=format:'%Y' 2>&/dev/null`
+git_date=`git log -1 --pretty=format:"%cd" --date=format:'%Y' 2>/dev/null`
 LIBO_THIS_YEAR=${git_date:-2024}
 AC_DEFINE_UNQUOTED(LIBO_THIS_YEAR,$LIBO_THIS_YEAR)
 
@@ -7397,8 +7397,11 @@ if test "$GCC" = "yes" -o "$COM_IS_CLANG" = TRUE; then
     AC_MSG_CHECKING([whether $CC_BASE supports -D_FORTIFY_SOURCE=2])
     save_CFLAGS=$CFLAGS
     CFLAGS="$CFLAGS -Werror -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=2"
+    if test "$ENABLE_OPTIMIZED" = TRUE; then
+        CFLAGS="$CFLAGS -O2"
+    fi
     AC_LINK_IFELSE(
-        [AC_LANG_PROGRAM(, [[return 0;]])],
+        [AC_LANG_PROGRAM([[#include <string.h>]], [[return 0;]])],
         [AC_MSG_RESULT([yes]); HARDENING_OPT_CFLAGS="$HARDENING_OPT_CFLAGS -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=2"],
         [AC_MSG_RESULT([no])])
     CFLAGS=$save_CFLAGS

@@ -84,6 +84,7 @@
 #include <svl/zforlist.hxx>
 #include <linguistic/misc.hxx>
 #include <cppuhelper/bootstrap.hxx>
+#include <comphelper/random.hxx>
 #include <comphelper/base64.hxx>
 #include <comphelper/dispatchcommand.hxx>
 #include <comphelper/lok.hxx>
@@ -1664,32 +1665,14 @@ static OUString getGenerator()
 
 extern "C" {
 
-CallbackFlushHandler::TimeoutIdle::TimeoutIdle( CallbackFlushHandler* handler )
-    : Timer( "lokit timer callback" )
-    , mHandler( handler )
-{
-    // A second timer with higher priority, it'll ensure we flush in reasonable time if we get too busy
-    // to get POST_PAINT priority processing. Otherwise it could take a long time to flush.
-    SetPriority(TaskPriority::DEFAULT);
-    SetTimeout( 100 ); // 100 ms
-}
-
-void CallbackFlushHandler::TimeoutIdle::Invoke()
-{
-    mHandler->Invoke();
-}
-
 // One of these is created per view to handle events cf. doc_registerCallback
 CallbackFlushHandler::CallbackFlushHandler(LibreOfficeKitDocument* pDocument, LibreOfficeKitCallback pCallback, void* pData)
-    : Idle( "lokit idle callback" ),
-      m_pDocument(pDocument),
+    : m_pDocument(pDocument),
       m_pCallback(pCallback),
+      m_pFlushEvent(nullptr),
       m_pData(pData),
-      m_nDisableCallbacks(0),
-      m_TimeoutIdle( this )
+      m_nDisableCallbacks(0)
 {
-    SetPriority(TaskPriority::POST_PAINT);
-
     // Add the states that are safe to skip duplicates on, even when
     // not consequent (i.e. do no emit them if unchanged from last).
     m_states.emplace(LOK_CALLBACK_TEXT_SELECTION, "NIL"_ostr);
@@ -1708,9 +1691,18 @@ CallbackFlushHandler::CallbackFlushHandler(LibreOfficeKitDocument* pDocument, Li
     m_states.emplace(LOK_CALLBACK_STATUS_INDICATOR_SET_VALUE, "NIL"_ostr);
 }
 
+void CallbackFlushHandler::stop()
+{
+    if (m_pFlushEvent)
+    {
+        Application::RemoveUserEvent(m_pFlushEvent);
+        m_pFlushEvent = nullptr;
+    }
+}
+
 CallbackFlushHandler::~CallbackFlushHandler()
 {
-    Stop();
+    stop();
 }
 
 CallbackFlushHandler::queue_type2::iterator CallbackFlushHandler::toQueue2(CallbackFlushHandler::queue_type1::iterator pos)
@@ -1732,7 +1724,7 @@ void CallbackFlushHandler::setUpdatedType( int nType, bool value )
         m_updatedTypes.resize( nType + 1 ); // new are default-constructed, i.e. false
     m_updatedTypes[ nType ] = value;
     if(value)
-        startTimer();
+        scheduleFlush();
 }
 
 void CallbackFlushHandler::resetUpdatedType( int nType )
@@ -1748,7 +1740,7 @@ void CallbackFlushHandler::setUpdatedTypePerViewId( int nType, int nViewId, int 
         types.resize( nType + 1 ); // new are default-constructed, i.e. 'set' is false
     types[ nType ] = PerViewIdData{ value, nSourceViewId };
     if(value)
-        startTimer();
+        scheduleFlush();
 }
 
 void CallbackFlushHandler::resetUpdatedTypePerViewId( int nType, int nViewId )
@@ -1825,7 +1817,7 @@ void CallbackFlushHandler::dumpState(rtl::OStringBuffer &rState)
 void CallbackFlushHandler::libreOfficeKitViewAddPendingInvalidateTiles()
 {
     // Invoke() will call flushPendingLOKInvalidateTiles(), so just make sure the timer is active.
-    startTimer();
+    scheduleFlush();
 }
 
 void CallbackFlushHandler::queue(const int type, const OString& data)
@@ -2138,7 +2130,7 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
 #endif
 
     lock.unlock();
-    startTimer();
+    scheduleFlush();
 }
 
 bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& aCallbackData)
@@ -2516,7 +2508,7 @@ void CallbackFlushHandler::enqueueUpdatedType( int type, const SfxViewShell* vie
         << "] to have " << m_queue1.size() << " entries.");
 }
 
-void CallbackFlushHandler::Invoke()
+void CallbackFlushHandler::invoke()
 {
     comphelper::ProfileZone aZone("CallbackFlushHandler::Invoke");
 
@@ -2586,6 +2578,7 @@ void CallbackFlushHandler::Invoke()
                     long w, h;
                     pDocument->pClass->getDocumentSize(pDocument, &w, &h);
                     __c11_atomic_store(&data.docWidthTwips, w, __ATOMIC_SEQ_CST);
+                    __c11_atomic_store(&data.docHeightTwips, h, __ATOMIC_SEQ_CST);
                 }
             }
         }
@@ -2672,16 +2665,19 @@ void CallbackFlushHandler::Invoke()
 
     m_queue1.clear();
     m_queue2.clear();
-    Stop();
-    m_TimeoutIdle.Stop();
+    stop();
 }
 
-void CallbackFlushHandler::startTimer()
+void CallbackFlushHandler::scheduleFlush()
 {
-    if (!IsActive())
-        Start();
-    if (!m_TimeoutIdle.IsActive())
-        m_TimeoutIdle.Start();
+    if (!m_pFlushEvent)
+        m_pFlushEvent = Application::PostUserEvent(LINK(this, CallbackFlushHandler, FlushQueue));
+}
+
+IMPL_LINK_NOARG(CallbackFlushHandler, FlushQueue, void*, void)
+{
+    m_pFlushEvent = nullptr;
+    invoke();
 }
 
 bool CallbackFlushHandler::removeAll(int type)
@@ -3978,6 +3974,8 @@ static void doc_iniUnoCommands ()
         u".uno:Context"_ustr,
         u".uno:WrapText"_ustr,
         u".uno:ToggleMergeCells"_ustr,
+        u".uno:NameGroup"_ustr,
+        u".uno:ObjectTitleDescription"_ustr,
         u".uno:NumberFormatCurrency"_ustr,
         u".uno:NumberFormatPercent"_ustr,
         u".uno:NumberFormatDecimal"_ustr,
@@ -4117,7 +4115,8 @@ static void doc_iniUnoCommands ()
         u".uno:InsertPictureContentControl"_ustr,
         u".uno:DataFilterAutoFilter"_ustr,
         u".uno:CellProtection"_ustr,
-        u".uno:MoveKeepInsertMode"_ustr
+        u".uno:MoveKeepInsertMode"_ustr,
+        u".uno:ToggleSheetGrid"_ustr,
     };
 
     util::URL aCommandURL;
@@ -6006,45 +6005,6 @@ static bool getFromTransferable(
     const css::uno::Reference<css::datatransfer::XTransferable> &xTransferable,
     const OString &aInMimeType, OString &aRet);
 
-// MACRO: {
-namespace {
-    char* leakyStrDup(const std::string_view& view) {
-        char* pMemory = static_cast<char*>(malloc(view.size() + 1));
-        assert(pMemory); // don't tolerate failed allocations.
-        std::memcpy(pMemory, view.data(), view.size());
-        pMemory[view.size()] = '\0';
-        return pMemory;
-    }
-}
-// MACRO: }
-
-
-// MACRO: getters for pagesetup commandValues {
-static char* getPageColor()
-{
-    SfxViewShell* pViewShell = SfxViewShell::Current();
-    SfxViewFrame* pViewFrm = pViewShell ? &pViewShell->GetViewFrame() : nullptr;
-    if (!pViewFrm)
-    {
-        return nullptr;
-    }
-
-    static constexpr std::string_view defaultColorHex = "\"#ffffff\"";
-
-    std::unique_ptr<SfxPoolItem> pState;
-    const SfxItemState eState (pViewFrm->GetBindings().QueryState(SID_ATTR_PAGE_COLOR, pState));
-    if (eState < SfxItemState::DEFAULT) {
-        return leakyStrDup(defaultColorHex);
-    }
-    if (pState)
-    {
-        OUString aColorHex = u"\"" + static_cast<XFillColorItem*>(pState->Clone())->GetColorValue().AsRGBHEXString() + u"\"";
-        return convertOUString(aColorHex);
-    }
-    return leakyStrDup(defaultColorHex);
-}
-
-
 static char* getPageSize()
 {
     tools::JsonWriter aJson;
@@ -6066,24 +6026,6 @@ static char* getPageSize()
     aJson.put("Height", pPageSizeItem->GetSize().Height());
 
     return const_cast<char*>(aJson.finishAndGetAsOString().getStr());
-}
-
-static char* getPageOrientation ()
-{
-    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-    if (!pViewFrm)
-    {
-        return nullptr;
-    }
-    SfxPoolItemHolder aResult;
-    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, aResult);
-    std::unique_ptr<SvxSizeItem> pSizeItem(
-        static_cast<const SvxSizeItem*>(aResult.getItem())->Clone()
-    );
-
-    bool bIsLandscape = (pSizeItem->GetSize().Width() >= pSizeItem->GetSize().Height());
-
-    return bIsLandscape ? leakyStrDup("\"landscape\"") : leakyStrDup("\"portrait\"");
 }
 
 static char* getPageMargins()
@@ -6982,21 +6924,13 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     }
 
     // MACRO: page setup {
-    if (aCommand == ".uno:PageColor")
-    {
-        return getPageColor();
-    }
-    else if (aCommand == ".uno:PageSize")
+    if (aCommand == ".uno:PageSize")
     {
         return getPageSize();
     }
     else if (aCommand == ".uno:PageMargins")
     {
         return getPageMargins();
-    }
-    else if (aCommand == ".uno:PageOrientation")
-    {
-        return getPageOrientation();
     }
     // MACRO: }
 
@@ -7960,8 +7894,7 @@ static void doc_setViewReadOnly(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* pTh
     SolarMutexGuard aGuard;
     SetLastExceptionMsg();
 
-    doc_setView(pThis, nId);
-    SfxViewShell::Current()->SetLokReadOnlyView(readOnly);
+    SfxLokHelper::setViewReadOnly(nId, readOnly);
 }
 
 static void doc_setAllowChangeComments(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* pThis, int nId, const bool allow)
@@ -7971,8 +7904,7 @@ static void doc_setAllowChangeComments(SAL_UNUSED_PARAMETER LibreOfficeKitDocume
     SolarMutexGuard aGuard;
     SetLastExceptionMsg();
 
-    doc_setView(pThis, nId);
-    SfxViewShell::Current()->SetAllowChangeComments(allow);
+    SfxLokHelper::setAllowChangeComments(nId, allow);
 }
 
 static void doc_setAccessibilityState(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* pThis, int nId, bool nEnabled)
@@ -8306,11 +8238,14 @@ static void preloadData()
     }
     std::cerr << "\n";
 
-    std::cerr << "Preloading breakiterator: ";
-    css::uno::Reference< css::i18n::XBreakIterator > xBreakIterator = css::i18n::BreakIterator::create(xContext);
-    css::i18n::LineBreakUserOptions aUserOptions;
-    css::i18n::LineBreakHyphenationOptions aHyphOptions( LinguMgr::GetHyphenator(), css::uno::Sequence<beans::PropertyValue>(), 1 );
-    xBreakIterator->getLineBreak("", /*nMaxBreakPos*/0, aLocales[0], /*nMinBreakPos*/0, aHyphOptions, aUserOptions);
+    std::cerr << "Preloading breakiterator\n";
+    if (aLocales.getLength())
+    {
+        css::uno::Reference< css::i18n::XBreakIterator > xBreakIterator = css::i18n::BreakIterator::create(xContext);
+        css::i18n::LineBreakUserOptions aUserOptions;
+        css::i18n::LineBreakHyphenationOptions aHyphOptions( LinguMgr::GetHyphenator(), css::uno::Sequence<beans::PropertyValue>(), 1 );
+        xBreakIterator->getLineBreak("", /*nMaxBreakPos*/0, aLocales[0], /*nMinBreakPos*/0, aHyphOptions, aUserOptions);
+    }
 
     css::uno::Reference< css::ui::XAcceleratorConfiguration > xGlobalCfg = css::ui::GlobalAcceleratorConfiguration::create(
         comphelper::getProcessComponentContext());
@@ -8691,7 +8626,10 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
         }
         rtl::Bootstrap::set(u"UserInstallation"_ustr, url);
         if (eStage == SECOND_INIT)
+        {
+            comphelper::rng::reseed();
             utl::Bootstrap::reloadData();
+        }
     }
 
     OUString aAppPath;

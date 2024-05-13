@@ -17,6 +17,7 @@ export type GlobalMessage = {
   // NOTE: Disabled until unoembind startup cost is under 1s
   // importScript(url: string): void;
   preload(): void;
+  setIsMacOSForConfig(): void;
 };
 
 type Rectangle = {
@@ -113,7 +114,7 @@ export type DocumentWithViewMethods = {
   ): void;
 
   startRendering(
-    canvas: OffscreenCanvas,
+    canvases: OffscreenCanvas[],
     tileSize: TileDim,
     /** Non-negative float, 1.0 is unchange, less than 1.0 is smaller, greater than 1.0 is larger */
     scale: number,
@@ -121,12 +122,13 @@ export type DocumentWithViewMethods = {
     yPosPx?: number
   ): TileRendererData;
 
-  setScrollTop(yPx: number): void;
+  setScrollTop(yPx: number): number;
   setVisibleHeight(heightPx: number): void;
+  setZoom(scale: number, dpi: number): void;
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
   resetRendering(
-    canvas: OffscreenCanvas,
+    canvas: OffscreenCanvas[],
     /** Non-negative float, 1.0 is unchanged, less than 1.0 is smaller, greater than 1.0 is larger */
     scale: number
   ): void;
@@ -362,25 +364,38 @@ export type ForwardedFromWorker<
 
 export type ToTileRenderer =
   | {
+      /** initialize */
       t: 'i';
-      c: OffscreenCanvas;
+      c: OffscreenCanvas[];
       d: TileRenderData;
-      /** scale */
+      /** absolute scale */
       s: number;
       /** top position in pixels */
       y: number;
+      /** dpi */
+      dpi: number;
     }
   | {
-      /** scroll for Firefox because it doesn't support Atomic.waitAsync */
+      /** scroll */
       t: 's';
       /** view height in pixels */
       y: number;
     }
   | {
-      /** resize for Firefox because it doesn't support Atomic.waitAsync */
+      /** resize */
       t: 'r';
       /** height */
       h: number;
+    }
+  | {
+      /** zoom */
+      t: 'z';
+      /** absolute scale */
+      s: number;
+      /** dpi */
+      d: number;
+      /** scrollTop position in px */
+      y: number;
     };
 
 export type Ref<T> = {

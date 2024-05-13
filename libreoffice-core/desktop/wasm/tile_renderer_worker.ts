@@ -1,14 +1,5 @@
-import {
-  createTexturePool,
-  createDrawImageProgram,
-  TexturePool,
-  PooledTexture,
-  drawImageFunc,
-  loadImage,
-  clear,
-} from './webgl2_draw_image';
 import type { TileRenderData } from './soffice';
-import type { TileDim, ToTileRenderer } from './shared';
+import type { ToTileRenderer } from './shared';
 
 /** From lib/wasm_extensions.hxx */
 enum RenderState {
@@ -36,9 +27,10 @@ const LOK_INTERNAL_TWIPS_TO_PX = 15;
 const POOL_SIZE = 2000;
 
 let d: TileRenderData;
-let c: OffscreenCanvas;
-let gl: WebGL2RenderingContext;
-let pool: TexturePool;
+let activeCanvas: OffscreenCanvas;
+let ctx: OffscreenCanvasRenderingContext2D;
+let canvases: OffscreenCanvas[];
+let activeCanvasIndex: number = 0;
 
 /** contains a set of all the valid tile indices */
 const validTiles: Set<number> = new Set();
@@ -47,72 +39,116 @@ const tileIndexToTileRingIndex: Map<number, number> = new Map();
 /** maps a tileRing index to a tile index */
 const tileRingIndexToTileIndex: Map<number, number> = new Map();
 /** a ring buffer that shouldn't allocate more than POOL_SIZE */
-let tileRing: Map<number, PooledTexture> = new Map();
+let tileRing: Map<number, ImageData> = new Map();
 /** contains a set of all visible tile ring indices */
 let visibleRingTiles: Set<number> = new Set();
 /** ring index that wraps on POOL_SIZE */
 let tileRingIndex = 0;
-let drawImage: drawImageFunc;
 let tileDimTwips: number;
 let docWidthTwips: number;
+let docHeightTwips: number;
 /** the number of tiles that make up a horizontal stride for the width of the document */
 let widthTileStride: number;
 let renderedTopTwips: number = -1;
 let renderedHeightTwips: number = -1;
 let scheduledTopTwips: number = -1;
 let scheduledHeightTwips: number = -1;
-let scaledTwips = LOK_INTERNAL_TWIPS_TO_PX;
+let scaledTwips: number = LOK_INTERNAL_TWIPS_TO_PX;
+let scale: number = 1;
+let dpi: number = 1;
+let scheduledWidthPx: number = -1;
 let scheduledHeightPx: number = -1;
+let renderedTileTop: number = 0;
+let didScroll = false;
 
 const visibleInvalidations: Rect[] = [];
 const nonVisibleInvalidations: Rect[] = [];
 
 let pendingStateChange = false;
 let running = false;
+let idleAreaPaint = false;
+let zoomResetTimeout: number | undefined;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
-    case 'i':
+    case 'i': // initialize
       initialize(data);
       break;
-    case 's':
+    case 's': // scroll
+      if (!activeCanvas) return;
+      idleAreaPaint = false;
       scheduledTopTwips = data.y * scaledTwips;
-      setState(RenderState.IDLE);
-      if (!running) stateMachine();
+      // Checks that the tile row has changed since the last scroll
+      if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
+        didScroll = true;
+        activeCanvasIndex ^= 1;
+        activeCanvas = canvases[activeCanvasIndex];
+        ctx = activeCanvas.getContext('2d');
+        setState(RenderState.IDLE);
+        if (!running) stateMachine();
+      } else {
+        if (!didScroll) postMessage({ s: activeCanvasIndex });
+      }
       break;
-    case 'r':
-      if (!c) return;
-      scheduledHeightPx = data.h;
+    case 'r': // resize
+      if (!activeCanvas) return;
+      idleAreaPaint = false;
+      scheduledHeightPx = data.h * dpi;
       scheduledHeightTwips = data.h * scaledTwips;
       setState(RenderState.IDLE);
       if (!running) stateMachine();
       break;
+    case 'z': // zoom
+      if (!activeCanvas) return;
+      // Clear the previously scheduled zoom reset
+      if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
+
+      idleAreaPaint = false;
+      zoom(data.s, data.d);
+
+      // Ensure we debounce a reset in combination with shouldStopPaint
+      zoomResetTimeout = setTimeout(() => {
+        setState(RenderState.RESET);
+        Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
+        if (!running) stateMachine();
+      });
+
+      break;
   }
 };
 
+function zoom(in_scale: number, in_dpi: number) {
+  docWidthTwips = Atomics.load(d.docWidthTwips, 0);
+  docHeightTwips = Atomics.load(d.docHeightTwips, 0);
+
+  scaledTwips =
+    clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
+    LOK_INTERNAL_TWIPS_TO_PX;
+
+  tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
+  widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
+  scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
+  scheduledHeightTwips = activeCanvas.height * scaledTwips;
+  scheduledWidthPx = docWidthTwips / scaledTwips;
+
+  // Set this as a reference for the new position for the next scroll event
+  renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
+
+  scale = in_scale;
+  dpi = in_dpi;
+}
+
 function initialize(data: ToTileRenderer & { t: 'i' }) {
   d = data.d;
-  c = data.c;
-  gl = c.getContext('webgl2');
-  docWidthTwips = Atomics.load(d.docWidthTwips, 0);
-  scaledTwips =
-    clipToNearest8PxZoom(d.tileSize, data.s) * LOK_INTERNAL_TWIPS_TO_PX;
-  tileDimTwips = d.tileSize * scaledTwips;
-  widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
+  canvases = data.c;
+  activeCanvas = data.c[0];
+  ctx = activeCanvas.getContext('2d');
 
-  pool = createTexturePool(
-    gl,
-    POOL_SIZE / (d.tileSize / 256),
-    d.tileSize as TileDim
-  );
-  drawImage = createDrawImageProgram(gl);
+  ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
 
-  // gl.enable(gl.BLEND); // enable blending
-  // gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // pre-multiplied alpha
-  clear(gl);
-
-  scheduledHeightPx = c.height;
-  scheduledHeightTwips = c.height * scaledTwips;
+  scale = data.s;
+  dpi = data.dpi;
+  zoom(data.s, dpi);
   scheduledTopTwips = data.y * scaledTwips;
 
   pendingStateChange = true;
@@ -241,9 +277,6 @@ function hasUpdatedVisibleArea(): boolean {
 function rendering() {
   const visibleTop = scheduledTopTwips;
   const visibleHeight = scheduledHeightTwips;
-  const yOffset = Math.floor(
-    ((visibleTop % tileDimTwips) * d.tileSize) / tileDimTwips
-  );
 
   const rangesToRender = rectToTileIndexRanges([
     0,
@@ -252,50 +285,50 @@ function rendering() {
     visibleHeight,
   ]);
   // TODO: mark missing and invalidate
-  clear(gl);
+  ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
   if (renderedHeightTwips !== scheduledHeightTwips) {
-    c.height = scheduledHeightPx;
+    canvases[0].height = scheduledHeightPx;
+    canvases[1].height = scheduledHeightPx;
+  }
+  if (activeCanvas.width !== scheduledWidthPx) {
+    canvases[0].width = scheduledWidthPx;
+    canvases[1].width = scheduledWidthPx;
   }
   renderedHeightTwips = visibleHeight;
   renderedTopTwips = visibleTop;
-  gl.viewport(0, 0, c.width, c.height);
 
   for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
       const [xCoord] = tileIndexToGridCoord(x);
-      const tex: PooledTexture = tileRing.get(tileIndexToTileRingIndex.get(x));
-      if (!tex) {
+      const img: ImageData = tileRing.get(tileIndexToTileRingIndex.get(x));
+      if (!img) {
         console.error('missing texture at ', x, xCoord, y);
         continue;
       }
       const dstX: number = xCoord * d.tileSize;
-      // wraps on the maxTileY
-      const dstY: number = y * d.tileSize - yOffset;
-      drawImage(
-        {
-          tex,
-          width: d.tileSize,
-          height: d.tileSize,
-        },
-        {
-          dstX,
-          dstY,
-        }
-      );
+      const dstY: number = y * d.tileSize;
+      ctx.beginPath();
+      ctx.putImageData(img, dstX, dstY);
+      ctx.closePath();
     }
   }
 
   Atomics.store(d.pendingFullPaint, 0, 0);
 
   setState(RenderState.IDLE);
+  if (didScroll) {
+    renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
+    postMessage({ s: activeCanvasIndex });
+    didScroll = false;
+  }
 }
 
 let pendingInvalidate: boolean;
 // TODO: Drop the polyfill when Firefox supports it: https://bugzilla.mozilla.org/show_bug.cgi?id=1884148
 const afterInvalidate: () => Promise<boolean> = Atomics.waitAsync
-  ? function () {
+  ? async function () {
       if (pendingInvalidate) return Promise.resolve(false);
       const res = Atomics.waitAsync(d.hasInvalidations, 0, 0);
       if (res.async) {
@@ -369,15 +402,60 @@ function stateMachine() {
         self.close();
     }
   }
+  idleAreaPaint = true;
   if (!pendingInvalidate) {
     afterInvalidate().then((shouldRun) => {
+      idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
       if (shouldRun && !running) {
         stateMachine();
       }
     });
+    if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
   }
   running = false;
+  idleDebounceTimeout = setTimeout(
+    paintNonVisibleAreasWhileIdle,
+    Math.max(trimmedMean(paintTimes), 10)
+  );
+}
+
+let idleDebounceTimeout: number;
+function paintNonVisibleAreasWhileIdle(): void {
+  if (!idleAreaPaint) return;
+  const visibleHeight = renderedHeightTwips;
+  const docHeight = Atomics.load(d.docHeightTwips, 0);
+  const visibleTop = renderedTopTwips;
+  // heuristic is one whole visible area below the fold, primarily for zooming out, but also helps with scrolling a little
+  const lowerFoldTop = visibleTop + visibleHeight;
+  const lowerFoldHeight = Math.min(docHeight - lowerFoldTop, visibleHeight);
+  const rangesToPaint = rectToTileIndexRanges([
+    0,
+    lowerFoldTop,
+    docWidthTwips,
+    lowerFoldHeight,
+  ]);
+
+  let didPaint = false;
+  for (let y = 0; y < rangesToPaint.length; ++y) {
+    const [start, endInclusive] = rangesToPaint[y];
+    for (let x = start; x <= endInclusive; ++x) {
+      if (running || !idleAreaPaint) {
+        return;
+      }
+      if (!validTiles.has(x)) {
+        blockingPaintTile(x);
+        didPaint = true;
+      }
+    }
+  }
+
+  if (didPaint) {
+    idleDebounceTimeout = setTimeout(
+      paintNonVisibleAreasWhileIdle,
+      Math.max(trimmedMean(paintTimes), 10)
+    );
+  }
 }
 
 function shouldPausePaint(): boolean {
@@ -496,9 +574,11 @@ function seekNonVisibleRingIndex() {
   }
 }
 
+let paintTimes: number[] = [];
 /** blocks the worker thread while painting a tile at tileIndex, returning the corresponding tileRingIndex */
 function blockingPaintTile(tileIndex: number): number {
   Atomics.wait(d.state, 0, RenderState.TILE_PAINT); // wait for existing paint to finish if necessary
+  const start = Date.now();
   const rect = tileIndexToTwipsRect(tileIndex);
   for (let i = 0; i < RECT_SIZE; ++i) {
     Atomics.store(d.tileTwips, i, rect[i]);
@@ -507,16 +587,22 @@ function blockingPaintTile(tileIndex: number): number {
   Atomics.wait(d.state, 0, RenderState.TILE_PAINT); // wait to finish
   seekNonVisibleRingIndex();
 
-  // retire the previous tile if it exists
-  tileRing.get(tileRingIndex)?.release();
-
   tileRingIndexToTileIndex.set(tileRingIndex, tileIndex);
   tileIndexToTileRingIndex.set(tileIndex, tileRingIndex);
   tileRing.set(
     tileRingIndex,
-    loadImage(pool, d.paintedTile, d.tileSize, d.tileSize).tex
+    new ImageData(
+      new Uint8ClampedArray(
+        d.paintedTile,
+        d.paintedTile.byteOffset,
+        d.paintedTile.byteLength
+      ),
+      d.tileSize,
+      d.tileSize
+    )
   );
   validTiles.add(tileIndex);
+  paintTimes.push(Date.now() - start);
 
   return tileRingIndex;
 }
@@ -532,14 +618,15 @@ function markInvalid(ranges: TileIndexRange[]) {
 }
 
 function clearNonVisibleTiles() {
-  for (const [tileRingIndex, pooledTexture] of tileRing) {
+  const indices = tileRing.keys();
+  for (const tileRingIndex of indices) {
     // but visible tiles shouldn't be cleared so there is something to paint
     if (visibleRingTiles.has(tileRingIndex)) continue;
 
     tileIndexToTileRingIndex.delete(
       tileRingIndexToTileIndex.get(tileRingIndex)
     );
-    pooledTexture.release();
+    tileRing.delete(tileRingIndex);
     tileRingIndexToTileIndex.delete(tileRingIndex);
   }
 }

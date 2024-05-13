@@ -24,6 +24,7 @@
 #include <svl/zforlist.hxx>
 #include <svl/currencytable.hxx>
 
+#include <comphelper/lok.hxx>
 #include <comphelper/string.hxx>
 #include <o3tl/string_view.hxx>
 #include <tools/debug.hxx>
@@ -242,7 +243,6 @@ void SvNumberFormatterRegistry_Impl::ConfigurationChanged( utl::ConfigurationBro
     }
 }
 
-
 SvNumberFormatterRegistry_Impl* SvNumberFormatter::pFormatterRegistry = nullptr;
 volatile bool SvNumberFormatter::bCurrencyTableInitialized = false;
 namespace
@@ -376,7 +376,7 @@ void SvNumberFormatter::SetColorLink( const Link<sal_uInt16,Color*>& rColorTable
     aColorLink = rColorTableCallBack;
 }
 
-Color* SvNumberFormatter::GetUserDefColor(sal_uInt16 nIndex)
+Color* SvNumberFormatter::GetUserDefColor(sal_uInt16 nIndex) const
 {
     ::osl::MutexGuard aGuard( GetInstanceMutex() );
     if( aColorLink.IsSet() )
@@ -901,6 +901,7 @@ OUString SvNumberFormatter::GetFormatStringForExcel( sal_uInt32 nKey, const NfKe
         }
         else
         {
+            bool bIsLOK = comphelper::LibreOfficeKit::isActive();
             bool bSystemLanguage = false;
             LanguageType nLang = pEntry->GetLanguage();
             if (nLang == LANGUAGE_SYSTEM)
@@ -908,7 +909,7 @@ OUString SvNumberFormatter::GetFormatStringForExcel( sal_uInt32 nKey, const NfKe
                 bSystemLanguage = true;
                 nLang = SvtSysLocale().GetLanguageTag().getLanguageType();
             }
-            if (nLang != LANGUAGE_ENGLISH_US)
+            if (!bIsLOK && nLang != LANGUAGE_ENGLISH_US)
             {
                 sal_Int32 nCheckPos;
                 SvNumFormatType nType = SvNumFormatType::DEFINED;
@@ -997,7 +998,7 @@ sal_uInt32 SvNumberFormatter::ImpGetCLOffset(LanguageType eLnge) const
 
 sal_uInt32 SvNumberFormatter::ImpIsEntry(std::u16string_view rString,
                                          sal_uInt32 nCLOffset,
-                                         LanguageType eLnge)
+                                         LanguageType eLnge) const
 {
     sal_uInt32 res = NUMBERFORMAT_ENTRY_NOT_FOUND;
     auto it = aFTable.find( nCLOffset);
@@ -1015,7 +1016,6 @@ sal_uInt32 SvNumberFormatter::ImpIsEntry(std::u16string_view rString,
     }
     return res;
 }
-
 
 SvNumberFormatTable& SvNumberFormatter::GetFirstEntryTable(
                                                       SvNumFormatType& eType,
@@ -1472,7 +1472,7 @@ sal_uInt32 SvNumberFormatter::GetStandardFormat( SvNumFormatType eType, Language
     }
 }
 
-bool SvNumberFormatter::IsSpecialStandardFormat( sal_uInt32 nFIndex,
+bool SvNumberFormatter::ImpIsSpecialStandardFormat( sal_uInt32 nFIndex,
                                                  LanguageType eLnge )
 {
     ::osl::MutexGuard aGuard( GetInstanceMutex() );
@@ -1487,7 +1487,7 @@ sal_uInt32 SvNumberFormatter::GetStandardFormat( sal_uInt32 nFIndex, SvNumFormat
                                                  LanguageType eLnge )
 {
     ::osl::MutexGuard aGuard( GetInstanceMutex() );
-    if ( IsSpecialStandardFormat( nFIndex, eLnge ) )
+    if ( ImpIsSpecialStandardFormat( nFIndex, eLnge ) )
         return nFIndex;
     else
         return GetStandardFormat( eType, eLnge );
@@ -1525,7 +1525,7 @@ sal_uInt32 SvNumberFormatter::GetStandardFormat( double fNumber, sal_uInt32 nFIn
                                                  SvNumFormatType eType, LanguageType eLnge )
 {
     ::osl::MutexGuard aGuard( GetInstanceMutex() );
-    if ( IsSpecialStandardFormat( nFIndex, eLnge ) )
+    if ( ImpIsSpecialStandardFormat( nFIndex, eLnge ) )
         return nFIndex;
 
     switch( eType )
@@ -3760,18 +3760,15 @@ void SvNumberFormatter::SetDefaultSystemCurrency( std::u16string_view rAbbrev, L
     nSystemCurrencyPosition = 0;    // not found => simple SYSTEM
 }
 
-
 void SvNumberFormatter::ResetDefaultSystemCurrency()
 {
     nDefaultSystemCurrencyFormat = NUMBERFORMAT_ENTRY_NOT_FOUND;
 }
 
-
 void SvNumberFormatter::InvalidateDateAcceptancePatterns()
 {
     pStringScanner->InvalidateDateAcceptancePatterns();
 }
-
 
 sal_uInt32 SvNumberFormatter::ImpGetDefaultSystemCurrencyFormat()
 {

@@ -21,7 +21,7 @@ import {
 } from './shared';
 
 /** rendered tile size in pixels */
-const TILE_DIM_PX = 256;
+export const TILE_DIM_PX = 256;
 /** 15 = 1440 twips-per-inch / 96 dpi */
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
 
@@ -40,7 +40,7 @@ function clipToNearest8PxZoom(w: number, s: number): number {
 
 /** Calculates the conversions for twips provided a `zoom` level and `dpi` */
 export function conversionTable(zoom: number, dpi: number) {
-  const scale = clipToNearest8PxZoom(TILE_DIM_PX, zoom * dpi);
+  const scale = clipToNearest8PxZoom(TILE_DIM_PX, 1 / (zoom * dpi));
   const TILE_DIM_TWIPS = Math.floor(
     TILE_DIM_PX * LOK_INTERNAL_TWIPS_TO_PX * scale
   );
@@ -53,14 +53,18 @@ export function conversionTable(zoom: number, dpi: number) {
   };
 }
 
-/** CSS pixels are DPI indepdendent */
-export function twipsToCssPx(twips: number, zoom: number) {
-  return Math.ceil(twips / zoom / LOK_INTERNAL_TWIPS_TO_PX);
+function getScaledTwips(zoom: number) {
+  return clipToNearest8PxZoom(TILE_DIM_PX, 1 / zoom) * LOK_INTERNAL_TWIPS_TO_PX;
 }
 
 /** CSS pixels are DPI indepdendent */
-export function cssPxToTwips(twips: number, zoom: number) {
-  return Math.ceil(twips * zoom * LOK_INTERNAL_TWIPS_TO_PX);
+export function twipsToCssPx(twips: number, zoom: number) {
+  return twips / getScaledTwips(zoom);
+}
+
+/** CSS pixels are DPI indepdendent */
+export function cssPxToTwips(px: number, zoom: number) {
+  return px * getScaledTwips(zoom);
 }
 
 const worker: Ref<Worker> = {};
@@ -193,7 +197,7 @@ function registerClientMethod(prop: string) {
     if (prop === 'startRendering' || prop === 'resetRendering') {
       transfers = {
         transfer: [
-          (
+          ...(
             args as
               | Parameters<DocumentWithViewMethods['startRendering']>
               | Parameters<DocumentWithViewMethods['resetRendering']>
@@ -333,6 +337,15 @@ export async function loadDocumentFromArrayBuffer<
 export async function preload() {
   const message: ToWorker = {
     f: 'preload',
+    i: UNUSED_ID,
+    a: [],
+  };
+  loadWorkerOnce().postMessage(message);
+}
+
+export async function setIsMacOSForConfig() {
+  const message: ToWorker = {
+    f: 'setIsMacOSForConfig',
     i: UNUSED_ID,
     a: [],
   };

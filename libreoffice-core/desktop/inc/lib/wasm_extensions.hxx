@@ -22,7 +22,7 @@ enum class RenderState : int32_t
     QUIT = 4
 };
 
-static constexpr size_t MAX_INVALIDATION_STACK = 4096;
+static constexpr int32_t MAX_INVALIDATION_STACK = 4096;
 
 // Used for fast communication between the tile renderer worker and the C++ thread
 struct TileRendererData
@@ -43,17 +43,20 @@ struct TileRendererData
     _Atomic uint32_t invalidationStack[MAX_INVALIDATION_STACK][4];
     _Atomic int32_t invalidationStackHead = -1;
 
+    // changes somewhat frequently
+    _Atomic uint32_t docHeightTwips;
     // changes infrequently
     _Atomic uint32_t docWidthTwips;
 
     LibreOfficeKitDocument* doc;
 
     TileRendererData(LibreOfficeKitDocument* doc_, int32_t viewId_, int32_t tileSize_,
-                     uint32_t docWidthTwips_)
+                     uint32_t docWidthTwips_, uint32_t docHeightTwips_)
         : viewId(viewId_)
         , tileSize(tileSize_)
         , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
         , paintedTile(new uint8_t[paintedTileAllocSize])
+        , docHeightTwips(docHeightTwips_)
         , docWidthTwips(docWidthTwips_)
         , doc(doc_){};
 
@@ -70,5 +73,8 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
     TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
+
+    std::string getPageColor();
+    std::string getPageOrientation();
 };
 }

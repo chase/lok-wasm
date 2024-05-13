@@ -2657,29 +2657,33 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
             if(1 == mpDrawView->GetMarkedObjectCount())
             {
                 // #i68101#
-                SdrObject* pSelected = mpDrawView->GetMarkedObjectByIndex(0);
+                rtl::Reference<SdrObject> pSelected = mpDrawView->GetMarkedObjectByIndex(0);
                 OSL_ENSURE(pSelected, "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aName(pSelected->GetName());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(GetFrameWeld(), aName));
+                VclPtr<AbstractSvxObjectNameDialog> pDlg(pFact->CreateSvxObjectNameDialog(GetFrameWeld(), aName));
 
                 pDlg->SetCheckNameHdl(LINK(this, DrawViewShell, NameObjectHdl));
 
-                if(RET_OK == pDlg->Execute())
-                {
-                    pDlg->GetName(aName);
-                    pSelected->SetName(aName);
+                pDlg->StartExecuteAsync(
+                    [this, pDlg, pSelected] (sal_Int32 nResult)->void
+                    {
+                        if (nResult == RET_OK)
+                        {
+                            pSelected->SetName(pDlg->GetName());
 
-                    SdPage* pPage = GetActualPage();
-                    if (pPage)
-                        pPage->notifyObjectRenamed(pSelected);
-                }
+                            SdPage* pPage = GetActualPage();
+                            if (pPage)
+                                pPage->notifyObjectRenamed(pSelected.get());
+                        }
+                        pDlg->disposeOnce();
+                        SfxBindings& rBindings = GetViewFrame()->GetBindings();
+                        rBindings.Invalidate( SID_NAVIGATOR_STATE, true );
+                        rBindings.Invalidate( SID_CONTEXT );
+                    }
+                );
             }
-
-            SfxBindings& rBindings = GetViewFrame()->GetBindings();
-            rBindings.Invalidate( SID_NAVIGATOR_STATE, true );
-            rBindings.Invalidate( SID_CONTEXT );
 
             Cancel();
             rReq.Ignore();
@@ -2691,25 +2695,36 @@ void DrawViewShell::FuTemporary(SfxRequest& rReq)
         {
             if(1 == mpDrawView->GetMarkedObjectCount())
             {
-                SdrObject* pSelected = mpDrawView->GetMarkedObjectByIndex(0);
+                rtl::Reference<SdrObject> pSelected = mpDrawView->GetMarkedObjectByIndex(0);
                 OSL_ENSURE(pSelected, "DrawViewShell::FuTemp03: nMarkCount, but no object (!)");
                 OUString aTitle(pSelected->GetTitle());
                 OUString aDescription(pSelected->GetDescription());
                 bool isDecorative(pSelected->IsDecorative());
 
                 SvxAbstractDialogFactory* pFact = SvxAbstractDialogFactory::Create();
-                ScopedVclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
+                VclPtr<AbstractSvxObjectTitleDescDialog> pDlg(pFact->CreateSvxObjectTitleDescDialog(
                             GetFrameWeld(), aTitle, aDescription, isDecorative));
 
-                if(RET_OK == pDlg->Execute())
-                {
-                    pDlg->GetTitle(aTitle);
-                    pDlg->GetDescription(aDescription);
-                    pDlg->IsDecorative(isDecorative);
-                    pSelected->SetTitle(aTitle);
-                    pSelected->SetDescription(aDescription);
-                    pSelected->SetDecorative(isDecorative);
-                }
+                pDlg->StartExecuteAsync(
+                    [pDlg, pSelected] (sal_Int32 nResult)->void
+                    {
+                        if (nResult == RET_OK)
+                        {
+                            OUString aNewTitle;
+                            OUString aNewDescription;
+                            bool newIsDecorative;
+
+                            pDlg->GetTitle(aNewTitle);
+                            pDlg->GetDescription(aNewDescription);
+                            pDlg->IsDecorative(newIsDecorative);
+
+                            pSelected->SetTitle(aNewTitle);
+                            pSelected->SetDescription(aNewDescription);
+                            pSelected->SetDecorative(newIsDecorative);
+                        }
+                        pDlg->disposeOnce();
+                    }
+                );
             }
 
             SfxBindings& rBindings = GetViewFrame()->GetBindings();

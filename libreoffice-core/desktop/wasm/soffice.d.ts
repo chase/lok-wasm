@@ -36,6 +36,8 @@ export type TileRenderData = {
   invalidationStackHead: Int32Array;
   /** `_Atomic uint32_t` */
   docWidthTwips: Uint32Array;
+  /** `_Atomic uint32_t` */
+  docHeightTwips: Uint32Array;
 };
 
 export type RectArray = [x: number, y: number, width: number, height: number];

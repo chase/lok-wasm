@@ -1977,7 +1977,8 @@ bool SfxObjectShell::IsContinueImportOnFilterExceptions()
             INetURLObject::LAST_SEGMENT, true, INetURLObject::DecodeMechanism::WithCharset));
         RequestPackageReparation aRequest(aDocName);
         xInteractionHandler->handle(aRequest.GetRequest());
-        if (aRequest.isApproved())
+        // MACRO: automatically approve the repair request {
+        /* if (aRequest.isApproved()) */
         {
             mbContinueImportOnFilterExceptions = yes;
             // lok: we want to overwrite file in jail, so don't use template flag
@@ -1987,8 +1988,9 @@ bool SfxObjectShell::IsContinueImportOnFilterExceptions()
             pMedium->GetItemSet().Put(SfxBoolItem(SID_TEMPLATE, !bIsLOK));
             pMedium->GetItemSet().Put(SfxStringItem(SID_DOCINFO_TITLE, aDocName));
         }
-        else
-            mbContinueImportOnFilterExceptions = no;
+        /* else */
+            /* mbContinueImportOnFilterExceptions = no; */
+        // MACRO: }
     }
     return mbContinueImportOnFilterExceptions == yes;
 }

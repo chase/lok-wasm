@@ -1,5 +1,7 @@
 import { DocumentClient } from '@lok/shared';
 import { eventModifiers } from './vclKeys';
+import { getOrCreateZoomSignal } from './zoom';
+import { cssPxToTwips } from '@lok';
 
 const MOUSE_MOVE_INTERVAL_MS = 200;
 
@@ -23,13 +25,23 @@ function domMouseButtonsToVclButtons(evt: PartialMouseEvent) {
   return newButtons;
 }
 
+function handleMouseEvent(
+  doc: DocumentClient,
+  evt: MouseEvent
+): [x: number, y: number] {
+  const [getZoom] = getOrCreateZoomSignal(() => doc);
+  const zoom = getZoom();
+  return [cssPxToTwips(evt.offsetX, zoom), cssPxToTwips(evt.offsetY, zoom)];
+}
+
 export function handleMouseDown(doc: DocumentClient, evt: MouseEvent) {
   mouseIsDown = true;
   mouseDownButtons = domMouseButtonsToVclButtons(evt);
+  const [x, y] = handleMouseEvent(doc, evt);
   doc.postMouseEvent(
     VCL_MOUSE_DOWN,
-    evt.offsetX * 15,
-    evt.offsetY * 15,
+    x,
+    y,
     1,
     mouseDownButtons,
     eventModifiers(evt)
@@ -38,10 +50,11 @@ export function handleMouseDown(doc: DocumentClient, evt: MouseEvent) {
 
 export function handleMouseUp(doc: DocumentClient, evt: MouseEvent) {
   mouseIsDown = false;
+  const [x, y] = handleMouseEvent(doc, evt);
   doc.postMouseEvent(
     VCL_MOUSE_UP,
-    evt.offsetX * 15,
-    evt.offsetY * 15,
+    x,
+    y,
     0,
     mouseDownButtons,
     eventModifiers(evt)
@@ -57,10 +70,11 @@ export function handleMouseMove(doc: DocumentClient, evt: PartialMouseEvent) {
     return;
   }
 
+  const [x, y] = handleMouseEvent(doc, evt);
   doc.postMouseEvent(
     VCL_MOUSE_MOVE,
-    evt.offsetX * 15,
-    evt.offsetY * 15,
+    x,
+    y,
     0,
     domMouseButtonsToVclButtons(evt),
     eventModifiers(evt)

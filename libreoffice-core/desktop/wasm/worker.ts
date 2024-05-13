@@ -84,6 +84,10 @@ const globalHandler: GlobalMethod = {
   preload: function (): void {
     lok.preload();
   },
+
+  setIsMacOSForConfig: function (): void {
+    lok.setIsMacOSForConfig();
+  },
 };
 
 const handler: DocumentMethod<Document> = {
@@ -254,9 +258,10 @@ const handler: DocumentMethod<Document> = {
   startRendering: function (
     doc: Document,
     viewId: ViewId,
-    canvas: OffscreenCanvas,
+    canvases: OffscreenCanvas[],
     tileSize: TileDim,
     scale: number,
+    dpi: number,
     yPos: number = 0
   ): TileRendererData {
     const ref = doc.ref();
@@ -273,12 +278,13 @@ const handler: DocumentMethod<Document> = {
     worker.postMessage(
       {
         t: 'i',
-        c: canvas,
+        c: canvases,
         d: result,
         s: scale,
         y: yPos,
+        dpi,
       } as ToTileRenderer,
-      { transfer: [canvas] }
+      { transfer: [...canvases] }
     );
 
     return {
@@ -289,22 +295,41 @@ const handler: DocumentMethod<Document> = {
   },
 
   resetRendering: function (
-    doc: Document,
-    viewId: ViewId,
-    canvas: OffscreenCanvas
+    _doc: Document,
+    _viewId: ViewId,
+    _canvases: OffscreenCanvas[]
   ): void {
     throw new Error('Function not implemented.');
   },
 
-  stopRendering: function (doc: Document, viewId: ViewId): void {
+  stopRendering: function (_doc: Document, _viewId: ViewId): void {
     throw new Error('Function not implemented.');
   },
 
-  setScrollTop: function (doc: Document, viewId: ViewId, yPx: number): void {
-    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+  setScrollTop: function (
+    doc: Document,
+    viewId: ViewId,
+    yPx: number
+  ): Promise<number> {
+    const ref = doc.ref();
+    const worker = tileRenderer[ref]?.[viewId];
+    if (!worker) return;
+    const scrollPromise = new Promise<number>((resolve) => {
+      const handleMessage = ({ data }: MessageEvent) => {
+        if (data.s != null) {
+          resolve(data.s);
+        }
+        worker.removeEventListener('message', handleMessage);
+      };
+      worker.addEventListener('message', handleMessage);
+    });
+
+    worker.postMessage({
       t: 's',
       y: yPx,
     } as ToTileRenderer);
+
+    return scrollPromise;
   },
 
   setVisibleHeight: function (
@@ -481,6 +506,19 @@ const handler: DocumentMethod<Document> = {
   ): ParagraphStyleList {
     doc.setCurrentView(viewId);
     return doc.paragraphStyles();
+  },
+
+  setZoom: async function (
+    doc: Document,
+    viewId: ViewId,
+    scale: number,
+    dpi: number
+  ): Promise<void> {
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+      t: 'z',
+      s: scale,
+      d: dpi,
+    } as ToTileRenderer);
   },
 };
 
