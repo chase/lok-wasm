@@ -284,11 +284,11 @@ export type GlobalMethod = {
 
 type Tail<T> = T extends [any, ...infer Rest] ? Rest : never;
 
-export type DocumentMethod<C> = {
+export type DocumentMethodHandler<C> = {
   [K in keyof DocumentMessageUnion]: (
     doc: C,
     ...args: Tail<Parameters<DocumentMessageUnion[K]>>
-  ) => ReturnType<DocumentMessageUnion[K]>;
+  ) => ReturnType<DocumentMessageUnion[K] | Promise<DocumentMessageUnion[K]>>;
 };
 
 export type AsyncMessage = {

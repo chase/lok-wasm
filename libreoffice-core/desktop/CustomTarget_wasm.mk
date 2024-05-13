@@ -37,6 +37,9 @@ $(call gb_CustomTarget_get_workdir,desktop/wasm)/version :
 $(call gb_CustomTarget_get_workdir,desktop/wasm)/soffice.d.ts : $(SRCDIR)/desktop/wasm/soffice.d.ts
 	$(call gb_Helper_copy_if_different_and_touch,$^,$@)
 
+$(call gb_CustomTarget_get_workdir,desktop/wasm)/shared.d.ts : $(SRCDIR)/desktop/wasm/shared.d.ts
+	$(call gb_Helper_copy_if_different_and_touch,$^,$@)
+
 $(call gb_CustomTarget_get_workdir,desktop/wasm)/%.d.ts \
 $(call gb_CustomTarget_get_workdir,desktop/wasm)/%.js \
 	: $(SRCDIR)/desktop/wasm/%.ts \

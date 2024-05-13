@@ -1,5 +1,5 @@
 import type {
-  DocumentMethod,
+  DocumentMethodHandler,
   GlobalMethod,
   DocumentRef,
   ForwardedFromWorker,
@@ -90,7 +90,7 @@ const globalHandler: GlobalMethod = {
   },
 };
 
-const handler: DocumentMethod<Document> = {
+const handler: DocumentMethodHandler<Document> = {
   newView: function (doc: Document): DocumentRef {
     return doc.newView();
   },
@@ -622,20 +622,20 @@ function handleForwardingMethod<
   });
 }
 
-function handleDocumentMethod<K extends keyof DocumentMethod<Document>>(
-  handler: (doc: Document, ...args: any[]) => any,
-  data: ToWorker<K>
-) {
+async function handleDocumentMethod<
+  K extends keyof DocumentMethodHandler<Document>,
+>(handler: (doc: Document, ...args: any[]) => any, data: ToWorker<K>) {
   const [ref, ...rest] = data.a;
   const doc = byRef(ref as DocumentRef);
   if (!doc) {
     console.error('doc ref missing');
     return;
   }
+  const r = handler(doc, ...rest);
   sendResult<K>({
     f: data.f,
     i: data.i,
-    r: handler(doc, ...rest),
+    r: r instanceof Promise ? await r : r,
   });
 }
 
@@ -650,11 +650,11 @@ function handleGlobalMethod<K extends keyof GlobalMethod>(data: ToWorker<K>) {
 onmessage = async <K extends keyof Message = keyof Message>({
   data,
 }: MessageEvent<ToWorker<K>>) => {
-  const docHandler = handler[data.f as keyof DocumentMethod<Document>];
+  const docHandler = handler[data.f as keyof DocumentMethodHandler<Document>];
   if (docHandler != null) {
     return handleDocumentMethod(
       docHandler,
-      data as ToWorker<keyof DocumentMethod<Document>>
+      data as ToWorker<keyof DocumentMethodHandler<Document>>
     );
   }
   // forwarded methods are methods on classes returned by the Document (such as ITextRanges)

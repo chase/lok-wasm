@@ -9,7 +9,6 @@ $(eval $(call gb_Package_add_files,desktop_wasm,$(LIBO_BIN_FOLDER),\
 	index.d.ts \
 	worker.js \
 	worker.d.ts \
-	shared.js \
 	shared.d.ts \
 	tile_renderer_worker.js \
 	tile_renderer_worker.d.ts \
