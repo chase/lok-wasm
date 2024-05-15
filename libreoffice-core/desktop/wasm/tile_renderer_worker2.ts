@@ -300,8 +300,8 @@ function fullPaint(view: RenderedView) {
 function partialPaint(view: RenderedView) {
   console.log("partialPaint for view", view.viewId);
   // rebalance visible and non-visible
-  // invalidations.push(...visibleInvalidations);
-  // invalidations.push(...nonVisibleInvalidations);
+  invalidations.push(...view.visibleInvalidations);
+  invalidations.push(...view.nonVisibleInvalidations);
   view.visibleInvalidations.length = 0;
   view.nonVisibleInvalidations.length = 0;
 
@@ -500,10 +500,77 @@ function stateMachine() {
         self.close();
         break;
     }
+
+  }
+  if (!pendingInvalidate) {
+    afterInvalidate().then((shouldRun) => {
+      // idleAreaPaint = false;
+      pendingStateChange ||= shouldRun;
+      if (shouldRun && !running) {
+        stateMachine();
+      }
+    });
+    // if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
   }
 
   running = false;
 }
+let pendingInvalidate: boolean;
+// TODO: Drop the polyfill when Firefox supports it: https://bugzilla.mozilla.org/show_bug.cgi?id=1884148
+const afterInvalidate: () => Promise<boolean> = Atomics.waitAsync
+  ? async function () {
+      if (pendingInvalidate) return Promise.resolve(false);
+      const res = Atomics.waitAsync(workerData.hasInvalidations, 0, 0);
+      if (res.async) {
+        pendingInvalidate = true;
+        return res.value.then(() => {
+          pendingInvalidate = false;
+          return true;
+        });
+      }
+      pendingInvalidate = false;
+      return Promise.resolve(false);
+    }
+  : /** FireFox polyfill or other cases where Atomics.waitAsync doesn't exist  */
+    function () {
+      if (pendingInvalidate) return Promise.resolve(false);
+      // don't spin up the worker if the state already doesn't match, saving about 6ms
+      if (Atomics.load(workerData.hasInvalidations, 0) != 0) {
+        pendingInvalidate = false;
+        return Promise.resolve(false);
+      }
+
+      // the overhead for launching the worker is about 5ms, which is better than polling every 10ms
+      // but we pool based on the state so that it just has overhead once. there is a cap of about 20 workers,
+      // so this doesn't scale if the number of states grows larger than 5
+      const waitOnInvalidatePolyfillWorker =
+        globalThis.waitOnInvalidatePolyfillWorker ??
+        new Worker(
+          new URL('./firefox_Atomic_waitAsync_worker.js', import.meta.url)
+        );
+      if (!globalThis.waitOnInvalidatePolyfillWorker)
+        globalThis.waitOnInvalidatePolyfillWorker =
+          waitOnInvalidatePolyfillWorker;
+      const promise = new Promise<boolean>((resolve) => {
+        function resolver() {
+          pendingInvalidate = false;
+          resolve(true);
+          waitOnInvalidatePolyfillWorker.removeEventListener(
+            'message',
+            resolver
+          );
+        }
+        waitOnInvalidatePolyfillWorker.addEventListener('message', resolver);
+      });
+      waitOnInvalidatePolyfillWorker.postMessage([
+        workerData.hasInvalidations,
+        0,
+        workerData.state,
+      ]);
+      pendingInvalidate = true;
+      return promise;
+    };
+
 function blockingPaintTile(view: RenderedView, tileIndex: number): number {
   Atomics.wait(workerData.state, 0, RenderState.TILE_PAINT); // wait for existing paint to finish if necessary
   const start = Date.now();
