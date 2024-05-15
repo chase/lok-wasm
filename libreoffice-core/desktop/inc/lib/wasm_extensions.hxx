@@ -3,6 +3,7 @@
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
+#include <array>
 #include <cstdint>
 #include <desktop/dllapi.h>
 #include <unordered_map>
@@ -48,10 +49,10 @@ struct TileRendererData
     _Atomic uint32_t docHeightTwips;
     _Atomic int32_t activeViewId;
 
-    uint32_t tileTwips[4];
+    std::array<uint32_t, 4> tileTwips;
     uint8_t* paintedTile;
 
-    uint32_t previewTileTwips[4];
+    std::optional<std::array<uint32_t, 4>> previewTileTwips;
     std::optional<uint8_t*> previewPaintedTile;
 
     LibreOfficeKitDocument* doc;

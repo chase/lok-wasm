@@ -46,7 +46,7 @@ static void* tileRendererWorker(void* data_)
 
         bool bIsMainView = d->viewId == d->activeViewId;
 
-        auto tileTwips = bIsMainView ? d->tileTwips : d->previewTileTwips;
+        auto tileTwips = bIsMainView ? d->tileTwips : d->previewTileTwips.value();
         uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewPaintedTile.value();
         int32_t tileSize = bIsMainView ? d->tileSize : d->previewTileSize.value();
         int32_t paintedTileAllocSize = bIsMainView ? d->paintedTileAllocSize : d->previewPaintedTileAllocSize.value();

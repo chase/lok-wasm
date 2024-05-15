@@ -472,13 +472,13 @@ public:
         result.set("invalidationStackHead",
                    typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
 
-        /* if (data.previewViewId.has_value()) */
-        /* { */
-        /*     result.set("previewViewId", previewViewId.value()); */
-        /*     result.set("previewTileSize", data.previewTileSize.value()); */
-        /*     result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewTileTwips.value())); */
-        /*     result.set("previewPaintedTile", typed_memory_view(data.previewPaintedTileAllocSize.value(), data.previewPaintedTile.value())); */
-        /* } */
+        if (data.previewViewId.has_value())
+        {
+            result.set("previewViewId", previewViewId.value());
+            result.set("previewTileSize", data.previewTileSize.value());
+            result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewTileTwips.value()));
+            result.set("previewPaintedTile", typed_memory_view(data.previewPaintedTileAllocSize.value(), data.previewPaintedTile.value()));
+        }
 
         return result;
     }
