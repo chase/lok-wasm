@@ -144,6 +144,10 @@ class RenderedView {
       this.activeCanvasIndex ^= 1;
       this.activeCanvas = this.canvases[this.activeCanvasIndex];
       this.ctx = this.activeCanvas.getContext('2d');
+      setState(RenderState.IDLE, this.viewId);
+      if (!running) stateMachine();
+    } else {
+      postMessage({ s: this.activeCanvasIndex });
     }
 
     return this.didScroll;
@@ -219,14 +223,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       console.log(`Received scroll message for view ${data.viewId}`);
       const view = isMainView ? mainView : previewView;
 
-      const didScroll = view.scroll(data.y);
-
-      if (didScroll) {
-        setState(RenderState.IDLE, view.viewId);
-        if (!running) stateMachine();
-      } else {
-        postMessage({ s: view.activeCanvasIndex });
-      }
+      view.scroll(data.y);
       break;
     }
     case 'r': {
@@ -380,6 +377,9 @@ function partialPaint(view: RenderedView) {
   view.visibleInvalidations.length = 0;
   view.visibleRingTiles.clear();
   view.visibleRingTiles = newVisibleRingTiles;
+  if (hasUpdatedVisibleArea(view)) {
+    view.needsRender = true;
+  }
 }
 
 function render(view: RenderedView) {
@@ -485,11 +485,12 @@ function stateMachine() {
         }
 
         setState(RenderState.IDLE, mainView.viewId);
-        // // if (didScroll) {
-        // //   renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
-        // //   postMessage({ s: activeCanvasIndex });
-        // //   didScroll = false;
-        // // }
+        console.log("rendered", viewToRender.didScroll);
+        if (viewToRender.didScroll) {
+          viewToRender.renderedTileTop = Math.floor(viewToRender.renderedTopTwips / viewToRender.tileDimTwips);
+          postMessage({ s: viewToRender.activeCanvasIndex });
+          viewToRender.didScroll = false;
+        }
         break;
       }
       case RenderState.RESET:
@@ -704,4 +705,11 @@ function clipToNearest8PxZoom(w: number, s: number): number {
     Math.abs((scaledWidth + 8 - mod) / w - s)
     ? (scaledWidth - mod) / w
     : (scaledWidth + 8 - mod) / w;
+}
+
+function hasUpdatedVisibleArea(view: RenderedView): boolean {
+  return (
+    view.scheduledTopTwips !== view.renderedTopTwips ||
+    view.scheduledHeightTwips !== view.renderedHeightTwips
+  );
 }
