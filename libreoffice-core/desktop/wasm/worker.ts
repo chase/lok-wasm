@@ -360,6 +360,7 @@ const handler: DocumentMethodHandler<Document> = {
 
     worker.postMessage({
       t: 's',
+      viewId,
       y: yPx,
     } as ToTileRenderer);
 
@@ -373,6 +374,7 @@ const handler: DocumentMethodHandler<Document> = {
   ): void {
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'r',
+      viewId,
       h: heightPx,
     } as ToTileRenderer);
   },
@@ -550,6 +552,7 @@ const handler: DocumentMethodHandler<Document> = {
   ): Promise<void> {
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'z',
+      viewId,
       s: scale,
       d: dpi,
     } as ToTileRenderer);

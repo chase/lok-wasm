@@ -1,5 +1,6 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
+#include <memory>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -43,7 +44,13 @@ static void* tileRendererWorker(void* data_)
     {
         RenderState state = d->state;
 
-        ViewData* currViewData = d->activeViewId == d->mainViewData->viewId ? d->mainViewData : d->previewViewData;
+        bool bIsMainView = d->viewId == d->activeViewId;
+
+        auto tileTwips = bIsMainView ? d->tileTwips : d->previewTileTwips;
+        uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewPaintedTile.value();
+        int32_t tileSize = bIsMainView ? d->tileSize : d->previewTileSize.value();
+        int32_t paintedTileAllocSize = bIsMainView ? d->paintedTileAllocSize : d->previewPaintedTileAllocSize.value();
+
         switch (state)
         {
             case RenderState::IDLE:
@@ -51,22 +58,20 @@ static void* tileRendererWorker(void* data_)
                 break;
             case RenderState::TILE_PAINT:
             {
-                SAL_WARN("desktop", "TileRendererData::TILE_PAINT " <<  "viewId: " << currViewData->viewId << " tileSize: " << currViewData->tileSize << " tileTwips: " << currViewData->tileTwips[0] << " " << currViewData->tileTwips[1] << " " << currViewData->tileTwips[2] << " " << currViewData->tileTwips[3] << " docWidthTwips: " << d->docWidthTwips << " docHeightTwips: " << d->docHeightTwips << " paintedTileAllocSize: " <<  currViewData->paintedTileAllocSize << "paintedTile:" << currViewData->paintedTile);
                 int nOrigViewId = d->doc->pClass->getView(d->doc);
-                if (nOrigViewId != d->mainViewData->viewId)
+                if (nOrigViewId != d->activeViewId)
                 {
-                    d->doc->pClass->setView(d->doc, d->mainViewData->viewId);
+                    d->doc->pClass->setView(d->doc, d->activeViewId);
                 }
 
-                std::fill_n(currViewData->paintedTile, currViewData->paintedTileAllocSize, 0);
-                d->doc->pClass->paintTile(d->doc, currViewData->paintedTile, currViewData->tileSize, currViewData->tileSize,
-                                          currViewData->tileTwips[0], currViewData->tileTwips[1], currViewData->tileTwips[2],
-                                          currViewData->tileTwips[3]);
-                if (nOrigViewId >= 0 && nOrigViewId != currViewData->viewId)
+                std::fill_n(paintedTile, paintedTileAllocSize, 0);
+                d->doc->pClass->paintTile(d->doc, paintedTile, tileSize, tileSize,
+                                          tileTwips[0], tileTwips[1], tileTwips[2],
+                                          tileTwips[3]);
+                if (nOrigViewId >= 0 && nOrigViewId != d->activeViewId)
                 {
                     d->doc->pClass->setView(d->doc, nOrigViewId);
                 }
-
                 changeState(d, RenderState::IDLE);
                 break;
             }
@@ -91,25 +96,26 @@ WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XCom
 
 }
 
-TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int32_t tileSize_, std::optional<int32_t> secondaryViewId_, std::optional<int32_t> secondaryTileSize_)
+TileRendererData& WasmDocumentExtension::startTileRenderer(
+    int32_t viewId_,
+    int32_t tileSize_,
+    std::optional<int32_t> previewViewId_,
+    std::optional<int32_t> previewTileSize_
+)
 {
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
-    ViewData primaryViewData = ViewData(viewId_, tileSize_);
 
-    std::optional<ViewData> secondaryViewData;
-
-    if (secondaryViewId_.has_value() && secondaryTileSize_.has_value())
-    {
-        secondaryViewData.emplace(secondaryViewId_.value(), secondaryTileSize_.value());
-    }
     TileRendererData& data = tileRendererData_.emplace_back(
         this,
-        &primaryViewData,
-        secondaryViewData.has_value() ? &secondaryViewData.value() : nullptr,
+        viewId_,
+        tileSize_,
+        previewViewId_,
+        previewTileSize_,
         w,
         h
     );
+
     pthread_t& threadId = tileRendererThreads_.emplace_back();
     if (pthread_create(&threadId, nullptr, tileRendererWorker, &data))
     {

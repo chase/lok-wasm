@@ -1,6 +1,5 @@
 #pragma once
 
-#include "com/sun/star/uno/Reference.h"
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
@@ -26,28 +25,15 @@ enum class RenderState : int32_t
 
 static constexpr int32_t MAX_INVALIDATION_STACK = 4096;
 
-struct ViewData
-{
-    const int32_t viewId;
-    const int32_t tileSize;
-    const int32_t paintedTileAllocSize;
-
-    uint32_t tileTwips[4];
-    uint8_t* paintedTile;
-
-    ViewData(int32_t viewId_, int32_t tileSize_)
-        : viewId(viewId_)
-        , tileSize(tileSize_)
-        , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
-        , paintedTile(new uint8_t[paintedTileAllocSize])
-    {}
-};
-
 // Used for fast communication between the tile renderer worker and the C++ thread
 struct TileRendererData
 {
-    ViewData* mainViewData;
-    ViewData* previewViewData;
+    const int32_t viewId;
+    const std::optional<int32_t> previewViewId;
+    const int32_t tileSize;
+    const int32_t paintedTileAllocSize;
+    const std::optional<int32_t> previewTileSize;
+    const std::optional<int32_t> previewPaintedTileAllocSize;
 
     // individual tile paint
     _Atomic RenderState state = RenderState::IDLE;
@@ -62,14 +48,34 @@ struct TileRendererData
     _Atomic uint32_t docHeightTwips;
     _Atomic int32_t activeViewId;
 
+    uint32_t tileTwips[4];
+    uint8_t* paintedTile;
+
+    uint32_t previewTileTwips[4];
+    std::optional<uint8_t*> previewPaintedTile;
+
     LibreOfficeKitDocument* doc;
 
-    TileRendererData(LibreOfficeKitDocument* doc_, ViewData* mainViewData_, ViewData* previewViewData_, int32_t docWidthTwips_, int32_t docHeightTwips_)
-        : mainViewData(mainViewData_)
-        , previewViewData(previewViewData_)
+    TileRendererData(
+        LibreOfficeKitDocument* doc_,
+        int32_t viewId_,
+        int32_t tileSize_,
+        std::optional<int32_t> previewViewId_,
+        std::optional<int32_t> previewTileSize_,
+        int32_t docWidthTwips_,
+        int32_t docHeightTwips_
+    )
+        : viewId(viewId_)
+        , previewViewId(previewViewId_)
+        , tileSize(tileSize_)
+        , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
+        , previewTileSize(previewTileSize_)
+        , previewPaintedTileAllocSize(previewTileSize_ ? previewTileSize_.value() * previewTileSize_.value() * 4 : 0)
         , docWidthTwips(docWidthTwips_)
         , docHeightTwips(docHeightTwips_)
-        , activeViewId(mainViewData_->viewId)
+        , activeViewId(viewId_)
+        , paintedTile(new uint8_t[paintedTileAllocSize])
+        , previewPaintedTile(previewTileSize_  && previewPaintedTileAllocSize.has_value() ? new uint8_t[previewPaintedTileAllocSize.value()] : nullptr)
         , doc(doc_){};
 
     /** x, y, w, h */

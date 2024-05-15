@@ -177,7 +177,7 @@ class RenderedView {
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
-    case 'i': // initialize
+    case 'i': { // initialize
       console.log(`Initializing Tile Renderer with`);
       console.log(data, data.d);
 
@@ -213,6 +213,41 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       stateMachine();
 
       break;
+    }
+    case 's': {
+      const isMainView = data.viewId === mainView.viewId;
+      console.log(`Received scroll message for view ${data.viewId}`);
+      const view = isMainView ? mainView : previewView;
+
+      const didScroll = view.scroll(data.y);
+
+      if (didScroll) {
+        setState(RenderState.IDLE, view.viewId);
+        if (!running) stateMachine();
+      } else {
+        postMessage({ s: view.activeCanvasIndex });
+      }
+      break;
+    }
+    case 'r': {
+      const isMainView = data.viewId === mainView.viewId;
+      console.log(`Received resize message for view ${data.viewId}`);
+      const view = isMainView ? mainView : previewView;
+      view.resize(data.h);
+      setState(RenderState.IDLE, view.viewId);
+      if (!running) stateMachine();
+      break;
+    }
+    case 'z': {
+      const isMainView = data.viewId === mainView.viewId;
+      console.log(`Received zoom message for view ${data.viewId}`);
+      const view = isMainView ? mainView : previewView;
+      view.zoom(data.s, data.d);
+      setState(RenderState.RESET, view.viewId);
+      Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
+      if (!running) stateMachine();
+      break;
+    }
   }
 };
 
@@ -389,6 +424,7 @@ function render(view: RenderedView) {
     }
   }
   view.pendingFullPaint = false;
+  view.needsRender = false;
 }
 
 function stateMachine() {
@@ -433,14 +469,13 @@ function stateMachine() {
         // owned by wasm_extensions.cxx, so just wait for a state change
         break;
       case RenderState.RENDERING: {
-        break;
+        console.log("rendering");
         let viewToRender: RenderedView = mainView;
         let isRenderingPreview = false;
         if (Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
           viewToRender = previewView;
           isRenderingPreview = true;
         }
-        console.log(`rendering view ${viewToRender.viewId}`);
 
         render(viewToRender);
         let pendingFullPaint = mainView.pendingFullPaint || (previewView && previewView.pendingFullPaint);
@@ -449,11 +484,11 @@ function stateMachine() {
         }
 
         setState(RenderState.IDLE, mainView.viewId);
-        // if (didScroll) {
-        //   renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
-        //   postMessage({ s: activeCanvasIndex });
-        //   didScroll = false;
-        // }
+        // // if (didScroll) {
+        // //   renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
+        // //   postMessage({ s: activeCanvasIndex });
+        // //   didScroll = false;
+        // // }
         break;
       }
       case RenderState.RESET:
@@ -464,6 +499,8 @@ function stateMachine() {
         break;
     }
   }
+
+  running = false;
 }
 function blockingPaintTile(view: RenderedView, tileIndex: number): number {
   Atomics.wait(workerData.state, 0, RenderState.TILE_PAINT); // wait for existing paint to finish if necessary

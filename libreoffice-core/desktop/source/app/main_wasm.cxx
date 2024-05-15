@@ -459,10 +459,10 @@ public:
         val result = val::object();
         result.set("viewId", viewId);
         result.set("activeViewId", typed_memory_view(1, (uint32_t*)&data.activeViewId));
-        result.set("tileSize", data.mainViewData->tileSize);
+        result.set("tileSize", data.tileSize);
         result.set("state", typed_memory_view(1, (int32_t*)&data.state));
-        result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.mainViewData->tileTwips));
-        result.set("paintedTile", typed_memory_view(data.mainViewData->paintedTileAllocSize, data.mainViewData->paintedTile));
+        result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.tileTwips));
+        result.set("paintedTile", typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
         result.set("pendingFullPaint", typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
         result.set("hasInvalidations", typed_memory_view(1, (int32_t*)&data.hasInvalidations));
         result.set("invalidationStack", typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
@@ -472,14 +472,13 @@ public:
         result.set("invalidationStackHead",
                    typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
 
-        if (data.previewViewData)
-        {
-            result.set("previewViewId", previewViewId.value());
-            result.set("previewTileSize", data.previewViewData->tileSize);
-            result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewViewData->tileTwips));
-            result.set("previewPaintedTile", typed_memory_view(data.previewViewData->paintedTileAllocSize,
-                        data.previewViewData->paintedTile));
-        }
+        /* if (data.previewViewId.has_value()) */
+        /* { */
+        /*     result.set("previewViewId", previewViewId.value()); */
+        /*     result.set("previewTileSize", data.previewTileSize.value()); */
+        /*     result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewTileTwips.value())); */
+        /*     result.set("previewPaintedTile", typed_memory_view(data.previewPaintedTileAllocSize.value(), data.previewPaintedTile.value())); */
+        /* } */
 
         return result;
     }
