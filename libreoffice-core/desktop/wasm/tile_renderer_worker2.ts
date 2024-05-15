@@ -253,7 +253,7 @@ function fullPaint(view: RenderedView) {
   for (let y = 0; y < rangesToPaint.length /* && !shouldPausePaint() */; ++y) {
     const [start, endInclusive] = rangesToPaint[y];
     for (let x = start; x <= endInclusive; ++x) {
-      // newVisibleRingTiles.add(blockingPaintTile(view, x));
+      newVisibleRingTiles.add(blockingPaintTile(view, x));
     }
   }
   view.visibleRingTiles.clear();

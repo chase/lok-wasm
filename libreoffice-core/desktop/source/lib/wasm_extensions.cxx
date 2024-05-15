@@ -51,11 +51,11 @@ static void* tileRendererWorker(void* data_)
                 break;
             case RenderState::TILE_PAINT:
             {
-                SAL_WARN("desktop", "TILE_PAINT " << "viewId: " << currViewData->viewId << " tileSize: " << currViewData->tileSize << " tileTwips: " << currViewData->tileTwips[0] << " " << currViewData->tileTwips[1] << " " << currViewData->tileTwips[2] << " " << currViewData->tileTwips[3] << " paintedTileAllocSize: " << currViewData->paintedTileAllocSize);
+                SAL_WARN("desktop", "TileRendererData::TILE_PAINT " <<  "viewId: " << currViewData->viewId << " tileSize: " << currViewData->tileSize << " tileTwips: " << currViewData->tileTwips[0] << " " << currViewData->tileTwips[1] << " " << currViewData->tileTwips[2] << " " << currViewData->tileTwips[3] << " docWidthTwips: " << d->docWidthTwips << " docHeightTwips: " << d->docHeightTwips << " paintedTileAllocSize: " <<  currViewData->paintedTileAllocSize << "paintedTile:" << currViewData->paintedTile);
                 int nOrigViewId = d->doc->pClass->getView(d->doc);
-                if (nOrigViewId != currViewData->viewId)
+                if (nOrigViewId != d->mainViewData->viewId)
                 {
-                    d->doc->pClass->setView(d->doc, currViewData->viewId);
+                    d->doc->pClass->setView(d->doc, d->mainViewData->viewId);
                 }
 
                 std::fill_n(currViewData->paintedTile, currViewData->paintedTileAllocSize, 0);
