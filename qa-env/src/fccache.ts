@@ -1,4 +1,4 @@
-import { run } from "@lok/fccache";
+import { run } from '@lok/fccache';
 function downloadFile({
   name,
   buffer,
@@ -6,9 +6,9 @@ function downloadFile({
   name: string;
   buffer: ArrayBuffer;
 }): void {
-  const blob = new Blob([buffer], { type: "application/octet-stream" });
+  const blob = new Blob([buffer], { type: 'application/octet-stream' });
   const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const a = document.createElement('a');
   a.href = url;
   a.download = name.split('/').at(-1)!;
   document.body.appendChild(a);
@@ -17,6 +17,7 @@ function downloadFile({
   document.body.removeChild(a);
 }
 
+// @ts-ignore
 window.run = async () => {
   const files = await run();
   files.forEach(downloadFile);

@@ -1,9 +1,8 @@
+import { CallbackType } from '@lok/lok_enums';
 import { DocumentClient } from '@lok/shared';
-import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Accessor, createEffect, onCleanup } from 'solid-js';
 import { getOrCreateFocusedSignal } from './focus';
 import { eventModifiers, pressKey } from './vclKeys';
-import { CallbackType } from '@lok/lok_enums';
-import { getOrCreateCursorPosition } from './cursorSignal';
 
 interface Props {
   doc: Accessor<DocumentClient>;
@@ -65,12 +64,12 @@ export function InputHandler(props: Props) {
       if (composing) abortComposition();
       composing = false;
     }
-  })
+  });
 
   createEffect<void, number[]>((prevPos) => {
     // Only re-focus if the position has changed already
     // and the document is focused
-    if (focus() && (prevPos !== props.pos)) {
+    if (focus() && prevPos !== props.pos) {
       input.focus();
       if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
         reset();
@@ -78,7 +77,7 @@ export function InputHandler(props: Props) {
     }
 
     return props.pos;
-  }, props.pos)
+  }, props.pos);
 
   function abortComposition() {
     reset(document.activeElement !== input);

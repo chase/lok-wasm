@@ -169,7 +169,7 @@ const KEY_UP = 1;
 const ZERO_KEY = 48;
 
 // TODO: add edit permissions
-function userCanEdit(doc: Accessor<DocumentClient>) {
+function userCanEdit(_doc: Accessor<DocumentClient>) {
   return true;
 }
 
@@ -258,13 +258,13 @@ export function createKeyHandler(
       // convert Cmd to Ctrl only if Ctrl is not pressed
       // which accounts for the case where the user presses Cmd+Ctrl+<char>
       if (
-        IS_MAC && 
+        IS_MAC &&
         (modifiers & Modifiers.META_OR_CMD) !== 0 &&
         (modifiers & Modifiers.CTRL) === 0
       ) {
         modifiers &= ~Modifiers.META_OR_CMD;
         modifiers |= Modifiers.CTRL;
-      };
+      }
 
       let vclCode = vclKeyCode(
         evt.code as keyof typeof VCL_KEY_CODES,
