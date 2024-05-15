@@ -58,8 +58,8 @@ struct TileRendererData
     _Atomic int32_t invalidationStackHead = -1;
     _Atomic uint32_t pendingFullPaint = 1; // this is a bool
 
-    _Atomic int32_t docWidthTwips;
-    _Atomic int32_t docHeightTwips;
+    _Atomic uint32_t docWidthTwips;
+    _Atomic uint32_t docHeightTwips;
     _Atomic int32_t activeViewId;
 
     LibreOfficeKitDocument* doc;

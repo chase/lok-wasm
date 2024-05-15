@@ -178,10 +178,7 @@ class RenderedView {
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
     case 'i': // initialize
-      console.log(
-        `Initializing Tile Renderer with
-        `
-      );
+      console.log(`Initializing Tile Renderer with`);
       console.log(data, data.d);
 
       workerData = data.d;
@@ -256,7 +253,7 @@ function fullPaint(view: RenderedView) {
   for (let y = 0; y < rangesToPaint.length /* && !shouldPausePaint() */; ++y) {
     const [start, endInclusive] = rangesToPaint[y];
     for (let x = start; x <= endInclusive; ++x) {
-      newVisibleRingTiles.add(blockingPaintTile(view, x));
+      // newVisibleRingTiles.add(blockingPaintTile(view, x));
     }
   }
   view.visibleRingTiles.clear();
