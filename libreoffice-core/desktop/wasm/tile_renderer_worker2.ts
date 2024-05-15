@@ -1,5 +1,5 @@
 import { ToTileRenderer } from './shared';
-import { TileRenderData} from './soffice';
+import { TileRenderData } from './soffice';
 
 /** From lib/wasm_extensions.hxx */
 enum RenderState {
@@ -44,7 +44,6 @@ function updateDocSize() {
   docWidthTwips = Atomics.load(workerData.docWidthTwips, 0);
   docHeightTwips = Atomics.load(workerData.docHeightTwips, 0);
 }
-
 
 class RenderedView {
   readonly viewId: number;
@@ -92,7 +91,6 @@ class RenderedView {
 
   paintedTile: Uint8Array;
   tileTwips: Uint32Array;
-
 
   constructor({
     viewId,
@@ -181,7 +179,8 @@ class RenderedView {
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
-    case 'i': { // initialize
+    case 'i': {
+      // initialize
       console.log(`Initializing Tile Renderer with`);
       console.log(data, data.d);
 
@@ -197,7 +196,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         paintedTile: data.m.paintedTile,
         tileTwips: data.m.tileTwips,
       });
-
 
       if (data.p) {
         previewView = new RenderedView({
@@ -298,7 +296,7 @@ function fullPaint(view: RenderedView) {
 }
 
 function partialPaint(view: RenderedView) {
-  console.log("partialPaint for view", view.viewId);
+  console.log('partialPaint for view', view.viewId);
   // rebalance visible and non-visible
   invalidations.push(...view.visibleInvalidations);
   invalidations.push(...view.nonVisibleInvalidations);
@@ -387,12 +385,11 @@ function render(view: RenderedView) {
   const visibleTop = view.scheduledTopTwips;
   const visibleHeight = view.scheduledHeightTwips;
 
-  const rangesToRender = rectToTileIndexRanges([
-    0,
-    visibleTop,
-    docWidthTwips,
-    visibleHeight,
-  ], view.tileDimTwips, view.widthTileStride);
+  const rangesToRender = rectToTileIndexRanges(
+    [0, visibleTop, docWidthTwips, visibleHeight],
+    view.tileDimTwips,
+    view.widthTileStride
+  );
 
   // TODO: mark missing and invalidate
   view.ctx.clearRect(0, 0, view.activeCanvas.width, view.activeCanvas.height);
@@ -407,12 +404,14 @@ function render(view: RenderedView) {
   view.renderedHeightTwips = visibleHeight;
   view.renderedTopTwips = visibleTop;
 
-    for (let y = 0; y < rangesToRender.length /*&& !shouldPausePaint()*/; ++y) {
+  for (let y = 0; y < rangesToRender.length /*&& !shouldPausePaint()*/; ++y) {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
       const [xCoord] = tileIndexToGridCoord(view, x);
-      const img: ImageData = view.tileRing.get(view.tileIndexToTileRingIndex.get(x));
+      const img: ImageData = view.tileRing.get(
+        view.tileIndexToTileRingIndex.get(x)
+      );
       if (!img) {
         console.error('missing texture at ', x, xCoord, y);
         continue;
@@ -470,7 +469,7 @@ function stateMachine() {
         // owned by wasm_extensions.cxx, so just wait for a state change
         break;
       case RenderState.RENDERING: {
-        console.log("rendering");
+        console.log('rendering');
         let viewToRender: RenderedView = mainView;
         let isRenderingPreview = false;
         if (Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
@@ -479,15 +478,19 @@ function stateMachine() {
         }
 
         render(viewToRender);
-        let pendingFullPaint = mainView.pendingFullPaint || (previewView && previewView.pendingFullPaint);
+        let pendingFullPaint =
+          mainView.pendingFullPaint ||
+          (previewView && previewView.pendingFullPaint);
         if (!pendingFullPaint) {
           Atomics.store(workerData.pendingFullPaint, 0, 0);
         }
 
         setState(RenderState.IDLE, mainView.viewId);
-        console.log("rendered", viewToRender.didScroll);
+        console.log('rendered', viewToRender.didScroll);
         if (viewToRender.didScroll) {
-          viewToRender.renderedTileTop = Math.floor(viewToRender.renderedTopTwips / viewToRender.tileDimTwips);
+          viewToRender.renderedTileTop = Math.floor(
+            viewToRender.renderedTopTwips / viewToRender.tileDimTwips
+          );
           postMessage({ s: viewToRender.activeCanvasIndex });
           viewToRender.didScroll = false;
         }
@@ -500,7 +503,6 @@ function stateMachine() {
         self.close();
         break;
     }
-
   }
   if (!pendingInvalidate) {
     afterInvalidate().then((shouldRun) => {
