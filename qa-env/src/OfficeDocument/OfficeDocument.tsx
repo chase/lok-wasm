@@ -188,15 +188,30 @@ export function OfficeDocument(props: Props) {
     canvas0_.height = scaledHeight;
     canvas1_.width = scaledWidth;
     canvas1_.height = scaledHeight;
+    // await props.doc.startRendering(
+    //   [
+    //     canvas0_.transferControlToOffscreen(),
+    //     canvas1_.transferControlToOffscreen(),
+    //   ],
+    //   256,
+    //   zoom,
+    //   dpi
+    // );
     await props.doc.startRendering(
-      [
-        canvas0_.transferControlToOffscreen(),
-        canvas1_.transferControlToOffscreen(),
-      ],
-      256,
-      zoom,
-      dpi
-    );
+      {
+        viewId: props.doc.viewId,
+        canvases: [
+          canvas0_.transferControlToOffscreen(),
+          canvas1_.transferControlToOffscreen(),
+        ],
+        tileSize: 256,
+        scale: zoom,
+        yPos: 0
+      },
+      dpi,
+      undefined
+
+    )
     didInitialRender.add(props.doc);
   });
 

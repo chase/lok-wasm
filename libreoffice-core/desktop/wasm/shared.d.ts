@@ -9,6 +9,7 @@ import type {
   ITextRanges,
   ParagraphStyleList,
   TileRenderData,
+  ViewData,
 } from './soffice';
 export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
@@ -25,6 +26,14 @@ type Rectangle = {
   y: number;
   width: number;
   height: number;
+};
+
+export type ViewToRenderData = {
+  viewId: ViewId;
+  canvases: OffscreenCanvas[];
+  tileSize: TileDim;
+  scale: number;
+  yPos: number;
 };
 
 export type RectanglePx = Rectangle & {};
@@ -114,12 +123,9 @@ export type DocumentWithViewMethods = {
   ): void;
 
   startRendering(
-    canvases: OffscreenCanvas[],
-    tileSize: TileDim,
-    /** Non-negative float, 1.0 is unchange, less than 1.0 is smaller, greater than 1.0 is larger */
-    scale: number,
-    /** scroll top position in pixels */
-    yPosPx?: number
+    mainView: ViewToRenderData,
+    dpi: number,
+    previewView?: ViewToRenderData,
   ): TileRendererData;
 
   setScrollTop(yPx: number): number;
@@ -128,9 +134,9 @@ export type DocumentWithViewMethods = {
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
   resetRendering(
-    canvas: OffscreenCanvas[],
+    // canvas: OffscreenCanvas[],
     /** Non-negative float, 1.0 is unchanged, less than 1.0 is smaller, greater than 1.0 is larger */
-    scale: number
+    // scale: number
   ): void;
   /** TODO: implement */
   stopRendering(): void;
@@ -362,34 +368,46 @@ export type ForwardedFromWorker<
   m: keyof ReturnType<ForwardingMethod<K>>;
 };
 
+type InitializeViewData = {
+  viewId: number;
+  scale: number;
+  canvases: OffscreenCanvas[];
+  tileTwips: Uint32Array;
+  paintedTile: Uint8Array;
+  y: number;
+};
+
+
 export type ToTileRenderer =
   | {
       /** initialize */
       t: 'i';
-      c: OffscreenCanvas[];
+      /** Main view data */
+      m: InitializeViewData;
+      /** Preview view data */
+      p: InitializeViewData | undefined;
+      /** shared renderer data */
       d: TileRenderData;
-      /** absolute scale */
-      s: number;
-      /** top position in pixels */
-      y: number;
-      /** dpi */
       dpi: number;
     }
   | {
       /** scroll */
       t: 's';
+      viewId: number;
       /** view height in pixels */
       y: number;
     }
   | {
       /** resize */
       t: 'r';
+      viewId: number;
       /** height */
       h: number;
     }
   | {
       /** zoom */
       t: 'z';
+      viewId: number;
       /** absolute scale */
       s: number;
       /** dpi */

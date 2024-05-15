@@ -10,8 +10,8 @@ $(eval $(call gb_Package_add_files,desktop_wasm,$(LIBO_BIN_FOLDER),\
 	worker.js \
 	worker.d.ts \
 	shared.d.ts \
-	tile_renderer_worker.js \
-	tile_renderer_worker.d.ts \
+	tile_renderer_worker2.js \
+	tile_renderer_worker2.d.ts \
 	lok_enums.js \
 	lok_enums.d.ts \
 	soffice.d.ts \

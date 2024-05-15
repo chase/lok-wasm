@@ -195,13 +195,11 @@ function registerClientMethod(prop: string) {
     const [i, future] = registerFuture();
     let transfers: { transfer: Transferable[] } | undefined;
     if (prop === 'startRendering' || prop === 'resetRendering') {
+      let params = (args as Parameters<DocumentWithViewMethods['startRendering']>);
       transfers = {
         transfer: [
-          ...(
-            args as
-              | Parameters<DocumentWithViewMethods['startRendering']>
-              | Parameters<DocumentWithViewMethods['resetRendering']>
-          )[0],
+          ...params[0].canvases,
+          ...params[2]?.canvases ?? [],
         ],
       };
     }

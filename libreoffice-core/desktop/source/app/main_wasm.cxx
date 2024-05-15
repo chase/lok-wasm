@@ -453,23 +453,33 @@ public:
 
     int32_t newView() { return doc_->createView(); }
 
-    val startTileRenderer(int32_t viewId, int32_t tileSize)
+    val startTileRenderer(int32_t viewId, int32_t tileSize, std::optional<int32_t> previewViewId, std::optional<int32_t> previewTileSize)
     {
-        desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize);
+        desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize, previewViewId, previewTileSize);
         val result = val::object();
-        result.set("viewId", data.viewId);
-        result.set("tileSize", data.tileSize);
+        result.set("viewId", viewId);
+        result.set("activeViewId", typed_memory_view(1, (uint32_t*)&data.activeViewId));
+        result.set("tileSize", data.mainViewData->tileSize);
         result.set("state", typed_memory_view(1, (int32_t*)&data.state));
-        result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.tileTwips));
-        result.set("paintedTile", typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
+        result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.mainViewData->tileTwips));
+        result.set("paintedTile", typed_memory_view(data.mainViewData->paintedTileAllocSize, data.mainViewData->paintedTile));
         result.set("pendingFullPaint", typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
         result.set("hasInvalidations", typed_memory_view(1, (int32_t*)&data.hasInvalidations));
         result.set("invalidationStack", typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
                                                           (uint32_t*)&data.invalidationStack));
-        result.set("invalidationStackHead",
-                   typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
         result.set("docWidthTwips", typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
         result.set("docHeightTwips", typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
+        result.set("invalidationStackHead",
+                   typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
+
+        if (data.previewViewData)
+        {
+            result.set("previewViewId", previewViewId.value());
+            result.set("previewTileSize", data.previewViewData->tileSize);
+            result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewViewData->tileTwips));
+            result.set("previewPaintedTile", typed_memory_view(data.previewViewData->paintedTileAllocSize,
+                        data.previewViewData->paintedTile));
+        }
 
         return result;
     }
@@ -682,6 +692,7 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<bool>();
     register_optional<std::string>();
     register_optional<int>();
+    register_optional<int32_t>();
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
 

@@ -2541,7 +2541,7 @@ void CallbackFlushHandler::invoke()
             LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
             for (auto& data : pDocument->tileRendererData_)
             {
-                if (data.viewId == m_viewId)
+                if (data.activeViewId == m_viewId)
                 {
                     auto& update = it2->getRectangleAndPart();
                     if (update.isEmpty()) continue;
@@ -2573,7 +2573,7 @@ void CallbackFlushHandler::invoke()
             LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
             for (auto& data : pDocument->tileRendererData_)
             {
-                if (data.viewId == m_viewId)
+                if (data.activeViewId == m_viewId)
                 {
                     long w, h;
                     pDocument->pClass->getDocumentSize(pDocument, &w, &h);

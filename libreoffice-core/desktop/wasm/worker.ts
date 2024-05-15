@@ -23,6 +23,8 @@ import type {
   ViewId,
   WorkerCallback,
   ForwardingMethodHandler,
+  ViewToRenderData,
+  InitializeViewData,
 } from './shared';
 import type {
   Comment,
@@ -41,6 +43,8 @@ const docMap: Record<DocumentRef, Document> = {};
 const findResultMap: Record<DocumentRef, ITextRanges> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
+
+
 
 const lok = await LOK({
   withFcCache: true,
@@ -257,50 +261,80 @@ const handler: DocumentMethodHandler<Document> = {
 
   startRendering: function (
     doc: Document,
-    viewId: ViewId,
-    canvases: OffscreenCanvas[],
-    tileSize: TileDim,
-    scale: number,
+    _viewId: ViewId,
+    mainView: ViewToRenderData,
     dpi: number,
-    yPos: number = 0
+    previewView?: ViewToRenderData,
   ): TileRendererData {
     const ref = doc.ref();
-    const result = doc.startTileRenderer(viewId, tileSize);
+    const result = doc.startTileRenderer(
+      mainView.viewId,
+      mainView.tileSize,
+      previewView?.viewId,
+      previewView?.tileSize
+    );
     const worker = new Worker(
-      new URL('./tile_renderer_worker.js', import.meta.url),
+      new URL('./tile_renderer_worker2.js', import.meta.url),
       { type: 'module' }
     );
     if (!tileRenderer[ref]) {
       tileRenderer[ref] = {};
     }
-    tileRenderer[ref][result.viewId] = worker;
+    tileRenderer[ref][mainView.viewId] = worker;
+
+    let canvasesToTransfer = [...mainView.canvases, ...previewView?.canvases ?? []];
+
+    let mainViewData: InitializeViewData = {
+      viewId: result.viewId,
+      scale: mainView.scale,
+      canvases: mainView.canvases,
+      tileTwips: result.tileTwips,
+      paintedTile: result.paintedTile,
+      y: mainView.yPos,
+    };
+
+    let previewViewData: InitializeViewData | undefined;
+
+    if (previewView) {
+      previewViewData = {
+        viewId: result.previewViewId,
+        scale: previewView.scale,
+        canvases: previewView.canvases,
+        tileTwips: result.previewTileTwips,
+        paintedTile: result.previewPaintedTile,
+        y: previewView.yPos,
+      };
+    }
 
     worker.postMessage(
       {
         t: 'i',
-        c: canvases,
+        m: mainViewData,
+        p: previewViewData,
         d: result,
-        s: scale,
-        y: yPos,
         dpi,
       } as ToTileRenderer,
-      { transfer: [...canvases] }
+      { transfer: [...canvasesToTransfer] }
     );
 
     return {
       docRef: ref,
       viewId: result.viewId,
-      scale,
+      scale: mainView.scale,
     };
   },
 
-  resetRendering: function (
-    _doc: Document,
-    _viewId: ViewId,
-    _canvases: OffscreenCanvas[]
-  ): void {
-    throw new Error('Function not implemented.');
+  resetRendering: function() {
+
   },
+
+//   resetRendering: function (
+//     _doc: Document,
+//     _viewId: ViewId,
+//     _canvases: OffscreenCanvas[]
+//   ): void {
+//     throw new Error('Function not implemented.');
+//   },
 
   stopRendering: function (_doc: Document, _viewId: ViewId): void {
     throw new Error('Function not implemented.');
