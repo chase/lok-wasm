@@ -61,7 +61,7 @@ function calcCanvasHeight(heightPx: number | undefined) {
     : undefined;
 }
 
-function observedSize(
+export function observedSize(
   el: Element,
   setter: () => [DocumentClient, Setter<number | undefined>]
 ) {
@@ -218,7 +218,7 @@ export function OfficeDocument(props: Props) {
           props?.previewCanvases![1]!.transferControlToOffscreen(),
         ],
         tileSize: 256,
-        scale: .2,
+        scale: .25,
         yPos: 0,
       }
     )

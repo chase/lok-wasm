@@ -45,7 +45,7 @@ static void* tileRendererWorker(void* data_)
         RenderState state = d->state;
 
         bool bIsMainView = d->viewId == d->activeViewId;
-        std::array<uint32_t, 4> tileTwips = bIsMainView ? d->tileTwips : d->previewTileTwips.value();
+        std::array<uint32_t, 4> tileTwips = bIsMainView ? d->tileTwips : d->previewTileTwips;
         uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewPaintedTile.value();
         int32_t tileSize = bIsMainView ? d->tileSize : d->previewTileSize.value();
         int32_t paintedTileAllocSize = bIsMainView ? d->paintedTileAllocSize : d->previewPaintedTileAllocSize.value();
@@ -105,6 +105,7 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
 
+    SAL_WARN("desktop", "before emplace back");
     TileRendererData& data = tileRendererData_.emplace_back(
         this,
         viewId_,
@@ -143,10 +144,10 @@ void TileRendererData::pushInvalidation(uint32_t invalidation[4])
 
 void TileRendererData::reset()
 {
+    bool bIsMainView = activeViewId == viewId;
     __c11_atomic_store(&invalidationStackHead, -1, __ATOMIC_RELAXED);
 
-    // TODO: @synoet make it so that pendingFullPaint is view specific
-    __c11_atomic_store(&pendingFullPaint, 1, __ATOMIC_SEQ_CST);
+    __c11_atomic_store(bIsMainView ?  &pendingFullPaint : &previewPendingFullPaint, 1, __ATOMIC_SEQ_CST);
     __c11_atomic_store(&hasInvalidations, 1, __ATOMIC_SEQ_CST);
     __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
 }

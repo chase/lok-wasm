@@ -4,6 +4,7 @@ import { createEffect, createSignal, For, JSX} from "solid-js";
 import { ScrollArea } from "./OfficeDocument/ScrollArea";
 import { frameThrottle } from "./OfficeDocument/frameThrottle";
 import { setPreviewCanvases } from "./App";
+import { observedSize } from "./OfficeDocument/OfficeDocument";
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
@@ -26,9 +27,9 @@ export const [canvas1, setCanvas1] = createSignal<HTMLCanvasElement | undefined>
 const didInitialRender = new WeakSet<DocumentClient>();
 export function DocumentPreview(props: Props) {
   let scrollAreaRef: HTMLDivElement | undefined;
-  const [containerHeight, setContainerHeight] = createSignal<
+  const [containerHeight, _setContainerHeight] = createSignal<
     number | undefined
-  >(2000);
+  >();
   const [docSizeTwips, setDocSizeTwips] = createSignal<
     Dimensions | undefined
   >();
@@ -112,6 +113,7 @@ export function DocumentPreview(props: Props) {
     <>
       <div
         class="w-full flex flex-1 justify-center relative overflow-hidden h-full"
+        use:observedSize={[props.doc, _setContainerHeight]}
       >
       {docSizePx() && canvasHeight && (
       <>
@@ -143,6 +145,7 @@ export function DocumentPreview(props: Props) {
         onScroll={handleScroll}
         ref={scrollAreaRef}
         class="absolute left-0 top-0"
+        noPadding={true}
       >
         {docSizePx() && (
           <div

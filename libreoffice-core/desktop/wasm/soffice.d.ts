@@ -47,6 +47,8 @@ export type TileRenderData = {
   previewTileTwips: Uint32Array;
   /** `_Atomic uint32_t` */
   previewPaintedTile: Uint8Array;
+  /** `_Atomic uint32_t` */
+  previewPendingFullPaint: Int32Array;
 };
 
 export type RectArray = [x: number, y: number, width: number, height: number];

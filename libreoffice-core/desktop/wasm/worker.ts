@@ -290,6 +290,7 @@ const handler: DocumentMethodHandler<Document> = {
       canvases: mainView.canvases,
       tileTwips: result.tileTwips,
       paintedTile: result.paintedTile,
+      pendingFullPaint: result.pendingFullPaint,
       y: mainView.yPos,
     };
 
@@ -302,6 +303,7 @@ const handler: DocumentMethodHandler<Document> = {
         canvases: previewView.canvases,
         tileTwips: result.previewTileTwips,
         paintedTile: result.previewPaintedTile,
+        pendingFullPaint: result.previewPendingFullPaint,
         y: previewView.yPos,
       };
     }

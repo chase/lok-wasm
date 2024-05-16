@@ -148,7 +148,7 @@ function App() {
         </div>
       </Show>
       <Show when={previewDoc()}>
-        <div class="h-full w-[300px] absolute left-0 top-0">
+        <div class="h-full w-[300px] absolute left-0 top-0 z-10">
           <DocumentPreview doc={previewDoc()!} />
         </div>
       </Show>

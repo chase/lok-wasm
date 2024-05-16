@@ -19,6 +19,8 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
+const DEBUG = true;
+
 const RECT_SIZE = 4;
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
 
@@ -27,18 +29,15 @@ let workerData: TileRenderData;
 let docWidthTwips: number;
 // Changes infrequently
 let docHeightTwips: number;
-
 // Is the state machine currently running?
 let running = false;
+let pendingStateChange: boolean = false;
+let invalidations: Rect[] = [];
+let startTimestamp: number;
 
 let mainView: RenderedView;
-
 // previewView is optional
 let previewView: RenderedView | undefined = undefined;
-
-let pendingStateChange: boolean = false;
-
-let invalidations: Rect[] = [];
 
 function updateDocSize() {
   docWidthTwips = Atomics.load(workerData.docWidthTwips, 0);
@@ -84,7 +83,7 @@ class RenderedView {
   /** ring index that wraps on POOL_SIZE */
   tileRingIndex = 0;
 
-  pendingFullPaint: boolean = false;
+  private pendingFullPaint: Int32Array;
   needsRender: boolean = false;
 
   paintTimes: number[] = [];
@@ -102,6 +101,7 @@ class RenderedView {
     poolSize,
     paintedTile,
     tileTwips,
+    pendingFullPaint,
   }: {
     viewId: number;
     canvases: OffscreenCanvas[];
@@ -112,6 +112,7 @@ class RenderedView {
     poolSize: number;
     tileTwips: Uint32Array;
     paintedTile: Uint8Array;
+    pendingFullPaint: Int32Array;
   }) {
     this.viewId = viewId;
     this.canvases = canvases;
@@ -123,10 +124,19 @@ class RenderedView {
     this.paintedTile = paintedTile;
     this.activeCanvas = canvases[0];
     this.ctx = this.activeCanvas.getContext('2d');
+    this.pendingFullPaint = pendingFullPaint;
 
     this.zoom(scale, dpi);
 
     this.scheduledTopTwips = yPos * this.scaledTwips;
+  }
+
+  isPendingFullPaint(): boolean {
+    return Atomics.load(this.pendingFullPaint, 0) === 1;
+  }
+
+  setIsPendingFullPaint(val: boolean) {
+    Atomics.store(this.pendingFullPaint, 0, val ? 1 : 0);
   }
 
   /// Returns true if the view has scroll sufficiently past the current tile
@@ -181,6 +191,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
     case 'i': {
       // initialize
+      startTimestamp = Date.now();
       console.log(`Initializing Tile Renderer with`);
       console.log(data, data.d);
 
@@ -195,6 +206,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         poolSize: 2000,
         paintedTile: data.m.paintedTile,
         tileTwips: data.m.tileTwips,
+        pendingFullPaint: data.m.pendingFullPaint,
       });
 
       if (data.p) {
@@ -208,9 +220,11 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
           poolSize: 500, // Document preview has a smaller pool size
           paintedTile: data.p.paintedTile,
           tileTwips: data.p.tileTwips,
+          pendingFullPaint: data.p.pendingFullPaint,
         });
       }
 
+      console.log("starting state machine");
       pendingStateChange = true;
       stateMachine();
 
@@ -252,22 +266,21 @@ function getState(): RenderState {
 }
 
 function setState(state: RenderState, viewId?: number): void {
-  pendingStateChange = true;
-  Atomics.store(workerData.state, 0, state);
-  Atomics.notify(workerData.state, 0);
-
   // Optionally set a new active view
   // specifically used for painting
   if (viewId) {
     Atomics.store(workerData.activeViewId, 0, viewId);
   }
+
+  pendingStateChange = true;
+  Atomics.store(workerData.state, 0, state);
+  Atomics.notify(workerData.state, 0);
 }
 
 function fullPaint(view: RenderedView) {
   console.log(`fullPaint for view ${view.viewId}`);
   view.visibleInvalidations.length = 0;
   view.nonVisibleInvalidations.length = 0;
-  view.pendingFullPaint = false;
 
   const rangesToPaint = rectToTileIndexRanges(
     [0, view.scheduledTopTwips, docWidthTwips, view.scheduledHeightTwips],
@@ -375,6 +388,7 @@ function partialPaint(view: RenderedView) {
   view.visibleInvalidations.length = 0;
   view.visibleRingTiles.clear();
   view.visibleRingTiles = newVisibleRingTiles;
+
   if (hasUpdatedVisibleArea(view)) {
     view.needsRender = true;
   }
@@ -419,11 +433,16 @@ function render(view: RenderedView) {
       const dstX: number = xCoord * view.tileSize;
       const dstY: number = y * view.tileSize;
       view.ctx.beginPath();
-      view.ctx.putImageData(img, dstX, dstY);
+      view.ctx.putImageData(DEBUG ? addRedBorder(img) : img, dstX, dstY);
+      if (DEBUG) {
+        view.ctx.font = '12px Arial';
+        view.ctx.fillStyle = 'blue';
+        view.ctx.fillText(`${Date.now() - startTimestamp}`, dstX + 5, dstY - 5);
+      }
       view.ctx.closePath();
     }
   }
-  view.pendingFullPaint = false;
+  view.setIsPendingFullPaint(false);
   view.needsRender = false;
 }
 
@@ -431,35 +450,37 @@ function stateMachine() {
   running = true;
   while (pendingStateChange) {
     pendingStateChange = false;
+    const mPendingFullPaint = mainView.isPendingFullPaint();
+    const pPendingFullPaint = previewView && previewView?.isPendingFullPaint();
+    console.log("is Pending full paint ", mPendingFullPaint, pPendingFullPaint);
     switch (getState()) {
       case RenderState.IDLE: {
         // Invalidations are shared between the main and preview views
         invalidations = drainInvalidations();
 
-        if (Atomics.load(workerData.pendingFullPaint, 0) === 1) {
-          mainView.pendingFullPaint = true;
-          if (previewView) previewView.pendingFullPaint = true;
-        }
 
         // Prioritize painting and rendering the main view
         // Only paint the preview view if the main view does not need a render
-        if (mainView.pendingFullPaint) {
+        if (mPendingFullPaint) {
           fullPaint(mainView);
+          Atomics.store(workerData.pendingFullPaint, 0, 0);
         } else {
           partialPaint(mainView);
         }
 
-        if (mainView.needsRender /* || hasUpdatedVisibleArea */) {
+        if (mainView.needsRender || hasUpdatedVisibleArea(mainView) ) {
           setState(RenderState.RENDERING, mainView.viewId);
+          break;
         } else if (previewView) {
           // if nothing needs to be done on the main view, check the preview view
-          if (previewView.pendingFullPaint) {
+          if (pPendingFullPaint) {
             fullPaint(previewView);
           } else {
             partialPaint(previewView);
           }
 
-          if (previewView.needsRender /* || hasUpdatedVisibleArea */) {
+          // Do we need to render the preview view ?
+          if (previewView.needsRender || hasUpdatedVisibleArea(previewView)) {
             setState(RenderState.RENDERING, previewView.viewId);
           }
         }
@@ -469,7 +490,6 @@ function stateMachine() {
         // owned by wasm_extensions.cxx, so just wait for a state change
         break;
       case RenderState.RENDERING: {
-        console.log('rendering');
         let viewToRender: RenderedView = mainView;
         let isRenderingPreview = false;
         if (Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
@@ -479,14 +499,12 @@ function stateMachine() {
 
         render(viewToRender);
         let pendingFullPaint =
-          mainView.pendingFullPaint ||
-          (previewView && previewView.pendingFullPaint);
+          mPendingFullPaint || pPendingFullPaint;
         if (!pendingFullPaint) {
           Atomics.store(workerData.pendingFullPaint, 0, 0);
         }
 
-        setState(RenderState.IDLE, mainView.viewId);
-        console.log('rendered', viewToRender.didScroll);
+        setState(RenderState.IDLE, Atomics.load(workerData.activeViewId, 0));
         if (viewToRender.didScroll) {
           viewToRender.renderedTileTop = Math.floor(
             viewToRender.renderedTopTwips / viewToRender.tileDimTwips
@@ -512,7 +530,6 @@ function stateMachine() {
         stateMachine();
       }
     });
-    // if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
   }
 
   running = false;
@@ -586,6 +603,7 @@ function blockingPaintTile(view: RenderedView, tileIndex: number): number {
 
   view.tileRingIndexToTileIndex.set(view.tileRingIndex, tileIndex);
   view.tileIndexToTileRingIndex.set(tileIndex, view.tileRingIndex);
+  view.tileRingIndexToTileIndex.set(tileIndex, Date.now());
   view.tileRing.set(
     view.tileRingIndex,
     new ImageData(
@@ -781,4 +799,54 @@ function hasUpdatedVisibleArea(view: RenderedView): boolean {
     view.scheduledTopTwips !== view.renderedTopTwips ||
     view.scheduledHeightTwips !== view.renderedHeightTwips
   );
+}
+
+function addRedBorder(imageData: ImageData) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+
+  // Define the red color values
+  const red = 0;
+  const green = 0;
+  const blue = 255;
+  const alpha = 255;
+
+  // Top border
+  for (let x = 0; x < width; x++) {
+    const index = (x + 0 * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  // Bottom border
+  for (let x = 0; x < width; x++) {
+    const index = (x + (height - 1) * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  // Left border
+  for (let y = 0; y < height; y++) {
+    const index = (0 + y * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  // Right border
+  for (let y = 0; y < height; y++) {
+    const index = (width - 1 + y * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  return imageData;
 }

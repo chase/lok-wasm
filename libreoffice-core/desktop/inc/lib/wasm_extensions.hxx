@@ -44,6 +44,7 @@ struct TileRendererData
     _Atomic uint32_t invalidationStack[MAX_INVALIDATION_STACK][4];
     _Atomic int32_t invalidationStackHead = -1;
     _Atomic uint32_t pendingFullPaint = 1; // this is a bool
+    _Atomic uint32_t previewPendingFullPaint = 1;
 
     _Atomic uint32_t docWidthTwips;
     _Atomic uint32_t docHeightTwips;
@@ -52,7 +53,7 @@ struct TileRendererData
     std::array<uint32_t, 4> tileTwips;
     uint8_t* paintedTile;
 
-    std::optional<std::array<uint32_t, 4>> previewTileTwips;
+    std::array<uint32_t, 4> previewTileTwips;
     std::optional<uint8_t*> previewPaintedTile;
 
     LibreOfficeKitDocument* doc;

@@ -374,6 +374,7 @@ type InitializeViewData = {
   canvases: OffscreenCanvas[];
   tileTwips: Uint32Array;
   paintedTile: Uint8Array;
+  pendingFullPaint: Int32Array;
   y: number;
 };
 

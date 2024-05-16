@@ -456,6 +456,7 @@ public:
     val startTileRenderer(int32_t viewId, int32_t tileSize, std::optional<int32_t> previewViewId, std::optional<int32_t> previewTileSize)
     {
         desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize, previewViewId, previewTileSize);
+        SAL_WARN("desktop", "after");
         val result = val::object();
         result.set("viewId", viewId);
         result.set("activeViewId", typed_memory_view(1, (uint32_t*)&data.activeViewId));
@@ -472,12 +473,13 @@ public:
         result.set("invalidationStackHead",
                    typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
 
-        if (data.previewViewId.has_value())
+        if (data.previewViewId)
         {
-            result.set("previewViewId", previewViewId.value());
+            result.set("previewViewId", data.previewViewId.value());
             result.set("previewTileSize", data.previewTileSize.value());
-            result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewTileTwips.value()));
+            result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewTileTwips));
             result.set("previewPaintedTile", typed_memory_view(data.previewPaintedTileAllocSize.value(), data.previewPaintedTile.value()));
+            result.set("previewPendingFullPaint", typed_memory_view(1, (int32_t*)&data.previewPendingFullPaint));
         }
 
         return result;
