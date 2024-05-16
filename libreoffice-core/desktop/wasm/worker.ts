@@ -273,7 +273,7 @@ const handler: DocumentMethodHandler<Document> = {
       previewView?.tileSize
     );
     const worker = new Worker(
-      new URL('./tile_renderer_worker2.js', import.meta.url),
+      new URL('./tile_renderer_worker.js', import.meta.url),
       { type: 'module' }
     );
     if (!tileRenderer[ref]) {
