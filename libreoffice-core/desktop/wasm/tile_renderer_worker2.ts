@@ -19,7 +19,7 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = true;
+const DEBUG = false;
 
 const RECT_SIZE = 4;
 const LOK_INTERNAL_TWIPS_TO_PX = 15;

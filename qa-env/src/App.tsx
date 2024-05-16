@@ -142,19 +142,21 @@ function App() {
           <button onClick={() => saveAsPDF(getDoc())}>Save As PDF</button>
         </div>
       </Show>
-      <Show when={loading()}>
-        <div class="loadsection">
-          <span class="loader" />
-        </div>
-      </Show>
-      <Show when={previewDoc()}>
-        <div class="h-full w-[300px] absolute left-0 top-0 z-10">
-          <DocumentPreview doc={previewDoc()!} />
-        </div>
-      </Show>
-      <Show when={getDoc() && previewCanvases()} keyed>
-        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} previewViewId={previewDoc()!.viewId} previewCanvases={[canvas0()!, canvas1()!]}/>
-      </Show>
+      <div class="w-full h-full flex relative">
+        <Show when={loading()}>
+          <div class="loadsection">
+            <span class="loader" />
+          </div>
+        </Show>
+        <Show when={previewDoc()}>
+          <div class="h-full w-[300px] absolute left-0 top-0 z-10">
+            <DocumentPreview doc={previewDoc()!} />
+          </div>
+        </Show>
+        <Show when={getDoc() && previewCanvases()} keyed>
+          <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} previewViewId={previewDoc()!.viewId} previewCanvases={[canvas0()!, canvas1()!]}/>
+        </Show>
+      </div>
     </>
   );
 }
