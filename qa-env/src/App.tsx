@@ -9,9 +9,12 @@ import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
 import { ZOOM_STEP, updateZoom } from './OfficeDocument/zoom';
 import { downloadFile } from './utils';
+import { DocumentPreview, canvas0, canvas1 } from './DocumentPreview';
 
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
+const [previewDoc, setPreviewDoc] = createSignal<DocumentClient | null>(null);
+export const [previewCanvases, setPreviewCanvases] = createSignal<Array<HTMLCanvasElement> | null>(null);
 const getDocThrows = () => {
   const doc = getDoc();
   if (!doc) throw new Error('no doc');
@@ -42,7 +45,12 @@ async function fileOpen(files: FileList | null) {
   await doc.initializeForRendering({
     author: 'Macro User',
   });
+
+  const previewDoc = await doc.newView();
+  await previewDoc?.initializeForRendering({});
+  console.log(`previewDoc`, previewDoc);
   setDoc(doc);
+  setPreviewDoc(previewDoc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
   window.d = doc;
@@ -139,8 +147,13 @@ function App() {
           <span class="loader" />
         </div>
       </Show>
-      <Show when={getDoc()} keyed>
-        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} />
+      <Show when={previewDoc()}>
+        <div class="h-full w-[300px] absolute left-0 top-0">
+          <DocumentPreview doc={previewDoc()!} />
+        </div>
+      </Show>
+      <Show when={getDoc() && previewCanvases()} keyed>
+        <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} previewViewId={previewDoc()!.viewId} previewCanvases={[canvas0()!, canvas1()!]}/>
       </Show>
     </>
   );

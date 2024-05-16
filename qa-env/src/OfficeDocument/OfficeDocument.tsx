@@ -35,6 +35,8 @@ const BORDER_WIDTH = 1;
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
   ignoreShortcuts?: Shortcut[];
+  previewViewId?: number;
+  previewCanvases?: HTMLCanvasElement[];
 }
 
 type Dimensions = [number, number];
@@ -209,8 +211,16 @@ export function OfficeDocument(props: Props) {
         yPos: 0
       },
       dpi,
-      undefined
-
+      {
+        viewId: props.previewViewId!,
+        canvases: [
+          props?.previewCanvases![0]!.transferControlToOffscreen(),
+          props?.previewCanvases![1]!.transferControlToOffscreen(),
+        ],
+        tileSize: 256,
+        scale: .2,
+        yPos: 0,
+      }
     )
     didInitialRender.add(props.doc);
   });

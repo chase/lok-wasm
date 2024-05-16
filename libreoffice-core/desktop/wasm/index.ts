@@ -154,7 +154,7 @@ const clientBase: DocumentClientBase = {
     const message: ToWorker = {
       f: 'newView',
       i,
-      a: [],
+      a: [this.ref],
     };
     loadWorkerOnce().postMessage(message);
 
@@ -220,6 +220,16 @@ function registerClientMethod(prop: string) {
           this.viewId = viewId;
         }
       );
+    }
+
+    // TODO: @synoet fix this
+    if (prop === 'newView') {
+      return new Promise((resolve, _reject) => {
+        resolve(future.promise.then((viewId) => {
+          return documentClient(this.ref, viewId as number)
+        }))
+      })
+
     }
     return future.promise;
   };
