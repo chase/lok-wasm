@@ -450,38 +450,44 @@ function stateMachine() {
   running = true;
   while (pendingStateChange) {
     pendingStateChange = false;
+    const isMainActive = Atomics.load(workerData.activeViewId, 0) === mainView.viewId;
     const mPendingFullPaint = mainView.isPendingFullPaint();
     const pPendingFullPaint = previewView && previewView?.isPendingFullPaint();
-    console.log("is Pending full paint ", mPendingFullPaint, pPendingFullPaint);
     switch (getState()) {
       case RenderState.IDLE: {
-        // Invalidations are shared between the main and preview views
         invalidations = drainInvalidations();
+        switch (isMainActive) {
+          case true: {
+            console.log("IDLE MAIN");
+            if (mPendingFullPaint) {
+              fullPaint(mainView);
+              setState(RenderState.RENDERING, mainView.viewId);
+              break;
+            }
 
-
-        // Prioritize painting and rendering the main view
-        // Only paint the preview view if the main view does not need a render
-        if (mPendingFullPaint) {
-          fullPaint(mainView);
-          Atomics.store(workerData.pendingFullPaint, 0, 0);
-        } else {
-          partialPaint(mainView);
-        }
-
-        if (mainView.needsRender || hasUpdatedVisibleArea(mainView) ) {
-          setState(RenderState.RENDERING, mainView.viewId);
-          break;
-        } else if (previewView) {
-          // if nothing needs to be done on the main view, check the preview view
-          if (pPendingFullPaint) {
-            fullPaint(previewView);
-          } else {
-            partialPaint(previewView);
+            partialPaint(mainView);
+            if (mainView.needsRender) {
+              setState(RenderState.RENDERING, mainView.viewId);
+              break;
+            }
           }
+          case false: {
+            console.log("IDLE PREVIEW");
+            if (pPendingFullPaint) {
+              fullPaint(previewView);
+              setState(RenderState.RENDERING, previewView.viewId);
+              break;
+            }
 
-          // Do we need to render the preview view ?
-          if (previewView.needsRender || hasUpdatedVisibleArea(previewView)) {
-            setState(RenderState.RENDERING, previewView.viewId);
+            partialPaint(previewView);
+
+            if (previewView.needsRender) {
+              setState(RenderState.RENDERING, previewView.viewId);
+              break;
+            }
+
+            // Always pass the active view id back to the main view;
+            Atomics.store(workerData.activeViewId, 0, mainView.viewId);
           }
         }
         break;
@@ -491,20 +497,25 @@ function stateMachine() {
         break;
       case RenderState.RENDERING: {
         let viewToRender: RenderedView = mainView;
-        let isRenderingPreview = false;
+        let otherView: RenderedView = previewView;
         if (Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
           viewToRender = previewView;
-          isRenderingPreview = true;
+          otherView = mainView;
         }
 
         render(viewToRender);
-        let pendingFullPaint =
-          mPendingFullPaint || pPendingFullPaint;
-        if (!pendingFullPaint) {
-          Atomics.store(workerData.pendingFullPaint, 0, 0);
+
+        // unset pending full paint for the view.
+        if (viewToRender.isPendingFullPaint()) {
+          viewToRender.setIsPendingFullPaint(false);
         }
 
-        setState(RenderState.IDLE, Atomics.load(workerData.activeViewId, 0));
+        if (otherView.isPendingFullPaint()) {
+          setState(RenderState.IDLE, otherView.viewId);
+        } else if (otherView.didScroll) {
+          setState(RenderState.IDLE, otherView.viewId);
+        }
+
         if (viewToRender.didScroll) {
           viewToRender.renderedTileTop = Math.floor(
             viewToRender.renderedTopTwips / viewToRender.tileDimTwips
