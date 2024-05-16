@@ -42,8 +42,7 @@ import LOK from './soffice';
 const docMap: Record<DocumentRef, Document> = {};
 const findResultMap: Record<DocumentRef, ITextRanges> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
-const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
-
+const tileRenderer: Record<DocumentRef, Worker> = {};
 
 
 const lok = await LOK({
@@ -278,9 +277,9 @@ const handler: DocumentMethodHandler<Document> = {
       { type: 'module' }
     );
     if (!tileRenderer[ref]) {
-      tileRenderer[ref] = {};
+      tileRenderer[ref] = undefined;
     }
-    tileRenderer[ref][mainView.viewId] = worker;
+    tileRenderer[ref] = worker;
 
     let canvasesToTransfer = [...mainView.canvases, ...previewView?.canvases ?? []];
 
@@ -348,7 +347,7 @@ const handler: DocumentMethodHandler<Document> = {
     yPx: number
   ): Promise<number> {
     const ref = doc.ref();
-    const worker = tileRenderer[ref]?.[viewId];
+    const worker = tileRenderer[ref];
     if (!worker) return;
     const scrollPromise = new Promise<number>((resolve) => {
       const handleMessage = ({ data }: MessageEvent) => {
@@ -374,7 +373,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
-    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+    tileRenderer[doc.ref()].postMessage({
       t: 'r',
       viewId,
       h: heightPx,
@@ -552,7 +551,7 @@ const handler: DocumentMethodHandler<Document> = {
     scale: number,
     dpi: number
   ): Promise<void> {
-    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+    tileRenderer[doc.ref()].postMessage({
       t: 'z',
       viewId,
       s: scale,
