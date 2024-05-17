@@ -277,7 +277,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         setState(RenderState.RESET, view.viewId);
         Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
         if (!running) stateMachine();
-      })
+      });
       break;
     }
   }
@@ -490,6 +490,12 @@ function stateMachine() {
     mainView.commitInvalidations(invalidations);
     if (previewView) {
       previewView.commitInvalidations(invalidations);
+      // When a main view invalidation occurs outside of the visible range
+      // of the preview view, we want to clear the non-visible tiles and
+      // repaint them next time around.
+      if (previewView.nonVisibleInvalidations.length > 0) {
+        clearNonVisibleTiles(previewView);
+      }
     }
     switch (getState()) {
       case RenderState.IDLE: {
