@@ -206,6 +206,8 @@ class RenderedView {
   }
 }
 
+let zoomResetTimeout: number;
+
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
     case 'i': {
@@ -268,13 +270,16 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     }
     case 'z': {
+      if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
       const isMainView = data.viewId === mainView.viewId;
       console.log(`Received zoom message for view ${data.viewId}`);
       const view = isMainView ? mainView : previewView;
       view.zoom(data.s, data.d);
-      setState(RenderState.RESET, view.viewId);
-      Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
-      if (!running) stateMachine();
+      zoomResetTimeout = setTimeout(() => {
+        setState(RenderState.RESET, view.viewId);
+        Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
+        if (!running) stateMachine();
+      })
       break;
     }
   }
