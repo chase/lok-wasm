@@ -142,6 +142,22 @@ class RenderedView {
     Atomics.store(this.pendingFullPaint, 0, val ? 1 : 0);
   }
 
+  commitInvalidations(invalidations: Rect[]) {
+    this.invalidations.push(...this.visibleInvalidations);
+    this.invalidations.push(...this.nonVisibleInvalidations);
+    // this.visibleInvalidations.length = 0;
+    // this.nonVisibleInvalidations.length = 0;
+
+    for (const invalidation of invalidations) {
+      commitVisibleAndNonVisible(
+        this,
+        invalidation,
+        this.scheduledTopTwips,
+        this.scheduledHeightTwips
+      );
+    }
+  }
+
   /// Returns true if the view has scroll sufficiently past the current tile
   /// to require switching canvases
   scroll(y: number): boolean {
@@ -320,19 +336,19 @@ function fullPaint(view: RenderedView) {
 function partialPaint(view: RenderedView) {
   view.pendingPartialPaint = false;
   // rebalance visible and non-visible
-  invalidations.push(...view.visibleInvalidations);
-  invalidations.push(...view.nonVisibleInvalidations);
-  view.visibleInvalidations.length = 0;
-  view.nonVisibleInvalidations.length = 0;
+  // invalidations.push(...view.visibleInvalidations);
+  // invalidations.push(...view.nonVisibleInvalidations);
+  // view.visibleInvalidations.length = 0;
+  // view.nonVisibleInvalidations.length = 0;
 
-  for (const invalidation of invalidations) {
-    commitVisibleAndNonVisible(
-      view,
-      invalidation,
-      view.scheduledTopTwips,
-      view.scheduledHeightTwips
-    );
-  }
+  // for (const invalidation of invalidations) {
+  //   commitVisibleAndNonVisible(
+  //     view,
+  //     invalidation,
+  //     view.scheduledTopTwips,
+  //     view.scheduledHeightTwips
+  //   );
+  // }
 
   const newVisibleRingTiles = new Set<number>();
 
@@ -487,6 +503,11 @@ function stateMachine() {
     const mPendingFullPaint = mainView.isPendingFullPaint();
     const pPendingFullPaint = previewView && previewView?.isPendingFullPaint();
     invalidations = removeContainedAdjacentRects(drainInvalidations());
+    mainView.commitInvalidations(invalidations);
+    if (previewView) {
+      console.log("committing preview invalidations", invalidations.length)
+      previewView.commitInvalidations(invalidations);
+    }
     switch (getState()) {
       case RenderState.IDLE: {
         switch (isMainActive) {
@@ -497,6 +518,7 @@ function stateMachine() {
               break;
             }
 
+            console.log("main invalidations", mainView.visibleInvalidations.length);
             partialPaint(mainView);
             if (mainView.needsRender) {
               setState(RenderState.RENDERING, mainView.viewId);
@@ -511,6 +533,8 @@ function stateMachine() {
               break;
             }
 
+
+            console.log("preview invalidations", previewView.visibleInvalidations.length);
             partialPaint(previewView);
 
             if (previewView.needsRender) {
@@ -518,7 +542,7 @@ function stateMachine() {
               break;
             }
 
-            // Always pass the active view id back to the main view;
+            // Always give priority back to the main view
             Atomics.store(workerData.activeViewId, 0, mainView.viewId);
           }
         }
@@ -542,7 +566,7 @@ function stateMachine() {
           viewToRender.setIsPendingFullPaint(false);
         }
 
-        if (otherView.isPendingFullPaint() || otherView.pendingPartialPaint) {
+        if (otherView.isPendingFullPaint()) {
           setState(RenderState.IDLE, otherView.viewId);
         } else if (otherView.didScroll) {
           setState(RenderState.IDLE, otherView.viewId);
@@ -555,6 +579,9 @@ function stateMachine() {
           postMessage({ s: viewToRender.activeCanvasIndex });
           viewToRender.didScroll = false;
         }
+
+        // Always give priority back to the main view
+        Atomics.store(workerData.activeViewId, 0, mainView.viewId);
         break;
       }
       case RenderState.RESET:
@@ -571,11 +598,26 @@ function stateMachine() {
       mainView.idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
       mainView.pendingPartialPaint = true;
-      previewView.pendingPartialPaint = true;
+      // if (previewView) previewView.pendingPartialPaint = true;
       setState(RenderState.IDLE, mainView.viewId);
       if (shouldRun && !running) {
         stateMachine();
+        // Debounce painting invalidations to the preview view
+        if (previewInvalidationTimeout) {
+          clearTimeout(previewInvalidationTimeout);
+        }
+        // Try to schedule a new paint for invalidations for
+        // the preview view. If no new main view invalidations are fired
+        // this should trigger a paint for the preview view
+        previewInvalidationTimeout = setTimeout(() => {
+          previewView.pendingPartialPaint = true;
+          setState(RenderState.IDLE, previewView.viewId);
+          if (!running) {
+            stateMachine();
+          }
+        }, 200)
       }
+
     });
 
     if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
