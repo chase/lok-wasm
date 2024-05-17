@@ -312,7 +312,7 @@ function fullPaint(view: RenderedView) {
   view.validTiles.clear();
 
   // effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
-  for (let y = 0; y < rangesToPaint.length ; ++y) {
+  for (let y = 0; y < rangesToPaint.length; ++y) {
     if (shouldPausePaint(view)) {
       view.setIsPendingFullPaint(true);
       if (view.viewId === mainView.viewId) {
@@ -352,11 +352,7 @@ function partialPaint(view: RenderedView) {
 
     for (const rangesToPaint of tileRangesToPaint) {
       // effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
-      for (
-        let y = 0;
-        y < rangesToPaint.length;
-        ++y
-      ) {
+      for (let y = 0; y < rangesToPaint.length; ++y) {
         if (shouldPausePaint(view)) {
           view.pendingPartialPaint = true;
           if (view.viewId === mainView.viewId) {
@@ -381,11 +377,7 @@ function partialPaint(view: RenderedView) {
     view.widthTileStride
   );
 
-  for (
-    let y = 0;
-    y < visibleRangesToPaint.length;
-    ++y
-  ) {
+  for (let y = 0; y < visibleRangesToPaint.length; ++y) {
     if (shouldPausePaint(view)) {
       view.pendingPartialPaint = true;
       if (view.viewId === mainView.viewId) {
@@ -490,7 +482,7 @@ function stateMachine() {
     invalidations = removeContainedAdjacentRects(drainInvalidations());
     mainView.commitInvalidations(invalidations);
     if (previewView) {
-      console.log("committing preview invalidations", invalidations.length)
+      console.log('committing preview invalidations', invalidations.length);
       previewView.commitInvalidations(invalidations);
     }
     switch (getState()) {
@@ -503,7 +495,10 @@ function stateMachine() {
               break;
             }
 
-            console.log("main invalidations", mainView.visibleInvalidations.length);
+            console.log(
+              'main invalidations',
+              mainView.visibleInvalidations.length
+            );
             partialPaint(mainView);
             if (mainView.needsRender) {
               setState(RenderState.RENDERING, mainView.viewId);
@@ -518,8 +513,10 @@ function stateMachine() {
               break;
             }
 
-
-            console.log("preview invalidations", previewView.visibleInvalidations.length);
+            console.log(
+              'preview invalidations',
+              previewView.visibleInvalidations.length
+            );
             partialPaint(previewView);
 
             if (previewView.needsRender) {
@@ -600,9 +597,8 @@ function stateMachine() {
           if (!running) {
             stateMachine();
           }
-        }, 200)
+        }, 200);
       }
-
     });
 
     if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
@@ -806,13 +802,15 @@ function shouldPausePaint(view: RenderedView): boolean {
   // Main view should always be painted / rendered
   // in higher priority than the preview view
   if (view.viewId !== mainView.viewId) {
-    const pause = mainView.needsRender || mainView.isPendingFullPaint() || mainView.didScroll;
+    const pause =
+      mainView.needsRender ||
+      mainView.isPendingFullPaint() ||
+      mainView.didScroll;
     if (pause) {
-      console.log("pausing preview paint, to prioritize main view");
+      console.log('pausing preview paint, to prioritize main view');
     }
     return pause;
   }
-
 
   return false;
 
@@ -1000,7 +998,6 @@ function trimmedMean(input: number[]): number {
 
   return sum / trimmedArray.length;
 }
-
 
 function addRedBorder(imageData: ImageData) {
   const width = imageData.width;
