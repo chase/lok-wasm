@@ -208,7 +208,7 @@ export type ForwardingId<K extends ForwardedResolver = ForwardedResolver> = [
 
 /** resolves all methods in ResolverToForwardingMethod */
 export type ForwardingMethod<
-  K extends ForwardedResolver = ForwardedResolver,
+  K extends keyof ResolverToForwardingMethod = keyof ResolverToForwardingMethod,
   M extends ResolverToForwardingMethod[K] = ResolverToForwardingMethod[K],
   F extends M[keyof M] & ((...args: any) => any) = Extract<
     M[keyof M],
@@ -217,7 +217,7 @@ export type ForwardingMethod<
 > = F;
 
 export type ForwardedResolverMap<
-  K extends ForwardedResolver = ForwardedResolver,
+  K extends keyof ResolverToForwardingMethod = keyof ResolverToForwardingMethod,
 > = {
   [T in K]: (id: ForwardingId<K>) => ReturnType<ForwardingMethod<K>>;
 };
@@ -312,6 +312,13 @@ export type DocumentClientBase = {
   newView(): Promise<DocumentClient | null>;
 };
 
+type FlatForwardMethod<
+  K extends keyof ResolverToForwardingMethod = keyof ResolverToForwardingMethod,
+  M extends ResolverToForwardingMethod[K] = ResolverToForwardingMethod[K],
+> = {
+  [FK in keyof M]: M[FK]
+};
+
 export type DocumentClient = {
   [K in keyof Omit<DocumentMethods, 'newView'>]: (
     ...args: Parameters<DocumentMethods[K]>
@@ -321,9 +328,9 @@ export type DocumentClient = {
     ...args: Parameters<DocumentWithViewMethods[K]>
   ) => Promise<ReturnType<DocumentWithViewMethods[K]>>;
 } & {
-  [K in keyof ForwardingMethod]: (
-    ...args: Parameters<ForwardingMethod[K]>
-  ) => Promise<ReturnType<ForwardingMethod[K]>>;
+  [K in keyof FlatForwardMethod]: (
+    ...args: Parameters<FlatForwardMethod[K]>
+  ) => Promise<ReturnType<FlatForwardMethod[K]>>;
 } & DocumentClientBase;
 
 export type ToWorker<K extends keyof Message = keyof Message> = {
