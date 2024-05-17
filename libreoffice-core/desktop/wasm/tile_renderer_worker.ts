@@ -273,11 +273,9 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       const isMainView = data.viewId === mainView.viewId;
       const view = isMainView ? mainView : previewView;
       view.zoom(data.s, data.d);
-      zoomResetTimeout = setTimeout(() => {
-        setState(RenderState.RESET, view.viewId);
-        Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
-        if (!running) stateMachine();
-      });
+      setState(RenderState.RESET, view.viewId);
+      Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
+      if (!running) stateMachine();
       break;
     }
   }
@@ -318,9 +316,6 @@ function fullPaint(view: RenderedView) {
   for (let y = 0; y < rangesToPaint.length; ++y) {
     if (shouldPausePaint(view)) {
       view.setIsPendingFullPaint(true);
-      if (view.viewId === mainView.viewId) {
-        break;
-      }
       return;
     }
     const [start, endInclusive] = rangesToPaint[y];
@@ -450,7 +445,6 @@ function render(view: RenderedView) {
         view.tileIndexToTileRingIndex.get(x)
       );
       if (!img) {
-        console.error('missing texture at ', x, xCoord, y);
         view.missingRects.push([
           xCoord * view.tileSize,
           y * view.tileSize,
