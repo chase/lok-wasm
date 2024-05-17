@@ -825,14 +825,11 @@ function shouldPausePaint(view: RenderedView): boolean {
     return pause;
   }
 
-  return false;
-
-  // TODO: @synoet fix pause condition
-  // return (
-  //   Atomics.load(workerData.state, 0) === RenderState.RESET ||
-  //   (view.scheduledTopTwips !== view.renderedTopTwips && view.renderedTopTwips !== -1) ||
-  //   (view.scheduledHeightTwips !== view.renderedHeightTwips && view.renderedHeightTwips !== -1)
-  // );
+  return (
+    Atomics.load(workerData.state, 0) === RenderState.RESET ||
+    (view.scheduledTopTwips !== view.renderedTopTwips && view.renderedTopTwips !== -1) ||
+    (view.scheduledHeightTwips !== view.renderedHeightTwips && view.renderedHeightTwips !== -1)
+  );
 }
 
 function rectToTileIndexRanges(
