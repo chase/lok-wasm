@@ -19,7 +19,7 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = false;
+const DEBUG = true;
 
 const RECT_SIZE = 4;
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
@@ -70,6 +70,7 @@ class RenderedView {
 
   visibleInvalidations: Rect[] = [];
   nonVisibleInvalidations: Rect[] = [];
+  invalidations: Rect[] = [];
 
   validTiles: Set<number> = new Set();
   /** maps a tile index to a tileRing index */
@@ -84,6 +85,7 @@ class RenderedView {
   tileRingIndex = 0;
 
   private pendingFullPaint: Int32Array;
+  pendingPartialPaint: boolean = false;
   needsRender: boolean = false;
 
   paintTimes: number[] = [];
@@ -279,7 +281,6 @@ function setState(state: RenderState, viewId?: number): void {
 }
 
 function fullPaint(view: RenderedView) {
-  console.log(`fullPaint for view ${view.viewId}`);
   view.visibleInvalidations.length = 0;
   view.nonVisibleInvalidations.length = 0;
 
@@ -295,7 +296,14 @@ function fullPaint(view: RenderedView) {
   view.validTiles.clear();
 
   // effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
-  for (let y = 0; y < rangesToPaint.length /* && !shouldPausePaint() */; ++y) {
+  for (let y = 0; y < rangesToPaint.length ; ++y) {
+    if (shouldPausePaint(view)) {
+      view.setIsPendingFullPaint(true);
+      if (view.viewId === mainView.viewId) {
+        break;
+      }
+      return;
+    }
     const [start, endInclusive] = rangesToPaint[y];
     for (let x = start; x <= endInclusive; ++x) {
       newVisibleRingTiles.add(blockingPaintTile(view, x));
@@ -310,7 +318,7 @@ function fullPaint(view: RenderedView) {
 }
 
 function partialPaint(view: RenderedView) {
-  console.log('partialPaint for view', view.viewId);
+  view.pendingPartialPaint = false;
   // rebalance visible and non-visible
   invalidations.push(...view.visibleInvalidations);
   invalidations.push(...view.nonVisibleInvalidations);
@@ -345,9 +353,16 @@ function partialPaint(view: RenderedView) {
       // effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
       for (
         let y = 0;
-        y < rangesToPaint.length /*&& !shouldPausePaint()*/;
+        y < rangesToPaint.length;
         ++y
       ) {
+        if (shouldPausePaint(view)) {
+          view.pendingPartialPaint = true;
+          if (view.viewId === mainView.viewId) {
+            break;
+          }
+          return;
+        }
         const [start, endInclusive] = rangesToPaint[y];
         for (let x = start; x <= endInclusive; ++x) {
           if (!view.validTiles.has(x)) {
@@ -367,9 +382,16 @@ function partialPaint(view: RenderedView) {
 
   for (
     let y = 0;
-    y < visibleRangesToPaint.length /*&& !shouldPausePaint()*/;
+    y < visibleRangesToPaint.length;
     ++y
   ) {
+    if (shouldPausePaint(view)) {
+      view.pendingPartialPaint = true;
+      if (view.viewId === mainView.viewId) {
+        break;
+      }
+      return;
+    }
     const [start, endInclusive] = visibleRangesToPaint[y];
     for (let x = start; x <= endInclusive; ++x) {
       const ringIndex = view.tileIndexToTileRingIndex.get(x);
@@ -419,7 +441,14 @@ function render(view: RenderedView) {
   view.renderedHeightTwips = visibleHeight;
   view.renderedTopTwips = visibleTop;
 
-  for (let y = 0; y < rangesToRender.length /*&& !shouldPausePaint()*/; ++y) {
+  for (let y = 0; y < rangesToRender.length; ++y) {
+    if (shouldPausePaint(view)) {
+      view.setIsPendingFullPaint(true);
+      if (view.viewId === mainView.viewId) {
+        break;
+      }
+      return;
+    }
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       // TODO: mark missing and invalidate
@@ -447,6 +476,8 @@ function render(view: RenderedView) {
   view.needsRender = false;
 }
 
+let previewInvalidationTimeout: number;
+
 function stateMachine() {
   running = true;
   while (pendingStateChange) {
@@ -455,12 +486,11 @@ function stateMachine() {
       Atomics.load(workerData.activeViewId, 0) === mainView.viewId;
     const mPendingFullPaint = mainView.isPendingFullPaint();
     const pPendingFullPaint = previewView && previewView?.isPendingFullPaint();
+    invalidations = removeContainedAdjacentRects(drainInvalidations());
     switch (getState()) {
       case RenderState.IDLE: {
-        invalidations = removeContainedAdjacentRects(drainInvalidations());
         switch (isMainActive) {
           case true: {
-            console.log('IDLE MAIN');
             if (mPendingFullPaint) {
               fullPaint(mainView);
               setState(RenderState.RENDERING, mainView.viewId);
@@ -512,7 +542,7 @@ function stateMachine() {
           viewToRender.setIsPendingFullPaint(false);
         }
 
-        if (otherView.isPendingFullPaint()) {
+        if (otherView.isPendingFullPaint() || otherView.pendingPartialPaint) {
           setState(RenderState.IDLE, otherView.viewId);
         } else if (otherView.didScroll) {
           setState(RenderState.IDLE, otherView.viewId);
@@ -540,6 +570,9 @@ function stateMachine() {
     afterInvalidate().then((shouldRun) => {
       mainView.idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
+      mainView.pendingPartialPaint = true;
+      previewView.pendingPartialPaint = true;
+      setState(RenderState.IDLE, mainView.viewId);
       if (shouldRun && !running) {
         stateMachine();
       }
@@ -742,6 +775,28 @@ function commitVisibleAndNonVisible(
   }
 }
 
+function shouldPausePaint(view: RenderedView): boolean {
+  // Main view should always be painted / rendered
+  // in higher priority than the preview view
+  if (view.viewId !== mainView.viewId) {
+    const pause = mainView.needsRender || mainView.isPendingFullPaint() || mainView.didScroll;
+    if (pause) {
+      console.log("pausing preview paint, to prioritize main view");
+    }
+    return pause;
+  }
+
+
+  return false;
+
+  // TODO: @synoet fix pause condition
+  // return (
+  //   Atomics.load(workerData.state, 0) === RenderState.RESET ||
+  //   (view.scheduledTopTwips !== view.renderedTopTwips && view.renderedTopTwips !== -1) ||
+  //   (view.scheduledHeightTwips !== view.renderedHeightTwips && view.renderedHeightTwips !== -1)
+  // );
+}
+
 function rectToTileIndexRanges(
   rect: Rect,
   tileDimTwips: number,
@@ -823,7 +878,7 @@ function hasUpdatedVisibleArea(view: RenderedView): boolean {
 
 let idleDebounceTimeout: number;
 function paintNonVisibleAreasWhileIdle(view: RenderedView): void {
-  if (!view.idleAreaPaint) return;
+  if (!view?.idleAreaPaint) return;
   const visibleHeight = view.renderedHeightTwips;
   const docHeight = Atomics.load(workerData.docHeightTwips, 0);
   const visibleTop = view.renderedTopTwips;
@@ -851,8 +906,11 @@ function paintNonVisibleAreasWhileIdle(view: RenderedView): void {
   }
 
   if (didPaint) {
+    if (previewInvalidationTimeout) {
+      clearTimeout(previewInvalidationTimeout);
+    }
     idleDebounceTimeout = setTimeout(
-      paintNonVisibleAreasWhileIdle,
+      () => paintNonVisibleAreasWhileIdle(mainView),
       Math.max(trimmedMean(view.paintTimes), 10)
     );
   }
