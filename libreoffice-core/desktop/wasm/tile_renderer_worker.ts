@@ -19,7 +19,7 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = true;
+const DEBUG = false;
 
 const RECT_SIZE = 4;
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
@@ -335,21 +335,6 @@ function fullPaint(view: RenderedView) {
 
 function partialPaint(view: RenderedView) {
   view.pendingPartialPaint = false;
-  // rebalance visible and non-visible
-  // invalidations.push(...view.visibleInvalidations);
-  // invalidations.push(...view.nonVisibleInvalidations);
-  // view.visibleInvalidations.length = 0;
-  // view.nonVisibleInvalidations.length = 0;
-
-  // for (const invalidation of invalidations) {
-  //   commitVisibleAndNonVisible(
-  //     view,
-  //     invalidation,
-  //     view.scheduledTopTwips,
-  //     view.scheduledHeightTwips
-  //   );
-  // }
-
   const newVisibleRingTiles = new Set<number>();
 
   if (view.visibleInvalidations.length != 0) {
