@@ -19,7 +19,7 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = false;
+const DEBUG = true;
 
 const RECT_SIZE = 4;
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
@@ -48,6 +48,8 @@ class RenderedView {
   readonly viewId: number;
   readonly canvases: OffscreenCanvas[];
   readonly POOL_SIZE: number;
+  private pendingFullPaint: Int32Array;
+
   activeCanvas: OffscreenCanvas;
   activeCanvasIndex: number = 0;
   ctx: OffscreenCanvasRenderingContext2D;
@@ -59,10 +61,12 @@ class RenderedView {
   tileDimTwips: number;
   widthTileStride: number;
 
+  /** the scheduled height to be painted/rendered **/
   scheduledHeightPx: number = -1;
   scheduledHeightTwips: number = -1;
   scheduledWidthPx: number = -1;
   scheduledTopTwips: number = -1;
+  /** the rendered height that was previously painted/rendered **/
   renderedTileTop: number = -1;
   renderedTopTwips: number = -1;
   renderedHeightTwips: number = -1;
@@ -71,6 +75,8 @@ class RenderedView {
   visibleInvalidations: Rect[] = [];
   nonVisibleInvalidations: Rect[] = [];
   invalidations: Rect[] = [];
+
+  missingRects: Rect[] = [];
 
   validTiles: Set<number> = new Set();
   /** maps a tile index to a tileRing index */
@@ -84,7 +90,6 @@ class RenderedView {
   /** ring index that wraps on POOL_SIZE */
   tileRingIndex = 0;
 
-  private pendingFullPaint: Int32Array;
   pendingPartialPaint: boolean = false;
   needsRender: boolean = false;
 
@@ -213,9 +218,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'i': {
       // initialize
       startTimestamp = Date.now();
-      console.log(`Initializing Tile Renderer with`);
-      console.log(data, data.d);
-
       workerData = data.d;
       mainView = new RenderedView({
         viewId: data.m.viewId,
@@ -245,7 +247,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         });
       }
 
-      console.log('starting state machine');
       pendingStateChange = true;
       stateMachine();
 
@@ -253,7 +254,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     }
     case 's': {
       const isMainView = data.viewId === mainView.viewId;
-      console.log(`Received scroll message for view ${data.viewId}`);
       const view = isMainView ? mainView : previewView;
 
       view.scroll(data.y);
@@ -261,7 +261,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     }
     case 'r': {
       const isMainView = data.viewId === mainView.viewId;
-      console.log(`Received resize message for view ${data.viewId}`);
       const view = isMainView ? mainView : previewView;
       const shouldResize = view.resize(data.h);
       if (!shouldResize) break;
@@ -272,7 +271,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'z': {
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
       const isMainView = data.viewId === mainView.viewId;
-      console.log(`Received zoom message for view ${data.viewId}`);
       const view = isMainView ? mainView : previewView;
       view.zoom(data.s, data.d);
       zoomResetTimeout = setTimeout(() => {
@@ -416,7 +414,6 @@ function partialPaint(view: RenderedView) {
 }
 
 function render(view: RenderedView) {
-  console.log(`rendering view ${view.viewId}`);
   const visibleTop = view.scheduledTopTwips;
   const visibleHeight = view.scheduledHeightTwips;
 
@@ -426,7 +423,6 @@ function render(view: RenderedView) {
     view.widthTileStride
   );
 
-  // TODO: mark missing and invalidate
   view.ctx.clearRect(0, 0, view.activeCanvas.width, view.activeCanvas.height);
   if (view.renderedHeightTwips !== view.scheduledHeightTwips) {
     view.canvases[0].height = view.scheduledHeightPx;
@@ -449,13 +445,19 @@ function render(view: RenderedView) {
     }
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
-      // TODO: mark missing and invalidate
       const [xCoord] = tileIndexToGridCoord(view, x);
       const img: ImageData = view.tileRing.get(
         view.tileIndexToTileRingIndex.get(x)
       );
       if (!img) {
         console.error('missing texture at ', x, xCoord, y);
+        view.missingRects.push([
+          xCoord * view.tileSize,
+          y * view.tileSize,
+          view.tileSize,
+          view.tileSize,
+        ]);
+        view.pendingPartialPaint = true;
         continue;
       }
       const dstX: number = xCoord * view.tileSize;
@@ -487,7 +489,6 @@ function stateMachine() {
     invalidations = removeContainedAdjacentRects(drainInvalidations());
     mainView.commitInvalidations(invalidations);
     if (previewView) {
-      console.log('committing preview invalidations', invalidations.length);
       previewView.commitInvalidations(invalidations);
     }
     switch (getState()) {
@@ -500,10 +501,12 @@ function stateMachine() {
               break;
             }
 
-            console.log(
-              'main invalidations',
-              mainView.visibleInvalidations.length
-            );
+            if (mainView.missingRects.length > 0) {
+              console.log('committing missing rects');
+              mainView.commitInvalidations(mainView.missingRects);
+              mainView.missingRects.length = 0;
+            }
+
             partialPaint(mainView);
             if (mainView.needsRender) {
               setState(RenderState.RENDERING, mainView.viewId);
@@ -511,17 +514,12 @@ function stateMachine() {
             }
           }
           case false: {
-            console.log('IDLE PREVIEW');
             if (pPendingFullPaint) {
               fullPaint(previewView);
               setState(RenderState.RENDERING, previewView.viewId);
               break;
             }
 
-            console.log(
-              'preview invalidations',
-              previewView.visibleInvalidations.length
-            );
             partialPaint(previewView);
 
             if (previewView.needsRender) {
@@ -547,6 +545,13 @@ function stateMachine() {
         }
 
         render(viewToRender);
+
+        // If there where any missing tiles during rendering,
+        // we need to repaint them and then re-render the view.
+        if (viewToRender.missingRects.length > 0) {
+          setState(RenderState.IDLE, viewToRender.viewId);
+          break;
+        }
 
         // unset pending full paint for the view.
         if (viewToRender.isPendingFullPaint()) {
@@ -585,7 +590,6 @@ function stateMachine() {
       mainView.idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
       mainView.pendingPartialPaint = true;
-      // if (previewView) previewView.pendingPartialPaint = true;
       setState(RenderState.IDLE, mainView.viewId);
       if (shouldRun && !running) {
         stateMachine();
@@ -593,6 +597,7 @@ function stateMachine() {
         if (previewInvalidationTimeout) {
           clearTimeout(previewInvalidationTimeout);
         }
+
         // Try to schedule a new paint for invalidations for
         // the preview view. If no new main view invalidations are fired
         // this should trigger a paint for the preview view
@@ -811,9 +816,6 @@ function shouldPausePaint(view: RenderedView): boolean {
       mainView.needsRender ||
       mainView.isPendingFullPaint() ||
       mainView.didScroll;
-    if (pause) {
-      console.log('pausing preview paint, to prioritize main view');
-    }
     return pause;
   }
 
