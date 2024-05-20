@@ -249,7 +249,10 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       const isMainView = data.viewId === mainView.viewId;
       const view = isMainView ? mainView : previewView;
       if (!view) {
-        console.error("tried to perform resize on non-existent view, viewId:", data.viewId);
+        console.error(
+          'tried to perform resize on non-existent view, viewId:',
+          data.viewId
+        );
         break;
       }
       const shouldResize = view.resize(data.h);
@@ -270,7 +273,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     }
     case 'previewStart': {
       // reset the worker data to omit the preview view
-      console.log("starting preview", data.d);
+      console.log('starting preview', data.d);
       workerData.previewPaintedTile = data.d.paintedTile;
       workerData.previewTileTwips = data.d.tileTwips;
       workerData.previewViewId = data.d.viewId;
@@ -340,7 +343,7 @@ function fullPaint(view: RenderedView) {
 
   // effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
   for (let y = 0; y < rangesToPaint.length; ++y) {
-    if (shouldPausePaint(view)) {
+    if (shouldPausePaint(view, 'full')) {
       view.setIsPendingFullPaint(true);
       return;
     }
@@ -479,7 +482,8 @@ function render(view: RenderedView) {
           view.tileSize,
         ]);
         view.pendingPartialPaint = true;
-        continue;
+
+        return;
       }
       const dstX: number = xCoord * view.tileSize;
       const dstY: number = y * view.tileSize;
@@ -565,7 +569,10 @@ function stateMachine() {
       case RenderState.RENDERING: {
         let viewToRender: RenderedView = mainView;
         let otherView: RenderedView | undefined = previewView;
-        if (previewView && Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
+        if (
+          previewView &&
+          Atomics.load(workerData.activeViewId, 0) === previewView?.viewId
+        ) {
           viewToRender = previewView;
           otherView = mainView;
         }
@@ -620,6 +627,7 @@ function stateMachine() {
       if (shouldRun && !running) {
         stateMachine();
 
+        if (!previewView) return;
         // Debounce painting invalidations to the preview view
         if (previewInvalidationTimeout) {
           clearTimeout(previewInvalidationTimeout);
@@ -628,7 +636,7 @@ function stateMachine() {
         // the preview view. If no new main view invalidations are fired
         // this should trigger a paint for the preview view
         previewInvalidationTimeout = setTimeout(() => {
-          console.log("DEBOUNCED PAINTING PREVIEW VIEW");
+          console.log('DEBOUNCED PAINTING PREVIEW VIEW');
           previewView.pendingPartialPaint = true;
           setState(RenderState.IDLE, previewView.viewId);
           if (!running) {
@@ -835,7 +843,10 @@ function commitVisibleAndNonVisible(
   }
 }
 
-function shouldPausePaint(view: RenderedView): boolean {
+function shouldPausePaint(
+  view: RenderedView,
+  type: 'full' | 'partial' = 'full'
+): boolean {
   // Main view should always be painted / rendered
   // in higher priority than the preview view
   if (view.viewId !== mainView.viewId) {
@@ -846,13 +857,18 @@ function shouldPausePaint(view: RenderedView): boolean {
     return pause;
   }
 
-  return false;
+  // When doing a full paint on the main view we shouldn't pause
+  if (view.viewId === mainView.viewId && type === 'full') {
+    return false;
+  }
 
-  // return (
-  //   Atomics.load(workerData.state, 0) === RenderState.RESET ||
-  //   (view.scheduledTopTwips !== view.renderedTopTwips && view.renderedTopTwips !== -1) ||
-  //   (view.scheduledHeightTwips !== view.renderedHeightTwips && view.renderedHeightTwips !== -1)
-  // );
+  return (
+    Atomics.load(workerData.state, 0) === RenderState.RESET ||
+    (view.scheduledTopTwips !== view.renderedTopTwips &&
+      view.renderedTopTwips !== -1) ||
+    (view.scheduledHeightTwips !== view.renderedHeightTwips &&
+      view.renderedHeightTwips !== -1)
+  );
 }
 
 function rectToTileIndexRanges(
