@@ -3,9 +3,11 @@
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
+#include <emscripten/val.h>
 #include <array>
 #include <cstdint>
 #include <desktop/dllapi.h>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <com/sun/star/lang/XComponent.hpp>
@@ -26,15 +28,31 @@ enum class RenderState : int32_t
 
 static constexpr int32_t MAX_INVALIDATION_STACK = 4096;
 
+struct AdditionalView
+{
+    const int32_t viewId;
+    const int32_t tileSize;
+    const int32_t paintedTileAllocSize;
+    _Atomic uint32_t pendingFullPaint = 1;
+
+    std::array<uint32_t, 4> tileTwips;
+    uint8_t* paintedTile;
+
+    AdditionalView(int32_t viewId_, int32_t tileSize_)
+        : viewId(viewId_)
+        , tileSize(tileSize_)
+        , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
+        , paintedTile(new uint8_t[paintedTileAllocSize])
+    {
+    }
+};
+
 // Used for fast communication between the tile renderer worker and the C++ thread
 struct TileRendererData
 {
     const int32_t viewId;
-    const std::optional<int32_t> previewViewId;
     const int32_t tileSize;
     const int32_t paintedTileAllocSize;
-    const std::optional<int32_t> previewTileSize;
-    const std::optional<int32_t> previewPaintedTileAllocSize;
 
     // individual tile paint
     _Atomic RenderState state = RenderState::IDLE;
@@ -44,7 +62,6 @@ struct TileRendererData
     _Atomic uint32_t invalidationStack[MAX_INVALIDATION_STACK][4];
     _Atomic int32_t invalidationStackHead = -1;
     _Atomic uint32_t pendingFullPaint = 1; // this is a bool
-    _Atomic uint32_t previewPendingFullPaint = 1;
 
     _Atomic uint32_t docWidthTwips;
     _Atomic uint32_t docHeightTwips;
@@ -53,8 +70,7 @@ struct TileRendererData
     std::array<uint32_t, 4> tileTwips;
     uint8_t* paintedTile;
 
-    std::array<uint32_t, 4> previewTileTwips;
-    std::optional<uint8_t*> previewPaintedTile;
+    std::shared_ptr<AdditionalView> previewView;
 
     LibreOfficeKitDocument* doc;
 
@@ -62,27 +78,26 @@ struct TileRendererData
         LibreOfficeKitDocument* doc_,
         int32_t viewId_,
         int32_t tileSize_,
-        std::optional<int32_t> previewViewId_,
-        std::optional<int32_t> previewTileSize_,
         int32_t docWidthTwips_,
         int32_t docHeightTwips_
     )
         : viewId(viewId_)
-        , previewViewId(previewViewId_)
         , tileSize(tileSize_)
         , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
-        , previewTileSize(previewTileSize_)
-        , previewPaintedTileAllocSize(previewTileSize_ ? previewTileSize_.value() * previewTileSize_.value() * 4 : 0)
         , docWidthTwips(docWidthTwips_)
         , docHeightTwips(docHeightTwips_)
         , activeViewId(viewId_)
         , paintedTile(new uint8_t[paintedTileAllocSize])
-        , previewPaintedTile(previewTileSize_  && previewPaintedTileAllocSize.has_value() ? new uint8_t[previewPaintedTileAllocSize.value()] : nullptr)
         , doc(doc_){};
 
     /** x, y, w, h */
     void pushInvalidation(uint32_t invalidation[4]);
     void reset();
+
+    TileRendererData(TileRendererData&&) = default;
+
+    TileRendererData(const TileRendererData&) = delete;
+    TileRendererData& operator=(const TileRendererData&) = delete;
 };
 
 struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
@@ -94,9 +109,13 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
     TileRendererData& startTileRenderer(
         int32_t viewId,
-        int32_t tileSize,
-        std::optional<int32_t> secondaryViewId,
-        std::optional<int32_t> secondaryTileSize
+        int32_t tileSize
+    );
+
+    AdditionalView& addPreviewView(
+        int32_t mainViewId,
+        int32_t viewId,
+        int32_t tileSize
     );
 
     std::string getPageColor();

@@ -21,8 +21,8 @@ export type TileRenderData = {
   /** the main view id */
   readonly viewId: number;
   readonly tileSize: number;
-  readonly previewViewId?: number;
-  readonly previewTileSize?: number;
+  previewViewId?: number;
+  previewTileSize?: number;
   /** `_Atomic int32_t` */
   state: Int32Array;
   /** `_Atomic int32_t` */
@@ -173,8 +173,11 @@ export declare class Document {
   startTileRenderer(
     viewId: number,
     tileSize: number,
-    previewViewId?: number,
-    previewTileSize?: number
+  ): TileRenderData;
+  addPreviewView(
+    mainViewId: number,
+    viewId: number,
+    tileSize: number,
   ): TileRenderData;
   setClientVisibleArea(
     viewId: number,

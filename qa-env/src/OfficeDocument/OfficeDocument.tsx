@@ -35,8 +35,6 @@ const BORDER_WIDTH = 1;
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
   ignoreShortcuts?: Shortcut[];
-  previewViewId?: number;
-  previewCanvases?: HTMLCanvasElement[];
 }
 
 type Dimensions = [number, number];
@@ -157,7 +155,7 @@ export function OfficeDocument(props: Props) {
 
   createEffect(() => {
     const height = canvasHeight();
-    if (height) props.doc.setVisibleHeight(height);
+    if (height && didInitialRender.has(props.doc)) props.doc.setVisibleHeight(height);
   });
 
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);
@@ -190,38 +188,18 @@ export function OfficeDocument(props: Props) {
     canvas0_.height = scaledHeight;
     canvas1_.width = scaledWidth;
     canvas1_.height = scaledHeight;
-    // await props.doc.startRendering(
-    //   [
-    //     canvas0_.transferControlToOffscreen(),
-    //     canvas1_.transferControlToOffscreen(),
-    //   ],
-    //   256,
-    //   zoom,
-    //   dpi
-    // );
+    console.log("startRendering")
     await props.doc.startRendering(
-      {
-        viewId: props.doc.viewId,
-        canvases: [
-          canvas0_.transferControlToOffscreen(),
-          canvas1_.transferControlToOffscreen(),
-        ],
-        tileSize: 256,
-        scale: zoom,
-        yPos: 0
-      },
+      [
+        canvas0_.transferControlToOffscreen(),
+        canvas1_.transferControlToOffscreen(),
+      ],
+      256,
+      zoom,
       dpi,
-      {
-        viewId: props.previewViewId!,
-        canvases: [
-          props?.previewCanvases![0]!.transferControlToOffscreen(),
-          props?.previewCanvases![1]!.transferControlToOffscreen(),
-        ],
-        tileSize: 256,
-        scale: .25,
-        yPos: 0,
-      }
-    )
+      undefined,
+    );
+
     didInitialRender.add(props.doc);
   });
 

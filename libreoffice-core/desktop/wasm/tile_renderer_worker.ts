@@ -136,7 +136,7 @@ class RenderedView {
 
     this.zoom(scale, dpi);
 
-    this.scheduledTopTwips = yPos * this.scaledTwips;
+    this.scheduledTopTwips = (yPos ?? 0) * this.scaledTwips;
   }
 
   isPendingFullPaint(): boolean {
@@ -232,22 +232,8 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         pendingFullPaint: data.m.pendingFullPaint,
       });
 
-      if (data.p) {
-        previewView = new RenderedView({
-          viewId: data.p.viewId,
-          canvases: data.p.canvases,
-          scale: data.p.scale,
-          yPos: data.p.y,
-          tileSize: 256,
-          dpi: data.dpi,
-          poolSize: 500, // Document preview has a smaller pool size
-          paintedTile: data.p.paintedTile,
-          tileTwips: data.p.tileTwips,
-          pendingFullPaint: data.p.pendingFullPaint,
-        });
-      }
-
       pendingStateChange = true;
+      setState(RenderState.IDLE, mainView.viewId);
       stateMachine();
 
       break;
@@ -262,6 +248,10 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'r': {
       const isMainView = data.viewId === mainView.viewId;
       const view = isMainView ? mainView : previewView;
+      if (!view) {
+        console.error("tried to perform resize on non-existent view, viewId:", data.viewId);
+        break;
+      }
       const shouldResize = view.resize(data.h);
       if (!shouldResize) break;
       setState(RenderState.IDLE, view.viewId);
@@ -275,6 +265,39 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       view.zoom(data.s, data.d);
       setState(RenderState.RESET, view.viewId);
       Atomics.wait(workerData.state, 0, RenderState.RESET); // wait for reset to finish
+      if (!running) stateMachine();
+      break;
+    }
+    case 'previewStart': {
+      // reset the worker data to omit the preview view
+      console.log("starting preview", data.d);
+      workerData.previewPaintedTile = data.d.paintedTile;
+      workerData.previewTileTwips = data.d.tileTwips;
+      workerData.previewViewId = data.d.viewId;
+      workerData.previewTileSize = data.d.tileSize;
+      workerData.previewPendingFullPaint = data.d.pendingFullPaint;
+      previewView = new RenderedView({
+        viewId: data.p.viewId,
+        canvases: data.p.canvases,
+        scale: data.p.scale,
+        yPos: data.p.y,
+        tileSize: 256,
+        dpi: mainView.dpi, // DPI should be the same for both views
+        poolSize: 500, // Document preview has a smaller pool size
+        paintedTile: data.p.paintedTile,
+        tileTwips: data.p.tileTwips,
+        pendingFullPaint: data.p.pendingFullPaint,
+      });
+
+      if (!running) {
+        setState(RenderState.IDLE, previewView.viewId);
+        stateMachine();
+      }
+      break;
+    }
+    case 'previewStop': {
+      previewView = undefined;
+
       if (!running) stateMachine();
       break;
     }
@@ -502,7 +525,6 @@ function stateMachine() {
             }
 
             if (mainView.missingRects.length > 0) {
-              console.log('committing missing rects');
               mainView.commitInvalidations(mainView.missingRects);
               mainView.missingRects.length = 0;
             }
@@ -514,6 +536,7 @@ function stateMachine() {
             }
           }
           case false: {
+            if (!previewView) break;
             if (pPendingFullPaint) {
               fullPaint(previewView);
               setState(RenderState.RENDERING, previewView.viewId);
@@ -538,12 +561,13 @@ function stateMachine() {
         break;
       case RenderState.RENDERING: {
         let viewToRender: RenderedView = mainView;
-        let otherView: RenderedView = previewView;
-        if (Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
+        let otherView: RenderedView | undefined = previewView;
+        if (previewView && Atomics.load(workerData.activeViewId, 0) === previewView?.viewId) {
           viewToRender = previewView;
           otherView = mainView;
         }
 
+        console.log("rendering view", viewToRender);
         render(viewToRender);
 
         // If there where any missing tiles during rendering,
@@ -558,9 +582,9 @@ function stateMachine() {
           viewToRender.setIsPendingFullPaint(false);
         }
 
-        if (otherView.isPendingFullPaint()) {
+        if (otherView && otherView.isPendingFullPaint()) {
           setState(RenderState.IDLE, otherView.viewId);
-        } else if (otherView.didScroll) {
+        } else if (otherView && otherView.didScroll) {
           setState(RenderState.IDLE, otherView.viewId);
         }
 
@@ -593,6 +617,8 @@ function stateMachine() {
       setState(RenderState.IDLE, mainView.viewId);
       if (shouldRun && !running) {
         stateMachine();
+
+        if (!previewView) return;
         // Debounce painting invalidations to the preview view
         if (previewInvalidationTimeout) {
           clearTimeout(previewInvalidationTimeout);
@@ -819,11 +845,13 @@ function shouldPausePaint(view: RenderedView): boolean {
     return pause;
   }
 
-  return (
-    Atomics.load(workerData.state, 0) === RenderState.RESET ||
-    (view.scheduledTopTwips !== view.renderedTopTwips && view.renderedTopTwips !== -1) ||
-    (view.scheduledHeightTwips !== view.renderedHeightTwips && view.renderedHeightTwips !== -1)
-  );
+  return false;
+
+  // return (
+  //   Atomics.load(workerData.state, 0) === RenderState.RESET ||
+  //   (view.scheduledTopTwips !== view.renderedTopTwips && view.renderedTopTwips !== -1) ||
+  //   (view.scheduledHeightTwips !== view.renderedHeightTwips && view.renderedHeightTwips !== -1)
+  // );
 }
 
 function rectToTileIndexRanges(
@@ -978,6 +1006,7 @@ const MAXIMUM_TIME_SAMPLES = 20; // Allows 2, 20% outliers to be trimmed from ei
 // TODO: sample tile paint times then run paints in the background during idle
 /** attempts to calculate a mean time per paint while excluding outliers */
 function trimmedMean(input: number[]): number {
+  if (input.length === 0) return 0;
   // skips work when there aren't enough viable samples
   if (input.length < MINIMUM_TIME_SAMPLES)
     return input.reduce((acc, val) => acc + val) / input.length;

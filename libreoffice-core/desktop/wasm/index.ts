@@ -194,13 +194,16 @@ function registerClientMethod(prop: string) {
   clientBase[prop] = function (...args: any[]) {
     const [i, future] = registerFuture();
     let transfers: { transfer: Transferable[] } | undefined;
-    if (prop === 'startRendering' || prop === 'resetRendering') {
-      let params = (args as Parameters<DocumentWithViewMethods['startRendering']>);
+    if (prop === 'startRendering' || prop === 'resetRendering' || prop==='startRenderingPreview') {
       transfers = {
         transfer: [
-          ...params[0].canvases,
-          ...params[2]?.canvases ?? [],
-        ],
+          ...(
+            args as
+              | Parameters<DocumentWithViewMethods['startRendering']>
+              | Parameters<DocumentWithViewMethods['resetRendering']>
+              | Parameters<DocumentWithViewMethods['startRenderingPreview']>
+          )[0],
+        ]
       };
     }
     loadWorkerOnce().postMessage(

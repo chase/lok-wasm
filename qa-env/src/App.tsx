@@ -148,13 +148,13 @@ function App() {
             <span class="loader" />
           </div>
         </Show>
-        <Show when={previewDoc()}>
-          <div class="h-full w-[300px] absolute left-0 top-0 z-10">
-            <DocumentPreview doc={previewDoc()!} />
-          </div>
+        <Show when={getDoc()} keyed>
+          <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts}/>
         </Show>
-        <Show when={getDoc() && previewCanvases()} keyed>
-          <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts} previewViewId={previewDoc()!.viewId} previewCanvases={[canvas0()!, canvas1()!]}/>
+        <Show when={previewDoc() && getDoc()}>
+          <div class="h-full w-[300px] absolute left-0 top-0 z-10">
+            <DocumentPreview doc={previewDoc()!} mainViewId={getDoc()?.viewId!}/>
+          </div>
         </Show>
       </div>
     </>

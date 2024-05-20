@@ -453,34 +453,40 @@ public:
 
     int32_t newView() { return doc_->createView(); }
 
-    val startTileRenderer(int32_t viewId, int32_t tileSize, std::optional<int32_t> previewViewId, std::optional<int32_t> previewTileSize)
+    val startTileRenderer(int32_t viewId, int32_t tileSize)
     {
-        desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize, previewViewId, previewTileSize);
-        SAL_WARN("desktop", "after");
-        val result = val::object();
+        desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize);
+
+        emscripten::val result = emscripten::val::object();
         result.set("viewId", viewId);
-        result.set("activeViewId", typed_memory_view(1, (uint32_t*)&data.activeViewId));
+        result.set("activeViewId", emscripten::typed_memory_view(1, (uint32_t*)&data.activeViewId));
         result.set("tileSize", data.tileSize);
-        result.set("state", typed_memory_view(1, (int32_t*)&data.state));
+        result.set("state", emscripten::typed_memory_view(1, (int32_t*)&data.state));
+        result.set("tileTwips", emscripten::typed_memory_view(4, (uint32_t*)&data.tileTwips));
+        result.set("paintedTile", emscripten::typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
+        result.set("pendingFullPaint", emscripten::typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
+        result.set("hasInvalidations", emscripten::typed_memory_view(1, (int32_t*)&data.hasInvalidations));
+        result.set("invalidationStack", emscripten::typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
+                                                          (uint32_t*)&data.invalidationStack));
+        result.set("docWidthTwips", emscripten::typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
+        result.set("docHeightTwips", emscripten::typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
+        result.set("invalidationStackHead",
+                   emscripten::typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
+
+        return result;
+    }
+
+    val addPreviewView(int32_t mainViewId, int32_t viewId, int32_t tileSize)
+    {
+        desktop::AdditionalView& data = ext()->addPreviewView(mainViewId, viewId, tileSize);
+
+        emscripten::val result = emscripten::val::object();
+
+        result.set("viewId", data.viewId);
+        result.set("tileSize", data.tileSize);
         result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.tileTwips));
         result.set("paintedTile", typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
         result.set("pendingFullPaint", typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
-        result.set("hasInvalidations", typed_memory_view(1, (int32_t*)&data.hasInvalidations));
-        result.set("invalidationStack", typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
-                                                          (uint32_t*)&data.invalidationStack));
-        result.set("docWidthTwips", typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
-        result.set("docHeightTwips", typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
-        result.set("invalidationStackHead",
-                   typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
-
-        if (data.previewViewId)
-        {
-            result.set("previewViewId", data.previewViewId.value());
-            result.set("previewTileSize", data.previewTileSize.value());
-            result.set("previewTileTwips", typed_memory_view(4, (uint32_t*)&data.previewTileTwips));
-            result.set("previewPaintedTile", typed_memory_view(data.previewPaintedTileAllocSize.value(), data.previewPaintedTile.value()));
-            result.set("previewPendingFullPaint", typed_memory_view(1, (int32_t*)&data.previewPendingFullPaint));
-        }
 
         return result;
     }
@@ -737,6 +743,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("dispatchCommand", &DocumentClient::dispatchCommand)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
+        .function("addPreviewView", &DocumentClient::addPreviewView)
         .function("ref", &DocumentClient::ref)
         .function("setClientVisibleArea", &DocumentClient::setClientVisibleArea)
         .function("getSelectionText", &DocumentClient::getSelectionText)

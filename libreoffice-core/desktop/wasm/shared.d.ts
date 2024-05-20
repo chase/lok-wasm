@@ -123,10 +123,22 @@ export type DocumentWithViewMethods = {
   ): void;
 
   startRendering(
-    mainView: ViewToRenderData,
+    canvases: OffscreenCanvas[],
+    tileSize: number,
+    scale: number,
     dpi: number,
-    previewView?: ViewToRenderData,
+    yPos: number | undefined
   ): TileRendererData;
+
+  startRenderingPreview(
+    canvases: OffscreenCanvas[],
+    tileSize: number,
+    scale: number,
+    dpi: number,
+    yPos: number | undefined
+  ): TileRendererData;
+
+  stopRenderingPreview(): void;
 
   setScrollTop(yPx: number): number;
   setVisibleHeight(heightPx: number): void;
@@ -385,8 +397,6 @@ export type ToTileRenderer =
       t: 'i';
       /** Main view data */
       m: InitializeViewData;
-      /** Preview view data */
-      p: InitializeViewData | undefined;
       /** shared renderer data */
       d: TileRenderData;
       dpi: number;
@@ -415,6 +425,14 @@ export type ToTileRenderer =
       d: number;
       /** scrollTop position in px */
       y: number;
+    }
+  | {
+      t: 'previewStart';
+      p: InitializeViewData;
+      d: Partial<TileRenderData, "tileSize" | "viewId" | "tileTwips" | "paintedTile" | "pendingFullPaint">;
+    }
+  | {
+      t: 'previewStop';
     };
 
 export type Ref<T> = {

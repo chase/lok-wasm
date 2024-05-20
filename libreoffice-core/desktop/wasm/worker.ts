@@ -34,6 +34,7 @@ import type {
   ParagraphStyleList,
   RectArray,
   SanitizeOptions,
+  TileRenderData,
 } from './soffice';
 import LOK from './soffice';
 // NOTE: Disabled until unoembind startup cost is under 1s
@@ -260,73 +261,116 @@ const handler: DocumentMethodHandler<Document> = {
 
   startRendering: function (
     doc: Document,
-    _viewId: ViewId,
-    mainView: ViewToRenderData,
+    viewId: ViewId,
+    canvases: OffscreenCanvas[],
+    tileSize: TileDim,
+    scale: number,
     dpi: number,
-    previewView?: ViewToRenderData,
+    yPos: number | undefined,
   ): TileRendererData {
     const ref = doc.ref();
     const result = doc.startTileRenderer(
-      mainView.viewId,
-      mainView.tileSize,
-      previewView?.viewId,
-      previewView?.tileSize
+      viewId,
+      tileSize,
     );
     const worker = new Worker(
       new URL('./tile_renderer_worker.js', import.meta.url),
       { type: 'module' }
     );
-    if (!tileRenderer[ref]) {
-      tileRenderer[ref] = undefined;
-    }
+
     tileRenderer[ref] = worker;
 
-    let canvasesToTransfer = [...mainView.canvases, ...previewView?.canvases ?? []];
+    console.log("worker in startRendering", worker);
+    console.log("ref in startRendering", ref);
 
     let mainViewData: InitializeViewData = {
       viewId: result.viewId,
-      scale: mainView.scale,
-      canvases: mainView.canvases,
+      scale: scale,
+      canvases: canvases,
       tileTwips: result.tileTwips,
       paintedTile: result.paintedTile,
       pendingFullPaint: result.pendingFullPaint,
-      y: mainView.yPos,
+      y: yPos,
     };
-
-    let previewViewData: InitializeViewData | undefined;
-
-    if (previewView) {
-      previewViewData = {
-        viewId: result.previewViewId,
-        scale: previewView.scale,
-        canvases: previewView.canvases,
-        tileTwips: result.previewTileTwips,
-        paintedTile: result.previewPaintedTile,
-        pendingFullPaint: result.previewPendingFullPaint,
-        y: previewView.yPos,
-      };
-    }
 
     worker.postMessage(
       {
         t: 'i',
         m: mainViewData,
-        p: previewViewData,
         d: result,
         dpi,
       } as ToTileRenderer,
-      { transfer: [...canvasesToTransfer] }
+      { transfer: [...canvases] }
     );
 
     return {
       docRef: ref,
       viewId: result.viewId,
-      scale: mainView.scale,
+      scale: scale,
     };
   },
 
   resetRendering: function() {
+    throw new Error('Function not implemented.');
+  },
 
+  startRenderingPreview: function (
+    doc: Document,
+    viewId: ViewId,
+    canvases: OffscreenCanvas[],
+    mainViewId: ViewId,
+    tileSize: TileDim,
+    scale: number,
+    yPos: number | undefined,
+  ) {
+    const ref = doc.ref();
+    const result = doc.addPreviewView(
+      mainViewId,
+      viewId,
+      tileSize,
+    );
+
+    const worker = tileRenderer[ref];
+
+    let previewViewData: InitializeViewData = {
+      viewId: viewId,
+      scale: scale,
+      canvases: canvases,
+      tileTwips: result.tileTwips,
+      paintedTile: result.paintedTile,
+      pendingFullPaint: result.pendingFullPaint,
+      y: yPos,
+    };
+
+    worker.postMessage(
+      {
+        t: 'previewStart',
+        p: previewViewData,
+        d: result,
+      } as ToTileRenderer,
+      { transfer: [...canvases] }
+    );
+
+    return {
+      docRef: ref,
+      viewId: result.viewId,
+      scale: scale,
+    };
+  },
+
+  stopRenderingPreview: function (
+    doc: Document,
+    viewId: ViewId,
+  ) {
+    const worker = tileRenderer[doc.ref()];
+
+    worker.postMessage(
+      {
+        t: 'previewStop',
+        viewId: viewId,
+        d: {} as TileRenderData,
+      } as ToTileRenderer,
+    );
   },
 
 //   resetRendering: function (
@@ -373,6 +417,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
+    console.log("document ref is setVisibleHeight", doc.ref());
     tileRenderer[doc.ref()].postMessage({
       t: 'r',
       viewId,

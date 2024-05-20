@@ -1,5 +1,5 @@
 import { TILE_DIM_PX, twipsToCssPx } from "@lok";
-import { DocumentClient, RectanglePx, RectangleTwips } from "@lok/shared";
+import { DocumentClient, RectanglePx, RectangleTwips, ViewId } from "@lok/shared";
 import { createEffect, createSignal, For, JSX} from "solid-js";
 import { ScrollArea } from "./OfficeDocument/ScrollArea";
 import { frameThrottle } from "./OfficeDocument/frameThrottle";
@@ -8,6 +8,7 @@ import { observedSize } from "./OfficeDocument/OfficeDocument";
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
+  mainViewId: ViewId;
 }
 
 const DEFAULT_AND_MAX_PAGES_PANE_ZOOM = 0.25;
@@ -72,7 +73,19 @@ export function DocumentPreview(props: Props) {
     canvas1_.width = width;
     canvas1_.height = height;
 
-    setPreviewCanvases([canvas0_, canvas1_]);
+    console.log("startRenderingPreview", props.mainViewId);
+    props.doc.startRenderingPreview(
+      [
+        canvas0_.transferControlToOffscreen(),
+        canvas1_.transferControlToOffscreen(),
+      ],
+      props.mainViewId,
+      256,
+      .25,
+      1,
+      undefined
+    );
+
     didInitialRender.add(props.doc);
   });
 

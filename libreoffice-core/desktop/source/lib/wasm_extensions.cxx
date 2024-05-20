@@ -1,6 +1,7 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
 #include <memory>
+#include <optional>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -45,10 +46,10 @@ static void* tileRendererWorker(void* data_)
         RenderState state = d->state;
 
         bool bIsMainView = d->viewId == d->activeViewId;
-        std::array<uint32_t, 4> tileTwips = bIsMainView ? d->tileTwips : d->previewTileTwips;
-        uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewPaintedTile.value();
-        int32_t tileSize = bIsMainView ? d->tileSize : d->previewTileSize.value();
-        int32_t paintedTileAllocSize = bIsMainView ? d->paintedTileAllocSize : d->previewPaintedTileAllocSize.value();
+        std::array<uint32_t, 4> tileTwips = bIsMainView ? d->tileTwips : d->previewView.get()->tileTwips;
+        uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewView.get()->paintedTile;
+        int32_t tileSize = bIsMainView ? d->tileSize : d->previewView.get()->tileSize;
+        int32_t paintedTileAllocSize = bIsMainView ? d->paintedTileAllocSize : d->previewView.get()->paintedTileAllocSize;
 
         switch (state)
         {
@@ -95,11 +96,10 @@ WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XCom
 
 }
 
+
 TileRendererData& WasmDocumentExtension::startTileRenderer(
     int32_t viewId_,
-    int32_t tileSize_,
-    std::optional<int32_t> previewViewId_,
-    std::optional<int32_t> previewTileSize_
+    int32_t tileSize_
 )
 {
     long w, h;
@@ -110,8 +110,6 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(
         this,
         viewId_,
         tileSize_,
-        previewViewId_,
-        previewTileSize_,
         w,
         h
     );
@@ -124,6 +122,27 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(
     pthread_detach(threadId);
 
     return data;
+}
+
+
+AdditionalView& WasmDocumentExtension::addPreviewView(
+    int32_t mainViewId,
+    int32_t viewId,
+    int32_t tileSize
+)
+{
+    std::shared_ptr<AdditionalView> previewView = std::make_shared<AdditionalView>(viewId, tileSize);
+
+    // Find the main view and set the preview view
+    for (auto& data: tileRendererData_)
+    {
+        if (data.viewId == mainViewId)
+        {
+            data.previewView = previewView;
+        }
+    }
+
+    return *previewView;
 }
 
 void TileRendererData::pushInvalidation(uint32_t invalidation[4])
@@ -147,7 +166,7 @@ void TileRendererData::reset()
     bool bIsMainView = activeViewId == viewId;
     __c11_atomic_store(&invalidationStackHead, -1, __ATOMIC_RELAXED);
 
-    __c11_atomic_store(bIsMainView ?  &pendingFullPaint : &previewPendingFullPaint, 1, __ATOMIC_SEQ_CST);
+    __c11_atomic_store(bIsMainView ?  &pendingFullPaint : &previewView->pendingFullPaint, 1, __ATOMIC_SEQ_CST);
     __c11_atomic_store(&hasInvalidations, 1, __ATOMIC_SEQ_CST);
     __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
 }
