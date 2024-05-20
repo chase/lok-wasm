@@ -168,7 +168,7 @@ void TileRendererData::reset()
 
     __c11_atomic_store(bIsMainView ?  &pendingFullPaint : &previewView->pendingFullPaint, 1, __ATOMIC_SEQ_CST);
     __c11_atomic_store(&hasInvalidations, 1, __ATOMIC_SEQ_CST);
-    __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
+    /* __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY); */
 }
 
 static std::string OUStringToString(OUString str) {
