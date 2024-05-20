@@ -297,8 +297,11 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     }
     case 'previewStop': {
       previewView = undefined;
-
-      if (!running) stateMachine();
+      workerData.previewPaintedTile = undefined;
+      workerData.previewTileTwips = undefined;
+      workerData.previewViewId = undefined;
+      workerData.previewTileSize = undefined;
+      workerData.previewPendingFullPaint = undefined;
       break;
     }
   }
@@ -618,12 +621,10 @@ function stateMachine() {
       if (shouldRun && !running) {
         stateMachine();
 
-        if (!previewView) return;
         // Debounce painting invalidations to the preview view
         if (previewInvalidationTimeout) {
           clearTimeout(previewInvalidationTimeout);
         }
-
         // Try to schedule a new paint for invalidations for
         // the preview view. If no new main view invalidations are fired
         // this should trigger a paint for the preview view

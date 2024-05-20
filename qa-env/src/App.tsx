@@ -122,6 +122,7 @@ function registerGlobalKeys() {
 
 function App() {
   registerGlobalKeys();
+  const [isPreviewOpen, setPreviewOpen] = createSignal(false);
 
   return (
     <>
@@ -140,6 +141,7 @@ function App() {
       <Show when={getDoc()}>
         <div class="h-[70px] border-b border border-gray-300 flex items-center bg-gray-200 px-2">
           <button onClick={() => saveAsPDF(getDoc())}>Save As PDF</button>
+          <button onClick={() => setPreviewOpen(!isPreviewOpen())}>Toggle Preview</button>
         </div>
       </Show>
       <div class="w-full h-full flex relative">
@@ -151,7 +153,7 @@ function App() {
         <Show when={getDoc()} keyed>
           <OfficeDocument doc={getDoc()!} ignoreShortcuts={ignoredShortcuts}/>
         </Show>
-        <Show when={previewDoc() && getDoc()}>
+        <Show when={previewDoc() && getDoc() && isPreviewOpen()}>
           <div class="h-full w-[300px] absolute left-0 top-0 z-10">
             <DocumentPreview doc={previewDoc()!} mainViewId={getDoc()?.viewId!}/>
           </div>

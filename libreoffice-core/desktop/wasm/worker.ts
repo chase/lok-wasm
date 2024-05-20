@@ -368,7 +368,6 @@ const handler: DocumentMethodHandler<Document> = {
       {
         t: 'previewStop',
         viewId: viewId,
-        d: {} as TileRenderData,
       } as ToTileRenderer,
     );
   },

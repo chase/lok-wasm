@@ -1,6 +1,6 @@
 import { TILE_DIM_PX, twipsToCssPx } from "@lok";
 import { DocumentClient, RectanglePx, RectangleTwips, ViewId } from "@lok/shared";
-import { createEffect, createSignal, For, JSX} from "solid-js";
+import { createEffect, createSignal, For, JSX, onCleanup} from "solid-js";
 import { ScrollArea } from "./OfficeDocument/ScrollArea";
 import { frameThrottle } from "./OfficeDocument/frameThrottle";
 import { setPreviewCanvases } from "./App";
@@ -103,6 +103,11 @@ export function DocumentPreview(props: Props) {
       ?.map((rect) => scaleRectCssPx(rect, DEFAULT_AND_MAX_PAGES_PANE_ZOOM))
       .filter((rect) => rect.width && rect.height);
   };
+
+  onCleanup(() => {
+    props.doc.stopRenderingPreview();
+    didInitialRender.delete(props.doc);
+  });
 
   const handleScroll = frameThrottle(async (yPx, xPx) => {
     handleScroll.cancel();
