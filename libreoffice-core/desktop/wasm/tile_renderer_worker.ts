@@ -471,6 +471,7 @@ function render(view: RenderedView) {
         view.tileIndexToTileRingIndex.get(x)
       );
       if (!img) {
+        console.log('missing tile', xCoord, y, view.tileSize, view.tileSize);
         view.missingRects.push([
           xCoord * view.tileSize,
           y * view.tileSize,
@@ -510,12 +511,6 @@ function stateMachine() {
     mainView.commitInvalidations(invalidations);
     if (previewView) {
       previewView.commitInvalidations(invalidations);
-      // When a main view invalidation occurs outside of the visible range
-      // of the preview view, we want to clear the non-visible tiles and
-      // repaint them next time around.
-      if (previewView.nonVisibleInvalidations.length > 0) {
-        clearNonVisibleTiles(previewView);
-      }
     }
     switch (getState()) {
       case RenderState.IDLE: {
@@ -546,6 +541,11 @@ function stateMachine() {
               break;
             }
 
+            if (previewView.missingRects.length > 0) {
+              previewView.commitInvalidations(previewView.missingRects);
+              previewView.missingRects.length = 0;
+            }
+
             partialPaint(previewView);
 
             if (previewView.needsRender) {
@@ -570,7 +570,6 @@ function stateMachine() {
           otherView = mainView;
         }
 
-        console.log("rendering view", viewToRender);
         render(viewToRender);
 
         // If there where any missing tiles during rendering,
@@ -629,6 +628,7 @@ function stateMachine() {
         // the preview view. If no new main view invalidations are fired
         // this should trigger a paint for the preview view
         previewInvalidationTimeout = setTimeout(() => {
+          console.log("DEBOUNCED PAINTING PREVIEW VIEW");
           previewView.pendingPartialPaint = true;
           setState(RenderState.IDLE, previewView.viewId);
           if (!running) {
