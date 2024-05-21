@@ -20,6 +20,8 @@ type Rect = [
 type TileIndexRange = [start: number, endInclusive: number];
 
 const DEBUG = false;
+const LARGE_POOL_SIZE = 2000;
+const SMALL_POOL_SIZE = 1000;
 
 const RECT_SIZE = 4;
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
@@ -71,6 +73,7 @@ class RenderedView {
   renderedTopTwips: number = -1;
   renderedHeightTwips: number = -1;
   didScroll = false;
+  didZoom = false;
 
   visibleInvalidations: Rect[] = [];
   nonVisibleInvalidations: Rect[] = [];
@@ -184,8 +187,10 @@ class RenderedView {
       this.activeCanvasIndex ^= 1;
       this.activeCanvas = this.canvases[this.activeCanvasIndex];
       this.ctx = this.activeCanvas.getContext('2d');
-      setState(RenderState.IDLE, this.viewId);
-      if (!running) stateMachine();
+      if (!this.didZoom)  {
+        setState(RenderState.IDLE, this.viewId);
+        if (!running) stateMachine();
+      }
     } else {
       postMessage({ s: this.activeCanvasIndex });
     }
@@ -220,6 +225,7 @@ class RenderedView {
 }
 
 let zoomResetTimeout: number;
+let scrollZoomTimeout: number;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -232,9 +238,9 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         canvases: data.m.canvases,
         scale: data.m.scale,
         yPos: data.m.y,
-        tileSize: 256,
+        tileSize: data.d.tileSize,
         dpi: data.dpi,
-        poolSize: 2000,
+        poolSize: LARGE_POOL_SIZE,
         paintedTile: data.m.paintedTile,
         tileTwips: data.m.tileTwips,
         pendingFullPaint: data.m.pendingFullPaint,
@@ -252,6 +258,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 
       view.scroll(data.y);
       break;
+
     }
     case 'r': {
       const isMainView = data.viewId === mainView.viewId;
@@ -272,6 +279,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'z': {
       const isMainView = data.viewId === mainView.viewId;
       const view = isMainView ? mainView : previewView;
+      view.didZoom = true;
       view.zoom(data.s, data.d);
       view.reset();
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
@@ -295,9 +303,9 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         canvases: data.p.canvases,
         scale: data.p.scale,
         yPos: data.p.y,
-        tileSize: 256,
+        tileSize: data.d.tileSize,
         dpi: mainView.dpi, // DPI should be the same for both views
-        poolSize: 500, // Document preview has a smaller pool size
+        poolSize: SMALL_POOL_SIZE, // Document preview has a smaller pool size
         paintedTile: data.p.paintedTile,
         tileTwips: data.p.tileTwips,
         pendingFullPaint: data.p.pendingFullPaint,
@@ -310,6 +318,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     }
     case 'previewStop': {
+      // Clear the previewView and reset the worker data
       previewView = undefined;
       workerData.previewPaintedTile = undefined;
       workerData.previewTileTwips = undefined;
@@ -337,7 +346,7 @@ function setState(state: RenderState, viewId?: number): void {
   Atomics.notify(workerData.state, 0);
 }
 
-function fullPaint(view: RenderedView): boolean {
+function fullPaint(view: RenderedView) {
   let didFinishPaint = true;
   view.visibleInvalidations.length = 0;
   view.nonVisibleInvalidations.length = 0;
@@ -372,12 +381,13 @@ function fullPaint(view: RenderedView): boolean {
 
   view.needsRender = true;
 
-  return didFinishPaint;
+  if (didFinishPaint) {
+    view.setIsPendingFullPaint(false);
+  }
 }
 
-function partialPaint(view: RenderedView): boolean {
+function partialPaint(view: RenderedView) {
   let didFinishPaint = true;
-  view.pendingPartialPaint = false;
   const newVisibleRingTiles = new Set<number>();
 
   if (view.visibleInvalidations.length != 0) {
@@ -406,6 +416,8 @@ function partialPaint(view: RenderedView): boolean {
           if (!view.validTiles.has(x)) {
             newVisibleRingTiles.add(blockingPaintTile(view, x));
             view.needsRender = true;
+          } else {
+            newVisibleRingTiles.add(view.tileIndexToTileRingIndex.get(x));
           }
         }
       }
@@ -421,6 +433,7 @@ function partialPaint(view: RenderedView): boolean {
   for (let y = 0; y < visibleRangesToPaint.length; ++y) {
     if (shouldPausePaint(view)) {
       view.pendingPartialPaint = true;
+      didFinishPaint = false;
       break;
     }
     const [start, endInclusive] = visibleRangesToPaint[y];
@@ -439,20 +452,19 @@ function partialPaint(view: RenderedView): boolean {
     }
   }
 
-  view.visibleInvalidations.length = 0;
-  view.visibleRingTiles.clear();
-  view.visibleRingTiles = newVisibleRingTiles;
-  view.pendingPartialPaint = false;
+  if (didFinishPaint) {
+    view.visibleInvalidations.length = 0;
+    view.visibleRingTiles.clear();
+    view.visibleRingTiles = newVisibleRingTiles;
+    view.pendingPartialPaint = false;
+  }
 
   if (hasUpdatedVisibleArea(view)) {
     view.needsRender = true;
   }
-
-  return didFinishPaint;
 }
 
-function render(view: RenderedView): boolean {
-  let didFinishRender = true;
+function render(view: RenderedView) {
   const visibleTop = view.scheduledTopTwips;
   const visibleHeight = view.scheduledHeightTwips;
 
@@ -474,12 +486,7 @@ function render(view: RenderedView): boolean {
   view.renderedHeightTwips = visibleHeight;
   view.renderedTopTwips = visibleTop;
 
-  for (let y = 0; y < rangesToRender.length; ++y) {
-    if (shouldPausePaint(view)) {
-      view.setIsPendingFullPaint(true);
-      didFinishRender = false;
-      break;
-    }
+  for (let y = 0; y < rangesToRender.length && !shouldPausePaint(view); ++y) {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
       const [xCoord] = tileIndexToGridCoord(view, x);
@@ -513,13 +520,11 @@ function render(view: RenderedView): boolean {
       view.ctx.closePath();
     }
   }
-  view.setIsPendingFullPaint(false);
   view.needsRender = false;
-
-  return didFinishRender;
 }
 
 let previewInvalidationTimeout: number;
+let missingTimeout: number;
 
 function stateMachine() {
   running = true;
@@ -550,6 +555,7 @@ function stateMachine() {
             }
 
             partialPaint(mainView);
+
             if (mainView.needsRender) {
               setState(RenderState.RENDERING, mainView.viewId);
               break;
@@ -597,10 +603,26 @@ function stateMachine() {
 
         render(viewToRender);
 
+        if (viewToRender.didZoom) {
+          viewToRender.didZoom = false;
+        }
+
+        if (viewToRender.didScroll) {
+          viewToRender.renderedTileTop = Math.floor(
+            viewToRender.renderedTopTwips / viewToRender.tileDimTwips
+          );
+          postMessage({ s: viewToRender.activeCanvasIndex });
+          viewToRender.didScroll = false;
+        }
+
         // If there where any missing tiles during rendering,
         // we need to repaint them and then re-render the view.
         if (viewToRender.missingRects.length > 0) {
-          setState(RenderState.IDLE, viewToRender.viewId);
+          if (missingTimeout) clearTimeout(missingTimeout);
+          missingTimeout = setTimeout(() => {
+            setState(RenderState.IDLE, viewToRender.viewId);
+            if (!running) stateMachine();
+          })
           break;
         }
 
@@ -613,14 +635,6 @@ function stateMachine() {
           setState(RenderState.IDLE, otherView.viewId);
         } else if (otherView && otherView.didScroll) {
           setState(RenderState.IDLE, otherView.viewId);
-        }
-
-        if (viewToRender.didScroll) {
-          viewToRender.renderedTileTop = Math.floor(
-            viewToRender.renderedTopTwips / viewToRender.tileDimTwips
-          );
-          postMessage({ s: viewToRender.activeCanvasIndex });
-          viewToRender.didScroll = false;
         }
 
         // Always give priority back to the main view
@@ -638,30 +652,13 @@ function stateMachine() {
   mainView.idleAreaPaint = true;
   if (!pendingInvalidate) {
     afterInvalidate().then((shouldRun) => {
-      console.log('INVALIDATION');
       mainView.idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
       mainView.pendingPartialPaint = true;
       setState(RenderState.IDLE, mainView.viewId);
       if (shouldRun && !running) {
         stateMachine();
-
-        if (!previewView) return;
-        // Debounce painting invalidations to the preview view
-        if (previewInvalidationTimeout) {
-          clearTimeout(previewInvalidationTimeout);
-        }
-        // Try to schedule a new paint for invalidations for
-        // the preview view. If no new main view invalidations are fired
-        // this should trigger a paint for the preview view
-        previewInvalidationTimeout = setTimeout(() => {
-          console.log('DEBOUNCED PAINTING PREVIEW VIEW');
-          previewView.pendingPartialPaint = true;
-          setState(RenderState.IDLE, previewView.viewId);
-          if (!running) {
-            stateMachine();
-          }
-        }, 200);
+        maybeInvalidatePreview();
       }
     });
 
@@ -672,6 +669,25 @@ function stateMachine() {
     paintNonVisibleAreasWhileIdle,
     Math.max(trimmedMean(mainView.paintTimes), 10)
   );
+}
+
+function maybeInvalidatePreview() {
+  if (!previewView) return;
+  if (previewInvalidationTimeout) {
+    clearTimeout(previewInvalidationTimeout);
+  }
+  // Try to schedule a new paint for invalidations for
+  // the preview view. If no new main view invalidations are fired
+  // this should trigger a paint for the preview view
+  previewInvalidationTimeout = setTimeout(() => {
+    if (Atomics.load(workerData.state, 0) !== RenderState.IDLE){
+        maybeInvalidatePreview();
+    };
+
+    previewView.pendingPartialPaint = true;
+    setState(RenderState.IDLE, previewView.viewId);
+    if (!running) stateMachine();
+  }, 200);
 }
 
 let pendingInvalidate: boolean;
