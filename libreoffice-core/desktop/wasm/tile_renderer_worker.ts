@@ -223,7 +223,6 @@ class RenderedView {
 }
 
 let zoomResetTimeout: number;
-let scrollTimeout: number;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -419,8 +418,6 @@ function partialPaint(view: RenderedView) {
           if (!view.validTiles.has(x)) {
             newVisibleRingTiles.add(blockingPaintTile(view, x));
             view.needsRender = true;
-          } else {
-            newVisibleRingTiles.add(view.tileIndexToTileRingIndex.get(x));
           }
         }
       }
@@ -455,12 +452,10 @@ function partialPaint(view: RenderedView) {
     }
   }
 
-  if (didFinishPaint) {
-    view.visibleInvalidations.length = 0;
-    view.visibleRingTiles.clear();
-    view.visibleRingTiles = newVisibleRingTiles;
-    view.pendingPartialPaint = false;
-  }
+  view.visibleInvalidations.length = 0;
+  view.visibleRingTiles.clear();
+  view.visibleRingTiles = newVisibleRingTiles;
+  view.pendingPartialPaint = false;
 
   if (hasUpdatedVisibleArea(view)) {
     view.needsRender = true;
@@ -502,7 +497,6 @@ function render(view: RenderedView) {
           view.missingRects.filter((r) => r[0] === xCoord * view.tileSize)
             .length === 0
         ) {
-          console.log("missing tile", xCoord, y);
           view.missingRects.push([
             xCoord * view.tileSize,
             y * view.tileSize,
@@ -925,7 +919,7 @@ function rectToTileIndexRanges(
   const b = rect[1] + rect[3];
   const y0 = Math.floor(rect[1] / tileDimTwips);
   const y1 = Math.floor(b / tileDimTwips);
-  for (let y = y0; y < y1; ++y) {
+  for (let y = y0; y <= y1; ++y) {
     result.push([x0 + widthTileStride * y, x1 + widthTileStride * y]);
   }
   return result;
