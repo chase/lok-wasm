@@ -19,7 +19,7 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = false;
+const DEBUG = true;
 const LARGE_POOL_SIZE = 2000;
 const SMALL_POOL_SIZE = 1000;
 
@@ -77,7 +77,6 @@ class RenderedView {
 
   visibleInvalidations: Rect[] = [];
   nonVisibleInvalidations: Rect[] = [];
-  invalidations: Rect[] = [];
 
   missingRects: Rect[] = [];
 
@@ -151,11 +150,11 @@ class RenderedView {
   }
 
   commitInvalidations(invalidations: Rect[]) {
-    this.invalidations.push(...this.visibleInvalidations);
-    this.invalidations.push(...this.nonVisibleInvalidations);
+    // Rebalance invalidations
+    invalidations.push(...this.visibleInvalidations);
+    invalidations.push(...this.nonVisibleInvalidations);
     // this.visibleInvalidations.length = 0;
     // this.nonVisibleInvalidations.length = 0;
-
     for (const invalidation of invalidations) {
       commitVisibleAndNonVisible(
         this,
@@ -167,7 +166,6 @@ class RenderedView {
   }
 
   reset() {
-    this.invalidations.length = 0;
     this.visibleInvalidations.length = 0;
     this.nonVisibleInvalidations.length = 0;
     this.missingRects.length = 0;
@@ -225,7 +223,7 @@ class RenderedView {
 }
 
 let zoomResetTimeout: number;
-let scrollZoomTimeout: number;
+let scrollTimeout: number;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -347,6 +345,7 @@ function setState(state: RenderState, viewId?: number): void {
 }
 
 function fullPaint(view: RenderedView) {
+  DEBUG && console.log("FULL_PAINT")
   let didFinishPaint = true;
   view.visibleInvalidations.length = 0;
   view.nonVisibleInvalidations.length = 0;
@@ -374,8 +373,11 @@ function fullPaint(view: RenderedView) {
       newVisibleRingTiles.add(blockingPaintTile(view, x));
     }
   }
-  view.visibleRingTiles.clear();
-  view.visibleRingTiles = newVisibleRingTiles;
+
+  if (didFinishPaint) {
+    view.visibleRingTiles.clear();
+    view.visibleRingTiles = newVisibleRingTiles;
+  }
 
   clearNonVisibleTiles(view);
 
@@ -387,6 +389,7 @@ function fullPaint(view: RenderedView) {
 }
 
 function partialPaint(view: RenderedView) {
+  DEBUG && console.log('PARTIAL_PAINT');
   let didFinishPaint = true;
   const newVisibleRingTiles = new Set<number>();
 
@@ -465,6 +468,7 @@ function partialPaint(view: RenderedView) {
 }
 
 function render(view: RenderedView) {
+  DEBUG && console.log("RENDER");
   const visibleTop = view.scheduledTopTwips;
   const visibleHeight = view.scheduledHeightTwips;
 
@@ -498,6 +502,7 @@ function render(view: RenderedView) {
           view.missingRects.filter((r) => r[0] === xCoord * view.tileSize)
             .length === 0
         ) {
+          console.log("missing tile", xCoord, y);
           view.missingRects.push([
             xCoord * view.tileSize,
             y * view.tileSize,
@@ -511,11 +516,12 @@ function render(view: RenderedView) {
       const dstX: number = xCoord * view.tileSize;
       const dstY: number = y * view.tileSize;
       view.ctx.beginPath();
-      view.ctx.putImageData(DEBUG ? addRedBorder(img) : img, dstX, dstY);
+      view.ctx.putImageData(DEBUG ? addBorder(img) : img, dstX, dstY);
       if (DEBUG) {
+        let timestamp = view.tileRingIndexToTileIndex.get(x);
         view.ctx.font = '12px Arial';
         view.ctx.fillStyle = 'blue';
-        view.ctx.fillText(`${Date.now() - startTimestamp}`, dstX + 5, dstY - 5);
+        view.ctx.fillText(`${timestamp - startTimestamp} (${xCoord}, ${y})`, dstX + 5, dstY + 15);
       }
       view.ctx.closePath();
     }
@@ -541,6 +547,7 @@ function stateMachine() {
     }
     switch (getState()) {
       case RenderState.IDLE: {
+        DEBUG && console.log("IDLE");
         switch (isMainActive) {
           case true: {
             if (mPendingFullPaint) {
@@ -889,7 +896,7 @@ function shouldPausePaint(view: RenderedView): boolean {
     return pause;
   }
 
-  return (
+  const shouldPausePaint = (
     Atomics.load(workerData.state, 0) === RenderState.RESET ||
     (view.scheduledTopTwips !== view.renderedTopTwips &&
       view.renderedTopTwips !== -1 &&
@@ -898,6 +905,12 @@ function shouldPausePaint(view: RenderedView): boolean {
       view.renderedHeightTwips !== -1 &&
       view.scheduledHeightTwips !== -1)
   );
+
+  if (shouldPausePaint && DEBUG) {
+    console.log("PAUSING");
+  }
+
+  return shouldPausePaint;
 }
 
 function rectToTileIndexRanges(
@@ -912,7 +925,7 @@ function rectToTileIndexRanges(
   const b = rect[1] + rect[3];
   const y0 = Math.floor(rect[1] / tileDimTwips);
   const y1 = Math.floor(b / tileDimTwips);
-  for (let y = y0; y <= y1; ++y) {
+  for (let y = y0; y < y1; ++y) {
     result.push([x0 + widthTileStride * y, x1 + widthTileStride * y]);
   }
   return result;
@@ -1078,7 +1091,7 @@ function trimmedMean(input: number[]): number {
   return sum / trimmedArray.length;
 }
 
-function addRedBorder(imageData: ImageData) {
+function addBorder(imageData: ImageData) {
   const width = imageData.width;
   const height = imageData.height;
   const data = imageData.data;
