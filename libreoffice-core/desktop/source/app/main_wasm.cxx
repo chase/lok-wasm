@@ -431,9 +431,12 @@ public:
         desktop::WasmDocumentExtension* ext
             = static_cast<desktop::WasmDocumentExtension*>(doc_->get());
 
-        if (command == ".uno:PageColor") {
+        if (command == ".uno:PageColor")
+        {
             return val(ext->getPageColor());
-        } else if (command == ".uno:PageOrientation") {
+        }
+        else if (command == ".uno:PageOrientation")
+        {
             return val(ext->getPageOrientation());
         }
         return val::u8string(doc_->getCommandValues(command.c_str()));
@@ -463,13 +466,19 @@ public:
         result.set("tileSize", data.tileSize);
         result.set("state", emscripten::typed_memory_view(1, (int32_t*)&data.state));
         result.set("tileTwips", emscripten::typed_memory_view(4, (uint32_t*)&data.tileTwips));
-        result.set("paintedTile", emscripten::typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
-        result.set("pendingFullPaint", emscripten::typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
-        result.set("hasInvalidations", emscripten::typed_memory_view(1, (int32_t*)&data.hasInvalidations));
-        result.set("invalidationStack", emscripten::typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
-                                                          (uint32_t*)&data.invalidationStack));
-        result.set("docWidthTwips", emscripten::typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
-        result.set("docHeightTwips", emscripten::typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
+        result.set("paintedTile",
+                   emscripten::typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
+        result.set("pendingFullPaint",
+                   emscripten::typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
+        result.set("hasInvalidations",
+                   emscripten::typed_memory_view(1, (int32_t*)&data.hasInvalidations));
+        result.set("invalidationStack",
+                   emscripten::typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
+                                                 (uint32_t*)&data.invalidationStack));
+        result.set("docWidthTwips",
+                   emscripten::typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
+        result.set("docHeightTwips",
+                   emscripten::typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
         result.set("invalidationStackHead",
                    emscripten::typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
 
@@ -714,8 +723,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("description", &wasm::ITextRanges::description)
         .function("descriptions", &wasm::ITextRanges::descriptions)
         .function("replace", &wasm::ITextRanges::replace)
-        .function("replaceAll", &wasm::ITextRanges::replaceAll)
-    ;
+        .function("replaceAll", &wasm::ITextRanges::replaceAll);
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()

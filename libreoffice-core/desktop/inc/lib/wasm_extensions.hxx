@@ -74,13 +74,8 @@ struct TileRendererData
 
     LibreOfficeKitDocument* doc;
 
-    TileRendererData(
-        LibreOfficeKitDocument* doc_,
-        int32_t viewId_,
-        int32_t tileSize_,
-        int32_t docWidthTwips_,
-        int32_t docHeightTwips_
-    )
+    TileRendererData(LibreOfficeKitDocument* doc_, int32_t viewId_, int32_t tileSize_,
+                     int32_t docWidthTwips_, int32_t docHeightTwips_)
         : viewId(viewId_)
         , tileSize(tileSize_)
         , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
@@ -107,16 +102,9 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     css::uno::Reference<css::lang::XComponent> mxComponent;
 
     WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
-    TileRendererData& startTileRenderer(
-        int32_t viewId,
-        int32_t tileSize
-    );
+    TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
 
-    AdditionalView& addPreviewView(
-        int32_t mainViewId,
-        int32_t viewId,
-        int32_t tileSize
-    );
+    AdditionalView& addPreviewView(int32_t mainViewId, int32_t viewId, int32_t tileSize);
 
     std::string getPageColor();
     std::string getPageOrientation();
