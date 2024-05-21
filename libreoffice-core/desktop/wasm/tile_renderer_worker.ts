@@ -153,8 +153,8 @@ class RenderedView {
     // Rebalance invalidations
     invalidations.push(...this.visibleInvalidations);
     invalidations.push(...this.nonVisibleInvalidations);
-    // this.visibleInvalidations.length = 0;
-    // this.nonVisibleInvalidations.length = 0;
+    this.visibleInvalidations.length = 0;
+    this.nonVisibleInvalidations.length = 0;
     for (const invalidation of invalidations) {
       commitVisibleAndNonVisible(
         this,
@@ -190,7 +190,7 @@ class RenderedView {
         if (!running) stateMachine();
       }
     } else {
-      postMessage({ s: this.activeCanvasIndex });
+      debouncedPostActiveCanvas(this.activeCanvasIndex);
     }
 
     return this.didScroll;
@@ -618,7 +618,7 @@ function stateMachine() {
           viewToRender.renderedTileTop = Math.floor(
             viewToRender.renderedTopTwips / viewToRender.tileDimTwips
           );
-          postMessage({ s: viewToRender.activeCanvasIndex });
+          debouncedPostActiveCanvas(viewToRender.activeCanvasIndex);
           viewToRender.didScroll = false;
         }
 
@@ -1091,6 +1091,18 @@ function trimmedMean(input: number[]): number {
   return sum / trimmedArray.length;
 }
 
+let postActiveCanvasTimeout: number;
+
+// Debounces the postMessage call to the worker
+// when multiple scroll events are fired at once, we want to make sure
+// we only post the active canvas correctly after the last scroll event
+function debouncedPostActiveCanvas(index: number) {
+  if (postActiveCanvasTimeout) clearTimeout(postActiveCanvasTimeout);
+  postActiveCanvasTimeout = setTimeout(() => {
+    postMessage({ s: index });
+  });
+}
+
 function addBorder(imageData: ImageData) {
   const width = imageData.width;
   const height = imageData.height;
@@ -1134,3 +1146,5 @@ function addBorder(imageData: ImageData) {
 
   return imageData;
 }
+
+
