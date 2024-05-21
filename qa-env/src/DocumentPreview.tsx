@@ -1,10 +1,16 @@
-import { TILE_DIM_PX, twipsToCssPx } from "@lok";
-import { DocumentClient, RectanglePx, RectangleTwips, ViewId } from "@lok/shared";
-import { createEffect, createSignal, For, JSX, onCleanup} from "solid-js";
-import { ScrollArea } from "./OfficeDocument/ScrollArea";
-import { frameThrottle } from "./OfficeDocument/frameThrottle";
-import { setPreviewCanvases } from "./App";
-import { observedSize } from "./OfficeDocument/OfficeDocument";
+import { TILE_DIM_PX, twipsToCssPx } from '@lok';
+import {
+  DocumentClient,
+  RectanglePx,
+  RectangleTwips,
+  ViewId,
+} from '@lok/shared';
+import { createEffect, createSignal, For, JSX, onCleanup } from 'solid-js';
+import { ScrollArea } from './OfficeDocument/ScrollArea';
+import { frameThrottle } from './OfficeDocument/frameThrottle';
+//@ts-ignore
+import { observedSize } from './OfficeDocument/OfficeDocument';
+import { getOrCreateDPISignal } from 'OfficeDocument/twipConversion';
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
@@ -20,14 +26,13 @@ function calcCanvasHeight(heightPx: number | undefined) {
     : undefined;
 }
 
-
 type Dimensions = [number, number];
-export const [canvas0, setCanvas0] = createSignal<HTMLCanvasElement | undefined>();
-export const [canvas1, setCanvas1] = createSignal<HTMLCanvasElement | undefined>();
 
 const didInitialRender = new WeakSet<DocumentClient>();
 export function DocumentPreview(props: Props) {
   let scrollAreaRef: HTMLDivElement | undefined;
+  const [canvas0, setCanvas0] = createSignal<HTMLCanvasElement | undefined>();
+  const [canvas1, setCanvas1] = createSignal<HTMLCanvasElement | undefined>();
   const [containerHeight, _setContainerHeight] = createSignal<
     number | undefined
   >();
@@ -36,14 +41,8 @@ export function DocumentPreview(props: Props) {
   >();
 
   const canvasHeight = () => {
-
-    console.log(
-    `container height when calculating canvasHeight
-    ${containerHeight()}}`
-    )
     return containerHeight() ? calcCanvasHeight(containerHeight()) : undefined;
-
-  }
+  };
 
   const [rectsTwips, setRectsTwips] = createSignal<RectanglePx[] | undefined>();
   let activeCanvas = 0;
@@ -52,28 +51,25 @@ export function DocumentPreview(props: Props) {
     setRectsTwips(await props.doc.partRectanglesTwips());
   });
 
-
   const docSizePx = () => {
-    return docSizeTwips()?.map((i) => twipsToCssPx(i, DEFAULT_AND_MAX_PAGES_PANE_ZOOM));
+    return docSizeTwips()?.map((i) =>
+      twipsToCssPx(i, DEFAULT_AND_MAX_PAGES_PANE_ZOOM)
+    );
   };
 
   createEffect(async () => {
     if (didInitialRender.has(props.doc)) return;
     const width = docSizePx()?.[0];
     const height = canvasHeight();
-    console.log(
-      `width and height for document preview
-      ${width} x ${height}`
-    );
+    const dpi = getOrCreateDPISignal();
     const canvas0_ = canvas0();
-    const canvas1_ = canvas1()
+    const canvas1_ = canvas1();
     if (!width || !height || !canvas0_ || !canvas1_ || !props.doc) return;
     canvas0_.width = width;
     canvas0_.height = height;
     canvas1_.width = width;
     canvas1_.height = height;
 
-    console.log("startRenderingPreview", props.mainViewId);
     props.doc.startRenderingPreview(
       [
         canvas0_.transferControlToOffscreen(),
@@ -81,9 +77,9 @@ export function DocumentPreview(props: Props) {
       ],
       props.mainViewId,
       256,
-      .25,
-      1,
-      undefined
+      0.25,
+      dpi(),
+      0
     );
 
     didInitialRender.add(props.doc);
@@ -133,31 +129,31 @@ export function DocumentPreview(props: Props) {
         class="w-full flex flex-1 justify-center relative overflow-hidden h-full"
         use:observedSize={[props.doc, _setContainerHeight]}
       >
-      {docSizePx() && canvasHeight && (
-      <>
-        <canvas
-          ref={setCanvas0}
-          class="absolute top-0 pointer-events-none"
-          style={{
-            'object-position': 'top center',
-            'transform-origin': 'top center',
-            width: `${docSizePx()![0]}px`,
-            height: `${canvasHeight()!}px`,
-          }}
-        />
-        <canvas
-          ref={setCanvas1}
-          class="absolute top-0 pointer-events-none"
-          style={{
-            'object-position': 'top center',
-            'transform-origin': 'top center',
-            width: `${docSizePx()![0]}px`,
-            height: `${canvasHeight()}px`,
-            display: 'none',
-          }}
-        />
-        </>
-      )}
+        {docSizePx() && canvasHeight && (
+          <>
+            <canvas
+              ref={setCanvas0}
+              class="absolute top-0 pointer-events-none"
+              style={{
+                'object-position': 'top center',
+                'transform-origin': 'top center',
+                width: `${docSizePx()![0]}px`,
+                height: `${canvasHeight()!}px`,
+              }}
+            />
+            <canvas
+              ref={setCanvas1}
+              class="absolute top-0 pointer-events-none"
+              style={{
+                'object-position': 'top center',
+                'transform-origin': 'top center',
+                width: `${docSizePx()![0]}px`,
+                height: `${canvasHeight()}px`,
+                display: 'none',
+              }}
+            />
+          </>
+        )}
       </div>
       <ScrollArea
         onScroll={handleScroll}
@@ -184,7 +180,9 @@ export function DocumentPreview(props: Props) {
                   }}
                 >
                   <div class="absolute right-2 bottom-2 select-none">
-                    <p class="text-gray-500 text-2xl drop-shadow-sm">{idx() + 1}</p>
+                    <p class="text-gray-500 text-2xl drop-shadow-sm">
+                      {idx() + 1}
+                    </p>
                   </div>
                 </div>
               )}
@@ -193,5 +191,5 @@ export function DocumentPreview(props: Props) {
         )}
       </ScrollArea>
     </>
-  )
+  );
 }

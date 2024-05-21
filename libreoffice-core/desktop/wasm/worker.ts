@@ -23,7 +23,6 @@ import type {
   ViewId,
   WorkerCallback,
   ForwardingMethodHandler,
-  ViewToRenderData,
   InitializeViewData,
 } from './shared';
 import type {
@@ -34,7 +33,6 @@ import type {
   ParagraphStyleList,
   RectArray,
   SanitizeOptions,
-  TileRenderData,
 } from './soffice';
 import LOK from './soffice';
 // NOTE: Disabled until unoembind startup cost is under 1s
@@ -280,9 +278,6 @@ const handler: DocumentMethodHandler<Document> = {
 
     tileRenderer[ref] = worker;
 
-    console.log("worker in startRendering", worker);
-    console.log("ref in startRendering", ref);
-
     let mainViewData: InitializeViewData = {
       viewId: result.viewId,
       scale: scale,
@@ -372,13 +367,6 @@ const handler: DocumentMethodHandler<Document> = {
     );
   },
 
-//   resetRendering: function (
-//     _doc: Document,
-//     _viewId: ViewId,
-//     _canvases: OffscreenCanvas[]
-//   ): void {
-//     throw new Error('Function not implemented.');
-//   },
 
   stopRendering: function (_doc: Document, _viewId: ViewId): void {
     throw new Error('Function not implemented.');
@@ -416,7 +404,6 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
-    console.log("document ref is setVisibleHeight", doc.ref());
     tileRenderer[doc.ref()].postMessage({
       t: 'r',
       viewId,

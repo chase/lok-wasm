@@ -9,12 +9,11 @@ import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
 import { ZOOM_STEP, updateZoom } from './OfficeDocument/zoom';
 import { downloadFile } from './utils';
-import { DocumentPreview, canvas0, canvas1 } from './DocumentPreview';
+import { DocumentPreview} from './DocumentPreview';
 
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
 const [previewDoc, setPreviewDoc] = createSignal<DocumentClient | null>(null);
-export const [previewCanvases, setPreviewCanvases] = createSignal<Array<HTMLCanvasElement> | null>(null);
 const getDocThrows = () => {
   const doc = getDoc();
   if (!doc) throw new Error('no doc');
@@ -48,7 +47,6 @@ async function fileOpen(files: FileList | null) {
 
   const previewDoc = await doc.newView();
   await previewDoc?.initializeForRendering({});
-  console.log(`previewDoc`, previewDoc);
   setDoc(doc);
   setPreviewDoc(previewDoc);
   setLoading(false);

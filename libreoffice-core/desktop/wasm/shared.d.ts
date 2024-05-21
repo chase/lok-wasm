@@ -28,14 +28,6 @@ type Rectangle = {
   height: number;
 };
 
-export type ViewToRenderData = {
-  viewId: ViewId;
-  canvases: OffscreenCanvas[];
-  tileSize: TileDim;
-  scale: number;
-  yPos: number;
-};
-
 export type RectanglePx = Rectangle & {};
 export type RectangleTwips = Rectangle & {};
 export type SetClipbaordItem = {

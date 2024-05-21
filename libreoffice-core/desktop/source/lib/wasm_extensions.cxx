@@ -103,7 +103,6 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
 
-    SAL_WARN("desktop", "before emplace back");
     TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h);
 
     pthread_t& threadId = tileRendererThreads_.emplace_back();
@@ -122,14 +121,9 @@ AdditionalView& WasmDocumentExtension::addPreviewView(int32_t mainViewId, int32_
     std::shared_ptr<AdditionalView> previewView
         = std::make_shared<AdditionalView>(viewId, tileSize);
 
-    // Find the main view and set the preview view
     for (auto& data : tileRendererData_)
-    {
         if (data.viewId == mainViewId)
-        {
             data.previewView = previewView;
-        }
-    }
 
     return *previewView;
 }
