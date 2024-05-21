@@ -10,7 +10,7 @@ import { ScrollArea } from './OfficeDocument/ScrollArea';
 import { frameThrottle } from './OfficeDocument/frameThrottle';
 //@ts-ignore
 import { observedSize } from './OfficeDocument/OfficeDocument';
-import { getOrCreateDPISignal } from 'OfficeDocument/twipConversion';
+import { getOrCreateDPISignal } from './OfficeDocument/twipConversion';
 
 interface Props extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onScroll'> {
   doc: DocumentClient;
