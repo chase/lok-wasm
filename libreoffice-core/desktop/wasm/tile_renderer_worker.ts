@@ -185,10 +185,8 @@ class RenderedView {
       this.activeCanvasIndex ^= 1;
       this.activeCanvas = this.canvases[this.activeCanvasIndex];
       this.ctx = this.activeCanvas.getContext('2d');
-      if (!this.didZoom) {
-        setState(RenderState.IDLE, this.viewId);
-        if (!running) stateMachine();
-      }
+      setState(RenderState.IDLE, this.viewId);
+      if (!running) stateMachine();
     } else {
       debouncedPostActiveCanvas(this.activeCanvasIndex);
     }
