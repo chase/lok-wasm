@@ -185,7 +185,7 @@ class RenderedView {
       this.activeCanvasIndex ^= 1;
       this.activeCanvas = this.canvases[this.activeCanvasIndex];
       this.ctx = this.activeCanvas.getContext('2d');
-      if (!this.didZoom)  {
+      if (!this.didZoom) {
         setState(RenderState.IDLE, this.viewId);
         if (!running) stateMachine();
       }
@@ -255,7 +255,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 
       view.scroll(data.y);
       break;
-
     }
     case 'r': {
       const isMainView = data.viewId === mainView.viewId;
@@ -344,7 +343,7 @@ function setState(state: RenderState, viewId?: number): void {
 }
 
 function fullPaint(view: RenderedView) {
-  DEBUG && console.log("FULL_PAINT")
+  DEBUG && console.log('FULL_PAINT');
   let didFinishPaint = true;
   view.visibleInvalidations.length = 0;
   view.nonVisibleInvalidations.length = 0;
@@ -463,7 +462,7 @@ function partialPaint(view: RenderedView) {
 }
 
 function render(view: RenderedView) {
-  DEBUG && console.log("RENDER");
+  DEBUG && console.log('RENDER');
   const visibleTop = view.scheduledTopTwips;
   const visibleHeight = view.scheduledHeightTwips;
 
@@ -515,7 +514,11 @@ function render(view: RenderedView) {
         let timestamp = view.tileRingIndexToTileIndex.get(x);
         view.ctx.font = '12px Arial';
         view.ctx.fillStyle = 'blue';
-        view.ctx.fillText(`${timestamp - startTimestamp} (${xCoord}, ${y})`, dstX + 5, dstY + 15);
+        view.ctx.fillText(
+          `${timestamp - startTimestamp} (${xCoord}, ${y})`,
+          dstX + 5,
+          dstY + 15
+        );
       }
       view.ctx.closePath();
     }
@@ -541,7 +544,7 @@ function stateMachine() {
     }
     switch (getState()) {
       case RenderState.IDLE: {
-        DEBUG && console.log("IDLE");
+        DEBUG && console.log('IDLE');
         switch (isMainActive) {
           case true: {
             if (mPendingFullPaint) {
@@ -623,7 +626,7 @@ function stateMachine() {
           missingTimeout = setTimeout(() => {
             setState(RenderState.IDLE, viewToRender.viewId);
             if (!running) stateMachine();
-          })
+          });
           break;
         }
 
@@ -681,9 +684,9 @@ function maybeInvalidatePreview() {
   // the preview view. If no new main view invalidations are fired
   // this should trigger a paint for the preview view
   previewInvalidationTimeout = setTimeout(() => {
-    if (Atomics.load(workerData.state, 0) !== RenderState.IDLE){
-        maybeInvalidatePreview();
-    };
+    if (Atomics.load(workerData.state, 0) !== RenderState.IDLE) {
+      maybeInvalidatePreview();
+    }
 
     previewView.pendingPartialPaint = true;
     setState(RenderState.IDLE, previewView.viewId);
@@ -890,18 +893,17 @@ function shouldPausePaint(view: RenderedView): boolean {
     return pause;
   }
 
-  const shouldPausePaint = (
+  const shouldPausePaint =
     Atomics.load(workerData.state, 0) === RenderState.RESET ||
     (view.scheduledTopTwips !== view.renderedTopTwips &&
       view.renderedTopTwips !== -1 &&
       view.scheduledTopTwips !== -1) ||
     (view.scheduledHeightTwips !== view.renderedHeightTwips &&
       view.renderedHeightTwips !== -1 &&
-      view.scheduledHeightTwips !== -1)
-  );
+      view.scheduledHeightTwips !== -1);
 
   if (shouldPausePaint && DEBUG) {
-    console.log("PAUSING");
+    console.log('PAUSING');
   }
 
   return shouldPausePaint;
@@ -1140,5 +1142,3 @@ function addBorder(imageData: ImageData) {
 
   return imageData;
 }
-
-
