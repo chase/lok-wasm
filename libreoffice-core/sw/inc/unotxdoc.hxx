@@ -87,119 +87,114 @@ class SwPrintData;
 class SwRenderData;
 class SwViewShell;
 class SfxItemPropertySet;
-namespace com::sun::star::container { class XNameContainer; }
-namespace com::sun::star::frame { class XController; }
-namespace com::sun::star::lang { struct Locale; }
-namespace com::sun::star::uno { class XAggregation; }
+namespace com::sun::star::container
+{
+class XNameContainer;
+}
+namespace com::sun::star::frame
+{
+class XController;
+}
+namespace com::sun::star::lang
+{
+struct Locale;
+}
+namespace com::sun::star::uno
+{
+class XAggregation;
+}
 
-namespace com::sun::star::util { class XReplaceDescriptor; }
+namespace com::sun::star::util
+{
+class XReplaceDescriptor;
+}
 
-typedef cppu::ImplInheritanceHelper
-<
-    SfxBaseModel,
-    css::text::XTextDocument,
-    css::text::XLineNumberingProperties,
-    css::text::XChapterNumberingSupplier,
-    css::text::XNumberingRulesSupplier,
-    css::text::XFootnotesSupplier,
-    css::text::XEndnotesSupplier,
-    css::text::XContentControlsSupplier,
-    css::util::XReplaceable,
-    css::text::XPagePrintable,
-    css::text::XReferenceMarksSupplier,
-    css::text::XTextTablesSupplier,
-    css::text::XTextFramesSupplier,
-    css::text::XBookmarksSupplier,
-    css::text::XTextSectionsSupplier,
-    css::text::XTextGraphicObjectsSupplier,
-    css::text::XTextEmbeddedObjectsSupplier,
-    css::text::XTextFieldsSupplier,
-    css::style::XStyleFamiliesSupplier,
-    css::style::XAutoStylesSupplier,
-    css::lang::XServiceInfo,
-    css::drawing::XDrawPageSupplier,
-    css::drawing::XDrawPagesSupplier,
-    css::text::XDocumentIndexesSupplier,
-    css::beans::XPropertySet,
-    css::beans::XPropertyState,
-    css::document::XLinkTargetSupplier,
-    css::document::XRedlinesSupplier,
-    css::util::XRefreshable,
-    css::util::XLinkUpdate,
-    css::view::XRenderable,
-    css::xforms::XFormsSupplier,
-    css::text::XFlatParagraphIteratorProvider,
-    css::document::XDocumentLanguages,
-    css::util::XCloneable,
-    css::text::XPasteBroadcaster
->
-SwXTextDocumentBaseClass;
+typedef cppu::ImplInheritanceHelper<
+    SfxBaseModel, css::text::XTextDocument, css::text::XLineNumberingProperties,
+    css::text::XChapterNumberingSupplier, css::text::XNumberingRulesSupplier,
+    css::text::XFootnotesSupplier, css::text::XEndnotesSupplier,
+    css::text::XContentControlsSupplier, css::util::XReplaceable, css::text::XPagePrintable,
+    css::text::XReferenceMarksSupplier, css::text::XTextTablesSupplier,
+    css::text::XTextFramesSupplier, css::text::XBookmarksSupplier, css::text::XTextSectionsSupplier,
+    css::text::XTextGraphicObjectsSupplier, css::text::XTextEmbeddedObjectsSupplier,
+    css::text::XTextFieldsSupplier, css::style::XStyleFamiliesSupplier,
+    css::style::XAutoStylesSupplier, css::lang::XServiceInfo, css::drawing::XDrawPageSupplier,
+    css::drawing::XDrawPagesSupplier, css::text::XDocumentIndexesSupplier, css::beans::XPropertySet,
+    css::beans::XPropertyState, css::document::XLinkTargetSupplier,
+    css::document::XRedlinesSupplier, css::util::XRefreshable, css::util::XLinkUpdate,
+    css::view::XRenderable, css::xforms::XFormsSupplier, css::text::XFlatParagraphIteratorProvider,
+    css::document::XDocumentLanguages, css::util::XCloneable, css::text::XPasteBroadcaster>
+    SwXTextDocumentBaseClass;
 
 class SW_DLLPUBLIC SwXTextDocument final : public SwXTextDocumentBaseClass,
-    public SvxFmMSFactory,
-    public vcl::ITiledRenderable,
-    public css::tiledrendering::XTiledRenderable,
-    public wasm::IWriterExtensions // MACRO: Extensions
+                                           public SvxFmMSFactory,
+                                           public vcl::ITiledRenderable,
+                                           public css::tiledrendering::XTiledRenderable,
+                                           public wasm::IWriterExtensions // MACRO: Extensions
 {
 private:
     class Impl;
     ::sw::UnoImplPtr<Impl> m_pImpl;
 
-    std::deque<std::unique_ptr<UnoActionContext, o3tl::default_delete<UnoActionContext>>> maActionArr;
+    std::deque<std::unique_ptr<UnoActionContext, o3tl::default_delete<UnoActionContext>>>
+        maActionArr;
 
     const SfxItemPropertySet* m_pPropSet;
 
-    SwDocShell*             m_pDocShell;
-    bool                    m_bObjectValid;
+    SwDocShell* m_pDocShell;
+    bool m_bObjectValid;
 
-    rtl::Reference<SwFmDrawPage>                                m_xDrawPage;
+    rtl::Reference<SwFmDrawPage> m_xDrawPage;
 
-    rtl::Reference<SwXBodyText>                                 m_xBodyText;
-    css::uno::Reference< css::uno::XAggregation >               m_xNumFormatAgg;
+    rtl::Reference<SwXBodyText> m_xBodyText;
+    css::uno::Reference<css::uno::XAggregation> m_xNumFormatAgg;
 
-    css::uno::Reference< css::container::XIndexAccess >         mxXNumberingRules;
-    css::uno::Reference< css::container::XIndexAccess >         mxXFootnotes;
-    css::uno::Reference< css::beans::XPropertySet >             mxXFootnoteSettings;
-    css::uno::Reference< css::container::XIndexAccess >         mxXEndnotes;
-    css::uno::Reference< css::beans::XPropertySet >             mxXEndnoteSettings;
-    css::uno::Reference< css::container::XIndexAccess >         mxXContentControls;
-    css::uno::Reference< css::container::XNameAccess >          mxXReferenceMarks;
-    css::uno::Reference< css::container::XEnumerationAccess >   mxXTextFieldTypes;
-    css::uno::Reference< css::container::XNameAccess >          mxXTextFieldMasters;
-    css::uno::Reference< css::container::XNameAccess >          mxXTextSections;
-    css::uno::Reference< css::container::XNameAccess >          mxXBookmarks;
-    css::uno::Reference< css::container::XNameAccess >          mxXTextTables;
-    css::uno::Reference< css::container::XNameAccess >          mxXTextFrames;
-    css::uno::Reference< css::container::XNameAccess >          mxXGraphicObjects;
-    css::uno::Reference< css::container::XNameAccess >          mxXEmbeddedObjects;
-    css::uno::Reference< css::container::XNameAccess >          mxXStyleFamilies;
-    mutable css::uno::Reference< css::style::XAutoStyles >      mxXAutoStyles;
-    css::uno::Reference< css::container::XIndexReplace >        mxXChapterNumbering;
-    css::uno::Reference< css::container::XIndexAccess >         mxXDocumentIndexes;
+    css::uno::Reference<css::container::XIndexAccess> mxXNumberingRules;
+    css::uno::Reference<css::container::XIndexAccess> mxXFootnotes;
+    css::uno::Reference<css::beans::XPropertySet> mxXFootnoteSettings;
+    css::uno::Reference<css::container::XIndexAccess> mxXEndnotes;
+    css::uno::Reference<css::beans::XPropertySet> mxXEndnoteSettings;
+    css::uno::Reference<css::container::XIndexAccess> mxXContentControls;
+    css::uno::Reference<css::container::XNameAccess> mxXReferenceMarks;
+    css::uno::Reference<css::container::XEnumerationAccess> mxXTextFieldTypes;
+    css::uno::Reference<css::container::XNameAccess> mxXTextFieldMasters;
+    css::uno::Reference<css::container::XNameAccess> mxXTextSections;
+    css::uno::Reference<css::container::XNameAccess> mxXBookmarks;
+    css::uno::Reference<css::container::XNameAccess> mxXTextTables;
+    css::uno::Reference<css::container::XNameAccess> mxXTextFrames;
+    css::uno::Reference<css::container::XNameAccess> mxXGraphicObjects;
+    css::uno::Reference<css::container::XNameAccess> mxXEmbeddedObjects;
+    css::uno::Reference<css::container::XNameAccess> mxXStyleFamilies;
+    mutable css::uno::Reference<css::style::XAutoStyles> mxXAutoStyles;
+    css::uno::Reference<css::container::XIndexReplace> mxXChapterNumbering;
+    css::uno::Reference<css::container::XIndexAccess> mxXDocumentIndexes;
 
-    css::uno::Reference< css::beans::XPropertySet >             mxXLineNumberingProperties;
-    css::uno::Reference< css::container::XNameAccess >          mxLinkTargetSupplier;
-    css::uno::Reference< css::container::XEnumerationAccess >   mxXRedlines;
+    css::uno::Reference<css::beans::XPropertySet> mxXLineNumberingProperties;
+    css::uno::Reference<css::container::XNameAccess> mxLinkTargetSupplier;
+    css::uno::Reference<css::container::XEnumerationAccess> mxXRedlines;
 
     //temporary frame to enable PDF export if no valid view is available
-    SfxViewFrame*                                   m_pHiddenViewFrame;
-    rtl::Reference<SwXDocumentPropertyHelper>       mxPropertyHelper;
+    SfxViewFrame* m_pHiddenViewFrame;
+    rtl::Reference<SwXDocumentPropertyHelper> mxPropertyHelper;
 
-    std::unique_ptr<SwPrintUIOptions>               m_pPrintUIOptions;
-    std::unique_ptr<SwRenderData>                   m_pRenderData;
+    std::unique_ptr<SwPrintUIOptions> m_pPrintUIOptions;
+    std::unique_ptr<SwRenderData> m_pRenderData;
 
-    void                    GetNumberFormatter();
+    void GetNumberFormatter();
 
-    css::uno::Reference<css::uno::XInterface> create(
-        OUString const & rServiceName,
-        css::uno::Sequence<css::uno::Any> const * arguments);
+    css::uno::Reference<css::uno::XInterface>
+    create(OUString const& rServiceName, css::uno::Sequence<css::uno::Any> const* arguments);
 
     // used for XRenderable implementation
-    SfxViewShell *  GuessViewShell( /* out */ bool &rbIsSwSrcView, const css::uno::Reference< css::frame::XController >& rController = css::uno::Reference< css::frame::XController >() );
-    SwDoc *         GetRenderDoc( SfxViewShell *&rpView, const css::uno::Any& rSelection, bool bIsPDFExport );
-    SfxViewShell *  GetRenderView( bool &rbIsSwSrcView, const css::uno::Sequence< css::beans::PropertyValue >& rxOptions, bool bIsPDFExport );
+    SfxViewShell* GuessViewShell(/* out */ bool& rbIsSwSrcView,
+                                 const css::uno::Reference<css::frame::XController>& rController
+                                 = css::uno::Reference<css::frame::XController>());
+    SwDoc* GetRenderDoc(SfxViewShell*& rpView, const css::uno::Any& rSelection, bool bIsPDFExport);
+    SfxViewShell* GetRenderView(bool& rbIsSwSrcView,
+                                const css::uno::Sequence<css::beans::PropertyValue>& rxOptions,
+                                bool bIsPDFExport);
 
-    OUString           maBuildId;
+    OUString maBuildId;
 
     // boolean for XPagePrintable
     // set in XPagePrintable::printPages(..) to indicate that the PagePrintSettings
@@ -221,175 +216,220 @@ public:
     SwXTextDocument(SwDocShell* pShell);
 
     void NotifyRefreshListeners();
-    virtual     css::uno::Any SAL_CALL queryInterface( const css::uno::Type& aType ) override;
-    virtual void SAL_CALL acquire(  ) noexcept override;
-    virtual void SAL_CALL release(  ) noexcept override;
+    virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& aType) override;
+    virtual void SAL_CALL acquire() noexcept override;
+    virtual void SAL_CALL release() noexcept override;
 
     //XWeak
-    virtual css::uno::Sequence< css::uno::Type > SAL_CALL getTypes(  ) override;
+    virtual css::uno::Sequence<css::uno::Type> SAL_CALL getTypes() override;
 
-    static const css::uno::Sequence< sal_Int8 > & getUnoTunnelId();
+    static const css::uno::Sequence<sal_Int8>& getUnoTunnelId();
 
     //XUnoTunnel
-    virtual sal_Int64 SAL_CALL getSomething( const css::uno::Sequence< sal_Int8 >& aIdentifier ) override;
+    virtual sal_Int64 SAL_CALL
+    getSomething(const css::uno::Sequence<sal_Int8>& aIdentifier) override;
 
     //XTextDocument
-    virtual css::uno::Reference< css::text::XText >  SAL_CALL getText() override;
-    rtl::Reference< SwXBodyText > getBodyText();
+    virtual css::uno::Reference<css::text::XText> SAL_CALL getText() override;
+    rtl::Reference<SwXBodyText> getBodyText();
     virtual void SAL_CALL reformat() override;
 
     //XModel
-    virtual sal_Bool SAL_CALL attachResource( const OUString& aURL, const css::uno::Sequence< css::beans::PropertyValue >& aArgs ) override;
-    virtual OUString SAL_CALL getURL(  ) override;
-    virtual css::uno::Sequence< css::beans::PropertyValue > SAL_CALL getArgs(  ) override;
-    virtual void SAL_CALL connectController( const css::uno::Reference< css::frame::XController >& xController ) override;
-    virtual void SAL_CALL disconnectController( const css::uno::Reference< css::frame::XController >& xController ) override;
-    virtual void SAL_CALL lockControllers(  ) override;
-    virtual void SAL_CALL unlockControllers(  ) override;
-    virtual sal_Bool SAL_CALL hasControllersLocked(  ) override;
-    virtual css::uno::Reference< css::frame::XController > SAL_CALL getCurrentController(  ) override;
-    virtual void SAL_CALL setCurrentController( const css::uno::Reference< css::frame::XController >& xController ) override;
-    virtual css::uno::Reference< css::uno::XInterface > SAL_CALL getCurrentSelection(  ) override;
+    virtual sal_Bool SAL_CALL attachResource(
+        const OUString& aURL, const css::uno::Sequence<css::beans::PropertyValue>& aArgs) override;
+    virtual OUString SAL_CALL getURL() override;
+    virtual css::uno::Sequence<css::beans::PropertyValue> SAL_CALL getArgs() override;
+    virtual void SAL_CALL
+    connectController(const css::uno::Reference<css::frame::XController>& xController) override;
+    virtual void SAL_CALL
+    disconnectController(const css::uno::Reference<css::frame::XController>& xController) override;
+    virtual void SAL_CALL lockControllers() override;
+    virtual void SAL_CALL unlockControllers() override;
+    virtual sal_Bool SAL_CALL hasControllersLocked() override;
+    virtual css::uno::Reference<css::frame::XController> SAL_CALL getCurrentController() override;
+    virtual void SAL_CALL
+    setCurrentController(const css::uno::Reference<css::frame::XController>& xController) override;
+    virtual css::uno::Reference<css::uno::XInterface> SAL_CALL getCurrentSelection() override;
 
     //XComponent
     virtual void SAL_CALL dispose() override;
-    virtual void SAL_CALL addEventListener(const css::uno::Reference< css::lang::XEventListener > & aListener) override;
-    virtual void SAL_CALL removeEventListener(const css::uno::Reference< css::lang::XEventListener > & aListener) override;
+    virtual void SAL_CALL
+    addEventListener(const css::uno::Reference<css::lang::XEventListener>& aListener) override;
+    virtual void SAL_CALL
+    removeEventListener(const css::uno::Reference<css::lang::XEventListener>& aListener) override;
 
     //XCloseable
-    virtual void SAL_CALL close( sal_Bool bDeliverOwnership ) override;
+    virtual void SAL_CALL close(sal_Bool bDeliverOwnership) override;
 
     //XLineNumberingProperties
-    virtual css::uno::Reference< css::beans::XPropertySet > SAL_CALL getLineNumberingProperties() override;
+    virtual css::uno::Reference<css::beans::XPropertySet>
+        SAL_CALL getLineNumberingProperties() override;
 
     //XChapterNumberingSupplier
-    virtual css::uno::Reference< css::container::XIndexReplace >  SAL_CALL getChapterNumberingRules() override;
+    virtual css::uno::Reference<css::container::XIndexReplace>
+        SAL_CALL getChapterNumberingRules() override;
 
     //XNumberingRulesSupplier
-    virtual css::uno::Reference< css::container::XIndexAccess > SAL_CALL getNumberingRules() override;
+    virtual css::uno::Reference<css::container::XIndexAccess> SAL_CALL getNumberingRules() override;
 
     //XFootnotesSupplier
-    virtual css::uno::Reference< css::container::XIndexAccess >  SAL_CALL getFootnotes() override;
-    virtual css::uno::Reference< css::beans::XPropertySet >  SAL_CALL getFootnoteSettings() override;
+    virtual css::uno::Reference<css::container::XIndexAccess> SAL_CALL getFootnotes() override;
+    virtual css::uno::Reference<css::beans::XPropertySet> SAL_CALL getFootnoteSettings() override;
 
     //XEndnotesSupplier
-    virtual css::uno::Reference< css::container::XIndexAccess >  SAL_CALL getEndnotes() override;
-    virtual css::uno::Reference< css::beans::XPropertySet >  SAL_CALL getEndnoteSettings() override;
+    virtual css::uno::Reference<css::container::XIndexAccess> SAL_CALL getEndnotes() override;
+    virtual css::uno::Reference<css::beans::XPropertySet> SAL_CALL getEndnoteSettings() override;
 
     // XContentControlsSupplier
     css::uno::Reference<css::container::XIndexAccess> SAL_CALL getContentControls() override;
 
     //XReplaceable
-    virtual css::uno::Reference< css::util::XReplaceDescriptor >  SAL_CALL createReplaceDescriptor() override;
-    virtual sal_Int32 SAL_CALL replaceAll(const css::uno::Reference< css::util::XSearchDescriptor > & xDesc) override;
+    virtual css::uno::Reference<css::util::XReplaceDescriptor>
+        SAL_CALL createReplaceDescriptor() override;
+    virtual sal_Int32 SAL_CALL
+    replaceAll(const css::uno::Reference<css::util::XSearchDescriptor>& xDesc) override;
 
     //XSearchable
-    virtual css::uno::Reference< css::util::XSearchDescriptor >  SAL_CALL createSearchDescriptor() override;
-    virtual css::uno::Reference< css::container::XIndexAccess >  SAL_CALL findAll(const css::uno::Reference< css::util::XSearchDescriptor > & xDesc) override;
-    virtual css::uno::Reference< css::uno::XInterface >  SAL_CALL findFirst(const css::uno::Reference< css::util::XSearchDescriptor > & xDesc) override;
-    virtual css::uno::Reference< css::uno::XInterface >  SAL_CALL findNext(const css::uno::Reference< css::uno::XInterface > & xStartAt, const css::uno::Reference< css::util::XSearchDescriptor > & xDesc) override;
+    virtual css::uno::Reference<css::util::XSearchDescriptor>
+        SAL_CALL createSearchDescriptor() override;
+    virtual css::uno::Reference<css::container::XIndexAccess>
+        SAL_CALL findAll(const css::uno::Reference<css::util::XSearchDescriptor>& xDesc) override;
+    virtual css::uno::Reference<css::uno::XInterface>
+        SAL_CALL findFirst(const css::uno::Reference<css::util::XSearchDescriptor>& xDesc) override;
+    virtual css::uno::Reference<css::uno::XInterface>
+        SAL_CALL findNext(const css::uno::Reference<css::uno::XInterface>& xStartAt,
+                          const css::uno::Reference<css::util::XSearchDescriptor>& xDesc) override;
 
     //XPagePrintable
-    virtual css::uno::Sequence< css::beans::PropertyValue > SAL_CALL getPagePrintSettings() override;
-    virtual void SAL_CALL setPagePrintSettings(const css::uno::Sequence< css::beans::PropertyValue >& aSettings) override;
-    virtual void SAL_CALL printPages(const css::uno::Sequence< css::beans::PropertyValue >& xOptions) override;
+    virtual css::uno::Sequence<css::beans::PropertyValue> SAL_CALL getPagePrintSettings() override;
+    virtual void SAL_CALL
+    setPagePrintSettings(const css::uno::Sequence<css::beans::PropertyValue>& aSettings) override;
+    virtual void SAL_CALL
+    printPages(const css::uno::Sequence<css::beans::PropertyValue>& xOptions) override;
 
     //XReferenceMarksSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getReferenceMarks() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getReferenceMarks() override;
 
     // css::text::XTextFieldsSupplier
-    virtual css::uno::Reference< css::container::XEnumerationAccess >  SAL_CALL getTextFields() override;
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getTextFieldMasters() override;
+    virtual css::uno::Reference<css::container::XEnumerationAccess>
+        SAL_CALL getTextFields() override;
+    virtual css::uno::Reference<css::container::XNameAccess>
+        SAL_CALL getTextFieldMasters() override;
 
     // css::text::XTextEmbeddedObjectsSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getEmbeddedObjects() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getEmbeddedObjects() override;
 
     // css::text::XBookmarksSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getBookmarks() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getBookmarks() override;
 
     // css::text::XTextSectionsSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getTextSections() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getTextSections() override;
 
     // css::text::XTextTablesSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getTextTables() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getTextTables() override;
 
     // css::text::XTextGraphicObjectsSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getGraphicObjects() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getGraphicObjects() override;
 
     // css::text::XTextFramesSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getTextFrames() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getTextFrames() override;
 
     //XStyleFamiliesSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getStyleFamilies() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getStyleFamilies() override;
 
     //XAutoStylesSupplier
-    virtual css::uno::Reference< css::style::XAutoStyles > SAL_CALL getAutoStyles(  ) override;
+    virtual css::uno::Reference<css::style::XAutoStyles> SAL_CALL getAutoStyles() override;
 
     //XMultiServiceFactory
-    virtual css::uno::Reference< css::uno::XInterface >  SAL_CALL createInstance(const OUString& ServiceSpecifier) override;
-    virtual css::uno::Reference< css::uno::XInterface >  SAL_CALL createInstanceWithArguments(const OUString& ServiceSpecifier,
-                const css::uno::Sequence< css::uno::Any >& Arguments) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getAvailableServiceNames() override;
+    virtual css::uno::Reference<css::uno::XInterface>
+        SAL_CALL createInstance(const OUString& ServiceSpecifier) override;
+    virtual css::uno::Reference<css::uno::XInterface> SAL_CALL
+    createInstanceWithArguments(const OUString& ServiceSpecifier,
+                                const css::uno::Sequence<css::uno::Any>& Arguments) override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getAvailableServiceNames() override;
 
     //XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
 
     // css::drawing::XDrawPageSupplier
-    virtual css::uno::Reference< css::drawing::XDrawPage >  SAL_CALL getDrawPage() override;
+    virtual css::uno::Reference<css::drawing::XDrawPage> SAL_CALL getDrawPage() override;
 
     // css::drawing::XDrawPagesSupplier
-    virtual css::uno::Reference< css::drawing::XDrawPages > SAL_CALL getDrawPages() override;
+    virtual css::uno::Reference<css::drawing::XDrawPages> SAL_CALL getDrawPages() override;
 
     // css::text::XDocumentIndexesSupplier
-    virtual css::uno::Reference< css::container::XIndexAccess >  SAL_CALL getDocumentIndexes() override;
+    virtual css::uno::Reference<css::container::XIndexAccess>
+        SAL_CALL getDocumentIndexes() override;
 
     //XPropertySet
-    virtual css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL getPropertySetInfo(  ) override;
-    virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override;
-    virtual css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;
-    virtual void SAL_CALL addPropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& xListener ) override;
-    virtual void SAL_CALL removePropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& aListener ) override;
-    virtual void SAL_CALL addVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
-    virtual void SAL_CALL removeVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
+    virtual css::uno::Reference<css::beans::XPropertySetInfo>
+        SAL_CALL getPropertySetInfo() override;
+    virtual void SAL_CALL setPropertyValue(const OUString& aPropertyName,
+                                           const css::uno::Any& aValue) override;
+    virtual css::uno::Any SAL_CALL getPropertyValue(const OUString& PropertyName) override;
+    virtual void SAL_CALL addPropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& xListener) override;
+    virtual void SAL_CALL removePropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& aListener) override;
+    virtual void SAL_CALL addVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
+    virtual void SAL_CALL removeVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
 
     //XPropertyState
-    virtual css::beans::PropertyState SAL_CALL getPropertyState( const OUString& rPropertyName ) override;
-    virtual css::uno::Sequence< css::beans::PropertyState > SAL_CALL getPropertyStates( const css::uno::Sequence< OUString >& rPropertyNames ) override;
-    virtual void SAL_CALL setPropertyToDefault( const OUString& rPropertyName ) override;
-    virtual css::uno::Any SAL_CALL getPropertyDefault( const OUString& rPropertyName ) override;
+    virtual css::beans::PropertyState SAL_CALL
+    getPropertyState(const OUString& rPropertyName) override;
+    virtual css::uno::Sequence<css::beans::PropertyState>
+        SAL_CALL getPropertyStates(const css::uno::Sequence<OUString>& rPropertyNames) override;
+    virtual void SAL_CALL setPropertyToDefault(const OUString& rPropertyName) override;
+    virtual css::uno::Any SAL_CALL getPropertyDefault(const OUString& rPropertyName) override;
 
     //XLinkTargetSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getLinks() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getLinks() override;
 
     //XRedlinesSupplier
-    virtual css::uno::Reference< css::container::XEnumerationAccess > SAL_CALL getRedlines(  ) override;
+    virtual css::uno::Reference<css::container::XEnumerationAccess> SAL_CALL getRedlines() override;
 
     // css::util::XRefreshable
     virtual void SAL_CALL refresh() override;
-    virtual void SAL_CALL addRefreshListener(const css::uno::Reference< css::util::XRefreshListener > & l) override;
-    virtual void SAL_CALL removeRefreshListener(const css::uno::Reference< css::util::XRefreshListener > & l) override;
+    virtual void SAL_CALL
+    addRefreshListener(const css::uno::Reference<css::util::XRefreshListener>& l) override;
+    virtual void SAL_CALL
+    removeRefreshListener(const css::uno::Reference<css::util::XRefreshListener>& l) override;
 
     // css::util::XLinkUpdate,
-    virtual void SAL_CALL updateLinks(  ) override;
+    virtual void SAL_CALL updateLinks() override;
 
     // css::view::XRenderable
-    virtual sal_Int32 SAL_CALL getRendererCount( const css::uno::Any& aSelection, const css::uno::Sequence< css::beans::PropertyValue >& xOptions ) override;
-    virtual css::uno::Sequence< css::beans::PropertyValue > SAL_CALL getRenderer( sal_Int32 nRenderer, const css::uno::Any& aSelection, const css::uno::Sequence< css::beans::PropertyValue >& xOptions ) override;
-    virtual void SAL_CALL render( sal_Int32 nRenderer, const css::uno::Any& aSelection, const css::uno::Sequence< css::beans::PropertyValue >& xOptions ) override;
+    virtual sal_Int32 SAL_CALL
+    getRendererCount(const css::uno::Any& aSelection,
+                     const css::uno::Sequence<css::beans::PropertyValue>& xOptions) override;
+    virtual css::uno::Sequence<css::beans::PropertyValue> SAL_CALL
+    getRenderer(sal_Int32 nRenderer, const css::uno::Any& aSelection,
+                const css::uno::Sequence<css::beans::PropertyValue>& xOptions) override;
+    virtual void SAL_CALL
+    render(sal_Int32 nRenderer, const css::uno::Any& aSelection,
+           const css::uno::Sequence<css::beans::PropertyValue>& xOptions) override;
 
     // css::xforms::XFormsSupplier
-    virtual css::uno::Reference< css::container::XNameContainer > SAL_CALL getXForms(  ) override;
+    virtual css::uno::Reference<css::container::XNameContainer> SAL_CALL getXForms() override;
 
     // css::document::XDocumentLanguages
-    virtual css::uno::Sequence< css::lang::Locale > SAL_CALL getDocumentLanguages( ::sal_Int16 nScriptTypes, ::sal_Int16 nCount ) override;
+    virtual css::uno::Sequence<css::lang::Locale>
+        SAL_CALL getDocumentLanguages(::sal_Int16 nScriptTypes, ::sal_Int16 nCount) override;
 
     // css::text::XFlatParagraphIteratorProvider:
-    virtual css::uno::Reference< css::text::XFlatParagraphIterator > SAL_CALL getFlatParagraphIterator(::sal_Int32 nTextMarkupType, sal_Bool bAutomatic ) override;
+    virtual css::uno::Reference<css::text::XFlatParagraphIterator> SAL_CALL
+    getFlatParagraphIterator(::sal_Int32 nTextMarkupType, sal_Bool bAutomatic) override;
 
     // css::util::XCloneable
-    virtual css::uno::Reference< css::util::XCloneable > SAL_CALL createClone(  ) override;
+    virtual css::uno::Reference<css::util::XCloneable> SAL_CALL createClone() override;
 
     // css::text::XPasteBroadcaster
     void SAL_CALL addPasteEventListener(
@@ -398,13 +438,9 @@ public:
         const ::css::uno::Reference<::css::text::XPasteListener>& xListener) override;
 
     /// @see vcl::ITiledRenderable::paintTile().
-    virtual void paintTile( VirtualDevice &rDevice,
-                            int nOutputWidth,
-                            int nOutputHeight,
-                            int nTilePosX,
-                            int nTilePosY,
-                            tools::Long nTileWidth,
-                            tools::Long nTileHeight ) override;
+    virtual void paintTile(VirtualDevice& rDevice, int nOutputWidth, int nOutputHeight,
+                           int nTilePosX, int nTilePosY, tools::Long nTileWidth,
+                           tools::Long nTileHeight) override;
     /// @see vcl::ITiledRenderable::getDocumentSize().
     virtual Size getDocumentSize() override;
     /// @see vcl::ITiledRenderable::setPart().
@@ -420,7 +456,8 @@ public:
     /// @see vcl::ITiledRenderable::getDocWindow().
     virtual VclPtr<vcl::Window> getDocWindow() override;
     /// @see vcl::ITiledRenderable::initializeForTiledRendering().
-    virtual void initializeForTiledRendering(const css::uno::Sequence<css::beans::PropertyValue>& rArguments) override;
+    virtual void initializeForTiledRendering(
+        const css::uno::Sequence<css::beans::PropertyValue>& rArguments) override;
 
     // MACRO: {
 
@@ -428,16 +465,18 @@ public:
     virtual void setAuthor(OUString sAuthor) override;
     // For MACRO-1212
     /// @see vcl::ITiledRenderable::batchUpdateTrackChange().
-    void batchUpdateTrackChange( const css::uno::Sequence<sal_uInt32>& rArguments, bool accept) override;
+    void batchUpdateTrackChange(const css::uno::Sequence<sal_uInt32>& rArguments,
+                                bool accept) override;
     // MACRO-1392: Request layout updates for redlines
-    void updateRedlines( const css::uno::Sequence<sal_uInt32>& rArguments) override;
+    void updateRedlines(const css::uno::Sequence<sal_uInt32>& rArguments) override;
 
     // MACRO: }
 
     /// @see vcl::ITiledRenderable::postKeyEvent().
     virtual void postKeyEvent(int nType, int nCharCode, int nKeyCode) override;
     /// @see vcl::ITiledRenderable::postMouseEvent().
-    virtual void postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons, int nModifier) override;
+    virtual void postMouseEvent(int nType, int nX, int nY, int nCount, int nButtons,
+                                int nModifier) override;
     /// @see vcl::ITiledRenderable::setTextSelection().
     virtual void setTextSelection(int nType, int nX, int nY) override;
     /// @see vcl::ITiledRenderable::getSelection().
@@ -449,13 +488,15 @@ public:
     /// @see vcl::ITiledRenderable::getPartPageRectangles().
     virtual OUString getPartPageRectangles() override;
     /// @see vcl::ITiledRenderable::setClipboard().
-    virtual void setClipboard(const css::uno::Reference<css::datatransfer::clipboard::XClipboard>& xClipboard) override;
+    virtual void setClipboard(
+        const css::uno::Reference<css::datatransfer::clipboard::XClipboard>& xClipboard) override;
     /// @see vcl::ITiledRenderable::isMimeTypeSupported().
     virtual bool isMimeTypeSupported() override;
     /// @see vcl::ITiledRenderable::setClientVisibleArea().
     virtual void setClientVisibleArea(const tools::Rectangle& rRectangle) override;
     /// @see vcl::ITiledRenderable::setClientZoom.
-    virtual void setClientZoom(int nTilePixelWidth_, int nTilePixelHeight_, int nTileTwipWidth_, int nTileTwipHeight_) override;
+    virtual void setClientZoom(int nTilePixelWidth_, int nTilePixelHeight_, int nTileTwipWidth_,
+                               int nTileTwipHeight_) override;
     /// @see vcl::ITiledRenderable::getPointer().
     virtual PointerStyle getPointer() override;
     /// @see vcl::ITiledRenderable::getTrackedChanges().
@@ -474,7 +515,10 @@ public:
     std::vector<basegfx::B2DRange> getSearchResultRectangles(const char* pPayload) override;
 
     // css::tiledrendering::XTiledRenderable
-    virtual void SAL_CALL paintTile( const ::css::uno::Any& Parent, ::sal_Int32 nOutputWidth, ::sal_Int32 nOutputHeight, ::sal_Int32 nTilePosX, ::sal_Int32 nTilePosY, ::sal_Int32 nTileWidth, ::sal_Int32 nTileHeight ) override;
+    virtual void SAL_CALL paintTile(const ::css::uno::Any& Parent, ::sal_Int32 nOutputWidth,
+                                    ::sal_Int32 nOutputHeight, ::sal_Int32 nTilePosX,
+                                    ::sal_Int32 nTilePosY, ::sal_Int32 nTileWidth,
+                                    ::sal_Int32 nTileHeight) override;
 
     /// @see vcl::ITiledRenderable::executeContentControlEvent().
     void executeContentControlEvent(const StringMap& aArguments) override;
@@ -488,20 +532,20 @@ public:
     /// @see vcl::ITiledRenderable::supportsCommand().
     bool supportsCommand(std::u16string_view rCommand) override;
 
-    void                        Invalidate();
-    void                        Reactivate(SwDocShell* pNewDocShell);
-    SwXDocumentPropertyHelper * GetPropertyHelper ();
-    bool                    IsValid() const {return m_bObjectValid;}
+    void Invalidate();
+    void Reactivate(SwDocShell* pNewDocShell);
+    SwXDocumentPropertyHelper* GetPropertyHelper();
+    bool IsValid() const { return m_bObjectValid; }
 
-    void                        InitNewDoc();
+    void InitNewDoc();
 
-    SwUnoCursor* CreateCursorForSearch(css::uno::Reference< css::text::XTextCursor > & xCursor);
-    SwUnoCursor* FindAny(const css::uno::Reference< css::util::XSearchDescriptor > & xDesc,
-                                            css::uno::Reference< css::text::XTextCursor > & xCursor, bool bAll,
-                                            sal_Int32& nResult,
-                                            css::uno::Reference< css::uno::XInterface > const & xLastResult);
+    SwUnoCursor* CreateCursorForSearch(css::uno::Reference<css::text::XTextCursor>& xCursor);
+    SwUnoCursor* FindAny(const css::uno::Reference<css::util::XSearchDescriptor>& xDesc,
+                         css::uno::Reference<css::text::XTextCursor>& xCursor, bool bAll,
+                         sal_Int32& nResult,
+                         css::uno::Reference<css::uno::XInterface> const& xLastResult);
 
-    SwDocShell*                 GetDocShell() {return m_pDocShell;}
+    SwDocShell* GetDocShell() { return m_pDocShell; }
 
     /// MACRO-2313: WASM Writer extensions {
     emscripten::val comments() override;
@@ -514,17 +558,21 @@ public:
     void sanitize(emscripten::val options) override;
     emscripten::val pageRects() override;
     emscripten::val headerFooterRect() override;
-    emscripten::val paragraphStyles() override;
-    std::shared_ptr<wasm::ITextRanges> findAllTextRanges(const std::string& text, emscripten::val flags) override;
+    virtual emscripten::val
+    paragraphStyles(emscripten::val (*unoAnyToVal)(const css::uno::Any& any),
+                    const css::uno::Reference<css::container::XNameAccess> xStyles,
+                    const emscripten::val& properties,
+                    const css::uno::Sequence<rtl::OUString>& names) override;
+    std::shared_ptr<wasm::ITextRanges> findAllTextRanges(const std::string& text,
+                                                         emscripten::val flags) override;
     void cancelFindOrReplace() override;
+    emscripten::val getOutline() override;
+    emscripten::val gotoOutline(int outlineIndex) override;
     /// MACRO-2313: }
 };
 
-class SwXLinkTargetSupplier final : public cppu::WeakImplHelper
-<
-    css::container::XNameAccess,
-    css::lang::XServiceInfo
->
+class SwXLinkTargetSupplier final
+    : public cppu::WeakImplHelper<css::container::XNameAccess, css::lang::XServiceInfo>
 {
     SwXTextDocument* m_pxDoc;
     OUString m_sTables;
@@ -542,145 +590,169 @@ public:
 
     //XNameAccess
     virtual css::uno::Any SAL_CALL getByName(const OUString& Name) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getElementNames() override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getElementNames() override;
     virtual sal_Bool SAL_CALL hasByName(const OUString& Name) override;
 
     //XElementAccess
-    virtual css::uno::Type SAL_CALL getElementType(  ) override;
-    virtual sal_Bool SAL_CALL hasElements(  ) override;
+    virtual css::uno::Type SAL_CALL getElementType() override;
+    virtual sal_Bool SAL_CALL hasElements() override;
 
     //XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
 
-    void    Invalidate() {m_pxDoc = nullptr;}
+    void Invalidate() { m_pxDoc = nullptr; }
 };
 
-class SwXLinkNameAccessWrapper final : public cppu::WeakImplHelper
-<
-    css::beans::XPropertySet,
-    css::container::XNameAccess,
-    css::lang::XServiceInfo,
-    css::document::XLinkTargetSupplier
->
+class SwXLinkNameAccessWrapper final
+    : public cppu::WeakImplHelper<css::beans::XPropertySet, css::container::XNameAccess,
+                                  css::lang::XServiceInfo, css::document::XLinkTargetSupplier>
 {
-    css::uno::Reference< css::container::XNameAccess >    m_xRealAccess;
-    const SfxItemPropertySet*                             m_pPropSet;
-    const OUString                                        m_sLinkSuffix;
-    const OUString                                        m_sLinkDisplayName;
-    SwXTextDocument*                                      m_pxDoc;
+    css::uno::Reference<css::container::XNameAccess> m_xRealAccess;
+    const SfxItemPropertySet* m_pPropSet;
+    const OUString m_sLinkSuffix;
+    const OUString m_sLinkDisplayName;
+    SwXTextDocument* m_pxDoc;
 
 public:
-    SwXLinkNameAccessWrapper(css::uno::Reference< css::container::XNameAccess >  const & xAccess,
-            OUString aLinkDisplayName, OUString  sSuffix);
-    SwXLinkNameAccessWrapper(SwXTextDocument& rxDoc,
-            OUString aLinkDisplayName, OUString sSuffix);
+    SwXLinkNameAccessWrapper(css::uno::Reference<css::container::XNameAccess> const& xAccess,
+                             OUString aLinkDisplayName, OUString sSuffix);
+    SwXLinkNameAccessWrapper(SwXTextDocument& rxDoc, OUString aLinkDisplayName, OUString sSuffix);
     virtual ~SwXLinkNameAccessWrapper() override;
 
     //XNameAccess
     virtual css::uno::Any SAL_CALL getByName(const OUString& Name) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getElementNames() override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getElementNames() override;
     virtual sal_Bool SAL_CALL hasByName(const OUString& Name) override;
 
     //XElementAccess
-    virtual css::uno::Type SAL_CALL getElementType(  ) override;
-    virtual sal_Bool SAL_CALL hasElements(  ) override;
+    virtual css::uno::Type SAL_CALL getElementType() override;
+    virtual sal_Bool SAL_CALL hasElements() override;
 
     //XPropertySet
-    virtual css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL getPropertySetInfo(  ) override;
-    virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override;
-    virtual css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;
-    virtual void SAL_CALL addPropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& xListener ) override;
-    virtual void SAL_CALL removePropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& aListener ) override;
-    virtual void SAL_CALL addVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
-    virtual void SAL_CALL removeVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
+    virtual css::uno::Reference<css::beans::XPropertySetInfo>
+        SAL_CALL getPropertySetInfo() override;
+    virtual void SAL_CALL setPropertyValue(const OUString& aPropertyName,
+                                           const css::uno::Any& aValue) override;
+    virtual css::uno::Any SAL_CALL getPropertyValue(const OUString& PropertyName) override;
+    virtual void SAL_CALL addPropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& xListener) override;
+    virtual void SAL_CALL removePropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& aListener) override;
+    virtual void SAL_CALL addVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
+    virtual void SAL_CALL removeVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
 
     //XLinkTargetSupplier
-    virtual css::uno::Reference< css::container::XNameAccess >  SAL_CALL getLinks() override;
+    virtual css::uno::Reference<css::container::XNameAccess> SAL_CALL getLinks() override;
 
     //XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
-
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
 };
 
-class SwXOutlineTarget final : public cppu::WeakImplHelper
-<
-    css::beans::XPropertySet,
-    css::lang::XServiceInfo
->
+class SwXOutlineTarget final
+    : public cppu::WeakImplHelper<css::beans::XPropertySet, css::lang::XServiceInfo>
 {
-    const SfxItemPropertySet*   m_pPropSet;
-    OUString                    m_sOutlineText;
-    OUString                    m_sActualText;
-    const sal_Int32             m_nOutlineLevel;
+    const SfxItemPropertySet* m_pPropSet;
+    OUString m_sOutlineText;
+    OUString m_sActualText;
+    const sal_Int32 m_nOutlineLevel;
 
 public:
-    SwXOutlineTarget(OUString aOutlineText, OUString aActualText,
-                     const sal_Int32 nOutlineLevel);
+    SwXOutlineTarget(OUString aOutlineText, OUString aActualText, const sal_Int32 nOutlineLevel);
     virtual ~SwXOutlineTarget() override;
 
     //XPropertySet
-    virtual css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL getPropertySetInfo(  ) override;
-    virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override;
-    virtual css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;
-    virtual void SAL_CALL addPropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& xListener ) override;
-    virtual void SAL_CALL removePropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& aListener ) override;
-    virtual void SAL_CALL addVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
-    virtual void SAL_CALL removeVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
+    virtual css::uno::Reference<css::beans::XPropertySetInfo>
+        SAL_CALL getPropertySetInfo() override;
+    virtual void SAL_CALL setPropertyValue(const OUString& aPropertyName,
+                                           const css::uno::Any& aValue) override;
+    virtual css::uno::Any SAL_CALL getPropertyValue(const OUString& PropertyName) override;
+    virtual void SAL_CALL addPropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& xListener) override;
+    virtual void SAL_CALL removePropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& aListener) override;
+    virtual void SAL_CALL addVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
+    virtual void SAL_CALL removeVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
 
     //XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
 };
 
-class SwXDrawingObjectTarget final : public cppu::WeakImplHelper
-<
-    css::beans::XPropertySet,
-    css::lang::XServiceInfo
->
+class SwXDrawingObjectTarget final
+    : public cppu::WeakImplHelper<css::beans::XPropertySet, css::lang::XServiceInfo>
 {
-    const SfxItemPropertySet*   m_pPropSet;
-    OUString                    m_sDrawingObjectText;
+    const SfxItemPropertySet* m_pPropSet;
+    OUString m_sDrawingObjectText;
 
 public:
     SwXDrawingObjectTarget(OUString aDrawingObjectText);
     virtual ~SwXDrawingObjectTarget() override;
 
     //XPropertySet
-    virtual css::uno::Reference< css::beans::XPropertySetInfo > SAL_CALL getPropertySetInfo(  ) override;
-    virtual void SAL_CALL setPropertyValue( const OUString& aPropertyName, const css::uno::Any& aValue ) override;
-    virtual css::uno::Any SAL_CALL getPropertyValue( const OUString& PropertyName ) override;
-    virtual void SAL_CALL addPropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& xListener ) override;
-    virtual void SAL_CALL removePropertyChangeListener( const OUString& aPropertyName, const css::uno::Reference< css::beans::XPropertyChangeListener >& aListener ) override;
-    virtual void SAL_CALL addVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
-    virtual void SAL_CALL removeVetoableChangeListener( const OUString& PropertyName, const css::uno::Reference< css::beans::XVetoableChangeListener >& aListener ) override;
+    virtual css::uno::Reference<css::beans::XPropertySetInfo>
+        SAL_CALL getPropertySetInfo() override;
+    virtual void SAL_CALL setPropertyValue(const OUString& aPropertyName,
+                                           const css::uno::Any& aValue) override;
+    virtual css::uno::Any SAL_CALL getPropertyValue(const OUString& PropertyName) override;
+    virtual void SAL_CALL addPropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& xListener) override;
+    virtual void SAL_CALL removePropertyChangeListener(
+        const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& aListener) override;
+    virtual void SAL_CALL addVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
+    virtual void SAL_CALL removeVetoableChangeListener(
+        const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
 
     //XServiceInfo
     virtual OUString SAL_CALL getImplementationName() override;
     virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override;
-    virtual css::uno::Sequence< OUString > SAL_CALL getSupportedServiceNames() override;
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override;
 };
 
-
-enum class SwCreateDrawTable {
-    Dash = 1, Gradient, Hatch, Bitmap, TransGradient, Marker, Defaults
+enum class SwCreateDrawTable
+{
+    Dash = 1,
+    Gradient,
+    Hatch,
+    Bitmap,
+    TransGradient,
+    Marker,
+    Defaults
 };
 
 class SwXDocumentPropertyHelper final : public SvxUnoForbiddenCharsTable
 {
-    css::uno::Reference < css::uno::XInterface > m_xDashTable;
-    css::uno::Reference < css::uno::XInterface > m_xGradientTable;
-    css::uno::Reference < css::uno::XInterface > m_xHatchTable;
-    css::uno::Reference < css::uno::XInterface > m_xBitmapTable;
-    css::uno::Reference < css::uno::XInterface > m_xTransGradientTable;
-    css::uno::Reference < css::uno::XInterface > m_xMarkerTable;
-    css::uno::Reference < css::uno::XInterface > m_xDrawDefaults;
+    css::uno::Reference<css::uno::XInterface> m_xDashTable;
+    css::uno::Reference<css::uno::XInterface> m_xGradientTable;
+    css::uno::Reference<css::uno::XInterface> m_xHatchTable;
+    css::uno::Reference<css::uno::XInterface> m_xBitmapTable;
+    css::uno::Reference<css::uno::XInterface> m_xTransGradientTable;
+    css::uno::Reference<css::uno::XInterface> m_xMarkerTable;
+    css::uno::Reference<css::uno::XInterface> m_xDrawDefaults;
 
-    SwDoc*  m_pDoc;
+    SwDoc* m_pDoc;
+
 public:
     SwXDocumentPropertyHelper(SwDoc& rDoc);
     virtual ~SwXDocumentPropertyHelper() override;
@@ -697,14 +769,14 @@ public:
 // After printing the view options are restored
 class SwViewOptionAdjust_Impl
 {
-    SwViewShell *   m_pShell;
-    SwViewOption    m_aOldViewOptions;
+    SwViewShell* m_pShell;
+    SwViewOption m_aOldViewOptions;
+
 public:
-    SwViewOptionAdjust_Impl( SwViewShell& rSh, const SwViewOption &rViewOptions );
+    SwViewOptionAdjust_Impl(SwViewShell& rSh, const SwViewOption& rViewOptions);
     ~SwViewOptionAdjust_Impl();
-    void AdjustViewOptions( SwPrintData const* const pPrtOptions, bool setShowPlaceHoldersInPDF );
-    bool checkShell( const SwViewShell& rCompare ) const
-    { return &rCompare == m_pShell; }
+    void AdjustViewOptions(SwPrintData const* const pPrtOptions, bool setShowPlaceHoldersInPDF);
+    bool checkShell(const SwViewShell& rCompare) const { return &rCompare == m_pShell; }
     void DontTouchThatViewShellItSmellsFunny() { m_pShell = nullptr; }
 };
 

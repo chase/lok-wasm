@@ -3,6 +3,6 @@
 BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")"/.. &>/dev/null && pwd)
 LO="$BASE_DIR"/libreoffice-core
 
-cd "$LO"/desktop/wasm
-([ ! -f node_modules/.bin/tsc ] && npm install) && \
-  node node_modules/.bin/tsc --watch -p tsconfig.json --outDir "$LO"/instdir/program
+cd "$LO"/desktop/wasm || exit
+([ ! -f node_modules/.bin/tsc ] && npm install)
+node node_modules/.bin/tsc --watch -p tsconfig.json --outDir "$LO"/instdir/program

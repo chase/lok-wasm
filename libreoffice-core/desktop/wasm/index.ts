@@ -4,7 +4,6 @@ import {
   DocumentClient,
   DocumentClientBase,
   DocumentMethods,
-  DocumentRef,
   DocumentWithViewMethods,
   ForwardedFromWorker,
   ForwardedResolver,
@@ -19,6 +18,7 @@ import {
   ToWorker,
   WorkerCallback,
 } from './shared';
+import { DocumentRef } from './soffice';
 
 /** rendered tile size in pixels */
 export const TILE_DIM_PX = 256;
@@ -384,3 +384,7 @@ if (import.meta.hot) {
     import.meta.hot.data.counter = counter.current;
   });
 }
+
+export * from './shared'
+export * from './soffice'
+export * from './lok_enums'

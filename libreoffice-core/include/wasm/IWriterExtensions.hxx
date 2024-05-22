@@ -1,7 +1,15 @@
 #pragma once
 
+#include <rtl/ustring.hxx>
 #include <vcl/dllapi.h>
 #include <emscripten/val.h>
+#include <com/sun/star/uno/Sequence.h>
+#include <com/sun/star/uno/Reference.h>
+
+namespace com::sun::star::container
+{
+class XNameAccess;
+}
 
 namespace wasm
 {
@@ -35,12 +43,21 @@ public:
     virtual void sanitize(val /* options */){};
     virtual val pageRects() { return {}; };
     virtual val headerFooterRect() { return {}; };
-    virtual val paragraphStyles() { return {}; };
+    virtual val
+    paragraphStyles(val (* /*unoAnyToVal*/)(const css::uno::Any& any),
+                    const css::uno::Reference<css::container::XNameAccess> /* xStyles */,
+                    const val& /* properties */,
+                    const css::uno::Sequence<rtl::OUString>& /* names */)
+    {
+        return {};
+    };
     virtual std::shared_ptr<ITextRanges> findAllTextRanges(const std::string& /* text */,
                                                            val /* flags */)
     {
         return {};
     };
     virtual void cancelFindOrReplace() {};
+    virtual val getOutline() { return {}; }
+    virtual val gotoOutline(int /* outlineIndex */) { return {}; };
 };
 }

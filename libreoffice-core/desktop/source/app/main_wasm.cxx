@@ -35,6 +35,7 @@
 #include <vcl/ITiledRenderable.hxx>
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
+#include <o3tl/any.hxx>
 
 namespace
 {
@@ -99,27 +100,25 @@ val unoAnyToVal(const css::uno::Any& any)
         case TypeClass::TypeClass_CHAR:
             return val(*static_cast<sal_Unicode const*>(any.getValue()));
         case TypeClass::TypeClass_BOOLEAN:
-            return val(any.get<bool>());
+            return val(*o3tl::forceAccess<bool>(any));
         case TypeClass::TypeClass_BYTE:
         case TypeClass::TypeClass_SHORT:
         case TypeClass::TypeClass_LONG:
         case TypeClass::TypeClass_HYPER:
-            return val(any.get<sal_Int32>());
+            return val(*o3tl::forceAccess<sal_Int32>(any));
         case TypeClass::TypeClass_UNSIGNED_LONG:
         case TypeClass::TypeClass_UNSIGNED_SHORT:
         case TypeClass::TypeClass_UNSIGNED_HYPER:
-            return val(any.get<sal_uInt32>());
+            return val(*o3tl::forceAccess<sal_uInt32>(any));
         case TypeClass::TypeClass_FLOAT:
         case TypeClass::TypeClass_DOUBLE:
-            return val(any.get<double>());
+            return val(*o3tl::forceAccess<double>(any));
         case TypeClass::TypeClass_STRING:
             return val::u16string(any.get<rtl::OUString>().getStr());
         case TypeClass::TypeClass_TYPE:
-            return val(any.get<Type>().getTypeName());
+            return val(o3tl::forceAccess<Type>(any)->getTypeName());
         case TypeClass::TypeClass_ENUM:
-            return val(any.get<sal_Int32>());
-        case TypeClass::TypeClass_ANY:
-            return val(any.get<sal_Int32>());
+            return val(*static_cast<sal_Int32 const*>(any.getValue()));
         case TypeClass::TypeClass_STRUCT:
         case TypeClass::TypeClass_EXCEPTION:
         {
@@ -149,6 +148,7 @@ val unoAnyToVal(const css::uno::Any& any)
         case TypeClass::TypeClass_CONSTANTS:
         case TypeClass::TypeClass_SINGLETON:
         case TypeClass::TypeClass_MAKE_FIXED_SIZE:
+        case TypeClass::TypeClass_ANY:
         {
             EM_ASM({ console.error('unsupported uno::any type'); });
             return val::null();
@@ -606,6 +606,7 @@ public:
         Sequence<Any> values = xStyleProp->getPropertyValues(names);
         Any* valuesArray = values.getArray();
         val result = val::object();
+        result.set("name", val(name));
         for (sal_uInt32 i = 0; i < len; ++i)
         {
             result.set(properties[i], unoAnyToVal(valuesArray[i]));
@@ -628,13 +629,21 @@ public:
     void sanitize(val options) { writer()->sanitize(std::move(options)); }
     val pageRects() { return writer()->pageRects(); }
     val headerFooterRect() { return writer()->headerFooterRect(); }
-    val paragraphStyles() { return writer()->paragraphStyles(); }
+    val paragraphStyles(val properties)
+    {
+        using namespace css::uno;
+        Sequence<rtl::OUString> names = valStrArrayToSequence(properties);
+        return writer()->paragraphStyles(unoAnyToVal, _paragraphStyles(), properties, names);
+    }
 
     std::shared_ptr<wasm::ITextRanges> findAll(std::string text, val options)
     {
-        find_text_ranges_ = writer()->findAllTextRanges(text, std::move(options));
-        return find_text_ranges_;
+        return writer()->findAllTextRanges(text, std::move(options));
     }
+
+    val getOutline() { return writer()->getOutline(); }
+    val gotoOutline(int idx) { return writer()->gotoOutline(idx); }
+    void setAuthor(std::string author) { doc_->setAuthor(author.c_str()); }
 
 private:
     struct DocWithId
@@ -770,5 +779,8 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("resolveCommentThread", &DocumentClient::resolveCommentThread)
         .function("resolveComment", &DocumentClient::resolveComment)
         .function("sanitize", &DocumentClient::sanitize)
+        .function("gotoOutline", &DocumentClient::gotoOutline)
+        .function("getOutline", &DocumentClient::getOutline)
+        .function("setAuthor", &DocumentClient::setAuthor)
         .function("newView", &DocumentClient::newView);
 }

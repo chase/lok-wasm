@@ -27,7 +27,7 @@ function domMouseButtonsToVclButtons(evt: PartialMouseEvent) {
 
 function handleMouseEvent(
   doc: DocumentClient,
-  evt: MouseEvent
+  evt: MouseEvent | PartialMouseEvent
 ): [x: number, y: number] {
   const [getZoom] = getOrCreateZoomSignal(() => doc);
   const zoom = getZoom();
@@ -61,8 +61,16 @@ export function handleMouseUp(doc: DocumentClient, evt: MouseEvent) {
   );
 }
 
-export type PartialMouseEvent = Pick<MouseEvent,
-  'metaKey' | 'altKey' | 'shiftKey' | 'ctrlKey' | 'offsetX' | 'offsetY' | 'buttons'>;
+export type PartialMouseEvent = Pick<
+  MouseEvent,
+  | 'metaKey'
+  | 'altKey'
+  | 'shiftKey'
+  | 'ctrlKey'
+  | 'offsetX'
+  | 'offsetY'
+  | 'buttons'
+>;
 
 let lastMouseMove = Date.now();
 export function handleMouseMove(doc: DocumentClient, evt: PartialMouseEvent) {

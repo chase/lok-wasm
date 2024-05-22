@@ -30,16 +30,22 @@
 #include <com/sun/star/util/XSearchDescriptor.hpp>
 #include <memory>
 #include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/text/XWordCursor.hpp>
 #include <com/sun/star/text/XTextViewCursorSupplier.hpp>
 #include <com/sun/star/text/XTextViewCursor.hpp>
 #include <com/sun/star/text/XTextRangeCompare.hpp>
 #include <com/sun/star/frame/XModel.hpp>
+#include <com/sun/star/beans/XMultiPropertySet.hpp>
 #include <emscripten/console.h>
 #include <rtl/ref.hxx>
 #include <unotextrange.hxx>
 #include <SwRewriter.hxx>
 #include <UndoInsert.hxx>
+#include <ndarr.hxx>
+#include <IDocumentOutlineNodes.hxx>
+#include <ndtxt.hxx>
+#include <txtfrm.hxx>
 
 using namespace emscripten;
 
@@ -358,7 +364,35 @@ val SwXTextDocument::headerFooterRect()
     return result;
 }
 
-val SwXTextDocument::paragraphStyles()
+namespace
+{
+val paragraphStyle(val (*unoAnyToVal)(const css::uno::Any& any), SfxStyleSheetBase* pStyle,
+                   const uno::Reference<container::XNameAccess>& xParaStyles, const val& properties,
+                   const uno::Sequence<rtl::OUString>& names)
+{
+    using namespace css::uno;
+    Reference<style::XStyle> xStyle(xParaStyles->getByName(pStyle->GetName()), UNO_QUERY);
+    Reference<beans::XMultiPropertySet> xStyleProp(xStyle, UNO_QUERY);
+    if (!xStyleProp.is())
+        return val::undefined();
+
+    val r = val::object();
+    r.set("name", val::u16string(pStyle->GetName().getStr()));
+    uno::Sequence<uno::Any> values = xStyleProp->getPropertyValues(names);
+    Any* valuesArray = values.getArray();
+    for (sal_uInt32 i = 0; i < (sal_uInt32)names.getLength(); ++i)
+    {
+        r.set(properties[i], unoAnyToVal(valuesArray[i]));
+    }
+
+    return r;
+}
+}
+
+val SwXTextDocument::paragraphStyles(val (*unoAnyToVal)(const css::uno::Any& any),
+                                     const css::uno::Reference<css::container::XNameAccess> xStyles,
+                                     const val& properties,
+                                     const css::uno::Sequence<rtl::OUString>& names)
 {
     SolarMutexGuard aGuard;
 
@@ -382,20 +416,18 @@ val SwXTextDocument::paragraphStyles()
             pStyle = xIter->Next();
             continue;
         }
-
-        val name = val::u16string(pStyle->GetName().getStr());
-
+        val style = paragraphStyle(unoAnyToVal, pStyle, xStyles, properties, names);
         if (pStyle->IsUserDefined())
         {
-            userDefined.call<void>("push", name);
+            userDefined.call<void>("push", style);
         }
         else if (pStyle->IsUsed())
         {
-            used.call<void>("push", name);
+            used.call<void>("push", style);
         }
         else
         {
-            other.call<void>("push", name);
+            other.call<void>("push", style);
         }
 
         pStyle = xIter->Next();
@@ -792,6 +824,83 @@ void SwXTextDocument::cancelFindOrReplace()
     {
         rUndoRedo.Undo();
     }
+}
+
+val SwXTextDocument::getOutline()
+{
+    SolarMutexGuard aGuard;
+
+    SwWrtShell* mrSh = m_pDocShell->GetWrtShell();
+    if (!mrSh)
+    {
+        emscripten_console_error("no shell");
+        return {};
+    }
+
+    const SwOutlineNodes::size_type nOutlineCount
+        = mrSh->getIDocumentOutlineNodesAccess()->getOutlineNodesCount();
+
+    typedef std::pair<sal_Int8, sal_Int32> StackEntry;
+    std::stack<StackEntry> aOutlineStack;
+    aOutlineStack.push(StackEntry(-1, -1)); // push default value
+
+    int nOutlineId = 0;
+
+    val r = val::array();
+    const SwOutlineNodes& rNodes = mrSh->GetNodes().GetOutLineNds();
+    for (SwOutlineNodes::size_type i = 0; i < nOutlineCount; ++i)
+    {
+        // Check if outline is hidden
+        const SwTextNode* textNode = rNodes[i]->GetTextNode();
+
+        if (textNode->IsHidden() || !sw::IsParaPropsNode(*mrSh->GetLayout(), *textNode) ||
+            // Skip empty outlines:
+            textNode->GetText().isEmpty())
+        {
+            continue;
+        }
+
+        // Get parent id from stack:
+        const sal_Int8 nLevel
+            = static_cast<sal_Int8>(mrSh->getIDocumentOutlineNodesAccess()->getOutlineLevel(i));
+
+        sal_Int8 nLevelOnTopOfStack = aOutlineStack.top().first;
+        while (nLevelOnTopOfStack >= nLevel && nLevelOnTopOfStack != -1)
+        {
+            aOutlineStack.pop();
+            nLevelOnTopOfStack = aOutlineStack.top().first;
+        }
+
+        const sal_Int32 nParent = aOutlineStack.top().second;
+
+        val o = val::object();
+        o.set("id", nOutlineId);
+        o.set("parent", nParent);
+        o.set("text", textNode->GetText());
+        r.call<void>("push", o);
+
+        aOutlineStack.push(StackEntry(nLevel, nOutlineId));
+
+        nOutlineId++;
+    }
+
+    return r;
+}
+
+val SwXTextDocument::gotoOutline(int outlineIndex)
+{
+    SolarMutexGuard aGuard;
+
+    SwWrtShell* mrSh = m_pDocShell->GetWrtShell();
+    if (!mrSh)
+    {
+        emscripten_console_error("no shell");
+        return {};
+    }
+
+    mrSh->GotoOutline(outlineIndex);
+
+    return rectToArray(mrSh->GetCharRect());
 }
 
 namespace sw

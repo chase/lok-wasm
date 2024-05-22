@@ -13,3 +13,4 @@ libreoffice-core/debug
 .idea/**/*
 /emsdk
 mutagen.yml.lock
+/build

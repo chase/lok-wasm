@@ -421,7 +421,7 @@ bool SwXTextDocument::supportsCommand(std::u16string_view rCommand)
     static const std::initializer_list<std::u16string_view> vForward
         = { u"TextFormFields", u"TextFormField", u"SetDocumentProperties",
             u"Bookmarks",      u"Fields",        u"Sections",
-            u"Bookmark",       u"Field", u"GetOutline" }; // MACRO:
+            u"Bookmark",       u"Field"};
 
     return std::find(vForward.begin(), vForward.end(), rCommand) != vForward.end();
 }
