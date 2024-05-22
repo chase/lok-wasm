@@ -225,18 +225,12 @@ function registerClientMethod(prop: string) {
       );
     }
 
-    // TODO: @synoet fix this
-    if (prop === 'newView') {
-      return new Promise((resolve, _reject) => {
-        resolve(future.promise.then((viewId) => {
-          return documentClient(this.ref, viewId as number)
-        }))
-      })
-
-    }
     return future.promise;
   };
 }
+
+// clientBase methods excluded from forwarding
+const EXCLUDED_CLIENT_METHODS = ['newView'];
 
 async function handleMessage<K extends keyof Message = keyof Message>({
   data,
@@ -244,7 +238,7 @@ async function handleMessage<K extends keyof Message = keyof Message>({
   if (messageIsCallback(data)) {
     subscribedEvents[data.d]?.[data.t]?.forEach((handler) => handler(data.p));
   } else if (messageIsKeys(data)) {
-    for (const prop of data.keys) {
+    for (const prop of data.keys.filter((k) => !EXCLUDED_CLIENT_METHODS.includes(k))) {
       registerClientMethod(prop);
     }
     for (const [resolver, methods] of Object.entries(data.forwarded)) {
