@@ -189,7 +189,7 @@ class RenderedView {
       setState(RenderState.IDLE, this.viewId);
       if (!running) stateMachine();
     } else {
-      debouncedPostActiveCanvas(this.activeCanvasIndex);
+      postMessage({ s: this.activeCanvasIndex });
     }
 
     return this.didScroll;
@@ -614,7 +614,7 @@ function stateMachine() {
           viewToRender.renderedTileTop = Math.floor(
             viewToRender.renderedTopTwips / viewToRender.tileDimTwips
           );
-          debouncedPostActiveCanvas(viewToRender.activeCanvasIndex);
+          postMessage({ s: viewToRender.activeCanvasIndex })
           viewToRender.didScroll = false;
         }
 
@@ -1084,18 +1084,6 @@ function trimmedMean(input: number[]): number {
   const sum = trimmedArray.reduce((acc, val) => acc + val, 0);
 
   return sum / trimmedArray.length;
-}
-
-let postActiveCanvasTimeout: number;
-
-// Debounces the postMessage call to the worker
-// when multiple scroll events are fired at once, we want to make sure
-// we only post the active canvas correctly after the last scroll event
-function debouncedPostActiveCanvas(index: number) {
-  if (postActiveCanvasTimeout) clearTimeout(postActiveCanvasTimeout);
-  postActiveCanvasTimeout = setTimeout(() => {
-    postMessage({ s: index });
-  });
 }
 
 function addBorder(imageData: ImageData) {
