@@ -66,14 +66,16 @@ export function InputHandler(props: Props) {
     }
   });
 
-  createEffect(() => {
-    if (focus()) {
+  createEffect<number[] | null>((prevPos) => {
+    if (focus() && (prevPos !== props.pos)) {
       input.focus();
       if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
         reset();
       }
     }
-  });
+
+    return props.pos;
+  }, null);
 
   function abortComposition() {
     reset(document.activeElement !== input);
