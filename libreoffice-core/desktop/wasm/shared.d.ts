@@ -119,7 +119,7 @@ export type DocumentWithViewMethods = {
     tileSize: number,
     scale: number,
     dpi: number,
-    yPos: number | undefined
+    yPosPx?: number
   ): TileRendererData;
 
   startRenderingPreview(
@@ -127,7 +127,7 @@ export type DocumentWithViewMethods = {
     tileSize: number,
     scale: number,
     dpi: number,
-    yPos: number | undefined
+    yPosPx?: number
   ): TileRendererData;
 
   stopRenderingPreview(): void;
@@ -138,9 +138,9 @@ export type DocumentWithViewMethods = {
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
   resetRendering(
-    // canvas: OffscreenCanvas[],
+    canvas: OffscreenCanvas[],
     /** Non-negative float, 1.0 is unchanged, less than 1.0 is smaller, greater than 1.0 is larger */
-    // scale: number
+    scale: number
   ): void;
   /** TODO: implement */
   stopRendering(): void;
