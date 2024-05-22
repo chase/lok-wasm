@@ -155,7 +155,7 @@ export function OfficeDocument(props: Props) {
 
   createEffect(() => {
     const height = canvasHeight();
-    if (height && didInitialRender.has(props.doc)) props.doc.setVisibleHeight(height);
+    if (height) props.doc.setVisibleHeight(height);
   });
 
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);
@@ -188,7 +188,6 @@ export function OfficeDocument(props: Props) {
     canvas0_.height = scaledHeight;
     canvas1_.width = scaledWidth;
     canvas1_.height = scaledHeight;
-    console.log("startRendering")
     await props.doc.startRendering(
       [
         canvas0_.transferControlToOffscreen(),

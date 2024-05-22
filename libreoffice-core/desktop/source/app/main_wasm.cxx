@@ -460,27 +460,27 @@ public:
     {
         desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize);
 
-        emscripten::val result = emscripten::val::object();
+        val result = emscripten::val::object();
         result.set("viewId", viewId);
-        result.set("activeViewId", emscripten::typed_memory_view(1, (uint32_t*)&data.activeViewId));
+        result.set("activeViewId", typed_memory_view(1, (uint32_t*)&data.activeViewId));
         result.set("tileSize", data.tileSize);
-        result.set("state", emscripten::typed_memory_view(1, (int32_t*)&data.state));
-        result.set("tileTwips", emscripten::typed_memory_view(4, (uint32_t*)&data.tileTwips));
+        result.set("state", typed_memory_view(1, (int32_t*)&data.state));
+        result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.tileTwips));
         result.set("paintedTile",
-                   emscripten::typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
+                   typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
         result.set("pendingFullPaint",
-                   emscripten::typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
+                   typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
         result.set("hasInvalidations",
-                   emscripten::typed_memory_view(1, (int32_t*)&data.hasInvalidations));
+                   typed_memory_view(1, (int32_t*)&data.hasInvalidations));
         result.set("invalidationStack",
-                   emscripten::typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
+                   typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
                                                  (uint32_t*)&data.invalidationStack));
         result.set("docWidthTwips",
-                   emscripten::typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
+                   typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
         result.set("docHeightTwips",
-                   emscripten::typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
+                   typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
         result.set("invalidationStackHead",
-                   emscripten::typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
+                   typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
 
         return result;
     }
@@ -489,7 +489,7 @@ public:
     {
         desktop::AdditionalView& data = ext()->addPreviewView(mainViewId, viewId, tileSize);
 
-        emscripten::val result = emscripten::val::object();
+        val result = emscripten::val::object();
 
         result.set("viewId", data.viewId);
         result.set("tileSize", data.tileSize);
@@ -708,7 +708,6 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<bool>();
     register_optional<std::string>();
     register_optional<int>();
-    register_optional<int32_t>();
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
 

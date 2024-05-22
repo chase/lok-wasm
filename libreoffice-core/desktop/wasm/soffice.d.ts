@@ -41,7 +41,7 @@ export type TileRenderData = {
   activeViewId: Uint32Array;
   /** `_Atomic uint32_t` */
   tileTwips: Uint32Array;
-  /** `_Atomic uint32_t` */
+  /** `_Atomic uint8_t` */
   paintedTile: Uint8Array;
   /** `_Atomic uint32_t` */
   previewTileTwips: Uint32Array;

@@ -1,5 +1,5 @@
-import { ToTileRenderer } from './shared';
 import { TileRenderData } from './soffice';
+import { ToTileRenderer } from './shared';
 
 /** From lib/wasm_extensions.hxx */
 enum RenderState {
@@ -19,7 +19,7 @@ type Rect = [
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = true;
+const DEBUG = false;
 const LARGE_POOL_SIZE = 2000;
 const SMALL_POOL_SIZE = 1000;
 
@@ -80,6 +80,7 @@ class RenderedView {
 
   missingRects: Rect[] = [];
 
+  /** contains a set of all the valid tile indices */
   validTiles: Set<number> = new Set();
   /** maps a tile index to a tileRing index */
   tileIndexToTileRingIndex: Map<number, number> = new Map();

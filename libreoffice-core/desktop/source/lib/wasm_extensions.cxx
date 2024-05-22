@@ -46,7 +46,7 @@ static void* tileRendererWorker(void* data_)
         RenderState state = d->state;
 
         bool bIsMainView = d->viewId == d->activeViewId;
-        std::array<uint32_t, 4> tileTwips
+        auto tileTwips
             = bIsMainView ? d->tileTwips : d->previewView.get()->tileTwips;
         uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewView.get()->paintedTile;
         int32_t tileSize = bIsMainView ? d->tileSize : d->previewView.get()->tileSize;
@@ -152,7 +152,7 @@ void TileRendererData::reset()
     __c11_atomic_store(bIsMainView ? &pendingFullPaint : &previewView->pendingFullPaint, 1,
                        __ATOMIC_SEQ_CST);
     __c11_atomic_store(&hasInvalidations, 1, __ATOMIC_SEQ_CST);
-    /* __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY); */
+    __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
 }
 
 static std::string OUStringToString(OUString str)

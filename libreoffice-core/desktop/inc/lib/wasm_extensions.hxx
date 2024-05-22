@@ -4,11 +4,9 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
 #include <emscripten/val.h>
-#include <array>
 #include <cstdint>
 #include <desktop/dllapi.h>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 #include <com/sun/star/lang/XComponent.hpp>
 
@@ -35,7 +33,7 @@ struct AdditionalView
     const int32_t paintedTileAllocSize;
     _Atomic uint32_t pendingFullPaint = 1;
 
-    std::array<uint32_t, 4> tileTwips;
+    uint32_t tileTwips[4];
     uint8_t* paintedTile;
 
     AdditionalView(int32_t viewId_, int32_t tileSize_)
@@ -67,7 +65,7 @@ struct TileRendererData
     _Atomic uint32_t docHeightTwips;
     _Atomic int32_t activeViewId;
 
-    std::array<uint32_t, 4> tileTwips;
+    uint32_t tileTwips[4];
     uint8_t* paintedTile;
 
     std::shared_ptr<AdditionalView> previewView;
@@ -75,7 +73,7 @@ struct TileRendererData
     LibreOfficeKitDocument* doc;
 
     TileRendererData(LibreOfficeKitDocument* doc_, int32_t viewId_, int32_t tileSize_,
-                     int32_t docWidthTwips_, int32_t docHeightTwips_)
+                     uint32_t docWidthTwips_, uint32_t docHeightTwips_)
         : viewId(viewId_)
         , tileSize(tileSize_)
         , paintedTileAllocSize(tileSize_ * tileSize_ * 4)
