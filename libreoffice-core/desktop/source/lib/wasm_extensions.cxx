@@ -1,3 +1,10 @@
+#include "com/sun/star/frame/Desktop.hpp"
+#include "com/sun/star/frame/XDesktop2.hdl"
+#include "comphelper/diagnose_ex.hxx"
+#include "cppuhelper/exc_hlp.hxx"
+#include "lib/init.hxx"
+#include "oox/helper/expandedstorage.hxx"
+#include "unotools/mediadescriptor.hxx"
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
 #include <memory>
@@ -23,6 +30,7 @@
 
 namespace desktop
 {
+using cppu::getCaughtException;
 
 static constexpr int MAX_THREADS_TO_NOTIFY = 2;
 
@@ -202,6 +210,87 @@ std::string WasmDocumentExtension::getPageOrientation()
     bool bIsLandscape = (pSize->GetSize().Width() >= pSize->GetSize().Height());
 
     return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
+}
+
+_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const char* pFilterOptions)
+{
+    LibreOfficeKitDocument* pDoc = NULL;
+    desktop::WasmDocumentExtension* ext
+        = static_cast<desktop::WasmDocumentExtension*>(pDoc);
+
+    LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
+
+
+    ext->loadFromExpanded(pThis, expandedDoc, pFilterOptions);
+
+    if (pDoc == NULL) {
+        return NULL;
+    }
+
+    return pDoc;
+}
+
+
+void ExpandedDocument::addPart(std::string path, std::string content)
+{
+    parts.emplace_back(path, content);
+}
+
+_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, const desktop::ExpandedDocument expandedDoc, const char* pFilterOptions)
+{
+    using namespace com::sun::star;
+    uno::XComponentContext * xContext =
+        static_cast<uno::XComponentContext*>(pThis->pClass->getXComponentContext(pThis));
+
+    if (!xContext) {
+        return nullptr;
+    }
+
+    uno::Reference<frame::XDesktop2> xComponentLoader = frame::Desktop::create(xContext);
+
+    if (!xComponentLoader.is())
+    {
+        SAL_WARN("lok", "ComponentLoader is not available");
+        return nullptr;
+    }
+
+    oox::ExpandedStorage storage;
+
+    for (const auto& part : expandedDoc.parts)
+    {
+        storage.addPart(part.path, part.content);
+    }
+
+    utl::MediaDescriptor aMediaDescriptor;
+    // Leave a breadcrumb that this is using expanded storage
+    aMediaDescriptor["ExpandedStorage"] <<= true;
+    // Expanded storage only supports .docx files right now
+    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML");
+    aMediaDescriptor["Storage"] <<= storage;
+
+    {
+        SolarMutexGuard aGuard;
+        try
+        {
+            Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
+            SfxViewShell::SetCurrentDocId(ViewShellDocId(1));
+            uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
+                "private:stream", "_blank", 1, aMediaDescriptor.getAsConstPropertyValueList());
+
+            if (!xComponent.is()) {
+                SAL_WARN("lok", "Could not load in memory doc");
+                return nullptr;
+            }
+
+            return new LibLODocument_Impl(xComponent, 1);
+        }
+        catch (const uno::Exception& exception)
+        {
+            uno::Any exAny(getCaughtException());
+            SAL_WARN("lok", "Failed to load to in-memory stream: " + exceptionToString(exAny));
+        }
+    }
+    return nullptr;
 }
 
 }

@@ -224,6 +224,16 @@ public:
         , doc_(instance()->documentLoad(path.c_str()))
     {
     }
+
+    explicit DocumentClient(desktop::ExpandedDocument expandedDoc, std::string name)
+        : ref_(++document_id_counter)
+    {
+        desktop::WasmOfficeExtension* ext = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
+        auto doc = ext->documentExpandedLoad(expandedDoc, name, nullptr);
+        lok::Document aDoc = static_cast<lok::Document>(doc);
+        doc_ = &aDoc;
+    }
+
     bool valid() { return doc_ != nullptr; }
 
     bool saveAs(std::string url, std::optional<std::string> format,
@@ -733,8 +743,18 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("replace", &wasm::ITextRanges::replace)
         .function("replaceAll", &wasm::ITextRanges::replaceAll);
 
+    class_<desktop::ExpandedDocument>("ExpandedDocument")
+        .constructor()
+        .function("addPart", &desktop::ExpandedDocument::addPart);
+
+    class_<desktop::ExpandedPart>("ExpandedPart")
+        .constructor<std::string, std::string>();
+
+    register_vector<desktop::ExpandedPart>("ExpandedPartVector");
+
     class_<DocumentClient>("Document")
         .constructor<std::string>()
+        .constructor<desktop::ExpandedDocument, std::string>()
         .function("valid", &DocumentClient::valid)
         .function("saveAs", &DocumentClient::saveAs)
         .function("getParts", &DocumentClient::getParts)

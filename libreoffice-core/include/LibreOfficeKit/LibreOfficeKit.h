@@ -126,7 +126,8 @@ struct _LibreOfficeKitClass
     // MACRO:
     LibreOfficeKitDocument* (*loadFromMemory) (LibreOfficeKit* pThis, char *data, size_t size);
 
-
+    // MACRO:
+    void* (*getXComponentContext) (LibreOfficeKit* pThis);
 
     /** @see lok::Office::extractRequest.
      */

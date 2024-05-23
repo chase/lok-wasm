@@ -2804,6 +2804,8 @@ static void lo_dumpState(LibreOfficeKit* pThis, const char* pOptions, char** pSt
 
 // MACRO
 static LibreOfficeKitDocument* lo_loadFromMemory(LibreOfficeKit* pThis, char *data, size_t size);
+// MACRO
+static void* lo_getXComponentContext(LibreOfficeKit* pThis);
 
 LibLibreOffice_Impl::LibLibreOffice_Impl()
     : m_pOfficeClass( gOfficeClass.lock() )
@@ -2835,6 +2837,7 @@ LibLibreOffice_Impl::LibLibreOffice_Impl()
 
         // MACRO: {
         m_pOfficeClass->loadFromMemory = lo_loadFromMemory;
+        m_pOfficeClass->getXComponentContext = lo_getXComponentContext;
         // MACRO: }
 
         m_pOfficeClass->extractRequest = lo_extractRequest;
@@ -5443,6 +5446,12 @@ static void lo_dumpState (LibreOfficeKit* pThis, const char* /* pOptions */, cha
     pLib->dumpState(aState);
 
     *pState = convertOString(aState.makeStringAndClear());
+}
+
+// MACRO:
+static void* lo_getXComponentContext(LibreOfficeKit* /*pThis*/)
+{
+    return xContext.is() ? xContext.get() : nullptr;
 }
 
 void LibLibreOffice_Impl::dumpState(rtl::OStringBuffer &rState)

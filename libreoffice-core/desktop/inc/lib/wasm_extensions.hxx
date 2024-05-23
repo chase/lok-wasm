@@ -93,6 +93,25 @@ struct TileRendererData
     TileRendererData& operator=(const TileRendererData&) = delete;
 };
 
+struct ExpandedPart
+{
+    std::string path;
+    std::string content;
+
+    ExpandedPart(std::string path_, std::string content_)
+        : path(path_)
+        , content(content_){};
+};
+
+struct ExpandedDocument
+{
+    std::vector<ExpandedPart> parts;
+
+    ExpandedDocument(){};
+
+    void addPart(std::string path, std::string content);
+};
+
 struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 {
     std::vector<pthread_t> tileRendererThreads_;
@@ -106,5 +125,13 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     std::string getPageColor();
     std::string getPageOrientation();
+
+    _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, const desktop::ExpandedDocument expandedDoc, const char* pFilterOptions = nullptr);
 };
+
+struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit
+{
+    _LibreOfficeKitDocument* documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const char* pFilterOptions);
+};
+
 }
