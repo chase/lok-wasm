@@ -134,7 +134,7 @@ class RenderedView {
     this.tileTwips = tileTwips;
     this.paintedTile = paintedTile;
     this.activeCanvas = canvases[0];
-    this.ctx = this.activeCanvas.getContext('2d');
+    this.ctx = getContext(this.activeCanvas);
     this.pendingFullPaint = pendingFullPaint;
 
     this.zoom(scale, dpi);
@@ -185,7 +185,7 @@ class RenderedView {
       this.didScroll = true;
       this.activeCanvasIndex ^= 1;
       this.activeCanvas = this.canvases[this.activeCanvasIndex];
-      this.ctx = this.activeCanvas.getContext('2d');
+      this.ctx = getContext(this.activeCanvas);
       setState(RenderState.IDLE, this.viewId);
       if (!running) stateMachine();
     } else {
@@ -1084,6 +1084,14 @@ function trimmedMean(input: number[]): number {
   const sum = trimmedArray.reduce((acc, val) => acc + val, 0);
 
   return sum / trimmedArray.length;
+}
+
+function getContext(canvas: OffscreenCanvas) {
+  let ctx = canvas.getContext("2d");
+  // default is true, which makes things blurry
+  //https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled
+  ctx.imageSmoothingEnabled = false;
+  return ctx;
 }
 
 function addBorder(imageData: ImageData) {
