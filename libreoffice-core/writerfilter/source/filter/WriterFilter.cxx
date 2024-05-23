@@ -166,16 +166,25 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
         bool bSkipImages
             = aMediaDesc.getUnpackedValueOrDefault("FilterOptions", OUString()) == "SkipImages";
 
+        bool bExpandedStorage = aMediaDesc.getUnpackedValueOrDefault("ExpandedStorage", false);
+
+        // If we are using ExpandedStorage, we can load the input stream directly from media descriptors
         uno::Reference<io::XInputStream> xInputStream;
-        try
+        if (bExpandedStorage)
         {
-            // use the oox.core.FilterDetect implementation to extract the decrypted ZIP package
-            rtl::Reference<::oox::core::FilterDetect> xDetector(
-                new ::oox::core::FilterDetect(m_xContext));
-            xInputStream = xDetector->extractUnencryptedPackage(aMediaDesc);
+            xInputStream = aMediaDesc.getUnpackedValueOrDefault(
+                utl::MediaDescriptor::PROP_INPUTSTREAM, uno::Reference<io::XInputStream>());
         }
-        catch (uno::Exception&)
+        else
         {
+            try
+            {
+                // use the oox.core.FilterDetect implementation to extract the decrypted ZIP package
+                rtl::Reference<::oox::core::FilterDetect> xDetector(
+                    new ::oox::core::FilterDetect(m_xContext));
+                xInputStream = xDetector->extractUnencryptedPackage(aMediaDesc);
+            }
+            catch (uno::Exception&){}
         }
 
         if (!xInputStream.is())
