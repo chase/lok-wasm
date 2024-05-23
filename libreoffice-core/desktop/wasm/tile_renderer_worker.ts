@@ -655,13 +655,20 @@ function stateMachine() {
   mainView.idleAreaPaint = true;
   if (!pendingInvalidate) {
     afterInvalidate().then((shouldRun) => {
-      mainView.idleAreaPaint = false;
-      pendingStateChange ||= shouldRun;
-      mainView.pendingPartialPaint = true;
-      setState(RenderState.IDLE, mainView.viewId);
-      if (shouldRun && !running) {
-        stateMachine();
-        maybeInvalidatePreview();
+      if (shouldRun) {
+        mainView.idleAreaPaint = false;
+        pendingStateChange = true;
+        mainView.pendingPartialPaint = true;
+        setState(RenderState.IDLE, mainView.viewId);
+        if (!running) {
+          stateMachine();
+          maybeInvalidatePreview();
+        }
+      } else {
+        setState(RenderState.IDLE, mainView.viewId);
+        if (!running) {
+          stateMachine();
+        }
       }
     });
 
