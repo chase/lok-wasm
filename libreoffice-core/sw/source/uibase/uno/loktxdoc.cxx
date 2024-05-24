@@ -501,9 +501,9 @@ void SwXTextDocument::batchUpdateTrackChange( const css::uno::Sequence<sal_uInt3
     SwWrtShell* mrSh = m_pDocShell->GetWrtShell();
     SwDoc *pDoc = mrSh->GetDoc();
     SwUndoId undoId = accept ? SwUndoId::ACCEPT_REDLINE : SwUndoId::REJECT_REDLINE;
+    UnoActionContext aAction(pDoc);
     // make batch update a single undo/redo and layout action
     mrSh->StartUndo(undoId, nullptr);
-    mrSh->StartAllAction();
 
     for (sal_uInt32 id : rArguments) {
         const SwRedlineTable& rRedlineTable = pDoc->getIDocumentRedlineAccess().GetRedlineTable();
@@ -517,7 +517,6 @@ void SwXTextDocument::batchUpdateTrackChange( const css::uno::Sequence<sal_uInt3
         }
     }
 
-    mrSh->EndAllAction();
     mrSh->EndUndo(undoId, nullptr);
 }
 // MACRO-1212: }
