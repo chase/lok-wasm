@@ -12,6 +12,7 @@ echo 'Optimizing WASM...'
 "$BASE_DIR"/emsdk/upstream/bin/wasm-opt \
   -o "$BUILD_DIR/soffice.wasm" \
   -O4 \
+  -g \
   --dce \
   --remove-unused-names \
   --enable-simd \
