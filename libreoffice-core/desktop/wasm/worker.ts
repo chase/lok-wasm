@@ -1,15 +1,17 @@
 import type {
   DocumentMethodHandler,
-  GlobalMethod,
   ForwardedFromWorker,
   ForwardedMethodMap,
   ForwardedResolver,
   ForwardedResolverMap,
   ForwardingId,
+  ForwardingMethodHandler,
   ForwardingMethodHandlers,
   FromWorker,
   GetClipbaordItem,
+  GlobalMethod,
   InitializeForRenderingOptions,
+  InitializeViewData,
   KeysMessage,
   Message,
   RectangleTwips,
@@ -20,8 +22,6 @@ import type {
   ToWorker,
   ViewId,
   WorkerCallback,
-  ForwardingMethodHandler,
-  InitializeViewData,
 } from './shared';
 import type {
   Comment,
@@ -30,7 +30,6 @@ import type {
   HeaderFooterRect,
   ITextRanges,
   ParagraphStyle,
-  ParagraphStyleList,
   RectArray,
   SanitizeOptions,
 } from './soffice';
@@ -38,11 +37,16 @@ import LOK from './soffice';
 // NOTE: Disabled until unoembind startup cost is under 1s
 // import { init_unoembind_uno } from './bindings_uno';
 
+// because the worker can arrive before the message handler which is initialized later after the LOK module is created,
+// queue the messages for later and run them against the message handler after the rest of initialization
+const messageQueue: MessageEvent<any>[] = [];
+globalThis.onmessage = (message) => {
+  messageQueue.push(message);
+};
 const docMap: Record<DocumentRef, Document> = {};
 const findResultMap: Record<DocumentRef, ITextRanges> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Worker> = {};
-
 
 const lok = await LOK({
   withFcCache: true,
@@ -264,13 +268,10 @@ const handler: DocumentMethodHandler<Document> = {
     tileSize: TileDim,
     scale: number,
     dpi: number,
-    yPos: number | undefined,
+    yPos: number | undefined
   ): TileRendererData {
     const ref = doc.ref();
-    const result = doc.startTileRenderer(
-      viewId,
-      tileSize,
-    );
+    const result = doc.startTileRenderer(viewId, tileSize);
     const worker = new Worker(
       new URL('./tile_renderer_worker.js', import.meta.url),
       { type: 'module' }
@@ -305,7 +306,7 @@ const handler: DocumentMethodHandler<Document> = {
     };
   },
 
-  resetRendering: function() {
+  resetRendering: function () {
     throw new Error('Function not implemented.');
   },
 
@@ -316,14 +317,10 @@ const handler: DocumentMethodHandler<Document> = {
     mainViewId: ViewId,
     tileSize: TileDim,
     scale: number,
-    yPos: number | undefined,
+    yPos: number | undefined
   ) {
     const ref = doc.ref();
-    const result = doc.addPreviewView(
-      mainViewId,
-      viewId,
-      tileSize,
-    );
+    const result = doc.addPreviewView(mainViewId, viewId, tileSize);
 
     const worker = tileRenderer[ref];
 
@@ -353,20 +350,14 @@ const handler: DocumentMethodHandler<Document> = {
     };
   },
 
-  stopRenderingPreview: function (
-    doc: Document,
-    viewId: ViewId,
-  ) {
+  stopRenderingPreview: function (doc: Document, viewId: ViewId) {
     const worker = tileRenderer[doc.ref()];
 
-    worker.postMessage(
-      {
-        t: 'previewStop',
-        viewId: viewId,
-      } as ToTileRenderer,
-    );
+    worker.postMessage({
+      t: 'previewStop',
+      viewId: viewId,
+    } as ToTileRenderer);
   },
-
 
   stopRendering: function (_doc: Document, _viewId: ViewId): void {
     throw new Error('Function not implemented.');
@@ -404,7 +395,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
-    tileRenderer[doc.ref()].postMessage({
+    tileRenderer[doc.ref()]?.postMessage({
       t: 'r',
       viewId,
       h: heightPx,
@@ -732,7 +723,7 @@ function handleGlobalMethod<K extends keyof GlobalMethod>(data: ToWorker<K>) {
   });
 }
 
-onmessage = async <K extends keyof Message = keyof Message>({
+globalThis.onmessage = async <K extends keyof Message = keyof Message>({
   data,
 }: MessageEvent<ToWorker<K>>) => {
   const docHandler = handler[data.f as keyof DocumentMethodHandler<Document>];
@@ -769,3 +760,6 @@ postMessage({
     ])
   ),
 } as KeysMessage);
+for (const message of messageQueue) {
+  globalThis.onmessage(message);
+}

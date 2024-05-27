@@ -385,6 +385,6 @@ if (import.meta.hot) {
   });
 }
 
-export * from './shared'
-export * from './soffice'
+export type * from './shared'
+export type * from './soffice'
 export * from './lok_enums'

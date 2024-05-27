@@ -281,6 +281,7 @@ gb_emscripten_fs_image_files := \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/filter/oox-drawingml-adj-names \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/filter/oox-drawingml-cs-presets \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/filter/vml-shape-types \
+    $(INSTROOT)/$(LIBO_SHARE_FOLDER)/autocorr \
 
 ifneq ($(ENABLE_WASM_STRIP_WRITER),TRUE)
 gb_emscripten_fs_image_files += \
