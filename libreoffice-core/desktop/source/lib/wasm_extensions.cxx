@@ -266,7 +266,6 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     aMediaDescriptor["ExpandedStorage"] <<= true;
     // Expanded storage only supports .docx files right now
     aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML");
-    aMediaDescriptor["Storage"] <<= storage;
 
     {
         SolarMutexGuard aGuard;
