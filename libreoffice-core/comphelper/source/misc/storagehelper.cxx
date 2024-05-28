@@ -19,6 +19,7 @@
 
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/uno/Reference.h"
+#include "sot/stg.hxx"
 #include <config_gpgme.h>
 
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -75,6 +76,7 @@ using namespace ::com::sun::star;
 namespace comphelper {
 
 static uno::Reference<embed::XStorage> expandedStorage;
+static uno::Reference<oox::StorageBase> expandedStorageBase;
 static bool bIsExpandedStorage = false;
 
 uno::Reference<embed::XStorage> OStorageHelper::GetExpandedStorage()
@@ -95,6 +97,16 @@ bool OStorageHelper::IsExpandedStorage()
 void OStorageHelper::SetIsExpandedStorage(bool bIsExpanded)
 {
     bIsExpandedStorage = bIsExpanded;
+}
+
+void OStorageHelper::SetExpandedStorageBase(uno::Reference<oox::StorageBase>& xStorage)
+{
+    expandedStorageBase = xStorage;
+}
+
+uno::Reference<oox::StorageBase> OStorageHelper::GetExpandedStorageBase()
+{
+    return expandedStorageBase;
 }
 
 uno::Reference< lang::XSingleServiceFactory > OStorageHelper::GetStorageFactory(

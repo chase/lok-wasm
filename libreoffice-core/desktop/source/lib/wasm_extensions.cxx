@@ -8,6 +8,7 @@
 #include "cppuhelper/exc_hlp.hxx"
 #include "lib/init.hxx"
 #include "oox/helper/expandedstorage.hxx"
+#include "sot/stg.hxx"
 #include "unotools/mediadescriptor.hxx"
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
@@ -257,8 +258,14 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
         SAL_WARN("lok", "ComponentLoader is not available");
         return nullptr;
     }
+    // Create an empty sequence
+    uno::Sequence<sal_Int8> aEmptyData;
 
-    oox::ExpandedStorage storage;
+    // Wrap the empty sequence in a SequenceInputStream
+    uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
+
+    oox::ExpandedStorage storage(xContext, xEmptyInputStream);
+    uno::Reference<oox::StorageBase> xStorageBase = storage.getStorageBase();
 
     for (const auto& part : expandedDoc.parts)
     {
@@ -269,22 +276,14 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
 
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
-
-    // Create an empty sequence
-    uno::Sequence<sal_Int8> aEmptyData;
-
-    // Wrap the empty sequence in a SequenceInputStream
-    uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
-
-    uno::Reference<io::XInputStream> aInputStream(xEmptyInputStream);
-
+    comphelper::OStorageHelper::SetExpandedStorageBase(xStorageBase);
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage
     // Expanded storage only supports .docx files right now
     aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
     aMediaDescriptor["MacroExecutionMode"] <<= document::MacroExecMode::NEVER_EXECUTE;
-    aMediaDescriptor["InputStream"] <<= aInputStream;
+    aMediaDescriptor["InputStream"] <<= xEmptyInputStream;
     aMediaDescriptor["Silent"] <<= true;
     aMediaDescriptor["Hidden"] <<= true;
 

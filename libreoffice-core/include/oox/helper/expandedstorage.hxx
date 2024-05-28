@@ -1,6 +1,7 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 
+#include "oox/helper/storagebase.hxx"
 #include <rtl/ustring.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <string>
@@ -57,7 +58,8 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
                               public css::embed::XStorage,
                               public css::embed::XHierarchicalStorageAccess,
                               public css::beans::XPropertySet,
-                              public cppu::OWeakObject
+                              public cppu::OWeakObject,
+                              public StorageBase
 {
     std::unordered_map<std::string, ExpandedFile> files;
     std::mutex m_aMutex;
@@ -65,9 +67,12 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
     ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
 
 public:
-    ExpandedStorage();
+    ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
+                    const css::uno::Reference<css::io::XInputStream>& rxStream);
 
     void addPart(const std::string& path, const std::string& content);
+
+    uno::Reference< StorageBase > getStorageBase();
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -154,6 +159,31 @@ public:
 
     virtual void SAL_CALL
     removeEventListener(const css::uno::Reference<css::lang::XEventListener>& xListener) override;
+
+    // StorageBase
+    /** Returns true, if the object represents a valid storage. */
+    virtual bool        implIsStorage() const override;
+
+    /** Returns the com.sun.star.embed.XStorage interface of the current storage. */
+    virtual css::uno::Reference< css::embed::XStorage >
+                        implGetXStorage() const override;
+
+    /** Returns the names of all elements of this storage. */
+    virtual void        implGetElementNames( ::std::vector< OUString >& orElementNames ) const override;
+
+    /** Opens and returns the specified sub storage from the storage. */
+    virtual StorageRef  implOpenSubStorage( const OUString& rElementName, bool bCreateMissing ) override;
+
+    /** Opens and returns the specified input stream from the storage. */
+    virtual css::uno::Reference< css::io::XInputStream >
+                        implOpenInputStream( const OUString& rElementName ) override;
+
+    /** Opens and returns the specified output stream from the storage. */
+    virtual css::uno::Reference< css::io::XOutputStream >
+                        implOpenOutputStream( const OUString& rElementName ) override;
+
+    /** Commits the current storage. */
+    virtual void        implCommit() const override;
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
 };

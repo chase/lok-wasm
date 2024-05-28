@@ -1,9 +1,13 @@
 #include "com/sun/star/io/SequenceInputStream.hpp"
 #include "com/sun/star/io/XStream.hdl"
 #include "com/sun/star/packages/NoEncryptionException.hdl"
+#include "com/sun/star/uno/Reference.h"
 #include "com/sun/star/uno/Sequence.h"
+#include "oox/helper/storagebase.hxx"
+#include "sot/stg.hxx"
 #include "tools/stream.hxx"
 #include "unotools/streamwrap.hxx"
+#include <memory>
 #include <oox/helper/expandedstorage.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
 #include <com/sun/star/embed/InvalidStorageException.hpp>
@@ -20,7 +24,10 @@ using namespace com::sun::star;
 namespace oox
 {
 
-ExpandedStorage::ExpandedStorage() {}
+ExpandedStorage::ExpandedStorage(const css::uno::Reference< uno::XComponentContext >& rxContext, const css::uno::Reference< css::io::XInputStream >& rxInStream) :
+    StorageBase(rxInStream, false),
+    m_xContext(rxContext)
+{}
 
 void ExpandedStorage::addPart(const std::string& path, const std::string& content)
 {
@@ -29,6 +36,11 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     Sequence<sal_Int8> sContent((sal_Int8*)content.c_str(), content.size());
     ExpandedFile file(sPath, sContent);
     files.insert({ path, file });
+}
+
+uno::Reference<StorageBase> ExpandedStorage::getStorageBase()
+{
+    return uno::Reference<StorageBase>(this);
 }
 
 // XInterface
@@ -57,7 +69,7 @@ css::uno::Sequence<css::uno::Type> SAL_CALL ExpandedStorage::getTypes()
         = { cppu::UnoType<css::lang::XTypeProvider>::get(),
             cppu::UnoType<css::embed::XStorage>::get(),
             cppu::UnoType<css::embed::XHierarchicalStorageAccess>::get(),
-            cppu::UnoType<css::beans::XPropertySet>::get() };
+            cppu::UnoType<css::beans::XPropertySet>::get()};
     return aTypes;
 }
 
@@ -284,7 +296,7 @@ css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
 ExpandedStorage::openEncryptedStreamElementByHierarchicalName(const OUString& sStreamPath,
                                                               sal_Int32 nOpenMode, const OUString&)
 {
-    openStreamElementByHierarchicalName(sStreamPath, nOpenMode);
+    return openStreamElementByHierarchicalName(sStreamPath, nOpenMode);
 }
 
 void SAL_CALL ExpandedStorage::removeStreamElementByHierarchicalName(const OUString& sElementPath)
@@ -323,5 +335,45 @@ ExpandedStorage::removeEventListener(const uno::Reference<lang::XEventListener>&
 
     m_aListenersContainer.removeInterface(aGuard, xListener);
 }
+
+// StorageBase
+bool ExpandedStorage::implIsStorage() const
+{
+    return true;
+}
+
+css::uno::Reference<css::embed::XStorage> ExpandedStorage::implGetXStorage() const
+{
+    return css::uno::Reference<css::embed::XStorage>(const_cast<ExpandedStorage*>(this));
+}
+
+void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementNames) const
+{
+    size_t i = 0;
+    for (const auto& pair : files)
+    {
+        orElementNames[i++] = OUString::createFromAscii(pair.first.c_str());
+    }
+}
+
+StorageRef ExpandedStorage::implOpenSubStorage(const OUString&, bool)
+{
+    return std::shared_ptr<StorageBase>(std::move(this));
+}
+
+css::uno::Reference<css::io::XInputStream>
+    ExpandedStorage::implOpenInputStream(const OUString& rElementName)
+{
+    return openStreamElement(rElementName, embed::ElementModes::READ)->getInputStream();
+}
+
+css::uno::Reference<css::io::XOutputStream>
+    ExpandedStorage::implOpenOutputStream(const OUString& rElementName)
+{
+    return openStreamElement(rElementName, embed::ElementModes::READWRITE)->getOutputStream();
+}
+
+void ExpandedStorage::implCommit() const {}
+
 
 } // namespace oox
