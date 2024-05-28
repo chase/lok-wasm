@@ -1188,6 +1188,7 @@ uno::Reference< io::XStream > OWriteStream_Impl::GetStream_Impl( sal_Int32 nStre
             throw io::IOException();
         }
 
+        SAL_WARN("package.xstor", "SEEKABLEREAD is not supported for now");
         uno::Reference< io::XInputStream > xInStream = GetTempFileAsInputStream(); //TODO:
 
         if ( !xInStream.is() )

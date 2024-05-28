@@ -18,6 +18,7 @@
  */
 
 #include "OOXMLStreamImpl.hxx"
+#include "sal/log.hxx"
 #include <oox/core/fasttokenhandler.hxx>
 
 #include <com/sun/star/embed/XHierarchicalStorageAccess.hpp>
@@ -36,12 +37,18 @@ OOXMLStreamImpl::OOXMLStreamImpl
  StreamType_t nType, bool bRepairStorage)
 : mxContext(xContext), mxStorageStream(std::move(xStorageStream)), mnStreamType(nType)
 {
+    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>)");
     mxStorage.set
         (comphelper::OStorageHelper::GetStorageOfFormatFromInputStream
          (OFOPXML_STORAGE_FORMAT_STRING, mxStorageStream, xContext, bRepairStorage));
+    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>) - done");
     mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
+    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>) - init");
 
     init();
+
+    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>) - done");
+
 }
 
 OOXMLStreamImpl::OOXMLStreamImpl
@@ -354,8 +361,10 @@ void OOXMLStreamImpl::init()
     bool bFound = lcl_getTarget(mxRelationshipAccess,
                                 mnStreamType, msId, msTarget);
 
-    if (!bFound)
+    if (!bFound){
+        SAL_WARN("streamimpl", "OOXMLStreamImpl::init() - target not found");
         return;
+    }
 
     sal_Int32 nLastIndex = msTarget.lastIndexOf('/');
     if (nLastIndex >= 0)
@@ -366,9 +375,11 @@ void OOXMLStreamImpl::init()
 
     if (xHierarchicalStorageAccess.is())
     {
+        SAL_WARN("streamimpl", "OOXMLStreamImpl::init() - opening stream");
         uno::Any aAny(xHierarchicalStorageAccess->
                       openStreamElementByHierarchicalName
                       (msTarget, embed::ElementModes::SEEKABLEREAD));
+        SAL_WARN("streamimpl", "OOXMLStreamImpl::init() - opened stream");
         aAny >>= mxDocumentStream;
         // Non-cached ID lookup works by accessing mxDocumentStream as an embed::XRelationshipAccess.
         // So when it changes, we should empty the cache.

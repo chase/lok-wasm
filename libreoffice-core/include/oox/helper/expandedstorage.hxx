@@ -2,6 +2,8 @@
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 
 #include "com/sun/star/io/XInputStream.hdl"
+#include "com/sun/star/io/XSeekable.hdl"
+#include "com/sun/star/lang/XComponent.hdl"
 #include "cppuhelper/implbase.hxx"
 #include "oox/helper/storagebase.hxx"
 #include <rtl/ustring.hxx>
@@ -47,21 +49,37 @@ using namespace com::sun::star;
 namespace oox
 {
 
-class SequenceStreamSupplier : public cppu::WeakImplHelper<css::io::XStream>
+class SequenceStreamSupplier
+    : public cppu::WeakImplHelper<css::io::XStream, io::XSeekable, css::lang::XComponent>
 {
 private:
     css::uno::Reference<io::XInputStream> m_xInput;
     css::uno::Reference<io::XOutputStream> m_xOutput;
+    ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
+    std::mutex m_aMutex;
+    uno::Reference<io::XSeekable> m_xSeekable;
 
 public:
     SequenceStreamSupplier(css::uno::Reference<io::XInputStream> xInput,
-                           css::uno::Reference<io::XOutputStream> xOutput)
-        : m_xInput(std::move(xInput))
-        , m_xOutput(std::move(xOutput)){};
+                           css::uno::Reference<io::XOutputStream> xOutput);
 
     // XStream
     virtual uno::Reference<io::XInputStream> SAL_CALL getInputStream() override;
     virtual uno::Reference<io::XOutputStream> SAL_CALL getOutputStream() override;
+    // XSeekable
+    virtual void SAL_CALL seek(sal_Int64 location) override;
+    virtual sal_Int64 SAL_CALL getPosition() override;
+    virtual sal_Int64 SAL_CALL getLength() override;
+
+    virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
+    virtual void SAL_CALL acquire() noexcept override;
+    virtual void SAL_CALL release() noexcept override;
+
+    virtual void SAL_CALL dispose() override;
+    virtual void SAL_CALL
+    addEventListener(const css::uno::Reference<css::lang::XEventListener>& xListener) override;
+    virtual void SAL_CALL
+    removeEventListener(const css::uno::Reference<css::lang::XEventListener>& aListener) override;
 };
 
 struct ExpandedFile

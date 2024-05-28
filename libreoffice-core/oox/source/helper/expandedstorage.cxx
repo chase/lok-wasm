@@ -36,9 +36,81 @@ using namespace com::sun::star;
 namespace oox
 {
 
-uno::Reference<io::XInputStream> SequenceStreamSupplier::getInputStream() { return m_xInput; }
+SequenceStreamSupplier::SequenceStreamSupplier(uno::Reference<io::XInputStream> xInput,
+                                               uno::Reference<io::XOutputStream> xOutput)
+    : m_xInput(std::move(xInput))
+    , m_xOutput(std::move(xOutput))
+{
+    m_xSeekable.set(m_xInput, uno::UNO_QUERY);
+    if (!m_xSeekable.is())
+        m_xSeekable.set(m_xOutput, uno::UNO_QUERY);
+    OSL_ENSURE(m_xSeekable.is(),
+               "StreamSupplier::StreamSupplier: at least one of both must be seekable!");
+}
 
-uno::Reference<io::XOutputStream> SequenceStreamSupplier::getOutputStream() { return m_xOutput; }
+uno::Reference<io::XInputStream> SAL_CALL SequenceStreamSupplier::getInputStream()
+{
+    return m_xInput;
+}
+
+uno::Reference<io::XOutputStream> SAL_CALL SequenceStreamSupplier::getOutputStream()
+{
+    return m_xOutput;
+}
+
+void SAL_CALL SequenceStreamSupplier::seek(sal_Int64 nLocation)
+{
+    if (!m_xSeekable.is())
+        throw io::NotConnectedException();
+    m_xSeekable->seek(nLocation);
+}
+
+sal_Int64 SAL_CALL SequenceStreamSupplier::getPosition()
+{
+    if (!m_xSeekable.is())
+        throw io::NotConnectedException();
+    return m_xSeekable->getPosition();
+}
+
+sal_Int64 SAL_CALL SequenceStreamSupplier::getLength()
+{
+    if (!m_xSeekable.is())
+        throw io::NotConnectedException();
+
+    return m_xSeekable->getLength();
+}
+
+uno::Any SAL_CALL SequenceStreamSupplier::queryInterface(const uno::Type& rType)
+{
+    uno::Any aRet = cppu::queryInterface(rType, static_cast<io::XStream*>(this),
+                                         static_cast<io::XSeekable*>(this));
+    if (aRet.hasValue())
+        return aRet;
+
+    return OWeakObject::queryInterface(rType);
+}
+
+void SAL_CALL SequenceStreamSupplier::acquire() noexcept { OWeakObject::acquire(); }
+
+void SAL_CALL SequenceStreamSupplier::release() noexcept { OWeakObject::release(); }
+
+void SAL_CALL SequenceStreamSupplier::dispose() {}
+
+void SAL_CALL
+SequenceStreamSupplier::addEventListener(const uno::Reference<lang::XEventListener>& xListener)
+{
+    std::unique_lock aGuard(m_aMutex);
+
+    m_aListenersContainer.addInterface(aGuard, xListener);
+}
+
+void SAL_CALL
+SequenceStreamSupplier::removeEventListener(const uno::Reference<lang::XEventListener>& xListener)
+{
+    std::unique_lock aGuard(m_aMutex);
+
+    m_aListenersContainer.removeInterface(aGuard, xListener);
+}
 
 ExpandedStorage::ExpandedStorage(const css::uno::Reference<uno::XComponentContext>& rxContext,
                                  const css::uno::Reference<css::io::XInputStream>& rxInStream)
@@ -119,7 +191,10 @@ css::uno::Reference<css::io::XStream>
     std::lock_guard<std::mutex> lock(m_aMutex);
     auto it = files.find(std::string(aStreamName.toUtf8()));
     if (it == files.end())
+    {
+        SAL_WARN("expandedstorage", "NO SUCH ELEMENT openStreamElement: " << aStreamName);
         throw css::container::NoSuchElementException();
+    }
 
     const auto& file = it->second;
 
@@ -301,10 +376,17 @@ css::uno::Reference<css::embed::XExtendedStorageStream>
     SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << sStreamPath);
     uno::Reference<embed::XExtendedStorageStream> xResult;
     uno::Reference<io::XStream> xStream = openStreamElement(sStreamPath, nOpenMode);
-
-    uno::Reference<io::XInputStream> xInputStream = xStream->getInputStream();
-
-    xResult.set(xInputStream, uno::UNO_QUERY);
+    SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << xStream.is());
+    try
+    {
+        xResult.set(xStream, uno::UNO_QUERY_THROW);
+        SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << xResult.is());
+    }
+    catch (const uno::Exception&)
+    {
+        SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << sStreamPath);
+        throw io::IOException(); // file not found
+    }
     return xResult;
 }
 
