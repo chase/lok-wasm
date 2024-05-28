@@ -148,21 +148,21 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
     }
 
     // Initialize RDF metadata, to be able to add statements during the import.
-    /* try */
-    /* { */
-    /*     uno::Reference<rdf::XDocumentMetadataAccess> xDocumentMetadataAccess(xModel, uno::UNO_QUERY_THROW); */
-    /*     uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetTemporaryStorage(); */
-    /*     OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString()); */
-    /*     const uno::Reference<frame::XModel> xModel_(xModel, */
-    /*         uno::UNO_QUERY_THROW); */
-    /*     const uno::Reference<rdf::XURI> xBaseURI(sfx2::createBaseURI(xContext, xModel_, aBaseURL, u"")); */
-    /*     const uno::Reference<task::XInteractionHandler> xHandler; */
-    /*     xDocumentMetadataAccess->loadMetadataFromStorage(xStorage, xBaseURI, xHandler); */
-    /* } */
-    /* catch (const uno::Exception&) */
-    /* { */
-    /*     DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to initialize RDF metadata"); */
-    /* } */
+    try
+    {
+        uno::Reference<rdf::XDocumentMetadataAccess> xDocumentMetadataAccess(xModel, uno::UNO_QUERY_THROW);
+        uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetTemporaryStorage();
+        OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString());
+        const uno::Reference<frame::XModel> xModel_(xModel,
+            uno::UNO_QUERY_THROW);
+        const uno::Reference<rdf::XURI> xBaseURI(sfx2::createBaseURI(xContext, xModel_, aBaseURL, u""));
+        const uno::Reference<task::XInteractionHandler> xHandler;
+        xDocumentMetadataAccess->loadMetadataFromStorage(xStorage, xBaseURI, xHandler);
+    }
+    catch (const uno::Exception&)
+    {
+        DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to initialize RDF metadata");
+    }
 
     if (eDocumentType == SourceDocumentType::OOXML) {
         // tdf#108350

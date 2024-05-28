@@ -72,7 +72,8 @@ public:
     virtual sal_Int64 SAL_CALL getLength() override;
 };
 
-class SequenceStreamContainer final : public embed::XExtendedStorageStream, public ::cppu::OWeakObject
+class SequenceStreamContainer final : public embed::XExtendedStorageStream,
+                                      public ::cppu::OWeakObject
 {
     std::mutex m_aMutex;
     css::uno::Reference<css::io::XStream> m_xStream;

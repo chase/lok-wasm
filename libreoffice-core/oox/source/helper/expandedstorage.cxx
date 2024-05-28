@@ -98,8 +98,7 @@ css::uno::Reference<css::io::XOutputStream> SAL_CALL SequenceStreamContainer::ge
 uno::Any SAL_CALL SequenceStreamContainer::queryInterface(const uno::Type& rType)
 {
     uno::Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
-            static_cast<io::XStream*>(this)
-    );
+                                         static_cast<io::XStream*>(this));
     if (aRet.hasValue())
         return aRet;
 
@@ -110,7 +109,8 @@ void SAL_CALL SequenceStreamContainer::acquire() noexcept { OWeakObject::acquire
 
 void SAL_CALL SequenceStreamContainer::release() noexcept { OWeakObject::release(); }
 
-void SAL_CALL SequenceStreamContainer::dispose() {
+void SAL_CALL SequenceStreamContainer::dispose()
+{
     std::unique_lock aGuard(m_aMutex);
     if (m_aListenersContainer.getLength(aGuard))
     {
@@ -391,18 +391,27 @@ void SAL_CALL ExpandedStorage::removeVetoableChangeListener(
 {
 }
 
-// XHierarchicalStorageAccess
 css::uno::Reference<css::embed::XExtendedStorageStream>
     SAL_CALL ExpandedStorage::openStreamElementByHierarchicalName(const OUString& sStreamPath,
                                                                   sal_Int32 nOpenMode)
 {
     SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << sStreamPath);
-    uno::Reference<embed::XExtendedStorageStream> xResult;
-    uno::Reference<io::XStream> xStream = openStreamElement(sStreamPath, nOpenMode);
-    SequenceStreamContainer aStreamContainer(xStream);
+
+    // Open the stream element
+    css::uno::Reference<io::XStream> xStream = openStreamElement(sStreamPath, nOpenMode);
+
+    // Create a SequenceStreamContainer and manage its lifetime with a uno::Reference
+    css::uno::Reference<SequenceStreamContainer> aStreamContainer(
+        new SequenceStreamContainer(xStream));
+
     SAL_WARN("expandedstorage", "before extended: " << xStream.is());
-    uno::Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer, uno::UNO_QUERY_THROW);
-    SAL_WARN("expandedstorage", "after extended" << xExtendedStream.is());
+
+    // Query the XExtendedStorageStream interface from the container
+    css::uno::Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer,
+                                                                       css::uno::UNO_QUERY_THROW);
+
+    SAL_WARN("expandedstorage", "after extended: " << xExtendedStream.is());
+
     return xExtendedStream;
 }
 
