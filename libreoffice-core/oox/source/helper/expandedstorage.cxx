@@ -1,3 +1,4 @@
+#include "com/sun/star/embed/XExtendedStorageStream.hdl"
 #include "com/sun/star/io/SequenceInputStream.hpp"
 #include "com/sun/star/io/XInputStream.hdl"
 #include "com/sun/star/io/XStream.hdl"
@@ -80,24 +81,46 @@ sal_Int64 SAL_CALL SequenceStreamSupplier::getLength()
     return m_xSeekable->getLength();
 }
 
-uno::Any SAL_CALL SequenceStreamSupplier::queryInterface(const uno::Type& rType)
+SequenceStreamContainer::SequenceStreamContainer(css::uno::Reference<css::io::XStream>& xStream)
+    : m_xStream(xStream)
 {
-    uno::Any aRet = cppu::queryInterface(rType, static_cast<io::XStream*>(this),
-                                         static_cast<io::XSeekable*>(this));
+}
+
+css::uno::Reference<css::io::XInputStream> SAL_CALL SequenceStreamContainer::getInputStream()
+{
+    return m_xStream->getInputStream();
+}
+css::uno::Reference<css::io::XOutputStream> SAL_CALL SequenceStreamContainer::getOutputStream()
+{
+    return m_xStream->getOutputStream();
+}
+
+uno::Any SAL_CALL SequenceStreamContainer::queryInterface(const uno::Type& rType)
+{
+    uno::Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
+            static_cast<io::XStream*>(this)
+    );
     if (aRet.hasValue())
         return aRet;
 
     return OWeakObject::queryInterface(rType);
 }
 
-void SAL_CALL SequenceStreamSupplier::acquire() noexcept { OWeakObject::acquire(); }
+void SAL_CALL SequenceStreamContainer::acquire() noexcept { OWeakObject::acquire(); }
 
-void SAL_CALL SequenceStreamSupplier::release() noexcept { OWeakObject::release(); }
+void SAL_CALL SequenceStreamContainer::release() noexcept { OWeakObject::release(); }
 
-void SAL_CALL SequenceStreamSupplier::dispose() {}
+void SAL_CALL SequenceStreamContainer::dispose() {
+    std::unique_lock aGuard(m_aMutex);
+    if (m_aListenersContainer.getLength(aGuard))
+    {
+        lang::EventObject aSource(getXWeak());
+        m_aListenersContainer.disposeAndClear(aGuard, aSource);
+    }
+}
 
 void SAL_CALL
-SequenceStreamSupplier::addEventListener(const uno::Reference<lang::XEventListener>& xListener)
+SequenceStreamContainer::addEventListener(const uno::Reference<lang::XEventListener>& xListener)
 {
     std::unique_lock aGuard(m_aMutex);
 
@@ -105,7 +128,7 @@ SequenceStreamSupplier::addEventListener(const uno::Reference<lang::XEventListen
 }
 
 void SAL_CALL
-SequenceStreamSupplier::removeEventListener(const uno::Reference<lang::XEventListener>& xListener)
+SequenceStreamContainer::removeEventListener(const uno::Reference<lang::XEventListener>& xListener)
 {
     std::unique_lock aGuard(m_aMutex);
 
@@ -376,18 +399,11 @@ css::uno::Reference<css::embed::XExtendedStorageStream>
     SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << sStreamPath);
     uno::Reference<embed::XExtendedStorageStream> xResult;
     uno::Reference<io::XStream> xStream = openStreamElement(sStreamPath, nOpenMode);
-    SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << xStream.is());
-    try
-    {
-        xResult.set(xStream, uno::UNO_QUERY_THROW);
-        SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << xResult.is());
-    }
-    catch (const uno::Exception&)
-    {
-        SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << sStreamPath);
-        throw io::IOException(); // file not found
-    }
-    return xResult;
+    SequenceStreamContainer aStreamContainer(xStream);
+    SAL_WARN("expandedstorage", "before extended: " << xStream.is());
+    uno::Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer, uno::UNO_QUERY_THROW);
+    SAL_WARN("expandedstorage", "after extended" << xExtendedStream.is());
+    return xExtendedStream;
 }
 
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
