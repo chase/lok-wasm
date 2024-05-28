@@ -147,24 +147,21 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
         m_pImpl->SetDocumentSettingsProperty("NoNumberingShowFollowBy", uno::Any(true));
     }
 
-    if (!rMediaDesc.getUnpackedValueOrDefault("ExpandedStorage", false))
+    // Initialize RDF metadata, to be able to add statements during the import.
+    try
     {
-        // Initialize RDF metadata, to be able to add statements during the import.
-        try
-        {
-            uno::Reference<rdf::XDocumentMetadataAccess> xDocumentMetadataAccess(xModel, uno::UNO_QUERY_THROW);
-            uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetTemporaryStorage();
-            OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString());
-            const uno::Reference<frame::XModel> xModel_(xModel,
-                uno::UNO_QUERY_THROW);
-            const uno::Reference<rdf::XURI> xBaseURI(sfx2::createBaseURI(xContext, xModel_, aBaseURL, u""));
-            const uno::Reference<task::XInteractionHandler> xHandler;
-            xDocumentMetadataAccess->loadMetadataFromStorage(xStorage, xBaseURI, xHandler);
-        }
-        catch (const uno::Exception&)
-        {
-            DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to initialize RDF metadata");
-        }
+        uno::Reference<rdf::XDocumentMetadataAccess> xDocumentMetadataAccess(xModel, uno::UNO_QUERY_THROW);
+        uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetTemporaryStorage();
+        OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString());
+        const uno::Reference<frame::XModel> xModel_(xModel,
+            uno::UNO_QUERY_THROW);
+        const uno::Reference<rdf::XURI> xBaseURI(sfx2::createBaseURI(xContext, xModel_, aBaseURL, u""));
+        const uno::Reference<task::XInteractionHandler> xHandler;
+        xDocumentMetadataAccess->loadMetadataFromStorage(xStorage, xBaseURI, xHandler);
+    }
+    catch (const uno::Exception&)
+    {
+        DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to initialize RDF metadata");
     }
 
     if (eDocumentType == SourceDocumentType::OOXML) {
@@ -190,7 +187,6 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
     {
         m_pImpl->m_xDocumentStorage = comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
             OFOPXML_STORAGE_FORMAT_STRING, xInputStream, xContext, bRepairStorage);
-
 
         uno::Reference< uno::XInterface > xTemp = xContext->getServiceManager()->createInstanceWithContext(
                                 "com.sun.star.document.OOXMLDocumentPropertiesImporter",
