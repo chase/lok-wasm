@@ -19,6 +19,7 @@ export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
   @returns the corresponding document on success, null otherwise */
   load(name: string, blob: Blob): DocumentRef | null;
+  loadFromExpandedParts(data: Array<{path: string, content: string}>): DocumentRef | null;
   // NOTE: Disabled until unoembind startup cost is under 1s
   // importScript(url: string): void;
   preload(): void;

@@ -141,9 +141,19 @@ export type ITextRanges = {
   replaceAll(text: string): void;
 };
 
-/** Embind Document class, see main_wasm.cxx */
+export declare class ExpandedPart {
+  constructor(path: string, content: string): void;
+}
+
+export declare class ExpandedDocument {
+  constructor(): void;
+  addPart(path: string, name: string): void;
+}
+
+/** Embind ocument class, see main_wasm.cxx */
 export declare class Document {
   constructor(path: string): void;
+  constructor(expanded: ExpandedDocument, name: string): void;
   delete(): void;
 
   valid(): boolean;
@@ -188,7 +198,7 @@ export declare class Document {
   unsubscribe(viewId: number, type: number): void;
   startTileRenderer(
     viewId: number,
-    tileSize: number,
+tileSize: number,
   ): TileRenderData;
   addPreviewView(
     mainViewId: number,
@@ -273,6 +283,8 @@ export interface Module extends EmscriptenModule {
   readUnlink(path: string): Uint8Array;
 
   Document: typeof Document;
+  ExpandedPart: typeof ExpandedPart;
+  ExpandedDocument: typeof ExpandedDocument;
 
   /** preloads LOK */
   preload(): void;

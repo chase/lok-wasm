@@ -1,7 +1,9 @@
+#include "com/sun/star/document/MacroExecMode.hdl"
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/frame/Desktop.hpp"
 #include "com/sun/star/frame/XDesktop2.hdl"
 #include "comphelper/diagnose_ex.hxx"
+#include "comphelper/seqstream.hxx"
 #include "comphelper/storagehelper.hxx"
 #include "cppuhelper/exc_hlp.hxx"
 #include "lib/init.hxx"
@@ -268,12 +270,23 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
 
+    // Create an empty sequence
+    uno::Sequence<sal_Int8> aEmptyData;
+
+    // Wrap the empty sequence in a SequenceInputStream
+    uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
+
+    uno::Reference<io::XInputStream> aInputStream(xEmptyInputStream);
+
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage
-    aMediaDescriptor["ExpandedStorage"] <<= true;
     // Expanded storage only supports .docx files right now
-    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML");
+    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
+    aMediaDescriptor["MacroExecutionMode"] <<= document::MacroExecMode::NEVER_EXECUTE;
+    aMediaDescriptor["InputStream"] <<= aInputStream;
+    aMediaDescriptor["Silent"] <<= true;
+    aMediaDescriptor["Hidden"] <<= true;
 
     {
         SolarMutexGuard aGuard;

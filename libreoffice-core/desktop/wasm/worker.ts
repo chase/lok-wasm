@@ -82,6 +82,25 @@ const globalHandler: GlobalMethod = {
     docMap[ref] = doc;
     return ref;
   },
+  loadFromExpandedParts: function(data: any) {
+    const { Document, ExpandedDocument, ExpandedPart} = lok;
+    const expandedDoc = new ExpandedDocument();
+    for (const part of data) {
+      expandedDoc.addPart(part.path, part.content.join(""));
+    }
+
+    const doc = new Document(expandedDoc, "test");
+    const ref = doc.ref();
+    lok.unmountBlob();
+
+    if (!doc.valid()) {
+      doc.delete();
+      return null;
+    }
+
+    docMap[ref] = doc;
+    return ref;
+  },
 
   preload: function (): void {
     lok.preload();
