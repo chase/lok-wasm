@@ -1,6 +1,8 @@
+#include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/frame/Desktop.hpp"
 #include "com/sun/star/frame/XDesktop2.hdl"
 #include "comphelper/diagnose_ex.hxx"
+#include "comphelper/storagehelper.hxx"
 #include "cppuhelper/exc_hlp.hxx"
 #include "lib/init.hxx"
 #include "oox/helper/expandedstorage.hxx"
@@ -260,6 +262,12 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     {
         storage.addPart(part.path, part.content);
     }
+
+    uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
+
+    comphelper::OStorageHelper::SetIsExpandedStorage(true);
+    comphelper::OStorageHelper::SetExpandedStorage(xStorage);
+
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage

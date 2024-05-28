@@ -62,6 +62,7 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
     std::unordered_map<std::string, ExpandedFile> files;
     std::mutex m_aMutex;
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
+    ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
 
 public:
     ExpandedStorage();

@@ -196,6 +196,12 @@ public:
 
     static OUString
     GetODFVersionFromStorage(const css::uno::Reference<css::embed::XStorage>& xStorage);
+
+    static css::uno::Reference<css::embed::XStorage> GetExpandedStorage();
+    static void SetExpandedStorage(css::uno::Reference<css::embed::XStorage>& xStorage);
+    static bool IsExpandedStorage();
+    static void SetIsExpandedStorage(bool bIsExpanded);
+
 };
 
 }
