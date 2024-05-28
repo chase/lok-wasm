@@ -2,6 +2,7 @@
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/frame/Desktop.hpp"
 #include "com/sun/star/frame/XDesktop2.hdl"
+#include "comphelper/base64.hxx"
 #include "comphelper/diagnose_ex.hxx"
 #include "comphelper/seqstream.hxx"
 #include "comphelper/storagehelper.hxx"
@@ -265,18 +266,20 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
 
     oox::ExpandedStorage storage(xContext, xEmptyInputStream);
-    uno::Reference<oox::StorageBase> xStorageBase = storage.getStorageBase();
+    /* uno::Reference<oox::StorageBase> xStorageBase(storage, uno::UNO_QUERY); */
 
     for (const auto& part : expandedDoc.parts)
     {
         storage.addPart(part.path, part.content);
     }
 
+    storage.readRelationshipInfo();
+
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
 
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
-    comphelper::OStorageHelper::SetExpandedStorageBase(xStorageBase);
+    /* comphelper::OStorageHelper::SetExpandedStorageBase(xStorageBase); */
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage

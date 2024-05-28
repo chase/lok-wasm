@@ -86,7 +86,7 @@ const globalHandler: GlobalMethod = {
     const { Document, ExpandedDocument, ExpandedPart} = lok;
     const expandedDoc = new ExpandedDocument();
     for (const part of data) {
-      expandedDoc.addPart(part.path, part.content.join(""));
+      expandedDoc.addPart(part.path, part.content);
     }
 
     const doc = new Document(expandedDoc, "test");

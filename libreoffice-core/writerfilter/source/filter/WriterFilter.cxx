@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "comphelper/storagehelper.hxx"
 #ifdef DBG_UTIL
 #include <iostream>
 #endif
@@ -166,7 +167,7 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
         bool bSkipImages
             = aMediaDesc.getUnpackedValueOrDefault("FilterOptions", OUString()) == "SkipImages";
 
-        bool bExpandedStorage = aMediaDesc.getUnpackedValueOrDefault("ExpandedStorage", false);
+        bool bExpandedStorage = comphelper::OStorageHelper::IsExpandedStorage();
 
         // If we are using ExpandedStorage, we can load the input stream directly from media descriptors
         uno::Reference<io::XInputStream> xInputStream;

@@ -1,6 +1,8 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 
+#include "com/sun/star/io/XInputStream.hdl"
+#include "cppuhelper/implbase.hxx"
 #include "oox/helper/storagebase.hxx"
 #include <rtl/ustring.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
@@ -9,6 +11,7 @@
 #include <mutex>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/embed/XHierarchicalStorageAccess.hpp>
+#include <com/sun/star/embed/XRelationshipAccess.hpp>
 #include <com/sun/star/io/XStream.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 #include <com/sun/star/lang/XTypeProvider.hpp>
@@ -44,6 +47,23 @@ using namespace com::sun::star;
 namespace oox
 {
 
+class SequenceStreamSupplier : public cppu::WeakImplHelper<css::io::XStream>
+{
+private:
+    css::uno::Reference<io::XInputStream> m_xInput;
+    css::uno::Reference<io::XOutputStream> m_xOutput;
+
+public:
+    SequenceStreamSupplier(css::uno::Reference<io::XInputStream> xInput,
+                           css::uno::Reference<io::XOutputStream> xOutput)
+        : m_xInput(std::move(xInput))
+        , m_xOutput(std::move(xOutput)){};
+
+    // XStream
+    virtual uno::Reference<io::XInputStream> SAL_CALL getInputStream() override;
+    virtual uno::Reference<io::XOutputStream> SAL_CALL getOutputStream() override;
+};
+
 struct ExpandedFile
 {
     const OUString path;
@@ -57,6 +77,7 @@ struct ExpandedFile
 class ExpandedStorage final : public css::lang::XTypeProvider,
                               public css::embed::XStorage,
                               public css::embed::XHierarchicalStorageAccess,
+                              public css::embed::XRelationshipAccess,
                               public css::beans::XPropertySet,
                               public cppu::OWeakObject,
                               public StorageBase
@@ -66,13 +87,17 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
     ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
 
+    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
+
 public:
+    ExpandedStorage(const ExpandedStorage&) = delete;
+    ExpandedStorage(ExpandedStorage&&) = delete;
+    ExpandedStorage& operator=(const ExpandedStorage&) = delete;
+    ExpandedStorage& operator=(ExpandedStorage&&) = delete;
     ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
                     const css::uno::Reference<css::io::XInputStream>& rxStream);
 
     void addPart(const std::string& path, const std::string& content);
-
-    uno::Reference< StorageBase > getStorageBase();
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -162,30 +187,59 @@ public:
 
     // StorageBase
     /** Returns true, if the object represents a valid storage. */
-    virtual bool        implIsStorage() const override;
+    virtual bool implIsStorage() const override;
 
     /** Returns the com.sun.star.embed.XStorage interface of the current storage. */
-    virtual css::uno::Reference< css::embed::XStorage >
-                        implGetXStorage() const override;
+    virtual css::uno::Reference<css::embed::XStorage> implGetXStorage() const override;
 
     /** Returns the names of all elements of this storage. */
-    virtual void        implGetElementNames( ::std::vector< OUString >& orElementNames ) const override;
+    virtual void implGetElementNames(::std::vector<OUString>& orElementNames) const override;
 
     /** Opens and returns the specified sub storage from the storage. */
-    virtual StorageRef  implOpenSubStorage( const OUString& rElementName, bool bCreateMissing ) override;
+    virtual StorageRef implOpenSubStorage(const OUString& rElementName,
+                                          bool bCreateMissing) override;
 
     /** Opens and returns the specified input stream from the storage. */
-    virtual css::uno::Reference< css::io::XInputStream >
-                        implOpenInputStream( const OUString& rElementName ) override;
+    virtual css::uno::Reference<css::io::XInputStream>
+    implOpenInputStream(const OUString& rElementName) override;
 
     /** Opens and returns the specified output stream from the storage. */
-    virtual css::uno::Reference< css::io::XOutputStream >
-                        implOpenOutputStream( const OUString& rElementName ) override;
+    virtual css::uno::Reference<css::io::XOutputStream>
+    implOpenOutputStream(const OUString& rElementName) override;
 
     /** Commits the current storage. */
-    virtual void        implCommit() const override;
+    virtual void implCommit() const override;
+
+    /* // XRelationshipAccess */
+    virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override;
+
+    virtual OUString SAL_CALL getTargetByID(const OUString& sID) override;
+
+    virtual OUString SAL_CALL getTypeByID(const OUString& sID) override;
+
+    virtual css::uno::Sequence<css::beans::StringPair>
+        SAL_CALL getRelationshipByID(const OUString& sID) override;
+
+    virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
+        SAL_CALL getRelationshipsByType(const OUString& sType) override;
+
+    virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
+        SAL_CALL getAllRelationships() override;
+
+    virtual void SAL_CALL insertRelationshipByID(
+        const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
+        sal_Bool bReplace) override;
+
+    virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override;
+
+    virtual void SAL_CALL insertRelationships(
+        const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
+        sal_Bool bReplace) override;
+
+    virtual void SAL_CALL clearRelationships() override;
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
+    void readRelationshipInfo();
 };
 
 } // namespace oox
