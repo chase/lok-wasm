@@ -276,10 +276,11 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     storage.readRelationshipInfo();
 
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
+    auto storageBase = std::shared_ptr<oox::StorageBase>(&storage);
 
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
-    /* comphelper::OStorageHelper::SetExpandedStorageBase(xStorageBase); */
+    comphelper::OStorageHelper::SetExpandedStorageBase(storageBase);
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage

@@ -200,9 +200,9 @@ public:
     GetODFVersionFromStorage(const css::uno::Reference<css::embed::XStorage>& xStorage);
 
     static css::uno::Reference<css::embed::XStorage> GetExpandedStorage();
-    static css::uno::Reference<oox::StorageBase> GetExpandedStorageBase();
+    static std::shared_ptr<oox::StorageBase> GetExpandedStorageBase();
     static void SetExpandedStorage(css::uno::Reference<css::embed::XStorage>& xStorage);
-    static void SetExpandedStorageBase(css::uno::Reference<oox::StorageBase>& xStorage);
+    static void SetExpandedStorageBase(std::shared_ptr<oox::StorageBase>& xStorage);
     static bool IsExpandedStorage();
     static void SetIsExpandedStorage(bool bIsExpanded);
 

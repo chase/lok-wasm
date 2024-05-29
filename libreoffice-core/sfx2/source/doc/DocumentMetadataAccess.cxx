@@ -350,6 +350,8 @@ addContentOrStylesFileImpl(struct DocumentMetadataAccess_Impl const & i_rImpl,
         xType.set(getURI<rdf::URIs::ODF_STYLESFILE>(i_rImpl.m_xContext));
     } else {
         return false;
+        SAL_WARN("metadata", "FAILED TO ADD CONTENT OR STYLE 1");
+
     }
     addFile(i_rImpl, xType, i_rPath, nullptr);
     return true;
@@ -548,15 +550,23 @@ static void
 collectFilesFromStorage(uno::Reference<embed::XStorage> const& i_xStorage,
     std::set< OUString > & o_rFiles)
 {
+    SAL_WARN("metadata", "collecting files from storage");
     try {
+
+        SAL_WARN("metadata", "checking content file");
         if (i_xStorage->hasByName(s_content) &&
             i_xStorage->isStreamElement(s_content))
         {
+
+            SAL_WARN("metadata", "found content file");
             o_rFiles.insert(s_content);
         }
+
+        SAL_WARN("metadata", "checking content file");
         if (i_xStorage->hasByName(s_styles) &&
             i_xStorage->isStreamElement(s_styles))
         {
+            SAL_WARN("metadata", "found content file");
             o_rFiles.insert(s_styles);
         }
     } catch (const uno::Exception &) {
@@ -806,9 +816,11 @@ static void init(struct DocumentMetadataAccess_Impl & i_rImpl)
 
     // add top-level content files
     if (!addContentOrStylesFileImpl(i_rImpl, s_content)) {
+        SAL_WARN("metadata", "FAILED TO ADD CONTENT OR STYLES");
         throw uno::RuntimeException();
     }
     if (!addContentOrStylesFileImpl(i_rImpl, s_styles)) {
+        SAL_WARN("metadata", "FAILED TO ADD CONTENT OR STYLES");
         throw uno::RuntimeException();
     }
 }
@@ -1085,32 +1097,48 @@ void SAL_CALL DocumentMetadataAccess::loadMetadataFromStorage(
     const uno::Reference<rdf::XURI> & i_xBaseURI,
     const uno::Reference<task::XInteractionHandler> & i_xHandler)
 {
-    if (!i_xStorage.is()) {
+    uno::Reference<embed::XStorage> storage;
+    bool isExpandedStorage = comphelper::OStorageHelper::IsExpandedStorage();
+
+    if (isExpandedStorage)
+    {
+        storage = i_xStorage->openStorageElement("word", 0);
+    }
+    else
+    {
+        storage = i_xStorage;
+    }
+
+
+    if (!storage.is()) {
         throw lang::IllegalArgumentException(
             "DocumentMetadataAccess::loadMetadataFromStorage: "
             "storage is null", *this, 0);
     }
-    if (!i_xBaseURI.is()) {
+    if (!i_xBaseURI.is() && !isExpandedStorage) {
         throw lang::IllegalArgumentException(
             "DocumentMetadataAccess::loadMetadataFromStorage: "
             "base URI is null", *this, 1);
     }
     const OUString baseURI( i_xBaseURI->getStringValue());
-    if (baseURI.indexOf('#') >= 0) {
+    if (baseURI.indexOf('#') >= 0 && !isExpandedStorage) {
         throw lang::IllegalArgumentException(
             "DocumentMetadataAccess::loadMetadataFromStorage: "
             "base URI not absolute", *this, 1);
     }
-    if (!baseURI.endsWith("/")) {
+    if (!baseURI.endsWith("/") && !isExpandedStorage) {
         throw lang::IllegalArgumentException(
             "DocumentMetadataAccess::loadMetadataFromStorage: "
             "base URI does not end with slash", *this, 1);
     }
 
-    initLoading(*m_pImpl, i_xStorage, i_xBaseURI, i_xHandler);
+
+    SAL_WARN("metadata", "before loading from storage");
+    initLoading(*m_pImpl, storage, i_xBaseURI, i_xHandler);
+    SAL_WARN("metadata", "after loading from storage");
 
     std::set< OUString > StgFiles;
-    collectFilesFromStorage(i_xStorage, StgFiles);
+    collectFilesFromStorage(storage, StgFiles);
 
     std::vector< OUString > MfstMetadataFiles;
 
@@ -1175,10 +1203,13 @@ void SAL_CALL DocumentMetadataAccess::loadMetadataFromStorage(
     }
 
     for (const auto& aStgFile : StgFiles)
+    {
+        SAL_WARN("metadata", "adding styles file" <<  aStgFile);
         addContentOrStylesFileImpl(*m_pImpl, aStgFile);
+    }
 
     for (const auto& aMfstMetadataFile : MfstMetadataFiles)
-        importFile(*m_pImpl, i_xStorage, baseURI, i_xHandler, aMfstMetadataFile);
+        importFile(*m_pImpl, storage, baseURI, i_xHandler, aMfstMetadataFile);
 }
 
 void SAL_CALL DocumentMetadataAccess::storeMetadataToStorage(

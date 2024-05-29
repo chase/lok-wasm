@@ -22,6 +22,7 @@
 #include "comphelper/storagehelper.hxx"
 #include "oox/helper/storagebase.hxx"
 #include "sot/stg.hxx"
+#include <memory>
 #include <oox/core/filterdetect.hxx>
 
 #include <com/sun/star/io/XStream.hpp>
@@ -453,7 +454,7 @@ void FilterDetect::ZipDetect( MediaDescriptor& aMediaDescriptor, Reference< XCom
 
 void FilterDetect::ExpandedDetect(utl::MediaDescriptor &aMediaDescriptor, css::uno::Reference<com::sun::star::uno::XComponentContext> rxContext, OUString &aFilterName)
 {
-    Reference< oox::StorageBase > xStorageBase = comphelper::OStorageHelper::GetExpandedStorageBase();
+    std::shared_ptr< oox::StorageBase > xStorageBase = comphelper::OStorageHelper::GetExpandedStorageBase();
 
     // create the fast parser, register the XML namespaces, set document handler
     FastParser aParser;

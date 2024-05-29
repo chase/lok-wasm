@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "oox/helper/expandedstorage.hxx"
 #include <oox/core/xmlfilterbase.hxx>
 
 #include <cstdio>
@@ -1013,12 +1014,20 @@ bool XmlFilterBase::implFinalizeExport( MediaDescriptor& rMediaDescriptor )
 }
 
 // private --------------------------------------------------------------------
+//
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XInputStream >& rxInStream ) const
 {
-    return std::make_shared<ZipStorage>(
-        getComponentContext(), rxInStream,
-        getMediaDescriptor().getUnpackedValueOrDefault("RepairPackage", false));
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        return comphelper::OStorageHelper::GetExpandedStorageBase();
+    }
+    else
+    {
+        return std::make_shared<ZipStorage>(
+            getComponentContext(), rxInStream,
+            getMediaDescriptor().getUnpackedValueOrDefault("RepairPackage", false));
+    }
 }
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XStream >& rxOutStream ) const

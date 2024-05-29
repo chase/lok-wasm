@@ -326,8 +326,9 @@ void SAL_CALL ExpandedStorage::copyStorageElementLastCommitTo(const OUString&,
 
 sal_Bool SAL_CALL ExpandedStorage::isStreamElement(const OUString& aElementName)
 {
+    SAL_WARN("expandedstorage", "isStreamElement" << getFullPath(aElementName));
     std::lock_guard<std::mutex> lock(m_aMutex);
-    return m_files->find(std::string(aElementName.toUtf8())) != m_files->end();
+    return m_files->find(helpers::toString(getFullPath(aElementName))) != m_files->end();
 }
 
 sal_Bool SAL_CALL ExpandedStorage::isStorageElement(const OUString& path)
@@ -408,7 +409,7 @@ css::uno::Sequence<OUString> SAL_CALL ExpandedStorage::getElementNames()
 // name is relative path to the current storage
 sal_Bool SAL_CALL ExpandedStorage::hasByName(const OUString& name)
 {
-    SAL_WARN("expandedstorage", "hasByName " << name);
+    SAL_WARN("expandedstorage", "hasByName " << getFullPath(name));
     std::lock_guard<std::mutex> lock(m_aMutex);
     return m_files->find(helpers::toString(getFullPath(name))) != m_files->end();
 }

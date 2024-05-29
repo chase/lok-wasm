@@ -43,6 +43,7 @@
 #include <com/sun/star/security/DocumentDigitalSignatures.hpp>
 #include <com/sun/star/security/XCertificate.hpp>
 
+#include <memory>
 #include <vector>
 
 #include <rtl/digest.h>
@@ -76,7 +77,7 @@ using namespace ::com::sun::star;
 namespace comphelper {
 
 static uno::Reference<embed::XStorage> expandedStorage;
-static uno::Reference<oox::StorageBase> expandedStorageBase;
+static std::shared_ptr<oox::StorageBase> expandedStorageBase;
 static bool bIsExpandedStorage = false;
 
 uno::Reference<embed::XStorage> OStorageHelper::GetExpandedStorage()
@@ -99,12 +100,12 @@ void OStorageHelper::SetIsExpandedStorage(bool bIsExpanded)
     bIsExpandedStorage = bIsExpanded;
 }
 
-void OStorageHelper::SetExpandedStorageBase(uno::Reference<oox::StorageBase>& xStorage)
+void OStorageHelper::SetExpandedStorageBase(std::shared_ptr<oox::StorageBase>& xStorage)
 {
     expandedStorageBase = xStorage;
 }
 
-uno::Reference<oox::StorageBase> OStorageHelper::GetExpandedStorageBase()
+std::shared_ptr<oox::StorageBase> OStorageHelper::GetExpandedStorageBase()
 {
     return expandedStorageBase;
 }
