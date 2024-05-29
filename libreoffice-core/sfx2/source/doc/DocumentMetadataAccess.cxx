@@ -18,6 +18,7 @@
  */
 
 
+#include "com/sun/star/embed/XStorage.hdl"
 #include <sfx2/DocumentMetadataAccess.hxx>
 
 #include <com/sun/star/lang/WrappedTargetRuntimeException.hpp>

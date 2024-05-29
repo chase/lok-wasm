@@ -1,5 +1,5 @@
 #include "com/sun/star/embed/XExtendedStorageStream.hdl"
-#include "com/sun/star/io/SequenceInputStream.hpp"
+#include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/io/XInputStream.hdl"
 #include "com/sun/star/io/XStream.hdl"
 #include "com/sun/star/packages/NoEncryptionException.hdl"
@@ -14,8 +14,6 @@
 #include "oox/helper/storagebase.hxx"
 #include "sal/log.hxx"
 #include "sot/stg.hxx"
-#include "tools/stream.hxx"
-#include "unotools/streamwrap.hxx"
 #include <memory>
 #include <oox/helper/expandedstorage.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -32,13 +30,35 @@
 #include <osl/diagnose.h>
 #include <string_view>
 
-using namespace com::sun::star;
+using namespace com::sun::star::uno;
 
 namespace oox
 {
 
-SequenceStreamSupplier::SequenceStreamSupplier(uno::Reference<io::XInputStream> xInput,
-                                               uno::Reference<io::XOutputStream> xOutput)
+namespace helpers
+{
+
+OUString toOUString(const std::string& value) { return OUString::createFromAscii(value.c_str()); }
+
+std::string toString(const OUString& value) { return std::string(value.toUtf8()); }
+
+std::vector<std::string> split(const std::string& str, char delimiter)
+{
+    std::vector<std::string> tokens;
+    std::stringstream ss(str);
+    std::string token;
+
+    while (std::getline(ss, token, delimiter))
+    {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+}
+
+SequenceStreamSupplier::SequenceStreamSupplier(Reference<io::XInputStream> xInput,
+                                               Reference<io::XOutputStream> xOutput)
     : m_xInput(std::move(xInput))
     , m_xOutput(std::move(xOutput))
 {
@@ -49,12 +69,9 @@ SequenceStreamSupplier::SequenceStreamSupplier(uno::Reference<io::XInputStream> 
                "StreamSupplier::StreamSupplier: at least one of both must be seekable!");
 }
 
-uno::Reference<io::XInputStream> SAL_CALL SequenceStreamSupplier::getInputStream()
-{
-    return m_xInput;
-}
+Reference<io::XInputStream> SAL_CALL SequenceStreamSupplier::getInputStream() { return m_xInput; }
 
-uno::Reference<io::XOutputStream> SAL_CALL SequenceStreamSupplier::getOutputStream()
+Reference<io::XOutputStream> SAL_CALL SequenceStreamSupplier::getOutputStream()
 {
     return m_xOutput;
 }
@@ -81,24 +98,24 @@ sal_Int64 SAL_CALL SequenceStreamSupplier::getLength()
     return m_xSeekable->getLength();
 }
 
-SequenceStreamContainer::SequenceStreamContainer(css::uno::Reference<css::io::XStream>& xStream)
+SequenceStreamContainer::SequenceStreamContainer(Reference<io::XStream>& xStream)
     : m_xStream(xStream)
 {
 }
 
-css::uno::Reference<css::io::XInputStream> SAL_CALL SequenceStreamContainer::getInputStream()
+Reference<io::XInputStream> SAL_CALL SequenceStreamContainer::getInputStream()
 {
     return m_xStream->getInputStream();
 }
-css::uno::Reference<css::io::XOutputStream> SAL_CALL SequenceStreamContainer::getOutputStream()
+Reference<io::XOutputStream> SAL_CALL SequenceStreamContainer::getOutputStream()
 {
     return m_xStream->getOutputStream();
 }
 
-uno::Any SAL_CALL SequenceStreamContainer::queryInterface(const uno::Type& rType)
+Any SAL_CALL SequenceStreamContainer::queryInterface(const Type& rType)
 {
-    uno::Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
-                                         static_cast<io::XStream*>(this));
+    Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
+                                    static_cast<io::XStream*>(this));
     if (aRet.hasValue())
         return aRet;
 
@@ -120,7 +137,7 @@ void SAL_CALL SequenceStreamContainer::dispose()
 }
 
 void SAL_CALL
-SequenceStreamContainer::addEventListener(const uno::Reference<lang::XEventListener>& xListener)
+SequenceStreamContainer::addEventListener(const Reference<lang::XEventListener>& xListener)
 {
     std::unique_lock aGuard(m_aMutex);
 
@@ -128,34 +145,61 @@ SequenceStreamContainer::addEventListener(const uno::Reference<lang::XEventListe
 }
 
 void SAL_CALL
-SequenceStreamContainer::removeEventListener(const uno::Reference<lang::XEventListener>& xListener)
+SequenceStreamContainer::removeEventListener(const Reference<lang::XEventListener>& xListener)
 {
     std::unique_lock aGuard(m_aMutex);
 
     m_aListenersContainer.removeInterface(aGuard, xListener);
 }
 
-ExpandedStorage::ExpandedStorage(const css::uno::Reference<uno::XComponentContext>& rxContext,
-                                 const css::uno::Reference<css::io::XInputStream>& rxInStream)
+ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
+                                 const Reference<io::XInputStream>& rxInStream)
     : StorageBase(rxInStream, false)
     , m_xContext(rxContext)
+    , m_inputStream(rxInStream)
+{
+}
+
+OUString ExpandedStorage::getFullPath(const OUString& path) const
+{
+    return helpers::toOUString(m_basePath.value_or("")) + "/" + path;
+}
+
+ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& context_,
+                                 const std::shared_ptr<ExpandedFileMap>& fileMap_,
+                                 const Reference<io::XInputStream>& inputStream_,
+                                 const OUString& basePath_)
+    : StorageBase(inputStream_, false)
+    , m_files(fileMap_)
+    , m_xContext(context_)
+    , m_basePath(helpers::toString(basePath_))
+    , m_inputStream(inputStream_)
 {
 }
 
 void ExpandedStorage::addPart(const std::string& path, const std::string& content)
 {
-    using namespace css::uno;
+    std::vector<std::string> pathParts = helpers::split(path, '/');
+    for (int idx = 0; idx < pathParts.size() - 1; idx++)
+    {
+        bool found = std::find(m_dirs.begin(), m_dirs.end(), pathParts[idx]) != m_dirs.end();
+        if (!found)
+        {
+            SAL_WARN("expandedstorage", "found dir part" << pathParts[idx]);
+            m_dirs.push_back(pathParts[idx]);
+        }
+    }
     OUString sPath = OUString::createFromAscii(path.c_str());
     Sequence<sal_Int8> sContent;
     comphelper::Base64::decode(sContent, OUString::createFromAscii(content.c_str()));
     ExpandedFile file(sPath, sContent);
-    files.insert({ path, file });
+    m_files->insert({ path, file });
 }
 
 // XInterface
-css::uno::Any SAL_CALL ExpandedStorage::queryInterface(const css::uno::Type& rType)
+Any SAL_CALL ExpandedStorage::queryInterface(const Type& rType)
 {
-    uno::Any aReturn = ::cppu::queryInterface(
+    Any aReturn = ::cppu::queryInterface(
         rType, static_cast<lang::XTypeProvider*>(this), static_cast<embed::XStorage*>(this),
         static_cast<embed::XHierarchicalStorageAccess*>(this),
         static_cast<container::XNameAccess*>(this), static_cast<container::XElementAccess*>(this),
@@ -173,7 +217,7 @@ void SAL_CALL ExpandedStorage::acquire() noexcept { cppu::OWeakObject::acquire()
 void SAL_CALL ExpandedStorage::release() noexcept { cppu::OWeakObject::release(); }
 
 // XTypeProvider
-css::uno::Sequence<css::uno::Type> SAL_CALL ExpandedStorage::getTypes()
+Sequence<Type> SAL_CALL ExpandedStorage::getTypes()
 {
     static css::uno::Sequence<css::uno::Type> aTypes = {
         cppu::UnoType<css::lang::XTypeProvider>::get(),
@@ -185,132 +229,150 @@ css::uno::Sequence<css::uno::Type> SAL_CALL ExpandedStorage::getTypes()
     return aTypes;
 }
 
-css::uno::Sequence<sal_Int8> SAL_CALL ExpandedStorage::getImplementationId()
-{
-    return css::uno::Sequence<sal_Int8>();
-}
+Sequence<sal_Int8> SAL_CALL ExpandedStorage::getImplementationId() { return Sequence<sal_Int8>(); }
 
 // XStorage
 
 /// Copies over all stream elements from this storage to the target storage.
-void SAL_CALL ExpandedStorage::copyToStorage(const css::uno::Reference<css::embed::XStorage>& xDest)
+void SAL_CALL ExpandedStorage::copyToStorage(const Reference<embed::XStorage>& xDest)
 {
     if (!xDest.is())
-        throw css::uno::RuntimeException();
+        throw RuntimeException();
 
-    for (const auto& [path, file] : files)
+    for (const auto& [path, file] : *m_files)
     {
-        css::uno::Reference<css::io::XStream> xStream = xDest->openStreamElement(
+        Reference<io::XStream> xStream = xDest->openStreamElement(
             file.path, embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE);
-        css::uno::Reference<css::io::XOutputStream> xOut = xStream->getOutputStream();
+        Reference<io::XOutputStream> xOut = xStream->getOutputStream();
         xOut->writeBytes(file.content);
         xOut->closeOutput();
     }
 }
-
-css::uno::Reference<css::io::XStream>
-    SAL_CALL ExpandedStorage::openStreamElement(const OUString& aStreamName, sal_Int32 nOpenMode)
+Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
+                                                          PathType pathType)
 {
+    SAL_WARN("expandedstorage",
+             "openStreamElement " << name << " " << nOpenMode << " " << pathType);
+    std::string path = pathType == PathType::Absolute ? helpers::toString(name)
+                                                      : helpers::toString(getFullPath(name));
+
     std::lock_guard<std::mutex> lock(m_aMutex);
-    auto it = files.find(std::string(aStreamName.toUtf8()));
-    if (it == files.end())
+    auto it = m_files->find(std::string(path));
+    if (it == m_files->end())
     {
-        SAL_WARN("expandedstorage", "NO SUCH ELEMENT openStreamElement: " << aStreamName);
         throw css::container::NoSuchElementException();
     }
 
     const auto& file = it->second;
 
-    uno::Reference<io::XInputStream> xInputStream(
-        new comphelper::SequenceInputStream(file.content));
-    uno::Reference<io::XStream> xStream = new SequenceStreamSupplier(xInputStream, nullptr);
+    Reference<io::XInputStream> xInputStream(new comphelper::SequenceInputStream(file.content));
+    Reference<io::XStream> xStream = new SequenceStreamSupplier(xInputStream, nullptr);
     return xStream;
 }
 
+// name is relative
+Reference<io::XStream> SAL_CALL ExpandedStorage::openStreamElement(const OUString& name,
+                                                                   sal_Int32 openMode)
+{
+    return openStreamElement(name, openMode, PathType::Relative);
+}
+
 /// ExpandedStorage does not support encrypted streams, so this method is equivalent to openStreamElement.
-css::uno::Reference<css::io::XStream> SAL_CALL
-ExpandedStorage::openEncryptedStreamElement(const OUString&, sal_Int32, const OUString&)
+Reference<io::XStream> SAL_CALL ExpandedStorage::openEncryptedStreamElement(const OUString&,
+                                                                            sal_Int32,
+                                                                            const OUString&)
 {
     return openStreamElement(OUString(), 0);
 }
 
 /// ExpandedStorage is flat, so this method always returns itself.
-css::uno::Reference<css::embed::XStorage>
-    SAL_CALL ExpandedStorage::openStorageElement(const OUString&, sal_Int32)
+Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OUString& path,
+                                                                        sal_Int32 openMode)
 {
-    return this;
+    SAL_WARN("expandedstorage", "openStorageElement " << path << openMode);
+    if (path == "/")
+    {
+        return this;
+    }
+
+    Reference<ExpandedStorage> expandedStorage(
+        new ExpandedStorage(m_xContext, m_files, m_inputStream, path));
+    return Reference<embed::XStorage>(expandedStorage);
 }
 
-css::uno::Reference<css::io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUString&)
+Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUString&)
 {
     // TODO: @synoet - Implement this
     throw css::embed::StorageWrappedTargetException();
 }
 
 /// ExpandedStorage does not support encrypted streams, so this method is equivalent to cloneStreamElement.
-css::uno::Reference<css::io::XStream>
-    SAL_CALL ExpandedStorage::cloneEncryptedStreamElement(const OUString&, const OUString&)
+Reference<io::XStream> SAL_CALL ExpandedStorage::cloneEncryptedStreamElement(const OUString&,
+                                                                             const OUString&)
 {
     return cloneStreamElement(OUString());
 }
 
-void SAL_CALL
-ExpandedStorage::copyLastCommitTo(const css::uno::Reference<css::embed::XStorage>& xTargetStorage)
+void SAL_CALL ExpandedStorage::copyLastCommitTo(const Reference<embed::XStorage>& xTargetStorage)
 {
     copyToStorage(xTargetStorage);
 }
 
-void SAL_CALL ExpandedStorage::copyStorageElementLastCommitTo(
-    const OUString&, const css::uno::Reference<css::embed::XStorage>&)
+void SAL_CALL ExpandedStorage::copyStorageElementLastCommitTo(const OUString&,
+                                                              const Reference<embed::XStorage>&)
 {
-    throw css::embed::InvalidStorageException();
+    throw embed::InvalidStorageException();
 }
 
 sal_Bool SAL_CALL ExpandedStorage::isStreamElement(const OUString& aElementName)
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
-    return files.find(std::string(aElementName.toUtf8())) != files.end();
+    return m_files->find(std::string(aElementName.toUtf8())) != m_files->end();
 }
 
-sal_Bool SAL_CALL ExpandedStorage::isStorageElement(const OUString&) { return sal_False; }
+sal_Bool SAL_CALL ExpandedStorage::isStorageElement(const OUString& path)
+{
+    SAL_WARN("expandedstorage", "isStorageElement " << path);
+    return std::find(m_dirs.begin(), m_dirs.end(), helpers::toString(path)) != m_dirs.end();
+}
 
 void SAL_CALL ExpandedStorage::removeElement(const OUString& aElementName)
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
-    files.erase(std::string(aElementName.toUtf8()));
+    m_files->erase(std::string(aElementName.toUtf8()));
 }
 
 void SAL_CALL ExpandedStorage::renameElement(const OUString& rEleName, const OUString& rNewName)
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
-    auto it = files.find(std::string(rEleName.toUtf8()));
-    if (it == files.end())
-        throw css::container::NoSuchElementException();
+    auto it = m_files->find(std::string(rEleName.toUtf8()));
+    if (it == m_files->end())
+        throw container::NoSuchElementException();
 
-    auto nodeHandler = files.extract(it);
+    auto nodeHandler = m_files->extract(it);
     nodeHandler.key() = rNewName.toUtf8();
-    files.insert(std::move(nodeHandler));
+    m_files->insert(std::move(nodeHandler));
 }
 
 void SAL_CALL ExpandedStorage::copyElementTo(const OUString& aElementName,
-                                             const css::uno::Reference<css::embed::XStorage>& xDest,
+                                             const Reference<css::embed::XStorage>& xDest,
                                              const OUString& aNewName)
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
-    auto it = files.find(std::string(aElementName.toUtf8()));
-    if (it == files.end())
+    auto it = m_files->find(std::string(aElementName.toUtf8()));
+    if (it == m_files->end())
         throw css::container::NoSuchElementException();
 
     const auto& file = it->second;
-    css::uno::Reference<css::io::XStream> xStream = xDest->openStreamElement(
+    Reference<io::XStream> xStream = xDest->openStreamElement(
         aNewName, embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE);
-    css::uno::Reference<css::io::XOutputStream> xOut = xStream->getOutputStream();
+    Reference<io::XOutputStream> xOut = xStream->getOutputStream();
     xOut->writeBytes(file.content);
     xOut->closeOutput();
 }
 
 void SAL_CALL ExpandedStorage::moveElementTo(const OUString& aElementName,
-                                             const css::uno::Reference<css::embed::XStorage>& xDest,
+                                             const Reference<css::embed::XStorage>& xDest,
                                              const OUString& rNewName)
 {
     copyElementTo(aElementName, xDest, rNewName);
@@ -318,12 +380,14 @@ void SAL_CALL ExpandedStorage::moveElementTo(const OUString& aElementName,
 }
 
 // XNameAccess
-css::uno::Any SAL_CALL ExpandedStorage::getByName(const OUString& aName)
+
+/// name is relative path to the current storage
+css::uno::Any SAL_CALL ExpandedStorage::getByName(const OUString& name)
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
 
     uno::Any aResult;
-    aResult <<= openStreamElement(aName, embed::ElementModes::READWRITE);
+    aResult <<= openStreamElement(getFullPath(name), embed::ElementModes::READWRITE);
 
     return aResult;
 }
@@ -331,20 +395,22 @@ css::uno::Any SAL_CALL ExpandedStorage::getByName(const OUString& aName)
 css::uno::Sequence<OUString> SAL_CALL ExpandedStorage::getElementNames()
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
-    css::uno::Sequence<OUString> names(files.size());
+    css::uno::Sequence<OUString> names(m_files->size());
     auto namesArray = names.getArray();
     size_t i = 0;
-    for (const auto& pair : files)
+    for (const auto& pair : *m_files)
     {
         namesArray[i++] = OUString::createFromAscii(pair.first.c_str());
     }
     return names;
 }
 
-sal_Bool SAL_CALL ExpandedStorage::hasByName(const OUString& aName)
+// name is relative path to the current storage
+sal_Bool SAL_CALL ExpandedStorage::hasByName(const OUString& name)
 {
+    SAL_WARN("expandedstorage", "hasByName " << name);
     std::lock_guard<std::mutex> lock(m_aMutex);
-    return files.find(std::string(aName.toUtf8())) != files.end();
+    return m_files->find(helpers::toString(getFullPath(name))) != m_files->end();
 }
 
 css::uno::Type SAL_CALL ExpandedStorage::getElementType() { return uno::Type(); }
@@ -352,7 +418,7 @@ css::uno::Type SAL_CALL ExpandedStorage::getElementType() { return uno::Type(); 
 sal_Bool SAL_CALL ExpandedStorage::hasElements()
 {
     std::lock_guard<std::mutex> lock(m_aMutex);
-    return !files.empty();
+    return !m_files->empty();
 }
 
 // XPropertySet
@@ -363,55 +429,44 @@ css::uno::Reference<css::beans::XPropertySetInfo> SAL_CALL ExpandedStorage::getP
 
 void SAL_CALL ExpandedStorage::setPropertyValue(const OUString&, const css::uno::Any&)
 {
-    throw css::beans::UnknownPropertyException();
+    throw beans::UnknownPropertyException();
 }
 
 css::uno::Any SAL_CALL ExpandedStorage::getPropertyValue(const OUString&)
 {
-    throw css::beans::UnknownPropertyException();
+    throw beans::UnknownPropertyException();
 }
 
 void SAL_CALL ExpandedStorage::addPropertyChangeListener(
-    const OUString&, const css::uno::Reference<css::beans::XPropertyChangeListener>&)
+    const OUString&, const Reference<beans::XPropertyChangeListener>&)
 {
 }
 
 void SAL_CALL ExpandedStorage::removePropertyChangeListener(
-    const OUString&, const css::uno::Reference<css::beans::XPropertyChangeListener>&)
+    const OUString&, const Reference<beans::XPropertyChangeListener>&)
 {
 }
 
 void SAL_CALL ExpandedStorage::addVetoableChangeListener(
-    const OUString&, const css::uno::Reference<css::beans::XVetoableChangeListener>&)
+    const OUString&, const Reference<css::beans::XVetoableChangeListener>&)
 {
 }
 
 void SAL_CALL ExpandedStorage::removeVetoableChangeListener(
-    const OUString&, const css::uno::Reference<css::beans::XVetoableChangeListener>&)
+    const OUString&, const Reference<beans::XVetoableChangeListener>&)
 {
 }
 
-css::uno::Reference<css::embed::XExtendedStorageStream>
-    SAL_CALL ExpandedStorage::openStreamElementByHierarchicalName(const OUString& sStreamPath,
-                                                                  sal_Int32 nOpenMode)
+// streamPath is absolute
+css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
+ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath, sal_Int32 openMode)
 {
-    SAL_WARN("expandedstorage", "openStreamElementByHierarchicalName: " << sStreamPath);
+    SAL_WARN("expandedstorage", "opening stream element by hierarchical name" << streamPath);
+    css::uno::Reference<io::XStream> xStream
+        = openStreamElement(streamPath, openMode, PathType::Absolute);
 
-    // Open the stream element
-    css::uno::Reference<io::XStream> xStream = openStreamElement(sStreamPath, nOpenMode);
-
-    // Create a SequenceStreamContainer and manage its lifetime with a uno::Reference
-    css::uno::Reference<SequenceStreamContainer> aStreamContainer(
-        new SequenceStreamContainer(xStream));
-
-    SAL_WARN("expandedstorage", "before extended: " << xStream.is());
-
-    // Query the XExtendedStorageStream interface from the container
-    css::uno::Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer,
-                                                                       css::uno::UNO_QUERY_THROW);
-
-    SAL_WARN("expandedstorage", "after extended: " << xExtendedStream.is());
-
+    Reference<SequenceStreamContainer> aStreamContainer(new SequenceStreamContainer(xStream));
+    Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer, UNO_QUERY_THROW);
     return xExtendedStream;
 }
 
@@ -443,16 +498,14 @@ void ExpandedStorage::disposeImpl(std::unique_lock<std::mutex>& rGuard)
     }
 }
 
-void SAL_CALL
-ExpandedStorage::addEventListener(const uno::Reference<lang::XEventListener>& xListener)
+void SAL_CALL ExpandedStorage::addEventListener(const Reference<lang::XEventListener>& xListener)
 {
     std::unique_lock aGuard(m_aMutex);
 
     m_aListenersContainer.addInterface(aGuard, xListener);
 }
 
-void SAL_CALL
-ExpandedStorage::removeEventListener(const uno::Reference<lang::XEventListener>& xListener)
+void SAL_CALL ExpandedStorage::removeEventListener(const Reference<lang::XEventListener>& xListener)
 {
     std::unique_lock aGuard(m_aMutex);
 
@@ -462,15 +515,15 @@ ExpandedStorage::removeEventListener(const uno::Reference<lang::XEventListener>&
 // StorageBase
 bool ExpandedStorage::implIsStorage() const { return true; }
 
-css::uno::Reference<css::embed::XStorage> ExpandedStorage::implGetXStorage() const
+Reference<embed::XStorage> ExpandedStorage::implGetXStorage() const
 {
-    return css::uno::Reference<css::embed::XStorage>(const_cast<ExpandedStorage*>(this));
+    return Reference<embed::XStorage>(const_cast<ExpandedStorage*>(this));
 }
 
 void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementNames) const
 {
     size_t i = 0;
-    for (const auto& pair : files)
+    for (const auto& pair : *m_files)
     {
         orElementNames[i++] = OUString::createFromAscii(pair.first.c_str());
     }
@@ -481,21 +534,19 @@ StorageRef ExpandedStorage::implOpenSubStorage(const OUString&, bool)
     return std::shared_ptr<StorageBase>(std::move(this));
 }
 
-css::uno::Reference<css::io::XInputStream>
-ExpandedStorage::implOpenInputStream(const OUString& rElementName)
+Reference<io::XInputStream> ExpandedStorage::implOpenInputStream(const OUString& rElementName)
 {
     return openStreamElement(rElementName, embed::ElementModes::READ)->getInputStream();
 }
 
-css::uno::Reference<css::io::XOutputStream>
-ExpandedStorage::implOpenOutputStream(const OUString& rElementName)
+Reference<io::XOutputStream> ExpandedStorage::implOpenOutputStream(const OUString& rElementName)
 {
     return openStreamElement(rElementName, embed::ElementModes::READWRITE)->getOutputStream();
 }
 
 void ExpandedStorage::implCommit() const {}
 
-const beans::StringPair* lcl_findPairByName(const uno::Sequence<beans::StringPair>& rSeq,
+const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& rSeq,
                                             const OUString& rName)
 {
     return std::find_if(rSeq.begin(), rSeq.end(),
@@ -505,7 +556,8 @@ const beans::StringPair* lcl_findPairByName(const uno::Sequence<beans::StringPai
 void ExpandedStorage::readRelationshipInfo()
 {
     uno::Reference<io::XInputStream> xRelInfoStream
-        = openStreamElement("_rels/.rels", embed::ElementModes::READ)->getInputStream();
+        = openStreamElement("_rels/.rels", embed::ElementModes::READ, PathType::Absolute)
+              ->getInputStream();
     SAL_WARN("expandedstorage", "readRelationshipInfo: " << xRelInfoStream.is() << " available "
                                                          << xRelInfoStream->available());
     m_aRelInfo = ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(xRelInfoStream,
@@ -515,16 +567,15 @@ void ExpandedStorage::readRelationshipInfo()
 void SAL_CALL ExpandedStorage::clearRelationships() { m_aRelInfo.realloc(0); }
 
 void SAL_CALL ExpandedStorage::insertRelationships(
-    const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
-    sal_Bool bReplace)
+    const Sequence<Sequence<beans::StringPair>>& aEntries, sal_Bool bReplace)
 {
     OUString aIDTag("Id");
-    const uno::Sequence<uno::Sequence<beans::StringPair>> aSeq = getAllRelationships();
-    std::vector<uno::Sequence<beans::StringPair>> aResultVec;
+    const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
+    std::vector<Sequence<beans::StringPair>> aResultVec;
     aResultVec.reserve(aSeq.getLength() + aEntries.getLength());
 
     std::copy_if(aSeq.begin(), aSeq.end(), std::back_inserter(aResultVec),
-                 [&aIDTag, &aEntries](const uno::Sequence<beans::StringPair>& rTargetRel)
+                 [&aIDTag, &aEntries](const Sequence<beans::StringPair>& rTargetRel)
                  {
                      auto pTargetPair = lcl_findPairByName(rTargetRel, aIDTag);
                      if (pTargetPair == rTargetRel.end())
@@ -532,7 +583,7 @@ void SAL_CALL ExpandedStorage::insertRelationships(
 
                      bool bIsSourceSame = std::any_of(
                          aEntries.begin(), aEntries.end(),
-                         [&pTargetPair](const uno::Sequence<beans::StringPair>& rSourceEntry)
+                         [&pTargetPair](const Sequence<beans::StringPair>& rSourceEntry)
                          {
                              return std::find(rSourceEntry.begin(), rSourceEntry.end(),
                                               *pTargetPair)
@@ -545,8 +596,7 @@ void SAL_CALL ExpandedStorage::insertRelationships(
 
     std::transform(
         aEntries.begin(), aEntries.end(), std::back_inserter(aResultVec),
-        [&aIDTag](
-            const uno::Sequence<beans::StringPair>& rEntry) -> uno::Sequence<beans::StringPair>
+        [&aIDTag](const Sequence<beans::StringPair>& rEntry) -> Sequence<beans::StringPair>
         {
             auto pPair = lcl_findPairByName(rEntry, aIDTag);
 
@@ -563,10 +613,10 @@ void SAL_CALL ExpandedStorage::insertRelationships(
 
 void SAL_CALL ExpandedStorage::removeRelationshipByID(const OUString& sID)
 {
-    uno::Sequence<uno::Sequence<beans::StringPair>> aSeq = getAllRelationships();
+    Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     const beans::StringPair aIDRel("Id", sID);
     auto pRel = std::find_if(std::cbegin(aSeq), std::cend(aSeq),
-                             [&aIDRel](const uno::Sequence<beans::StringPair>& rRel)
+                             [&aIDRel](const Sequence<beans::StringPair>& rRel)
                              { return std::find(rRel.begin(), rRel.end(), aIDRel) != rRel.end(); });
     if (pRel != std::cend(aSeq))
     {
@@ -616,15 +666,15 @@ void SAL_CALL ExpandedStorage::insertRelationshipByID(
     m_aRelInfo = aSeq;
 }
 
-uno::Sequence<uno::Sequence<beans::StringPair>>
+Sequence<Sequence<beans::StringPair>>
     SAL_CALL ExpandedStorage::getRelationshipsByType(const OUString& sType)
 {
-    const uno::Sequence<uno::Sequence<beans::StringPair>> aSeq = getAllRelationships();
-    std::vector<uno::Sequence<beans::StringPair>> aResult;
+    const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
+    std::vector<Sequence<beans::StringPair>> aResult;
     aResult.reserve(aSeq.getLength());
 
     std::copy_if(aSeq.begin(), aSeq.end(), std::back_inserter(aResult),
-                 [&sType](const uno::Sequence<beans::StringPair>& rRel)
+                 [&sType](const Sequence<beans::StringPair>& rRel)
                  {
                      auto pRel = lcl_findPairByName(rRel, "Type");
                      return pRel != rRel.end()
@@ -637,7 +687,7 @@ uno::Sequence<uno::Sequence<beans::StringPair>>
 
 OUString SAL_CALL ExpandedStorage::getTypeByID(const OUString& sID)
 {
-    const uno::Sequence<beans::StringPair> aSeq = getRelationshipByID(sID);
+    const Sequence<beans::StringPair> aSeq = getRelationshipByID(sID);
     auto pRel = lcl_findPairByName(aSeq, "Type");
     if (pRel != aSeq.end())
         return pRel->Second;
@@ -647,7 +697,7 @@ OUString SAL_CALL ExpandedStorage::getTypeByID(const OUString& sID)
 
 OUString SAL_CALL ExpandedStorage::getTargetByID(const OUString& sID)
 {
-    const uno::Sequence<beans::StringPair> aSeq = getRelationshipByID(sID);
+    const Sequence<beans::StringPair> aSeq = getRelationshipByID(sID);
     auto pRel = lcl_findPairByName(aSeq, "Target");
     if (pRel != aSeq.end())
         return pRel->Second;
@@ -670,13 +720,13 @@ sal_Bool SAL_CALL ExpandedStorage::hasByID(const OUString& sID)
     return false;
 }
 
-uno::Sequence<beans::StringPair> SAL_CALL ExpandedStorage::getRelationshipByID(const OUString& sID)
+Sequence<beans::StringPair> SAL_CALL ExpandedStorage::getRelationshipByID(const OUString& sID)
 {
-    const uno::Sequence<uno::Sequence<beans::StringPair>> aSeq = getAllRelationships();
+    const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     const beans::StringPair aIDRel("Id", sID);
 
     auto pRel = std::find_if(aSeq.begin(), aSeq.end(),
-                             [&aIDRel](const uno::Sequence<beans::StringPair>& rRel)
+                             [&aIDRel](const Sequence<beans::StringPair>& rRel)
                              { return std::find(rRel.begin(), rRel.end(), aIDRel) != rRel.end(); });
     if (pRel != aSeq.end())
         return *pRel;
@@ -684,7 +734,7 @@ uno::Sequence<beans::StringPair> SAL_CALL ExpandedStorage::getRelationshipByID(c
     throw container::NoSuchElementException();
 }
 
-uno::Sequence<uno::Sequence<beans::StringPair>> SAL_CALL ExpandedStorage::getAllRelationships()
+Sequence<Sequence<beans::StringPair>> SAL_CALL ExpandedStorage::getAllRelationships()
 {
     return m_aRelInfo;
 }

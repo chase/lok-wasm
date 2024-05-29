@@ -107,6 +107,13 @@ struct ExpandedFile
         , content(content_){};
 };
 
+typedef std::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
+enum PathType
+{
+    Relative,
+    Absolute
+};
+
 class ExpandedStorage final : public css::lang::XTypeProvider,
                               public css::embed::XStorage,
                               public css::embed::XHierarchicalStorageAccess,
@@ -115,22 +122,35 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
                               public cppu::OWeakObject,
                               public StorageBase
 {
-    std::unordered_map<std::string, ExpandedFile> files;
+    std::shared_ptr<ExpandedFileMap> m_files;
+    std::vector<std::string> m_dirs;
     std::mutex m_aMutex;
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
     ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
-
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
+    std::optional<std::string> m_basePath;
+    css::uno::Reference<css::io::XInputStream> m_inputStream;
 
 public:
+    ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
+                    const css::uno::Reference<css::io::XInputStream>& rxStream);
+    // Constructor for creating a sub storage
+    ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
+                    const std::shared_ptr<ExpandedFileMap>& fileMap,
+                    const css::uno::Reference<io::XInputStream>& rxInputStream,
+                    const OUString& basePath);
+
     ExpandedStorage(const ExpandedStorage&) = delete;
     ExpandedStorage(ExpandedStorage&&) = delete;
     ExpandedStorage& operator=(const ExpandedStorage&) = delete;
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
-    ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
-                    const css::uno::Reference<css::io::XInputStream>& rxStream);
 
     void addPart(const std::string& path, const std::string& content);
+    void disposeImpl(std::unique_lock<std::mutex>& rGuard);
+    void readRelationshipInfo();
+    OUString getFullPath(const OUString& path) const;
+    uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,
+                                                  PathType pathType);
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -270,9 +290,6 @@ public:
         sal_Bool bReplace) override;
 
     virtual void SAL_CALL clearRelationships() override;
-
-    void disposeImpl(std::unique_lock<std::mutex>& rGuard);
-    void readRelationshipInfo();
 };
 
 } // namespace oox
