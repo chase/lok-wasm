@@ -20,7 +20,7 @@ const RECT_SIZE = 4;
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = true;
+const DEBUG = false;
 const START_TIMESTAMP = Date.now();
 
 /** 15 = 1440 twips-per-inch / 96 dpi */
