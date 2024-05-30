@@ -94,7 +94,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       if (!activeCanvas) return;
       idleAreaPaint = false;
       scheduledHeightPx = data.h * dpi;
-      scheduledHeightTwips = data.h * scaledTwips;
+      scheduledHeightTwips = scheduledHeightPx * scaledTwips;
       setState(RenderState.IDLE);
       if (!running) stateMachine();
       break;
@@ -128,7 +128,7 @@ function zoom(in_scale: number, in_dpi: number) {
   tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
-  scheduledHeightTwips = activeCanvas.height * scaledTwips;
+  scheduledHeightTwips = scheduledHeightPx * scaledTwips;
   scheduledWidthPx = docWidthTwips / scaledTwips;
 
   // Set this as a reference for the new position for the next scroll event

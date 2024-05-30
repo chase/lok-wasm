@@ -65,6 +65,7 @@ function observedSize(
 ) {
   const [doc, setHeight] = setter();
   let debounce: ReturnType<typeof setTimeout>;
+  const dpi = getOrCreateDPISignal();
   const observer = new ResizeObserver((entries) => {
     const entry = entries[0];
     const height = entry.contentRect
@@ -76,7 +77,7 @@ function observedSize(
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(async () => {
       setHeight(height);
-      await doc.setVisibleHeight(canvasHeight!);
+      await doc.setVisibleHeight(canvasHeight!, dpi());
     }, OBSERVED_SIZE_DEBOUNCE);
   });
 
@@ -153,10 +154,16 @@ export function OfficeDocument(props: Props) {
     });
   });
 
-  createEffect(() => {
-    const height = canvasHeight();
-    if (height) props.doc.setVisibleHeight(height);
-  });
+  createEffect(
+    on(
+      canvasHeight, 
+      () => {
+        const height = canvasHeight();
+        const getDpi = getOrCreateDPISignal();
+        if (height) props.doc.setVisibleHeight(height, getDpi());
+      }
+    )
+  );
 
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);
 
