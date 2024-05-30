@@ -20,6 +20,9 @@ const RECT_SIZE = 4;
 
 type TileIndexRange = [start: number, endInclusive: number];
 
+const DEBUG = false;
+const START_TIMESTAMP = Date.now();
+
 /** 15 = 1440 twips-per-inch / 96 dpi */
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
 
@@ -31,6 +34,7 @@ let activeCanvas: OffscreenCanvas;
 let ctx: OffscreenCanvasRenderingContext2D;
 let canvases: OffscreenCanvas[];
 let activeCanvasIndex: number = 0;
+let tileRingIndexToTime: Map<number, number> = new Map();
 
 /** contains a set of all the valid tile indices */
 const validTiles: Set<number> = new Set();
@@ -310,7 +314,18 @@ function rendering() {
       const dstX: number = xCoord * d.tileSize;
       const dstY: number = y * d.tileSize;
       ctx.beginPath();
-      ctx.putImageData(img, dstX, dstY);
+      ctx.putImageData(DEBUG ? addBorder(img) : img, dstX, dstY);
+      if (DEBUG) {
+        let timestamp = tileRingIndexToTime.get(x);
+        console.log(timestamp, START_TIMESTAMP);
+        ctx.font = '12px Arial';
+        ctx.fillStyle = 'blue';
+        ctx.fillText(
+          `${timestamp - START_TIMESTAMP} (${xCoord}, ${y})`,
+          dstX + 5,
+          dstY + 15
+        );
+      }
       ctx.closePath();
     }
   }
@@ -589,6 +604,7 @@ function blockingPaintTile(tileIndex: number): number {
 
   tileRingIndexToTileIndex.set(tileRingIndex, tileIndex);
   tileIndexToTileRingIndex.set(tileIndex, tileRingIndex);
+  tileRingIndexToTime.set(tileRingIndex, Date.now());
   tileRing.set(
     tileRingIndex,
     new ImageData(
@@ -708,4 +724,48 @@ function trimmedMean(input: number[]): number {
   const sum = trimmedArray.reduce((acc, val) => acc + val, 0);
 
   return sum / trimmedArray.length;
+}
+
+function addBorder(imageData: ImageData) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+  const red = 0;
+  const green = 0;
+  const blue = 255;
+  const alpha = 255;
+
+  for (let x = 0; x < width; x++) {
+    const index = (x + 0 * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  for (let x = 0; x < width; x++) {
+    const index = (x + (height - 1) * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  for (let y = 0; y < height; y++) {
+    const index = (0 + y * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  for (let y = 0; y < height; y++) {
+    const index = (width - 1 + y * width) * 4;
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = alpha;
+  }
+
+  return imageData;
 }
