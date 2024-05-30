@@ -154,7 +154,7 @@ const clientBase: DocumentClientBase = {
     const message: ToWorker = {
       f: 'newView',
       i,
-      a: [this.ref],
+      a: [],
     };
     loadWorkerOnce().postMessage(message);
 
@@ -194,16 +194,15 @@ function registerClientMethod(prop: string) {
   clientBase[prop] = function (...args: any[]) {
     const [i, future] = registerFuture();
     let transfers: { transfer: Transferable[] } | undefined;
-    if (prop === 'startRendering' || prop === 'resetRendering' || prop==='startRenderingPreview') {
+    if (prop === 'startRendering' || prop === 'resetRendering') {
       transfers = {
         transfer: [
           ...(
             args as
               | Parameters<DocumentWithViewMethods['startRendering']>
               | Parameters<DocumentWithViewMethods['resetRendering']>
-              | Parameters<DocumentWithViewMethods['startRenderingPreview']>
           )[0],
-        ]
+        ],
       };
     }
     loadWorkerOnce().postMessage(
@@ -224,13 +223,9 @@ function registerClientMethod(prop: string) {
         }
       );
     }
-
     return future.promise;
   };
 }
-
-// clientBase methods excluded from forwarding
-const EXCLUDED_CLIENT_METHODS = ['newView'];
 
 async function handleMessage<K extends keyof Message = keyof Message>({
   data,
@@ -238,7 +233,7 @@ async function handleMessage<K extends keyof Message = keyof Message>({
   if (messageIsCallback(data)) {
     subscribedEvents[data.d]?.[data.t]?.forEach((handler) => handler(data.p));
   } else if (messageIsKeys(data)) {
-    for (const prop of data.keys.filter((k) => !EXCLUDED_CLIENT_METHODS.includes(k))) {
+    for (const prop of data.keys) {
       registerClientMethod(prop);
     }
     for (const [resolver, methods] of Object.entries(data.forwarded)) {

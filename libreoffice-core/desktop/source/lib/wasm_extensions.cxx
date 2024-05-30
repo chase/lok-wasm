@@ -1,7 +1,5 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
-#include <memory>
-#include <optional>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -44,15 +42,6 @@ static void* tileRendererWorker(void* data_)
     while (d->state != RenderState::QUIT)
     {
         RenderState state = d->state;
-
-        bool bIsMainView = d->viewId == d->activeViewId;
-        auto tileTwips
-            = bIsMainView ? d->tileTwips : d->previewView.get()->tileTwips;
-        uint8_t* paintedTile = bIsMainView ? d->paintedTile : d->previewView.get()->paintedTile;
-        int32_t tileSize = bIsMainView ? d->tileSize : d->previewView.get()->tileSize;
-        int32_t paintedTileAllocSize
-            = bIsMainView ? d->paintedTileAllocSize : d->previewView.get()->paintedTileAllocSize;
-
         switch (state)
         {
             case RenderState::IDLE:
@@ -61,18 +50,19 @@ static void* tileRendererWorker(void* data_)
             case RenderState::TILE_PAINT:
             {
                 int nOrigViewId = d->doc->pClass->getView(d->doc);
-                if (nOrigViewId != d->activeViewId)
+                if (nOrigViewId != d->viewId)
                 {
-                    d->doc->pClass->setView(d->doc, d->activeViewId);
+                    d->doc->pClass->setView(d->doc, d->viewId);
                 }
-
-                std::fill_n(paintedTile, paintedTileAllocSize, 0);
-                d->doc->pClass->paintTile(d->doc, paintedTile, tileSize, tileSize, tileTwips[0],
-                                          tileTwips[1], tileTwips[2], tileTwips[3]);
-                if (nOrigViewId >= 0 && nOrigViewId != d->activeViewId)
+                std::fill_n(d->paintedTile, d->paintedTileAllocSize, 0);
+                d->doc->pClass->paintTile(d->doc, d->paintedTile, d->tileSize, d->tileSize,
+                                          d->tileTwips[0], d->tileTwips[1], d->tileTwips[2],
+                                          d->tileTwips[3]);
+                if (nOrigViewId >= 0 && nOrigViewId != d->viewId)
                 {
                     d->doc->pClass->setView(d->doc, nOrigViewId);
                 }
+
                 changeState(d, RenderState::IDLE);
                 break;
             }
@@ -93,18 +83,15 @@ static void* tileRendererWorker(void* data_)
     return nullptr;
 }
 
-WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent)
-    : mxComponent(std::move(xComponent))
-{
+WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent) : mxComponent(std::move(xComponent)) {
+
 }
 
 TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int32_t tileSize_)
 {
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
-
     TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h);
-
     pthread_t& threadId = tileRendererThreads_.emplace_back();
     if (pthread_create(&threadId, nullptr, tileRendererWorker, &data))
     {
@@ -113,19 +100,6 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
     pthread_detach(threadId);
 
     return data;
-}
-
-AdditionalView& WasmDocumentExtension::addPreviewView(int32_t mainViewId, int32_t viewId,
-                                                      int32_t tileSize)
-{
-    std::shared_ptr<AdditionalView> previewView
-        = std::make_shared<AdditionalView>(viewId, tileSize);
-
-    for (auto& data : tileRendererData_)
-        if (data.viewId == mainViewId)
-            data.previewView = previewView;
-
-    return *previewView;
 }
 
 void TileRendererData::pushInvalidation(uint32_t invalidation[4])
@@ -146,17 +120,13 @@ void TileRendererData::pushInvalidation(uint32_t invalidation[4])
 
 void TileRendererData::reset()
 {
-    bool bIsMainView = activeViewId == viewId;
     __c11_atomic_store(&invalidationStackHead, -1, __ATOMIC_RELAXED);
-
-    __c11_atomic_store(bIsMainView ? &pendingFullPaint : &previewView->pendingFullPaint, 1,
-                       __ATOMIC_SEQ_CST);
+    __c11_atomic_store(&pendingFullPaint, 1, __ATOMIC_SEQ_CST);
     __c11_atomic_store(&hasInvalidations, 1, __ATOMIC_SEQ_CST);
     __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
 }
 
-static std::string OUStringToString(OUString str)
-{
+static std::string OUStringToString(OUString str) {
     return OUStringToOString(str, RTL_TEXTENCODING_UTF8).getStr();
 }
 
@@ -172,11 +142,11 @@ std::string WasmDocumentExtension::getPageColor()
 
     static constexpr std::string_view defaultColorHex = "\"#ffffff\"";
 
+
     SfxPoolItemHolder pState;
-    const SfxItemState eState(pDispatch->QueryState(SID_ATTR_PAGE_COLOR, pState));
-    if (eState < SfxItemState::DEFAULT)
-    {
-        return std::string(defaultColorHex);
+    const SfxItemState eState (pDispatch->QueryState(SID_ATTR_PAGE_COLOR, pState));
+    if (eState < SfxItemState::DEFAULT) {
+        return std::string (defaultColorHex);
     }
     if (pState.getItem())
     {
@@ -184,10 +154,10 @@ std::string WasmDocumentExtension::getPageColor()
         OUString aColorHex = u"\"" + pColor->GetColorValue().AsRGBHEXString() + u"\"";
         return OUStringToString(aColorHex);
     }
-    return std::string(defaultColorHex);
+    return std::string (defaultColorHex);
 }
 
-std::string WasmDocumentExtension::getPageOrientation()
+std::string WasmDocumentExtension::getPageOrientation ()
 {
     SfxViewFrame* pViewFrm = SfxViewFrame::Current();
     if (!pViewFrm)

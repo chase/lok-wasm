@@ -18,13 +18,14 @@ type GetClipbaordItem =
 export type DocumentRef = number & {};
 
 export type TileRenderData = {
-  /** the main view id */
   readonly viewId: number;
   readonly tileSize: number;
-  previewViewId?: number;
-  previewTileSize?: number;
   /** `_Atomic int32_t` */
   state: Int32Array;
+  /** `uint32_t[4]` */
+  tileTwips: Uint32Array;
+  /** `uint8_t[]` */
+  paintedTile: Uint8Array;
   /** `_Atomic int32_t` */
   pendingFullPaint: Int32Array;
   /** `_Atomic int32_t` */
@@ -37,18 +38,6 @@ export type TileRenderData = {
   docWidthTwips: Uint32Array;
   /** `_Atomic uint32_t` */
   docHeightTwips: Uint32Array;
-  /** `_Atomic uint32_t` view id currently active */
-  activeViewId: Uint32Array;
-  /** `_Atomic uint32_t` */
-  tileTwips: Uint32Array;
-  /** `_Atomic uint8_t` */
-  paintedTile: Uint8Array;
-  /** `_Atomic uint32_t` */
-  previewTileTwips: Uint32Array;
-  /** `_Atomic uint32_t` */
-  previewPaintedTile: Uint8Array;
-  /** `_Atomic uint32_t` */
-  previewPendingFullPaint: Int32Array;
 };
 
 export type RectArray = [x: number, y: number, width: number, height: number];
@@ -186,15 +175,7 @@ export declare class Document {
   getCommandValues(viewId: number, command: string): string;
   subscribe(viewId: number, type: number): void;
   unsubscribe(viewId: number, type: number): void;
-  startTileRenderer(
-    viewId: number,
-    tileSize: number,
-  ): TileRenderData;
-  addPreviewView(
-    mainViewId: number,
-    viewId: number,
-    tileSize: number,
-  ): TileRenderData;
+  startTileRenderer(viewId: number, tileSize: number): TileRenderData;
   setClientVisibleArea(
     viewId: number,
     x: number,

@@ -459,43 +459,20 @@ public:
     val startTileRenderer(int32_t viewId, int32_t tileSize)
     {
         desktop::TileRendererData& data = ext()->startTileRenderer(viewId, tileSize);
-
-        val result = emscripten::val::object();
-        result.set("viewId", viewId);
-        result.set("activeViewId", typed_memory_view(1, (uint32_t*)&data.activeViewId));
+        val result = val::object();
+        result.set("viewId", data.viewId);
         result.set("tileSize", data.tileSize);
         result.set("state", typed_memory_view(1, (int32_t*)&data.state));
         result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.tileTwips));
-        result.set("paintedTile",
-                   typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
-        result.set("pendingFullPaint",
-                   typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
-        result.set("hasInvalidations",
-                   typed_memory_view(1, (int32_t*)&data.hasInvalidations));
-        result.set("invalidationStack",
-                   typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
-                                                 (uint32_t*)&data.invalidationStack));
-        result.set("docWidthTwips",
-                   typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
-        result.set("docHeightTwips",
-                   typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
-        result.set("invalidationStackHead",
-                   typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
-
-        return result;
-    }
-
-    val addPreviewView(int32_t mainViewId, int32_t viewId, int32_t tileSize)
-    {
-        desktop::AdditionalView& data = ext()->addPreviewView(mainViewId, viewId, tileSize);
-
-        val result = emscripten::val::object();
-
-        result.set("viewId", data.viewId);
-        result.set("tileSize", data.tileSize);
-        result.set("tileTwips", typed_memory_view(4, (uint32_t*)&data.tileTwips));
         result.set("paintedTile", typed_memory_view(data.paintedTileAllocSize, data.paintedTile));
         result.set("pendingFullPaint", typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
+        result.set("hasInvalidations", typed_memory_view(1, (int32_t*)&data.hasInvalidations));
+        result.set("invalidationStack", typed_memory_view(4 * desktop::MAX_INVALIDATION_STACK,
+                                                          (uint32_t*)&data.invalidationStack));
+        result.set("invalidationStackHead",
+                   typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
+        result.set("docWidthTwips", typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
+        result.set("docHeightTwips", typed_memory_view(1, (uint32_t*)&data.docHeightTwips));
 
         return result;
     }
@@ -759,7 +736,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("dispatchCommand", &DocumentClient::dispatchCommand)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
-        .function("addPreviewView", &DocumentClient::addPreviewView)
         .function("ref", &DocumentClient::ref)
         .function("setClientVisibleArea", &DocumentClient::setClientVisibleArea)
         .function("getSelectionText", &DocumentClient::getSelectionText)

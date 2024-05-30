@@ -24,9 +24,8 @@ import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
 
 // These give us good scaling behavior until the render actually finishes
-
-/** 'cover' is ideal for zoom_in, however it causes issues with pixelation. */
-const ZOOM_IN_CANVAS_FIT = 'contain';
+/** Cover on Zoom In, will stretch the image to fit as the canvas size changes */
+const ZOOM_IN_CANVAS_FIT = 'cover';
 /** Contain on Zoom Out, squeezes the image to fit as the canvas size changes */
 const ZOOM_OUT_CANVAS_FIT = 'contain';
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
@@ -60,7 +59,7 @@ function calcCanvasHeight(heightPx: number | undefined) {
     : undefined;
 }
 
-export function observedSize(
+function observedSize(
   el: Element,
   setter: () => [DocumentClient, Setter<number | undefined>]
 ) {
@@ -196,10 +195,8 @@ export function OfficeDocument(props: Props) {
       ],
       256,
       zoom,
-      dpi,
-      undefined,
+      dpi
     );
-
     didInitialRender.add(props.doc);
   });
 
@@ -273,7 +270,6 @@ export function OfficeDocument(props: Props) {
                   ? ZOOM_OUT_CANVAS_FIT
                   : ZOOM_IN_CANVAS_FIT,
                 'object-position': 'top center',
-                'image-rendering': 'crisp-edges',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()!}px`,
@@ -287,7 +283,6 @@ export function OfficeDocument(props: Props) {
                   ? ZOOM_OUT_CANVAS_FIT
                   : ZOOM_IN_CANVAS_FIT,
                 'object-position': 'top center',
-                'image-rendering': 'crisp-edges',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()}px`,

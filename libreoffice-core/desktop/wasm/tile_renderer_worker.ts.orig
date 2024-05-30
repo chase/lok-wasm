@@ -323,6 +323,55 @@ function rendering() {
     postMessage({ s: activeCanvasIndex });
     didScroll = false;
   }
+<<<<<<< HEAD
+  mainView.idleAreaPaint = true;
+  if (!pendingInvalidate) {
+    afterInvalidate().then((shouldRun) => {
+      if (shouldRun) {
+        mainView.idleAreaPaint = false;
+        pendingStateChange = true;
+        mainView.pendingPartialPaint = true;
+        setState(RenderState.IDLE, mainView.viewId);
+        if (!running) {
+          stateMachine();
+          maybeInvalidatePreview();
+        }
+      } else {
+        setState(RenderState.IDLE, mainView.viewId);
+        if (!running) {
+          stateMachine();
+        }
+      }
+    });
+
+    if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
+  }
+  running = false;
+  idleDebounceTimeout = setTimeout(
+    paintNonVisibleAreasWhileIdle,
+    Math.max(trimmedMean(mainView.paintTimes), 10)
+  );
+}
+
+function maybeInvalidatePreview() {
+  if (!previewView) return;
+  if (previewInvalidationTimeout) {
+    clearTimeout(previewInvalidationTimeout);
+  }
+  // Try to schedule a new paint for invalidations for
+  // the preview view. If no new main view invalidations are fired
+  // this should trigger a paint for the preview view
+  previewInvalidationTimeout = setTimeout(() => {
+    if (Atomics.load(workerData.state, 0) !== RenderState.IDLE) {
+      maybeInvalidatePreview();
+    }
+
+    previewView.pendingPartialPaint = true;
+    setState(RenderState.IDLE, previewView.viewId);
+    if (!running) stateMachine();
+  }, 200);
+=======
+>>>>>>> parent of 953f0db4161e (Multi View Rendering + Document Preview [MACRO-2212] (#34))
 }
 
 let pendingInvalidate: boolean;

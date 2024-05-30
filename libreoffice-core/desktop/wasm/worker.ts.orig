@@ -11,6 +11,7 @@ import type {
   GetClipbaordItem,
   GlobalMethod,
   InitializeForRenderingOptions,
+  InitializeViewData,
   KeysMessage,
   Message,
   RectangleTwips,
@@ -21,6 +22,10 @@ import type {
   ToWorker,
   ViewId,
   WorkerCallback,
+<<<<<<< HEAD
+=======
+  ForwardingMethodHandler,
+>>>>>>> parent of 953f0db4161e (Multi View Rendering + Document Preview [MACRO-2212] (#34))
 } from './shared';
 import type {
   Comment,
@@ -45,7 +50,11 @@ globalThis.onmessage = (message) => {
 const docMap: Record<DocumentRef, Document> = {};
 const findResultMap: Record<DocumentRef, ITextRanges> = {};
 const byRef = (ref: DocumentRef) => docMap[ref];
+<<<<<<< HEAD
+const tileRenderer: Record<DocumentRef, Worker> = {};
+=======
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
+>>>>>>> parent of 953f0db4161e (Multi View Rendering + Document Preview [MACRO-2212] (#34))
 
 const lok = await LOK({
   withFcCache: true,
@@ -267,7 +276,11 @@ const handler: DocumentMethodHandler<Document> = {
     tileSize: TileDim,
     scale: number,
     dpi: number,
+<<<<<<< HEAD
+    yPos: number | undefined
+=======
     yPos: number = 0
+>>>>>>> parent of 953f0db4161e (Multi View Rendering + Document Preview [MACRO-2212] (#34))
   ): TileRendererData {
     const ref = doc.ref();
     const result = doc.startTileRenderer(viewId, tileSize);
@@ -298,6 +311,62 @@ const handler: DocumentMethodHandler<Document> = {
       scale,
     };
   },
+
+<<<<<<< HEAD
+  resetRendering: function () {
+    throw new Error('Function not implemented.');
+  },
+
+  startRenderingPreview: function (
+    doc: Document,
+    viewId: ViewId,
+    canvases: OffscreenCanvas[],
+    mainViewId: ViewId,
+    tileSize: TileDim,
+    scale: number,
+    yPos: number | undefined
+  ) {
+    const ref = doc.ref();
+    const result = doc.addPreviewView(mainViewId, viewId, tileSize);
+
+    const worker = tileRenderer[ref];
+
+    let previewViewData: InitializeViewData = {
+      viewId: viewId,
+      scale: scale,
+      canvases: canvases,
+      tileTwips: result.tileTwips,
+      paintedTile: result.paintedTile,
+      pendingFullPaint: result.pendingFullPaint,
+      y: yPos,
+    };
+
+    worker.postMessage(
+      {
+        t: 'previewStart',
+        p: previewViewData,
+        d: result,
+      } as ToTileRenderer,
+      { transfer: [...canvases] }
+    );
+
+    return {
+      docRef: ref,
+      viewId: result.viewId,
+      scale: scale,
+    };
+  },
+
+  stopRenderingPreview: function (doc: Document, viewId: ViewId) {
+    const worker = tileRenderer[doc.ref()];
+
+    worker.postMessage({
+      t: 'previewStop',
+      viewId: viewId,
+    } as ToTileRenderer);
+  },
+
+=======
   resetRendering: function (
     _doc: Document,
     _viewId: ViewId,
@@ -305,6 +374,8 @@ const handler: DocumentMethodHandler<Document> = {
   ): void {
     throw new Error('Function not implemented.');
   },
+
+>>>>>>> parent of 953f0db4161e (Multi View Rendering + Document Preview [MACRO-2212] (#34))
   stopRendering: function (_doc: Document, _viewId: ViewId): void {
     throw new Error('Function not implemented.');
   },
@@ -340,7 +411,11 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
+<<<<<<< HEAD
+    tileRenderer[doc.ref()]?.postMessage({
+=======
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+>>>>>>> parent of 953f0db4161e (Multi View Rendering + Document Preview [MACRO-2212] (#34))
       t: 'r',
       h: heightPx,
     } as ToTileRenderer);
