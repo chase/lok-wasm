@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "comphelper/storagehelper.hxx"
 #include <time.h>
 #include <sfx2/sfxbasecontroller.hxx>
 #include <com/sun/star/awt/XVclWindowPeer.hpp>
@@ -1322,6 +1323,10 @@ void SfxBaseController::ConnectSfxFrame_Impl( const ConnectSfxFrame i_eConnect )
 
 void SfxBaseController::ShowInfoBars( )
 {
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        return;
+    }
     if ( !m_pData->m_pViewShell )
         return;
 

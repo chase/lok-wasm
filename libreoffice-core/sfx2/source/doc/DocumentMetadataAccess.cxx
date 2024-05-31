@@ -754,19 +754,24 @@ retry:
     uno::Any rterr;
     ucb::InteractiveAugmentedIOException iaioe;
     bool err(false);
+    bool isExpandedStorage(comphelper::OStorageHelper::IsExpandedStorage());
 
     const uno::Reference <rdf::XURI> xManifest(
         getURIForStream(i_rImpl, s_manifest));
-    try {
-        readStream(i_rImpl, i_xStorage, s_manifest, i_xBaseURI->getStringValue());
-    } catch (const ucb::InteractiveAugmentedIOException & e) {
-        // no manifest.rdf: this is not an error in ODF < 1.2
-        if (ucb::IOErrorCode_NOT_EXISTING_PATH != e.Code) {
-            iaioe = e;
-            err = true;
+
+    if (!isExpandedStorage)
+    {
+        try {
+            readStream(i_rImpl, i_xStorage, s_manifest, i_xBaseURI->getStringValue());
+        } catch (const ucb::InteractiveAugmentedIOException & e) {
+            // no manifest.rdf: this is not an error in ODF < 1.2
+            if (ucb::IOErrorCode_NOT_EXISTING_PATH != e.Code) {
+                iaioe = e;
+                err = true;
+            }
+        } catch (const uno::Exception & e) {
+            rterr <<= e;
         }
-    } catch (const uno::Exception & e) {
-        rterr <<= e;
     }
 
     // init manifest graph
@@ -784,14 +789,14 @@ retry:
     OSL_ENSURE(i_rImpl.m_xRepository.is(), "repository is null");
     OSL_ENSURE(i_rImpl.m_xManifest.is(), "manifest is null");
 
-    if (rterr.hasValue()) {
-        throw lang::WrappedTargetRuntimeException(
-            "DocumentMetadataAccess::loadMetadataFromStorage: "
-            "exception", nullptr, rterr);
-    }
+    /* if (rterr.hasValue()) { */
+    /*     throw lang::WrappedTargetRuntimeException( */
+    /*         "DocumentMetadataAccess::loadMetadataFromStorage: " */
+    /*         "exception", nullptr, rterr); */
+    /* } */
 
-    if (err && handleError(iaioe, i_xHandler))
-        goto retry;
+    /* if (err && handleError(iaioe, i_xHandler)) */
+    /*     goto retry; */
 }
 
 /** init Impl struct */

@@ -289,21 +289,21 @@ void LoadEnv::startLoading(const OUString& sURL, const uno::Sequence<beans::Prop
 
     /*TODO progress is bound to a frame ... How can we set it here? */
 
-    // UI mode
-    const bool bUIMode =
-        (m_eFeature & LoadEnvFeatures::WorkWithUI) &&
-        !m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_HIDDEN, false) &&
-        !m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_PREVIEW, false);
+    /* // UI mode */
+    /* const bool bUIMode = */
+    /*     (m_eFeature & LoadEnvFeatures::WorkWithUI) && */
+    /*     !m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_HIDDEN, false) && */
+    /*     !m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_PREVIEW, false); */
 
-    if( comphelper::LibreOfficeKit::isActive() &&
-        m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_SILENT, false))
-    {
-        rtl::Reference<QuietInteraction> pQuietInteraction = new QuietInteraction();
-        uno::Reference<task::XInteractionHandler> xInteractionHandler(pQuietInteraction);
-        m_lMediaDescriptor[utl::MediaDescriptor::PROP_INTERACTIONHANDLER] <<= xInteractionHandler;
-    }
+    /* if( comphelper::LibreOfficeKit::isActive() && */
+    /*     m_lMediaDescriptor.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_SILENT, false)) */
+    /* { */
+    /*     rtl::Reference<QuietInteraction> pQuietInteraction = new QuietInteraction(); */
+    /*     uno::Reference<task::XInteractionHandler> xInteractionHandler(pQuietInteraction); */
+    /*     m_lMediaDescriptor[utl::MediaDescriptor::PROP_INTERACTIONHANDLER] <<= xInteractionHandler; */
+    /* } */
 
-    initializeUIDefaults(m_xContext, m_lMediaDescriptor, bUIMode, &m_pQuietInteraction);
+    /* initializeUIDefaults(m_xContext, m_lMediaDescriptor, bUIMode, &m_pQuietInteraction); */
 
     start();
 }
@@ -1582,6 +1582,7 @@ css::uno::Reference< css::frame::XFrame > LoadEnv::impl_searchRecycleTarget()
 
 void LoadEnv::impl_reactForLoadingState()
 {
+    return;
     /*TODO reset action locks */
 
     // SAFE -> ----------------------------------

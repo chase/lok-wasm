@@ -430,12 +430,11 @@ css::uno::Reference<css::beans::XPropertySetInfo> SAL_CALL ExpandedStorage::getP
 
 void SAL_CALL ExpandedStorage::setPropertyValue(const OUString&, const css::uno::Any&)
 {
-    throw beans::UnknownPropertyException();
 }
 
 css::uno::Any SAL_CALL ExpandedStorage::getPropertyValue(const OUString&)
 {
-    throw beans::UnknownPropertyException();
+    return css::uno::Any();
 }
 
 void SAL_CALL ExpandedStorage::addPropertyChangeListener(
@@ -526,13 +525,15 @@ void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementName
     size_t i = 0;
     for (const auto& pair : *m_files)
     {
-        orElementNames[i++] = OUString::createFromAscii(pair.first.c_str());
+        orElementNames[i++] = helpers::toOUString(pair.first);
     }
 }
 
-StorageRef ExpandedStorage::implOpenSubStorage(const OUString&, bool)
+StorageRef ExpandedStorage::implOpenSubStorage(const OUString& path, bool)
 {
-    return std::shared_ptr<StorageBase>(std::move(this));
+    SAL_WARN("expandedstorage", "openSubStorage " << path);
+    return std::shared_ptr<StorageBase>(
+        new ExpandedStorage(m_xContext, m_files, m_inputStream, path));
 }
 
 Reference<io::XInputStream> ExpandedStorage::implOpenInputStream(const OUString& rElementName)

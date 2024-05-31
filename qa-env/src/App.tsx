@@ -45,12 +45,13 @@ async function fileOpen(files: FileList | null) {
     let parts = JSON.parse(content) as Array<{path: string, content: string}>;
 
     doc = await loadDocumentFromExpandedParts(parts)
+    console.log(doc);
 
   } else {
     doc = await loadDocument(name, blob);
   }
 
-  doc = await loadDocument(name, blob);
+  // doc = await loadDocument(name, blob);
   if (!doc) {
     console.error('failure!');
     return;
@@ -59,10 +60,10 @@ async function fileOpen(files: FileList | null) {
     author: 'Macro User',
   });
 
-  const previewDoc = await doc.newView();
-  await previewDoc?.initializeForRendering({});
+  // const previewDoc = await doc.newView();
+  // await previewDoc?.initializeForRendering({});
   setDoc(doc);
-  setPreviewDoc(previewDoc);
+  // setPreviewDoc(previewDoc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
   window.d = doc;

@@ -215,7 +215,7 @@ class RenderedView {
     if (!this.activeCanvas) return false;
 
     this.scheduledHeightPx = h * this.dpi;
-    this.scheduledHeightTwips = h * this.scaledTwips;
+    this.scheduledHeightTwips = h * this.dpi * this.scaledTwips;
 
     return true;
   }

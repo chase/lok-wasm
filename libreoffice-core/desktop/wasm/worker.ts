@@ -90,15 +90,20 @@ const globalHandler: GlobalMethod = {
     }
 
     const doc = new Document(expandedDoc, "test");
+
+    console.log("HERE DOC");
     const ref = doc.ref();
-    lok.unmountBlob();
+    // lok.unmountBlob();
 
     if (!doc.valid()) {
       doc.delete();
+      console.log("INVALID DOC");
       return null;
     }
 
+    console.log(doc);
     docMap[ref] = doc;
+    console.log("FINISHED LOADING HERE IS REF", ref);
     return ref;
   },
 
@@ -149,6 +154,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     args: InitializeForRenderingOptions = {}
   ): number {
+    console.log('INITIALIZE FOR RENDERING', args);
     doc.initializeForRendering(
       `{".uno:ShowBorderShadow": {
           "type": "boolean",
@@ -167,7 +173,7 @@ const handler: DocumentMethodHandler<Document> = {
           "value": "${args.author ?? 'Macro User'}"
         }}`
     );
-    return doc.getViewId();
+    return 0;
   },
 
   postKeyEvent: function (
@@ -295,6 +301,7 @@ const handler: DocumentMethodHandler<Document> = {
       { type: 'module' }
     );
 
+    console.log('START RENDERING', ref, result.viewId, scale, tileSize, dpi, yPos);
     tileRenderer[ref] = worker;
 
     let mainViewData: InitializeViewData = {
@@ -316,6 +323,7 @@ const handler: DocumentMethodHandler<Document> = {
       } as ToTileRenderer,
       { transfer: [...canvases] }
     );
+    console.log('POSTED MESSAGE');
 
     return {
       docRef: ref,
@@ -423,6 +431,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
+    console.log(doc.ref());
     tileRenderer[doc.ref()].postMessage({
       t: 'r',
       viewId,

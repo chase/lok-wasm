@@ -267,37 +267,37 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
 
         oox::core::XmlFilterBase::putPropertiesToDocumentGrabBag(m_xDstDoc, aGrabBagProperties);
 
-        writerfilter::ooxml::OOXMLStream::Pointer_t pVBAProjectStream(
-            writerfilter::ooxml::OOXMLDocumentFactory::createStream(
-                pDocStream, writerfilter::ooxml::OOXMLStream::VBAPROJECT));
-        oox::StorageRef xVbaPrjStrg = std::make_shared<::oox::ole::OleStorage>(
-            m_xContext, pVBAProjectStream->getDocumentStream(), false);
-        if (xVbaPrjStrg && xVbaPrjStrg->isStorage())
-        {
-            ::oox::ole::VbaProject aVbaProject(m_xContext, xModel, u"Writer");
-            uno::Reference<frame::XFrame> xFrame = aMediaDesc.getUnpackedValueOrDefault(
-                utl::MediaDescriptor::PROP_FRAME, uno::Reference<frame::XFrame>());
+        /* writerfilter::ooxml::OOXMLStream::Pointer_t pVBAProjectStream( */
+        /*     writerfilter::ooxml::OOXMLDocumentFactory::createStream( */
+        /*         pDocStream, writerfilter::ooxml::OOXMLStream::VBAPROJECT)); */
+        /* oox::StorageRef xVbaPrjStrg = std::make_shared<::oox::ole::OleStorage>( */
+        /*     m_xContext, pVBAProjectStream->getDocumentStream(), false); */
+        /* if (xVbaPrjStrg && xVbaPrjStrg->isStorage()) */
+        /* { */
+        /*     ::oox::ole::VbaProject aVbaProject(m_xContext, xModel, u"Writer"); */
+        /*     uno::Reference<frame::XFrame> xFrame = aMediaDesc.getUnpackedValueOrDefault( */
+        /*         utl::MediaDescriptor::PROP_FRAME, uno::Reference<frame::XFrame>()); */
 
-            // if no XFrame try fallback to what we can glean from the Model
-            if (!xFrame.is())
-            {
-                uno::Reference<frame::XController> xController = xModel->getCurrentController();
-                xFrame = xController.is() ? xController->getFrame() : nullptr;
-            }
+        /*     // if no XFrame try fallback to what we can glean from the Model */
+        /*     if (!xFrame.is()) */
+        /*     { */
+        /*         uno::Reference<frame::XController> xController = xModel->getCurrentController(); */
+        /*         xFrame = xController.is() ? xController->getFrame() : nullptr; */
+        /*     } */
 
-            oox::GraphicHelper gHelper(m_xContext, xFrame, xVbaPrjStrg);
-            aVbaProject.importVbaProject(*xVbaPrjStrg, gHelper);
+        /*     oox::GraphicHelper gHelper(m_xContext, xFrame, xVbaPrjStrg); */
+        /*     aVbaProject.importVbaProject(*xVbaPrjStrg, gHelper); */
 
-            writerfilter::ooxml::OOXMLStream::Pointer_t pVBADataStream(
-                writerfilter::ooxml::OOXMLDocumentFactory::createStream(
-                    pDocStream, writerfilter::ooxml::OOXMLStream::VBADATA));
-            if (pVBADataStream)
-            {
-                uno::Reference<io::XInputStream> xDataStream = pVBADataStream->getDocumentStream();
-                if (xDataStream.is())
-                    aVbaProject.importVbaData(xDataStream);
-            }
-        }
+        /*     writerfilter::ooxml::OOXMLStream::Pointer_t pVBADataStream( */
+        /*         writerfilter::ooxml::OOXMLDocumentFactory::createStream( */
+        /*             pDocStream, writerfilter::ooxml::OOXMLStream::VBADATA)); */
+        /*     if (pVBADataStream) */
+        /*     { */
+        /*         uno::Reference<io::XInputStream> xDataStream = pVBADataStream->getDocumentStream(); */
+        /*         if (xDataStream.is()) */
+        /*             aVbaProject.importVbaData(xDataStream); */
+        /*     } */
+        /* } */
 
         pStream.clear();
 

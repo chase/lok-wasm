@@ -156,7 +156,7 @@ export function OfficeDocument(props: Props) {
 
   createEffect(() => {
     const height = canvasHeight();
-    if (height) props.doc.setVisibleHeight(height);
+    if (height && didInitialRender.has(props.doc)) props.doc.setVisibleHeight(height);
   });
 
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);

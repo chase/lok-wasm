@@ -227,13 +227,7 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::Expa
     LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
 
 
-    ext->loadFromExpanded(pThis, expandedDoc, pFilterOptions);
-
-    if (pDoc == NULL) {
-        return NULL;
-    }
-
-    return pDoc;
+    return ext->loadFromExpanded(pThis, expandedDoc, pFilterOptions);
 }
 
 
@@ -265,18 +259,18 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     // Wrap the empty sequence in a SequenceInputStream
     uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
 
-    oox::ExpandedStorage storage(xContext, xEmptyInputStream);
+    uno::Reference<oox::ExpandedStorage> storage(new oox::ExpandedStorage(xContext, xEmptyInputStream));
     /* uno::Reference<oox::StorageBase> xStorageBase(storage, uno::UNO_QUERY); */
 
     for (const auto& part : expandedDoc.parts)
     {
-        storage.addPart(part.path, part.content);
+        storage->addPart(part.path, part.content);
     }
 
-    storage.readRelationshipInfo();
+    storage->readRelationshipInfo();
 
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
-    auto storageBase = std::shared_ptr<oox::StorageBase>(&storage);
+    auto storageBase = std::shared_ptr<oox::StorageBase>(storage.get());
 
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
@@ -299,6 +293,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
             SfxViewShell::SetCurrentDocId(ViewShellDocId(1));
             uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
                 "private:stream", "_blank", 1, aMediaDescriptor.getAsConstPropertyValueList());
+            SAL_WARN("lok", "Loaded in memory doc");
 
             if (!xComponent.is()) {
                 SAL_WARN("lok", "Could not load in memory doc");
@@ -313,6 +308,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
             SAL_WARN("lok", "Failed to load to in-memory stream: " + exceptionToString(exAny));
         }
     }
+    SAL_WARN("lok", "Failed to load to in-memory stream");
     return nullptr;
 }
 

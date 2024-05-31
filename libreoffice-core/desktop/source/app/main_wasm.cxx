@@ -231,8 +231,9 @@ public:
         SAL_WARN("wasm", "expanded load");
         desktop::WasmOfficeExtension* ext = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
         auto doc = ext->documentExpandedLoad(expandedDoc, name, nullptr);
-        lok::Document aDoc = static_cast<lok::Document>(doc);
-        doc_ = &aDoc;
+        SAL_WARN("wasm", "expanded load done");
+        lok::Document* aDoc = new lok::Document(doc);
+        doc_ = aDoc;
     }
 
     bool valid() { return doc_ != nullptr; }

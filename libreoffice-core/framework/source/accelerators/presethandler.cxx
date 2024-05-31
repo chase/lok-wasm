@@ -311,6 +311,7 @@ void PresetHandler::connectToResource(      PresetHandler::EConfigType          
                                       const css::uno::Reference< css::embed::XStorage >& xDocumentRoot,
                                       const LanguageTag&                                 rLanguageTag )
 {
+    return;
     // TODO free all current open storages!
 
     {

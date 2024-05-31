@@ -287,6 +287,8 @@ void LayoutManager::implts_reset( bool bAttached )
 
     implts_lock();
 
+    return;
+
     Reference< XModel > xModel;
     if ( xFrame.is() )
     {

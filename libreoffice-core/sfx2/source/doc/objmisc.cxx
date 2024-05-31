@@ -948,6 +948,10 @@ void SfxObjectShell::BreakMacroSign_Impl( bool bBreakMacroSign )
 
 void SfxObjectShell::CheckSecurityOnLoading_Impl()
 {
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        return;
+    }
     // make sure LO evaluates the macro signatures, so it can be preserved
     GetScriptingSignatureState();
 
@@ -1131,7 +1135,11 @@ void SfxObjectShell::FinishedLoading( SfxLoadedFlags nFlags )
         if( !bSetModifiedTRUE && IsEnableSetModified() )
             SetModified( false );
 
-        CheckSecurityOnLoading_Impl();
+        if (!comphelper::OStorageHelper::IsExpandedStorage())
+        {
+            CheckSecurityOnLoading_Impl();
+        }
+
 
         bHasName = true; // the document is loaded, so the name should already available
         GetTitle( SFX_TITLE_DETECT );
