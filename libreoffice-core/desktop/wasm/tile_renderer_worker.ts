@@ -87,7 +87,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
         didScroll = true;
         activeCanvasIndex ^= 1;
         activeCanvas = canvases[activeCanvasIndex];
-        ctx = activeCanvas.getContext('2d');
+        ctx = getContext(activeCanvas);
         setState(RenderState.IDLE);
         if (!running) stateMachine();
       } else {
@@ -121,6 +121,14 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
+function getContext(canvas: OffscreenCanvas) {
+  let ctx = canvas.getContext("2d");
+  // default is true, which makes things blurry
+  //https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled
+  ctx.imageSmoothingEnabled = false;
+  return ctx;
+}
+
 function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
@@ -146,7 +154,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
   d = data.d;
   canvases = data.c;
   activeCanvas = data.c[0];
-  ctx = activeCanvas.getContext('2d');
+  ctx = getContext(activeCanvas);
 
   ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
 
