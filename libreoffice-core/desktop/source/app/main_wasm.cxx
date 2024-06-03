@@ -549,7 +549,8 @@ public:
         if (!stored_range_.is())
             return;
 
-        Reference<text::XTextViewCursorSupplier> xCursorSupplier(ext()->mxComponent,
+        Reference<frame::XModel> xModel(ext()->mxComponent, UNO_QUERY_THROW);
+        Reference<text::XTextViewCursorSupplier> xCursorSupplier(xModel->getCurrentController(),
                                                                  UNO_QUERY_THROW);
         Reference<text::XTextViewCursor> xCursor = xCursorSupplier->getViewCursor();
         xCursor->gotoRange(stored_range_, false);
@@ -560,7 +561,8 @@ public:
     {
         using namespace css;
         using namespace css::uno;
-        Reference<text::XTextViewCursorSupplier> xCursorSupplier(ext()->mxComponent,
+        Reference<frame::XModel> xModel(ext()->mxComponent, UNO_QUERY_THROW);
+        Reference<text::XTextViewCursorSupplier> xCursorSupplier(xModel->getCurrentController(),
                                                                  UNO_QUERY_THROW);
         Reference<text::XTextViewCursor> xCursor = xCursorSupplier->getViewCursor();
         return val::u16string(xCursor->getString().getStr());
