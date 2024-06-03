@@ -338,11 +338,13 @@ const handler: DocumentMethodHandler<Document> = {
   setVisibleHeight: function (
     doc: Document,
     viewId: ViewId,
-    heightPx: number
+    heightPx: number,
+    dpi: number
   ): void {
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'r',
       h: heightPx,
+      d: dpi,
     } as ToTileRenderer);
   },
 

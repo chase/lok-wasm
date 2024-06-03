@@ -81,7 +81,13 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 's': // scroll
       if (!activeCanvas) return;
       idleAreaPaint = false;
-      scheduledTopTwips = data.y * scaledTwips;
+
+      // even though technically data.y is in css pixels
+      // we need to treat it as physical pixels because
+      // it represents the amount we have scrolled through the canvas
+      // document which is rendered in physical pixels
+      scheduledTopTwips = pxToTwips(data.y);
+
       // Checks that the tile row has changed since the last scroll
       if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
         didScroll = true;
@@ -97,8 +103,8 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
     case 'r': // resize
       if (!activeCanvas) return;
       idleAreaPaint = false;
-      scheduledHeightPx = data.h * dpi;
-      scheduledHeightTwips = data.h * scaledTwips;
+      scheduledHeightPx = cssPxToPx(data.h, dpi);
+      scheduledHeightTwips = pxToTwips(data.h);
       setState(RenderState.IDLE);
       if (!running) stateMachine();
       break;
@@ -121,19 +127,41 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
   }
 };
 
+/** Converts a CSS pixel to twips */
+function cssPxToTwips(px: number, dpi: number): number {
+  return px * scaledTwips / dpi;
+}
+
+/** Converts a physical pixel to twips */
+function pxToTwips(px: number): number {
+  return px * scaledTwips;
+}
+
+/** Converts a CSS pixel to a physical pixel */
+function cssPxToPx(px: number, dpi: number): number {
+  return px * dpi;
+}
+
+/** Converts twips to physical pixels */
+function twipsToPx(twips: number, dpi: number): number {
+  return (twips / scaledTwips) * dpi;
+}
+
 function zoom(in_scale: number, in_dpi: number) {
   docWidthTwips = Atomics.load(d.docWidthTwips, 0);
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
 
   scaledTwips =
-    clipToNearest8PxZoom(d.tileSize, 1 / (in_scale * in_dpi)) *
+    clipToNearest8PxZoom(d.tileSize, 1 / in_scale) *
     LOK_INTERNAL_TWIPS_TO_PX;
 
-  tileDimTwips = Math.ceil(d.tileSize * scaledTwips);
+  tileDimTwips = Math.ceil(cssPxToTwips(d.tileSize, dpi));
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
+  // This is in physical pixels
   scheduledHeightPx = (activeCanvas.height * in_dpi) / dpi;
-  scheduledHeightTwips = activeCanvas.height * scaledTwips;
-  scheduledWidthPx = docWidthTwips / scaledTwips;
+  scheduledHeightTwips = pxToTwips(activeCanvas.height);
+
+  scheduledWidthPx = twipsToPx(docWidthTwips, in_dpi);
 
   // Set this as a reference for the new position for the next scroll event
   renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
@@ -153,7 +181,7 @@ function initialize(data: ToTileRenderer & { t: 'i' }) {
   scale = data.s;
   dpi = data.dpi;
   zoom(data.s, dpi);
-  scheduledTopTwips = data.y * scaledTwips;
+  scheduledTopTwips = cssPxToTwips(data.y, dpi);
 
   pendingStateChange = true;
   stateMachine();
