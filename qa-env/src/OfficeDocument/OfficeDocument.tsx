@@ -64,7 +64,6 @@ function observedSize(
   setter: () => [DocumentClient, Setter<number | undefined>]
 ) {
   const [doc, setHeight] = setter();
-  const dpi = getOrCreateDPISignal();
   let debounce: ReturnType<typeof setTimeout>;
   const observer = new ResizeObserver((entries) => {
     const entry = entries[0];
@@ -77,7 +76,7 @@ function observedSize(
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(async () => {
       setHeight(height);
-      await doc.setVisibleHeight(canvasHeight!, dpi());
+      await doc.setVisibleHeight(canvasHeight!);
     }, OBSERVED_SIZE_DEBOUNCE);
   });
 

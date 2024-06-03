@@ -400,8 +400,6 @@ export type ToTileRenderer =
       t: 'r';
       /** height */
       h: number;
-      /** dpi */
-      d: number;
     }
   | {
       /** zoom */

@@ -339,12 +339,10 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     heightPx: number,
-    dpi: number
   ): void {
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'r',
       h: heightPx,
-      d: dpi,
     } as ToTileRenderer);
   },
 
