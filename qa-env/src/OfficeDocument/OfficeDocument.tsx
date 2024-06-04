@@ -239,7 +239,6 @@ export function OfficeDocument(props: Props) {
     const previousCanvas = activeCanvas;
     activeCanvas = await props.doc.setScrollTop(yPx);
     const dpi = getOrCreateDPISignal();
-    console.log('dpi', dpi());
     const c = activeCanvas === 0 ? c0 : c1;
     c.style.willChange = 'transform';
     // yPx is technically in css pixels, but it is referring to the position 
