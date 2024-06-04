@@ -439,7 +439,6 @@ public:
         {
             return val(ext->getPageOrientation());
         }
-
         return val::u8string(doc_->getCommandValues(command.c_str()));
     }
 
