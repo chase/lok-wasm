@@ -70,7 +70,6 @@ let zoomTimeout: ReturnType<typeof setTimeout>;
 
 function registerGlobalKeys() {
   async function callback(e: KeyboardEvent) {
-    console.log('key', e.key);
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     switch (e.key) {
       case "+":
