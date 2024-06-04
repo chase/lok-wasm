@@ -439,7 +439,9 @@ public:
         {
             return val(ext->getPageOrientation());
         }
-        return val::u8string(doc_->getCommandValues(command.c_str()));
+
+        const char* result = doc_->getCommandValues(command.c_str());
+        return val::u8string(result);
     }
 
     void subscribe(int viewId, int type)
