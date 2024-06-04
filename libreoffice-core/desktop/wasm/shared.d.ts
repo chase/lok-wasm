@@ -121,7 +121,7 @@ export type DocumentWithViewMethods = {
   ): TileRendererData;
 
   setScrollTop(yPx: number): number;
-  setVisibleHeight(heightPx: number, dpi: number): void;
+  setVisibleHeight(heightPx: number): void;
   setZoom(scale: number, dpi: number): void;
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */

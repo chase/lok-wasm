@@ -338,7 +338,7 @@ const handler: DocumentMethodHandler<Document> = {
   setVisibleHeight: function (
     doc: Document,
     viewId: ViewId,
-    heightPx: number,
+    heightPx: number
   ): void {
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'r',
