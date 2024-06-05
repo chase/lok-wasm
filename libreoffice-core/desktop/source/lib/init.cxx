@@ -6034,7 +6034,6 @@ static char* getPageMargins()
 
     SfxViewFrame* pViewFrm = SfxViewFrame::Current();
 
-
     if (!pViewFrm) {
         return nullptr;
     }
