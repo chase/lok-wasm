@@ -140,7 +140,7 @@ std::string WasmDocumentExtension::getPageColor()
         return nullptr;
     }
 
-    static constexpr std::string_view defaultColorHex = "\"#ffffff\"";
+    static constexpr std::string_view defaultColorHex = "#ffffff";
 
 
     SfxPoolItemHolder pState;
@@ -151,7 +151,7 @@ std::string WasmDocumentExtension::getPageColor()
     if (pState.getItem())
     {
         XColorItem* pColor = static_cast<XColorItem*>(pState.getItem()->Clone());
-        OUString aColorHex = u"\"" + pColor->GetColorValue().AsRGBHEXString() + u"\"";
+        OUString aColorHex = pColor->GetColorValue().AsRGBHEXString();
         return OUStringToString(aColorHex);
     }
     return std::string (defaultColorHex);
@@ -171,7 +171,7 @@ std::string WasmDocumentExtension::getPageOrientation ()
 
     bool bIsLandscape = (pSize->GetSize().Width() >= pSize->GetSize().Height());
 
-    return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
+    return bIsLandscape ? "landscape" : "portrait";
 }
 
 }
