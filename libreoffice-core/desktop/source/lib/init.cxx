@@ -6962,12 +6962,6 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     {
         return getTrackedChanges(pThis);
     }
-    // MACRO: {
-    else if (aCommand == ".uno:ViewTrackChangesInformation")
-    {
-        return getTrackedChanges(pThis);
-    }
-    // MACRO: }
     else if (aCommand == ".uno:TrackedChangeAuthors")
     {
         return getTrackedChangeAuthors(pThis);
