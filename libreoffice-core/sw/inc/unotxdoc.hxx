@@ -19,6 +19,7 @@
 #ifndef INCLUDED_SW_INC_UNOTXDOC_HXX
 #define INCLUDED_SW_INC_UNOTXDOC_HXX
 
+#include "sal/types.h"
 #include "swdllapi.h"
 #include <sfx2/sfxbasemodel.hxx>
 
@@ -568,6 +569,9 @@ public:
     void cancelFindOrReplace() override;
     emscripten::val getOutline() override;
     emscripten::val gotoOutline(int outlineIndex) override;
+    _Atomic sal_uInt32 m_nInvalidationGeneration = 0;
+    void bumpInvalidationGeneration() override;
+    sal_uInt32 invalidationGeneration() override;
     /// MACRO-2313: }
 };
 

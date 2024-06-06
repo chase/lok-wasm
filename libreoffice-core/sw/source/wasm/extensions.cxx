@@ -1,4 +1,4 @@
-#include <algorithm>
+#include <vector>
 #include <docufld.hxx>
 #include <tools/long.hxx>
 #include <postithelper.hxx>
@@ -46,6 +46,7 @@
 #include <IDocumentOutlineNodes.hxx>
 #include <ndtxt.hxx>
 #include <txtfrm.hxx>
+#include <comphelper/servicehelper.hxx>
 
 using namespace emscripten;
 
@@ -80,17 +81,6 @@ tools::Long bottomTwips(SwRects* pRects)
             r = rNextRect.Bottom();
     }
     return r;
-}
-
-tools::Long topTwips(SwRects* pRects)
-{
-    tools::Long r = LONG_MAX;
-    for (const SwRect& rNextRect : *pRects)
-    {
-        if (rNextRect.Top() < r)
-            r = rNextRect.Top();
-    }
-    return r == LONG_MAX ? 0 : r;
 }
 
 uno::Reference<text::XTextViewCursor> currentCursor()
@@ -443,11 +433,21 @@ class TextRanges_Impl final : public wasm::ITextRanges
 {
 private:
     std::vector<rtl::Reference<SwXTextRange>> ranges_;
-    std::vector<tools::Long> cachedBottomTwips_;
     sw::UnoCursorPointer unoCursorPtr_;
     const OUString searchString_;
 
-    SwRects* rangeRects(SwWrtShell* const pWrtShell, int index)
+    std::vector<val> cachedRectObjects_;
+    tools::Long cachedRectsStart_ = -1;
+    tools::Long cachedRectsEnd_ = -1;
+    size_t cachedStartIndex_ = 0;
+    size_t cachedEndIndex_ = 0;
+    /** 0 means unset, because realistically, no results are at 0 because that's out-of-bounds for the doc */
+    static constexpr tools::Long INVALID_BOTTOM_TWIPS = 0;
+    /** the bottom-most coordinate of a set of rectangles, in twips. */
+    std::vector<tools::Long> cachedBottomTwips_;
+    sal_uInt32 cachedInvalidationGeneration_ = 0;
+
+    val rangeRects(SwWrtShell* const pWrtShell, size_t index)
     {
         val rArray = val::array();
         rtl::Reference<SwXTextRange> range = ranges_.at(index);
@@ -455,7 +455,7 @@ private:
         if (!range->GetPositions(aPam))
         {
             emscripten_console_error("missing PaM");
-            return nullptr;
+            return {};
         }
 
         SwPosition* startPos = aPam.Start();
@@ -464,18 +464,124 @@ private:
         if (!startPos || !endPos || !node)
         {
             emscripten_console_error("missing node");
-            return nullptr;
+            return {};
         }
 
-        SwShellCursor aCursor(*pWrtShell, *startPos);
-        aCursor.SetMark();
-        aCursor.GetMark()->Assign(*node, endPos->GetContentIndex());
+        std::unique_ptr<SwShellCursor> aCursor(new SwShellCursor(*pWrtShell, *startPos));
+        aCursor->SetMark();
+        aCursor->GetMark()->Assign(*node, endPos->GetContentIndex());
 
-        aCursor.FillRects();
+        aCursor->FillRects();
+        SwRects* pRects = aCursor.get();
 
-        SwRects* pRects(&aCursor);
         cachedBottomTwips_[index] = bottomTwips(pRects);
-        return pRects;
+        val rects = swRectsToArray(pRects);
+        cachedRectObjects_[index] = rects;
+
+        return rects;
+    }
+
+    // this is only used for cases when there is nothing valid in the cache
+    std::optional<std::pair<size_t, size_t>> binarySearchRangeRects(SwWrtShell* const pWrtShell,
+                                                                    tools::Long startBottomTwips,
+                                                                    tools::Long endBottomTwips)
+    {
+        size_t low = 0, high = ranges_.size() - 1;
+        size_t startIndex = 0, endIndex = 0;
+        bool startSet = false, endSet = false;
+
+        while (low <= high)
+        {
+            size_t mid = low + (high - low) / 2;
+            // has a side-effect that produces the cached bottom twips used
+            rangeRects(pWrtShell, mid);
+
+            tools::Long midVal = cachedBottomTwips_.at(mid);
+            if (midVal != INVALID_BOTTOM_TWIPS && midVal >= startBottomTwips)
+            {
+                high = mid - 1;
+                startIndex = mid;
+                startSet = true;
+                if (mid == 0) break; // underflow
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+
+        if (!startSet)
+        {
+            return {};
+        }
+
+        // since there can be rects with identical bottom coordinates, seek back until the first non-identical
+        for (size_t seekIndex = (startIndex ? startIndex - 1 : startIndex); seekIndex > 0;
+             seekIndex--)
+        {
+            rangeRects(pWrtShell, seekIndex);
+            if (cachedBottomTwips_.at(seekIndex) >= startBottomTwips)
+            {
+                startIndex = seekIndex;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        low = startIndex;
+        high = ranges_.size() - 1;
+        while (low <= high)
+        {
+            size_t mid = low + (high - low) / 2;
+            // there's a good chance this rect was already calculated from the first loop
+            tools::Long midVal = cachedBottomTwips_.at(mid);
+            if (midVal == INVALID_BOTTOM_TWIPS)
+            {
+                // has a side-effect that produces the cached bottom twips used
+                rangeRects(pWrtShell, mid);
+            }
+
+            midVal = cachedBottomTwips_.at(mid);
+            if (midVal != INVALID_BOTTOM_TWIPS && midVal <= endBottomTwips)
+            {
+                low = mid + 1;
+                endIndex = mid;
+                endSet = true;
+            }
+            else
+            {
+                if (mid == 0) break; // underflow
+                high = mid - 1;
+            }
+        }
+
+        if (!endSet)
+        {
+            return {};
+        }
+
+        // same seek, but towards the end
+        for (size_t seekIndex = endIndex + 1; seekIndex < ranges_.size() - 1; seekIndex++)
+        {
+            rangeRects(pWrtShell, seekIndex);
+            if (cachedBottomTwips_.at(seekIndex) <= endBottomTwips)
+            {
+                endIndex = seekIndex;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (startIndex > endIndex)
+        {
+            return {};
+        }
+
+        return { { startIndex, endIndex } };
     }
 
     bool isOutOfRange(int index) { return index < 0 || index >= (int)ranges_.size(); }
@@ -552,6 +658,7 @@ public:
             }
         }
         cachedBottomTwips_.resize(ranges_.size());
+        cachedRectObjects_.resize(ranges_.size());
     }
 
     int length() override { return ranges_.size(); };
@@ -559,7 +666,10 @@ public:
     val rect(int index) override
     {
         if (isOutOfRange(index))
+        {
+            emscripten_console_error("out of range");
             return val::undefined();
+        }
 
         SolarMutexGuard aGuard;
         SwView* pView = dynamic_cast<SwView*>(SfxViewShell::Current());
@@ -568,10 +678,17 @@ public:
             emscripten_console_error("missing view!");
             return val::undefined();
         }
-        SwRects* rects = rangeRects(pView->GetWrtShellPtr(), index);
-        if (!rects)
-            return val::undefined();
-        return swRectsToArray(rects);
+
+        SwXTextDocument* pModel
+            = comphelper::getFromUnoTunnel<SwXTextDocument>(pView->GetCurrentDocument());
+        if (cachedInvalidationGeneration_ == pModel->invalidationGeneration())
+        {
+            val maybe = cachedRectObjects_.at(index);
+            if (!maybe.isUndefined())
+                return maybe;
+        }
+
+        return rangeRects(pView->GetWrtShellPtr(), index);
     };
 
     val rects(int startYPosTwips, int endYPosTwips) override
@@ -590,57 +707,82 @@ public:
             return val::undefined();
         }
 
-        // predicting based on the cached bottom-most coordinate prevents running layout, which is expensive
-        int predictedStartIndex = -1;
-        int predictedEndIndex = -1;
-        for (int i = 0; i < (int)cachedBottomTwips_.size(); ++i)
+        val r = val::array();
+        SwXTextDocument* pModel
+            = comphelper::getFromUnoTunnel<SwXTextDocument>(pView->GetCurrentDocument());
+        // a later invalidation generation means that all prior rects are now likely not valid
+        if (cachedInvalidationGeneration_ != pModel->invalidationGeneration())
         {
-            tools::Long cachedBottomTwips = cachedBottomTwips_.at(i);
-            if (cachedBottomTwips == 0)
-                continue;
-
-            SwRects* pRects = rangeRects(pView->GetWrtShellPtr(), i);
-            if (!pRects)
-                return val::undefined();
-
-            if (startYPosTwips <= cachedBottomTwips)
+            std::fill(cachedBottomTwips_.begin(), cachedBottomTwips_.end(), INVALID_BOTTOM_TWIPS);
+            auto maybeRange = binarySearchRangeRects(pWrtShell, startYPosTwips, endYPosTwips);
+            if (!maybeRange)
             {
-                // if the cached bottom doesn't match the current bottom, a change has occurred and the values aren't valid
-                if (cachedBottomTwips != bottomTwips(pRects))
-                    break;
-
-                predictedStartIndex = i;
+                cachedRectsStart_ = -1;
+                cachedRectsEnd_ = -1;
+                return r;
             }
 
-            if (endYPosTwips >= cachedBottomTwips)
+            auto [startIndex, endIndex] = maybeRange.value();
+            for (size_t i = startIndex; i <= endIndex; ++i)
             {
-                if (cachedBottomTwips != bottomTwips(pRects))
-                {
-                    predictedStartIndex = -1;
-                    break;
-                }
-
-                predictedEndIndex = i;
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", cachedBottomTwips_.at(i) == INVALID_BOTTOM_TWIPS
+                                  ? rangeRects(pWrtShell, i)
+                                  : cachedRectObjects_.at(i));
+                r.call<void>("push", o);
             }
+            cachedRectsStart_ = startYPosTwips;
+            cachedRectsEnd_ = endYPosTwips;
+            return r;
         }
 
-        val r = val::array();
-        const int startIndex = std::clamp(predictedStartIndex, 0, (int)ranges_.size() - 1);
-        const int endIndex = std::clamp(predictedEndIndex, startIndex, (int)ranges_.size() - 1);
-        for (int i = startIndex; i <= endIndex; ++i)
+        // complete overlap of cached range
+        if (cachedRectsStart_ <= startYPosTwips && cachedRectsEnd_ >= endYPosTwips)
         {
-            SwRects* pRects = rangeRects(pView->GetWrtShellPtr(), i);
-            if (!pRects)
-                return val::undefined();
+            for (size_t i = cachedStartIndex_; i <= cachedEndIndex_; ++i)
+            {
+                tools::Long bottomTwips = cachedBottomTwips_.at(i);
+                if (bottomTwips < startYPosTwips)
+                {
+                    continue;
+                }
+                if (bottomTwips > endYPosTwips)
+                {
+                    break;
+                }
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", cachedRectObjects_.at(i));
+                r.call<void>("push", o);
+            }
+            return r;
+        }
 
-            if (bottomTwips(pRects) < startYPosTwips)
-                continue;
-            if (topTwips(pRects) > endYPosTwips)
-                continue;
-            val o = val::object();
-            o.set("i", i);
-            o.set("rect", swRectsToArray(pRects));
-            r.call<void>("push", o);
+        // work backwards from the cached rect start
+        if (startYPosTwips < cachedRectsStart_)
+        {
+            for (size_t i = cachedStartIndex_; i >= 0; --i)
+            {
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", rangeRects(pWrtShell, i));
+                r.call<void>("unshift", o);
+            }
+            cachedRectsStart_ = startYPosTwips;
+        }
+
+        // work forwards from the cached rect end
+        if (startYPosTwips < cachedRectsEnd_)
+        {
+            for (size_t i = cachedEndIndex_; ranges_.size() - 1; i++)
+            {
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", rangeRects(pWrtShell, i));
+                r.call<void>("push", o);
+            }
+            cachedRectsEnd_ = endYPosTwips;
         }
 
         return r;
@@ -903,9 +1045,19 @@ val SwXTextDocument::gotoOutline(int outlineIndex)
     return rectToArray(mrSh->GetCharRect());
 }
 
+void SwXTextDocument::bumpInvalidationGeneration()
+{
+    __c11_atomic_fetch_add(&m_nInvalidationGeneration, 1, __ATOMIC_RELAXED);
+}
+
+sal_uInt32 SwXTextDocument::invalidationGeneration()
+{
+    return __c11_atomic_load(&m_nInvalidationGeneration, __ATOMIC_RELAXED);
+}
+
 namespace sw
 {
-// search generations are used instead of a boolean because a simple boolean cannot gaurantee ordering
+// search generations are used instead of a boolean because a simple boolean cannot guarantee ordering
 _Atomic int g_searchGeneration = 0;
 
 void BumpSearchGeneration() { __c11_atomic_fetch_add(&g_searchGeneration, 1, __ATOMIC_RELAXED); }
