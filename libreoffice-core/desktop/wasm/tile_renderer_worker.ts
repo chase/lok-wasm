@@ -447,7 +447,7 @@ export const throttle = <T extends () => any>(callback: T): (() => void) => {
   ) {
     lastArgs = args;
     if (requestId == null) {
-      requestId = setTimeout(later(), 1000 / 30 /* ~fps */);
+      requestId = setTimeout(later(), 15);
     }
   };
 
