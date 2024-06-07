@@ -45,6 +45,12 @@ async function fileOpen(files: FileList | null) {
   setDoc(doc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
+  doc.afterIdle(() => {
+    console.log('did idle');
+  });
+  doc.afterPaint(() => {
+    console.log('did paint');
+  });
   window.d = doc;
   // doc.on(CallbackType.STATE_CHANGED, (payload) => console.log(payload));
 }
@@ -72,13 +78,13 @@ function registerGlobalKeys() {
   async function callback(e: KeyboardEvent) {
     if (IS_MAC ? !e.metaKey : !e.ctrlKey) return;
     switch (e.key) {
-      case "+":
+      case '+':
       case '=':
         e.preventDefault();
         if (zoomTimeout) clearTimeout(zoomTimeout);
         zoomTimeout = setTimeout(() => updateZoom(getDocThrows, ZOOM_STEP));
         break;
-      case "_":
+      case '_':
       case '-':
         e.preventDefault();
         if (zoomTimeout) clearTimeout(zoomTimeout);

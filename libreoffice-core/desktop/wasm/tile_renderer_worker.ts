@@ -129,7 +129,7 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
 
 /** Converts a CSS pixel to twips */
 function cssPxToTwips(px: number, dpi: number): number {
-  return px * scaledTwips / dpi;
+  return (px * scaledTwips) / dpi;
 }
 
 /** Converts a physical pixel to twips */
@@ -148,7 +148,7 @@ function twipsToPx(twips: number, dpi: number): number {
 }
 
 function getContext(canvas: OffscreenCanvas) {
-  let ctx = canvas.getContext("2d");
+  let ctx = canvas.getContext('2d');
   // default is true, which makes things blurry
   //https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled
   ctx.imageSmoothingEnabled = false;
@@ -160,8 +160,7 @@ function zoom(in_scale: number, in_dpi: number) {
   docHeightTwips = Atomics.load(d.docHeightTwips, 0);
 
   scaledTwips =
-    clipToNearest8PxZoom(d.tileSize, 1 / in_scale) *
-    LOK_INTERNAL_TWIPS_TO_PX;
+    clipToNearest8PxZoom(d.tileSize, 1 / in_scale) * LOK_INTERNAL_TWIPS_TO_PX;
 
   tileDimTwips = Math.ceil(cssPxToTwips(d.tileSize, dpi));
   widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
@@ -432,6 +431,39 @@ const afterInvalidate: () => Promise<boolean> = Atomics.waitAsync
       return promise;
     };
 
+export const throttle = <T extends () => any>(callback: T): (() => void) => {
+  let requestId: number | undefined;
+
+  let lastArgs: any[];
+
+  const later = () => () => {
+    requestId = undefined;
+    callback();
+  };
+
+  const throttled = function (
+    this: ThisParameterType<T>,
+    ...args: Parameters<T>
+  ) {
+    lastArgs = args;
+    if (requestId == null) {
+      requestId = setTimeout(later(), 1000 / 30 /* ~fps */);
+    }
+  };
+
+  return throttled;
+};
+
+const postIdle = throttle(() => {
+  postMessage({ idle: true });
+});
+
+const postPaint = throttle(() => {
+  postMessage({ paint: true });
+});
+
+let idleDebounceTimeout: number;
+let lowPriorityIdleDebounceTimeout: number;
 function stateMachine() {
   running = true;
   while (pendingStateChange) {
@@ -469,9 +501,11 @@ function stateMachine() {
     paintNonVisibleAreasWhileIdle,
     Math.max(trimmedMean(paintTimes), 10)
   );
+  if (lowPriorityIdleDebounceTimeout)
+    clearTimeout(lowPriorityIdleDebounceTimeout);
+  lowPriorityIdleDebounceTimeout = setTimeout(postIdle, 200);
 }
 
-let idleDebounceTimeout: number;
 function paintNonVisibleAreasWhileIdle(): void {
   if (!idleAreaPaint) return;
   const visibleHeight = renderedHeightTwips;
@@ -507,6 +541,7 @@ function paintNonVisibleAreasWhileIdle(): void {
       Math.max(trimmedMean(paintTimes), 10)
     );
   }
+  postPaint();
 }
 
 function shouldPausePaint(): boolean {

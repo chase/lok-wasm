@@ -12,7 +12,7 @@ import type {
   ParagraphStyleList,
   RectArray,
   TileRenderData,
-  DocumentRef
+  DocumentRef,
 } from './soffice';
 export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
@@ -308,6 +308,10 @@ export type DocumentClientBase = {
   on(type: CallbackType, handler: CallbackHandler): void;
   off(type: CallbackType, handler: CallbackHandler): void;
   newView(): Promise<DocumentClient | null>;
+  /** after painting is idle, calls the callback, returns the method to unregister the callback */
+  afterIdle(callback: () => any): () => void;
+  /** !!!USE SPARINGLY: Impacts performance!!! Calls the callback, returns the method to unregister the callback */
+  afterPaint(callback: () => any): () => void;
 };
 
 export type AsyncFunctions<T extends { [K: string]: (...args: any) => any }> = {

@@ -280,6 +280,15 @@ const handler: DocumentMethodHandler<Document> = {
     }
     tileRenderer[ref][result.viewId] = worker;
 
+    worker.addEventListener('message', ({ data }) => {
+      if (data.idle) {
+        postMessage({ f: 'idle_', d: ref });
+      }
+      if (data.paint) {
+        postMessage({ f: 'paint_', d: ref });
+      }
+    });
+
     worker.postMessage(
       {
         t: 'i',
