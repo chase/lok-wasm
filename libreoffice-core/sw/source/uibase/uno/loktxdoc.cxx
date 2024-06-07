@@ -512,7 +512,14 @@ void SwXTextDocument::batchUpdateTrackChange( const css::uno::Sequence<sal_uInt3
         {
             if (id == rRedlineTable[i]->GetId()) {
                 found = true;
-                mrSh->AcceptRedline(i);
+                if (accept)
+                {
+                    mrSh->AcceptRedline(i);
+                }
+                else
+                {
+                    mrSh->RejectRedline(i);
+                }
             }
         }
     }
