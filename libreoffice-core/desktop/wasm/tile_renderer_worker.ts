@@ -431,7 +431,7 @@ const afterInvalidate: () => Promise<boolean> = Atomics.waitAsync
       return promise;
     };
 
-export const throttle = <T extends () => any>(callback: T): (() => void) => {
+const throttle = <T extends () => any>(callback: T): (() => void) => {
   let requestId: number | undefined;
 
   let lastArgs: any[];
