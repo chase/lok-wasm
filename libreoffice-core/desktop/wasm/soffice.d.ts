@@ -148,6 +148,7 @@ export declare class ExpandedPart {
 export declare class ExpandedDocument {
   constructor(): void;
   addPart(path: string, name: string): void;
+  delete(): void;
 }
 
 /** Embind ocument class, see main_wasm.cxx */

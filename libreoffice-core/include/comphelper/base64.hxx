@@ -52,6 +52,8 @@ public:
     // must be used!
     static void decode(css::uno::Sequence<sal_Int8>& aPass, std::u16string_view sBuffer);
 
+    static void decode(css::uno::Sequence<sal_Int8>& aPass, std::string_view sBuffer);
+
     static std::size_t decodeSomeChars(css::uno::Sequence<sal_Int8>& aPass,
                                        std::u16string_view sBuffer);
 };

@@ -2,6 +2,7 @@
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
+#include "boost/unordered/unordered_map_fwd.hpp"
 #include "com/sun/star/embed/XExtendedStorageStream.hdl"
 #include "com/sun/star/io/XInputStream.hdl"
 #include "com/sun/star/io/XSeekable.hdl"
@@ -12,6 +13,7 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <string>
 #include <unordered_map>
+#include <boost/unordered_map.hpp>
 #include <mutex>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/embed/XHierarchicalStorageAccess.hpp>
@@ -107,7 +109,7 @@ struct ExpandedFile
         , content(content_){};
 };
 
-typedef std::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
+typedef boost::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
 enum PathType
 {
     Relative,

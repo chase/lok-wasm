@@ -109,6 +109,7 @@ struct ExpandedDocument
 
     ExpandedDocument(){};
 
+public:
     void addPart(std::string path, std::string content);
 };
 
@@ -126,7 +127,7 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::string getPageColor();
     std::string getPageOrientation();
 
-    _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, const desktop::ExpandedDocument expandedDoc, const char* pFilterOptions = nullptr);
+    _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions = nullptr);
 };
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit

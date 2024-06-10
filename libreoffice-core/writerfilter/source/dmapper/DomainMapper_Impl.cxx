@@ -2222,7 +2222,7 @@ void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap, con
 #endif
 
     const StyleSheetEntryPtr pEntry = GetStyleSheetTable()->FindStyleSheetByConvertedStyleName( GetCurrentParaStyleName() );
-    SAL_WARN_IF(!pEntry, "writerfilter.dmapper", "no style sheet found");
+    /* SAL_WARN_IF(!pEntry, "writerfilter.dmapper", "no style sheet found"); */
     const StyleSheetPropertyMap* pStyleSheetProperties = pEntry ? pEntry->m_pProperties.get() : nullptr;
     sal_Int32 nListId = pParaContext ? pParaContext->props().GetListId() : -1;
     bool isNumberingViaStyle(false);

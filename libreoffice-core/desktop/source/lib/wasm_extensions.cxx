@@ -14,7 +14,7 @@
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
 #include <memory>
-#include <optional>
+#include <vector>
 #include <sfx2/bindings.hxx>
 #include <sfx2/dispatch.hxx>
 #include <sfx2/viewfrm.hxx>
@@ -236,7 +236,7 @@ void ExpandedDocument::addPart(std::string path, std::string content)
     parts.emplace_back(path, content);
 }
 
-_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, const desktop::ExpandedDocument expandedDoc, const char* pFilterOptions)
+_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions)
 {
     using namespace com::sun::star;
     uno::XComponentContext * xContext =
@@ -260,11 +260,14 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
 
     uno::Reference<oox::ExpandedStorage> storage(new oox::ExpandedStorage(xContext, xEmptyInputStream));
-    /* uno::Reference<oox::StorageBase> xStorageBase(storage, uno::UNO_QUERY); */
 
-    for (const auto& part : expandedDoc.parts)
+    auto it = expandedDoc.parts.begin();
+    while(it != expandedDoc.parts.end())
     {
-        storage->addPart(part.path, part.content);
+        if (it->content.length() == 0 || it->path.length() == 0)
+            continue;
+        storage->addPart(it->path, it->content);
+        it = expandedDoc.parts.erase(it);
     }
 
     storage->readRelationshipInfo();

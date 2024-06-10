@@ -185,15 +185,14 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
         bool found = std::find(m_dirs.begin(), m_dirs.end(), pathParts[idx]) != m_dirs.end();
         if (!found)
         {
-            SAL_WARN("expandedstorage", "found dir part" << pathParts[idx]);
             m_dirs.push_back(pathParts[idx]);
         }
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
     Sequence<sal_Int8> sContent;
-    comphelper::Base64::decode(sContent, OUString::createFromAscii(content.c_str()));
-    ExpandedFile file(sPath, sContent);
-    m_files->insert({ path, file });
+    comphelper::Base64::decode(sContent, content);
+    SAL_WARN("expandedstorage", " size of m_files " << m_files->size());
+    m_files->insert({ path, {sPath, sContent} });
 }
 
 // XInterface

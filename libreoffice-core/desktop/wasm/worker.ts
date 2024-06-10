@@ -83,15 +83,13 @@ const globalHandler: GlobalMethod = {
     return ref;
   },
   loadFromExpandedParts: function(data: any) {
-    const { Document, ExpandedDocument, ExpandedPart} = lok;
+    const { Document, ExpandedDocument} = lok;
     const expandedDoc = new ExpandedDocument();
     for (const part of data) {
-      expandedDoc.addPart(part.path, part.content);
+      part.content.length > 0 && expandedDoc.addPart(part.path, part.content);
     }
 
     const doc = new Document(expandedDoc, "test");
-
-    console.log("HERE DOC");
     const ref = doc.ref();
     // lok.unmountBlob();
 
@@ -154,7 +152,6 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     args: InitializeForRenderingOptions = {}
   ): number {
-    console.log('INITIALIZE FOR RENDERING', args);
     doc.initializeForRendering(
       `{".uno:ShowBorderShadow": {
           "type": "boolean",
