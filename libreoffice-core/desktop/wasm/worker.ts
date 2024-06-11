@@ -42,8 +42,10 @@ const messageQueue: MessageEvent<any>[] = [];
 globalThis.onmessage = (message) => {
   messageQueue.push(message);
 };
+type EmbindingDisposable = { delete(): void };
 const docMap: Record<DocumentRef, Document> = {};
-const findResultMap: Record<DocumentRef, ITextRanges> = {};
+const findResultMap: Record<DocumentRef, ITextRanges & EmbindingDisposable> =
+  {};
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
 
@@ -562,8 +564,9 @@ const forwarding: ForwardingMethodHandlers<Document> = {
       mode: 'wildcard' | 'regex' | 'similar';
     }>
   ): ForwardingId {
-    findResultMap[docRef] = doc.findAll(text, options);
-
+    findResultMap[docRef]?.delete();
+    findResultMap[docRef] = doc.findAll(text, options) as ITextRanges &
+      EmbindingDisposable;
     return [docRef, viewId, '_find'];
   },
 };
