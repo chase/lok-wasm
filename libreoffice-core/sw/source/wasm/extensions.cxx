@@ -872,14 +872,14 @@ public:
         SolarMutexGuard aGuard;
 
         OUString replaceString = OUString::fromUtf8(text);
-        auto range = ranges_.at(0);
+        auto range = ranges_.at(index);
         SwDoc& rDoc = range->GetDoc();
         UnoActionContext aAction(&rDoc);
         rDoc.GetIDocumentUndoRedo().StartUndo(SwUndoId::REPLACE, nullptr);
 
         replace(range, replaceString);
 
-        SwRewriter rewriter(MakeUndoReplaceRewriter(ranges_.size(), searchString_, replaceString));
+        SwRewriter rewriter(MakeUndoReplaceRewriter(1, searchString_, replaceString));
         rDoc.GetIDocumentUndoRedo().EndUndo(SwUndoId::REPLACE, &rewriter);
     };
 
