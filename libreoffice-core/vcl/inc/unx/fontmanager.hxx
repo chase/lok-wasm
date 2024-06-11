@@ -29,6 +29,7 @@
 #include <unx/fc_fontoptions.hxx>
 
 #include <font/PhysicalFontFace.hxx>
+#include <roaring.hh>
 
 #include <set>
 #include <memory>
@@ -79,6 +80,9 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
     // for speeding up findFontFileID
     std::unordered_map< OString, o3tl::sorted_vector< fontID > >
                                                 m_aFontFileToFontID;
+    // MACRO: Fast missing codepoint lookup {
+    std::unordered_map< fontID, roaring::Roaring >     m_aCodepointBitmap;
+    // MACRO: }
 
     std::unordered_map< OString, int >
     m_aDirToAtom;

@@ -389,6 +389,7 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/helper/strhelper \
     vcl/source/helper/svtaccessiblefactory \
     vcl/source/helper/threadex \
+    vcl/source/roaring \
     vcl/source/app/brand \
     vcl/source/app/customweld \
     vcl/source/app/dbggui \
