@@ -637,6 +637,8 @@ private:
     }
 
 public:
+    TextRanges_Impl() {}
+
     TextRanges_Impl(SwPaM* const pPaM, OUString searchString)
         : searchString_(searchString)
     {
@@ -944,10 +946,14 @@ std::shared_ptr<wasm::ITextRanges> SwXTextDocument::findAllTextRanges(const std:
     sal_Int32 nResult = 0;
     uno::Reference<text::XTextCursor> xCursor;
     SwUnoCursor* pResultCursor(FindAny(xSearch, xCursor, true, nResult, xTmp));
+    if (!nResult)
+    {
+        return std::make_shared<TextRanges_Impl>();
+    }
     if (!pResultCursor)
     {
         emscripten_console_error("no result cursor");
-        return {};
+        return std::make_shared<TextRanges_Impl>();
     }
 
     return std::make_shared<TextRanges_Impl>(pResultCursor, searchString);
