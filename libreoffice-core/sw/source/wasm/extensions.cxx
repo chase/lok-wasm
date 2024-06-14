@@ -1025,7 +1025,7 @@ val SwXTextDocument::getOutline()
         val o = val::object();
         o.set("id", nOutlineId);
         o.set("parent", nParent);
-        o.set("text", textNode->GetText());
+        o.set("text", val::u16string(textNode->GetText().getStr()));
         r.call<void>("push", o);
 
         aOutlineStack.push(StackEntry(nLevel, nOutlineId));
