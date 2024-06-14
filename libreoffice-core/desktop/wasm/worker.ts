@@ -319,11 +319,9 @@ const handler: DocumentMethodHandler<Document> = {
   stopRendering: function (doc: Document, viewId: ViewId): void {
     const ref = doc.ref();
     const worker = tileRenderer[ref]?.[viewId];
-    worker.terminate();
+    worker?.terminate();
     doc.stopTileRenderer(viewId);
-
   },
-
   setScrollTop: function (
     doc: Document,
     viewId: ViewId,
