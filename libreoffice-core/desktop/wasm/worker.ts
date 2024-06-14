@@ -316,8 +316,12 @@ const handler: DocumentMethodHandler<Document> = {
   ): void {
     throw new Error('Function not implemented.');
   },
-  stopRendering: function (_doc: Document, _viewId: ViewId): void {
-    throw new Error('Function not implemented.');
+  stopRendering: function (doc: Document, viewId: ViewId): void {
+    const ref = doc.ref();
+    const worker = tileRenderer[ref]?.[viewId];
+    worker.terminate();
+    doc.stopTileRenderer(viewId);
+
   },
 
   setScrollTop: function (

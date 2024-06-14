@@ -166,6 +166,10 @@ export function OfficeDocument(props: Props) {
     false
   );
 
+  onCleanup(() => {
+    props.doc.stopRendering();
+  })
+
   createEffect(async () => {
     if (didInitialRender.has(props.doc)) return;
     const width = docSizePx()?.[0];

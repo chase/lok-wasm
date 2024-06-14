@@ -91,8 +91,8 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
 {
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
-    TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h);
     pthread_t& threadId = tileRendererThreads_.emplace_back();
+    TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h, threadId);
     if (pthread_create(&threadId, nullptr, tileRendererWorker, &data))
     {
         std::abort();
@@ -101,6 +101,37 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
 
     return data;
 }
+
+void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
+{
+    auto it = std::find_if(tileRendererData_.begin(), tileRendererData_.end(),
+                           [viewId](const TileRendererData& data) {
+                               return data.viewId == viewId;
+                           });
+
+    if (it != tileRendererData_.end())
+    {
+        TileRendererData* data = &*it;
+        changeState(data, RenderState::QUIT);
+
+        auto threadIt = std::find_if(tileRendererThreads_.begin(), tileRendererThreads_.end(),
+                                     [data](const pthread_t& threadId) {
+                                         return pthread_equal(threadId, data->threadId);
+                                     });
+
+        if (threadIt != tileRendererThreads_.end())
+        {
+            pthread_join(*threadIt, nullptr);
+            *threadIt = std::move(tileRendererThreads_.back());
+            tileRendererThreads_.pop_back();
+        }
+
+        delete[] data->paintedTile;
+        data->~TileRendererData();
+        data = nullptr;
+    }
+}
+
 
 void TileRendererData::pushInvalidation(uint32_t invalidation[4])
 {

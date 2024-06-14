@@ -176,6 +176,7 @@ export declare class Document {
   subscribe(viewId: number, type: number): void;
   unsubscribe(viewId: number, type: number): void;
   startTileRenderer(viewId: number, tileSize: number): TileRenderData;
+  stopTileRenderer(viewId: number): void;
   setClientVisibleArea(
     viewId: number,
     x: number,

@@ -477,6 +477,11 @@ public:
         return result;
     }
 
+    void stopTileRenderer(int32_t viewId)
+    {
+        ext()->stopTileRenderer(viewId);
+    }
+
     void dispatchCommand(int viewId, std::string command, std::optional<std::string> arguments,
                          std::optional<bool> notifyWhenFinished)
     {
@@ -738,6 +743,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("dispatchCommand", &DocumentClient::dispatchCommand)
         .function("removeText", &DocumentClient::removeText)
         .function("startTileRenderer", &DocumentClient::startTileRenderer)
+        .function("stopTileRenderer", &DocumentClient::stopTileRenderer)
         .function("ref", &DocumentClient::ref)
         .function("setClientVisibleArea", &DocumentClient::setClientVisibleArea)
         .function("getSelectionText", &DocumentClient::getSelectionText)
