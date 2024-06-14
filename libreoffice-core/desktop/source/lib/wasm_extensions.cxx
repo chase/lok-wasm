@@ -105,9 +105,9 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
 void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
 {
     auto it = std::find_if(tileRendererData_.begin(), tileRendererData_.end(),
-                           [viewId](const TileRendererData& data) {
-                               return data.viewId == viewId;
-                           });
+        [viewId](const TileRendererData& data) {
+            return data.viewId == viewId;
+        });
 
     if (it != tileRendererData_.end())
     {
@@ -115,20 +115,17 @@ void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
         changeState(data, RenderState::QUIT);
 
         auto threadIt = std::find_if(tileRendererThreads_.begin(), tileRendererThreads_.end(),
-                                     [data](const pthread_t& threadId) {
-                                         return pthread_equal(threadId, data->threadId);
-                                     });
+            [data](const pthread_t& threadId) {
+                return pthread_equal(threadId, data->threadId);
+            });
 
         if (threadIt != tileRendererThreads_.end())
         {
             pthread_join(*threadIt, nullptr);
-            *threadIt = std::move(tileRendererThreads_.back());
-            tileRendererThreads_.pop_back();
+            tileRendererThreads_.erase(threadIt);
         }
-
         delete[] data->paintedTile;
-        data->~TileRendererData();
-        data = nullptr;
+        delete data;
     }
 }
 
