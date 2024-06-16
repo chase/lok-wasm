@@ -157,7 +157,7 @@ const clientBase: DocumentClientBase = {
   off(type: CallbackType, handler: CallbackHandler) {
     const ref = this.ref;
     const subscribedEvent = subscribedEvents[ref]?.[type];
-    if (!subscribedEvent) return;
+    if (subscribedEvent != null) return;
 
     subscribedEvent.delete(handler);
     if (subscribedEvent.size === 0) {
