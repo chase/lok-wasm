@@ -548,6 +548,11 @@ void SwAnnotationWin::Rescale()
 void SwAnnotationWin::SetPosAndSize()
 {
     const bool bShowNotes = mrMgr.ShowNotes();
+
+    // MACRO: skip layout for non-root comments {
+    if (GetPostItField()->GetParentPostItId() != 0) return;
+    // MACRO: }
+
     if (bShowNotes)
     {
         bool bChange = false;
@@ -849,6 +854,10 @@ void SwAnnotationWin::SetScrollbar()
 
 void SwAnnotationWin::ResizeIfNecessary(tools::Long aOldHeight, tools::Long aNewHeight)
 {
+    // MACRO: skip layout for non-root comments {
+    if (GetPostItField()->GetParentPostItId() != 0) return;
+    // MACRO: }
+
     if (aOldHeight != aNewHeight)
     {
         //check for lower border or next note

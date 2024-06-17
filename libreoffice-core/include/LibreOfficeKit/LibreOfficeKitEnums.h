@@ -551,31 +551,22 @@ typedef enum
      */
     LOK_CALLBACK_REDLINE_TABLE_ENTRY_MODIFIED = 31,
 
+    // MACRO: Simplified comment notification {
     /**
      * There is some change in comments in the document
      *
      * The payload example:
      * {
-     *     "comment": {
-     *         "action": "Add",
-     *         "id": "11",
-     *         "parent": "4",
-     *         "author": "Unknown Author",
-     *         "text": "",
-     *         "dateTime": "2016-08-18T13:13:00",
-     *         "anchorPos": "4529, 3906",
-     *         "textRange": "1418, 3906, 3111, 919"
-     *     }
+     *    "action": "Add",
+     *    "id": 11,
+     *    "parentId": 4,
      * }
-     *
-     * The format is the same as an entry of
-     * lok::Document::getCommandValues('.uno:ViewAnnotations'), extra
-     * fields:
      *
      * - 'action' can be 'Add', 'Remove' or 'Modify' depending on whether
      *    comment has been added, removed or modified.
      */
     LOK_CALLBACK_COMMENT = 32,
+    // MACRO: }
 
     /**
      * The column/row header is no more valid because of a column/row insertion

@@ -549,7 +549,7 @@ public:
     SwDocShell* GetDocShell() { return m_pDocShell; }
 
     /// MACRO-2313: WASM Writer extensions {
-    emscripten::val comments() override;
+    emscripten::val comments(const emscripten::val& ids) override;
     void addComment(const std::string& text) override;
     void replyComment(int parentId, const std::string& text) override;
     void deleteCommentThreads(emscripten::val parentIds) override;

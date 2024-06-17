@@ -3,6 +3,7 @@ export type ViewId = number & {};
 import type { CallbackType } from './lok_enums';
 import type {
   Document,
+  RootComment,
   Comment,
   FindAllOptions,
   HeaderFooterRect,
@@ -135,7 +136,7 @@ export type DocumentWithViewMethods = {
   // NOTE: Disabled until unoembind startup cost is under 1s
   // getXComponent(): void;
 
-  comments(): Comment[];
+  comments(ids?: number[]): Array<Comment | RootComment>;
   addComment(text: string): void;
   replyComment(parentId: number, text: string): void;
   deleteCommentThreads(parentIds: number[]): void;

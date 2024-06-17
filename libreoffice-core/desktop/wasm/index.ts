@@ -446,3 +446,12 @@ if (import.meta.hot) {
 export type * from './shared';
 export type * from './soffice';
 export * from './lok_enums';
+
+export enum LayoutStatus {
+  INVISIBLE,
+  VISIBLE,
+  INSERTED,
+  DELETED,
+  NONE,
+  HIDDEN,
+}

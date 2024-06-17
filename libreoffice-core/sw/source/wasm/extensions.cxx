@@ -1,3 +1,5 @@
+#include "sal/types.h"
+#include <unordered_set>
 #include <vector>
 #include <docufld.hxx>
 #include <tools/long.hxx>
@@ -100,14 +102,32 @@ uno::Reference<text::XTextViewCursor> currentCursor()
     }
     return xTextViewCursorSupplier->getViewCursor();
 }
+
+void prepareComment(const SwPostItField* pField, val& obj)
+{
+    obj.set("id", val(pField->GetPostItId()));
+    obj.set("parentId", val(pField->GetParentPostItId()));
+    obj.set("author", val::u16string(pField->GetPar1().getStr()));
+    obj.set("text", val::u16string(pField->GetPar2().getStr()));
+    obj.set("resolved", val(pField->GetResolved()));
+    obj.set("dateTime",
+            val::u16string(utl::toISO8601(pField->GetDateTime().GetUNODateTime()).getStr()));
+}
 }
 
 constexpr OUString g_sRecordChanges = u"RecordChanges"_ustr;
 
-val SwXTextDocument::comments()
+val SwXTextDocument::comments(const val& ids)
 {
     SolarMutexGuard aGuard;
     val commentsNode = val::array();
+    std::unordered_set<sal_uInt32> idSet;
+    const uint32_t idsLen = ids["length"].as<uint32_t>();
+    for (size_t i = 0; i < idsLen; i++)
+    {
+        idSet.insert(ids[i].as<uint32_t>());
+    }
+
     for (auto const& sidebarItem : *m_pDocShell->GetView()->GetPostItMgr())
     {
         sw::annotation::SwAnnotationWin* pWin = sidebarItem->mpPostIt.get();
@@ -118,6 +138,19 @@ val SwXTextDocument::comments()
         }
 
         const SwPostItField* pField = pWin->GetPostItField();
+        if (idsLen > 0 && !idSet.contains(pField->GetPostItId())) {
+            continue;
+        }
+        bool root = pField->GetParentPostItId() == 0;
+        val obj = val::object();
+        // if it isn't a root comment, layout information is not useful
+        if (!root)
+        {
+            prepareComment(pField, obj);
+            commentsNode.call<void>("push", obj);
+            continue;
+        }
+
         const SwRect& aRect = pWin->GetAnchorRect();
         tools::Rectangle aSVRect(aRect.Pos().getX(), aRect.Pos().getY(),
                                  aRect.Pos().getX() + aRect.SSize().Width(),
@@ -130,22 +163,19 @@ val SwXTextDocument::comments()
         }
 
         val rects = val::array();
+        double bottom = 0.0;
         for (const basegfx::B2DRange& aRange : pWin->GetAnnotationTextRanges())
         {
             const SwRect rect(aRange.getMinX(), aRange.getMinY(), aRange.getWidth(),
                               aRange.getHeight());
+            if (aRange.getMaxY() > bottom)
+                bottom = aRange.getMaxY();
             rects.call<void>("push", rectToArray(rect.SVRect()));
         }
 
-        val obj = val::object();
-        obj.set("id", val(pField->GetPostItId()));
-        obj.set("parentId", val(pField->GetParentPostItId()));
-        obj.set("author", val::u16string(pField->GetPar1().getStr()));
-        obj.set("text", val::u16string(pField->GetPar2().getStr()));
-        obj.set("resolved", val(pField->GetResolved()));
-        obj.set("dateTime",
-                val::u16string(utl::toISO8601(pField->GetDateTime().GetUNODateTime()).getStr()));
+        prepareComment(pField, obj);
         obj.set("anchorPos", rectToArray(aSVRect));
+        obj.set("bottomTwips", bottom);
         obj.set("textRange", rects);
         obj.set("layoutStatus", val(static_cast<sal_Int16>(pWin->GetLayoutStatus())));
 
@@ -503,7 +533,8 @@ private:
                 high = mid - 1;
                 startIndex = mid;
                 startSet = true;
-                if (mid == 0) break; // underflow
+                if (mid == 0)
+                    break; // underflow
             }
             else
             {
@@ -553,7 +584,8 @@ private:
             }
             else
             {
-                if (mid == 0) break; // underflow
+                if (mid == 0)
+                    break; // underflow
                 high = mid - 1;
             }
         }

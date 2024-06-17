@@ -48,6 +48,15 @@ export type OutlineItem = {
   text: string;
 };
 
+export declare enum LayoutStatus {
+  INVISIBLE,
+  VISIBLE,
+  INSERTED,
+  DELETED,
+  NONE,
+  HIDDEN,
+}
+
 export type Comment = {
   id: number;
   parentId: number;
@@ -55,9 +64,14 @@ export type Comment = {
   text: string;
   resolved: boolean;
   dateTime: string;
+};
+
+export type RootComment = Comment & {
+  parentId: 0;
   anchorPos: RectArray;
   textRange: RectArray[];
-  layoutStatus: number;
+  bottomTwips: number;
+  layoutStatus: LayoutStatus;
 };
 
 export type SanitizeOptions = Partial<{
@@ -200,7 +214,7 @@ export declare class Document {
   // NOTE: Disabled until unoembind startup cost is under 1s
   // getXComponent(viewId: number): any;
 
-  comments(): Comment[];
+  comments(ids: number[]): Comment[];
   addComment(text: string): void;
   replyComment(parentId: number, text: string): void;
   deleteCommentThreads(parentIds: number[]): void;

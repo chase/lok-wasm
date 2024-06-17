@@ -399,9 +399,9 @@ const handler: DocumentMethodHandler<Document> = {
     doc.setClientVisibleArea(viewId, x, y, width, height);
   },
 
-  comments: function (doc: Document, viewId: ViewId): Comment[] {
+  comments: function (doc: Document, viewId: ViewId, ids: number[] = []): Comment[] {
     doc.setCurrentView(viewId);
-    return doc.comments();
+    return doc.comments(ids);
   },
 
   addComment: function (doc: Document, viewId: ViewId, text: string): void {

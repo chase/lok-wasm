@@ -600,7 +600,7 @@ public:
     }
 
     // Forwarded from IWriterExtensions.hxx, unotxdoc.hxx, wasm/extensions.cxx
-    val comments() { return writer()->comments(); }
+    val comments(const val& ids) { return writer()->comments(ids); }
     void addComment(std::string text) { writer()->addComment(std::move(text)); }
     void replyComment(int parentId, std::string text)
     {

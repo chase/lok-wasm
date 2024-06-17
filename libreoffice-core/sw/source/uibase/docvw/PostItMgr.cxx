@@ -19,7 +19,7 @@
 
 #include <config_wasm_strip.h>
 
-#include <boost/property_tree/json_parser.hpp>
+#include <tools/json_writer.hxx>
 
 #include <PostItMgr.hxx>
 #include <postithelper.hxx>
@@ -132,66 +132,33 @@ namespace {
     }
 
     /// Emits LOK notification about one addition/removal/change of a comment
+    // MACRO: Simplified comment notification {
     void lcl_CommentNotification(const SwView* pView, const CommentNotificationType nType, const SwSidebarItem* pItem, const sal_uInt32 nPostItId)
     {
-        if (!comphelper::LibreOfficeKit::isActive())
+        if (!comphelper::LibreOfficeKit::isActive() || !pView)
             return;
 
-        boost::property_tree::ptree aAnnotation;
-        aAnnotation.put("action", (nType == CommentNotificationType::Add ? "Add" :
+        tools::JsonWriter aTree;
+        aTree.put("action", (nType == CommentNotificationType::Add ? "Add" :
                                    (nType == CommentNotificationType::Remove ? "Remove" :
                                     (nType == CommentNotificationType::Modify ? "Modify" :
                                      (nType == CommentNotificationType::RedlinedDeletion ? "RedlinedDeletion" :
                                       (nType == CommentNotificationType::Resolve ? "Resolve" : "???"))))));
 
-        aAnnotation.put("id", nPostItId);
+        aTree.put("id", nPostItId);
         if (nType != CommentNotificationType::Remove && pItem != nullptr)
         {
             sw::annotation::SwAnnotationWin* pWin = pItem->mpPostIt.get();
 
             const SwPostItField* pField = pWin->GetPostItField();
-            const SwRect& aRect = pWin->GetAnchorRect();
-            tools::Rectangle aSVRect(aRect.Pos().getX(),
-                                    aRect.Pos().getY(),
-                                    aRect.Pos().getX() + aRect.SSize().Width(),
-                                    aRect.Pos().getY() + aRect.SSize().Height());
 
-            if (!pItem->maLayoutInfo.mPositionFromCommentAnchor)
-            {
-                // Comments on frames: anchor position is the corner position, not the whole frame.
-                aSVRect.SetSize(Size(0, 0));
-            }
-
-            std::vector<OString> aRects;
-            for (const basegfx::B2DRange& aRange : pWin->GetAnnotationTextRanges())
-            {
-                const SwRect rect(aRange.getMinX(), aRange.getMinY(), aRange.getWidth(), aRange.getHeight());
-                aRects.push_back(rect.SVRect().toString());
-            }
-            const OString sRects = comphelper::string::join("; ", aRects);
-
-            aAnnotation.put("id", pField->GetPostItId());
-            aAnnotation.put("parentId", pField->GetParentPostItId());
-            aAnnotation.put("author", pField->GetPar1().toUtf8().getStr());
-            aAnnotation.put("text", pField->GetPar2().toUtf8().getStr());
-            aAnnotation.put("resolved", pField->GetResolved() ? "true" : "false");
-            aAnnotation.put("dateTime", utl::toISO8601(pField->GetDateTime().GetUNODateTime()));
-            aAnnotation.put("anchorPos", aSVRect.toString());
-            aAnnotation.put("textRange", sRects.getStr());
-            aAnnotation.put("layoutStatus", pItem->mLayoutStatus);
+            aTree.put("id", pField->GetPostItId());
+            aTree.put("parentId", pField->GetParentPostItId());
         }
 
-        boost::property_tree::ptree aTree;
-        aTree.add_child("comment", aAnnotation);
-        std::stringstream aStream;
-        boost::property_tree::write_json(aStream, aTree);
-        std::string aPayload = aStream.str();
-
-        if (pView)
-        {
-            pView->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, OString(aPayload));
-        }
+        pView->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aTree.finishAndGetAsOString());
     }
+    // MACRO: }
 
 } // anonymous namespace
 
@@ -561,6 +528,9 @@ bool SwPostItMgr::CalcRects()
         IDocumentRedlineAccess const& rIDRA(mpWrtShell->getIDocumentRedlineAccess());
         for (auto const& pItem : mvPostItFields)
         {
+            // MACRO: skip layout for non-root comments {
+            if (pItem->mpPostIt->GetPostItField()->GetParentPostItId() != 0) continue;
+            // MACRO: }
             if (!pItem->UseElement(*mpWrtShell->GetLayout(), rIDRA))
             {
                 OSL_FAIL("PostIt is not in doc or other wrong use");
@@ -751,8 +721,12 @@ void SwPostItMgr::LayoutPostIts()
                             GetColorAnchor(pItem->maLayoutInfo.mRedlineAuthor));
                         pPostIt->SetSidebarPosition(pPage->eSidebarPosition);
 
-                        if (pPostIt->GetPostItField()->GetParentPostItId() != 0)
+                        // MACRO: skip layout for non-root comments {
+                        if (pPostIt->GetPostItField()->GetParentPostItId() != 0) {
                             pPostIt->SetFollow(true);
+                            continue;
+                        }
+                        // MACRO: skip layout for non-root comments }
 
                         tools::Long aPostItHeight = 0;
                         if (bShowNotes)
