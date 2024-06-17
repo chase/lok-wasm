@@ -5600,12 +5600,6 @@ static void doc_postUnoCommand(LibreOfficeKitDocument* pThis, const char* pComma
 
 
     // MACRO: page setup commands {
-    if (gImpl && aCommand == ".uno:ToggleOrientation")
-    {
-        ExecuteOrientationChange();
-        return;
-    }
-
     if (gImpl && aCommand == ".uno:SetPageSize")
     {
         long width;
