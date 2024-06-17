@@ -2,6 +2,7 @@
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/frame/Desktop.hpp"
 #include "com/sun/star/frame/XDesktop2.hdl"
+#include "com/sun/star/uno/Reference.h"
 #include "comphelper/base64.hxx"
 #include "comphelper/diagnose_ex.hxx"
 #include "comphelper/seqstream.hxx"
@@ -278,6 +279,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
     comphelper::OStorageHelper::SetExpandedStorageBase(storageBase);
+    expandedStorage = uno::Reference<oox::ExpandedStorage>(storage.get());
 
     utl::MediaDescriptor aMediaDescriptor;
     // Leave a breadcrumb that this is using expanded storage
@@ -315,4 +317,36 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     return nullptr;
 }
 
+css::uno::Reference<oox::ExpandedFile> WasmDocumentExtension::getExpandedPart(const std::string& path) const
+{
+
+    if (!expandedStorage.is())
+    {
+        SAL_WARN("wasm_extensions", "No expanded storage available");
+        return nullptr;
+    }
+
+    return expandedStorage->getPart(path);
+}
+void WasmDocumentExtension::removePart(const std::string& path) const
+{
+    if (!expandedStorage.is())
+    {
+        SAL_WARN("wasm_extensions", "No expanded storage available");
+        return;
+    }
+
+    return expandedStorage->removePart(path);
+}
+
+std::vector<std::pair<const std::string, const std::string>> WasmDocumentExtension::listParts() const
+{
+    if (!expandedStorage.is())
+    {
+        SAL_WARN("wasm_extensions", "No expanded storage available");
+        return {};
+    }
+
+    return expandedStorage->listParts();
+}
 }

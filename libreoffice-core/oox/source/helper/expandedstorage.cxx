@@ -7,11 +7,13 @@
 #include "com/sun/star/uno/Sequence.h"
 #include "comphelper/base64.hxx"
 #include "comphelper/diagnose_ex.hxx"
+#include "comphelper/hash.hxx"
 #include "comphelper/seqstream.hxx"
 #include "comphelper/sequence.hxx"
 #include "oox/helper/binaryinputstream.hxx"
 #include "oox/helper/binaryoutputstream.hxx"
 #include "oox/helper/storagebase.hxx"
+#include "osl/thread.h"
 #include "sal/log.hxx"
 #include "sot/stg.hxx"
 #include <memory>
@@ -54,6 +56,34 @@ std::vector<std::string> split(const std::string& str, char delimiter)
     }
 
     return tokens;
+}
+
+OUString toHexString(const std::vector<unsigned char>& a)
+{
+    std::stringstream aStrm;
+    for (auto& i : a)
+    {
+        aStrm << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(i);
+    }
+
+
+    std::string str = aStrm.str();
+
+    return OUString(str.data(), str.length(), osl_getThreadTextEncoding());
+}
+
+OUString getContentHash(const Sequence<sal_Int8>& content)
+{
+    const sal_Int8* data = content.getConstArray();
+    const unsigned char* unsignedData = reinterpret_cast<const unsigned char*>(data);
+
+    // Generate SHA-256 hash
+    std::vector<unsigned char> hashVec = comphelper::Hash::calculateHash(
+        unsignedData, content.getLength(),
+        comphelper::HashType::SHA256
+    );
+
+    return toHexString(hashVec);
 }
 }
 
@@ -192,7 +222,55 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     Sequence<sal_Int8> sContent;
     comphelper::Base64::decode(sContent, content);
     SAL_WARN("expandedstorage", " size of m_files " << m_files->size());
-    m_files->insert({ path, {sPath, sContent} });
+    OUString sha = helpers::getContentHash(sContent);
+
+    m_files->insert({ path, {sPath, sContent, sha} });
+}
+
+uno::Reference<ExpandedFile> ExpandedStorage::getPart(const std::string& path) const
+{
+
+    auto it = std::find_if(m_files->begin(), m_files->end(), [&path](const auto& pair) {
+            return pair.first == path;
+
+    });
+
+    if (it == m_files->end())
+    {
+        return nullptr;
+    }
+
+    return uno::Reference<ExpandedFile>(&it->second);
+}
+
+void ExpandedStorage::removePart(const std::string &path)
+{
+    if (getPart(path) == nullptr)
+    {
+        SAL_WARN("expandedstorage", "removePart: part not found" << path);
+        return;
+    }
+
+    m_files->erase(path);
+}
+
+std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::listParts() const
+{
+    std::vector<std::pair<const std::string, const std::string>> parts;
+    for (const auto& [path, file] : *m_files)
+    {
+        const std::string pathString = helpers::toString(file.path);
+        const std::string shaString = helpers::toString(file.sha);
+
+        parts.push_back({pathString, shaString});
+    }
+
+    if (parts.empty())
+    {
+        SAL_WARN("expandedstorage", "listParts: no parts found");
+    }
+
+    return parts;
 }
 
 // XInterface

@@ -630,6 +630,13 @@ const handler: DocumentMethodHandler<Document> = {
     doc.setCurrentView(viewId);
     return doc.setAuthor(author);
   },
+
+  getExpandedPart: function (doc: Document, _viewId: ViewId, path: string) {
+    return doc.getExpandedPart(path);
+  },
+  listExpandedParts: function (doc: Document, _viewId: ViewId) {
+    return doc.listExpandedParts();
+  }
 };
 
 const forwarding: ForwardingMethodHandlers<Document> = {

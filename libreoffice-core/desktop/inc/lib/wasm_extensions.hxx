@@ -1,5 +1,6 @@
 #pragma once
 
+#include "oox/helper/expandedstorage.hxx"
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
@@ -7,6 +8,7 @@
 #include <cstdint>
 #include <desktop/dllapi.h>
 #include <memory>
+#include <utility>
 #include <vector>
 #include <com/sun/star/lang/XComponent.hpp>
 
@@ -118,6 +120,7 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::vector<pthread_t> tileRendererThreads_;
     std::vector<TileRendererData> tileRendererData_;
     css::uno::Reference<css::lang::XComponent> mxComponent;
+    uno::Reference<oox::ExpandedStorage> expandedStorage;
 
     WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
     TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
@@ -128,6 +131,11 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::string getPageOrientation();
 
     _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions = nullptr);
+
+    css::uno::Reference<oox::ExpandedFile> getExpandedPart(const std::string& path) const;
+    void removePart(const std::string& path) const;
+    std::vector<std::pair<const std::string, const std::string>> listParts() const;
+
 };
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit

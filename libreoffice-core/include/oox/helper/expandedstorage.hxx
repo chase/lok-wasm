@@ -102,10 +102,12 @@ public:
 struct ExpandedFile
 {
     const OUString path;
+    const OUString sha;
     const css::uno::Sequence<sal_Int8> content;
 
-    ExpandedFile(const OUString& path_, const css::uno::Sequence<sal_Int8>& content_)
+    ExpandedFile(const OUString& path_, const css::uno::Sequence<sal_Int8>& content_, const OUString& sha_)
         : path(path_)
+        , sha(sha_)
         , content(content_){};
 };
 
@@ -148,6 +150,10 @@ public:
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
 
     void addPart(const std::string& path, const std::string& content);
+    uno::Reference<ExpandedFile> getPart(const std::string& path) const;
+    void removePart(const std::string& path);
+    std::vector<std::pair<const std::string, const std::string>> listParts() const;
+
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
     void readRelationshipInfo();
     OUString getFullPath(const OUString& path) const;

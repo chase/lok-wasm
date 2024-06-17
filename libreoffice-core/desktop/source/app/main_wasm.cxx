@@ -657,6 +657,38 @@ public:
     val gotoOutline(int idx) { return writer()->gotoOutline(idx); }
     void setAuthor(std::string author) { doc_->setAuthor(author.c_str()); }
 
+    val getExpandedPart(std::string path)
+    {
+        auto part = ext()->getExpandedPart(path);
+        val result = val::object();
+
+        result.set("path", val(part->path));
+        result.set("content", typed_memory_view(part->content.size(), part->content.getConstArray()));
+
+        return result;
+    }
+
+    void removePart(std::string path)
+    {
+        ext()->removePart(path);
+    }
+
+    val listExpandedParts()
+    {
+        auto parts = ext()->listParts();
+        val values = val::array();
+
+        for (const auto& part : parts)
+        {
+
+            val item = val::object();
+            item.set("path", val(part.first));
+            item.set("sha", val(part.second));
+            values.call<void>("push", item);
+        }
+        return values;
+    }
+
 private:
     struct DocWithId
     {
@@ -804,5 +836,8 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("gotoOutline", &DocumentClient::gotoOutline)
         .function("getOutline", &DocumentClient::getOutline)
         .function("setAuthor", &DocumentClient::setAuthor)
-        .function("newView", &DocumentClient::newView);
+        .function("newView", &DocumentClient::newView)
+        .function("getExpandedPart", &DocumentClient::getExpandedPart)
+        .function("removeExpandedPart", &DocumentClient::removePart)
+        .function("listExpandedParts", &DocumentClient::listExpandedParts);
 }

@@ -258,6 +258,9 @@ tileSize: number,
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
   setAuthor(author: string): void;
+  setAuthor(author: string): void;
+  getExpandedPart(path: string): {path: string, content: string} | null;
+  listExpandedParts(): Array<{path: string, sha: string}>;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

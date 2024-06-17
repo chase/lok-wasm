@@ -183,6 +183,9 @@ export type DocumentWithViewMethods = {
   gotoOutline(index: number): RectArray;
 
   setAuthor(author: string): void;
+
+  getExpandedPart(path: string): {path: string, content: string} | null;
+  listExpandedParts(): Array<{path: string, sha: string}>;
 };
 
 /** methods that forward to a class weakly bound to the Document that forwards calls */
