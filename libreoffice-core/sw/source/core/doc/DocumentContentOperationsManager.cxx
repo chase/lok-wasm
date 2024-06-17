@@ -5107,12 +5107,16 @@ bool DocumentContentOperationsManager::CopyImplImpl(SwPaM& rPam, SwPosition& rPo
     // bullet list.
     // Keep also the <ListId> value for possible propagation.
     OUString aListIdToPropagate;
+    SvxTextLeftMarginItem const* pTextLeftMarginToPropagate{nullptr};
+    SvxFirstLineIndentItem const* pFirstLineIndentToPropagate{nullptr};
     const SwNumRule* pNumRuleToPropagate =
-        rDoc.SearchNumRule( rPos, false, true, false, 0, aListIdToPropagate, nullptr, true );
+        rDoc.SearchNumRule(rPos, false, true, false, 0, aListIdToPropagate, nullptr,
+                true, &pTextLeftMarginToPropagate, &pFirstLineIndentToPropagate);
     if ( !pNumRuleToPropagate )
     {
         pNumRuleToPropagate =
-            rDoc.SearchNumRule( rPos, false, false, false, 0, aListIdToPropagate, nullptr, true );
+            rDoc.SearchNumRule(rPos, false, false, false, 0, aListIdToPropagate, nullptr,
+                true, &pTextLeftMarginToPropagate, &pFirstLineIndentToPropagate);
     }
     // #i86492#
     // Do not propagate previous found list, if
@@ -5518,8 +5522,12 @@ bool DocumentContentOperationsManager::CopyImplImpl(SwPaM& rPam, SwPosition& rPo
         // #i86492# - use <SwDoc::SetNumRule(..)>, because it also handles the <ListId>
         // Don't reset indent attributes, that would mean loss of direct
         // formatting.
-        rDoc.SetNumRule( *pCopyPam, *pNumRuleToPropagate, false, nullptr,
-                          aListIdToPropagate, true, /*bResetIndentAttrs=*/false );
+        // It could be that pNumRuleToPropagate is already applied via
+        // the paragraph style, in that case applying it again in mpAttrSet could
+        // override indents, so avoid that.
+        rDoc.SetNumRule(*pCopyPam, *pNumRuleToPropagate,
+            SwDoc::SetNumRuleMode::DontSetIfAlreadyApplied, nullptr, aListIdToPropagate,
+            pTextLeftMarginToPropagate, pFirstLineIndentToPropagate);
     }
 
     rDoc.getIDocumentRedlineAccess().SetRedlineFlags_intern( eOld );

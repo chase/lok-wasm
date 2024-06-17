@@ -79,8 +79,6 @@ namespace sd {
 
         bool operator==( const HeaderFooterSettings& rSettings ) const;
     };
-
-    typedef std::vector< rtl::Reference< Annotation > > AnnotationVector;
 }
 
 namespace sd {
@@ -123,8 +121,6 @@ friend class sd::UndoAttrObject;
     rtl_TextEncoding meCharSet;           ///< Text encoding
     sal_uInt16  mnPaperBin;               ///< PaperBin
     SdPageLink* mpPageLink;               ///< Page link (at left sides only)
-
-    sd::AnnotationVector    maAnnotations;
 
     /** holds the smil animation sequences for this page */
     css::uno::Reference< css::animations::XAnimationNode > mxAnimationNode;
@@ -368,10 +364,12 @@ public:
     */
     bool IsPrecious() const { return mbIsPrecious; }
 
-    void createAnnotation( rtl::Reference< sd::Annotation >& xAnnotation );
-    void addAnnotation( const rtl::Reference< sd::Annotation >& xAnnotation, int nIndex );
-    void removeAnnotation( const rtl::Reference< sd::Annotation >& xAnnotation );
-    const sd::AnnotationVector& getAnnotations() const { return maAnnotations; }
+    rtl::Reference<sdr::annotation::Annotation> createAnnotation() override;
+    void addAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1) override;
+    void addAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1) override;
+    void removeAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation) override;
+    void removeAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation) override;
+
     bool Equals(const SdPage&) const;
     virtual void dumpAsXml(xmlTextWriterPtr pWriter) const override;
     sal_uInt16 getPageId() const { return mnPageId; }

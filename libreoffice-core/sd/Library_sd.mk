@@ -158,7 +158,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/core/ThemeColorChanger \
 	sd/source/core/anminfo \
 	sd/source/core/annotations/Annotation \
-	sd/source/core/annotations/AnnotationEnumeration \
 	sd/source/core/cusshow \
 	sd/source/core/drawdoc \
 	sd/source/core/drawdoc2 \
@@ -174,7 +173,6 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/core/stlfamily \
 	sd/source/core/stlpool \
 	sd/source/core/stlsheet \
-	sd/source/core/text/textapi \
 	sd/source/core/typemap \
 	sd/source/core/undo/undofactory \
 	sd/source/core/undo/undomanager \

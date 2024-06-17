@@ -1666,27 +1666,67 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
             PropertyIds eBorderId = PropertyIds::INVALID;
             PropertyIds eBorderComplexColorId = PropertyIds::INVALID;
             PropertyIds eBorderDistId = PropertyIds::INVALID;
+
+            const StyleSheetEntryPtr& pEntry = GetStyleSheetTable()->GetCurrentEntry();
+            bool bInTableStyle = pEntry && pEntry->m_nStyleTypeCode == STYLE_TYPE_TABLE;
+
             switch( nSprmId )
             {
             case NS_ooxml::LN_CT_PBdr_top:
-                eBorderId = PROP_TOP_BORDER;
-                eBorderComplexColorId = PROP_BORDER_TOP_COMPLEX_COLOR;
-                eBorderDistId = PROP_TOP_BORDER_DISTANCE;
+                if (bInTableStyle)
+                {
+                    eBorderId = PROP_PARA_TOP_BORDER;
+                    eBorderComplexColorId = PROP_PARA_BORDER_TOP_COMPLEX_COLOR;
+                    eBorderDistId = PROP_PARA_TOP_BORDER_DISTANCE;
+                }
+                else
+                {
+                    eBorderId = PROP_TOP_BORDER;
+                    eBorderComplexColorId = PROP_BORDER_TOP_COMPLEX_COLOR;
+                    eBorderDistId = PROP_TOP_BORDER_DISTANCE;
+                }
                 break;
             case NS_ooxml::LN_CT_PBdr_left:
-                eBorderId = PROP_LEFT_BORDER;
-                eBorderComplexColorId = PROP_BORDER_LEFT_COMPLEX_COLOR;
-                eBorderDistId = PROP_LEFT_BORDER_DISTANCE;
+                if (bInTableStyle)
+                {
+                    eBorderId = PROP_PARA_LEFT_BORDER;
+                    eBorderComplexColorId = PROP_PARA_BORDER_LEFT_COMPLEX_COLOR;
+                    eBorderDistId = PROP_PARA_LEFT_BORDER_DISTANCE;
+                }
+                else
+                {
+                    eBorderId = PROP_LEFT_BORDER;
+                    eBorderComplexColorId = PROP_BORDER_LEFT_COMPLEX_COLOR;
+                    eBorderDistId = PROP_LEFT_BORDER_DISTANCE;
+                }
                 break;
             case NS_ooxml::LN_CT_PBdr_bottom:
-                eBorderId = PROP_BOTTOM_BORDER;
-                eBorderComplexColorId = PROP_BORDER_BOTTOM_COMPLEX_COLOR;
-                eBorderDistId = PROP_BOTTOM_BORDER_DISTANCE;
+                if (bInTableStyle)
+                {
+                    eBorderId = PROP_PARA_BOTTOM_BORDER;
+                    eBorderComplexColorId = PROP_PARA_BORDER_BOTTOM_COMPLEX_COLOR;
+                    eBorderDistId = PROP_PARA_BOTTOM_BORDER_DISTANCE;
+                }
+                else
+                {
+                    eBorderId = PROP_BOTTOM_BORDER;
+                    eBorderComplexColorId = PROP_BORDER_BOTTOM_COMPLEX_COLOR;
+                    eBorderDistId = PROP_BOTTOM_BORDER_DISTANCE;
+                }
                 break;
             case NS_ooxml::LN_CT_PBdr_right:
-                eBorderId = PROP_RIGHT_BORDER;
-                eBorderComplexColorId = PROP_BORDER_RIGHT_COMPLEX_COLOR;
-                eBorderDistId = PROP_RIGHT_BORDER_DISTANCE;
+                if (bInTableStyle)
+                {
+                    eBorderId = PROP_PARA_RIGHT_BORDER;
+                    eBorderComplexColorId = PROP_PARA_BORDER_RIGHT_COMPLEX_COLOR;
+                    eBorderDistId = PROP_PARA_RIGHT_BORDER_DISTANCE;
+                }
+                else
+                {
+                    eBorderId = PROP_RIGHT_BORDER;
+                    eBorderComplexColorId = PROP_BORDER_RIGHT_COMPLEX_COLOR;
+                    eBorderDistId = PROP_RIGHT_BORDER_DISTANCE;
+                }
                 break;
             case NS_ooxml::LN_CT_PBdr_between:
                 if (m_pImpl->handlePreviousParagraphBorderInBetween())
@@ -2659,7 +2699,7 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
     case NS_ooxml::LN_CT_PPrBase_pStyle:
     {
         StyleSheetTablePtr pStyleTable = m_pImpl->GetStyleSheetTable();
-        const OUString sConvertedStyleName = pStyleTable->ConvertStyleName( sStringValue, true );
+        const OUString sConvertedStyleName = pStyleTable->ConvertStyleNameExt(sStringValue);
         m_pImpl->SetCurrentParaStyleName( sConvertedStyleName );
         if (m_pImpl->GetTopContext() && m_pImpl->GetTopContextType() != CONTEXT_SECTION)
             m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::Any( sConvertedStyleName ));
@@ -2667,7 +2707,7 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
     break;
     case NS_ooxml::LN_EG_RPrBase_rStyle:
         {
-            OUString sConvertedName( m_pImpl->GetStyleSheetTable()->ConvertStyleName( sStringValue, true ) );
+            OUString const sConvertedName(m_pImpl->GetStyleSheetTable()->ConvertStyleNameExt(sStringValue));
             if (m_pImpl->CheckFootnoteStyle() && m_pImpl->GetFootnoteContext())
                 m_pImpl->SetHasFootnoteStyle(m_pImpl->GetFootnoteContext()->GetFootnoteStyle() == sConvertedName);
 
@@ -4354,13 +4394,13 @@ void DomainMapper::lcl_utext(const sal_Unicode *const data_, size_t len)
     else if (len == 1 && sText[0] == '\r')
     {
         // Clear "last" one linebreak at end of section
-        if (m_pImpl->GetIsLastParagraphInSection() && m_pImpl->isBreakDeferred(LINE_BREAK))
+        if (m_pImpl->GetIsLastParagraphInSection() && m_pImpl->isBreakDeferred(LINE_BREAK) && !m_pImpl->HasLineBreakClear())
             m_pImpl->clearDeferredBreak(LINE_BREAK);
         // And emit all other linebreaks
         while (m_pImpl->isBreakDeferred(LINE_BREAK))
         {
             m_pImpl->clearDeferredBreak(LINE_BREAK);
-            m_pImpl->appendTextPortion("\n", m_pImpl->GetTopContext());
+            m_pImpl->HandleLineBreak(m_pImpl->GetTopContext());
         }
     }
     else if (len == 1 && sText[0] == '\t' )

@@ -170,12 +170,16 @@ SwRect GetBoundRectOfAnchoredObj( const SdrObject* pObj )
 /// Returns the UserCall if applicable from the group object
 SwContact* GetUserCall( const SdrObject* pObj )
 {
-    SdrObject *pTmp;
-    while ( !pObj->GetUserCall() && nullptr != (pTmp = pObj->getParentSdrObjectFromSdrObject()) )
-        pObj = pTmp;
-    assert((!pObj->GetUserCall() || nullptr != dynamic_cast<const SwContact*>(pObj->GetUserCall())) &&
-            "<::GetUserCall(..)> - wrong type of found object user call." );
-    return static_cast<SwContact*>(pObj->GetUserCall());
+    for (; pObj; pObj = pObj->getParentSdrObjectFromSdrObject())
+    {
+        if (auto pUserCall = pObj->GetUserCall())
+        {
+            assert(dynamic_cast<SwContact*>(pUserCall)
+                   && "<::GetUserCall(..)> - wrong type of found object user call.");
+            return static_cast<SwContact*>(pUserCall);
+        }
+    }
+    return nullptr;
 }
 
 /// Returns true if the SrdObject is a Marquee-Object (scrolling text)
@@ -2216,8 +2220,9 @@ namespace sdr::contact
 
         void VOCOfDrawVirtObj::createPrimitive2DSequence(const DisplayInfo& rDisplayInfo, drawinglayer::primitive2d::Primitive2DDecompositionVisitor& rVisitor) const
         {
-            // tdf#91260 have already checked top-level one is on the right page
-            assert(isPrimitiveVisible(rDisplayInfo));
+            // this may be called for painting where it's a precondition that
+            // isPrimitiveVisible() is true, or for e.g. getObjectRange() (even
+            // during layout) where there are no preconditions...
             // nasty corner case: override to clear page frame to disable the
             // sub-objects' anchor check, because their anchor is always on
             // the first page that the page style is applied to

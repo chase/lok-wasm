@@ -813,7 +813,7 @@ void StyleSheetTable::lcl_entry(writerfilter::Reference<Properties>::Pointer_t r
     m_pImpl->m_rDMapper.PopStyleSheetProperties();
     if( !m_pImpl->m_rDMapper.IsOOXMLImport() || !m_pImpl->m_pCurrentEntry->m_sStyleName.isEmpty())
     {
-        m_pImpl->m_pCurrentEntry->m_sConvertedStyleName = ConvertStyleName( m_pImpl->m_pCurrentEntry->m_sStyleName );
+        m_pImpl->m_pCurrentEntry->m_sConvertedStyleName = ConvertStyleName(m_pImpl->m_pCurrentEntry->m_sStyleName).first;
         m_pImpl->m_aStyleSheetEntries.push_back( m_pImpl->m_pCurrentEntry );
         m_pImpl->m_aStyleSheetEntriesMap.emplace( m_pImpl->m_pCurrentEntry->m_sStyleIdentifierD, m_pImpl->m_pCurrentEntry );
     }
@@ -922,7 +922,7 @@ void StyleSheetTable::ApplyNumberingStyleNameToParaStyles()
                 if (pStyleSheetProperties->props().GetListId() > -1)
                 {
                     uno::Reference< style::XStyle > xStyle;
-                    xParaStyles->getByName( ConvertStyleName(pEntry->m_sStyleName) ) >>= xStyle;
+                    xParaStyles->getByName(ConvertStyleName(pEntry->m_sStyleName).first) >>= xStyle;
 
                     if ( !xStyle.is() )
                         break;
@@ -1030,6 +1030,20 @@ void StyleSheetTable_Impl::ApplyClonedTOCStylesToXText(uno::Reference<text::XTex
                     xPara->setPropertyValue(u"ParaStyleName"_ustr, uno::Any(it->second));
                 }
             }
+            uno::Reference<container::XEnumerationAccess> const xParaEA{xPara, uno::UNO_QUERY_THROW};
+            uno::Reference<container::XEnumeration> const xEnum{xParaEA->createEnumeration()};
+            while (xEnum->hasMoreElements())
+            {
+                uno::Reference<beans::XPropertySet> const xPortion{xEnum->nextElement(), uno::UNO_QUERY_THROW};
+                if (xPortion->getPropertyValue(u"CharStyleName"_ustr) >>= styleName)
+                {
+                    auto const it{m_ClonedTOCStylesMap.find(styleName)};
+                    if (it != m_ClonedTOCStylesMap.end())
+                    {
+                        xPortion->setPropertyValue(u"CharStyleName"_ustr, uno::Any(it->second));
+                    }
+                }
+            }
         }
         else if (xElem->supportsService(u"com.sun.star.text.TextTable"_ustr))
         {
@@ -1076,14 +1090,19 @@ void StyleSheetTable::ApplyClonedTOCStyles()
 
 OUString StyleSheetTable::CloneTOCStyle(FontTablePtr const& rFontTable, StyleSheetEntryPtr const pStyle, OUString const& rNewName)
 {
+    auto const it = m_pImpl->m_ClonedTOCStylesMap.find(pStyle->m_sConvertedStyleName);
+    if (it != m_pImpl->m_ClonedTOCStylesMap.end())
+    {
+        return it->second;
+    }
+    SAL_INFO("writerfilter.dmapper", "cloning TOC paragraph style (presumed built-in) " << rNewName << " from " << pStyle->m_sStyleName);
     StyleSheetEntryPtr const pClone(new StyleSheetEntry(*pStyle));
     pClone->m_sStyleIdentifierD = rNewName;
     pClone->m_sStyleName = rNewName;
-    pClone->m_sConvertedStyleName = ConvertStyleName(rNewName);
+    pClone->m_sConvertedStyleName = ConvertStyleName(rNewName).first;
     m_pImpl->m_aStyleSheetEntries.push_back(pClone);
-    // add it so it will be found if referenced from another TOC
-    m_pImpl->m_aStyleSheetEntriesMap.emplace(rNewName, pClone);
-    m_pImpl->m_ClonedTOCStylesMap.emplace(pStyle->m_sStyleName, pClone->m_sConvertedStyleName);
+    // the old converted name is what is applied to paragraphs
+    m_pImpl->m_ClonedTOCStylesMap.emplace(pStyle->m_sConvertedStyleName, pClone->m_sConvertedStyleName);
     std::vector<StyleSheetEntryPtr> const styles{ pClone };
     ApplyStyleSheetsImpl(rFontTable, styles);
     return pClone->m_sConvertedStyleName;
@@ -1127,7 +1146,7 @@ void StyleSheetTable::ApplyStyleSheetsImpl(const FontTablePtr& rFontTable, std::
                     bool bInsert = false;
                     uno::Reference< container::XNameContainer > xStyles = bParaStyle ? xParaStyles : (bListStyle ? xNumberingStyles : xCharStyles);
                     uno::Reference< style::XStyle > xStyle;
-                    const OUString sConvertedStyleName = ConvertStyleName( pEntry->m_sStyleName );
+                    const OUString sConvertedStyleName(ConvertStyleName(pEntry->m_sStyleName).first);
 
                     if(xStyles->hasByName( sConvertedStyleName ))
                     {
@@ -1194,7 +1213,7 @@ void StyleSheetTable::ApplyStyleSheetsImpl(const FontTablePtr& rFontTable, std::
                             // Writer core doesn't support numbering styles having a parent style, it seems
                             if (pParent && !bListStyle)
                             {
-                                const OUString sParentStyleName = ConvertStyleName( pParent->m_sStyleName );
+                                const OUString sParentStyleName(ConvertStyleName(pParent->m_sStyleName).first);
                                 if ( !sParentStyleName.isEmpty() && !xStyles->hasByName( sParentStyleName ) )
                                     aMissingParent.emplace_back( sParentStyleName, xStyle );
                                 else
@@ -1254,7 +1273,7 @@ void StyleSheetTable::ApplyStyleSheetsImpl(const FontTablePtr& rFontTable, std::
                             StyleSheetEntryPtr pLinkStyle
                                 = FindStyleSheetByISTD(pEntry->m_sLinkStyleIdentifier);
                             if (pLinkStyle && !pLinkStyle->m_sStyleName.isEmpty())
-                                aMissingLink.emplace_back(ConvertStyleName(pLinkStyle->m_sStyleName),
+                                aMissingLink.emplace_back(ConvertStyleName(pLinkStyle->m_sStyleName).first,
                                                           xStyle);
                         }
                     }
@@ -1266,7 +1285,7 @@ void StyleSheetTable::ApplyStyleSheetsImpl(const FontTablePtr& rFontTable, std::
                         {
                             StyleSheetEntryPtr pFollowStyle = FindStyleSheetByISTD( pEntry->m_sNextStyleIdentifier );
                             if ( pFollowStyle && !pFollowStyle->m_sStyleName.isEmpty() )
-                                aMissingFollow.emplace_back( ConvertStyleName( pFollowStyle->m_sStyleName ), xStyle );
+                                aMissingFollow.emplace_back(ConvertStyleName(pFollowStyle->m_sStyleName).first, xStyle);
                         }
 
                         // Set the outline levels
@@ -1514,10 +1533,9 @@ const StyleSheetEntryPtr & StyleSheetTable::GetCurrentEntry() const
     return m_pImpl->m_pCurrentEntry;
 }
 
-OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExtendedSearch)
+OUString StyleSheetTable::ConvertStyleNameExt(const OUString& rWWName)
 {
     OUString sRet( rWWName );
-    if( bExtendedSearch )
     {
         //search for the rWWName in the IdentifierD of the existing styles and convert the sStyleName member
         auto findIt = m_pImpl->m_aStyleSheetEntriesMap.find(rWWName);
@@ -1529,16 +1547,32 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         }
     }
 
+    return ConvertStyleName(sRet).first;
+}
+
+std::pair<OUString, bool>
+StyleSheetTable::ConvertStyleName(const OUString& rWWName)
+{
+    OUString sRet(rWWName);
+
     // create a map only once
     // This maps Word's special style manes to Writer's (the opposite to what MSWordStyles::GetWWId
     // and ww::GetEnglishNameFromSti do on export). The mapping gives a Writer's style name, which
     // will point to a style with specific RES_POOL* in its m_nPoolFormatId. Then on export, the
     // pool format id will map to a ww::sti enum value, and finally to a Word style name. Keep this
     // part in sync with the export functions mentioned above!
-    // In addition to "standard" names, some case variations are handled here; and also there are
-    // a number of strange mappings like "BodyTextIndentItalic" -> "Text body indent italic", which
-    // map something unused in Word to something unused in Writer :-/
+    // In addition to "standard" names, some case variations are handled here.
+    // It's required to know all the Word paragraph/character styles for
+    // STYLEREF/TOC fields; the ones that don't have a Writer equivalent have
+    // an empty string in the map, and the code should return the original name.
+    // Also very unclear: at least in DOCX, style names appear to be case
+    // sensitive; if Word imports 2 styles that have the same case-insensitive
+    // name as a built-in style, it renames one of them by appending a number.
+    // These are from the w:latentStyles in the styles.xml of a Word 15.0 DOCX,
+    // plus some pre-existing additions and variants.
     static const std::map< OUString, OUString> StyleNameMap {
+//        FIXME: testFdo77716, testTdf129575_docDefault etc. fail with correct mapping
+//        { "Normal", "Default Paragraph Style" }, // RES_POOLCOLL_STANDARD
         { "Normal", "Standard" }, // RES_POOLCOLL_STANDARD
         { "heading 1", "Heading 1" }, // RES_POOLCOLL_HEADLINE1
         { "heading 2", "Heading 2" }, // RES_POOLCOLL_HEADLINE2
@@ -1561,12 +1595,21 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         { "Index 1", "Index 1" }, // RES_POOLCOLL_TOX_IDX1
         { "Index 2", "Index 2" }, // RES_POOLCOLL_TOX_IDX2
         { "Index 3", "Index 3" }, // RES_POOLCOLL_TOX_IDX3
-//        { "Index 4", "" },
-//        { "Index 5", "" },
-//        { "Index 6", "" },
-//        { "Index 7", "" },
-//        { "Index 8", "" },
-//        { "Index 9", "" },
+        { "Index 4", "" },
+        { "Index 5", "" },
+        { "Index 6", "" },
+        { "Index 7", "" },
+        { "Index 8", "" },
+        { "Index 9", "" },
+        { "index 1", "Index 1" }, // RES_POOLCOLL_TOX_IDX1
+        { "index 2", "Index 2" }, // RES_POOLCOLL_TOX_IDX2
+        { "index 3", "Index 3" }, // RES_POOLCOLL_TOX_IDX3
+        { "index 4", "" },
+        { "index 5", "" },
+        { "index 6", "" },
+        { "index 7", "" },
+        { "index 8", "" },
+        { "index 9", "" },
         { "TOC 1", "Contents 1" }, // RES_POOLCOLL_TOX_CNTNT1
         { "TOC 2", "Contents 2" }, // RES_POOLCOLL_TOX_CNTNT2
         { "TOC 3", "Contents 3" }, // RES_POOLCOLL_TOX_CNTNT3
@@ -1576,8 +1619,6 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         { "TOC 7", "Contents 7" }, // RES_POOLCOLL_TOX_CNTNT7
         { "TOC 8", "Contents 8" }, // RES_POOLCOLL_TOX_CNTNT8
         { "TOC 9", "Contents 9" }, // RES_POOLCOLL_TOX_CNTNT9
-        { "TOC Heading", "Contents Heading" }, // RES_POOLCOLL_TOX_CNTNTH
-        { "TOCHeading", "Contents Heading" }, // RES_POOLCOLL_TOX_CNTNTH
         { "toc 1", "Contents 1" }, // RES_POOLCOLL_TOX_CNTNT1
         { "toc 2", "Contents 2" }, // RES_POOLCOLL_TOX_CNTNT2
         { "toc 3", "Contents 3" }, // RES_POOLCOLL_TOX_CNTNT3
@@ -1596,37 +1637,48 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         { "TOC7", "Contents 7" }, // RES_POOLCOLL_TOX_CNTNT7
         { "TOC8", "Contents 8" }, // RES_POOLCOLL_TOX_CNTNT8
         { "TOC9", "Contents 9" }, // RES_POOLCOLL_TOX_CNTNT9
-//        { "Normal Indent", "" },
+        { "Normal Indent", "" },
         { "footnote text", "Footnote" }, // RES_POOLCOLL_FOOTNOTE
         { "Footnote Text", "Footnote" }, // RES_POOLCOLL_FOOTNOTE
         { "Annotation Text", "Marginalia" }, // RES_POOLCOLL_MARGINAL
+        { "annotation text", "Marginalia" }, // RES_POOLCOLL_MARGINAL
         { "Header", "Header" }, // RES_POOLCOLL_HEADER
         { "header", "Header" }, // RES_POOLCOLL_HEADER
         { "Footer", "Footer" }, // RES_POOLCOLL_FOOTER
         { "footer", "Footer" }, // RES_POOLCOLL_FOOTER
         { "Index Heading", "Index Heading" }, // RES_POOLCOLL_TOX_IDXH
+        { "index heading", "Index Heading" }, // RES_POOLCOLL_TOX_IDXH
         { "Caption", "Caption" }, // RES_POOLCOLL_LABEL
+        { "caption", "Caption" }, // RES_POOLCOLL_LABEL
         { "table of figures", "Figure Index 1" }, // RES_POOLCOLL_TOX_ILLUS1
         { "Table of Figures", "Figure Index 1" }, // RES_POOLCOLL_TOX_ILLUS1
         { "Envelope Address", "Addressee" }, // RES_POOLCOLL_ENVELOPE_ADDRESS
+        { "envelope address", "Addressee" }, // RES_POOLCOLL_ENVELOPE_ADDRESS
         { "Envelope Return", "Sender" }, // RES_POOLCOLL_SEND_ADDRESS
-        { "footnote reference", "Footnote Symbol" }, // RES_POOLCHR_FOOTNOTE; tdf#82173
-        { "Footnote Reference", "Footnote Symbol" }, // RES_POOLCHR_FOOTNOTE; tdf#82173
-//        { "Annotation Reference", "" },
-        { "Line Number", "Line numbering" }, // RES_POOLCHR_LINENUM
+        { "envelope return", "Sender" }, // RES_POOLCOLL_SEND_ADDRESS
+        { "footnote reference", "Footnote Characters" }, // RES_POOLCHR_FOOTNOTE; tdf#82173
+        { "Footnote Reference", "Footnote Characters" }, // RES_POOLCHR_FOOTNOTE; tdf#82173
+        { "Annotation Reference", "" },
+        { "annotation reference", "" },
+        { "Line Number", "Line Numbering" }, // RES_POOLCHR_LINENUM
+        { "line number", "Line Numbering" }, // RES_POOLCHR_LINENUM
         { "Page Number", "Page Number" }, // RES_POOLCHR_PAGENO
-        { "endnote reference", "Endnote Symbol" }, // RES_POOLCHR_ENDNOTE; tdf#82173
-        { "Endnote Reference", "Endnote Symbol" }, // RES_POOLCHR_ENDNOTE; tdf#82173
+        { "page number", "Page Number" }, // RES_POOLCHR_PAGENO
+        { "PageNumber", "Page Number" }, // RES_POOLCHR_PAGENO
+        { "endnote reference", "Endnote Characters" }, // RES_POOLCHR_ENDNOTE; tdf#82173
+        { "Endnote Reference", "Endnote Characters" }, // RES_POOLCHR_ENDNOTE; tdf#82173
         { "endnote text", "Endnote" }, // RES_POOLCOLL_ENDNOTE
         { "Endnote Text", "Endnote" }, // RES_POOLCOLL_ENDNOTE
         { "Table of Authorities", "Bibliography Heading" }, // RES_POOLCOLL_TOX_AUTHORITIESH
-//        { "Macro Text", "" },
-//        { "TOA Heading", "" },
+        { "table of authorities", "Bibliography Heading" }, // RES_POOLCOLL_TOX_AUTHORITIESH
+        { "macro", "" },
+        { "TOA Heading", "" },
+        { "toa heading", "" },
         { "List", "List" }, // RES_POOLCOLL_NUMBER_BULLET_BASE
-//        { "List 2", "" },
-//        { "List 3", "" },
-//        { "List 4", "" },
-//        { "List 5", "" },
+        { "List 2", "" },
+        { "List 3", "" },
+        { "List 4", "" },
+        { "List 5", "" },
         { "List Bullet", "List 1" }, // RES_POOLCOLL_BULLET_LEVEL1
         { "List Bullet 2", "List 2" }, // RES_POOLCOLL_BULLET_LEVEL2
         { "List Bullet 3", "List 3" }, // RES_POOLCOLL_BULLET_LEVEL3
@@ -1640,49 +1692,339 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         { "Title", "Title" }, // RES_POOLCOLL_DOC_TITLE
         { "Closing", "Appendix" }, // RES_POOLCOLL_DOC_APPENDIX
         { "Signature", "Signature" }, // RES_POOLCOLL_SIGNATURE
-//        { "Default Paragraph Font", "" },
-        { "DefaultParagraphFont", "Default Paragraph Font" },
+        { "Default Paragraph Font", "" },
+        { "DefaultParagraphFont", "" },
+//        FIXME: testTdf118947_tableStyle fails with correct mapping
+//        { "Body Text", "Body Text" }, // RES_POOLCOLL_TEXT
         { "Body Text", "Text body" }, // RES_POOLCOLL_TEXT
-        { "BodyText", "Text body" }, // RES_POOLCOLL_TEXT
-        { "BodyTextIndentItalic", "Text body indent italic" },
-        { "Body Text Indent", "Text body indent" }, // RES_POOLCOLL_TEXT_MOVE
-        { "BodyTextIndent", "Text body indent" }, // RES_POOLCOLL_TEXT_MOVE
-        { "BodyTextIndent2", "Text body indent2" },
+        { "BodyText", "Body Text" }, // RES_POOLCOLL_TEXT
+        { "BodyTextIndentItalic", "" },
+        { "Body Text Indent", "Body Text, Indented" }, // RES_POOLCOLL_TEXT_MOVE
+        { "BodyTextIndent", "Body Text, Indented" }, // RES_POOLCOLL_TEXT_MOVE
+        { "BodyTextIndent2", "" },
         { "List Continue", "List 1 Cont." }, // RES_POOLCOLL_BULLET_NONUM1
         { "List Continue 2", "List 2 Cont." }, // RES_POOLCOLL_BULLET_NONUM2
         { "List Continue 3", "List 3 Cont." }, // RES_POOLCOLL_BULLET_NONUM3
         { "List Continue 4", "List 4 Cont." }, // RES_POOLCOLL_BULLET_NONUM4
         { "List Continue 5", "List 5 Cont." }, // RES_POOLCOLL_BULLET_NONUM5
-//        { "Message Header", "" },
+        { "Message Header", "" },
         { "Subtitle", "Subtitle" }, // RES_POOLCOLL_DOC_SUBTITLE
-        { "Salutation", "Salutation" }, // RES_POOLCOLL_GREETING
-//        { "Date", "" },
-        { "Body Text First Indent", "First line indent" }, // RES_POOLCOLL_TEXT_IDENT
-//        { "Body Text First Indent 2", "" },
-//        { "Note Heading", "" },
-//        { "Body Text 2", "" },
-//        { "Body Text 3", "" },
-//        { "Body Text Indent 2", "" },
-//        { "Body Text Indent 3", "" },
-//        { "Block Text", "" },
-        { "Hyperlink", "Internet link" }, // RES_POOLCHR_INET_NORMAL
+        { "Salutation", "Complimentary Close" }, // RES_POOLCOLL_GREETING
+        { "Date", "" },
+        { "Body Text First Indent", "First Line Indent" }, // RES_POOLCOLL_TEXT_IDENT
+        { "Body Text First Indent 2", "" },
+        { "Note Heading", "" },
+        { "Body Text 2", "" },
+        { "Body Text 3", "" },
+        { "Body Text Indent 2", "" },
+        { "Body Text Indent 3", "" },
+        { "Block Text", "" },
+        { "Hyperlink", "Internet Link" }, // RES_POOLCHR_INET_NORMAL
         { "FollowedHyperlink", "Visited Internet Link" }, // RES_POOLCHR_INET_VISIT
         { "Strong", "Strong Emphasis" }, // RES_POOLCHR_HTML_STRONG
         { "Emphasis", "Emphasis" }, // RES_POOLCHR_HTML_EMPHASIS
-//        { "Document Map", "" },
-//        { "Plain Text", "" },
-        { "NoList", "No List" },
+        { "Document Map", "" },
+        { "DocumentMap", "" },
+        { "Plain Text", "" },
+        { "E-mail Signature", "" },
+        { "HTML Top of Form", "" },
+        { "HTML Bottom of Form", "" },
+        { "Normal (Web)", "" },
+        { "HTML Acronym", "" },
+        { "HTML Address", "" },
+        { "HTML Cite", "" },
+        { "HTML Code", "" },
+        { "HTML Definition", "" },
+        { "HTML Keyboard", "" },
+        { "HTML Preformatted", "" },
+        { "HTML Sample", "" },
+        { "HTML Typewriter", "" },
+        { "HTML Variable", "" },
+        { "", "" },
+        { "", "" },
+        { "", "" },
+        { "Normal Table", "" },
+        { "annotation subject", "" },
+        { "No List", "No List" }, // RES_POOLNUMRULE_NOLIST
+        { "NoList", "No List" }, // RES_POOLNUMRULE_NOLIST
+        { "Outline List 1", "" },
+        { "Outline List 2", "" },
+        { "Outline List 3", "" },
+        { "Table Simple 1", "" },
+        { "Table Simple 2", "" },
+        { "Table Simple 3", "" },
+        { "Table Classic 1", "" },
+        { "Table Classic 2", "" },
+        { "Table Classic 3", "" },
+        { "Table Classic 4", "" },
+        { "Table Colorful 1", "" },
+        { "Table Colorful 2", "" },
+        { "Table Colorful 3", "" },
+        { "Table Columns 1", "" },
+        { "Table Columns 2", "" },
+        { "Table Columns 3", "" },
+        { "Table Columns 4", "" },
+        { "Table Columns 5", "" },
+        { "Table Grid 1", "" },
+        { "Table Grid 2", "" },
+        { "Table Grid 3", "" },
+        { "Table Grid 4", "" },
+        { "Table Grid 5", "" },
+        { "Table Grid 6", "" },
+        { "Table Grid 7", "" },
+        { "Table Grid 8", "" },
+        { "Table List 1", "" },
+        { "Table List 2", "" },
+        { "Table List 3", "" },
+        { "Table List 4", "" },
+        { "Table List 5", "" },
+        { "Table List 6", "" },
+        { "Table List 7", "" },
+        { "Table List 8", "" },
+        { "Table 3D effects 1", "" },
+        { "Table 3D effects 2", "" },
+        { "Table 3D effects 3", "" },
+        { "Table Contemporary", "" },
+        { "Table Elegant", "" },
+        { "Table Professional", "" },
+        { "Table Subtle 1", "" },
+        { "Table Subtle 2", "" },
+        { "Table Web 1", "" },
+        { "Table Web 2", "" },
+        { "Table Web 3", "" },
+        { "Balloon Text", "" },
+        { "Table Grid", "" },
+        { "Table Theme", "" },
+        { "Placeholder Text", "" },
+        { "No Spacing", "" },
+        { "Light Shading", "" },
+        { "Light List", "" },
+        { "Light Grid", "" },
+        { "Medium Shading 1", "" },
+        { "Medium Shading 2", "" },
+        { "Medium List 1", "" },
+        { "Medium List 2", "" },
+        { "Medium Grid 1", "" },
+        { "Medium Grid 2", "" },
+        { "Medium Grid 3", "" },
+        { "Dark List", "" },
+        { "Colorful Shading", "" },
+        { "Colorful List", "" },
+        { "Colorful Grid", "" },
+        { "Light Shading Accent 1", "" },
+        { "Light List Accent 1", "" },
+        { "Light Grid Accent 1", "" },
+        { "Medium Shading 1 Accent 1", "" },
+        { "Medium Shading 2 Accent 1", "" },
+        { "Medium List 1 Accent 1", "" },
+        { "Revision", "" },
+        { "List Paragraph", "" },
+        { "Quote", "" },
+        { "Intense Quote", "" },
+        { "Medium List 2 Accent 1", "" },
+        { "Medium Grid 1 Accent 1", "" },
+        { "Medium Grid 2 Accent 1", "" },
+        { "Medium Grid 3 Accent 1", "" },
+        { "Dark List Accent 1", "" },
+        { "Colorful Shading Accent 1", "" },
+        { "Colorful List Accent 1", "" },
+        { "Colorful Grid Accent 1", "" },
+        { "Light Shading Accent 2", "" },
+        { "Light List Accent 2", "" },
+        { "Light Grid Accent 2", "" },
+        { "Medium Shading 1 Accent 2", "" },
+        { "Medium Shading 2 Accent 2", "" },
+        { "Medium List 1 Accent 2", "" },
+        { "Medium List 2 Accent 2", "" },
+        { "Medium Grid 1 Accent 2", "" },
+        { "Medium Grid 2 Accent 2", "" },
+        { "Medium Grid 3 Accent 2", "" },
+        { "Dark List Accent 2", "" },
+        { "Colorful Shading Accent 2", "" },
+        { "Colorful List Accent 2", "" },
+        { "Colorful Grid Accent 2", "" },
+        { "Light Shading Accent 3", "" },
+        { "Light List Accent 3", "" },
+        { "Light Grid Accent 3", "" },
+        { "Medium Shading 1 Accent 3", "" },
+        { "Medium Shading 2 Accent 3", "" },
+        { "Medium List 1 Accent 3", "" },
+        { "Medium List 2 Accent 3", "" },
+        { "Medium Grid 1 Accent 3", "" },
+        { "Medium Grid 2 Accent 3", "" },
+        { "Medium Grid 3 Accent 3", "" },
+        { "Dark List Accent 3", "" },
+        { "Colorful Shading Accent 3", "" },
+        { "Colorful List Accent 3", "" },
+        { "Colorful Grid Accent 3", "" },
+        { "Light Shading Accent 4", "" },
+        { "Light List Accent 4", "" },
+        { "Light Grid Accent 4", "" },
+        { "Medium Shading 1 Accent 4", "" },
+        { "Medium Shading 2 Accent 4", "" },
+        { "Medium List 1 Accent 4", "" },
+        { "Medium List 2 Accent 4", "" },
+        { "Medium Grid 1 Accent 4", "" },
+        { "Medium Grid 2 Accent 4", "" },
+        { "Medium Grid 3 Accent 4", "" },
+        { "Dark List Accent 4", "" },
+        { "Colorful Shading Accent 4", "" },
+        { "Colorful List Accent 4", "" },
+        { "Colorful Grid Accent 4", "" },
+        { "Light Shading Accent 5", "" },
+        { "Light List Accent 5", "" },
+        { "Light Grid Accent 5", "" },
+        { "Medium Shading 1 Accent 5", "" },
+        { "Medium Shading 2 Accent 5", "" },
+        { "Medium List 1 Accent 5", "" },
+        { "Medium List 2 Accent 5", "" },
+        { "Medium Grid 1 Accent 5", "" },
+        { "Medium Grid 2 Accent 5", "" },
+        { "Medium Grid 3 Accent 5", "" },
+        { "Dark List Accent 5", "" },
+        { "Colorful Shading Accent 5", "" },
+        { "Colorful List Accent 5", "" },
+        { "Colorful Grid Accent 5", "" },
+        { "Light Shading Accent 6", "" },
+        { "Light List Accent 6", "" },
+        { "Light Grid Accent 6", "" },
+        { "Medium Shading 1 Accent 6", "" },
+        { "Medium Shading 2 Accent 6", "" },
+        { "Medium List 1 Accent 6", "" },
+        { "Medium List 2 Accent 6", "" },
+        { "Medium Grid 1 Accent 6", "" },
+        { "Medium Grid 2 Accent 6", "" },
+        { "Medium Grid 3 Accent 6", "" },
+        { "Dark List Accent 6", "" },
+        { "Colorful Shading Accent 6", "" },
+        { "Colorful List Accent 6", "" },
+        { "Colorful Grid Accent 6", "" },
+        { "Subtle Emphasis", "" },
+        { "Intense Emphasis", "" },
+        { "Subtle Reference", "" },
+        { "Intense Reference", "" },
+        { "Book Title", "" },
+        { "Bibliography", "" },
+        { "TOC Heading", "Contents Heading" }, // RES_POOLCOLL_TOX_CNTNTH
+        { "TOCHeading", "Contents Heading" }, // RES_POOLCOLL_TOX_CNTNTH
+        { "Plain Table 1", "" },
+        { "Plain Table 2", "" },
+        { "Plain Table 3", "" },
+        { "Plain Table 4", "" },
+        { "Plain Table 5", "" },
+        { "Grid Table Light", "" },
+        { "Grid Table 1 Light", "" },
+        { "Grid Table 2", "" },
+        { "Grid Table 3", "" },
+        { "Grid Table 4", "" },
+        { "Grid Table 5 Dark", "" },
+        { "Grid Table 6 Colorful", "" },
+        { "Grid Table 7 Colorful", "" },
+        { "Grid Table 1 Light Accent 1", "" },
+        { "Grid Table 2 Accent 1", "" },
+        { "Grid Table 3 Accent 1", "" },
+        { "Grid Table 4 Accent 1", "" },
+        { "Grid Table 5 Dark Accent 1", "" },
+        { "Grid Table 6 Colorful Accent 1", "" },
+        { "Grid Table 7 Colorful Accent 1", "" },
+        { "Grid Table 1 Light Accent 2", "" },
+        { "Grid Table 2 Accent 2", "" },
+        { "Grid Table 3 Accent 2", "" },
+        { "Grid Table 4 Accent 2", "" },
+        { "Grid Table 5 Dark Accent 2", "" },
+        { "Grid Table 6 Colorful Accent 2", "" },
+        { "Grid Table 7 Colorful Accent 2", "" },
+        { "Grid Table 1 Light Accent 3", "" },
+        { "Grid Table 2 Accent 3", "" },
+        { "Grid Table 3 Accent 3", "" },
+        { "Grid Table 4 Accent 3", "" },
+        { "Grid Table 5 Dark Accent 3", "" },
+        { "Grid Table 6 Colorful Accent 3", "" },
+        { "Grid Table 7 Colorful Accent 3", "" },
+        { "Grid Table 1 Light Accent 4", "" },
+        { "Grid Table 2 Accent 4", "" },
+        { "Grid Table 3 Accent 4", "" },
+        { "Grid Table 4 Accent 4", "" },
+        { "Grid Table 5 Dark Accent 4", "" },
+        { "Grid Table 6 Colorful Accent 4", "" },
+        { "Grid Table 7 Colorful Accent 4", "" },
+        { "Grid Table 1 Light Accent 5", "" },
+        { "Grid Table 2 Accent 5", "" },
+        { "Grid Table 3 Accent 5", "" },
+        { "Grid Table 4 Accent 5", "" },
+        { "Grid Table 5 Dark Accent 5", "" },
+        { "Grid Table 6 Colorful Accent 5", "" },
+        { "Grid Table 7 Colorful Accent 5", "" },
+        { "Grid Table 1 Light Accent 6", "" },
+        { "Grid Table 2 Accent 6", "" },
+        { "Grid Table 3 Accent 6", "" },
+        { "Grid Table 4 Accent 6", "" },
+        { "Grid Table 5 Dark Accent 6", "" },
+        { "Grid Table 6 Colorful Accent 6", "" },
+        { "Grid Table 7 Colorful Accent 6", "" },
+        { "List Table 1 Light", "" },
+        { "List Table 2", "" },
+        { "List Table 3", "" },
+        { "List Table 4", "" },
+        { "List Table 5 Dark", "" },
+        { "List Table 6 Colorful", "" },
+        { "List Table 7 Colorful", "" },
+        { "List Table 1 Light Accent 1", "" },
+        { "List Table 2 Accent 1", "" },
+        { "List Table 3 Accent 1", "" },
+        { "List Table 4 Accent 1", "" },
+        { "List Table 5 Dark Accent 1", "" },
+        { "List Table 6 Colorful Accent 1", "" },
+        { "List Table 7 Colorful Accent 1", "" },
+        { "List Table 1 Light Accent 2", "" },
+        { "List Table 2 Accent 2", "" },
+        { "List Table 3 Accent 2", "" },
+        { "List Table 4 Accent 2", "" },
+        { "List Table 5 Dark Accent 2", "" },
+        { "List Table 6 Colorful Accent 2", "" },
+        { "List Table 7 Colorful Accent 2", "" },
+        { "List Table 1 Light Accent 3", "" },
+        { "List Table 2 Accent 3", "" },
+        { "List Table 3 Accent 3", "" },
+        { "List Table 4 Accent 3", "" },
+        { "List Table 5 Dark Accent 3", "" },
+        { "List Table 6 Colorful Accent 3", "" },
+        { "List Table 7 Colorful Accent 3", "" },
+        { "List Table 1 Light Accent 4", "" },
+        { "List Table 2 Accent 4", "" },
+        { "List Table 3 Accent 4", "" },
+        { "List Table 4 Accent 4", "" },
+        { "List Table 5 Dark Accent 4", "" },
+        { "List Table 6 Colorful Accent 4", "" },
+        { "List Table 7 Colorful Accent 4", "" },
+        { "List Table 1 Light Accent 5", "" },
+        { "List Table 2 Accent 5", "" },
+        { "List Table 3 Accent 5", "" },
+        { "List Table 4 Accent 5", "" },
+        { "List Table 5 Dark Accent 5", "" },
+        { "List Table 6 Colorful Accent 5", "" },
+        { "List Table 7 Colorful Accent 5", "" },
+        { "List Table 1 Light Accent 6", "" },
+        { "List Table 2 Accent 6", "" },
+        { "List Table 3 Accent 6", "" },
+        { "List Table 4 Accent 6", "" },
+        { "List Table 5 Dark Accent 6", "" },
+        { "List Table 6 Colorful Accent 6", "" },
+        { "List Table 7 Colorful Accent 6", "" },
+
+        // ??? unsure what these are, they are not in Word's styles.xml
         { "AbstractHeading", "Abstract Heading" },
         { "AbstractBody", "Abstract Body" },
-        { "PageNumber", "Page Number" }, // RES_POOLCHR_PAGENO
         { "TableNormal", "Normal Table" },
-        { "DocumentMap", "Document Map" },
     };
 
     // find style-name using map
-    if (const auto aIt = StyleNameMap.find(sRet); aIt != StyleNameMap.end())
+    if (const auto aIt = StyleNameMap.find(sRet); aIt != StyleNameMap.end() && !aIt->second.isEmpty())
     {
+        // if there's no Writer built-in to map to, aIt.second is empty!
+        // if it's a Word built-in but not Writer built-in, it can still collide (e.g. "List 5").
         sRet = aIt->second;
+        return { sRet, true };
     }
     else
     {
@@ -1704,9 +2046,8 @@ OUString StyleSheetTable::ConvertStyleName( const OUString& rWWName, bool bExten
         // the UI names of built-in styles.
         if (ReservedStyleNames.find(sRet) != ReservedStyleNames.end() || sRet.endsWith(" (WW)"))
             sRet += " (WW)";
+        return { sRet, aIt != StyleNameMap.end() };
     }
-
-    return sRet;
 }
 
 void StyleSheetTable::applyDefaults(bool bParaProperties)
