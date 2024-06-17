@@ -19,19 +19,38 @@
 
 #pragma once
 
-#include <sal/config.h>
+#include <editeng/unotext.hxx>
+#include <rtl/ref.hxx>
+#include <editeng/outliner.hxx>
+#include <svx/svxdllapi.h>
 
-#include "sdpage.hxx"
+class SdrModel;
 
-namespace com::sun::star::office
+namespace sdr::annotation
 {
-class XAnnotationEnumeration;
-}
+class TextAPIEditSource;
 
-namespace sd
+class SVXCORE_DLLPUBLIC TextApiObject final : public SvxUnoText
 {
-css::uno::Reference<css::office::XAnnotationEnumeration>
-createAnnotationEnumeration(AnnotationVector&&);
-}
+public:
+    static rtl::Reference<TextApiObject> create(SdrModel* pModel);
+
+    virtual ~TextApiObject() noexcept override;
+
+    /// @throws css::uno::RuntimeException
+    void dispose();
+
+    std::optional<OutlinerParaObject> CreateText();
+    void SetText(OutlinerParaObject const& rText);
+    OUString GetText() const;
+
+    static TextApiObject* getImplementation(const css::uno::Reference<css::text::XText>&);
+
+private:
+    std::unique_ptr<TextAPIEditSource> mpSource;
+    TextApiObject(std::unique_ptr<TextAPIEditSource> pEditSource);
+};
+
+} // namespace sdr::annotation
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -9,7 +9,7 @@ dnl in order to create a configure script.
 # several non-alphanumeric characters, those are split off and used only for the
 # ABOUTBOXPRODUCTVERSIONSUFFIX in openoffice.lst. Why that is necessary, no idea.
 
-AC_INIT([Collabora Office],[24.04.2.1],[],[],[https://collaboraoffice.com/])
+AC_INIT([Collabora Office],[24.04.4.1],[],[],[https://collaboraoffice.com/])
 
 dnl libnumbertext needs autoconf 2.68, but that can pick up autoconf268 just fine if it is installed
 dnl whereas aclocal (as run by autogen.sh) insists on using autoconf and fails hard
@@ -5646,7 +5646,7 @@ dnl ===================================================================
 ENABLE_HTMLHELP=
 HELP_OMINDEX_PAGE=
 HELP_ONLINE=
-WITH_HELPPACKS=
+ENABLE_LOCALHELP=
 
 AC_MSG_CHECKING([which help to build])
 if test -n "$with_help" -a "$with_help" != "no"; then
@@ -5655,7 +5655,7 @@ if test -n "$with_help" -a "$with_help" != "no"; then
     case "$with_help" in
     "html")
         ENABLE_HTMLHELP=TRUE
-        WITH_HELPPACKS=TRUE
+        ENABLE_LOCALHELP=TRUE
         SCPDEFS="$SCPDEFS -DWITH_HELPPACKS"
         AC_MSG_RESULT([HTML (local)])
         ;;
@@ -5665,7 +5665,7 @@ if test -n "$with_help" -a "$with_help" != "no"; then
         AC_MSG_RESULT([HTML (online)])
         ;;
     yes)
-        WITH_HELPPACKS=TRUE
+        ENABLE_LOCALHELP=TRUE
         SCPDEFS="$SCPDEFS -DWITH_HELPPACKS"
         AC_MSG_RESULT([XML (local)])
         ;;
@@ -5722,7 +5722,7 @@ fi
 
 dnl Test whether to integrate helppacks into the product's installer
 AC_MSG_CHECKING([for helppack integration])
-if test -z "$WITH_HELPPACKS" -o "$with_helppack_integration" = no; then
+if test -z "$ENABLE_LOCALHELP" -o "$with_helppack_integration" = no; then
     AC_MSG_RESULT([no integration])
 else
     SCPDEFS="$SCPDEFS -DWITH_HELPPACK_INTEGRATION"
@@ -5732,7 +5732,9 @@ fi
 AC_SUBST([ENABLE_HTMLHELP])
 AC_SUBST([HELP_OMINDEX_PAGE])
 AC_SUBST([HELP_ONLINE])
-# WITH_HELPPACKS is used only in configure
+if test "$ENABLE_LOCALHELP" = "TRUE" ; then
+    AC_DEFINE(HAVE_FEATURE_LOCAL_HELP)
+fi
 
 dnl ===================================================================
 dnl Set up a different compiler to produce tools to run on the build
@@ -14439,6 +14441,12 @@ if test -d "$SRC_ROOT/translations/source"; then
             WITH_POOR_HELP_LOCALIZATIONS="$WITH_POOR_HELP_LOCALIZATIONS $l"
         fi
     done
+    if test "$OS" = WNT; then
+        # We want to include only English (US), French, German, Italian and Spanish help
+        # packs in our Windows distribution. Others are probably not needed and digital
+        # signature of MSI packages is expensive. Some other languages are available online.
+        WITH_POOR_HELP_LOCALIZATIONS="ab af am an ar as ast az be bg bn bn-IN bo br brx bs ca ca-valencia ckb cs cy da dgo dsb dz el en-GB en-ZA eo et eu fa fi fur fy ga gd gl gu gug he hi hr hsb hu hy id is ja jv ka kab kk kl km kmr-Latn kn ko kok ks ky lb lo lt lv mai mk ml mn mni mr my nb ne nl nn nr nso oc om or pa-IN pl pt pt-BR ro ru rw sa-IN sah sat sd si sid sk sl sq sr sr-Latn ss st sv sw-TZ szl ta te tg th ti tn tr ts tt ug uk ur uz ve vec vi xh zh-CN zh-TW zu"
+    fi
 fi
 AC_SUBST(WITH_POOR_HELP_LOCALIZATIONS)
 

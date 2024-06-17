@@ -127,6 +127,7 @@
 #include <docsh.hxx>
 #include <docary.hxx>
 #include <fmtclbl.hxx>
+#include <fmtftntx.hxx>
 #include <IDocumentSettingAccess.hxx>
 #include <IDocumentRedlineAccess.hxx>
 #include <grfatr.hxx>
@@ -8722,7 +8723,15 @@ void DocxAttributeOutput::FootnotesEndnotes( bool bFootnotes )
         bSeparator = rFootnoteInfo.GetLineStyle() != SvxBorderLineStyle::NONE
                   && rFootnoteInfo.GetLineWidth() > 0
                   && double(rFootnoteInfo.GetWidth()) > 0;
-        nHeight = sw::FootnoteSeparatorHeight(rFootnoteInfo);
+        nHeight = sw::FootnoteSeparatorHeight(m_rExport.m_rDoc, rFootnoteInfo);
+
+        const IDocumentSettingAccess& rIDSA = m_rExport.m_rDoc.getIDocumentSettingAccess();
+        if (rIDSA.get(DocumentSettingId::CONTINUOUS_ENDNOTES))
+        {
+            // Don't request separator if this is a Word-style separator, which is handled at a
+            // layout level.
+            nHeight = 0;
+        }
     }
 
     WriteFootnoteSeparatorHeight(m_pSerializer, nHeight);
@@ -8778,6 +8787,18 @@ void DocxAttributeOutput::WriteFootnoteEndnotePr( ::sax_fastparser::FSHelperPtr 
     const SwEndNoteInfo& info, int listtag )
 {
     fs->startElementNS(XML_w, tag);
+
+    SwSectionFormats& rSections = m_rExport.m_rDoc.GetSections();
+    if (!rSections.empty())
+    {
+        SwSectionFormat* pFormat = rSections[0];
+        bool bEndnAtEnd = pFormat->GetEndAtTextEnd().IsAtEnd();
+        if (bEndnAtEnd)
+        {
+            fs->singleElementNS(XML_w, XML_pos, FSNS(XML_w, XML_val), "sectEnd");
+        }
+    }
+
     OString aCustomFormat;
     OString fmt = lcl_ConvertNumberingType(info.m_aFormat.GetNumberingType(), nullptr, aCustomFormat);
     if (!fmt.isEmpty() && aCustomFormat.isEmpty())

@@ -5777,7 +5777,7 @@ void SwFootnoteContFrame::PaintLine( const SwRect& rRect,
     SwTwips nPrtWidth = aRectFnSet.GetWidth(getFramePrintArea());
     Fraction aFract( nPrtWidth, 1 );
     aFract *= rInf.GetWidth();
-    const SwTwips nWidth = static_cast<tools::Long>(aFract);
+    SwTwips nWidth = static_cast<tools::Long>(aFract);
 
     SwTwips nX = aRectFnSet.GetPrtLeft(*this);
     switch ( rInf.GetAdj() )
@@ -5793,13 +5793,43 @@ void SwFootnoteContFrame::PaintLine( const SwRect& rRect,
             assert(false);
     }
     SwTwips nLineWidth = rInf.GetLineWidth();
-    const SwRect aLineRect = aRectFnSet.IsVert() ?
-        SwRect( Point(getFrameArea().Left()+getFrameArea().Width()-rInf.GetTopDist()-nLineWidth,
-                      nX), Size( nLineWidth, nWidth ) )
-            : SwRect( Point( nX, getFrameArea().Pos().Y() + rInf.GetTopDist() ),
-                            Size( nWidth, rInf.GetLineWidth()));
-    if ( aLineRect.HasArea() && rInf.GetLineStyle() != SvxBorderLineStyle::NONE)
-        PaintBorderLine( rRect, aLineRect , pPage, &rInf.GetLineColor(),
+    std::optional<SwRect> oLineRect;
+    if (aRectFnSet.IsVert())
+    {
+        oLineRect.emplace(Point(getFrameArea().Left()+getFrameArea().Width()-rInf.GetTopDist()-nLineWidth,
+                      nX), Size( nLineWidth, nWidth ) );
+    }
+    else
+    {
+        Point aPoint(nX, getFrameArea().Pos().Y() + rInf.GetTopDist());
+        const IDocumentSettingAccess& rIDSA = GetFormat()->getIDocumentSettingAccess();
+        if (rIDSA.get(DocumentSettingId::CONTINUOUS_ENDNOTES))
+        {
+            // Word style: instead of fixed value, upper spacing is 60% of all space.
+            auto nPrintAreaTop = static_cast<double>(getFramePrintArea().Top());
+            aPoint.setY(getFrameArea().Pos().Y() + nPrintAreaTop * 0.6);
+
+            const SwFootnoteFrame* pEndnoteFrame = FindEndNote();
+            bool bEndnoteContinuation = pEndnoteFrame && pEndnoteFrame->GetMaster();
+            if (bEndnoteContinuation)
+            {
+                // Endnote continuation separator is print area wide.
+                nWidth = nPrtWidth;
+            }
+            else
+            {
+                // Length is 2 inches, but don't paint outside the container frame.
+                nWidth = o3tl::convert(2, o3tl::Length::in, o3tl::Length::twip);
+                if (nWidth > nPrtWidth)
+                {
+                    nWidth = nPrtWidth;
+                }
+            }
+        }
+        oLineRect.emplace(aPoint, Size(nWidth, rInf.GetLineWidth()));
+    }
+    if ( oLineRect->HasArea() && rInf.GetLineStyle() != SvxBorderLineStyle::NONE)
+        PaintBorderLine( rRect, *oLineRect , pPage, &rInf.GetLineColor(),
                 rInf.GetLineStyle() );
 }
 

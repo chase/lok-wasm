@@ -78,6 +78,7 @@
 #include <hints.hxx>
 #include <tools/json_writer.hxx>
 #include <redline.hxx>
+#include <boost/property_tree/ptree.hpp>
 
 using namespace com::sun::star;
 using namespace util;
@@ -1790,6 +1791,21 @@ void SwCursorShell::VisPortChgd( const SwRect & rRect )
     if( m_bSVCursorVis && bVis ) // show SV cursor again
         m_pVisibleCursor->Show();
 
+    if( comphelper::LibreOfficeKit::isActive() && !rRect.Overlaps( m_aCharRect ))
+    {
+        boost::property_tree::ptree aParams;
+        tools::Rectangle aRect(rRect.TopLeft(), Size(1, 1));
+
+        aParams.put("rectangle", aRect.toString());
+        aParams.put("scroll", true);
+        aParams.put("hyperlink", "");
+
+        SfxLokHelper::notifyOtherView(GetSfxViewShell(),
+                                      GetSfxViewShell(),
+                                      LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR,
+                                      aParams);
+    }
+
     if( m_nCursorMove )
         m_bInCMvVisportChgd = true;
 
@@ -1913,6 +1929,15 @@ void SwCursorShell::UpdateCursor( sal_uInt16 eFlags, bool bIdleEnd )
         if ( eFlags & SwCursorShell::READONLY )
             m_bIgnoreReadonly = true;
         return; // if not then no update
+    }
+
+    if (m_bNeedLayoutOnCursorUpdate)
+    {
+        // A previous spell check skipped a word that had a spelling error, because that word
+        // had cursor. Now schedule the idle to call SwViewShell::LayoutIdle, to repeat the
+        // spell check, in the hope that the cursor has left the word.
+        m_aLayoutIdle.Start();
+        m_bNeedLayoutOnCursorUpdate = false;
     }
 
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
@@ -3305,6 +3330,7 @@ SwCursorShell::SwCursorShell( SwCursorShell& rShell, vcl::Window *pInitWin )
     , m_eEnhancedTableSel(SwTable::SEARCH_NONE)
     , m_nMarkedListLevel( 0 )
     , m_oldColFrame(nullptr)
+    , m_aLayoutIdle("SwCursorShell m_aLayoutIdle")
 {
     CurrShell aCurr( this );
     // only keep the position of the current cursor of the copy shell
@@ -3320,6 +3346,9 @@ SwCursorShell::SwCursorShell( SwCursorShell& rShell, vcl::Window *pInitWin )
     m_bSetCursorInReadOnly = true;
     m_pVisibleCursor = new SwVisibleCursor( this );
     m_bMacroExecAllowed = rShell.IsMacroExecAllowed();
+
+    m_aLayoutIdle.SetPriority(TaskPriority::LOWEST);
+    m_aLayoutIdle.SetInvokeHandler(LINK(this, SwCursorShell, DoLayoutIdle));
 }
 
 /// default constructor
@@ -3342,6 +3371,7 @@ SwCursorShell::SwCursorShell( SwDoc& rDoc, vcl::Window *pInitWin,
     , m_eEnhancedTableSel(SwTable::SEARCH_NONE)
     , m_nMarkedListLevel( 0 )
     , m_oldColFrame(nullptr)
+    , m_aLayoutIdle("SwCursorShell m_aLayoutIdle")
 {
     CurrShell aCurr( this );
     // create initial cursor and set it to first content position
@@ -3366,10 +3396,15 @@ SwCursorShell::SwCursorShell( SwDoc& rDoc, vcl::Window *pInitWin,
 
     m_pVisibleCursor = new SwVisibleCursor( this );
     m_bMacroExecAllowed = true;
+
+    m_aLayoutIdle.SetPriority(TaskPriority::LOWEST);
+    m_aLayoutIdle.SetInvokeHandler(LINK(this, SwCursorShell, DoLayoutIdle));
 }
 
 SwCursorShell::~SwCursorShell()
 {
+    m_aLayoutIdle.Stop();
+
     // if it is not the last view then at least the field should be updated
     if( !unique() )
         CheckTableBoxContent( m_pCurrentCursor->GetPoint() );
@@ -3397,6 +3432,8 @@ SwCursorShell::~SwCursorShell()
     // a client at the cursor shell the chance to hang itself on a TextNode
     EndListeningAll();
 }
+
+IMPL_LINK_NOARG(SwCursorShell, DoLayoutIdle, Timer*, void) { LayoutIdle(); }
 
 SwShellCursor* SwCursorShell::getShellCursor( bool bBlock )
 {

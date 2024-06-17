@@ -39,6 +39,7 @@
 
 #include <cppuhelper/supportsservice.hxx>
 #include <cppuhelper/implbase.hxx>
+#include <comphelper/lok.hxx>
 #include <rtl/ref.hxx>
 
 namespace framework{
@@ -120,7 +121,8 @@ class StatusIndicatorFactory final : public  ::cppu::WeakImplHelper<
                                              css::lang::XServiceInfo
                                            , css::lang::XInitialization
                                            , css::task::XStatusIndicatorFactory
-                                           , css::util::XUpdatable >
+                                           , css::util::XUpdatable >,
+                                     public comphelper::LibreOfficeKit::ThreadJoinable
 {
 
     // member
@@ -150,7 +152,7 @@ class StatusIndicatorFactory final : public  ::cppu::WeakImplHelper<
 
         /** Notify us if a fix time is over. We use it to implement an
             intelligent "Reschedule" ... */
-        rtl::Reference<WakeUpThread> m_pWakeUp;
+        std::unique_ptr<WakeUpThread> m_pWakeUp;
 
         /** Our WakeUpThread calls us in our interface method "XUpdatable::update().
             There we set this member m_bAllowReschedule to sal_True. Next time if our impl_reschedule()
@@ -210,6 +212,11 @@ class StatusIndicatorFactory final : public  ::cppu::WeakImplHelper<
 
         void setValue(const css::uno::Reference< css::task::XStatusIndicator >& xChild,
                                              sal_Int32                                           nValue);
+
+        // comphelper::LibreOfficeKit::ThreadJoinable
+        virtual bool joinThreads() override;
+
+        virtual void startThreads() override;
 
     // specials
 

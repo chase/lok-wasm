@@ -36,11 +36,11 @@
 #include <vector>
 #include <deque>
 
-
 // predefines
 namespace model { class Theme; }
 namespace reportdesign { class OSection; }
 namespace sdr::contact { class ViewContact; }
+namespace sdr::annotation { class Annotation; }
 class SdrPage;
 class SdrModel;
 class SfxItemPool;
@@ -423,6 +423,9 @@ private:
     // the SdrModel this page was created with, unchanged during SdrPage lifetime
     SdrModel&                   mrSdrModelFromSdrPage;
 
+protected:
+    std::vector<rtl::Reference<sdr::annotation::Annotation>> maAnnotations;
+
 private:
     tools::Long mnWidth;       // page size
     tools::Long mnHeight;      // page size
@@ -517,8 +520,8 @@ public:
 
 protected:
     void TRG_ImpMasterPageRemoved(const SdrPage& rRemovedPage);
-public:
 
+public:
     /// changing the layers does not set the modified-flag!
     const SdrLayerAdmin& GetLayerAdmin() const;
     SdrLayerAdmin& GetLayerAdmin();
@@ -553,6 +556,14 @@ public:
         bool bEdit );
 
     void dumpAsXml(xmlTextWriterPtr pWriter) const override;
+
+    virtual rtl::Reference<sdr::annotation::Annotation> createAnnotation();
+    virtual void addAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1);
+    virtual void addAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1);
+    virtual void removeAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation);
+    virtual void removeAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation);
+
+    std::vector<rtl::Reference<sdr::annotation::Annotation>> const& getAnnotations() const;
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

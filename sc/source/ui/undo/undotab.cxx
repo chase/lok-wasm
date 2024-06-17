@@ -163,6 +163,9 @@ void ScUndoInsertTab::SetChangeTrack()
 void ScUndoInsertTab::Undo()
 {
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
+
     pViewShell->SetTabNo(nTab);
 
     pDocShell->SetInUndo( true );               //! BeginUndo
@@ -193,6 +196,8 @@ void ScUndoInsertTab::Undo()
 void ScUndoInsertTab::Redo()
 {
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
 
     RedoSdrUndoAction( pDrawUndo.get() );             // Draw Redo first
 
@@ -277,6 +282,9 @@ void ScUndoInsertTables::SetChangeTrack()
 void ScUndoInsertTables::Undo()
 {
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
+
     pViewShell->SetTabNo(nTab);
 
     pDocShell->SetInUndo( true );               //! BeginUndo
@@ -300,6 +308,8 @@ void ScUndoInsertTables::Undo()
 void ScUndoInsertTables::Redo()
 {
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
 
     RedoSdrUndoAction( pDrawUndo.get() );       // Draw Redo first
 
@@ -462,6 +472,9 @@ void ScUndoDeleteTab::Undo()
 void ScUndoDeleteTab::Redo()
 {
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
+
     pViewShell->SetTabNo( lcl_GetVisibleTabBefore( pDocShell->GetDocument(), theTabs.front() ) );
 
     RedoSdrUndoAction( pDrawUndo.get() );       // Draw Redo first
@@ -581,9 +594,11 @@ OUString ScUndoMoveTab::GetComment() const
 
 void ScUndoMoveTab::DoChange( bool bUndo ) const
 {
-    ScDocument& rDoc = pDocShell->GetDocument();
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
 
+    ScDocument& rDoc = pDocShell->GetDocument();
     if (bUndo)                                      // UnDo
     {
         size_t i = mpNewTabs->size();
@@ -742,8 +757,11 @@ void ScUndoCopyTab::Undo()
 
 void ScUndoCopyTab::Redo()
 {
-    ScDocument& rDoc = pDocShell->GetDocument();
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
+
+    ScDocument& rDoc = pDocShell->GetDocument();
 
     SCTAB nDestTab = 0;
     for (size_t i = 0, n = mpNewTabs->size(); i < n; ++i)
@@ -980,18 +998,18 @@ OUString ScUndoImportTab::GetComment() const
 void ScUndoImportTab::DoChange() const
 {
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
+
     ScDocument& rDoc = pDocShell->GetDocument();
     SCTAB nTabCount = rDoc.GetTableCount();
-    if (pViewShell)
+    if(nTab<nTabCount)
     {
-        if(nTab<nTabCount)
-        {
-            pViewShell->SetTabNo(nTab,true);
-        }
-        else
-        {
-            pViewShell->SetTabNo(nTab-1,true);
-        }
+        pViewShell->SetTabNo(nTab,true);
+    }
+    else
+    {
+        pViewShell->SetTabNo(nTab-1,true);
     }
 
     SfxGetpApp()->Broadcast( SfxHint( SfxHintId::ScTablesChanged ) );    // Navigator
@@ -1202,14 +1220,15 @@ ScUndoShowHideTab::~ScUndoShowHideTab()
 
 void ScUndoShowHideTab::DoChange( bool bShowP ) const
 {
-    ScDocument& rDoc = pDocShell->GetDocument();
     ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell();
+    if (!pViewShell)
+        return;
 
+    ScDocument& rDoc = pDocShell->GetDocument();
     for(const SCTAB& nTab : undoTabs)
     {
         rDoc.SetVisible( nTab, bShowP );
-        if (pViewShell)
-            pViewShell->SetTabNo(nTab,true);
+        pViewShell->SetTabNo(nTab,true);
     }
 
     SfxGetpApp()->Broadcast( SfxHint( SfxHintId::ScTablesChanged ) );

@@ -180,7 +180,7 @@ bool ScDocFunc::AdjustRowHeight( const ScRange& rRange, bool bPaint, bool bApi )
             while (pViewShell)
             {
                 ScTabViewShell* pTabViewShell = dynamic_cast<ScTabViewShell*>(pViewShell);
-                if (pTabViewShell && pTabViewShell->GetDocId() == pSomeViewForThisDoc->GetDocId())
+                if (pTabViewShell && pSomeViewForThisDoc && pTabViewShell->GetDocId() == pSomeViewForThisDoc->GetDocId())
                 {
                     if (ScPositionHelper* pPosHelper = pTabViewShell->GetViewData().GetLOKHeightHelper(nTab))
                         pPosHelper->invalidateByIndex(nStartRow);
@@ -2275,12 +2275,12 @@ bool ScDocFunc::InsertCells( const ScRange& rRange, const ScMarkData* pTabMark, 
 
         if (bInsertCols)
         {
-            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col(), 1);
+            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col() - (eCmd == INS_INSCOLS_BEFORE ? 1: 0), 1);
         }
 
         if (bInsertRows)
         {
-            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row(), 1);
+            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row() - (eCmd == INS_INSROWS_BEFORE ? 1: 0), 1);
         }
     }
 
@@ -2856,11 +2856,11 @@ bool ScDocFunc::DeleteCells( const ScRange& rRange, const ScMarkData* pTabMark, 
     {
         if (eCmd == DelCellCmd::Cols)
         {
-            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col(), -1);
+            pViewSh->OnLOKInsertDeleteColumn(rRange.aStart.Col(), -1 * (rRange.aEnd.Col() - rRange.aStart.Col() + 1));
         }
         if (eCmd == DelCellCmd::Rows)
         {
-            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row(), -1);
+            pViewSh->OnLOKInsertDeleteRow(rRange.aStart.Row(), -1 * (rRange.aEnd.Row() - rRange.aStart.Row() + 1));
         }
     }
 
@@ -5521,11 +5521,11 @@ void ScDocFunc::ResizeMatrix( const ScRange& rOldRange, const ScAddress& rNewEnd
 
     if ( DeleteContents( aMark, InsertDeleteFlags::CONTENTS, true, false/*bApi*/ ) )
     {
-        // GRAM_API for API compatibility.
-        if (!EnterMatrix( aNewRange, &aMark, nullptr, aFormula, false/*bApi*/, false, OUString(), formula::FormulaGrammar::GRAM_API ))
+        // Formula string was obtained in document grammar.
+        if (!EnterMatrix( aNewRange, &aMark, nullptr, aFormula, false/*bApi*/, false, OUString(), rDoc.GetGrammar() ))
         {
             // try to restore the previous state
-            EnterMatrix( rOldRange, &aMark, nullptr, aFormula, false/*bApi*/, false, OUString(), formula::FormulaGrammar::GRAM_API );
+            EnterMatrix( rOldRange, &aMark, nullptr, aFormula, false/*bApi*/, false, OUString(), rDoc.GetGrammar() );
         }
     }
 

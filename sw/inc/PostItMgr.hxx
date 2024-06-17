@@ -172,6 +172,8 @@ class SAL_DLLPUBLIC_RTTI SwPostItMgr final : public SfxListener
         SwSidebarItem*  InsertItem( SfxBroadcaster* pItem, bool bCheckExistence, bool bFocus);
         void            RemoveItem( SfxBroadcaster* pBroadcast );
 
+        VclPtr<sw::annotation::SwAnnotationWin> GetOrCreateAnnotationWindow(SwSidebarItem& rItem);
+
     public:
         SwPostItMgr(SwView* aDoc);
         virtual ~SwPostItMgr() override;
@@ -231,6 +233,7 @@ class SAL_DLLPUBLIC_RTTI SwPostItMgr final : public SfxListener
         sw::annotation::SwAnnotationWin* GetNextPostIt( sal_uInt16 aDirection,
                                                         sw::annotation::SwAnnotationWin* aPostIt);
         SwPostItField* GetLatestPostItField();
+        sw::annotation::SwAnnotationWin* GetOrCreateAnnotationWindowForLatestPostItField();
 
         tools::Long GetNextBorder();
 
