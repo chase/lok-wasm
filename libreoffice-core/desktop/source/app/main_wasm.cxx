@@ -606,6 +606,10 @@ public:
     {
         writer()->replyComment(parentId, std::move(text));
     }
+    void updateComment(int id, std::string text)
+    {
+        writer()->updateComment(id, std::move(text));
+    }
     void deleteCommentThreads(val parentIds) { writer()->deleteCommentThreads(parentIds); }
     void deleteComment(int commentId) { writer()->deleteComment(commentId); }
     void resolveCommentThread(int parentId) { writer()->resolveCommentThread(parentId); }
@@ -758,6 +762,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("comments", &DocumentClient::comments)
         .function("addComment", &DocumentClient::addComment)
         .function("replyComment", &DocumentClient::replyComment)
+        .function("updateComment", &DocumentClient::updateComment)
         .function("deleteCommentThreads", &DocumentClient::deleteCommentThreads)
         .function("deleteComment", &DocumentClient::deleteComment)
         .function("resolveCommentThread", &DocumentClient::resolveCommentThread)

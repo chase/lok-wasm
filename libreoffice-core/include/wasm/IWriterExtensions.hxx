@@ -36,6 +36,7 @@ public:
     virtual val comments(const val& /* ids */) { return {}; };
     virtual void addComment(const std::string& /* text */) {}
     virtual void replyComment(int /* parentId */, const std::string& /* text */) {};
+    virtual void updateComment(int /* id */, const std::string& /* text */) {};
     virtual void deleteCommentThreads(val /* parentId */){};
     virtual void deleteComment(int /* commentId */) {};
     virtual void resolveCommentThread(int /* parentId */) {};

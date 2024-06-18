@@ -139,6 +139,7 @@ export type DocumentWithViewMethods = {
   comments(ids?: number[]): Array<Comment | RootComment>;
   addComment(text: string): void;
   replyComment(parentId: number, text: string): void;
+  updateComment(id: number, text: string): void;
   deleteCommentThreads(parentIds: number[]): void;
   deleteComment(commentId: number): void;
   resolveCommentThread(parentId: number): void;

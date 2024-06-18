@@ -49,6 +49,7 @@
 #include <ndtxt.hxx>
 #include <txtfrm.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <cmdid.h>
 
 using namespace emscripten;
 
@@ -206,18 +207,52 @@ void SwXTextDocument::addComment(const std::string& text)
 
 void SwXTextDocument::replyComment(int parentId, const std::string& text)
 {
-    css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(
-        comphelper::InitPropertySequence({ { "Id", uno::Any(static_cast<sal_uInt32>(parentId)) },
-                                           { "Text", uno::Any(OUString::fromUtf8(text)) } }));
-
+    SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
     SolarMutexGuard aGuard;
+    sw::annotation::SwAnnotationWin* pWin = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(parentId));
+    if (!pWin) return;
+    OUString sText = OUString::fromUtf8(text);
+    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
+    if (recordChanges)
+    {
+        setPropertyValue(g_sRecordChanges, uno::Any(false));
+    }
+    pMgr->RegisterAnswerText(sText);
+    pWin->ExecuteCommand(FN_REPLY);
+    SwPostItField* pLatestPostItField = pMgr->GetLatestPostItField();
+    if (pLatestPostItField)
+    {
+        // Set the parent postit id of the reply.
+        pLatestPostItField->SetParentPostItId(static_cast<sal_uInt32>(parentId));
+
+        // If name of the replied comment is empty, we need to set a name in order to connect them in the xml file.
+        pWin->GeneratePostItName(); // Generates a name if the current name is empty.
+
+        pLatestPostItField->SetParentName(pWin->GetPostItField()->GetName());
+    }
+
+    if (recordChanges)
+    {
+        setPropertyValue(g_sRecordChanges, uno::Any(true));
+    }
+}
+
+void SwXTextDocument::updateComment(int id, const std::string& text)
+{
+    SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
+    SolarMutexGuard aGuard;
+    sw::annotation::SwAnnotationWin* pAnnotationWin = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(id));
+    if (!pAnnotationWin) return;
+    OUString sText = OUString::fromUtf8(text);
     bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
     if (recordChanges)
     {
         setPropertyValue(g_sRecordChanges, uno::Any(false));
     }
 
-    comphelper::dispatchCommand(u".uno:ReplyComment"_ustr, aPropertyValues);
+    pAnnotationWin->UpdateText(sText);
+    // explicit state update to get the Undo state right
+    m_pDocShell->GetView()->AttrChangedNotify(nullptr);
 
     if (recordChanges)
     {

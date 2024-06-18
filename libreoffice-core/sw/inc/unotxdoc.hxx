@@ -552,6 +552,7 @@ public:
     emscripten::val comments(const emscripten::val& ids) override;
     void addComment(const std::string& text) override;
     void replyComment(int parentId, const std::string& text) override;
+    void updateComment(int id, const std::string& text) override;
     void deleteCommentThreads(emscripten::val parentIds) override;
     void deleteComment(int commentId) override;
     void resolveCommentThread(int parentId) override;

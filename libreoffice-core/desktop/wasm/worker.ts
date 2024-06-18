@@ -399,7 +399,11 @@ const handler: DocumentMethodHandler<Document> = {
     doc.setClientVisibleArea(viewId, x, y, width, height);
   },
 
-  comments: function (doc: Document, viewId: ViewId, ids: number[] = []): Comment[] {
+  comments: function (
+    doc: Document,
+    viewId: ViewId,
+    ids: number[] = []
+  ): Comment[] {
     doc.setCurrentView(viewId);
     return doc.comments(ids);
   },
@@ -551,6 +555,16 @@ const handler: DocumentMethodHandler<Document> = {
   setAuthor: function (doc: Document, viewId: ViewId, author: string) {
     doc.setCurrentView(viewId);
     return doc.setAuthor(author);
+  },
+
+  updateComment: function (
+    doc: Document,
+    viewId: ViewId,
+    id: number,
+    text: string
+  ) {
+    doc.setCurrentView(viewId);
+    doc.updateComment(id, text);
   },
 };
 

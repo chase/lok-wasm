@@ -217,6 +217,7 @@ export declare class Document {
   comments(ids: number[]): Comment[];
   addComment(text: string): void;
   replyComment(parentId: number, text: string): void;
+  updateComment(id: number, text: string): void;
   deleteCommentThreads(parentIds: number[]): void;
   deleteComment(commentId: number): void;
   resolveCommentThread(parentId: number): void;
