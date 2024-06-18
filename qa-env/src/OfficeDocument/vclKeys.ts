@@ -274,7 +274,9 @@ export function createKeyHandler(
 
       // simple key down
       if (
-        modifiers &&
+        modifiers && 
+        // If Space is the not the only modifier or if we press Shift+Space
+        (modifiers !== Modifiers.SHIFT || evt.key === "Space") && 
         evt.type === 'keydown'
       ) {
         doc().postKeyEvent(KEY_DOWN, rawCharCode, vclCode);

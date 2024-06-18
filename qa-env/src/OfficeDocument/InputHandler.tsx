@@ -1,12 +1,12 @@
 import { CallbackType } from '@lok/lok_enums';
 import { DocumentClient } from '@lok/shared';
-import { Accessor, createEffect, onCleanup } from 'solid-js';
-import { getOrCreateFocusedSignal } from './focus';
+import { Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { focusRef, getOrCreateFocusedSignal, hasFocus, setHasFocus } from './focus';
 import { eventModifiers, pressKey } from './vclKeys';
 
 interface Props {
   doc: Accessor<DocumentClient>;
-  pos: number[];
+  pos: Accessor<number[] | undefined>;
 }
 
 const FORWARD = 0;
@@ -39,7 +39,7 @@ type TextAreaEvent = InputEvent & {
 
 export function InputHandler(props: Props) {
   let input: HTMLTextAreaElement;
-  const [focus] = getOrCreateFocusedSignal(props.doc);
+  const [focused, setFocused] = getOrCreateFocusedSignal(props.doc);
   let composing = false;
   let lastContent: Array<number> = [];
   let ignoreInputLocks = 0;
@@ -60,22 +60,29 @@ export function InputHandler(props: Props) {
 
   createEffect(() => {
     // if we loose focus we need to abort active composition
-    if (!focus()) {
+    if (!focused()) {
       if (composing) abortComposition();
       composing = false;
     }
   });
 
-  createEffect<number[] | null>((prevPos) => {
-    if (focus() && (prevPos !== props.pos)) {
-      input.focus();
-      if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
-        reset();
+  createEffect(
+    on(
+      [focused, props.pos],
+      ([focused, position], prev) => {
+        // Only refocus the input if the position has changed,
+        // or if the editor does not currnetly have focus...
+        // AKA we are refocusing the editor from somewhere else
+        const prevPos = prev?.at(1);
+        if (focused && (!hasFocus()  || prevPos !== position)) {
+          input.focus();
+          if (!isSelectionValid(input) || isCaretAtPreSpace(input)) {
+            reset();
+          }
+        }
       }
-    }
-
-    return props.pos;
-  }, null);
+    ), undefined
+  );
 
   function abortComposition() {
     reset(document.activeElement !== input);
@@ -167,60 +174,73 @@ export function InputHandler(props: Props) {
   }
 
   return (
-    <textarea
-      class="absolute top-0 left-0 pointer-events-none whitespace-pre caret-transparent opacity-0 resize-none"
-      autocapitalize="off"
-      autocomplete="off"
-      spellcheck={false}
-      wrap="off"
-      rows={1}
-      tabIndex={-1}
-      style={{
-        transform: `translate(${props.pos[0]}px, ${props.pos[1] + props.pos[3]}px)`,
-        width: '1px',
-        height: '1px',
-      }}
-      ref={(ref) => {
-        input = ref;
-        if (focus()) {
-          input.focus();
-        }
-      }}
-      onBeforeInput={() => {
-        if (!getSelection()) reset();
-      }}
-      onInput={handleInput as any}
-      onCompositionStart={() => {
-        composing = true;
-      }}
-      onCompositionEnd={(evt) => {
-        handleInput(evt as any);
-        composing = false;
-      }}
-      onKeyDown={(evt) => {
-        if (evt.key === 'Enter') {
-          lineBreakModifiers = eventModifiers(evt);
-        }
-      }}
-      onKeyUp={(evt) => {
-        if (
-          !composing &&
-          (evt.key === 'ArrowLeft' ||
-            evt.key === 'ArrowRight' ||
-            evt.key === 'ArrowUp' ||
-            evt.key === 'ArrowDown' ||
-            evt.key === 'Home' ||
-            evt.key === 'End' ||
-            evt.key === 'PageUp' ||
-            evt.key === 'PageDown' ||
-            evt.key === 'Escape')
-        ) {
-          reset();
-        }
-      }}
-      onCompositionUpdate={handleInput as any}
-      value={INITIAL_CONTENT}
-    />
+<div
+      class="absolute top-0 left-0 pointer-events-none opacity-0"
+    >
+      <textarea
+        class="w-full h-full whitespace-pre caret-transparent resize-none opacity-0"
+        autocapitalize="off"
+        autocomplete="off"
+        spellcheck={false}
+        wrap="off"
+        rows={1}
+        tabIndex={-1}
+        onBlur={(e) => {
+          if (e.relatedTarget !== focusRef()) {
+            setHasFocus(false);
+            setFocused(false);
+          }
+        }}
+        onFocus={() => {
+          setHasFocus(true);
+        }}
+        style={{
+          transform: `translate(${props.pos()![0]}px, ${props.pos()![1] + props.pos()![3]}px)`,
+          width: '1px',
+          height: '1px',
+        }}
+        ref={(ref) => {
+          input = ref;
+          if (focused()) {
+            input.focus();
+          }
+        }}
+        onBeforeInput={() => {
+          if (!getSelection()) reset();
+        }}
+        onInput={handleInput as any}
+        onCompositionStart={() => {
+          composing = true;
+        }}
+        onCompositionEnd={(evt) => {
+          handleInput(evt as any);
+          composing = false;
+        }}
+        onKeyDown={(evt) => {
+          if (evt.key === 'Enter') {
+            lineBreakModifiers = eventModifiers(evt);
+          }
+        }}
+        onKeyUp={(evt) => {
+          if (
+            !composing &&
+            (evt.key === 'ArrowLeft' ||
+              evt.key === 'ArrowRight' ||
+              evt.key === 'ArrowUp' ||
+              evt.key === 'ArrowDown' ||
+              evt.key === 'Home' ||
+              evt.key === 'End' ||
+              evt.key === 'PageUp' ||
+              evt.key === 'PageDown' ||
+              evt.key === 'Escape')
+          ) {
+            reset();
+          }
+        }}
+        onCompositionUpdate={handleInput as any}
+        value={INITIAL_CONTENT}
+      />
+    </div>
   );
 }
 

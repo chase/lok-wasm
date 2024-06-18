@@ -43,7 +43,7 @@ export function Cursor(props: Props) {
         }}
         ref={local.ref}
       />
-      <InputHandler doc={doc} pos={pos()!} />
+      <InputHandler doc={doc} pos={pos!} />
     </Show>
   );
 }

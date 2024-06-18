@@ -183,6 +183,7 @@ export function OfficeDocument(props: Props) {
     const dpi = getDpi();
     const scaledWidth = Math.floor(width * dpi);
     const scaledHeight = Math.floor(height * dpi);
+    console.log("setting the canvas width and height");
     canvas0_.width = scaledWidth;
     canvas0_.height = scaledHeight;
     canvas1_.width = scaledWidth;
