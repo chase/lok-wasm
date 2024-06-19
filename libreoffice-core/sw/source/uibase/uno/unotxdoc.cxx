@@ -3652,6 +3652,7 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
     SwViewShell* pViewShell = m_pDocShell->GetWrtShell();
 
     SwView* pView = m_pDocShell->GetView();
+
     if (!pView)
         return;
 

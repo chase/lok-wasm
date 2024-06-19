@@ -146,7 +146,7 @@ const handler: DocumentMethodHandler<Document> = {
         },
         ".uno:SpellOnline": {
           "type": "boolean",
-          "value": ${args.autoSpellcheck ?? true}
+          "value": true
         },
         ".uno:Author": {
           "type": "string",

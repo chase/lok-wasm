@@ -30,6 +30,7 @@
 #include <com/sun/star/util/thePathSettings.hpp>
 #include <o3tl/typed_flags_set.hxx>
 
+#include <sal/log.hxx>
 #include <linguistic/misc.hxx>
 
 using namespace com::sun::star;
@@ -141,7 +142,9 @@ OUString GetDictionaryWriteablePath()
 
 std::vector< OUString > GetDictionaryPaths()
 {
-    return GetMultiPaths_Impl( u"Dictionary", PATH_FLAG_ALL );
+    SAL_WARN("lok", "GetDictionaryPaths");
+    auto result = GetMultiPaths_Impl( u"Dictionary", PATH_FLAG_ALL );
+    return result;
 }
 
 OUString  GetWritableDictionaryURL( std::u16string_view rDicName )

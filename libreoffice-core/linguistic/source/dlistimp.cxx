@@ -271,6 +271,7 @@ void DicList::SearchForDictionaries(
     const OUString &rDicDirURL,
     bool bIsWriteablePath )
 {
+    SAL_WARN("lok", "SearchForDictionaries");
     osl::MutexGuard aGuard( GetLinguMutex() );
 
     const uno::Sequence< OUString > aDirCnt( utl::LocalFileHelper::
@@ -385,6 +386,7 @@ uno::Reference< XDictionary > SAL_CALL
 sal_Bool SAL_CALL DicList::addDictionary(
             const uno::Reference< XDictionary >& xDictionary )
 {
+    SAL_WARN("lok", "addDictionary");
     osl::MutexGuard aGuard( GetLinguMutex() );
 
     if (bDisposing)
@@ -574,6 +576,7 @@ void SAL_CALL
 
 void DicList::CreateDicList()
 {
+    SAL_WARN("lok", "CreateDicList");
     bInCreation = true;
 
     // look for dictionaries

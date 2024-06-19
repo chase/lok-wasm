@@ -200,6 +200,7 @@ void SfxLokHelper::setView(int nId)
         // If we wanted to set the SfxViewShell that is actually set, we could skip it.
         // But it looks like that the language can go wrong, so we have to fix that.
         // This can happen, when someone sets the language or SfxViewShell::Current() separately.
+        SAL_WARN("lok", "look at me");
         SAL_WARN("lok", "LANGUAGE mismatch at setView! ... old (wrong) lang:"
                         << comphelper::LibreOfficeKit::getLanguageTag().getBcp47()
                         << " new lang:" << pViewShell->GetLOKLanguageTag().getBcp47());

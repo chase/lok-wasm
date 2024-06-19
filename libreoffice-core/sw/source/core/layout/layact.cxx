@@ -2024,6 +2024,7 @@ void SwLayAction::FormatFlyContent( const SwFlyFrame *pFly )
 bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
 {
     OSL_ENSURE( pCnt->IsTextFrame(), "NoText neighbour of Text" );
+
     // robust against misuse by e.g. #i52542#
     if( !pCnt->IsTextFrame() )
         return false;
@@ -2038,7 +2039,8 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
         switch ( eJob )
         {
             case IdleJobType::ONLINE_SPELLING:
-                bProcess = pTextNode->IsWrongDirty(); break;
+                bProcess = pTextNode->IsWrongDirty();
+                break;
             case IdleJobType::AUTOCOMPLETE_WORDS:
                 bProcess = pTextNode->IsAutoCompleteWordDirty(); break;
             case IdleJobType::WORD_COUNT:
@@ -2076,6 +2078,7 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
 
     if( bProcess )
     {
+        SAL_WARN("lok", "B PROCESS");
         assert(pTextNode);
         SwViewShell *pSh = m_pImp->GetShell();
         if( COMPLETE_STRING == m_nTextPos )
@@ -2172,6 +2175,8 @@ bool SwLayIdle::DoIdleJob_( const SwContentFrame *pCnt, IdleJobType eJob )
 
 bool SwLayIdle::isJobEnabled(IdleJobType eJob, const SwViewShell* pViewShell)
 {
+    std::string jobStr = std::to_string(static_cast<int>(eJob));
+    SAL_WARN("lok", "isJobEnabled(..) called: " << jobStr);
     switch (eJob)
     {
         case IdleJobType::ONLINE_SPELLING:

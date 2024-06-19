@@ -482,6 +482,7 @@ const OUString& SvtPathOptions::GetConfigPath() const
 
 const OUString& SvtPathOptions::GetDictionaryPath() const
 {
+    SAL_WARN("lok", "SvtPathOptions::GetDictionaryPath: " << pImpl->GetDictionaryPath());
     return pImpl->GetDictionaryPath();
 }
 
@@ -612,6 +613,7 @@ OUString SvtPathOptions::UseVariable( const OUString& rPath ) const
 
 bool SvtPathOptions::SearchFile( OUString& rIniFile, SvtPathOptions::Paths ePath )
 {
+    SAL_WARN("lok", "SEARCH FILE");
     // check parameter: empty inifile name?
     if ( rIniFile.isEmpty() )
     {

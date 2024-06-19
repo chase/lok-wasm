@@ -234,6 +234,7 @@ uno::Sequence< sal_Int16 > SAL_CALL
 sal_Bool SAL_CALL
     SpellDummy_Impl::hasLanguage( sal_Int16 nLanguage )
 {
+    SAL_WARN("lok", "HAS LANGUAGE");
     GetSpell_Impl();
     bool bRes = false;
     if (xSpell.is())
@@ -493,6 +494,9 @@ uno::Reference< XThesaurus > LinguMgr::GetThesaurus()
 
 uno::Reference< XSearchableDictionaryList > LinguMgr::GetDictionaryList()
 {
+    SAL_WARN("lok", "GetDictionaryList");
+    SAL_WARN("lok", "GetDictionaryList xDicList.is: " << xDicList.is());
+    SAL_WARN("lok", "GetDictionaryList GetDicList.is: " << GetDicList().is());
     return xDicList.is() ? xDicList : GetDicList();
 }
 
@@ -563,6 +567,7 @@ uno::Reference< XThesaurus > LinguMgr::GetThes()
 
 uno::Reference< XSearchableDictionaryList > LinguMgr::GetDicList()
 {
+    SAL_WARN("lok", "GetDicList");
     if (bExiting)
         return nullptr;
 
@@ -587,6 +592,7 @@ uno::Reference< linguistic2::XLinguProperties > LinguMgr::GetProp()
 
 uno::Reference< XDictionary > LinguMgr::GetIgnoreAll()
 {
+    SAL_WARN("lok", "LinguMgr::GetIgnoreAll()");
     if (bExiting)
         return nullptr;
 
@@ -627,6 +633,7 @@ uno::Reference< XDictionary > LinguMgr::GetChangeAll()
 
 uno::Reference< XDictionary > LinguMgr::GetStandard()
 {
+    SAL_WARN("lok", "uno::Reference< XDictionary > LinguMgr::GetStandard");
     // Tries to return a dictionary which may hold positive entries is
     // persistent and not read-only.
 

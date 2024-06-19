@@ -520,6 +520,7 @@ uno::Any SwDoc::Spell( SwPaM& rPaM,
                     SwRootFrame const*const pLayout,
                     SwConversionArgs *pConvArgs  ) const
 {
+    SAL_WARN("lok", "START OF SPELLING");
     SwPosition* const pSttPos = rPaM.Start();
     SwPosition* const pEndPos = rPaM.End();
 

@@ -76,7 +76,8 @@ LanguageType LinguLocaleToLanguage( const css::lang::Locale& rLocale )
 {
     if ( rLocale.Language.isEmpty() )
         return LANGUAGE_NONE;
-    return LanguageTag::convertToLanguageType( rLocale );
+    LanguageType nLang = LanguageTag::convertToLanguageType( rLocale );
+    return nLang;
 }
 
 css::lang::Locale LinguLanguageToLocale( LanguageType nLanguage )
@@ -251,6 +252,7 @@ uno::Reference< XDictionaryEntry > SearchDicList(
         const OUString &rWord, LanguageType nLanguage,
         bool bSearchPosDics, bool bSearchSpellEntry )
 {
+    SAL_WARN("lok", "TEMP");
     MutexGuard  aGuard( GetLinguMutex() );
 
     uno::Reference< XDictionaryEntry > xEntry;
@@ -294,6 +296,7 @@ uno::Reference< XDictionaryEntry > SearchDicList(
 
 bool SaveDictionaries( const uno::Reference< XSearchableDictionaryList > &xDicList )
 {
+    SAL_WARN("lok", "TEMP");
     if (!xDicList.is())
         return true;
 
@@ -326,6 +329,7 @@ DictionaryError AddEntryToDic(
         const OUString &rRplcTxt,
         bool bStripDot )
 {
+    SAL_WARN("lok", "TEMP");
     if (!rxDic.is())
         return DictionaryError::NOT_EXISTS;
 
@@ -363,11 +367,17 @@ DictionaryError AddEntryToDic(
 std::vector< LanguageType >
     LocaleSeqToLangVec( uno::Sequence< Locale > const &rLocaleSeq )
 {
+    SAL_WARN("lok", "LocaleSeqToLangVec LENGTH: " << rLocaleSeq.getLength());
     std::vector< LanguageType >   aLangs;
     aLangs.reserve(rLocaleSeq.getLength());
 
     std::transform(rLocaleSeq.begin(), rLocaleSeq.end(), std::back_inserter(aLangs),
         [](const Locale& rLocale) { return LinguLocaleToLanguage(rLocale); });
+
+    for(const auto& lang : aLangs)
+    {
+        SAL_WARN("lok", "LocaleSeqToLangVec: " << lang);
+    }
 
     return aLangs;
 }

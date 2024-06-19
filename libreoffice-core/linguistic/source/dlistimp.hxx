@@ -71,6 +71,7 @@ class DicList :
     void                CreateDicList();
     DictionaryVec_t &   GetOrCreateDicList()
                         {
+                            SAL_WARN("lok", "GET OR CREATE");
                             if ( !bInCreation && aDicList.empty() )
                                 CreateDicList();
                             return aDicList;

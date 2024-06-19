@@ -67,6 +67,7 @@ static void GetOldStyleDicsInDir(
     std::set< OUString >& aDicLangInUse,
     std::vector< SvtLinguConfigDictionaryEntry >& aRes )
 {
+    SAL_WARN("lok", "GetOldStyleDicsInDir");
     osl::Directory aSystemDicts(aSystemDir);
     if (aSystemDicts.open() != osl::FileBase::E_None)
         return;

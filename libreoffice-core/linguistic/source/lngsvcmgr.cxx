@@ -925,6 +925,7 @@ void LngSvcMgr::GetThesaurusDsp_Impl( bool bSetSvcList  )
 
 void LngSvcMgr::GetAvailableSpellSvcs_Impl()
 {
+    SAL_WARN("lok", "GetAvailableSpellSvcs_Impl");
     if (pAvailSpellSvcs)
         return;
 
@@ -963,7 +964,12 @@ void LngSvcMgr::GetAvailableSpellSvcs_Impl()
                 if (xInfo.is())
                     aImplName = xInfo->getImplementationName();
                 SAL_WARN_IF( aImplName.isEmpty(), "linguistic", "empty implementation name" );
-                uno::Sequence<lang::Locale> aLocaleSequence(xSvc->getLocales());
+                lang::Locale defaultLocale("en", "US", "");
+                uno::Sequence<lang::Locale> defaultLocales({defaultLocale});
+                auto xSvcLocales = xSvc->getLocales();
+                uno::Sequence<lang::Locale> aLocaleSequence(xSvcLocales.getLength() > 0 ? xSvcLocales : defaultLocales);
+                SAL_WARN("linguistic", "locales " <<  aLocaleSequence.getLength());
+                SAL_WARN("lok", "linguistic locales empty? " << aLocaleSequence.getLength());
                 aLanguages = LocaleSeqToLangVec( aLocaleSequence );
 
                 pAvailSpellSvcs->push_back( SvcInfo( aImplName, std::move(aLanguages) ) );
@@ -1381,6 +1387,7 @@ uno::Sequence< OUString > SAL_CALL
 
     if (rServiceName == SN_SPELLCHECKER)
     {
+        SAL_WARN("lok", "getAvailableServices " << "SN_SPELLCHECKER: " << rLocale.Language);
         GetAvailableSpellSvcs_Impl();
         pInfoArray = &*pAvailSpellSvcs;
     }
@@ -1399,6 +1406,9 @@ uno::Sequence< OUString > SAL_CALL
         GetAvailableThesSvcs_Impl();
         pInfoArray = &*pAvailThesSvcs;
     }
+
+    if (!pInfoArray)
+        SAL_WARN("lok", "shit fuck it's empty");
 
     if (pInfoArray)
     {
@@ -1445,7 +1455,8 @@ uno::Sequence< lang::Locale > SAL_CALL
     // is used to activate them. Thus we can not rely anymore on buffered data.
     if (pAvailLocales)
     {
-        *pAvailLocales = GetAvailLocales(getAvailableServices(rServiceName, lang::Locale()));
+        SAL_WARN("lok", "getAvailableLocales: " << pAvailLocales);
+        *pAvailLocales = GetAvailLocales(getAvailableServices(rServiceName, lang::Locale("en", "US", "")));
         aRes = *pAvailLocales;
     }
 
@@ -1468,6 +1479,7 @@ void SAL_CALL
             const uno::Sequence< OUString >& rServiceImplNames )
 {
     SAL_INFO( "linguistic", "linguistic: LngSvcMgr::setConfiguredServices" );
+    SAL_WARN( "lok", "linguistic: LngSvcMgr::setConfiguredServices" );
 
     osl::MutexGuard aGuard( GetLinguMutex() );
 

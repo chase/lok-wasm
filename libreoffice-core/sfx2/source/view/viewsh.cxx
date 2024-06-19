@@ -2742,7 +2742,7 @@ SfxViewShell::SfxViewShell
 ,   bNoNewWindow( nFlags & SfxViewShellFlags::NO_NEWWINDOW )
 ,   mbPrinterSettingsModified(false)
 ,   maLOKLanguageTag(LANGUAGE_NONE)
-,   maLOKLocale(LANGUAGE_NONE)
+,   maLOKLocale(LANGUAGE_ENGLISH_US)
 ,   maLOKDeviceFormFactor(LOKDeviceFormFactor::UNKNOWN)
 ,   mbLOKAccessibilityEnabled(false)
 {

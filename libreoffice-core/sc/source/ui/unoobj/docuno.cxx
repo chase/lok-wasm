@@ -1317,11 +1317,18 @@ void ScModelObj::initializeForTiledRendering(const css::uno::Sequence<css::beans
 
     for (const beans::PropertyValue& rValue : rArguments)
     {
+        if(rValue.Name === ".uno:SpellOnline")
+        {
+            SAL_WARN("lok", ".uno:SpellOnline: " << rValue.Value.get<auto>());
+        }
         if (rValue.Name == ".uno:SpellOnline" && rValue.Value.has<bool>())
         {
+            SAL_WARN("lok", "initializeForTiledRendering: .uno:SpellOnline: " << rValue.Value.get<bool>());
             ScViewData* pViewData = ScDocShell::GetViewData();
-            if (ScTabViewShell* pTabViewShell = pViewData ? pViewData->GetViewShell() : nullptr)
+            if (ScTabViewShell* pTabViewShell = pViewData ? pViewData->GetViewShell() : nullptr) {
+                SAL_WARN("lok", "ENABLE AUTO SPELL" << rValue.Value.get<bool>());
                 pTabViewShell->EnableAutoSpell(rValue.Value.get<bool>());
+            }
         }
         else if (rValue.Name == ".uno:ChangeTheme" && rValue.Value.has<OUString>())
             sThemeName = rValue.Value.get<OUString>();

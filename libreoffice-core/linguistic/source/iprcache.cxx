@@ -18,6 +18,7 @@
  */
 
 
+#include "sal/log.hxx"
 #include <iprcache.hxx>
 #include <linguistic/misc.hxx>
 
@@ -185,6 +186,7 @@ void SAL_CALL FlushListener::propertyChange(
 SpellCache::SpellCache()
 {
     mxFlushLstnr = new FlushListener( *this );
+    SAL_WARN("lok", "SpellCache::SpellCache");
     Reference<XSearchableDictionaryList> aDictionaryList(GetDictionaryList());
     mxFlushLstnr->SetDicList( aDictionaryList ); //! after reference is established
     Reference<XLinguProperties> aPropertySet(GetLinguProperties());
