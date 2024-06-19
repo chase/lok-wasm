@@ -50,6 +50,9 @@
 #include <txtfrm.hxx>
 #include <comphelper/servicehelper.hxx>
 #include <cmdid.h>
+#include <tools/json_writer.hxx>
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
+#include <DocumentRedlineManager.hxx>
 
 using namespace emscripten;
 
@@ -114,9 +117,35 @@ void prepareComment(const SwPostItField* pField, val& obj)
     obj.set("dateTime",
             val::u16string(utl::toISO8601(pField->GetDateTime().GetUNODateTime()).getStr()));
 }
-}
 
-constexpr OUString g_sRecordChanges = u"RecordChanges"_ustr;
+// RAII utility to disable redlines
+class WithoutRedlines
+{
+private:
+    SwDoc& rDoc;
+    bool hasRedlines = false;
+    RedlineFlags eOld;
+
+public:
+    explicit WithoutRedlines(SwDoc& doc)
+        : rDoc(doc)
+    {
+        sw::DocumentRedlineManager& rRedlineManager = rDoc.GetDocumentRedlineManager();
+        eOld = rRedlineManager.GetRedlineFlags();
+        if (eOld & RedlineFlags::On)
+        {
+            hasRedlines = true;
+            rRedlineManager.SetRedlineFlags(eOld & ~RedlineFlags::On);
+        }
+    }
+
+    ~WithoutRedlines()
+    {
+        sw::DocumentRedlineManager& rRedlineManager = rDoc.GetDocumentRedlineManager();
+        rRedlineManager.SetRedlineFlags(eOld);
+    }
+};
+}
 
 val SwXTextDocument::comments(const val& ids)
 {
@@ -139,7 +168,8 @@ val SwXTextDocument::comments(const val& ids)
         }
 
         const SwPostItField* pField = pWin->GetPostItField();
-        if (idsLen > 0 && !idSet.contains(pField->GetPostItId())) {
+        if (idsLen > 0 && !idSet.contains(pField->GetPostItId()))
+        {
             continue;
         }
         bool root = pField->GetParentPostItId() == 0;
@@ -192,31 +222,21 @@ void SwXTextDocument::addComment(const std::string& text)
         comphelper::InitPropertySequence({ { "Text", uno::Any(OUString::fromUtf8(text)) } }));
 
     SolarMutexGuard aGuard;
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
     comphelper::dispatchCommand(u".uno:InsertAnnotation"_ustr, aPropertyValues);
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::replyComment(int parentId, const std::string& text)
 {
     SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
     SolarMutexGuard aGuard;
-    sw::annotation::SwAnnotationWin* pWin = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(parentId));
-    if (!pWin) return;
+    sw::annotation::SwAnnotationWin* pWin
+        = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(parentId));
+    if (!pWin)
+        return;
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
     OUString sText = OUString::fromUtf8(text);
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
     pMgr->RegisterAnswerText(sText);
     pWin->ExecuteCommand(FN_REPLY);
     SwPostItField* pLatestPostItField = pMgr->GetLatestPostItField();
@@ -229,11 +249,15 @@ void SwXTextDocument::replyComment(int parentId, const std::string& text)
         pWin->GeneratePostItName(); // Generates a name if the current name is empty.
 
         pLatestPostItField->SetParentName(pWin->GetPostItField()->GetName());
-    }
 
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
+        // the callback needs to be constructed here, because the Add callback is fired during layout,
+        // which is no longer done for replies as an optimization
+        tools::JsonWriter aTree;
+        aTree.put("action", "Add");
+        aTree.put("id", pLatestPostItField->GetPostItId());
+        aTree.put("parentId", parentId);
+        m_pDocShell->GetView()->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT,
+                                                           aTree.finishAndGetAsOString());
     }
 }
 
@@ -241,23 +265,16 @@ void SwXTextDocument::updateComment(int id, const std::string& text)
 {
     SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
     SolarMutexGuard aGuard;
-    sw::annotation::SwAnnotationWin* pAnnotationWin = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(id));
-    if (!pAnnotationWin) return;
+    sw::annotation::SwAnnotationWin* pAnnotationWin
+        = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(id));
+    if (!pAnnotationWin)
+        return;
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
     OUString sText = OUString::fromUtf8(text);
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
 
     pAnnotationWin->UpdateText(sText);
     // explicit state update to get the Undo state right
     m_pDocShell->GetView()->AttrChangedNotify(nullptr);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::deleteCommentThreads(val parentIds)
@@ -266,19 +283,9 @@ void SwXTextDocument::deleteCommentThreads(val parentIds)
     std::vector<sal_uInt32> ids = vecFromJSArray<sal_uInt32>(parentIds);
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     pMgr->DeleteCommentThreads(ids);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::deleteComment(int commentId)
@@ -286,19 +293,9 @@ void SwXTextDocument::deleteComment(int commentId)
     SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     pMgr->Delete(commentId);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::resolveCommentThread(int parentId)
@@ -307,19 +304,9 @@ void SwXTextDocument::resolveCommentThread(int parentId)
         { { "Id", uno::Any(static_cast<sal_uInt32>(parentId)) } }));
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     comphelper::dispatchCommand(u".uno:ResolveCommentThread"_ustr, aPropertyValues);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 };
 
 void SwXTextDocument::resolveComment(int commentId)
@@ -328,19 +315,9 @@ void SwXTextDocument::resolveComment(int commentId)
         { { "Id", uno::Any(static_cast<sal_uInt32>(commentId)) } }));
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     comphelper::dispatchCommand(u".uno:ResolveComment"_ustr, aPropertyValues);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 };
 
 void SwXTextDocument::sanitize(val options)
@@ -376,18 +353,9 @@ void SwXTextDocument::sanitize(val options)
 
     if (options["comments"].isTrue())
     {
-        bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-        if (recordChanges)
-        {
-            setPropertyValue(g_sRecordChanges, uno::Any(false));
-        }
+        WithoutRedlines dontTrackComments(GetDocOrThrow());
 
         comphelper::dispatchCommand(u".uno:DeleteAllNotes"_ustr, {});
-
-        if (recordChanges)
-        {
-            setPropertyValue(g_sRecordChanges, uno::Any(true));
-        }
     }
 }
 

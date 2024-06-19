@@ -145,7 +145,6 @@ namespace {
                                      (nType == CommentNotificationType::RedlinedDeletion ? "RedlinedDeletion" :
                                       (nType == CommentNotificationType::Resolve ? "Resolve" : "???"))))));
 
-        aTree.put("id", nPostItId);
         if (nType != CommentNotificationType::Remove && pItem != nullptr)
         {
             sw::annotation::SwAnnotationWin* pWin = pItem->mpPostIt.get();
@@ -154,6 +153,8 @@ namespace {
 
             aTree.put("id", pField->GetPostItId());
             aTree.put("parentId", pField->GetParentPostItId());
+        } else {
+            aTree.put("id", nPostItId);
         }
 
         pView->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aTree.finishAndGetAsOString());
