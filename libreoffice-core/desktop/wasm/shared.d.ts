@@ -123,6 +123,7 @@ export type DocumentWithViewMethods = {
 
   setScrollTop(yPx: number): number;
   setVisibleHeight(heightPx: number): void;
+  setDocumentWidth(widthTwips: number): void;
   setZoom(scale: number, dpi: number): void;
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
@@ -415,7 +416,13 @@ export type ToTileRenderer =
       d: number;
       /** scrollTop position in px */
       y: number;
-    };
+    }
+  | {
+      /** width change */
+      t: 'w';
+      /** width */
+      w: number;
+  };
 
 export type Ref<T> = {
   current?: T;

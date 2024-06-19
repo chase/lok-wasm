@@ -124,6 +124,18 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       });
 
       break;
+    case 'w': // infrequent
+      let newDocWidthTwips = Atomics.load(d.docWidthTwips, 0);
+
+      // A change in the width of the document most likely requires a full reset
+      if (newDocWidthTwips !== docWidthTwips) {
+        docWidthTwips = newDocWidthTwips;
+        widthTileStride = Math.ceil(docWidthTwips / tileDimTwips);
+        scheduledWidthPx = twipsToPx(docWidthTwips, dpi);
+        setState(RenderState.RESET);
+        Atomics.wait(d.state, 0, RenderState.RESET); // wait for reset to finish
+        if (!running) stateMachine();
+      }
   }
 };
 

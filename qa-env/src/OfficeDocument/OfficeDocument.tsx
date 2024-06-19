@@ -146,6 +146,10 @@ export function OfficeDocument(props: Props) {
     const callback = async () => {
       setDocSizeTwips(await props.doc.documentSize());
       setRectsTwips(await props.doc.partRectanglesTwips());
+      // This is required to re-render the document with the new width
+      // if it has actually changed, if the width remains the same nothing
+      // will happen
+      await props.doc.setDocumentWidth(docSizePx()![0]);
     };
     props.doc.on(CallbackType.DOCUMENT_SIZE_CHANGED, callback);
     onCleanup(() => {

@@ -358,7 +358,16 @@ const handler: DocumentMethodHandler<Document> = {
       h: heightPx,
     } as ToTileRenderer);
   },
-
+  setDocumentWidth: function (
+    doc: Document,
+    viewId: ViewId,
+    widthTwips: number
+  ): void {
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+      t: 'w',
+      w: widthTwips,
+    } as ToTileRenderer);
+  },
   dispatchCommand: function (
     doc: Document,
     viewId: ViewId,
