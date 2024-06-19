@@ -93,10 +93,16 @@ namespace
                                            const uno::Reference< XSpellChecker1 >& xSpell,
                                            const LanguageType eActLang )
     {
-        if( xSpell.is() && !xSpell->hasLanguage( eActLang.get() ) )
+        SAL_WARN("lok", "CHECKING LANGUAGES: " << xSpell->getLanguages());
+        SAL_WARN("lok", "CHECKING DICTIONARIES: " << eActLang);
+        if( xSpell.is() && !xSpell->hasLanguage( eActLang.get() ) ) {
+            SAL_WARN("lok", "MISSING DICTIONARY: " << eActLang);
             rDoc.SetMissingDictionaries( true );
-        else
+        }
+        else {
+            SAL_WARN("lok", "NOT MISSING DICTIONARY" << eActLang);
             rDoc.SetMissingDictionaries( false );
+        }
     }
 }
 
@@ -971,6 +977,7 @@ bool SwScanner::NextWord()
 // Note: this is a clone of SwTextFrame::AutoSpell_, so keep them in sync when fixing things!
 bool SwTextNode::Spell(SwSpellArgs* pArgs)
 {
+    SAL_WARN("lok", "START OF SPELLING IN NODE");
     // modify string according to redline information and hidden text
     const OUString aOldText( m_Text );
     OUStringBuffer buf(m_Text);
@@ -1294,6 +1301,7 @@ bool SwTextNode::Convert( SwConversionArgs &rArgs )
 // Note: this is a clone of SwTextNode::Spell, so keep them in sync when fixing things!
 SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
 {
+    SAL_WARN("lok", "REPAINTING");
     SwRect aRect;
     assert(sw::FrameContainsNode(*this, rNode.GetIndex()));
     SwTextNode *const pNode(&rNode);
@@ -1304,6 +1312,7 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
 
     // modify string according to redline information and hidden text
     const OUString aOldText( pNode->GetText() );
+    SAL_WARN("lok", "OLD TEXT" << aOldText);
     OUStringBuffer buf(pNode->m_Text);
     const bool bContainsComments = lcl_HasComments(rNode);
     const bool bRestoreString =
@@ -1328,6 +1337,7 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
 
     if( pNode->GetWrong() )
     {
+        SAL_WARN("lok", "WE HAVE WRONG");
         nBegin = pNode->GetWrong()->GetBeginInv();
         if( COMPLETE_STRING != nBegin )
         {
@@ -1363,6 +1373,7 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
 
     if( bFresh )
     {
+        SAL_WARN("lok", "bFresh is true, getting xSpell");
         uno::Reference< XSpellChecker1 > xSpell( ::GetSpellChecker() );
         SwDoc& rDoc = pNode->GetDoc();
 
@@ -1373,6 +1384,7 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
         while( bNextWord )
         {
             const OUString& rWord = aScanner.GetWord();
+            SAL_WARN("lok", "rWord: " << rWord);
             nBegin = aScanner.GetBegin();
             sal_Int32 nLen = aScanner.GetLen();
             bool bCalledNextWord = false;
@@ -1380,11 +1392,14 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
             // get next language for next word, consider language attributes
             // within the word
             LanguageType eActLang = aScanner.GetCurrentLanguage();
+            SAL_WARN("lok", "eActLang: " << eActLang);
             DetectAndMarkMissingDictionaries( rDoc, xSpell, eActLang );
 
             bool bSpell = xSpell.is() && xSpell->hasLanguage( static_cast<sal_uInt16>(eActLang) );
+            SAL_WARN("lok", "bSpell: " << bSpell);
             if( bSpell && !rWord.isEmpty() && !lcl_IsURL(rWord, *pNode, nBegin, nLen) )
             {
+                SAL_WARN("lok", "INSIDE IF");
                 // check for: bAlter => xHyphWord.is()
                 OSL_ENSURE(!bSpell || xSpell.is(), "NULL pointer");
                 if( !xSpell->isValid( rWord, static_cast<sal_uInt16>(eActLang), Sequence< PropertyValue >() ) &&
@@ -1461,6 +1476,10 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
     {
         pNode->m_Text = aOldText;
     }
+    if(!pNode->GetWrong())
+    {
+        SAL_WARN("lok", "NOTHING WRONG?");
+    }
     if( pNode->GetWrong() )
     {
         if( bFresh )
@@ -1469,8 +1488,11 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
 
         // Calculate repaint area:
 
+        SAL_WARN("lok", "FUCK YOU FORCING REPAINT");
+        aRect = lcl_CalculateRepaintRect(*this, rNode, nChgStart, nChgEnd);
         if( nChgStart < nChgEnd )
         {
+            SAL_WARN("lok", "nChgStart < nChgEnd");
             aRect = lcl_CalculateRepaintRect(*this, rNode, nChgStart, nChgEnd);
 
             // fdo#71558 notify misspelled word to accessibility
@@ -1505,6 +1527,7 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
     if( bAddAutoCmpl )
         pNode->SetAutoCompleteWordDirty( false );
 
+    SAL_WARN("lok", "WTF");
     return aRect;
 }
 

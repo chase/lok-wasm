@@ -281,6 +281,45 @@ gb_emscripten_fs_image_files := \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/filter/oox-drawingml-adj-names \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/filter/oox-drawingml-cs-presets \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/filter/vml-shape-types \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/affDescription.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/changelog.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/description.xml \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dialog/en.xdl \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dialog/en_en_US.default \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dialog/en_en_US.properties \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dialog/OptionsDialog.xcs \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dialog/OptionsDialog.xcu \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dictionaries.xcu \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_AU.aff \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_AU.dic \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_CA.aff \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_CA.dic \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_GB.aff \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_GB.dic \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_US.aff \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_US.dic \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/hyph_en_GB.dic \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/hyph_en_US.dic \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/license.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/Lightproof.components \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/Lightproof.py \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/Linguistic.xcu \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/META-INF/manifest.xml \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/package-description.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/pythonpath/lightproof_en.py \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/pythonpath/lightproof_handler_en.py \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/pythonpath/lightproof_impl_en.py \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/pythonpath/lightproof_opts_en.py \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_en_AU.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_en_CA.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_en_GB_thes.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_en_GB.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_en_US.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_hyph_en_GB.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_hyph_en_US.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README_lightproof_en.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/README.txt \
+	$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/WordNet_license.txt \
 
 ifneq ($(ENABLE_WASM_STRIP_WRITER),TRUE)
 gb_emscripten_fs_image_files += \
@@ -1557,7 +1596,6 @@ $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.filelist: \
 		$(gb_emscripten_fs_font_image_files) \
 		| $(emscripten_fs_image_WORKDIR)/.dir
 	$(file >$@,$(foreach item,$(filter $(INSTROOT)/$(LIBO_SHARE_FOLDER)%,$(gb_emscripten_fs_font_image_all_files)),$(subst @,@@,$(item))@$(subst @,@@,$(subst $(SRCDIR),,$(item)))))
-
 $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js.metadata: $(emscripten_fs_image_WORKDIR)/soffice_fonts.data.filelist
 	$(call gb_Output_announce,$(subst $(BUILDDIR)/,,$(emscripten_fs_image_WORKDIR)/soffice_fonts.data),$(true),GEN,2)
 	$(EMSDK_FILE_PACKAGER) $(emscripten_fs_image_WORKDIR)/soffice_fonts.data --preload $(shell cat $^) --js-output=$(emscripten_fs_image_WORKDIR)/soffice_fonts.data.js --separate-metadata --use-preload-cache \

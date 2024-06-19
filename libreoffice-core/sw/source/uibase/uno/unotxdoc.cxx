@@ -3689,7 +3689,10 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
             m_pDocShell->SetView(pView);
         }
         else if (rValue.Name == ".uno:SpellOnline" && rValue.Value.has<bool>())
-            aViewOption.SetOnlineSpell(rValue.Value.get<bool>());
+        {
+            SAL_WARN("lok", "UNO SPELL ONLINE SET TO TRUE: " << rValue.Value.get<bool>());
+            aViewOption.SetOnlineSpell(true);
+        }
         else if (rValue.Name == ".uno:ChangeTheme" && rValue.Value.has<OUString>())
             sThemeName = rValue.Value.get<OUString>();
     }
