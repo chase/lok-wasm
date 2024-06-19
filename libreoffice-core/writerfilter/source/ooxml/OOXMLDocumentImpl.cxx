@@ -82,8 +82,9 @@ void OOXMLDocumentImpl::resolveFastSubStream(Stream & rStreamHandler,
     {
         pStream = OOXMLDocumentFactory::createStream(mpStream, nType);
     }
-    catch (uno::Exception const&)
+    catch (uno::Exception const& e)
     {
+        SAL_WARN("writerfilter.ooxml", "loadFastSubStream: exception while  resolving stream type " << nType << " "  << e);
         TOOLS_INFO_EXCEPTION("writerfilter.ooxml", "resolveFastSubStream: exception while "
                 "resolving stream " << nType);
         return;

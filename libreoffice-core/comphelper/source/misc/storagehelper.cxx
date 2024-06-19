@@ -19,6 +19,7 @@
 
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/uno/Reference.h"
+#include "oox/helper/expandedstorage.hxx"
 #include "sot/stg.hxx"
 #include <config_gpgme.h>
 

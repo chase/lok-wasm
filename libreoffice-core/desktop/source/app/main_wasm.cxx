@@ -662,8 +662,14 @@ public:
         auto part = ext()->getExpandedPart(path);
         val result = val::object();
 
-        result.set("path", val(part->path));
-        result.set("content", typed_memory_view(part->content.size(), part->content.getConstArray()));
+        if (!part)
+        {
+            SAL_WARN("main_wasm", "could not find expanded part with path: (" << path << ")");
+            return result;
+        }
+
+        result.set("path", val(part->first));
+        result.set("content", part->second);
 
         return result;
     }

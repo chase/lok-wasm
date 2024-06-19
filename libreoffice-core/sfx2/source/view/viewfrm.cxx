@@ -2024,6 +2024,7 @@ void SfxViewFrame::KillDispatcher_Impl()
 SfxViewFrame* SfxViewFrame::Current()
 {
     SfxApplication* pApp = SfxApplication::Get();
+    SAL_WARN_IF(!pApp, "viewfrm", "no current sfxApplication");
     return pApp ? pApp->Get_Impl()->pViewFrame : nullptr;
 }
 

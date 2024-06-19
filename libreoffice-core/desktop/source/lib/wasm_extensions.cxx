@@ -10,6 +10,7 @@
 #include "cppuhelper/exc_hlp.hxx"
 #include "lib/init.hxx"
 #include "oox/helper/expandedstorage.hxx"
+#include "sal/log.hxx"
 #include "sot/stg.hxx"
 #include "unotools/mediadescriptor.hxx"
 #include <com/sun/star/uno/Reference.hxx>
@@ -276,6 +277,8 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
     auto storageBase = std::shared_ptr<oox::StorageBase>(storage.get());
 
+
+
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
     comphelper::OStorageHelper::SetExpandedStorageBase(storageBase);
@@ -317,36 +320,17 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     return nullptr;
 }
 
-css::uno::Reference<oox::ExpandedFile> WasmDocumentExtension::getExpandedPart(const std::string& path) const
+std::optional<std::pair<std::string, std::string>> WasmDocumentExtension::getExpandedPart(const std::string& path) const
 {
-
-    if (!expandedStorage.is())
-    {
-        SAL_WARN("wasm_extensions", "No expanded storage available");
-        return nullptr;
-    }
-
     return expandedStorage->getPart(path);
 }
 void WasmDocumentExtension::removePart(const std::string& path) const
 {
-    if (!expandedStorage.is())
-    {
-        SAL_WARN("wasm_extensions", "No expanded storage available");
-        return;
-    }
-
     return expandedStorage->removePart(path);
 }
 
 std::vector<std::pair<const std::string, const std::string>> WasmDocumentExtension::listParts() const
 {
-    if (!expandedStorage.is())
-    {
-        SAL_WARN("wasm_extensions", "No expanded storage available");
-        return {};
-    }
-
     return expandedStorage->listParts();
 }
 }

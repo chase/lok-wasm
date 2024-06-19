@@ -54,6 +54,11 @@ class OOXMLStreamImpl : public OOXMLStream
                        StreamType_t nStreamType,
                        const OUString & rId,
                        OUString & rDocumentTarget);
+bool lcl_getExpandedTarget(const css::uno::Reference<css::embed::XRelationshipAccess>& xRelationshipAccess,
+                       StreamType_t nStreamType,
+                       const OUString & rId,
+                       OUString & rDocumentTarget);
+
 public:
     typedef tools::SvRef<OOXMLStreamImpl> Pointer_t;
 

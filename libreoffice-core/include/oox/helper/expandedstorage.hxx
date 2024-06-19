@@ -150,11 +150,15 @@ public:
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
 
     void addPart(const std::string& path, const std::string& content);
-    uno::Reference<ExpandedFile> getPart(const std::string& path) const;
+    std::optional<std::pair<std::string, std::string>> getPart(const std::string& path) const;
     void removePart(const std::string& path);
     std::vector<std::pair<const std::string, const std::string>> listParts() const;
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
+
+
+
+    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> getRelInfoFromName(const OUString& rName);
     void readRelationshipInfo();
     OUString getFullPath(const OUString& path) const;
     uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,

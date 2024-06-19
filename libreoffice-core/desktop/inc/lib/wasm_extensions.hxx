@@ -132,7 +132,7 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions = nullptr);
 
-    css::uno::Reference<oox::ExpandedFile> getExpandedPart(const std::string& path) const;
+    std::optional<std::pair<std::string, std::string>> getExpandedPart(const std::string& path) const;
     void removePart(const std::string& path) const;
     std::vector<std::pair<const std::string, const std::string>> listParts() const;
 

@@ -1,3 +1,4 @@
+#include "com/sun/star/embed/ElementModes.hdl"
 #include "com/sun/star/embed/XExtendedStorageStream.hdl"
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/io/XInputStream.hdl"
@@ -221,15 +222,13 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     OUString sPath = OUString::createFromAscii(path.c_str());
     Sequence<sal_Int8> sContent;
     comphelper::Base64::decode(sContent, content);
-    SAL_WARN("expandedstorage", " size of m_files " << m_files->size());
     OUString sha = helpers::getContentHash(sContent);
 
     m_files->insert({ path, {sPath, sContent, sha} });
 }
 
-uno::Reference<ExpandedFile> ExpandedStorage::getPart(const std::string& path) const
+std::optional<std::pair<std::string, std::string>> ExpandedStorage::getPart(const std::string& path) const
 {
-
     auto it = std::find_if(m_files->begin(), m_files->end(), [&path](const auto& pair) {
             return pair.first == path;
 
@@ -237,15 +236,18 @@ uno::Reference<ExpandedFile> ExpandedStorage::getPart(const std::string& path) c
 
     if (it == m_files->end())
     {
-        return nullptr;
+        SAL_WARN("expandedstorage", "getPart: part not found " << path);
+        return {};
     }
 
-    return uno::Reference<ExpandedFile>(&it->second);
+    std::string content(*it->second.content.getConstArray(), it->second.content.getLength());
+
+    return std::make_pair(helpers::toString(it->second.path), content);
 }
 
 void ExpandedStorage::removePart(const std::string &path)
 {
-    if (getPart(path) == nullptr)
+    if (getPart(path).has_value())
     {
         SAL_WARN("expandedstorage", "removePart: part not found" << path);
         return;
@@ -328,8 +330,6 @@ void SAL_CALL ExpandedStorage::copyToStorage(const Reference<embed::XStorage>& x
 Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
                                                           PathType pathType)
 {
-    SAL_WARN("expandedstorage",
-             "openStreamElement " << name << " " << nOpenMode << " " << pathType);
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
 
@@ -366,7 +366,6 @@ Reference<io::XStream> SAL_CALL ExpandedStorage::openEncryptedStreamElement(cons
 Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OUString& path,
                                                                         sal_Int32 openMode)
 {
-    SAL_WARN("expandedstorage", "openStorageElement " << path << openMode);
     if (path == "/")
     {
         return this;
@@ -403,14 +402,12 @@ void SAL_CALL ExpandedStorage::copyStorageElementLastCommitTo(const OUString&,
 
 sal_Bool SAL_CALL ExpandedStorage::isStreamElement(const OUString& aElementName)
 {
-    SAL_WARN("expandedstorage", "isStreamElement" << getFullPath(aElementName));
     std::lock_guard<std::mutex> lock(m_aMutex);
     return m_files->find(helpers::toString(getFullPath(aElementName))) != m_files->end();
 }
 
 sal_Bool SAL_CALL ExpandedStorage::isStorageElement(const OUString& path)
 {
-    SAL_WARN("expandedstorage", "isStorageElement " << path);
     return std::find(m_dirs.begin(), m_dirs.end(), helpers::toString(path)) != m_dirs.end();
 }
 
@@ -486,7 +483,6 @@ css::uno::Sequence<OUString> SAL_CALL ExpandedStorage::getElementNames()
 // name is relative path to the current storage
 sal_Bool SAL_CALL ExpandedStorage::hasByName(const OUString& name)
 {
-    SAL_WARN("expandedstorage", "hasByName " << getFullPath(name));
     std::lock_guard<std::mutex> lock(m_aMutex);
     return m_files->find(helpers::toString(getFullPath(name))) != m_files->end();
 }
@@ -538,7 +534,6 @@ void SAL_CALL ExpandedStorage::removeVetoableChangeListener(
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
 ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath, sal_Int32 openMode)
 {
-    SAL_WARN("expandedstorage", "opening stream element by hierarchical name" << streamPath);
     css::uno::Reference<io::XStream> xStream
         = openStreamElement(streamPath, openMode, PathType::Absolute);
 
@@ -608,7 +603,6 @@ void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementName
 
 StorageRef ExpandedStorage::implOpenSubStorage(const OUString& path, bool)
 {
-    SAL_WARN("expandedstorage", "openSubStorage " << path);
     return std::shared_ptr<StorageBase>(
         new ExpandedStorage(m_xContext, m_files, m_inputStream, path));
 }
@@ -632,15 +626,43 @@ const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& r
                         [&rName](const beans::StringPair& rPair) { return rPair.First == rName; });
 }
 
+
+css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> ExpandedStorage::getRelInfoFromName(const OUString& name)
+{
+    uno::Reference<io::XInputStream> relInfoStream
+        = openStreamElement(name, embed::ElementModes::READ, PathType::Absolute)
+              ->getInputStream();
+
+    return ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(relInfoStream,
+                                                                        name, m_xContext);
+}
+
 void ExpandedStorage::readRelationshipInfo()
 {
-    uno::Reference<io::XInputStream> xRelInfoStream
-        = openStreamElement("_rels/.rels", embed::ElementModes::READ, PathType::Absolute)
-              ->getInputStream();
-    SAL_WARN("expandedstorage", "readRelationshipInfo: " << xRelInfoStream.is() << " available "
-                                                         << xRelInfoStream->available());
-    m_aRelInfo = ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(xRelInfoStream,
-                                                                        u"_rels/.rels", m_xContext);
+    std::vector<std::string> relFilePaths;
+    // Find all files that end in .rels
+    for (const auto& [path, _file] : *m_files)
+    {
+        if (path.find(".rels") == std::string::npos)
+        {
+            continue;
+        }
+        relFilePaths.push_back(path);
+    }
+
+    std::vector<Sequence<beans::StringPair>> allRelsVec;
+
+    for (const std::string& path : relFilePaths)
+    {
+        auto seq = getRelInfoFromName(helpers::toOUString(path));
+
+        for (const auto& rels : seq)
+        {
+            allRelsVec.push_back(rels);
+        }
+    }
+
+    m_aRelInfo = comphelper::containerToSequence(allRelsVec);
 }
 
 void SAL_CALL ExpandedStorage::clearRelationships() { m_aRelInfo.realloc(0); }

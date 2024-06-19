@@ -37,18 +37,12 @@ OOXMLStreamImpl::OOXMLStreamImpl
  StreamType_t nType, bool bRepairStorage)
 : mxContext(xContext), mxStorageStream(std::move(xStorageStream)), mnStreamType(nType)
 {
-    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>)");
     mxStorage.set
         (comphelper::OStorageHelper::GetStorageOfFormatFromInputStream
          (OFOPXML_STORAGE_FORMAT_STRING, mxStorageStream, xContext, bRepairStorage));
-    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>) - done");
     mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
-    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>) - init");
 
     init();
-
-    SAL_WARN("streamimpl", "OOXMLStreamImpl::OOXMLStreamImpl(uno::Reference<io::XInputStream>) - done");
-
 }
 
 OOXMLStreamImpl::OOXMLStreamImpl
@@ -59,8 +53,19 @@ OOXMLStreamImpl::OOXMLStreamImpl
   mnStreamType(nStreamType),
   msPath(rOOXMLStream.msPath)
 {
-    mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
-
+    // MACRO: {
+    // Expanded storage will give an empty stream,
+    // so we need to rely on the storage for relationship access
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        mxStorage.set(comphelper::OStorageHelper::GetExpandedStorage());
+        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
+    }
+    else
+    {
+        mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
+    }
+    // MACRO: }
     init();
 }
 
@@ -73,7 +78,19 @@ OOXMLStreamImpl::OOXMLStreamImpl
   msId(std::move(sId)),
   msPath(rOOXMLStream.msPath)
 {
-    mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
+    // MACRO: {
+    // Expanded storage will give an empty stream,
+    // so we need to rely on the storage for relationship access
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        mxStorage.set(comphelper::OStorageHelper::GetExpandedStorage());
+        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
+    }
+    else
+    {
+        mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
+    }
+    // MACRO: }
 
     init();
 }
@@ -265,6 +282,8 @@ bool OOXMLStreamImpl::lcl_getTarget(const uno::Reference<embed::XRelationshipAcc
             break;
     }
 
+
+
     if (xRelationshipAccess.is())
     {
         const uno::Sequence< uno::Sequence< beans::StringPair > >aSeqs =
@@ -375,11 +394,9 @@ void OOXMLStreamImpl::init()
 
     if (xHierarchicalStorageAccess.is())
     {
-        SAL_WARN("streamimpl", "OOXMLStreamImpl::init() - opening stream");
         uno::Any aAny(xHierarchicalStorageAccess->
                       openStreamElementByHierarchicalName
                       (msTarget, embed::ElementModes::SEEKABLEREAD));
-        SAL_WARN("streamimpl", "OOXMLStreamImpl::init() - opened stream");
         aAny >>= mxDocumentStream;
         // Non-cached ID lookup works by accessing mxDocumentStream as an embed::XRelationshipAccess.
         // So when it changes, we should empty the cache.
