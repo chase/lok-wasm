@@ -1,3 +1,5 @@
+#include "com/sun/star/beans/UnknownPropertyException.hdl"
+#include "com/sun/star/beans/XPropertySetInfo.hdl"
 #include "com/sun/star/embed/ElementModes.hdl"
 #include "com/sun/star/embed/XExtendedStorageStream.hdl"
 #include "com/sun/star/embed/XStorage.hdl"
@@ -497,14 +499,23 @@ sal_Bool SAL_CALL ExpandedStorage::hasElements()
 // XPropertySet
 css::uno::Reference<css::beans::XPropertySetInfo> SAL_CALL ExpandedStorage::getPropertySetInfo()
 {
-    return nullptr;
+    return Reference < beans::XPropertySetInfo > ();
 }
 
-void SAL_CALL ExpandedStorage::setPropertyValue(const OUString&, const css::uno::Any&) {}
-
-css::uno::Any SAL_CALL ExpandedStorage::getPropertyValue(const OUString&)
+void SAL_CALL ExpandedStorage::setPropertyValue(const OUString& name, const css::uno::Any& value)
 {
-    return css::uno::Any();
+    m_properties.insert({name, value});
+}
+
+css::uno::Any SAL_CALL ExpandedStorage::getPropertyValue(const OUString& name)
+{
+    auto it = m_properties.find(name);
+    if (it == m_properties.end()) {
+        SAL_WARN("expandedstorage", "requested property (" << name << ") not found");
+        return Any();
+    }
+
+    return Any(it->second);
 }
 
 void SAL_CALL ExpandedStorage::addPropertyChangeListener(
