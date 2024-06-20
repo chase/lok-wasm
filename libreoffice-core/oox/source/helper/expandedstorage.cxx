@@ -184,7 +184,7 @@ SequenceStreamContainer::removeEventListener(const Reference<lang::XEventListene
 
 ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
                                  const Reference<io::XInputStream>& rxInStream)
-    : StorageBase(rxInStream, false)
+    : StorageBase(rxInStream, true, false)
     , m_xContext(rxContext)
     , m_inputStream(rxInStream)
 {
@@ -199,7 +199,7 @@ ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& context_,
                                  const std::shared_ptr<ExpandedFileMap>& fileMap_,
                                  const Reference<io::XInputStream>& inputStream_,
                                  const OUString& basePath_)
-    : StorageBase(inputStream_, false)
+    : StorageBase(inputStream_, true, false)
     , m_files(fileMap_)
     , m_xContext(context_)
     , m_basePath(helpers::toString(basePath_))
@@ -343,8 +343,28 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
 
     const auto& file = it->second;
 
-    Reference<io::XInputStream> xInputStream(new comphelper::SequenceInputStream(file.content));
-    Reference<io::XStream> xStream = new SequenceStreamSupplier(xInputStream, nullptr);
+    Reference<io::XInputStream> maybeInputStream;
+    Reference<io::XOutputStream> maybeOutputStream;
+
+    if (nOpenMode == embed::ElementModes::READWRITE ||
+        nOpenMode == embed::ElementModes::READ ||
+        nOpenMode == embed::ElementModes::SEEKABLE ||
+        nOpenMode == embed::ElementModes::SEEKABLE)
+    {
+        Reference<io::XInputStream> inputStream(new comphelper::SequenceInputStream(file.content));
+        maybeInputStream = inputStream;
+    }
+
+    if (nOpenMode == embed::ElementModes::READWRITE ||
+        nOpenMode == embed::ElementModes::WRITE ||
+        nOpenMode == embed::ElementModes::TRUNCATE)
+    {
+        auto content = file.content;
+        Reference<io::XOutputStream> outputStream(new comphelper::OSequenceOutputStream(content));
+        maybeOutputStream = outputStream;
+    }
+
+    Reference<io::XStream> xStream = new SequenceStreamSupplier(maybeInputStream, maybeOutputStream);
     return xStream;
 }
 
@@ -611,6 +631,7 @@ void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementName
 
 StorageRef ExpandedStorage::implOpenSubStorage(const OUString& path, bool)
 {
+    SAL_WARN("expandedstorage", "opening sub storage" << path);
     return std::shared_ptr<StorageBase>(
         new ExpandedStorage(m_xContext, m_files, m_inputStream, path));
 }
@@ -622,6 +643,7 @@ Reference<io::XInputStream> ExpandedStorage::implOpenInputStream(const OUString&
 
 Reference<io::XOutputStream> ExpandedStorage::implOpenOutputStream(const OUString& rElementName)
 {
+    SAL_WARN("expandedstorage", "opening output stream" << rElementName);
     return openStreamElement(rElementName, embed::ElementModes::READWRITE)->getOutputStream();
 }
 

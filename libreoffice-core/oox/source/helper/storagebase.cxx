@@ -67,6 +67,12 @@ StorageBase::StorageBase( const Reference< XInputStream >& rxInStream, bool bBas
     OSL_ENSURE( mxInStream.is(), "StorageBase::StorageBase - missing base input stream" );
 }
 
+StorageBase::StorageBase( const Reference< XInputStream >& rxInStream, bool bBaseStreamAccess, bool bReadOnly):
+    mxInStream( rxInStream ),
+    mbBaseStreamAccess( bBaseStreamAccess ),
+    mbReadOnly( bReadOnly )
+{}
+
 StorageBase::StorageBase( const Reference< XStream >& rxOutStream, bool bBaseStreamAccess ) :
     mxOutStream( rxOutStream ),
     mbBaseStreamAccess( bBaseStreamAccess ),
@@ -161,6 +167,7 @@ Reference< XInputStream > StorageBase::openInputStream( const OUString& rStreamN
 Reference< XOutputStream > StorageBase::openOutputStream( const OUString& rStreamName )
 {
     Reference< XOutputStream > xOutStream;
+
     OSL_ENSURE( !mbReadOnly, "StorageBase::openOutputStream - cannot create output stream in read-only mode" );
     if( !mbReadOnly )
     {

@@ -58,6 +58,9 @@ public:
                             const css::uno::Reference< css::io::XStream >& rxOutStream,
                             bool bBaseStreamAccess );
 
+    explicit            StorageBase(
+                            const css::uno::Reference< css::io::XInputStream >& rxInStream, bool bBaseStreamAccess, bool bExpandedStorage);
+
     virtual             ~StorageBase();
 
     /** Returns true, if the object represents a valid storage. */
@@ -181,6 +184,7 @@ private:
     OUString            maStorageName;      ///< Name of this storage, if it is a substorage.
     bool                mbBaseStreamAccess; ///< True = access base streams with empty stream name.
     bool                mbReadOnly;         ///< True = storage opened read-only (based on input stream).
+    bool                mbExpanded;         /// < True = being used for expanded storage
 };
 
 

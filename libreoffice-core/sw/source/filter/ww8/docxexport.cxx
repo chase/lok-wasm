@@ -955,6 +955,9 @@ void DocxExport::WriteProperties( )
         bSecurityOptOpenReadOnly = pDocShell->IsSecurityOptOpenReadOnly();
     }
 
+    SAL_WARN_IF(!xDocProps.is(), "docxexport", "properties do not exist");
+
+
     m_rFilter.exportDocumentProperties( xDocProps, bSecurityOptOpenReadOnly );
 }
 
