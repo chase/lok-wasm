@@ -925,6 +925,7 @@ void LngSvcMgr::GetThesaurusDsp_Impl( bool bSetSvcList  )
 
 void LngSvcMgr::GetAvailableSpellSvcs_Impl()
 {
+    SAL_WARN("lok", "LngSvcMgr::GetAvailableSpellSvcs_Impl");
     if (pAvailSpellSvcs)
         return;
 
@@ -963,7 +964,12 @@ void LngSvcMgr::GetAvailableSpellSvcs_Impl()
                 if (xInfo.is())
                     aImplName = xInfo->getImplementationName();
                 SAL_WARN_IF( aImplName.isEmpty(), "linguistic", "empty implementation name" );
-                uno::Sequence<lang::Locale> aLocaleSequence(xSvc->getLocales());
+                lang::Locale defaultLocale("en", "US", "");
+                uno::Sequence<lang::Locale> defaultLocales({defaultLocale});
+                auto xSvcLocales = xSvc->getLocales();
+                uno::Sequence<lang::Locale> aLocaleSequence(xSvcLocales.getLength() > 0 ? xSvcLocales : defaultLocales);
+                SAL_WARN("linguistic", "locales " <<  aLocaleSequence.getLength());
+                SAL_WARN("lok", "linguistic locales empty? " << aLocaleSequence.getLength());
                 aLanguages = LocaleSeqToLangVec( aLocaleSequence );
 
                 pAvailSpellSvcs->push_back( SvcInfo( aImplName, std::move(aLanguages) ) );

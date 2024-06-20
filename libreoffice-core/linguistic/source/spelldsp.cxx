@@ -728,6 +728,7 @@ uno::Sequence< sal_Int16 > SAL_CALL SpellCheckerDispatcher::getLanguages(  )
 sal_Bool SAL_CALL SpellCheckerDispatcher::hasLanguage(
     sal_Int16 nLanguage )
 {
+    SAL_WARN("lok", "SpellCheckerDispatcher::hasLanguage " << nLanguage);
     MutexGuard  aGuard( GetLinguMutex() );
     return hasLocale( LanguageTag::convertToLocale(LanguageType(static_cast<sal_uInt16>(nLanguage))));
 }

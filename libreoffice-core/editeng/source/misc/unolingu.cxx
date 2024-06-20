@@ -234,6 +234,8 @@ uno::Sequence< sal_Int16 > SAL_CALL
 sal_Bool SAL_CALL
     SpellDummy_Impl::hasLanguage( sal_Int16 nLanguage )
 {
+
+    SAL_WARN("lok", "SpellDummy_Impl::hasLanguage: " << nLanguage);
     GetSpell_Impl();
     bool bRes = false;
     if (xSpell.is())

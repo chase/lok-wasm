@@ -93,8 +93,12 @@ namespace
                                            const uno::Reference< XSpellChecker1 >& xSpell,
                                            const LanguageType eActLang )
     {
+        SAL_WARN("lok", "CHECKING DICTIONARIES: " << eActLang);
         if( xSpell.is() && !xSpell->hasLanguage( eActLang.get() ) )
+        {
+            SAL_WARN("lok", "MISSING DICTIONARY: " << eActLang);
             rDoc.SetMissingDictionaries( true );
+        }
         else
             rDoc.SetMissingDictionaries( false );
     }
@@ -1505,6 +1509,10 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
     if( bAddAutoCmpl )
         pNode->SetAutoCompleteWordDirty( false );
 
+    if(aRect.IsEmpty())
+    {
+        SAL_WARN("lok", "RECT IS EMPTY");
+    }
     return aRect;
 }
 

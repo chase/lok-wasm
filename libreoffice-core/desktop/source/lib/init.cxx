@@ -8568,6 +8568,8 @@ void setLanguageToolConfig()
 
 static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char* pUserProfileUrl)
 {
+    SAL_WARN("lok", "lo_initialize");
+
     enum {
         PRE_INIT,     // setup shared data in master process
         SECOND_INIT,  // complete init. after fork
@@ -8625,6 +8627,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     if (pThis == nullptr)
     {
         eStage = PRE_INIT;
+        SAL_WARN("lok", "PRE_INIT SET");
         if (lok_preinit_2_called)
         {
             SAL_INFO("lok", "Create libreoffice object");
@@ -8941,6 +8944,22 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     if (eStage == PRE_INIT)
         rtl_alloc_preInit(false);
 
+    // preload all available dictionaries
+    SAL_WARN("lok", "PRELOADING DICTIONARIES");
+    setLanguageAndLocale(u"en-US"_ustr);
+    linguistic2::DictionaryList::create(comphelper::getProcessComponentContext());
+    css::uno::Reference<css::linguistic2::XLinguServiceManager> xLngSvcMgr =
+    css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
+    css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
+
+    css::uno::Reference<linguistic2::XSupportedLocales> xSpellLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
+    uno::Sequence< css::lang::Locale > aLocales = xSpellLocales->getLocales();
+    SAL_WARN("lok", "Locale length: " << aLocales.getLength());
+    css::lang::Locale defaultLocale("en", "US", "");
+    css::beans::PropertyValues aNone;
+    bool result = xSpellChecker->isValid(u"forcefed"_ustr, defaultLocale, aNone);
+    bool r2 = xSpellChecker->hasLocale(defaultLocale);
+    SAL_WARN("lok", "PRELOADING DONE: "  << result << " " << r2);
     return bInitialized;
 }
 

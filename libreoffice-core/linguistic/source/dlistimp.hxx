@@ -31,6 +31,7 @@
 
 #include <linguistic/misc.hxx>
 #include "lngopt.hxx"
+#include "sal/log.hxx"
 
 class DicEvtListenerHelper;
 
@@ -71,6 +72,7 @@ class DicList :
     void                CreateDicList();
     DictionaryVec_t &   GetOrCreateDicList()
                         {
+                            SAL_WARN("lok", "GetOrCreateDicList");
                             if ( !bInCreation && aDicList.empty() )
                                 CreateDicList();
                             return aDicList;
