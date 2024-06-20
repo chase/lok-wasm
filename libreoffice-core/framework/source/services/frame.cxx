@@ -1453,8 +1453,8 @@ sal_Bool SAL_CALL XFrameImpl::setComponent(const css::uno::Reference< css::awt::
     implts_stopWindowListening();
 
     // Notify all listener, that this component (if current one exist) will be unloaded.
-    if (bWasConnected)
-        implts_sendFrameActionEvent( css::frame::FrameAction_COMPONENT_DETACHING );
+    /* if (bWasConnected) */
+        /* implts_sendFrameActionEvent( css::frame::FrameAction_COMPONENT_DETACHING ); */
 
     // otherwise release old component first
     // Always release controller before releasing window,

@@ -1102,18 +1102,8 @@ void SAL_CALL DocumentMetadataAccess::loadMetadataFromStorage(
     const uno::Reference<rdf::XURI> & i_xBaseURI,
     const uno::Reference<task::XInteractionHandler> & i_xHandler)
 {
-    uno::Reference<embed::XStorage> storage;
+    uno::Reference<embed::XStorage> storage = i_xStorage;
     bool isExpandedStorage = comphelper::OStorageHelper::IsExpandedStorage();
-
-    if (isExpandedStorage)
-    {
-        storage = i_xStorage->openStorageElement("word", 0);
-    }
-    else
-    {
-        storage = i_xStorage;
-    }
-
 
     if (!storage.is()) {
         throw lang::IllegalArgumentException(

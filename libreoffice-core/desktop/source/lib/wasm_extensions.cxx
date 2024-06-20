@@ -2,6 +2,8 @@
 #include "com/sun/star/embed/XStorage.hdl"
 #include "com/sun/star/frame/Desktop.hpp"
 #include "com/sun/star/frame/XDesktop2.hdl"
+#include "com/sun/star/ucb/OpenMode.hdl"
+#include "com/sun/star/uno/Any.h"
 #include "com/sun/star/uno/Reference.h"
 #include "comphelper/base64.hxx"
 #include "comphelper/diagnose_ex.hxx"
@@ -220,7 +222,7 @@ std::string WasmDocumentExtension::getPageOrientation()
     return bIsLandscape ? "\"landscape\"" : "\"portrait\"";
 }
 
-_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const char* pFilterOptions)
+_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const char* pFilterOptions, const int documentId)
 {
     LibreOfficeKitDocument* pDoc = NULL;
     desktop::WasmDocumentExtension* ext
@@ -229,7 +231,7 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::Expa
     LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
 
 
-    return ext->loadFromExpanded(pThis, expandedDoc, pFilterOptions);
+    return ext->loadFromExpanded(pThis, expandedDoc, pFilterOptions, documentId);
 }
 
 
@@ -238,7 +240,7 @@ void ExpandedDocument::addPart(std::string path, std::string content)
     parts.emplace_back(path, content);
 }
 
-_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions)
+_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions, const int documentId)
 {
     using namespace com::sun::star;
     uno::XComponentContext * xContext =
@@ -273,34 +275,46 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     }
 
     storage->readRelationshipInfo();
+    // Is this necesarry ?
+    storage->setPropertyValue("OpenMode", uno::Any(ucb::OpenMode::ALL));
+    storage->setPropertyValue("Version", uno::Any(OUString("1")));
+    storage->setPropertyValue("MS Word 2007 XML", uno::Any(OUString("1")));
 
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
     auto storageBase = std::shared_ptr<oox::StorageBase>(storage.get());
 
-
-
+    // ExpandedStorage can represent both a BaseStorage and an XStorage
+    //
+    // Unlike conventional XStorage we don't want to be constantly re-initializing
+    // a storage object since the file content is stored in memory.
+    // Thus we set a storageBase and xStorage globals to be used
+    // throughout the load process.
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
     comphelper::OStorageHelper::SetExpandedStorageBase(storageBase);
     expandedStorage = uno::Reference<oox::ExpandedStorage>(storage.get());
 
     utl::MediaDescriptor aMediaDescriptor;
-    // Leave a breadcrumb that this is using expanded storage
-    // Expanded storage only supports .docx files right now
+
+    // Expanded Storage only supports .DOCX
     aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
     aMediaDescriptor["MacroExecutionMode"] <<= document::MacroExecMode::NEVER_EXECUTE;
+    // We don't have a general document input stream,
+    // so we pass in an empty one. Down the line its crucial we
+    // check if we are currently loading from expanded storage
+    // and use the storage instead of the stream
     aMediaDescriptor["InputStream"] <<= xEmptyInputStream;
-    aMediaDescriptor["Silent"] <<= true;
-    aMediaDescriptor["Hidden"] <<= true;
+    // Silences various exceptions
+    aMediaDescriptor["Silent"] <<= false;
 
     {
         SolarMutexGuard aGuard;
         try
         {
             Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
-            SfxViewShell::SetCurrentDocId(ViewShellDocId(1));
+            SfxViewShell::SetCurrentDocId(ViewShellDocId(documentId));
             uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
-                "private:stream", "_blank", 1, aMediaDescriptor.getAsConstPropertyValueList());
+                "private:stream", "_blank", documentId, aMediaDescriptor.getAsConstPropertyValueList());
             SAL_WARN("lok", "Loaded in memory doc");
 
             if (!xComponent.is()) {
@@ -308,7 +322,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
                 return nullptr;
             }
 
-            return new LibLODocument_Impl(xComponent, 1);
+            return new LibLODocument_Impl(xComponent, documentId);
         }
         catch (const uno::Exception& exception)
         {

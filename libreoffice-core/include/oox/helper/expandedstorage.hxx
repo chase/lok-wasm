@@ -134,6 +134,7 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
     std::optional<std::string> m_basePath;
     css::uno::Reference<css::io::XInputStream> m_inputStream;
+    std::unordered_map<OUString, css::uno::Any> m_properties;
 
 public:
     ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,

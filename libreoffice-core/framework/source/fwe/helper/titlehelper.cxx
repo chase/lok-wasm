@@ -170,6 +170,7 @@ void SAL_CALL TitleHelper::documentEventOccured(const css::document::DocumentEve
 
 void SAL_CALL TitleHelper::frameAction(const css::frame::FrameActionEvent& aEvent)
 {
+    return; // MACRO
     css::uno::Reference< css::frame::XFrame > xOwner;
     // SYNCHRONIZED ->
     {

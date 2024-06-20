@@ -529,7 +529,8 @@ void SAL_CALL SfxBaseController::attachFrame( const Reference< frame::XFrame >& 
     if ( m_pData->m_pViewShell )
     {
         ConnectSfxFrame_Impl( E_CONNECT );
-        ShowInfoBars( );
+        //MACRO: uneeded
+        /* ShowInfoBars( ); */
 
         // attaching the frame to the controller is the last step in the creation of a new view, so notify this
         SfxViewEventHint aHint( SfxEventHintId::ViewCreated, GlobalEventConfig::GetEventName( GlobalEventId::VIEWCREATED ), m_pData->m_pViewShell->GetObjectShell(), Reference< frame::XController2 >( this ) );
@@ -1321,12 +1322,10 @@ void SfxBaseController::ConnectSfxFrame_Impl( const ConnectSfxFrame i_eConnect )
         pViewFrame->GetBindings().Invalidate( nViewNo + SID_VIEWSHELL0 );
 }
 
+// NOTE @synoet
+// Don't think this needs to be called.
 void SfxBaseController::ShowInfoBars( )
 {
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        return;
-    }
     if ( !m_pData->m_pViewShell )
         return;
 

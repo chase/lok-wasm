@@ -2785,6 +2785,7 @@ sal_Bool SAL_CALL SfxBaseModel::canCheckIn( )
 
 void SfxBaseModel::loadCmisProperties( )
 {
+    return; // MACRO
     SfxMedium* pMedium = m_pData->m_pObjectShell->GetMedium();
     if ( !pMedium )
         return;

@@ -580,6 +580,7 @@ Reference< XController2 > SfxFrameLoader_Impl::impl_createDocumentView( const Re
         i_rFrame
     ), UNO_SET_THROW );
 
+    SAL_WARN("frmload", "connecting frame controller and model together " << i_rFrame.is() << " "  << xController.is() << " " << i_rModel.is());
     // introduce model/view/controller to each other
     utl::ConnectFrameControllerModel(i_rFrame, xController, i_rModel);
 
@@ -767,9 +768,10 @@ sal_Bool SAL_CALL SfxFrameLoader_Impl::load( const Sequence< PropertyValue >& rA
 
         bLoadSuccess = true;
     }
-    catch ( Exception& )
+    catch ( Exception& e)
     {
         const Any aError( ::cppu::getCaughtException() );
+        SAL_WARN("frmload", "exception while loading frame " << e);
         if ( !aDescriptor.getOrDefault( "Silent", false ) )
             impl_handleCaughtError_nothrow( aError, aDescriptor );
     }
@@ -787,6 +789,8 @@ sal_Bool SAL_CALL SfxFrameLoader_Impl::load( const Sequence< PropertyValue >& rA
             DBG_UNHANDLED_EXCEPTION("sfx.view");
         }
     }
+
+    SAL_WARN("frmload", "bLoadSuccess " << bLoadSuccess);
 
     return bLoadSuccess;
 }

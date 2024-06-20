@@ -170,7 +170,7 @@ const handler: DocumentMethodHandler<Document> = {
           "value": "${args.author ?? 'Macro User'}"
         }}`
     );
-    return 0;
+    return doc.getViewId();
   },
 
   postKeyEvent: function (

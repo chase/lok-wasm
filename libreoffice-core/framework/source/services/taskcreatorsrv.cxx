@@ -189,11 +189,13 @@ css::uno::Reference< css::uno::XInterface > SAL_CALL TaskCreatorService::createI
     if (bTopLevelDocumentWindow)
         implts_establishDocModifyListener (xFrame);
 
-    // special feature:
-    // A special listener will update title bar (text and icon)
-    // if component of frame will be changed.
-    if (bEnableTitleBarUpdate)
-        implts_establishTitleBarUpdate(xFrame);
+    // MACRO: {
+    /* // special feature: */
+    /* // A special listener will update title bar (text and icon) */
+    /* // if component of frame will be changed. */
+    /* if (bEnableTitleBarUpdate) */
+    /*     implts_establishTitleBarUpdate(xFrame); */
+    // MACRO : }
 
     // Make it visible directly here...
     // if it's required from outside.
