@@ -67,7 +67,6 @@ OUString toHexString(const std::vector<unsigned char>& a)
         aStrm << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(i);
     }
 
-
     std::string str = aStrm.str();
 
     return OUString(str.data(), str.length(), osl_getThreadTextEncoding());
@@ -80,9 +79,7 @@ OUString getContentHash(const Sequence<sal_Int8>& content)
 
     // Generate SHA-256 hash
     std::vector<unsigned char> hashVec = comphelper::Hash::calculateHash(
-        unsignedData, content.getLength(),
-        comphelper::HashType::SHA256
-    );
+        unsignedData, content.getLength(), comphelper::HashType::SHA256);
 
     return toHexString(hashVec);
 }
@@ -224,15 +221,17 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     comphelper::Base64::decode(sContent, content);
     OUString sha = helpers::getContentHash(sContent);
 
-    m_files->insert({ path, {sPath, sContent, sha} });
+    m_files->insert({ path, { sPath, sContent, sha } });
 }
 
-std::optional<std::pair<std::string, std::string>> ExpandedStorage::getPart(const std::string& path) const
+std::optional<std::pair<std::string, std::string>>
+ExpandedStorage::getPart(const std::string& path) const
 {
-    auto it = std::find_if(m_files->begin(), m_files->end(), [&path](const auto& pair) {
-            return pair.first == path;
-
-    });
+    auto it = std::find_if(m_files->begin(), m_files->end(),
+                           [&path](const auto& pair)
+                           {
+                               return pair.first == path;
+                           });
 
     if (it == m_files->end())
     {
@@ -245,7 +244,7 @@ std::optional<std::pair<std::string, std::string>> ExpandedStorage::getPart(cons
     return std::make_pair(helpers::toString(it->second.path), content);
 }
 
-void ExpandedStorage::removePart(const std::string &path)
+void ExpandedStorage::removePart(const std::string& path)
 {
     if (getPart(path).has_value())
     {
@@ -264,7 +263,7 @@ std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::li
         const std::string pathString = helpers::toString(file.path);
         const std::string shaString = helpers::toString(file.sha);
 
-        parts.push_back({pathString, shaString});
+        parts.push_back({ pathString, shaString });
     }
 
     if (parts.empty())
@@ -501,9 +500,7 @@ css::uno::Reference<css::beans::XPropertySetInfo> SAL_CALL ExpandedStorage::getP
     return nullptr;
 }
 
-void SAL_CALL ExpandedStorage::setPropertyValue(const OUString&, const css::uno::Any&)
-{
-}
+void SAL_CALL ExpandedStorage::setPropertyValue(const OUString&, const css::uno::Any&) {}
 
 css::uno::Any SAL_CALL ExpandedStorage::getPropertyValue(const OUString&)
 {
@@ -626,15 +623,13 @@ const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& r
                         [&rName](const beans::StringPair& rPair) { return rPair.First == rName; });
 }
 
-
-css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> ExpandedStorage::getRelInfoFromName(const OUString& name)
+css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
+ExpandedStorage::getRelInfoFromName(const OUString& name)
 {
     uno::Reference<io::XInputStream> relInfoStream
-        = openStreamElement(name, embed::ElementModes::READ, PathType::Absolute)
-              ->getInputStream();
+        = openStreamElement(name, embed::ElementModes::READ, PathType::Absolute)->getInputStream();
 
-    return ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(relInfoStream,
-                                                                        name, m_xContext);
+    return ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(relInfoStream, name, m_xContext);
 }
 
 void ExpandedStorage::readRelationshipInfo()
