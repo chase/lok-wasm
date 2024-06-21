@@ -301,7 +301,7 @@ void SwXTextDocument::deleteComment(int commentId)
 void SwXTextDocument::resolveCommentThread(int parentId)
 {
     css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
-        { { "Id", uno::Any(static_cast<sal_uInt32>(parentId)) } }));
+        { { "Id", uno::Any(OUString::number(parentId)) } }));
 
     SolarMutexGuard aGuard;
     WithoutRedlines dontTrackComments(GetDocOrThrow());
@@ -312,7 +312,7 @@ void SwXTextDocument::resolveCommentThread(int parentId)
 void SwXTextDocument::resolveComment(int commentId)
 {
     css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
-        { { "Id", uno::Any(static_cast<sal_uInt32>(commentId)) } }));
+        { { "Id", uno::Any(OUString::number(commentId)) } }));
 
     SolarMutexGuard aGuard;
     WithoutRedlines dontTrackComments(GetDocOrThrow());
