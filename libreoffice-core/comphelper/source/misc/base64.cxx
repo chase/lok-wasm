@@ -206,52 +206,6 @@ std::size_t Base64::decodeSomeChars(uno::Sequence<sal_Int8>& rOutBuffer, std::u1
 
     return nCharsDecoded;
 }
-void Base64::decode(uno::Sequence<sal_Int8>& rOutBuffer, std::string_view rInBuffer)
-{
-    std::size_t nInBufferLen = rInBuffer.size();
-    std::size_t nMinOutBufferLen = (nInBufferLen / 4) * 3;
-    if (o3tl::make_unsigned(rOutBuffer.getLength()) < nMinOutBufferLen)
-        rOutBuffer.realloc(nMinOutBufferLen);
-
-    const char* pInBuffer = rInBuffer.data();
-    sal_Int8* pOutBuffer = rOutBuffer.getArray();
-    sal_Int8* pOutBufferStart = pOutBuffer;
-    sal_uInt8 aDecodeBuffer[4];
-    sal_Int32 nBytesToDecode = 0;
-    sal_Int32 nBytesGotFromDecoding = 3;
-
-    for (std::size_t nInBufferPos = 0; nInBufferPos < nInBufferLen; ++nInBufferPos)
-    {
-        char cChar = pInBuffer[nInBufferPos];
-        if (cChar >= '+' && cChar <= 'z')
-        {
-            sal_uInt8 nByte = aBase64DecodeTable[cChar - '+'];
-            if (nByte != 255)
-            {
-                aDecodeBuffer[nBytesToDecode++] = nByte;
-                if ('=' == cChar && nBytesToDecode > 2)
-                    nBytesGotFromDecoding--;
-                if (4 == nBytesToDecode)
-                {
-                    sal_uInt32 nOut = (aDecodeBuffer[0] << 18) +
-                                      (aDecodeBuffer[1] << 12) +
-                                      (aDecodeBuffer[2] << 6) +
-                                       aDecodeBuffer[3];
-                    *pOutBuffer++  = static_cast<sal_Int8>((nOut & 0xff0000) >> 16);
-                    if (nBytesGotFromDecoding > 1)
-                        *pOutBuffer++  = static_cast<sal_Int8>((nOut & 0xff00) >> 8);
-                    if (nBytesGotFromDecoding > 2)
-                        *pOutBuffer++  = static_cast<sal_Int8>(nOut & 0xff);
-                    nBytesToDecode = 0;
-                    nBytesGotFromDecoding = 3;
-                }
-            }
-        }
-    }
-
-    if ((pOutBuffer - pOutBufferStart) != rOutBuffer.getLength())
-        rOutBuffer.realloc(pOutBuffer - pOutBufferStart);
-}
 
 }
 

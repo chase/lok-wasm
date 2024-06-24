@@ -196,10 +196,12 @@ void SAL_CALL OSequenceOutputStream::writeBytes( const Sequence< sal_Int8 >& _rD
         if (nNewLength < m_nSize + _rData.getLength())
         {   // it's not enough... the data would not fit
 
-            // let's take the double amount of the length of the data to be written, as the next write
-            // request could be as large as this one
-            sal_Int32 nNewGrowth = _rData.getLength() * 2;
-            nNewLength = nCurrentLength + nNewGrowth;
+            // MACRO:
+            // Take into account the current size of the sequence when calculating the new size.
+            // Ensure we have enough space for existing data plus new data
+            nNewLength = m_nSize + _rData.getLength();
+            // Add some extra space to reduce future reallocations
+            nNewLength += std::max(nNewLength / 2, static_cast<sal_Int32>(_rData.getLength() * 2));
         }
 
         // round it off to the next multiple of 4...

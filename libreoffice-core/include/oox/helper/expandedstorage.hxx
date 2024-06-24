@@ -7,6 +7,7 @@
 #include "com/sun/star/io/XInputStream.hdl"
 #include "com/sun/star/io/XSeekable.hdl"
 #include "com/sun/star/lang/XComponent.hdl"
+#include "comphelper/seqstream.hxx"
 #include "cppuhelper/implbase.hxx"
 #include "oox/helper/storagebase.hxx"
 #include <rtl/ustring.hxx>
@@ -23,6 +24,7 @@
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <cppuhelper/weak.hxx>
 #include <comphelper/interfacecontainer4.hxx>
+#include <unordered_set>
 
 namespace com::sun::star
 {

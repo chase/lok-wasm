@@ -95,8 +95,6 @@ SequenceStreamSupplier::SequenceStreamSupplier(Reference<io::XInputStream> xInpu
     m_xSeekable.set(m_xInput, uno::UNO_QUERY);
     if (!m_xSeekable.is())
         m_xSeekable.set(m_xOutput, uno::UNO_QUERY);
-    OSL_ENSURE(m_xSeekable.is(),
-               "StreamSupplier::StreamSupplier: at least one of both must be seekable!");
 }
 
 Reference<io::XInputStream> SAL_CALL SequenceStreamSupplier::getInputStream() { return m_xInput; }
@@ -184,7 +182,7 @@ SequenceStreamContainer::removeEventListener(const Reference<lang::XEventListene
 
 ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
                                  const Reference<io::XInputStream>& rxInStream)
-    : StorageBase(rxInStream, true, false)
+    : StorageBase(rxInStream, false, false)
     , m_xContext(rxContext)
     , m_inputStream(rxInStream)
 {
@@ -199,7 +197,7 @@ ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& context_,
                                  const std::shared_ptr<ExpandedFileMap>& fileMap_,
                                  const Reference<io::XInputStream>& inputStream_,
                                  const OUString& basePath_)
-    : StorageBase(inputStream_, true, false)
+    : StorageBase(inputStream_, false, false)
     , m_files(fileMap_)
     , m_xContext(context_)
     , m_basePath(helpers::toString(basePath_))
@@ -220,7 +218,7 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
     Sequence<sal_Int8> sContent;
-    comphelper::Base64::decode(sContent, content);
+    comphelper::Base64::decode(sContent, helpers::toOUString(content));
     OUString sha = helpers::getContentHash(sContent);
 
     m_files->insert({ path, { sPath, sContent, sha } });
@@ -328,9 +326,17 @@ void SAL_CALL ExpandedStorage::copyToStorage(const Reference<embed::XStorage>& x
         xOut->closeOutput();
     }
 }
+bool shouldCreateStreamElement(sal_Int32 openMode)
+{
+    return (openMode != embed::ElementModes::READ) &&
+        (openMode != embed::ElementModes::NOCREATE) &&
+        (openMode != embed::ElementModes::SEEKABLEREAD);
+
+}
 Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
                                                           PathType pathType)
 {
+
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
 
@@ -338,7 +344,13 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     auto it = m_files->find(std::string(path));
     if (it == m_files->end())
     {
-        throw css::container::NoSuchElementException();
+        if (!shouldCreateStreamElement(nOpenMode))
+        {
+
+            throw css::container::NoSuchElementException();
+        }
+
+        it = m_files->insert({path, {name, Sequence<sal_Int8>(), ""}}).first;
     }
 
     const auto& file = it->second;
@@ -349,7 +361,7 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     if (nOpenMode == embed::ElementModes::READWRITE ||
         nOpenMode == embed::ElementModes::READ ||
         nOpenMode == embed::ElementModes::SEEKABLE ||
-        nOpenMode == embed::ElementModes::SEEKABLE)
+        nOpenMode == embed::ElementModes::SEEKABLEREAD)
     {
         Reference<io::XInputStream> inputStream(new comphelper::SequenceInputStream(file.content));
         maybeInputStream = inputStream;
@@ -360,7 +372,10 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
         nOpenMode == embed::ElementModes::TRUNCATE)
     {
         auto content = file.content;
-        Reference<io::XOutputStream> outputStream(new comphelper::OSequenceOutputStream(content));
+
+        SAL_WARN("expandedstorage", "openStreamElement: content size " << content.size() << " length " << content.getLength());
+        uno::Reference<comphelper::OSequenceOutputStream> seqOutStream(new comphelper::OSequenceOutputStream(content, 2));
+        Reference<io::XOutputStream> outputStream(seqOutStream, UNO_QUERY);
         maybeOutputStream = outputStream;
     }
 
@@ -399,6 +414,7 @@ Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OU
 
 Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUString&)
 {
+    SAL_WARN("expandedstorage", "cloneStreamElement: not implemented");
     // TODO: @synoet - Implement this
     throw css::embed::StorageWrappedTargetException();
 }

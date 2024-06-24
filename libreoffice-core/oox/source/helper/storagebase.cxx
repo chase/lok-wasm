@@ -17,6 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "comphelper/storagehelper.hxx"
+#include "sal/log.hxx"
 #include <oox/helper/storagebase.hxx>
 
 #include <com/sun/star/io/XStream.hpp>
@@ -252,6 +254,12 @@ void StorageBase::commit()
 
 StorageRef StorageBase::getSubStorage( const OUString& rElementName, bool bCreateMissing )
 {
+    SAL_WARN("storagebase", "open sub storage " << rElementName << " create missing " << bCreateMissing);
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        SAL_WARN("storagebase", "expanded storage");
+        return implOpenSubStorage(rElementName, bCreateMissing);
+    }
     StorageRef& rxSubStrg = maSubStorages[ rElementName ];
     if( !rxSubStrg )
         rxSubStrg = implOpenSubStorage( rElementName, bCreateMissing );

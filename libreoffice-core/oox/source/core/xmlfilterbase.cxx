@@ -1032,6 +1032,10 @@ StorageRef XmlFilterBase::implCreateStorage( const Reference< XInputStream >& rx
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XStream >& rxOutStream ) const
 {
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        return comphelper::OStorageHelper::GetExpandedStorageBase();
+    }
     return std::make_shared<ZipStorage>( getComponentContext(), rxOutStream );
 }
 
