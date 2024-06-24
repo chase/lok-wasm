@@ -2500,7 +2500,7 @@ void SfxMedium::Transfer_Impl()
                 {}
             }
         }
-        else
+        else if (!comphelper::OStorageHelper::IsExpandedStorage())
         {
             SAL_WARN( "sfx.doc", "Illegal Output stream parameter!" );
             SetError(ERRCODE_IO_GENERAL);

@@ -255,8 +255,13 @@ void ExpandedStorage::removePart(const std::string& path)
     m_files->erase(path);
 }
 
-std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::listParts() const
+std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::listParts()
 {
+
+    for (auto& [path, file] : *m_files)
+    {
+        file.sha = helpers::getContentHash(file.content);
+    }
     std::vector<std::pair<const std::string, const std::string>> parts;
     for (const auto& [path, file] : *m_files)
     {
@@ -339,7 +344,6 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
 
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
-
     std::lock_guard<std::mutex> lock(m_aMutex);
     auto it = m_files->find(std::string(path));
     if (it == m_files->end())
@@ -373,10 +377,11 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     {
         auto content = file.content;
 
-        SAL_WARN("expandedstorage", "openStreamElement: content size " << content.size() << " length " << content.getLength());
         uno::Reference<comphelper::OSequenceOutputStream> seqOutStream(new comphelper::OSequenceOutputStream(content, 2));
         Reference<io::XOutputStream> outputStream(seqOutStream, UNO_QUERY);
         maybeOutputStream = outputStream;
+
+        m_staleSha = true;
     }
 
     Reference<io::XStream> xStream = new SequenceStreamSupplier(maybeInputStream, maybeOutputStream);
