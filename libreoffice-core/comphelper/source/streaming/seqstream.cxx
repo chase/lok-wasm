@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "sal/log.hxx"
 #include <sal/config.h>
 
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
@@ -179,6 +180,7 @@ OSequenceOutputStream::OSequenceOutputStream(Sequence< sal_Int8 >& _rSeq, double
 void SAL_CALL OSequenceOutputStream::writeBytes( const Sequence< sal_Int8 >& _rData )
 {
     std::scoped_lock aGuard(m_aMutex);
+    SAL_WARN("seqstream", "writing bytes to stream " << _rData.getLength() << "bytes to write " <<  m_rSequence.getLength() << " current length");
     if (!m_bConnected)
         throw NotConnectedException();
 

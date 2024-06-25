@@ -105,9 +105,9 @@ struct ExpandedFile
 {
     const OUString path;
     OUString sha;
-    const css::uno::Sequence<sal_Int8> content;
+    std::vector<sal_Int8> content;
 
-    ExpandedFile(const OUString& path_, const css::uno::Sequence<sal_Int8>& content_, const OUString& sha_)
+    ExpandedFile(const OUString& path_, const std::vector<sal_Int8>& content_, const OUString& sha_)
         : path(path_)
         , sha(sha_)
         , content(content_){};

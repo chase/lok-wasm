@@ -163,6 +163,7 @@ $(eval $(call gb_Library_add_exception_objects,comphelper,\
     comphelper/source/streaming/seqinputstreamserv \
     comphelper/source/streaming/seqoutputstreamserv \
     comphelper/source/streaming/seqstream \
+    comphelper/source/streaming/vecstream \
     comphelper/source/streaming/streamsection \
     comphelper/source/xml/attributelist \
     comphelper/source/xml/ofopxmlhelper \

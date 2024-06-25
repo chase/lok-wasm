@@ -12,6 +12,7 @@
 #include "comphelper/diagnose_ex.hxx"
 #include "comphelper/hash.hxx"
 #include "comphelper/seqstream.hxx"
+#include "comphelper/vecstream.hxx"
 #include "comphelper/sequence.hxx"
 #include "oox/helper/binaryinputstream.hxx"
 #include "oox/helper/binaryoutputstream.hxx"
@@ -74,14 +75,13 @@ OUString toHexString(const std::vector<unsigned char>& a)
     return OUString(str.data(), str.length(), osl_getThreadTextEncoding());
 }
 
-OUString getContentHash(const Sequence<sal_Int8>& content)
+OUString getContentHash(const std::vector<sal_Int8>& content)
 {
-    const sal_Int8* data = content.getConstArray();
-    const unsigned char* unsignedData = reinterpret_cast<const unsigned char*>(data);
+    const unsigned char* unsignedData = reinterpret_cast<const unsigned char*>(content.data());
 
     // Generate SHA-256 hash
     std::vector<unsigned char> hashVec = comphelper::Hash::calculateHash(
-        unsignedData, content.getLength(), comphelper::HashType::SHA256);
+        unsignedData, content.size(), comphelper::HashType::SHA256);
 
     return toHexString(hashVec);
 }
@@ -217,11 +217,16 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
         }
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
-    Sequence<sal_Int8> sContent;
-    comphelper::Base64::decode(sContent, helpers::toOUString(content));
-    OUString sha = helpers::getContentHash(sContent);
+    Sequence<sal_Int8> seqContent;
+    comphelper::Base64::decode(seqContent, helpers::toOUString(content));
+    std::vector<sal_Int8> fileContent = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
+    OUString sha = helpers::getContentHash(fileContent);
 
-    m_files->insert({ path, { sPath, sContent, sha } });
+    seqContent.realloc(0);
+
+    SAL_WARN("expandedstorage", "addPart: sha " << sha << " path " << path << " content size " << fileContent.size());
+
+    m_files->insert({ path, { sPath, fileContent, sha } });
 }
 
 std::optional<std::pair<std::string, std::string>>
@@ -239,7 +244,7 @@ ExpandedStorage::getPart(const std::string& path) const
         return {};
     }
 
-    std::string content(*it->second.content.getConstArray(), it->second.content.getLength());
+    std::string content(*it->second.content.data(), it->second.content.size());
 
     return std::make_pair(helpers::toString(it->second.path), content);
 }
@@ -327,7 +332,7 @@ void SAL_CALL ExpandedStorage::copyToStorage(const Reference<embed::XStorage>& x
         Reference<io::XStream> xStream = xDest->openStreamElement(
             file.path, embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE);
         Reference<io::XOutputStream> xOut = xStream->getOutputStream();
-        xOut->writeBytes(file.content);
+        xOut->writeBytes(comphelper::containerToSequence(file.content));
         xOut->closeOutput();
     }
 }
@@ -354,10 +359,10 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
             throw css::container::NoSuchElementException();
         }
 
-        it = m_files->insert({path, {name, Sequence<sal_Int8>(), ""}}).first;
+        it = m_files->insert({path, {name, std::vector<sal_Int8>(), ""}}).first;
     }
 
-    const auto& file = it->second;
+    auto& file = it->second;
 
     Reference<io::XInputStream> maybeInputStream;
     Reference<io::XOutputStream> maybeOutputStream;
@@ -367,7 +372,7 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
         nOpenMode == embed::ElementModes::SEEKABLE ||
         nOpenMode == embed::ElementModes::SEEKABLEREAD)
     {
-        Reference<io::XInputStream> inputStream(new comphelper::SequenceInputStream(file.content));
+        Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(file.content));
         maybeInputStream = inputStream;
     }
 
@@ -375,10 +380,7 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
         nOpenMode == embed::ElementModes::WRITE ||
         nOpenMode == embed::ElementModes::TRUNCATE)
     {
-        auto content = file.content;
-
-        uno::Reference<comphelper::OSequenceOutputStream> seqOutStream(new comphelper::OSequenceOutputStream(content, 2));
-        Reference<io::XOutputStream> outputStream(seqOutStream, UNO_QUERY);
+        Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
         maybeOutputStream = outputStream;
 
         m_staleSha = true;
@@ -484,7 +486,7 @@ void SAL_CALL ExpandedStorage::copyElementTo(const OUString& aElementName,
     Reference<io::XStream> xStream = xDest->openStreamElement(
         aNewName, embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE);
     Reference<io::XOutputStream> xOut = xStream->getOutputStream();
-    xOut->writeBytes(file.content);
+    xOut->writeBytes(comphelper::containerToSequence(file.content));
     xOut->closeOutput();
 }
 
