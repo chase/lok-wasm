@@ -548,6 +548,11 @@ void SwAnnotationWin::Rescale()
 void SwAnnotationWin::SetPosAndSize()
 {
     const bool bShowNotes = mrMgr.ShowNotes();
+
+    // MACRO: skip layout for non-root comments {
+    if (GetPostItField()->GetParentPostItId() != 0) return;
+    // MACRO: }
+
     if (bShowNotes)
     {
         bool bChange = false;
@@ -849,6 +854,10 @@ void SwAnnotationWin::SetScrollbar()
 
 void SwAnnotationWin::ResizeIfNecessary(tools::Long aOldHeight, tools::Long aNewHeight)
 {
+    // MACRO: skip layout for non-root comments {
+    if (GetPostItField()->GetParentPostItId() != 0) return;
+    // MACRO: }
+
     if (aOldHeight != aNewHeight)
     {
         //check for lower border or next note
@@ -1049,6 +1058,7 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
         case FN_POSTIT:
         case FN_REPLY:
         {
+            const bool bReply = nSlot == FN_REPLY;
             // if this note is empty, it will be deleted once losing the focus, so no reply, but only a new note
             // will be created
             if (!mpOutliner->GetEditEngine().GetText().isEmpty())
@@ -1059,15 +1069,32 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
             if (mrMgr.HasActiveSidebarWin())
                 mrMgr.SetActiveSidebarWin(nullptr);
             SwitchToFieldPos();
+
+            SwDocShell* pShell = mrView.GetDocShell();
+            if (bReply)
+                pShell->GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::INSERT, nullptr);
+
+            // synchronous dispatch
             mrView.GetViewFrame().GetDispatcher()->Execute(FN_POSTIT);
 
-            if (nSlot == FN_REPLY)
+            if (bReply)
             {
                 // Get newly created SwPostItField and set its paraIdParent
                 auto pPostItField = mrMgr.GetLatestPostItField();
                 pPostItField->SetParentId(GetTopReplyNote()->GetParaId());
                 pPostItField->SetParentPostItId(GetTopReplyNote()->GetPostItField()->GetPostItId());
+                this->GeneratePostItName();
                 pPostItField->SetParentName(GetTopReplyNote()->GetPostItField()->GetName());
+
+                // In this case, force generating the associated window
+                // synchronously so we can bundle its use of the registered
+                // "Answer" into the same undo group that the synchronous
+                // FN_POSTIT was put in
+                mrMgr.GetOrCreateAnnotationWindowForLatestPostItField();
+
+                SwRewriter aRewriter;
+                aRewriter.AddRule(UndoArg1, pPostItField->GetDescription());
+                pShell->GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT, &aRewriter);
             }
             break;
         }
@@ -1395,7 +1422,7 @@ void SwAnnotationWin::ChangeSidebarItem( SwSidebarItem const & rSidebarItem )
 {
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
     const bool bAnchorChanged = mpAnchorFrame != rSidebarItem.maLayoutInfo.mpAnchorFrame;
-    if ( bAnchorChanged )
+    if (bAnchorChanged && mpAnchorFrame)
     {
         mrMgr.DisconnectSidebarWinFromFrame( *mpAnchorFrame, *this );
     }
@@ -1403,6 +1430,7 @@ void SwAnnotationWin::ChangeSidebarItem( SwSidebarItem const & rSidebarItem )
 
     mrSidebarItem = rSidebarItem;
     mpAnchorFrame = mrSidebarItem.maLayoutInfo.mpAnchorFrame;
+    assert(mpAnchorFrame);
 
 #if !ENABLE_WASM_STRIP_ACCESSIBILITY
     if (mxSidebarWinAccessible)

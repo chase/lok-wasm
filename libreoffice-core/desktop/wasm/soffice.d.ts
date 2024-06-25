@@ -18,13 +18,14 @@ type GetClipbaordItem =
 export type DocumentRef = number & {};
 
 export type TileRenderData = {
-  /** the main view id */
   readonly viewId: number;
   readonly tileSize: number;
-  previewViewId?: number;
-  previewTileSize?: number;
   /** `_Atomic int32_t` */
   state: Int32Array;
+  /** `uint32_t[4]` */
+  tileTwips: Uint32Array;
+  /** `uint8_t[]` */
+  paintedTile: Uint8Array;
   /** `_Atomic int32_t` */
   pendingFullPaint: Int32Array;
   /** `_Atomic int32_t` */
@@ -37,18 +38,6 @@ export type TileRenderData = {
   docWidthTwips: Uint32Array;
   /** `_Atomic uint32_t` */
   docHeightTwips: Uint32Array;
-  /** `_Atomic uint32_t` view id currently active */
-  activeViewId: Uint32Array;
-  /** `_Atomic uint32_t` */
-  tileTwips: Uint32Array;
-  /** `_Atomic uint8_t` */
-  paintedTile: Uint8Array;
-  /** `_Atomic uint32_t` */
-  previewTileTwips: Uint32Array;
-  /** `_Atomic uint32_t` */
-  previewPaintedTile: Uint8Array;
-  /** `_Atomic uint32_t` */
-  previewPendingFullPaint: Int32Array;
 };
 
 export type RectArray = [x: number, y: number, width: number, height: number];
@@ -59,6 +48,15 @@ export type OutlineItem = {
   text: string;
 };
 
+export declare enum LayoutStatus {
+  INVISIBLE,
+  VISIBLE,
+  INSERTED,
+  DELETED,
+  NONE,
+  HIDDEN,
+}
+
 export type Comment = {
   id: number;
   parentId: number;
@@ -66,9 +64,14 @@ export type Comment = {
   text: string;
   resolved: boolean;
   dateTime: string;
+};
+
+export type RootComment = Comment & {
+  parentId: 0;
   anchorPos: RectArray;
   textRange: RectArray[];
-  layoutStatus: number;
+  bottomTwips: number;
+  layoutStatus: LayoutStatus;
 };
 
 export type SanitizeOptions = Partial<{
@@ -197,15 +200,8 @@ export declare class Document {
   getCommandValues(viewId: number, command: string): string;
   subscribe(viewId: number, type: number): void;
   unsubscribe(viewId: number, type: number): void;
-  startTileRenderer(
-    viewId: number,
-tileSize: number,
-  ): TileRenderData;
-  addPreviewView(
-    mainViewId: number,
-    viewId: number,
-    tileSize: number,
-  ): TileRenderData;
+  startTileRenderer(viewId: number, tileSize: number): TileRenderData;
+  stopTileRenderer(viewId: number): void;
   setClientVisibleArea(
     viewId: number,
     x: number,
@@ -229,9 +225,10 @@ tileSize: number,
   // NOTE: Disabled until unoembind startup cost is under 1s
   // getXComponent(viewId: number): any;
 
-  comments(): Comment[];
+  comments(ids: number[]): Comment[];
   addComment(text: string): void;
   replyComment(parentId: number, text: string): void;
+  updateComment(id: number, text: string): void;
   deleteCommentThreads(parentIds: number[]): void;
   deleteComment(commentId: number): void;
   resolveCommentThread(parentId: number): void;

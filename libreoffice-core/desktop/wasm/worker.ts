@@ -1,14 +1,15 @@
 import type {
   DocumentMethodHandler,
-  GlobalMethod,
   ForwardedFromWorker,
   ForwardedMethodMap,
   ForwardedResolver,
   ForwardedResolverMap,
   ForwardingId,
+  ForwardingMethodHandler,
   ForwardingMethodHandlers,
   FromWorker,
   GetClipbaordItem,
+  GlobalMethod,
   InitializeForRenderingOptions,
   KeysMessage,
   Message,
@@ -20,8 +21,6 @@ import type {
   ToWorker,
   ViewId,
   WorkerCallback,
-  ForwardingMethodHandler,
-  InitializeViewData,
 } from './shared';
 import type {
   Comment,
@@ -30,7 +29,6 @@ import type {
   HeaderFooterRect,
   ITextRanges,
   ParagraphStyle,
-  ParagraphStyleList,
   RectArray,
   SanitizeOptions,
 } from './soffice';
@@ -38,11 +36,18 @@ import LOK from './soffice';
 // NOTE: Disabled until unoembind startup cost is under 1s
 // import { init_unoembind_uno } from './bindings_uno';
 
+// because the worker can arrive before the message handler which is initialized later after the LOK module is created,
+// queue the messages for later and run them against the message handler after the rest of initialization
+const messageQueue: MessageEvent<any>[] = [];
+globalThis.onmessage = (message) => {
+  messageQueue.push(message);
+};
+type EmbindingDisposable = { delete(): void };
 const docMap: Record<DocumentRef, Document> = {};
-const findResultMap: Record<DocumentRef, ITextRanges> = {};
+const findResultMap: Record<DocumentRef, ITextRanges & EmbindingDisposable> =
+  {};
 const byRef = (ref: DocumentRef) => docMap[ref];
-const tileRenderer: Record<DocumentRef, Worker> = {};
-
+const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
 
 const lok = await LOK({
   withFcCache: true,
@@ -286,36 +291,35 @@ const handler: DocumentMethodHandler<Document> = {
     tileSize: TileDim,
     scale: number,
     dpi: number,
-    yPos: number | undefined,
+    yPos: number = 0
   ): TileRendererData {
     const ref = doc.ref();
-    const result = doc.startTileRenderer(
-      viewId,
-      tileSize,
-    );
+    const result = doc.startTileRenderer(viewId, tileSize);
     const worker = new Worker(
       new URL('./tile_renderer_worker.js', import.meta.url),
       { type: 'module' }
     );
+    if (!tileRenderer[ref]) {
+      tileRenderer[ref] = {};
+    }
+    tileRenderer[ref][result.viewId] = worker;
 
-    console.log('START RENDERING', ref, result.viewId, scale, tileSize, dpi, yPos);
-    tileRenderer[ref] = worker;
-
-    let mainViewData: InitializeViewData = {
-      viewId: result.viewId,
-      scale: scale,
-      canvases: canvases,
-      tileTwips: result.tileTwips,
-      paintedTile: result.paintedTile,
-      pendingFullPaint: result.pendingFullPaint,
-      y: yPos,
-    };
+    worker.addEventListener('message', ({ data }) => {
+      if (data.idle) {
+        postMessage({ f: 'idle_', d: ref });
+      }
+      if (data.paint) {
+        postMessage({ f: 'paint_', d: ref });
+      }
+    });
 
     worker.postMessage(
       {
         t: 'i',
-        m: mainViewData,
+        c: canvases,
         d: result,
+        s: scale,
+        y: yPos,
         dpi,
       } as ToTileRenderer,
       { transfer: [...canvases] }
@@ -325,84 +329,29 @@ const handler: DocumentMethodHandler<Document> = {
     return {
       docRef: ref,
       viewId: result.viewId,
-      scale: scale,
+      scale,
     };
   },
-
-  resetRendering: function() {
+  resetRendering: function (
+    _doc: Document,
+    _viewId: ViewId,
+    _canvases: OffscreenCanvas[]
+  ): void {
     throw new Error('Function not implemented.');
   },
-
-  startRenderingPreview: function (
-    doc: Document,
-    viewId: ViewId,
-    canvases: OffscreenCanvas[],
-    mainViewId: ViewId,
-    tileSize: TileDim,
-    scale: number,
-    yPos: number | undefined,
-  ) {
+  stopRendering: function (doc: Document, viewId: ViewId): void {
     const ref = doc.ref();
-    const result = doc.addPreviewView(
-      mainViewId,
-      viewId,
-      tileSize,
-    );
-
-    const worker = tileRenderer[ref];
-
-    let previewViewData: InitializeViewData = {
-      viewId: viewId,
-      scale: scale,
-      canvases: canvases,
-      tileTwips: result.tileTwips,
-      paintedTile: result.paintedTile,
-      pendingFullPaint: result.pendingFullPaint,
-      y: yPos,
-    };
-
-    worker.postMessage(
-      {
-        t: 'previewStart',
-        p: previewViewData,
-        d: result,
-      } as ToTileRenderer,
-      { transfer: [...canvases] }
-    );
-
-    return {
-      docRef: ref,
-      viewId: result.viewId,
-      scale: scale,
-    };
+    const worker = tileRenderer[ref]?.[viewId];
+    worker?.terminate();
+    doc.stopTileRenderer(viewId);
   },
-
-  stopRenderingPreview: function (
-    doc: Document,
-    viewId: ViewId,
-  ) {
-    const worker = tileRenderer[doc.ref()];
-
-    worker.postMessage(
-      {
-        t: 'previewStop',
-        viewId: viewId,
-      } as ToTileRenderer,
-    );
-  },
-
-
-  stopRendering: function (_doc: Document, _viewId: ViewId): void {
-    throw new Error('Function not implemented.');
-  },
-
   setScrollTop: function (
     doc: Document,
     viewId: ViewId,
     yPx: number
   ): Promise<number> {
     const ref = doc.ref();
-    const worker = tileRenderer[ref];
+    const worker = tileRenderer[ref]?.[viewId];
     if (!worker) return;
     const scrollPromise = new Promise<number>((resolve) => {
       const handleMessage = ({ data }: MessageEvent) => {
@@ -416,7 +365,6 @@ const handler: DocumentMethodHandler<Document> = {
 
     worker.postMessage({
       t: 's',
-      viewId,
       y: yPx,
     } as ToTileRenderer);
 
@@ -428,14 +376,21 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     heightPx: number
   ): void {
-    console.log(doc.ref());
-    tileRenderer[doc.ref()].postMessage({
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'r',
-      viewId,
       h: heightPx,
     } as ToTileRenderer);
   },
-
+  setDocumentWidth: function (
+    doc: Document,
+    viewId: ViewId,
+    widthTwips: number
+  ): void {
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
+      t: 'w',
+      w: widthTwips,
+    } as ToTileRenderer);
+  },
   dispatchCommand: function (
     doc: Document,
     viewId: ViewId,
@@ -476,9 +431,13 @@ const handler: DocumentMethodHandler<Document> = {
     doc.setClientVisibleArea(viewId, x, y, width, height);
   },
 
-  comments: function (doc: Document, viewId: ViewId): Comment[] {
+  comments: function (
+    doc: Document,
+    viewId: ViewId,
+    ids: number[] = []
+  ): Comment[] {
     doc.setCurrentView(viewId);
-    return doc.comments();
+    return doc.comments(ids);
   },
 
   addComment: function (doc: Document, viewId: ViewId, text: string): void {
@@ -608,9 +567,8 @@ const handler: DocumentMethodHandler<Document> = {
     scale: number,
     dpi: number
   ): Promise<void> {
-    tileRenderer[doc.ref()].postMessage({
+    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
       t: 'z',
-      viewId,
       s: scale,
       d: dpi,
     } as ToTileRenderer);
@@ -636,7 +594,16 @@ const handler: DocumentMethodHandler<Document> = {
   },
   listExpandedParts: function (doc: Document, _viewId: ViewId) {
     return doc.listExpandedParts();
-  }
+  },
+  updateComment: function (
+    doc: Document,
+    viewId: ViewId,
+    id: number,
+    text: string
+  ) {
+    doc.setCurrentView(viewId);
+    doc.updateComment(id, text);
+  },
 };
 
 const forwarding: ForwardingMethodHandlers<Document> = {
@@ -651,8 +618,9 @@ const forwarding: ForwardingMethodHandlers<Document> = {
       mode: 'wildcard' | 'regex' | 'similar';
     }>
   ): ForwardingId {
-    findResultMap[docRef] = doc.findAll(text, options);
-
+    findResultMap[docRef]?.delete();
+    findResultMap[docRef] = doc.findAll(text, options) as ITextRanges &
+      EmbindingDisposable;
     return [docRef, viewId, '_find'];
   },
 };
@@ -764,7 +732,7 @@ function handleGlobalMethod<K extends keyof GlobalMethod>(data: ToWorker<K>) {
   });
 }
 
-onmessage = async <K extends keyof Message = keyof Message>({
+globalThis.onmessage = async <K extends keyof Message = keyof Message>({
   data,
 }: MessageEvent<ToWorker<K>>) => {
   const docHandler = handler[data.f as keyof DocumentMethodHandler<Document>];
@@ -801,3 +769,6 @@ postMessage({
     ])
   ),
 } as KeysMessage);
+for (const message of messageQueue) {
+  globalThis.onmessage(message);
+}

@@ -628,6 +628,14 @@ void SwViewShell::FlushPendingLOKInvalidateTiles()
     rects.Compress( SwRegionRects::CompressFuzzy );
     if(rects.empty())
         return;
+
+    // MACRO: track invalidations passively {
+    SwXTextDocument* pModel = comphelper::getFromUnoTunnel<SwXTextDocument>(GetSfxViewShell()->GetCurrentDocument());
+    if (pModel && !pModel->isDisposed()) {
+        pModel->bumpInvalidationGeneration();
+    }
+    // MACRO: }
+
     // This is basically the loop from SwViewShell::InvalidateWindows().
     for(SwViewShell& rSh : GetRingContainer())
     {

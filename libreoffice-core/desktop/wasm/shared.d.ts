@@ -3,6 +3,7 @@ export type ViewId = number & {};
 import type { CallbackType } from './lok_enums';
 import type {
   Document,
+  RootComment,
   Comment,
   FindAllOptions,
   HeaderFooterRect,
@@ -12,8 +13,7 @@ import type {
   ParagraphStyleList,
   RectArray,
   TileRenderData,
-  ViewData,
-  DocumentRef
+  DocumentRef,
 } from './soffice';
 export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
@@ -115,24 +115,16 @@ export type DocumentWithViewMethods = {
 
   startRendering(
     canvases: OffscreenCanvas[],
-    tileSize: number,
+    tileSize: TileDim,
+    /** Non-negative float, 1.0 is unchange, less than 1.0 is smaller, greater than 1.0 is larger */
     scale: number,
-    dpi: number,
+    /** scroll top position in pixels */
     yPosPx?: number
   ): TileRendererData;
-
-  startRenderingPreview(
-    canvases: OffscreenCanvas[],
-    tileSize: number,
-    scale: number,
-    dpi: number,
-    yPosPx?: number
-  ): TileRendererData;
-
-  stopRenderingPreview(): void;
 
   setScrollTop(yPx: number): number;
   setVisibleHeight(heightPx: number): void;
+  setDocumentWidth(widthTwips: number): void;
   setZoom(scale: number, dpi: number): void;
 
   /** TODO: implement, used to set a new scale or set a new offscreen cavnas */
@@ -146,9 +138,10 @@ export type DocumentWithViewMethods = {
   // NOTE: Disabled until unoembind startup cost is under 1s
   // getXComponent(): void;
 
-  comments(): Comment[];
+  comments(ids?: number[]): Array<Comment | RootComment>;
   addComment(text: string): void;
   replyComment(parentId: number, text: string): void;
+  updateComment(id: number, text: string): void;
   deleteCommentThreads(parentIds: number[]): void;
   deleteComment(commentId: number): void;
   resolveCommentThread(parentId: number): void;
@@ -322,6 +315,10 @@ export type DocumentClientBase = {
   on(type: CallbackType, handler: CallbackHandler): void;
   off(type: CallbackType, handler: CallbackHandler): void;
   newView(): Promise<DocumentClient | null>;
+  /** after painting is idle, calls the callback, returns the method to unregister the callback */
+  afterIdle(callback: () => any): () => void;
+  /** !!!USE SPARINGLY: Impacts performance!!! Calls the callback, returns the method to unregister the callback */
+  afterPaint(callback: () => any): () => void;
 };
 
 export type AsyncFunctions<T extends { [K: string]: (...args: any) => any }> = {
@@ -390,45 +387,34 @@ export type ForwardedFromWorker<
   m: keyof ReturnType<ForwardingMethod<K>>;
 };
 
-type InitializeViewData = {
-  viewId: number;
-  scale: number;
-  canvases: OffscreenCanvas[];
-  tileTwips: Uint32Array;
-  paintedTile: Uint8Array;
-  pendingFullPaint: Int32Array;
-  y: number;
-};
-
-
 export type ToTileRenderer =
   | {
       /** initialize */
       t: 'i';
-      /** Main view data */
-      m: InitializeViewData;
-      /** shared renderer data */
+      c: OffscreenCanvas[];
       d: TileRenderData;
+      /** absolute scale */
+      s: number;
+      /** top position in pixels */
+      y: number;
+      /** dpi */
       dpi: number;
     }
   | {
       /** scroll */
       t: 's';
-      viewId: number;
       /** view height in pixels */
       y: number;
     }
   | {
       /** resize */
       t: 'r';
-      viewId: number;
       /** height */
       h: number;
     }
   | {
       /** zoom */
       t: 'z';
-      viewId: number;
       /** absolute scale */
       s: number;
       /** dpi */
@@ -437,13 +423,11 @@ export type ToTileRenderer =
       y: number;
     }
   | {
-      t: 'previewStart';
-      p: InitializeViewData;
-      d: Partial<TileRenderData, "tileSize" | "viewId" | "tileTwips" | "paintedTile" | "pendingFullPaint">;
-    }
-  | {
-      t: 'previewStop';
-    };
+      /** width change */
+      t: 'w';
+      /** width */
+      w: number;
+  };
 
 export type Ref<T> = {
   current?: T;

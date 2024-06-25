@@ -5653,7 +5653,8 @@ void ScInterpreter::IterateParametersIf( ScIterFuncIf eFunc )
                 ScMatrixRef pResultMatrix = QueryMat( pQueryMatrix, aOptions);
                 if (nGlobalError != FormulaError::NONE || !pResultMatrix)
                 {
-                    SetError( FormulaError::IllegalParameter);
+                    PushIllegalParameter();
+                    return;
                 }
 
                 if (pSumExtraMatrix)
@@ -5670,6 +5671,25 @@ void ScInterpreter::IterateParametersIf( ScIterFuncIf eFunc )
                                 if (pSumExtraMatrix->IsValue( nC, nR))
                                 {
                                     fVal = pSumExtraMatrix->GetDouble( nC, nR);
+                                    ++fCount;
+                                    fSum += fVal;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (!bSumExtraRange)
+                {
+                    for (SCCOL nCol = nCol1; nCol <= nCol2; ++nCol)
+                    {
+                        for (SCROW nRow = nRow1; nRow <= nRow2; ++nRow)
+                        {
+                            if (pResultMatrix->IsValue( nCol, nRow) &&
+                                    pResultMatrix->GetDouble( nCol, nRow))
+                            {
+                                if (pQueryMatrix->IsValue( nCol, nRow))
+                                {
+                                    fVal = pQueryMatrix->GetDouble( nCol, nRow);
                                     ++fCount;
                                     fSum += fVal;
                                 }
@@ -11386,26 +11406,41 @@ bool ScInterpreter::SearchRangeForValue( VectorSearchArguments& vsa, ScQueryPara
                 }
                 else
                 {
-                    // search of columns in row
                     rParam.bByRow = false;
-                    bool bReverseSearch = (vsa.eSearchMode == searchrev);
-                    ScQueryCellIteratorDirect aCellIter(mrDoc, mrContext, vsa.nTab1, rParam, false, bReverseSearch);
-                    // Advance Entry.nField in Iterator if column changed
-                    aCellIter.SetAdvanceQueryParamEntryField(true);
-                    aCellIter.SetLookupMode(vsa.nSearchOpCode);
-                    // TODO: no binary search for column (horizontal) search (use linear)
-                    aCellIter.SetSortedBinarySearchMode(vsa.eSearchMode);
-                    if (rEntry.eOp == SC_EQUAL)
+                    bool bBinarySearch = vsa.eSearchMode == searchbasc || vsa.eSearchMode == searchbdesc;
+                    if (bBinarySearch && (vsa.nSearchOpCode == SC_OPCODE_X_LOOKUP || vsa.nSearchOpCode == SC_OPCODE_X_MATCH))
                     {
+                        ScQueryCellIteratorSortedCache aCellIter(mrDoc, mrContext, rParam.nTab, rParam, false, false);
+                        // Advance Entry.nField in Iterator if column changed
+                        aCellIter.SetAdvanceQueryParamEntryField(true);
+                        aCellIter.SetSortedBinarySearchMode(vsa.eSearchMode);
+                        aCellIter.SetLookupMode(vsa.nSearchOpCode);
                         if (aCellIter.GetFirst())
+                        {
                             vsa.nHitIndex = aCellIter.GetCol() - vsa.nCol1 + 1;
+                        }
                     }
                     else
                     {
-                        SCCOL nC;
-                        SCROW nR;
-                        if (aCellIter.FindEqualOrSortedLastInRange(nC, nR))
-                            vsa.nHitIndex = nC - vsa.nCol1 + 1;
+                        // search of columns in row
+                        bool bReverseSearch = (vsa.eSearchMode == searchrev);
+                        ScQueryCellIteratorDirect aCellIter(mrDoc, mrContext, vsa.nTab1, rParam, false, bReverseSearch);
+                        // Advance Entry.nField in Iterator if column changed
+                        aCellIter.SetAdvanceQueryParamEntryField(true);
+                        aCellIter.SetLookupMode(vsa.nSearchOpCode);
+                        aCellIter.SetSortedBinarySearchMode(vsa.eSearchMode);
+                        if (rEntry.eOp == SC_EQUAL)
+                        {
+                            if (aCellIter.GetFirst())
+                                vsa.nHitIndex = aCellIter.GetCol() - vsa.nCol1 + 1;
+                        }
+                        else
+                        {
+                            SCCOL nC;
+                            SCROW nR;
+                            if (aCellIter.FindEqualOrSortedLastInRange(nC, nR))
+                                vsa.nHitIndex = nC - vsa.nCol1 + 1;
+                        }
                     }
                 }
             }
@@ -11555,14 +11590,10 @@ static bool lcl_LookupQuery( ScAddress & o_rResultPos, ScDocument& rDoc, ScInter
         // range lookup <= or >=
         SCCOL nCol;
         SCROW nRow;
-        bool bLessOrEqual = rEntry.eOp == SC_LESS || rEntry.eOp == SC_LESS_EQUAL;
-        // we can use binary search if the SearchMode is searchbasc or searchbdesc
-        if ((static_cast<SearchMode>(nSearchMode) == searchbasc && !bLessOrEqual) ||
-            (static_cast<SearchMode>(nSearchMode) == searchbdesc && bLessOrEqual) ||
+        bool bBinarySearch = static_cast<SearchMode>(nSearchMode) == searchbasc || static_cast<SearchMode>(nSearchMode) == searchbdesc;
+        if ((bBinarySearch && (nOpCode == SC_OPCODE_X_LOOKUP || nOpCode == SC_OPCODE_X_MATCH)) ||
             ScQueryCellIteratorSortedCache::CanBeUsed(rDoc, rParam, rParam.nTab, cell, refData, rContext))
         {
-            // search for the first LessOrEqual value if SearchMode is desc or
-            // search for the first GreaterOrEqual value if SearchMode is asc
             ScQueryCellIteratorSortedCache aCellIter(rDoc, rContext, rParam.nTab, rParam, false, false);
             aCellIter.SetSortedBinarySearchMode(nSearchMode);
             aCellIter.SetLookupMode(nOpCode);
@@ -11575,7 +11606,6 @@ static bool lcl_LookupQuery( ScAddress & o_rResultPos, ScDocument& rDoc, ScInter
         }
         else
         {
-            // search for the last LessOrEqual value or GreaterOrEqual value
             bool bReverse = (static_cast<SearchMode>(nSearchMode) == searchrev);
             ScQueryCellIteratorDirect aCellIter(rDoc, rContext, rParam.nTab, rParam, false, bReverse);
 

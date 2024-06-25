@@ -17,6 +17,8 @@
 #include <rootfrm.hxx>
 #include <view.hxx>
 #include <wrtsh.hxx>
+#include <bodyfrm.hxx>
+#include <sectfrm.hxx>
 
 /// Covers sw/source/core/layout/ftnfrm.cxx fixes.
 class Test : public SwModelTestBase
@@ -61,6 +63,94 @@ CPPUNIT_TEST_FIXTURE(Test, testFlySplitFootnoteLayout)
     // Without the accompanying fix in place, this test would have failed, the footnote frame was
     // not created, the footnote reference was empty.
     CPPUNIT_ASSERT(pPage->FindFootnoteCont());
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testInlineEndnoteAndFootnote)
+{
+    // Given a DOC file with an endnote and then a footnote:
+    createSwDoc("inline-endnote-and-footnote.doc");
+
+    // When laying out that document:
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // Then make sure the footnote is below the endnote:
+    // Without the accompanying fix in place, this test would have failed with:
+    // - xpath should match exactly 1 node
+    // i.e. the endnote was also in the footnote container, not at the end of the body text.
+    sal_Int32 nEndnoteTop
+        = parseDump("/root/page/body/section/column/ftncont/ftn/infos/bounds"_ostr, "top"_ostr)
+              .toInt32();
+    sal_Int32 nFootnoteTop
+        = parseDump("/root/page/ftncont/ftn/infos/bounds"_ostr, "top"_ostr).toInt32();
+    // Endnote at the end of body text, footnote at page bottom.
+    CPPUNIT_ASSERT_LESS(nFootnoteTop, nEndnoteTop);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testInlineEndnoteAndSection)
+{
+    // Given a document ending with a section, ContinuousEndnotes is true:
+    createSwDoc("inline-endnote-and-section.odt");
+
+    // When laying out that document:
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // Then make sure the endnote section is after the section at the end of the document, not
+    // inside it:
+    int nToplevelSections = countXPathNodes(pXmlDoc, "/root/page/body/section"_ostr);
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 2
+    // - Actual  : 1
+    // and we even crashed on shutdown.
+    CPPUNIT_ASSERT_EQUAL(2, nToplevelSections);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testInlineEndnotePosition)
+{
+    // Given a document, ContinuousEndnotes is true:
+    createSwDoc("inline-endnote-position.docx");
+
+    // When laying out that document:
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // Then make sure the endnote separator (line + spacing around it) is large enough, so the
+    // endnote text below the separator has the correct position:
+    sal_Int32 nEndnoteContTopMargin
+        = parseDump("//column/ftncont/infos/prtBounds"_ostr, "top"_ostr).toInt32();
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 269
+    // - Actual  : 124
+    // i.e. the top margin wasn't the default font size with its spacing, but the Writer default,
+    // which shifted endnote text up, incorrectly.
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(269), nEndnoteContTopMargin);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testInlineEndnoteSectionDelete)
+{
+    // Given a document, ContinuousEndnotes is true, 3 pages, endnodes start on page 2:
+    // When laying out that document:
+    createSwDoc("inline-endnote-section-delete.docx");
+
+    // First page: just body text:
+    SwDoc* pDoc = getSwDoc();
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    auto pPage = pLayout->Lower()->DynCastPageFrame();
+    CPPUNIT_ASSERT(pPage->GetLower()->IsBodyFrame());
+    auto pBodyFrame = static_cast<SwBodyFrame*>(pPage->GetLower());
+    CPPUNIT_ASSERT(!pBodyFrame->GetLastLower()->IsSctFrame());
+    // Second page: ends with endnotes:
+    pPage = pPage->GetNext()->DynCastPageFrame();
+    CPPUNIT_ASSERT(pPage->GetLower()->IsBodyFrame());
+    pBodyFrame = static_cast<SwBodyFrame*>(pPage->GetLower());
+    CPPUNIT_ASSERT(pBodyFrame->GetLastLower()->IsSctFrame());
+    auto pSection = static_cast<SwSectionFrame*>(pBodyFrame->GetLastLower());
+    CPPUNIT_ASSERT(pSection->IsEndNoteSection());
+    // Third page: just endnotes:
+    pPage = pPage->GetNext()->DynCastPageFrame();
+    CPPUNIT_ASSERT(pPage->GetLower()->IsBodyFrame());
+    pBodyFrame = static_cast<SwBodyFrame*>(pPage->GetLower());
+    CPPUNIT_ASSERT(pBodyFrame->GetLower()->IsSctFrame());
+    pSection = static_cast<SwSectionFrame*>(pBodyFrame->GetLower());
+    CPPUNIT_ASSERT(pSection->IsEndNoteSection());
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

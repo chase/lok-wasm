@@ -1490,6 +1490,7 @@ endif
 
 gb_emscripten_fs_image_filelists += $(call gb_Package_get_target,liblangtag_data)
 gb_emscripten_fs_image_filelists += $(call gb_Package_get_target,fontconfig_data)
+gb_emscripten_fs_image_filelists += $(call gb_Package_get_target,extras_autocorr)
 
 #
 # Ruleset

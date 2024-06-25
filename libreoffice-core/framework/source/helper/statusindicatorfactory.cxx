@@ -286,6 +286,17 @@ void StatusIndicatorFactory::setValue( const css::uno::Reference< css::task::XSt
     impl_reschedule(false);
 }
 
+bool StatusIndicatorFactory::joinThreads()
+{
+    WakeUpThread::joinThread();
+    return true;
+}
+
+void StatusIndicatorFactory::startThreads()
+{
+    WakeUpThread::startThread();
+}
+
 void StatusIndicatorFactory::implts_makeParentVisibleIfAllowed()
 {
     css::uno::Reference< css::frame::XFrame > xFrame;
@@ -544,24 +555,19 @@ void StatusIndicatorFactory::impl_startWakeUpThread()
     if (m_bDisableReschedule)
         return;
 
-    if (!m_pWakeUp.is())
-    {
-        m_pWakeUp = new WakeUpThread(this);
-        m_pWakeUp->launch();
-    }
+    if (!m_pWakeUp)
+        m_pWakeUp.reset(new WakeUpThread(this));
 }
 
 void StatusIndicatorFactory::impl_stopWakeUpThread()
 {
-    rtl::Reference<WakeUpThread> wakeUp;
+    std::unique_ptr<WakeUpThread> wakeUp;
     {
         std::scoped_lock g(m_mutex);
         std::swap(wakeUp, m_pWakeUp);
     }
-    if (wakeUp.is())
-    {
+    if (wakeUp)
         wakeUp->stop();
-    }
 }
 
 } // namespace framework

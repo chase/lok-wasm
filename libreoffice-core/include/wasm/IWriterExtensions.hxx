@@ -33,9 +33,10 @@ public:
 class VCL_DLLPUBLIC SAL_LOPLUGIN_ANNOTATE("crosscast") IWriterExtensions
 {
 public:
-    virtual val comments() { return {}; };
+    virtual val comments(const val& /* ids */) { return {}; };
     virtual void addComment(const std::string& /* text */) {}
     virtual void replyComment(int /* parentId */, const std::string& /* text */) {};
+    virtual void updateComment(int /* id */, const std::string& /* text */) {};
     virtual void deleteCommentThreads(val /* parentId */){};
     virtual void deleteComment(int /* commentId */) {};
     virtual void resolveCommentThread(int /* parentId */) {};
@@ -59,5 +60,7 @@ public:
     virtual void cancelFindOrReplace() {};
     virtual val getOutline() { return {}; }
     virtual val gotoOutline(int /* outlineIndex */) { return {}; };
+    virtual void bumpInvalidationGeneration() {};
+    virtual sal_uInt32 invalidationGeneration() { return 0; };
 };
 }

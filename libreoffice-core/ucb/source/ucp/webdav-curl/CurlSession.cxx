@@ -14,10 +14,13 @@
 #include "UCBDeadPropertyValue.hxx"
 #include "webdavresponseparser.hxx"
 
+#include <cppuhelper/implbase.hxx>
+#include <comphelper/processfactory.hxx>
 #include <comphelper/attributelist.hxx>
-#include <comphelper/lok.hxx>
 #include <comphelper/scopeguard.hxx>
 #include <comphelper/string.hxx>
+#include <cppuhelper/queryinterface.hxx>
+#include <cppuhelper/supportsservice.hxx>
 
 #include <o3tl/safeint.hxx>
 #include <o3tl/string_view.hxx>
@@ -27,6 +30,7 @@
 
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <com/sun/star/io/Pipe.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
 #include <com/sun/star/io/SequenceInputStream.hpp>
 #include <com/sun/star/io/SequenceOutputStream.hpp>
 #include <com/sun/star/xml/sax/Writer.hpp>
@@ -688,14 +692,6 @@ CurlSession::CurlSession(uno::Reference<uno::XComponentContext> xContext,
         // neon would close the connection from ne_end_request(), this seems
         // to be the equivalent and not CURLOPT_TCP_KEEPALIVE
         rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_FORBID_REUSE, 1L);
-        assert(rc == CURLE_OK);
-    }
-    // If WOPI-like host has self-signed certificate, it's not possible to insert images
-    // to the document, so here is a compromise. The user has already accepted the self
-    // signed certificate in the browser, when we get here.
-    if (comphelper::LibreOfficeKit::isActive())
-    {
-        rc = curl_easy_setopt(m_pCurl.get(), CURLOPT_SSL_VERIFYPEER, 0L);
         assert(rc == CURLE_OK);
     }
 }
@@ -2438,5 +2434,43 @@ auto CurlSession::NonInteractive_UNLOCK(OUString const& rURI) -> void
 }
 
 } // namespace http_dav_ucp
+
+namespace
+{
+/// Manage lifecycle of global DAV worker threads
+class WebDAVManager : public cppu::WeakImplHelper<css::lang::XServiceInfo>,
+                      public comphelper::LibreOfficeKit::ThreadJoinable
+{
+public:
+    WebDAVManager() {}
+
+    // XServiceInfo
+    virtual OUString SAL_CALL getImplementationName() override
+    {
+        return "com.sun.star.comp.WebDAVManager";
+    }
+    virtual sal_Bool SAL_CALL supportsService(const OUString& ServiceName) override
+    {
+        return cppu::supportsService(this, ServiceName);
+    }
+    virtual css::uno::Sequence<OUString> SAL_CALL getSupportedServiceNames() override
+    {
+        return { "com.sun.star.ucb.WebDAVManager" };
+    }
+
+    // comphelper::LibreOfficeKit::ThreadJoinable
+    virtual bool joinThreads() override { return g_Init.LockStore.joinThreads(); }
+
+    virtual void startThreads() override { g_Init.LockStore.startThreads(); }
+};
+
+} // anonymous namespace
+
+extern "C" SAL_DLLPUBLIC_EXPORT css::uno::XInterface*
+ucb_webdav_manager_get_implementation(css::uno::XComponentContext*,
+                                      css::uno::Sequence<css::uno::Any> const&)
+{
+    return cppu::acquire(new WebDAVManager());
+}
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -274,11 +274,10 @@ export function createKeyHandler(
 
       // simple key down
       if (
-        modifiers &&
-        evt.type === 'keydown' &&
-        (!evt.shiftKey ||
-          // don't override scrolling when out of focus
-          (evt.code === 'Space' && !isCursorVisible_))
+        modifiers && 
+        // If Space is the not the only modifier or if we press Shift+Space
+        (modifiers !== Modifiers.SHIFT || evt.key === "Space") && 
+        evt.type === 'keydown'
       ) {
         doc().postKeyEvent(KEY_DOWN, rawCharCode, vclCode);
         return evt.preventDefault();

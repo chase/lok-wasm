@@ -551,31 +551,22 @@ typedef enum
      */
     LOK_CALLBACK_REDLINE_TABLE_ENTRY_MODIFIED = 31,
 
+    // MACRO: Simplified comment notification {
     /**
      * There is some change in comments in the document
      *
      * The payload example:
      * {
-     *     "comment": {
-     *         "action": "Add",
-     *         "id": "11",
-     *         "parent": "4",
-     *         "author": "Unknown Author",
-     *         "text": "",
-     *         "dateTime": "2016-08-18T13:13:00",
-     *         "anchorPos": "4529, 3906",
-     *         "textRange": "1418, 3906, 3111, 919"
-     *     }
+     *    "action": "Add",
+     *    "id": 11,
+     *    "parentId": 4,
      * }
-     *
-     * The format is the same as an entry of
-     * lok::Document::getCommandValues('.uno:ViewAnnotations'), extra
-     * fields:
      *
      * - 'action' can be 'Add', 'Remove' or 'Modify' depending on whether
      *    comment has been added, removed or modified.
      */
     LOK_CALLBACK_COMMENT = 32,
+    // MACRO: }
 
     /**
      * The column/row header is no more valid because of a column/row insertion
@@ -590,7 +581,7 @@ typedef enum
      */
     LOK_CALLBACK_CELL_ADDRESS = 34,
     /**
-     * The key ruler related properties on change are reported by this.
+     * The key horizontal ruler related properties on change are reported by this.
      *
      * The payload format is:
      *
@@ -1060,6 +1051,23 @@ typedef enum
      *  Payload contains the rectangle details
      */
     LOK_CALLBACK_SHAPE_INNER_TEXT = 72,
+        /**
+     * The key vertical ruler related properties on change are reported by this.
+     *
+     * The payload format is:
+     *
+     * {
+     *      "margin1": "...",
+     *      "margin2": "...",
+     *      "leftOffset": "...",
+     *      "pageOffset": "...",
+     *      "pageWidth": "...",
+     *      "unit": "..."
+     *  }
+     *
+     * Here all aproperties are same as described in svxruler.
+     */
+    LOK_CALLBACK_VERTICAL_RULER_UPDATE = 73
 
 }
 LibreOfficeKitCallbackType;
@@ -1161,6 +1169,8 @@ static inline const char* lokCallbackTypeToString(int nType)
         return "LOK_CALLBACK_COMMENT";
     case LOK_CALLBACK_RULER_UPDATE:
         return "LOK_CALLBACK_RULER_UPDATE";
+    case LOK_CALLBACK_VERTICAL_RULER_UPDATE:
+        return "LOK_CALLBACK_VERTICAL_RULER_UPDATE";
     case LOK_CALLBACK_WINDOW:
         return "LOK_CALLBACK_WINDOW";
     case LOK_CALLBACK_VALIDITY_LIST_BUTTON:

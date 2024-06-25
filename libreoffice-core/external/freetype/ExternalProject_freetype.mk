@@ -29,9 +29,11 @@ $(call gb_ExternalProject_get_state_target,freetype,build) :
 			CFLAGS="$(CFLAGS) \
 				$(call gb_ExternalProject_get_build_flags,freetype) \
 				$(call gb_ExternalProject_get_link_flags,freetype) \
-				-DFT_DEBUG_LEVEL_ERROR \
 				$(gb_VISIBILITY_FLAGS) \
 				$(gb_EMSCRIPTEN_CPPFLAGS)" \
+		&& sed -i 's/^#define FT_CONFIG_OPTION_MAC_FONTS/\/\/ &/' devel/ftoption.h \
+		&& sed -i 's/^#define FT_CONFIG_OPTION_MAC_FONTS/\/\/ &/' include/freetype/config/ftoption.h \
+		&& sed -i 's/^#define FT_CONFIG_OPTION_MAC_FONTS/\/\/ &/' builds/unix/ftoption.h \
 		&& $(MAKE) install \
 		&& touch $@	)
 	$(call gb_Trace_EndRange,freetype,EXTERNAL)

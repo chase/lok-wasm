@@ -34,6 +34,7 @@
 #include <vcl/lineinfo.hxx>
 #include <vcl/gradient.hxx>
 #include <vcl/settings.hxx>
+#include <vcl/pdf/PDFNote.hxx>
 #include <svx/unoapi.hxx>
 #include <sal/log.hxx>
 #include <comphelper/lok.hxx>
@@ -144,6 +145,7 @@ ScOutputData::ScOutputData( OutputDevice* pNewDev, ScOutputType eNewType,
                             SCCOL nNewX1, SCROW nNewY1, SCCOL nNewX2, SCROW nNewY2,
                             double nPixelPerTwipsX, double nPixelPerTwipsY,
                             const Fraction* pZoomX, const Fraction* pZoomY ) :
+    mpOriginalTargetDevice( pNewDev ),
     mpDev( pNewDev ),
     mpRefDevice( pNewDev ),      // default is output device
     pFmtDevice( pNewDev ),      // default is output device
@@ -2602,9 +2604,9 @@ void ScOutputData::AddPDFNotes()
                         OUString aContent = pNote->GetText();
                         aContent = aContent.replaceAll("\n", " ");
 
-                        vcl::PDFNote aNote;
-                        aNote.Title = aTitle;
-                        aNote.Contents = aContent;
+                        vcl::pdf::PDFNote aNote;
+                        aNote.maTitle = aTitle;
+                        aNote.maContents = aContent;
                         pPDFData->CreateNote( aNoteRect, aNote );
                     }
                 }

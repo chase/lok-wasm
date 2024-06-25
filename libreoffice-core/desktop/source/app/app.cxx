@@ -1988,6 +1988,8 @@ void Desktop::OpenClients()
 
     if ( ! bAllowRecoveryAndSessionManagement )
     {
+// MACRO: this service does not exist when it is stripped out
+#if !ENABLE_WASM_STRIP_RECOVERYUI
         try
         {
             Reference< XDispatch > xRecovery = css::frame::theAutoRecovery::get( ::comphelper::getProcessComponentContext() );
@@ -2003,6 +2005,7 @@ void Desktop::OpenClients()
         {
             TOOLS_WARN_EXCEPTION( "desktop.app", "Could not disable AutoRecovery.");
         }
+#endif
     }
     else
     {
@@ -2082,6 +2085,7 @@ void Desktop::OpenClients()
     aRequest.aConversionParams = rArgs.GetConversionParams();
     aRequest.aConversionOut = rArgs.GetConversionOut();
     aRequest.aImageConversionType = rArgs.GetImageConversionType();
+    aRequest.aStartListParams = rArgs.GetStartListParams();
     aRequest.aInFilter = rArgs.GetInFilter();
     aRequest.bTextCat = rArgs.IsTextCat();
     aRequest.bScriptCat = rArgs.IsScriptCat();

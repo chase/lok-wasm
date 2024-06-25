@@ -1,4 +1,6 @@
-#include <algorithm>
+#include "sal/types.h"
+#include <unordered_set>
+#include <vector>
 #include <docufld.hxx>
 #include <tools/long.hxx>
 #include <postithelper.hxx>
@@ -46,6 +48,11 @@
 #include <IDocumentOutlineNodes.hxx>
 #include <ndtxt.hxx>
 #include <txtfrm.hxx>
+#include <comphelper/servicehelper.hxx>
+#include <cmdid.h>
+#include <tools/json_writer.hxx>
+#include <LibreOfficeKit/LibreOfficeKitEnums.h>
+#include <DocumentRedlineManager.hxx>
 
 using namespace emscripten;
 
@@ -82,17 +89,6 @@ tools::Long bottomTwips(SwRects* pRects)
     return r;
 }
 
-tools::Long topTwips(SwRects* pRects)
-{
-    tools::Long r = LONG_MAX;
-    for (const SwRect& rNextRect : *pRects)
-    {
-        if (rNextRect.Top() < r)
-            r = rNextRect.Top();
-    }
-    return r == LONG_MAX ? 0 : r;
-}
-
 uno::Reference<text::XTextViewCursor> currentCursor()
 {
     SwView* pView = dynamic_cast<SwView*>(SfxViewShell::Current());
@@ -110,14 +106,58 @@ uno::Reference<text::XTextViewCursor> currentCursor()
     }
     return xTextViewCursorSupplier->getViewCursor();
 }
+
+void prepareComment(const SwPostItField* pField, val& obj)
+{
+    obj.set("id", val(pField->GetPostItId()));
+    obj.set("parentId", val(pField->GetParentPostItId()));
+    obj.set("author", val::u16string(pField->GetPar1().getStr()));
+    obj.set("text", val::u16string(pField->GetPar2().getStr()));
+    obj.set("resolved", val(pField->GetResolved()));
+    obj.set("dateTime",
+            val::u16string(utl::toISO8601(pField->GetDateTime().GetUNODateTime()).getStr()));
 }
 
-constexpr OUString g_sRecordChanges = u"RecordChanges"_ustr;
+// RAII utility to disable redlines
+class WithoutRedlines
+{
+private:
+    SwDoc& rDoc;
+    bool hasRedlines = false;
+    RedlineFlags eOld;
 
-val SwXTextDocument::comments()
+public:
+    explicit WithoutRedlines(SwDoc& doc)
+        : rDoc(doc)
+    {
+        sw::DocumentRedlineManager& rRedlineManager = rDoc.GetDocumentRedlineManager();
+        eOld = rRedlineManager.GetRedlineFlags();
+        if (eOld & RedlineFlags::On)
+        {
+            hasRedlines = true;
+            rRedlineManager.SetRedlineFlags(eOld & ~RedlineFlags::On);
+        }
+    }
+
+    ~WithoutRedlines()
+    {
+        sw::DocumentRedlineManager& rRedlineManager = rDoc.GetDocumentRedlineManager();
+        rRedlineManager.SetRedlineFlags(eOld);
+    }
+};
+}
+
+val SwXTextDocument::comments(const val& ids)
 {
     SolarMutexGuard aGuard;
     val commentsNode = val::array();
+    std::unordered_set<sal_uInt32> idSet;
+    const uint32_t idsLen = ids["length"].as<uint32_t>();
+    for (size_t i = 0; i < idsLen; i++)
+    {
+        idSet.insert(ids[i].as<uint32_t>());
+    }
+
     for (auto const& sidebarItem : *m_pDocShell->GetView()->GetPostItMgr())
     {
         sw::annotation::SwAnnotationWin* pWin = sidebarItem->mpPostIt.get();
@@ -128,6 +168,20 @@ val SwXTextDocument::comments()
         }
 
         const SwPostItField* pField = pWin->GetPostItField();
+        if (idsLen > 0 && !idSet.contains(pField->GetPostItId()))
+        {
+            continue;
+        }
+        bool root = pField->GetParentPostItId() == 0;
+        val obj = val::object();
+        // if it isn't a root comment, layout information is not useful
+        if (!root)
+        {
+            prepareComment(pField, obj);
+            commentsNode.call<void>("push", obj);
+            continue;
+        }
+
         const SwRect& aRect = pWin->GetAnchorRect();
         tools::Rectangle aSVRect(aRect.Pos().getX(), aRect.Pos().getY(),
                                  aRect.Pos().getX() + aRect.SSize().Width(),
@@ -140,21 +194,19 @@ val SwXTextDocument::comments()
         }
 
         val rects = val::array();
+        double bottom = 0.0;
         for (const basegfx::B2DRange& aRange : pWin->GetAnnotationTextRanges())
         {
             const SwRect rect(aRange.getMinX(), aRange.getMinY(), aRange.getWidth(),
                               aRange.getHeight());
+            if (aRange.getMaxY() > bottom)
+                bottom = aRange.getMaxY();
             rects.call<void>("push", rectToArray(rect.SVRect()));
         }
 
-        val obj = val::object();
-        obj.set("id", val(pField->GetPostItId()));
-        obj.set("parentId", val(pField->GetParentPostItId()));
-        obj.set("author", val::u16string(pField->GetPar1().getStr()));
-        obj.set("text", val::u16string(pField->GetPar2().getStr()));
-        obj.set("resolved", val(pField->GetResolved()));
-        obj.set("dateTime", val(utl::toISO8601(pField->GetDateTime().GetUNODateTime())));
+        prepareComment(pField, obj);
         obj.set("anchorPos", rectToArray(aSVRect));
+        obj.set("bottomTwips", bottom);
         obj.set("textRange", rects);
         obj.set("layoutStatus", val(static_cast<sal_Int16>(pWin->GetLayoutStatus())));
 
@@ -170,38 +222,59 @@ void SwXTextDocument::addComment(const std::string& text)
         comphelper::InitPropertySequence({ { "Text", uno::Any(OUString::fromUtf8(text)) } }));
 
     SolarMutexGuard aGuard;
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
     comphelper::dispatchCommand(u".uno:InsertAnnotation"_ustr, aPropertyValues);
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::replyComment(int parentId, const std::string& text)
 {
-    css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(
-        comphelper::InitPropertySequence({ { "Id", uno::Any(static_cast<sal_uInt32>(parentId)) },
-                                           { "Text", uno::Any(OUString::fromUtf8(text)) } }));
-
+    SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
     SolarMutexGuard aGuard;
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
+    sw::annotation::SwAnnotationWin* pWin
+        = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(parentId));
+    if (!pWin)
+        return;
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
+    OUString sText = OUString::fromUtf8(text);
+    pMgr->RegisterAnswerText(sText);
+    pWin->ExecuteCommand(FN_REPLY);
+    SwPostItField* pLatestPostItField = pMgr->GetLatestPostItField();
+    if (pLatestPostItField)
     {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+        // Set the parent postit id of the reply.
+        pLatestPostItField->SetParentPostItId(static_cast<sal_uInt32>(parentId));
 
-    comphelper::dispatchCommand(u".uno:ReplyComment"_ustr, aPropertyValues);
+        // If name of the replied comment is empty, we need to set a name in order to connect them in the xml file.
+        pWin->GeneratePostItName(); // Generates a name if the current name is empty.
 
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
+        pLatestPostItField->SetParentName(pWin->GetPostItField()->GetName());
+
+        // the callback needs to be constructed here, because the Add callback is fired during layout,
+        // which is no longer done for replies as an optimization
+        tools::JsonWriter aTree;
+        aTree.put("action", "Add");
+        aTree.put("id", pLatestPostItField->GetPostItId());
+        aTree.put("parentId", parentId);
+        m_pDocShell->GetView()->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT,
+                                                           aTree.finishAndGetAsOString());
     }
+}
+
+void SwXTextDocument::updateComment(int id, const std::string& text)
+{
+    SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
+    SolarMutexGuard aGuard;
+    sw::annotation::SwAnnotationWin* pAnnotationWin
+        = pMgr->GetAnnotationWin(static_cast<sal_uInt32>(id));
+    if (!pAnnotationWin)
+        return;
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
+    OUString sText = OUString::fromUtf8(text);
+
+    pAnnotationWin->UpdateText(sText);
+    // explicit state update to get the Undo state right
+    m_pDocShell->GetView()->AttrChangedNotify(nullptr);
 }
 
 void SwXTextDocument::deleteCommentThreads(val parentIds)
@@ -210,19 +283,9 @@ void SwXTextDocument::deleteCommentThreads(val parentIds)
     std::vector<sal_uInt32> ids = vecFromJSArray<sal_uInt32>(parentIds);
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     pMgr->DeleteCommentThreads(ids);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::deleteComment(int commentId)
@@ -230,61 +293,31 @@ void SwXTextDocument::deleteComment(int commentId)
     SwPostItMgr* pMgr = m_pDocShell->GetView()->GetPostItMgr();
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     pMgr->Delete(commentId);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 }
 
 void SwXTextDocument::resolveCommentThread(int parentId)
 {
     css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
-        { { "Id", uno::Any(static_cast<sal_uInt32>(parentId)) } }));
+        { { "Id", uno::Any(OUString::number(parentId)) } }));
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     comphelper::dispatchCommand(u".uno:ResolveCommentThread"_ustr, aPropertyValues);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 };
 
 void SwXTextDocument::resolveComment(int commentId)
 {
     css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
-        { { "Id", uno::Any(static_cast<sal_uInt32>(commentId)) } }));
+        { { "Id", uno::Any(OUString::number(commentId)) } }));
 
     SolarMutexGuard aGuard;
-
-    bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(false));
-    }
+    WithoutRedlines dontTrackComments(GetDocOrThrow());
 
     comphelper::dispatchCommand(u".uno:ResolveComment"_ustr, aPropertyValues);
-
-    if (recordChanges)
-    {
-        setPropertyValue(g_sRecordChanges, uno::Any(true));
-    }
 };
 
 void SwXTextDocument::sanitize(val options)
@@ -320,18 +353,9 @@ void SwXTextDocument::sanitize(val options)
 
     if (options["comments"].isTrue())
     {
-        bool recordChanges = getPropertyValue(g_sRecordChanges).get<bool>();
-        if (recordChanges)
-        {
-            setPropertyValue(g_sRecordChanges, uno::Any(false));
-        }
+        WithoutRedlines dontTrackComments(GetDocOrThrow());
 
         comphelper::dispatchCommand(u".uno:DeleteAllNotes"_ustr, {});
-
-        if (recordChanges)
-        {
-            setPropertyValue(g_sRecordChanges, uno::Any(true));
-        }
     }
 }
 
@@ -443,11 +467,21 @@ class TextRanges_Impl final : public wasm::ITextRanges
 {
 private:
     std::vector<rtl::Reference<SwXTextRange>> ranges_;
-    std::vector<tools::Long> cachedBottomTwips_;
     sw::UnoCursorPointer unoCursorPtr_;
     const OUString searchString_;
 
-    SwRects* rangeRects(SwWrtShell* const pWrtShell, int index)
+    std::vector<val> cachedRectObjects_;
+    tools::Long cachedRectsStart_ = -1;
+    tools::Long cachedRectsEnd_ = -1;
+    size_t cachedStartIndex_ = 0;
+    size_t cachedEndIndex_ = 0;
+    /** 0 means unset, because realistically, no results are at 0 because that's out-of-bounds for the doc */
+    static constexpr tools::Long INVALID_BOTTOM_TWIPS = 0;
+    /** the bottom-most coordinate of a set of rectangles, in twips. */
+    std::vector<tools::Long> cachedBottomTwips_;
+    sal_uInt32 cachedInvalidationGeneration_ = 0;
+
+    val rangeRects(SwWrtShell* const pWrtShell, size_t index)
     {
         val rArray = val::array();
         rtl::Reference<SwXTextRange> range = ranges_.at(index);
@@ -455,7 +489,7 @@ private:
         if (!range->GetPositions(aPam))
         {
             emscripten_console_error("missing PaM");
-            return nullptr;
+            return {};
         }
 
         SwPosition* startPos = aPam.Start();
@@ -464,18 +498,126 @@ private:
         if (!startPos || !endPos || !node)
         {
             emscripten_console_error("missing node");
-            return nullptr;
+            return {};
         }
 
-        SwShellCursor aCursor(*pWrtShell, *startPos);
-        aCursor.SetMark();
-        aCursor.GetMark()->Assign(*node, endPos->GetContentIndex());
+        std::unique_ptr<SwShellCursor> aCursor(new SwShellCursor(*pWrtShell, *startPos));
+        aCursor->SetMark();
+        aCursor->GetMark()->Assign(*node, endPos->GetContentIndex());
 
-        aCursor.FillRects();
+        aCursor->FillRects();
+        SwRects* pRects = aCursor.get();
 
-        SwRects* pRects(&aCursor);
         cachedBottomTwips_[index] = bottomTwips(pRects);
-        return pRects;
+        val rects = swRectsToArray(pRects);
+        cachedRectObjects_[index] = rects;
+
+        return rects;
+    }
+
+    // this is only used for cases when there is nothing valid in the cache
+    std::optional<std::pair<size_t, size_t>> binarySearchRangeRects(SwWrtShell* const pWrtShell,
+                                                                    tools::Long startBottomTwips,
+                                                                    tools::Long endBottomTwips)
+    {
+        size_t low = 0, high = ranges_.size() - 1;
+        size_t startIndex = 0, endIndex = 0;
+        bool startSet = false, endSet = false;
+
+        while (low <= high)
+        {
+            size_t mid = low + (high - low) / 2;
+            // has a side-effect that produces the cached bottom twips used
+            rangeRects(pWrtShell, mid);
+
+            tools::Long midVal = cachedBottomTwips_.at(mid);
+            if (midVal != INVALID_BOTTOM_TWIPS && midVal >= startBottomTwips)
+            {
+                high = mid - 1;
+                startIndex = mid;
+                startSet = true;
+                if (mid == 0)
+                    break; // underflow
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+
+        if (!startSet)
+        {
+            return {};
+        }
+
+        // since there can be rects with identical bottom coordinates, seek back until the first non-identical
+        for (size_t seekIndex = (startIndex ? startIndex - 1 : startIndex); seekIndex > 0;
+             seekIndex--)
+        {
+            rangeRects(pWrtShell, seekIndex);
+            if (cachedBottomTwips_.at(seekIndex) >= startBottomTwips)
+            {
+                startIndex = seekIndex;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        low = startIndex;
+        high = ranges_.size() - 1;
+        while (low <= high)
+        {
+            size_t mid = low + (high - low) / 2;
+            // there's a good chance this rect was already calculated from the first loop
+            tools::Long midVal = cachedBottomTwips_.at(mid);
+            if (midVal == INVALID_BOTTOM_TWIPS)
+            {
+                // has a side-effect that produces the cached bottom twips used
+                rangeRects(pWrtShell, mid);
+            }
+
+            midVal = cachedBottomTwips_.at(mid);
+            if (midVal != INVALID_BOTTOM_TWIPS && midVal <= endBottomTwips)
+            {
+                low = mid + 1;
+                endIndex = mid;
+                endSet = true;
+            }
+            else
+            {
+                if (mid == 0)
+                    break; // underflow
+                high = mid - 1;
+            }
+        }
+
+        if (!endSet)
+        {
+            return {};
+        }
+
+        // same seek, but towards the end
+        for (size_t seekIndex = endIndex + 1; seekIndex < ranges_.size() - 1; seekIndex++)
+        {
+            rangeRects(pWrtShell, seekIndex);
+            if (cachedBottomTwips_.at(seekIndex) <= endBottomTwips)
+            {
+                endIndex = seekIndex;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (startIndex > endIndex)
+        {
+            return {};
+        }
+
+        return { { startIndex, endIndex } };
     }
 
     bool isOutOfRange(int index) { return index < 0 || index >= (int)ranges_.size(); }
@@ -531,6 +673,8 @@ private:
     }
 
 public:
+    TextRanges_Impl() {}
+
     TextRanges_Impl(SwPaM* const pPaM, OUString searchString)
         : searchString_(searchString)
     {
@@ -552,6 +696,7 @@ public:
             }
         }
         cachedBottomTwips_.resize(ranges_.size());
+        cachedRectObjects_.resize(ranges_.size());
     }
 
     int length() override { return ranges_.size(); };
@@ -559,7 +704,10 @@ public:
     val rect(int index) override
     {
         if (isOutOfRange(index))
+        {
+            emscripten_console_error("out of range");
             return val::undefined();
+        }
 
         SolarMutexGuard aGuard;
         SwView* pView = dynamic_cast<SwView*>(SfxViewShell::Current());
@@ -568,10 +716,17 @@ public:
             emscripten_console_error("missing view!");
             return val::undefined();
         }
-        SwRects* rects = rangeRects(pView->GetWrtShellPtr(), index);
-        if (!rects)
-            return val::undefined();
-        return swRectsToArray(rects);
+
+        SwXTextDocument* pModel
+            = comphelper::getFromUnoTunnel<SwXTextDocument>(pView->GetCurrentDocument());
+        if (cachedInvalidationGeneration_ == pModel->invalidationGeneration())
+        {
+            val maybe = cachedRectObjects_.at(index);
+            if (!maybe.isUndefined())
+                return maybe;
+        }
+
+        return rangeRects(pView->GetWrtShellPtr(), index);
     };
 
     val rects(int startYPosTwips, int endYPosTwips) override
@@ -590,57 +745,82 @@ public:
             return val::undefined();
         }
 
-        // predicting based on the cached bottom-most coordinate prevents running layout, which is expensive
-        int predictedStartIndex = -1;
-        int predictedEndIndex = -1;
-        for (int i = 0; i < (int)cachedBottomTwips_.size(); ++i)
+        val r = val::array();
+        SwXTextDocument* pModel
+            = comphelper::getFromUnoTunnel<SwXTextDocument>(pView->GetCurrentDocument());
+        // a later invalidation generation means that all prior rects are now likely not valid
+        if (cachedInvalidationGeneration_ != pModel->invalidationGeneration())
         {
-            tools::Long cachedBottomTwips = cachedBottomTwips_.at(i);
-            if (cachedBottomTwips == 0)
-                continue;
-
-            SwRects* pRects = rangeRects(pView->GetWrtShellPtr(), i);
-            if (!pRects)
-                return val::undefined();
-
-            if (startYPosTwips <= cachedBottomTwips)
+            std::fill(cachedBottomTwips_.begin(), cachedBottomTwips_.end(), INVALID_BOTTOM_TWIPS);
+            auto maybeRange = binarySearchRangeRects(pWrtShell, startYPosTwips, endYPosTwips);
+            if (!maybeRange)
             {
-                // if the cached bottom doesn't match the current bottom, a change has occurred and the values aren't valid
-                if (cachedBottomTwips != bottomTwips(pRects))
-                    break;
-
-                predictedStartIndex = i;
+                cachedRectsStart_ = -1;
+                cachedRectsEnd_ = -1;
+                return r;
             }
 
-            if (endYPosTwips >= cachedBottomTwips)
+            auto [startIndex, endIndex] = maybeRange.value();
+            for (size_t i = startIndex; i <= endIndex; ++i)
             {
-                if (cachedBottomTwips != bottomTwips(pRects))
-                {
-                    predictedStartIndex = -1;
-                    break;
-                }
-
-                predictedEndIndex = i;
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", cachedBottomTwips_.at(i) == INVALID_BOTTOM_TWIPS
+                                  ? rangeRects(pWrtShell, i)
+                                  : cachedRectObjects_.at(i));
+                r.call<void>("push", o);
             }
+            cachedRectsStart_ = startYPosTwips;
+            cachedRectsEnd_ = endYPosTwips;
+            return r;
         }
 
-        val r = val::array();
-        const int startIndex = std::clamp(predictedStartIndex, 0, (int)ranges_.size() - 1);
-        const int endIndex = std::clamp(predictedEndIndex, startIndex, (int)ranges_.size() - 1);
-        for (int i = startIndex; i <= endIndex; ++i)
+        // complete overlap of cached range
+        if (cachedRectsStart_ <= startYPosTwips && cachedRectsEnd_ >= endYPosTwips)
         {
-            SwRects* pRects = rangeRects(pView->GetWrtShellPtr(), i);
-            if (!pRects)
-                return val::undefined();
+            for (size_t i = cachedStartIndex_; i <= cachedEndIndex_; ++i)
+            {
+                tools::Long bottomTwips = cachedBottomTwips_.at(i);
+                if (bottomTwips < startYPosTwips)
+                {
+                    continue;
+                }
+                if (bottomTwips > endYPosTwips)
+                {
+                    break;
+                }
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", cachedRectObjects_.at(i));
+                r.call<void>("push", o);
+            }
+            return r;
+        }
 
-            if (bottomTwips(pRects) < startYPosTwips)
-                continue;
-            if (topTwips(pRects) > endYPosTwips)
-                continue;
-            val o = val::object();
-            o.set("i", i);
-            o.set("rect", swRectsToArray(pRects));
-            r.call<void>("push", o);
+        // work backwards from the cached rect start
+        if (startYPosTwips < cachedRectsStart_)
+        {
+            for (size_t i = cachedStartIndex_; i >= 0; --i)
+            {
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", rangeRects(pWrtShell, i));
+                r.call<void>("unshift", o);
+            }
+            cachedRectsStart_ = startYPosTwips;
+        }
+
+        // work forwards from the cached rect end
+        if (startYPosTwips < cachedRectsEnd_)
+        {
+            for (size_t i = cachedEndIndex_; ranges_.size() - 1; i++)
+            {
+                val o = val::object();
+                o.set("i", i);
+                o.set("rect", rangeRects(pWrtShell, i));
+                r.call<void>("push", o);
+            }
+            cachedRectsEnd_ = endYPosTwips;
         }
 
         return r;
@@ -728,14 +908,14 @@ public:
         SolarMutexGuard aGuard;
 
         OUString replaceString = OUString::fromUtf8(text);
-        auto range = ranges_.at(0);
+        auto range = ranges_.at(index);
         SwDoc& rDoc = range->GetDoc();
         UnoActionContext aAction(&rDoc);
         rDoc.GetIDocumentUndoRedo().StartUndo(SwUndoId::REPLACE, nullptr);
 
         replace(range, replaceString);
 
-        SwRewriter rewriter(MakeUndoReplaceRewriter(ranges_.size(), searchString_, replaceString));
+        SwRewriter rewriter(MakeUndoReplaceRewriter(1, searchString_, replaceString));
         rDoc.GetIDocumentUndoRedo().EndUndo(SwUndoId::REPLACE, &rewriter);
     };
 
@@ -802,10 +982,14 @@ std::shared_ptr<wasm::ITextRanges> SwXTextDocument::findAllTextRanges(const std:
     sal_Int32 nResult = 0;
     uno::Reference<text::XTextCursor> xCursor;
     SwUnoCursor* pResultCursor(FindAny(xSearch, xCursor, true, nResult, xTmp));
+    if (!nResult)
+    {
+        return std::make_shared<TextRanges_Impl>();
+    }
     if (!pResultCursor)
     {
         emscripten_console_error("no result cursor");
-        return {};
+        return std::make_shared<TextRanges_Impl>();
     }
 
     return std::make_shared<TextRanges_Impl>(pResultCursor, searchString);
@@ -876,7 +1060,7 @@ val SwXTextDocument::getOutline()
         val o = val::object();
         o.set("id", nOutlineId);
         o.set("parent", nParent);
-        o.set("text", textNode->GetText());
+        o.set("text", val::u16string(textNode->GetText().getStr()));
         r.call<void>("push", o);
 
         aOutlineStack.push(StackEntry(nLevel, nOutlineId));
@@ -903,9 +1087,19 @@ val SwXTextDocument::gotoOutline(int outlineIndex)
     return rectToArray(mrSh->GetCharRect());
 }
 
+void SwXTextDocument::bumpInvalidationGeneration()
+{
+    __c11_atomic_fetch_add(&m_nInvalidationGeneration, 1, __ATOMIC_RELAXED);
+}
+
+sal_uInt32 SwXTextDocument::invalidationGeneration()
+{
+    return __c11_atomic_load(&m_nInvalidationGeneration, __ATOMIC_RELAXED);
+}
+
 namespace sw
 {
-// search generations are used instead of a boolean because a simple boolean cannot gaurantee ordering
+// search generations are used instead of a boolean because a simple boolean cannot guarantee ordering
 _Atomic int g_searchGeneration = 0;
 
 void BumpSearchGeneration() { __c11_atomic_fetch_add(&g_searchGeneration, 1, __ATOMIC_RELAXED); }

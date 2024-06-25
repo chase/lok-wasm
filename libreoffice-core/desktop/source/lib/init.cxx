@@ -116,6 +116,8 @@
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
+#include <com/sun/star/util/XFlushable.hpp>
+#include <com/sun/star/configuration/theDefaultProvider.hpp>
 #include <com/sun/star/datatransfer/clipboard/XClipboard.hpp>
 #include <com/sun/star/datatransfer/UnsupportedFlavorException.hpp>
 #include <com/sun/star/datatransfer/XTransferable2.hpp>
@@ -271,11 +273,12 @@ extern "C" {
 
 #endif
 
-
 using LanguageToolCfg = officecfg::Office::Linguistic::GrammarChecking::LanguageTool;
+
 
 static LibLibreOffice_Impl *gImpl = nullptr;
 static bool lok_preinit_2_called = false;
+static bool gUseCompactFonts = false;
 static std::weak_ptr< LibreOfficeKitClass > gOfficeClass;
 static std::weak_ptr< LibreOfficeKitDocumentClass > gDocumentClass;
 
@@ -1688,6 +1691,7 @@ CallbackFlushHandler::CallbackFlushHandler(LibreOfficeKitDocument* pDocument, Li
     m_states.emplace(LOK_CALLBACK_TABLE_SELECTED, "NIL"_ostr);
     m_states.emplace(LOK_CALLBACK_TAB_STOP_LIST, "NIL"_ostr);
     m_states.emplace(LOK_CALLBACK_RULER_UPDATE, "NIL"_ostr);
+    m_states.emplace(LOK_CALLBACK_VERTICAL_RULER_UPDATE, "NIL"_ostr);
     m_states.emplace(LOK_CALLBACK_STATUS_INDICATOR_SET_VALUE, "NIL"_ostr);
 }
 
@@ -1800,7 +1804,7 @@ void CallbackFlushHandler::libreOfficeKitViewUpdatedCallbackPerViewId(int nType,
 void CallbackFlushHandler::dumpState(rtl::OStringBuffer &rState)
 {
     // NB. no locking
-    rState.append("\nView:\t");
+    rState.append("\n    View:\t");
     rState.append(static_cast<sal_Int32>(m_viewId));
     rState.append("\n\tDisableCallbacks:\t");
     rState.append(static_cast<sal_Int32>(m_nDisableCallbacks));
@@ -2019,6 +2023,7 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
             case LOK_CALLBACK_SET_PART:
             case LOK_CALLBACK_STATUS_INDICATOR_SET_VALUE:
             case LOK_CALLBACK_RULER_UPDATE:
+            case LOK_CALLBACK_VERTICAL_RULER_UPDATE:
             case LOK_CALLBACK_A11Y_FOCUS_CHANGED:
             case LOK_CALLBACK_A11Y_CARET_CHANGED:
             case LOK_CALLBACK_A11Y_TEXT_SELECTION_CHANGED:
@@ -2541,7 +2546,7 @@ void CallbackFlushHandler::invoke()
             LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
             for (auto& data : pDocument->tileRendererData_)
             {
-                if (data.activeViewId == m_viewId)
+                if (data.viewId == m_viewId)
                 {
                     auto& update = it2->getRectangleAndPart();
                     if (update.isEmpty()) continue;
@@ -2573,7 +2578,7 @@ void CallbackFlushHandler::invoke()
             LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
             for (auto& data : pDocument->tileRendererData_)
             {
-                if (data.activeViewId == m_viewId)
+                if (data.viewId == m_viewId)
                 {
                     long w, h;
                     pDocument->pClass->getDocumentSize(pDocument, &w, &h);
@@ -2787,6 +2792,8 @@ static void lo_stopURP(LibreOfficeKit* pThis, void* pSendURPToLOContext);
 
 static int lo_joinThreads(LibreOfficeKit* pThis);
 
+static void lo_startThreads(LibreOfficeKit* pThis);
+
 static void lo_setForkedChild(LibreOfficeKit* pThis, bool bIsChild);
 
 static void lo_runLoop(LibreOfficeKit* pThis,
@@ -2845,6 +2852,7 @@ LibLibreOffice_Impl::LibLibreOffice_Impl()
         m_pOfficeClass->startURP = lo_startURP;
         m_pOfficeClass->stopURP = lo_stopURP;
         m_pOfficeClass->joinThreads = lo_joinThreads;
+        m_pOfficeClass->startThreads = lo_startThreads;
         m_pOfficeClass->setForkedChild = lo_setForkedChild;
 
         gOfficeClass = m_pOfficeClass;
@@ -3600,9 +3608,6 @@ static int lo_joinThreads(LibreOfficeKit* /* pThis */)
     comphelper::ThreadPool &pool = comphelper::ThreadPool::getSharedOptimalPool();
     pool.joinThreadsIfIdle();
 
-//    if (comphelper::getWorkerCount() > 0)
-//        return 0;
-
     // Grammar checker thread
     css::uno::Reference<css::linguistic2::XLinguServiceManager2> xLangSrv =
         css::linguistic2::LinguServiceManager::create(xContext);
@@ -3611,7 +3616,40 @@ static int lo_joinThreads(LibreOfficeKit* /* pThis */)
     if (joinable && !joinable->joinThreads())
         return 0;
 
+    auto ucpWebdav = xContext->getServiceManager()->createInstanceWithContext(
+        "com.sun.star.ucb.WebDAVManager", xContext);
+    joinable = dynamic_cast<comphelper::LibreOfficeKit::ThreadJoinable *>(ucpWebdav.get());
+    if (joinable && !joinable->joinThreads())
+        return 0;
+
+    auto progressThread = xContext->getServiceManager()->createInstanceWithContext(
+        "com.sun.star.task.StatusIndicatorFactory", xContext);
+    joinable = dynamic_cast<comphelper::LibreOfficeKit::ThreadJoinable *>(progressThread.get());
+    if (joinable && !joinable->joinThreads())
+        return 0;
+
+    // Ensure configmgr's write thread is down
+    css::uno::Reference< css::util::XFlushable >(
+        css::configuration::theDefaultProvider::get(
+            comphelper::getProcessComponentContext()),
+        css::uno::UNO_QUERY_THROW)->flush();
+
     return 1;
+}
+
+static void lo_startThreads(LibreOfficeKit* /* pThis */)
+{
+    auto ucpWebdav = xContext->getServiceManager()->createInstanceWithContext(
+        "com.sun.star.ucb.WebDAVManager", xContext);
+    auto joinable = dynamic_cast<comphelper::LibreOfficeKit::ThreadJoinable *>(ucpWebdav.get());
+    if (joinable)
+        joinable->startThreads();
+
+    auto progressThread = xContext->getServiceManager()->createInstanceWithContext(
+        "com.sun.star.task.StatusIndicatorFactory", xContext);
+    joinable = dynamic_cast<comphelper::LibreOfficeKit::ThreadJoinable *>(progressThread.get());
+    if (joinable)
+        joinable->startThreads();
 }
 
 static void lo_setForkedChild(LibreOfficeKit* /* pThis */, bool bIsChild)
@@ -3903,7 +3941,6 @@ static void doc_iniUnoCommands ()
         u".uno:AlignLeft"_ustr,
         u".uno:AlignHorizontalCenter"_ustr,
         u".uno:AlignRight"_ustr,
-        u".uno:BackColor"_ustr,
         u".uno:BackgroundColor"_ustr,
         u".uno:TableCellBackgroundColor"_ustr,
         u".uno:Bold"_ustr,
@@ -4121,6 +4158,7 @@ static void doc_iniUnoCommands ()
         u".uno:CellProtection"_ustr,
         u".uno:MoveKeepInsertMode"_ustr,
         u".uno:ToggleSheetGrid"_ustr,
+        u".uno:ChangeBezier"_ustr,
     };
 
     util::URL aCommandURL;
@@ -5465,6 +5503,11 @@ void LibLibreOffice_Impl::dumpState(rtl::OStringBuffer &rState)
     rState.append(static_cast<sal_Int64>(mOptionalFeatures), 16);
     rState.append("\n\tCallbackData:\t0x");
     rState.append(reinterpret_cast<sal_Int64>(mpCallback), 16);
+    rState.append("\n\tIsModified:\t");
+    if (SfxObjectShell::Current())
+        rState.append(SfxObjectShell::Current()->IsModified() ? "modified" : "unmodified");
+    else
+        rState.append("noshell");
     // TODO: dump mInteractionMap
     SfxLokHelper::dumpState(rState);
     vcl::lok::dumpState(rState);
@@ -5610,12 +5653,6 @@ static void doc_postUnoCommand(LibreOfficeKitDocument* pThis, const char* pComma
 
 
     // MACRO: page setup commands {
-    if (gImpl && aCommand == ".uno:ToggleOrientation")
-    {
-        ExecuteOrientationChange();
-        return;
-    }
-
     if (gImpl && aCommand == ".uno:SetPageSize")
     {
         long width;
@@ -6035,7 +6072,7 @@ static char* getPageSize()
     aJson.put("Width", pPageSizeItem->GetSize().Width());
     aJson.put("Height", pPageSizeItem->GetSize().Height());
 
-    return const_cast<char*>(aJson.finishAndGetAsOString().getStr());
+    return convertOString(aJson.finishAndGetAsOString());
 }
 
 static char* getPageMargins()
@@ -6064,7 +6101,7 @@ static char* getPageMargins()
     aJson.put("PageTop", pPageULMarginItem->GetUpper());
     aJson.put("PageBottom", pPageULMarginItem->GetLower());
 
-    return const_cast<char*>(aJson.finishAndGetAsOString().getStr());
+    return convertOString(aJson.finishAndGetAsOString());
 }
 // MACRO: }
 
@@ -6541,7 +6578,7 @@ static char* getDocReadOnly(LibreOfficeKitDocument* pThis)
     aTree.put("success", pObjectShell->IsLoadReadonly());
 
     std::stringstream aStream;
-    boost::property_tree::write_json(aStream, aTree);
+    boost::property_tree::write_json(aStream, aTree, false /* pretty */);
     char* pJson = static_cast<char*>(malloc(aStream.str().size() + 1));
     if (!pJson)
         return nullptr;
@@ -6600,7 +6637,7 @@ static char* getLanguages(const char* pCommand)
         addLocale(aValues, rLocale);
     aTree.add_child("commandValues", aValues);
     std::stringstream aStream;
-    boost::property_tree::write_json(aStream, aTree);
+    boost::property_tree::write_json(aStream, aTree, false /* pretty */);
     char* pJson = static_cast<char*>(malloc(aStream.str().size() + 1));
     assert(pJson); // Don't handle OOM conditions
     strcpy(pJson, aStream.str().c_str());
@@ -6608,7 +6645,7 @@ static char* getLanguages(const char* pCommand)
     return pJson;
 }
 
-static char* getFonts (const char* pCommand)
+static char* getFonts (const char* pCommand, const bool bBloatWithRepeatedSizes)
 {
     SfxObjectShell* pDocSh = SfxObjectShell::Current();
     if (!pDocSh)
@@ -6617,36 +6654,59 @@ static char* getFonts (const char* pCommand)
         pDocSh->GetItem(SID_ATTR_CHAR_FONTLIST));
     const FontList* pList = pFonts ? pFonts->GetFontList() : nullptr;
 
-    boost::property_tree::ptree aTree;
-    aTree.put("commandName", pCommand);
-    boost::property_tree::ptree aValues;
-    if ( pList )
+    if (!bBloatWithRepeatedSizes)
     {
-        sal_uInt16 nFontCount = pList->GetFontNameCount();
-        for (sal_uInt16 i = 0; i < nFontCount; ++i)
+        tools::JsonWriter aJson;
+        aJson.put("commandName", pCommand);
         {
-            boost::property_tree::ptree aChildren;
-            const FontMetric& rFontMetric = pList->GetFontName(i);
-            const int* pAry = FontList::GetStdSizeAry();
-            sal_uInt16 nSizeCount = 0;
-            while (pAry[nSizeCount])
-            {
-                boost::property_tree::ptree aChild;
-                aChild.put("", static_cast<float>(pAry[nSizeCount]) / 10);
-                aChildren.push_back(std::make_pair("", aChild));
-                nSizeCount++;
-            }
-            aValues.add_child(rFontMetric.GetFamilyName().toUtf8().getStr(), aChildren);
+            auto aFontNames = aJson.startArray("FontNames");
+
+            sal_uInt16 nFontCount = pList->GetFontNameCount();
+            for (sal_uInt16 i = 0; i < nFontCount; ++i)
+                aJson.putSimpleValue(pList->GetFontName(i).GetFamilyName());
         }
+        {
+            auto aFontSizes = aJson.startArray("FontSizes");
+            const int* pAry = FontList::GetStdSizeAry();
+            for (sal_uInt16 i = 0; pAry[i]; ++i)
+                aJson.putSimpleValue(OUString::number(static_cast<float>(pAry[i]) / 10));
+        }
+
+        return convertOString(aJson.finishAndGetAsOString());
     }
-    aTree.add_child("commandValues", aValues);
-    std::stringstream aStream;
-    boost::property_tree::write_json(aStream, aTree);
-    char* pJson = static_cast<char*>(malloc(aStream.str().size() + 1));
-    assert(pJson); // Don't handle OOM conditions
-    strcpy(pJson, aStream.str().c_str());
-    pJson[aStream.str().size()] = '\0';
-    return pJson;
+    else // FIXME: remove nonsensical legacy version
+    {
+        boost::property_tree::ptree aTree;
+        aTree.put("commandName", pCommand);
+        boost::property_tree::ptree aValues;
+        if ( pList )
+        {
+            sal_uInt16 nFontCount = pList->GetFontNameCount();
+            for (sal_uInt16 i = 0; i < nFontCount; ++i)
+            {
+                boost::property_tree::ptree aChildren;
+                const FontMetric& rFontMetric = pList->GetFontName(i);
+                const int* pAry = FontList::GetStdSizeAry();
+                sal_uInt16 nSizeCount = 0;
+                while (pAry[nSizeCount])
+                {
+                    boost::property_tree::ptree aChild;
+                    aChild.put("", static_cast<float>(pAry[nSizeCount]) / 10);
+                    aChildren.push_back(std::make_pair("", aChild));
+                    nSizeCount++;
+                }
+                aValues.add_child(rFontMetric.GetFamilyName().toUtf8().getStr(), aChildren);
+            }
+        }
+        aTree.add_child("commandValues", aValues);
+        std::stringstream aStream;
+        boost::property_tree::write_json(aStream, aTree, false /* pretty */);
+        char* pJson = static_cast<char*>(malloc(aStream.str().size() + 1));
+        assert(pJson); // Don't handle OOM conditions
+        strcpy(pJson, aStream.str().c_str());
+        pJson[aStream.str().size()] = '\0';
+        return pJson;
+    }
 }
 
 static char* getFontSubset (std::string_view aFontName)
@@ -6676,7 +6736,7 @@ static char* getFontSubset (std::string_view aFontName)
 
     aTree.add_child("commandValues", aValues);
     std::stringstream aStream;
-    boost::property_tree::write_json(aStream, aTree);
+    boost::property_tree::write_json(aStream, aTree, false /* pretty */);
     char* pJson = static_cast<char*>(malloc(aStream.str().size() + 1));
     assert(pJson); // Don't handle OOM conditions
     strcpy(pJson, aStream.str().c_str());
@@ -6799,7 +6859,7 @@ static char* getStyles(LibreOfficeKitDocument* pThis, const char* pCommand)
 
     aTree.add_child("commandValues", aValues);
     std::stringstream aStream;
-    boost::property_tree::write_json(aStream, aTree);
+    boost::property_tree::write_json(aStream, aTree, false /* pretty */);
     char* pJson = static_cast<char*>(malloc(aStream.str().size() + 1));
     assert(pJson); // Don't handle OOM conditions
     strcpy(pJson, aStream.str().c_str());
@@ -6954,7 +7014,7 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     }
     else if (aCommand == ".uno:CharFontName")
     {
-        return getFonts(pCommand);
+        return getFonts(pCommand, !gUseCompactFonts);
     }
     else if (aCommand == ".uno:StyleApply")
     {
@@ -6972,7 +7032,6 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     {
         return getTrackedChanges(pThis);
     }
-
     else if (aCommand == ".uno:TrackedChangeAuthors")
     {
         return getTrackedChangeAuthors(pThis);
@@ -7897,7 +7956,7 @@ static void doc_setViewTimezone(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* /*p
     }
 }
 
-static void doc_setViewReadOnly(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* pThis, int nId, const bool readOnly)
+static void doc_setViewReadOnly(LibreOfficeKitDocument* /*pThis*/, int nId, const bool readOnly)
 {
     comphelper::ProfileZone aZone("doc_setViewReadOnly");
 
@@ -7907,7 +7966,7 @@ static void doc_setViewReadOnly(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* pTh
     SfxLokHelper::setViewReadOnly(nId, readOnly);
 }
 
-static void doc_setAllowChangeComments(SAL_UNUSED_PARAMETER LibreOfficeKitDocument* pThis, int nId, const bool allow)
+static void doc_setAllowChangeComments(LibreOfficeKitDocument* /*pThis*/, int nId, const bool allow)
 {
     comphelper::ProfileZone aZone("doc_setAllowChangeComments");
 
@@ -8542,6 +8601,8 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
         {
             if (it == "unipoll")
                 bUnipoll = true;
+            if (it == "compact_fonts")
+                gUseCompactFonts = true;
             else if (it == "profile_events")
                 bProfileZones = true;
             else if (it == "sc_no_grid_bg")

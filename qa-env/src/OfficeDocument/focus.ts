@@ -1,6 +1,9 @@
 import { DocumentClient } from '@lok/shared';
 import { Accessor, Signal, createSignal } from 'solid-js';
 
+export const [ hasFocus, setHasFocus ] = createSignal<boolean>(false);
+export const [ focusRef, setFocusRef ] = createSignal<HTMLDivElement | null>(null);
+
 const signals = new WeakMap<DocumentClient, Signal<boolean>>();
 
 export function getOrCreateFocusedSignal(

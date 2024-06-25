@@ -90,13 +90,32 @@ type CallbackHandlers = {
   -readonly [K in keyof typeof CallbackType]?: Set<CallbackHandler>;
 };
 const subscribedEvents: { [K: number]: CallbackHandlers } = {};
+const subscribedPaint: Map<number, Set<() => any>> = new Map();
+const subscribedIdle: Map<number, Set<() => any>> = new Map();
+
+type IdleMessage = { f: 'idle_'; d: DocumentRef };
+type PaintMesasge = { f: 'paint_'; d: DocumentRef };
 
 type AllMessages<K extends keyof Message = keyof Message> =
   | FromWorker<K>
   | ForwardingFromWorker<K & keyof ForwardingMethod>
   | ForwardedFromWorker<K & keyof ForwardingMethod>
   | WorkerCallback
-  | KeysMessage;
+  | KeysMessage
+  | PaintMesasge
+  | IdleMessage;
+
+function messageIsPaint<K extends keyof Message = keyof Message>(
+  data: AllMessages<K>
+): data is PaintMesasge {
+  return data.f === 'paint_';
+}
+
+function messageIsIdle<K extends keyof Message = keyof Message>(
+  data: AllMessages<K>
+): data is IdleMessage {
+  return data.f === 'idle_';
+}
 
 function messageIsCallback<K extends keyof Message = keyof Message>(
   data: AllMessages<K>
@@ -154,11 +173,33 @@ const clientBase: DocumentClientBase = {
     const message: ToWorker = {
       f: 'newView',
       i,
-      a: [this.ref],
+      a: [],
     };
     loadWorkerOnce().postMessage(message);
 
     return documentClient(this.ref, await future.promise);
+  },
+  afterIdle: function (callback: () => any): () => void {
+    let handlers = subscribedIdle.get(this.ref);
+    if (handlers == null) {
+      handlers = new Set();
+      subscribedIdle.set(this.ref, handlers);
+    }
+    handlers.add(callback);
+    return () => {
+      handlers.delete(callback);
+    };
+  },
+  afterPaint: function (callback: () => any): () => void {
+    let handlers = subscribedPaint.get(this.ref);
+    if (handlers == null) {
+      handlers = new Set();
+      subscribedPaint.set(this.ref, handlers);
+    }
+    handlers.add(callback);
+    return () => {
+      handlers.delete(callback);
+    };
   },
 };
 
@@ -194,16 +235,15 @@ function registerClientMethod(prop: string) {
   clientBase[prop] = function (...args: any[]) {
     const [i, future] = registerFuture();
     let transfers: { transfer: Transferable[] } | undefined;
-    if (prop === 'startRendering' || prop === 'resetRendering' || prop==='startRenderingPreview') {
+    if (prop === 'startRendering' || prop === 'resetRendering') {
       transfers = {
         transfer: [
           ...(
             args as
               | Parameters<DocumentWithViewMethods['startRendering']>
               | Parameters<DocumentWithViewMethods['resetRendering']>
-              | Parameters<DocumentWithViewMethods['startRenderingPreview']>
           )[0],
-        ]
+        ],
       };
     }
     loadWorkerOnce().postMessage(
@@ -224,13 +264,9 @@ function registerClientMethod(prop: string) {
         }
       );
     }
-
     return future.promise;
   };
 }
-
-// clientBase methods excluded from forwarding
-const EXCLUDED_CLIENT_METHODS = ['newView'];
 
 async function handleMessage<K extends keyof Message = keyof Message>({
   data,
@@ -238,7 +274,7 @@ async function handleMessage<K extends keyof Message = keyof Message>({
   if (messageIsCallback(data)) {
     subscribedEvents[data.d]?.[data.t]?.forEach((handler) => handler(data.p));
   } else if (messageIsKeys(data)) {
-    for (const prop of data.keys.filter((k) => !EXCLUDED_CLIENT_METHODS.includes(k))) {
+    for (const prop of data.keys) {
       registerClientMethod(prop);
     }
     for (const [resolver, methods] of Object.entries(data.forwarded)) {
@@ -249,6 +285,20 @@ async function handleMessage<K extends keyof Message = keyof Message>({
   } else if (messageIsForwarding(data)) {
     callIdToFuture[data.i].resolve(forwardedClient(data.r));
     callIdToFuture[data.i] = undefined;
+  } else if (messageIsIdle(data)) {
+    const callbacks = subscribedIdle.get(data.d);
+    if (callbacks) {
+      for (const cb of callbacks) {
+        cb();
+      }
+    }
+  } else if (messageIsPaint(data)) {
+    const callbacks = subscribedPaint.get(data.d);
+    if (callbacks) {
+      for (const cb of callbacks) {
+        cb();
+      }
+    }
   } else if (data.i !== UNUSED_ID) {
     callIdToFuture[data.i].resolve(data.r);
     callIdToFuture[data.i] = undefined;
@@ -300,6 +350,14 @@ function documentClient<T extends DocumentClient>(
     ref: {
       value: ref,
       writable: true,
+    },
+    idleHandlers: {
+      value: new Set(),
+      writable: false,
+    },
+    paintHandlers: {
+      value: new Set(),
+      writable: false,
     },
   });
   return clientObject as T;
@@ -403,6 +461,15 @@ if (import.meta.hot) {
   });
 }
 
-export type * from './shared'
-export type * from './soffice'
-export type * from './lok_enums'
+export type * from './shared';
+export type * from './soffice';
+export * from './lok_enums';
+
+export enum LayoutStatus {
+  INVISIBLE,
+  VISIBLE,
+  INSERTED,
+  DELETED,
+  NONE,
+  HIDDEN,
+}

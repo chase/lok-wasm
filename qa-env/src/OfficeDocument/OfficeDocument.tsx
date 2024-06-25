@@ -24,8 +24,7 @@ import { getOrCreateZoomSignal } from './zoom';
 import { getOrCreateDPISignal } from './twipConversion';
 
 // These give us good scaling behavior until the render actually finishes
-
-/** 'cover' is ideal for zoom_in, however it causes issues with pixelation. */
+/** Cover on Zoom In, will stretch the image to fit as the canvas size changes */
 const ZOOM_IN_CANVAS_FIT = 'contain';
 /** Contain on Zoom Out, squeezes the image to fit as the canvas size changes */
 const ZOOM_OUT_CANVAS_FIT = 'contain';
@@ -60,7 +59,7 @@ function calcCanvasHeight(heightPx: number | undefined) {
     : undefined;
 }
 
-export function observedSize(
+function observedSize(
   el: Element,
   setter: () => [DocumentClient, Setter<number | undefined>]
 ) {
@@ -147,16 +146,15 @@ export function OfficeDocument(props: Props) {
     const callback = async () => {
       setDocSizeTwips(await props.doc.documentSize());
       setRectsTwips(await props.doc.partRectanglesTwips());
+      // This is required to re-render the document with the new width
+      // if it has actually changed, if the width remains the same nothing
+      // will happen
+      await props.doc.setDocumentWidth(docSizePx()![0]);
     };
     props.doc.on(CallbackType.DOCUMENT_SIZE_CHANGED, callback);
     onCleanup(() => {
       props.doc.off(CallbackType.DOCUMENT_SIZE_CHANGED, callback);
     });
-  });
-
-  createEffect(() => {
-    const height = canvasHeight();
-    if (height && didInitialRender.has(props.doc)) props.doc.setVisibleHeight(height);
   });
 
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);
@@ -171,6 +169,10 @@ export function OfficeDocument(props: Props) {
     ),
     false
   );
+
+  onCleanup(() => {
+    props.doc.stopRendering();
+  })
 
   createEffect(async () => {
     if (didInitialRender.has(props.doc)) return;
@@ -196,10 +198,8 @@ export function OfficeDocument(props: Props) {
       ],
       256,
       zoom,
-      dpi,
-      undefined,
+      dpi
     );
-
     didInitialRender.add(props.doc);
   });
 
@@ -246,9 +246,14 @@ export function OfficeDocument(props: Props) {
     if (!c0 || !c1) return;
     const previousCanvas = activeCanvas;
     activeCanvas = await props.doc.setScrollTop(yPx);
+    const dpi = getOrCreateDPISignal();
     const c = activeCanvas === 0 ? c0 : c1;
     c.style.willChange = 'transform';
-    c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % TILE_DIM_PX}px, 0)`;
+    // yPx is technically in css pixels, but it is referring to the position 
+    // of the document rendered on the canvas which is in physical pixels
+    // so the offset should be scaled down aswell.
+    const scaledTileDim = TILE_DIM_PX / dpi();
+    c.style.transform = `translate3d(-${xPx}px, -${(Math.floor(yPx) % (scaledTileDim))}px, 0)`;
     c.style.willChange = '';
     if (previousCanvas !== activeCanvas) {
       c.style.display = '';

@@ -965,6 +965,9 @@ void SwLayoutFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
     const SwLayNotify aNotify( this );
     bool bVert = IsVertical();
 
+    if (IsHiddenNow())
+        MakeValidZeroHeight();
+
     SwRectFn fnRect = ( IsNeighbourFrame() == bVert )? fnRectHori : ( IsVertLR() ? (IsVertLRBT() ? fnRectVertL2RB2T : fnRectVertL2R) : fnRectVert );
 
     std::optional<SwBorderAttrAccess> oAccess;
@@ -1092,9 +1095,15 @@ bool SwFrame::IsCollapseUpper() const
         return false;
     }
 
-    // Word >= 2013 style: when we're at the top of the page, but not on the first page, then ignore
-    // the upper margin for paragraphs.
-    if (GetPrev())
+    if (IsInFly())
+    {
+        // Not in a page's body.
+        return false;
+    }
+
+    // Word >= 2013 style: when we're at the top of the page's body, but not on the first page, then
+    // ignore the upper margin for paragraphs.
+    if (GetPrev() || !GetUpper() || !GetUpper()->IsBodyFrame())
     {
         return false;
     }
@@ -1274,6 +1283,9 @@ void SwContentFrame::MakeAll(vcl::RenderContext* /*pRenderContext*/)
         OSL_FAIL( "Format for locked TextFrame." );
         return;
     }
+
+    if (IsHiddenNow())
+        MakeValidZeroHeight();
 
     std::optional<SwFrameDeleteGuard> oDeleteGuard(std::in_place, this);
     LockJoin();

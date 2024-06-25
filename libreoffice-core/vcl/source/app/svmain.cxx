@@ -194,7 +194,8 @@ int ImplSVMain()
 
     const bool bWasInitVCL = IsVCLInit();
 
-#if !defined(_WIN32) && !defined(SYSTEM_OPENSSL)
+// MACRO: CA certs aren't available on __EMSCRIPTEN__
+#if !defined(_WIN32) && !defined(SYSTEM_OPENSSL) && !defined(__EMSCRIPTEN__)
     if (!bWasInitVCL)
     {
         OUString constexpr name(u"SSL_CERT_FILE"_ustr);

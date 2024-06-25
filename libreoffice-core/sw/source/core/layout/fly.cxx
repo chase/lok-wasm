@@ -70,6 +70,7 @@
 #include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <osl/diagnose.h>
 #include <o3tl/string_view.hxx>
+#include <rtl/math.hxx>
 
 #include <wrtsh.hxx>
 #include <view.hxx>
@@ -2528,8 +2529,8 @@ void SwFrame::AppendDrawObj( SwAnchoredObject& _rNewObj )
         assert(!m_pDrawObjs || m_pDrawObjs->is_sorted());
         // perform disconnect from layout, if 'master' drawing object is appended
         // to a new frame.
-        static_cast<SwDrawContact*>(::GetUserCall( _rNewObj.GetDrawObj() ))->
-                                                DisconnectFromLayout( false );
+        if (SwDrawContact* pContact = static_cast<SwDrawContact*>(::GetUserCall( _rNewObj.GetDrawObj() )))
+            pContact->DisconnectFromLayout( false );
         assert(!m_pDrawObjs || m_pDrawObjs->is_sorted());
     }
 
@@ -2845,9 +2846,9 @@ Size SwFlyFrame::CalcRel( const SwFormatFrameSize &rSz ) const
         }
 
         if ( rSz.GetWidthPercent() && rSz.GetWidthPercent() != SwFormatFrameSize::SYNCED )
-            aRet.setWidth( nRelWidth * rSz.GetWidthPercent() / 100 );
+            aRet.setWidth(rtl::math::round(double(nRelWidth) * rSz.GetWidthPercent() / 100));
         if ( rSz.GetHeightPercent() && rSz.GetHeightPercent() != SwFormatFrameSize::SYNCED )
-            aRet.setHeight( nRelHeight * rSz.GetHeightPercent() / 100 );
+            aRet.setHeight(rtl::math::round(double(nRelHeight) * rSz.GetHeightPercent() / 100));
 
         if ( rSz.GetHeight() && rSz.GetWidthPercent() == SwFormatFrameSize::SYNCED )
         {
