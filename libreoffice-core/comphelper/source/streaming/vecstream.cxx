@@ -1,5 +1,8 @@
 #include "com/sun/star/io/BufferSizeExceededException.hdl"
+#include "com/sun/star/io/NotConnectedException.hdl"
 #include "com/sun/star/lang/IllegalArgumentException.hdl"
+#include "com/sun/star/lang/XEventListener.hdl"
+#include "cppuhelper/queryinterface.hxx"
 #include "sal/types.h"
 #include <vector>
 #include <comphelper/vecstream.hxx>
@@ -120,4 +123,96 @@ void SAL_CALL VectorOutputStream::writeBytes(const Sequence<sal_Int8>& data)
 
 void SAL_CALL VectorOutputStream::flush() {}
 void SAL_CALL VectorOutputStream::closeOutput() {}
+
+VecStreamSupplier::VecStreamSupplier(Reference<io::XInputStream> inputStream,
+                                     Reference<io::XOutputStream> outputStream)
+    : m_inputStream(std::move(inputStream))
+    , m_outputStream(std::move(outputStream))
+{
+    m_seekable.set(m_inputStream, uno::UNO_QUERY);
+    if (!m_seekable.is())
+        m_seekable.set(m_outputStream, uno::UNO_QUERY);
+}
+
+Reference<io::XInputStream> SAL_CALL VecStreamSupplier::getInputStream() { return m_inputStream; }
+
+Reference<io::XOutputStream> SAL_CALL VecStreamSupplier::getOutputStream()
+{
+    return m_outputStream;
+}
+
+void SAL_CALL VecStreamSupplier::seek(sal_Int64 location)
+{
+    if (!m_seekable.is())
+        throw io::NotConnectedException();
+    m_seekable->seek(location);
+}
+
+sal_Int64 SAL_CALL VecStreamSupplier::getPosition()
+{
+    if (!m_seekable.is())
+        throw io::NotConnectedException();
+    return m_seekable->getPosition();
+}
+
+sal_Int64 SAL_CALL VecStreamSupplier::getLength()
+{
+    if (!m_seekable.is())
+        throw io::NotConnectedException();
+
+    return m_seekable->getLength();
+}
+
+VecStreamContainer::VecStreamContainer(Reference<io::XStream>& stream)
+    : m_stream(stream)
+{
+}
+
+Reference<io::XInputStream> SAL_CALL VecStreamContainer::getInputStream()
+{
+    return m_stream->getInputStream();
+}
+Reference<io::XOutputStream> SAL_CALL VecStreamContainer::getOutputStream()
+{
+    return m_stream->getOutputStream();
+}
+
+Any SAL_CALL VecStreamContainer::queryInterface(const Type& rType)
+{
+    Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
+                                    static_cast<io::XStream*>(this));
+    if (aRet.hasValue())
+        return aRet;
+
+    return OWeakObject::queryInterface(rType);
+}
+
+void SAL_CALL VecStreamContainer::acquire() noexcept { OWeakObject::acquire(); }
+
+void SAL_CALL VecStreamContainer::release() noexcept { OWeakObject::release(); }
+
+void SAL_CALL VecStreamContainer::dispose()
+{
+    std::unique_lock gaurd(m_mutex);
+    if (m_listeners.getLength(gaurd))
+    {
+        lang::EventObject aSource(getXWeak());
+        m_listeners.disposeAndClear(gaurd, aSource);
+    }
+}
+
+void SAL_CALL VecStreamContainer::addEventListener(const Reference<lang::XEventListener>& xListener)
+{
+    std::unique_lock gaurd(m_mutex);
+
+    m_listeners.addInterface(gaurd, xListener);
+}
+
+void SAL_CALL
+VecStreamContainer::removeEventListener(const Reference<lang::XEventListener>& listener)
+{
+    std::unique_lock gaurd(m_mutex);
+
+    m_listeners.removeInterface(gaurd, listener);
+}
 }

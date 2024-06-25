@@ -87,99 +87,6 @@ OUString getContentHash(const std::vector<sal_Int8>& content)
 }
 }
 
-SequenceStreamSupplier::SequenceStreamSupplier(Reference<io::XInputStream> xInput,
-                                               Reference<io::XOutputStream> xOutput)
-    : m_xInput(std::move(xInput))
-    , m_xOutput(std::move(xOutput))
-{
-    m_xSeekable.set(m_xInput, uno::UNO_QUERY);
-    if (!m_xSeekable.is())
-        m_xSeekable.set(m_xOutput, uno::UNO_QUERY);
-}
-
-Reference<io::XInputStream> SAL_CALL SequenceStreamSupplier::getInputStream() { return m_xInput; }
-
-Reference<io::XOutputStream> SAL_CALL SequenceStreamSupplier::getOutputStream()
-{
-    return m_xOutput;
-}
-
-void SAL_CALL SequenceStreamSupplier::seek(sal_Int64 nLocation)
-{
-    if (!m_xSeekable.is())
-        throw io::NotConnectedException();
-    m_xSeekable->seek(nLocation);
-}
-
-sal_Int64 SAL_CALL SequenceStreamSupplier::getPosition()
-{
-    if (!m_xSeekable.is())
-        throw io::NotConnectedException();
-    return m_xSeekable->getPosition();
-}
-
-sal_Int64 SAL_CALL SequenceStreamSupplier::getLength()
-{
-    if (!m_xSeekable.is())
-        throw io::NotConnectedException();
-
-    return m_xSeekable->getLength();
-}
-
-SequenceStreamContainer::SequenceStreamContainer(Reference<io::XStream>& xStream)
-    : m_xStream(xStream)
-{
-}
-
-Reference<io::XInputStream> SAL_CALL SequenceStreamContainer::getInputStream()
-{
-    return m_xStream->getInputStream();
-}
-Reference<io::XOutputStream> SAL_CALL SequenceStreamContainer::getOutputStream()
-{
-    return m_xStream->getOutputStream();
-}
-
-Any SAL_CALL SequenceStreamContainer::queryInterface(const Type& rType)
-{
-    Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
-                                    static_cast<io::XStream*>(this));
-    if (aRet.hasValue())
-        return aRet;
-
-    return OWeakObject::queryInterface(rType);
-}
-
-void SAL_CALL SequenceStreamContainer::acquire() noexcept { OWeakObject::acquire(); }
-
-void SAL_CALL SequenceStreamContainer::release() noexcept { OWeakObject::release(); }
-
-void SAL_CALL SequenceStreamContainer::dispose()
-{
-    std::unique_lock aGuard(m_aMutex);
-    if (m_aListenersContainer.getLength(aGuard))
-    {
-        lang::EventObject aSource(getXWeak());
-        m_aListenersContainer.disposeAndClear(aGuard, aSource);
-    }
-}
-
-void SAL_CALL
-SequenceStreamContainer::addEventListener(const Reference<lang::XEventListener>& xListener)
-{
-    std::unique_lock aGuard(m_aMutex);
-
-    m_aListenersContainer.addInterface(aGuard, xListener);
-}
-
-void SAL_CALL
-SequenceStreamContainer::removeEventListener(const Reference<lang::XEventListener>& xListener)
-{
-    std::unique_lock aGuard(m_aMutex);
-
-    m_aListenersContainer.removeInterface(aGuard, xListener);
-}
-
 ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
                                  const Reference<io::XInputStream>& rxInStream)
     : StorageBase(rxInStream, false, false)
@@ -219,7 +126,8 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     OUString sPath = OUString::createFromAscii(path.c_str());
     Sequence<sal_Int8> seqContent;
     comphelper::Base64::decode(seqContent, helpers::toOUString(content));
-    std::vector<sal_Int8> fileContent = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
+    std::vector<sal_Int8> fileContent
+        = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
     OUString sha = helpers::getContentHash(fileContent);
     seqContent.realloc(0);
 
@@ -230,10 +138,7 @@ std::optional<std::pair<std::string, std::string>>
 ExpandedStorage::getPart(const std::string& path) const
 {
     auto it = std::find_if(m_files->begin(), m_files->end(),
-                           [&path](const auto& pair)
-                           {
-                               return pair.first == path;
-                           });
+                           [&path](const auto& pair) { return pair.first == path; });
 
     if (it == m_files->end())
     {
@@ -259,7 +164,6 @@ void ExpandedStorage::removePart(const std::string& path)
 
 std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::listParts()
 {
-
     for (auto& [path, file] : *m_files)
     {
         file.sha = helpers::getContentHash(file.content);
@@ -335,15 +239,12 @@ void SAL_CALL ExpandedStorage::copyToStorage(const Reference<embed::XStorage>& x
 }
 bool shouldCreateStreamElement(sal_Int32 openMode)
 {
-    return (openMode != embed::ElementModes::READ) &&
-        (openMode != embed::ElementModes::NOCREATE) &&
-        (openMode != embed::ElementModes::SEEKABLEREAD);
-
+    return (openMode != embed::ElementModes::READ) && (openMode != embed::ElementModes::NOCREATE)
+           && (openMode != embed::ElementModes::SEEKABLEREAD);
 }
 Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
                                                           PathType pathType)
 {
-
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
     std::lock_guard<std::mutex> lock(m_aMutex);
@@ -352,11 +253,10 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     {
         if (!shouldCreateStreamElement(nOpenMode))
         {
-
             throw css::container::NoSuchElementException();
         }
 
-        it = m_files->insert({path, {name, std::vector<sal_Int8>(), ""}}).first;
+        it = m_files->insert({ path, { name, std::vector<sal_Int8>(), "" } }).first;
     }
 
     auto& file = it->second;
@@ -364,18 +264,16 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     Reference<io::XInputStream> maybeInputStream;
     Reference<io::XOutputStream> maybeOutputStream;
 
-    if (nOpenMode == embed::ElementModes::READWRITE ||
-        nOpenMode == embed::ElementModes::READ ||
-        nOpenMode == embed::ElementModes::SEEKABLE ||
-        nOpenMode == embed::ElementModes::SEEKABLEREAD)
+    if (nOpenMode == embed::ElementModes::READWRITE || nOpenMode == embed::ElementModes::READ
+        || nOpenMode == embed::ElementModes::SEEKABLE
+        || nOpenMode == embed::ElementModes::SEEKABLEREAD)
     {
         Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(file.content));
         maybeInputStream = inputStream;
     }
 
-    if (nOpenMode == embed::ElementModes::READWRITE ||
-        nOpenMode == embed::ElementModes::WRITE ||
-        nOpenMode == embed::ElementModes::TRUNCATE)
+    if (nOpenMode == embed::ElementModes::READWRITE || nOpenMode == embed::ElementModes::WRITE
+        || nOpenMode == embed::ElementModes::TRUNCATE)
     {
         Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
         maybeOutputStream = outputStream;
@@ -383,7 +281,8 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
         m_staleSha = true;
     }
 
-    Reference<io::XStream> xStream = new SequenceStreamSupplier(maybeInputStream, maybeOutputStream);
+    Reference<io::XStream> xStream
+        = new comphelper::VecStreamSupplier(maybeInputStream, maybeOutputStream);
     return xStream;
 }
 
@@ -539,18 +438,19 @@ sal_Bool SAL_CALL ExpandedStorage::hasElements()
 // XPropertySet
 css::uno::Reference<css::beans::XPropertySetInfo> SAL_CALL ExpandedStorage::getPropertySetInfo()
 {
-    return Reference < beans::XPropertySetInfo > ();
+    return Reference<beans::XPropertySetInfo>();
 }
 
 void SAL_CALL ExpandedStorage::setPropertyValue(const OUString& name, const css::uno::Any& value)
 {
-    m_properties.insert({name, value});
+    m_properties.insert({ name, value });
 }
 
 css::uno::Any SAL_CALL ExpandedStorage::getPropertyValue(const OUString& name)
 {
     auto it = m_properties.find(name);
-    if (it == m_properties.end()) {
+    if (it == m_properties.end())
+    {
         SAL_WARN("expandedstorage", "requested property (" << name << ") not found");
         return Any();
     }
@@ -585,7 +485,8 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
     css::uno::Reference<io::XStream> xStream
         = openStreamElement(streamPath, openMode, PathType::Absolute);
 
-    Reference<SequenceStreamContainer> aStreamContainer(new SequenceStreamContainer(xStream));
+    Reference<comphelper::VecStreamContainer> aStreamContainer(
+        new comphelper::VecStreamContainer(xStream));
     Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer, UNO_QUERY_THROW);
     return xExtendedStream;
 }

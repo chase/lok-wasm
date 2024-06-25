@@ -55,52 +55,6 @@ using namespace com::sun::star;
 namespace oox
 {
 
-class SequenceStreamSupplier : public cppu::WeakImplHelper<css::io::XStream, io::XSeekable>
-{
-private:
-    css::uno::Reference<io::XInputStream> m_xInput;
-    css::uno::Reference<io::XOutputStream> m_xOutput;
-    std::mutex m_aMutex;
-    uno::Reference<io::XSeekable> m_xSeekable;
-
-public:
-    SequenceStreamSupplier(css::uno::Reference<io::XInputStream> xInput,
-                           css::uno::Reference<io::XOutputStream> xOutput);
-
-    // XStream
-    virtual uno::Reference<io::XInputStream> SAL_CALL getInputStream() override;
-    virtual uno::Reference<io::XOutputStream> SAL_CALL getOutputStream() override;
-    // XSeekable
-    virtual void SAL_CALL seek(sal_Int64 location) override;
-    virtual sal_Int64 SAL_CALL getPosition() override;
-    virtual sal_Int64 SAL_CALL getLength() override;
-};
-
-class SequenceStreamContainer final : public embed::XExtendedStorageStream,
-                                      public ::cppu::OWeakObject
-{
-    std::mutex m_aMutex;
-    css::uno::Reference<css::io::XStream> m_xStream;
-    ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
-
-public:
-    SequenceStreamContainer(css::uno::Reference<css::io::XStream>& xStream);
-
-    virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
-    virtual void SAL_CALL acquire() noexcept override;
-    virtual void SAL_CALL release() noexcept override;
-    // XComponent
-    virtual void SAL_CALL dispose() override;
-    virtual void SAL_CALL
-    addEventListener(const css::uno::Reference<css::lang::XEventListener>& xListener) override;
-    virtual void SAL_CALL
-    removeEventListener(const css::uno::Reference<css::lang::XEventListener>& aListener) override;
-
-    // XStream
-    virtual css::uno::Reference<css::io::XInputStream> SAL_CALL getInputStream() override;
-    virtual css::uno::Reference<css::io::XOutputStream> SAL_CALL getOutputStream() override;
-};
-
 struct ExpandedFile
 {
     const OUString path;
@@ -160,9 +114,8 @@ public:
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
 
-
-
-    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> getRelInfoFromName(const OUString& rName);
+    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
+    getRelInfoFromName(const OUString& rName);
     void readRelationshipInfo();
     OUString getFullPath(const OUString& path) const;
     uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,
