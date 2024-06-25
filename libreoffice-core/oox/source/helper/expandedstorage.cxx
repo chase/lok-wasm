@@ -221,10 +221,7 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     comphelper::Base64::decode(seqContent, helpers::toOUString(content));
     std::vector<sal_Int8> fileContent = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
     OUString sha = helpers::getContentHash(fileContent);
-
     seqContent.realloc(0);
-
-    SAL_WARN("expandedstorage", "addPart: sha " << sha << " path " << path << " content size " << fileContent.size());
 
     m_files->insert({ path, { sPath, fileContent, sha } });
 }
@@ -654,7 +651,6 @@ void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementName
 
 StorageRef ExpandedStorage::implOpenSubStorage(const OUString& path, bool)
 {
-    SAL_WARN("expandedstorage", "opening sub storage" << path);
     return std::shared_ptr<StorageBase>(
         new ExpandedStorage(m_xContext, m_files, m_inputStream, path));
 }
@@ -666,7 +662,6 @@ Reference<io::XInputStream> ExpandedStorage::implOpenInputStream(const OUString&
 
 Reference<io::XOutputStream> ExpandedStorage::implOpenOutputStream(const OUString& rElementName)
 {
-    SAL_WARN("expandedstorage", "opening output stream" << rElementName);
     return openStreamElement(rElementName, embed::ElementModes::READWRITE)->getOutputStream();
 }
 
