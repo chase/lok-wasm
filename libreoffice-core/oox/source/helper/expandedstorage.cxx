@@ -241,9 +241,9 @@ ExpandedStorage::getPart(const std::string& path) const
         return {};
     }
 
-    std::string content(*it->second.content.data(), it->second.content.size());
+    std::string contentString(it->second.content.begin(), it->second.content.end());
 
-    return std::make_pair(helpers::toString(it->second.path), content);
+    return std::make_pair(helpers::toString(it->second.path), contentString);
 }
 
 void ExpandedStorage::removePart(const std::string& path)
