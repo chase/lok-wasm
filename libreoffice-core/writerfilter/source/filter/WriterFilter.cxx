@@ -196,32 +196,25 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
                 m_xContext, xInputStream, m_xDstDoc, bRepairStorage,
                 writerfilter::dmapper::SourceDocumentType::OOXML, aMediaDesc));
         //create the tokenizer and domain mapper
-        SAL_WARN("writerfilter", "WriterFilter::filter(): created domain mapper");
         writerfilter::ooxml::OOXMLStream::Pointer_t pDocStream
             = writerfilter::ooxml::OOXMLDocumentFactory::createStream(m_xContext, xInputStream,
                                                                       bRepairStorage);
-        SAL_WARN("writerfilter", "WriterFilter::filter(): created OOXMLStream");
         uno::Reference<task::XStatusIndicator> xStatusIndicator
             = aMediaDesc.getUnpackedValueOrDefault(utl::MediaDescriptor::PROP_STATUSINDICATOR,
                                                    uno::Reference<task::XStatusIndicator>());
-        SAL_WARN("writerfilter", "WriterFilter::filter(): created status indicator");
         writerfilter::ooxml::OOXMLDocument::Pointer_t pDocument(
             writerfilter::ooxml::OOXMLDocumentFactory::createDocument(pDocStream, xStatusIndicator,
                                                                       bSkipImages, rDescriptor));
-        SAL_WARN("writerfilter", "WriterFilter::filter(): created document");
 
         uno::Reference<frame::XModel> xModel(m_xDstDoc, uno::UNO_QUERY_THROW);
-        SAL_WARN("writerfilter", "WriterFilter::filter(): got model");
         pDocument->setModel(xModel);
 
         uno::Reference<drawing::XDrawPageSupplier> xDrawings(m_xDstDoc, uno::UNO_QUERY_THROW);
         uno::Reference<drawing::XDrawPage> xDrawPage(xDrawings->getDrawPage(), uno::UNO_SET_THROW);
         pDocument->setDrawPage(xDrawPage);
-        SAL_WARN("writerfilter", "WriterFilter::filter(): got draw page");
 
         try
         {
-            SAL_WARN("writerfilter", "WriterFilter::filter(): resolving document");
             pDocument->resolve(*pStream);
         }
         catch (xml::sax::SAXParseException const& e)
@@ -243,8 +236,6 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
         catch (uno::Exception const&)
         {
             css::uno::Any anyEx = cppu::getCaughtException();
-            SAL_WARN("writerfilter",
-                     "WriterFilter::filter(): failed with " << exceptionToString(anyEx));
             throw lang::WrappedTargetRuntimeException("", getXWeak(), anyEx);
         }
 

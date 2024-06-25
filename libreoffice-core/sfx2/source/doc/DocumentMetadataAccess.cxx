@@ -550,23 +550,18 @@ static void
 collectFilesFromStorage(uno::Reference<embed::XStorage> const& i_xStorage,
     std::set< OUString > & o_rFiles)
 {
-    SAL_WARN("metadata", "collecting files from storage");
     try {
 
-        SAL_WARN("metadata", "checking content file");
         if (i_xStorage->hasByName(s_content) &&
             i_xStorage->isStreamElement(s_content))
         {
 
-            SAL_WARN("metadata", "found content file");
             o_rFiles.insert(s_content);
         }
 
-        SAL_WARN("metadata", "checking content file");
         if (i_xStorage->hasByName(s_styles) &&
             i_xStorage->isStreamElement(s_styles))
         {
-            SAL_WARN("metadata", "found content file");
             o_rFiles.insert(s_styles);
         }
     } catch (const uno::Exception &) {
@@ -789,14 +784,14 @@ retry:
     OSL_ENSURE(i_rImpl.m_xRepository.is(), "repository is null");
     OSL_ENSURE(i_rImpl.m_xManifest.is(), "manifest is null");
 
-    /* if (rterr.hasValue()) { */
-    /*     throw lang::WrappedTargetRuntimeException( */
-    /*         "DocumentMetadataAccess::loadMetadataFromStorage: " */
-    /*         "exception", nullptr, rterr); */
-    /* } */
+    if (rterr.hasValue()) {
+        throw lang::WrappedTargetRuntimeException(
+            "DocumentMetadataAccess::loadMetadataFromStorage: "
+            "exception", nullptr, rterr);
+    }
 
-    /* if (err && handleError(iaioe, i_xHandler)) */
-    /*     goto retry; */
+    if (err && handleError(iaioe, i_xHandler))
+        goto retry;
 }
 
 /** init Impl struct */
@@ -821,11 +816,9 @@ static void init(struct DocumentMetadataAccess_Impl & i_rImpl)
 
     // add top-level content files
     if (!addContentOrStylesFileImpl(i_rImpl, s_content)) {
-        SAL_WARN("metadata", "FAILED TO ADD CONTENT OR STYLES");
         throw uno::RuntimeException();
     }
     if (!addContentOrStylesFileImpl(i_rImpl, s_styles)) {
-        SAL_WARN("metadata", "FAILED TO ADD CONTENT OR STYLES");
         throw uno::RuntimeException();
     }
 }
@@ -1127,10 +1120,7 @@ void SAL_CALL DocumentMetadataAccess::loadMetadataFromStorage(
             "base URI does not end with slash", *this, 1);
     }
 
-
-    SAL_WARN("metadata", "before loading from storage");
     initLoading(*m_pImpl, storage, i_xBaseURI, i_xHandler);
-    SAL_WARN("metadata", "after loading from storage");
 
     std::set< OUString > StgFiles;
     collectFilesFromStorage(storage, StgFiles);

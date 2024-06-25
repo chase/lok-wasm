@@ -11,7 +11,6 @@
 #include "comphelper/base64.hxx"
 #include "comphelper/diagnose_ex.hxx"
 #include "comphelper/hash.hxx"
-#include "comphelper/seqstream.hxx"
 #include "comphelper/vecstream.hxx"
 #include "comphelper/sequence.hxx"
 #include "oox/helper/binaryinputstream.hxx"
@@ -26,7 +25,6 @@
 #include <com/sun/star/embed/InvalidStorageException.hpp>
 #include <emscripten/console.h>
 #include <com/sun/star/embed/StorageWrappedTargetException.hpp>
-
 #include <comphelper/ofopxmlhelper.hxx>
 #include <com/sun/star/io/IOException.hpp>
 #include <com/sun/star/io/XTruncate.hpp>

@@ -20,9 +20,7 @@
 #include <sal/config.h>
 
 #include <cassert>
-#include <memory>
 #include <sal/log.hxx>
-
 #include <com/sun/star/packages/NoEncryptionException.hpp>
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
@@ -1188,7 +1186,6 @@ uno::Reference< io::XStream > OWriteStream_Impl::GetStream_Impl( sal_Int32 nStre
             throw io::IOException();
         }
 
-        SAL_WARN("package.xstor", "SEEKABLEREAD is not supported for now");
         uno::Reference< io::XInputStream > xInStream = GetTempFileAsInputStream(); //TODO:
 
         if ( !xInStream.is() )
