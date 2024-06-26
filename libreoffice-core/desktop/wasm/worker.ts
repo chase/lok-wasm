@@ -96,17 +96,13 @@ const globalHandler: GlobalMethod = {
 
     const doc = new Document(expandedDoc, "test");
     const ref = doc.ref();
-    // lok.unmountBlob();
 
     if (!doc.valid()) {
       doc.delete();
-      console.log("INVALID DOC");
       return null;
     }
 
-    console.log(doc);
     docMap[ref] = doc;
-    console.log("FINISHED LOADING HERE IS REF", ref);
     return ref;
   },
 
@@ -324,7 +320,6 @@ const handler: DocumentMethodHandler<Document> = {
       } as ToTileRenderer,
       { transfer: [...canvases] }
     );
-    console.log('POSTED MESSAGE');
 
     return {
       docRef: ref,
