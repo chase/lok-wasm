@@ -56,14 +56,34 @@ class PPDParser;
 
 typedef int fontID;
 
-// a class to manage printable fonts
+struct VCL_DLLPUBLIC PrintFont
+{
+    FontAttributes    m_aFontAttributes;
+
+    int               m_nDirectory;       // atom containing system dependent path
+    OString           m_aFontFile;        // relative to directory
+    int               m_nCollectionEntry; // 0 for regular fonts, 0 to ... for fonts stemming from collections
+    int               m_nVariationEntry;  // 0 for regular fonts, 0 to ... for fonts stemming from font variations
+
+    PrintFont(const FontAttributes attributes, const OString& fontFile, int collectionEntry, int variationEntry);
+    PrintFont();
+};
+
+struct VCL_DLLPUBLIC PrintFontData
+{
+    fontID fontId;
+    PrintFont font;
+    roaring::Roaring bitmap;
+
+    PrintFontData(const fontID& fontId, const PrintFont& font, const roaring::Roaring& bitmap)
+        : fontId(fontId), font(font), bitmap(bitmap) {}
+};
 
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
-    struct PrintFont;
     friend struct PrintFont;
 
-    struct VCL_DLLPRIVATE PrintFont
+    struct VCL_DLLPUBLIC PrintFont
     {
         FontAttributes    m_aFontAttributes;
 
@@ -72,8 +92,10 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
         int               m_nCollectionEntry; // 0 for regular fonts, 0 to ... for fonts stemming from collections
         int               m_nVariationEntry;  // 0 for regular fonts, 0 to ... for fonts stemming from font variations
 
-        explicit PrintFont();
+        PrintFont(const FontAttributes attributes, const OString& fontFile, int collectionEntry, int variationEntry);
+        PrintFont();
     };
+
 
     fontID                                      m_nNextFontID;
     std::unordered_map< fontID, PrintFont >     m_aFonts;

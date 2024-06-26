@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "fontattributes.hxx"
 #include <unistd.h>
 #include <sal/config.h>
 
@@ -613,15 +614,22 @@ void buildRoaringBitmap(FcPattern* pattern, roaring::Roaring bitmap)
         }
     }
     bitmap.runOptimize();
+    bitmap.toString();
+}
+
+std::string wrapInQuotes(std::string str) {
+    return "\"" + str + "\"";
 }
 
 void PrintFontManager::countFontconfigFonts()
 {
+    std::string generatedFontFile;
     int nFonts = 0;
     FontCfgWrapper& rWrapper = FontCfgWrapper::get();
 
     FcFontSet* pFSet = rWrapper.getFontSet();
     const bool bMinimalFontset = utl::ConfigManager::IsFuzzing();
+    generatedFontFile += "static std::unordered_map<fontID, PrintFontData> g_fonts = {\n";
     if( pFSet )
     {
         SAL_INFO("vcl.fonts", "found " << pFSet->nfont << " entries in fontconfig fontset");
@@ -705,6 +713,13 @@ void PrintFontManager::countFontconfigFonts()
             rFA.SetPitch(PITCH_VARIABLE);
             rFA.SetQuality(512);
 
+            const OUString familyName = OStringToOUString(std::string_view(reinterpret_cast<char*>(family)), RTL_TEXTENCODING_UTF8);
+            const OUString styleName = OStringToOUString(std::string_view(reinterpret_cast<char*>(style)), RTL_TEXTENCODING_UTF8);
+            const FontWeight convertedWeight = convertWeight(weight);
+            const FontWidth convertedWidth = convertWidth(width);
+            const FontPitch convertedPitch = convertSpacing(spacing);
+            const FontItalic convertedItalic = convertSlant(slant);
+
             rFA.SetFamilyName(OStringToOUString(std::string_view(reinterpret_cast<char*>(family)), RTL_TEXTENCODING_UTF8));
             if (eStyleRes == FcResultMatch)
                 rFA.SetStyleName(OStringToOUString(std::string_view(reinterpret_cast<char*>(style)), RTL_TEXTENCODING_UTF8));
@@ -721,13 +736,23 @@ void PrintFontManager::countFontconfigFonts()
 
             // sort into known fonts
             fontID nFontID = m_nNextFontID++;
+
             m_aFonts.emplace(nFontID, aFont);
             m_aFontFileToFontID[aBase].insert(nFontID);
             roaring::Roaring bitmap;
             buildRoaringBitmap(pPattern, bitmap);
             m_aCodepointBitmap.emplace(nFontID, bitmap);
             nFonts++;
+            FontAttributes attr(familyName, styleName, convertedWeight, FontFamily::FAMILY_DONTKNOW, convertedPitch, convertedWidth, convertedItalic, false, 512);
+            /* PrintFontData fontData(nFontID, PrintFont(FontAttributes(familyName, styleName, convertedWeight, FontFamily::FAMILY_DONTKNOW, convertedPitch, convertedWidth, convertedItalic, false, 512), "", 0, 0), bitmap); */
 
+
+
+            std::string fontAttributesString = "FontAttributes(" + wrapInQuotes(std::string(familyName.toUtf8())) + ", " + wrapInQuotes(std::string(styleName.toUtf8())) + ", " + std::to_string(convertedWeight) + ", " + std::to_string(FontFamily::FAMILY_DONTKNOW) + ", " + std::to_string(convertedPitch) + ", " + std::to_string(convertedWidth) + ", " + std::to_string(convertedItalic) + ", false, " + std::to_string(512) + "),\n";
+
+            std::string fontDataString = "PrintFontData(" + std::to_string(nFontID) + ", PrintFont(" + fontAttributesString + ", " + wrapInQuotes(std::string("")) + ", " + std::to_string(0) + ", " + std::to_string(0) + ")," + roaringString +") \n";
+
+            generatedFontFile += "{" + std::to_string(nFontID) + ", " + fontDataString + "} \n ";
             FcPatternReference(pPattern);
             FcFontSetAdd(pFilteredSet, pPattern);
 
@@ -740,6 +765,8 @@ void PrintFontManager::countFontconfigFonts()
             rWrapper.replaceFontSet(pFilteredSet);
         else
             FcFontSetDestroy(pFilteredSet);
+
+        SAL_WARN("vcl.fonts", "generatedFontFile" <<  generatedFontFile);
 
     }
 

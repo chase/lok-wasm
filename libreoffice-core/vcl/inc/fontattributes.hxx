@@ -64,6 +64,17 @@ public:
     void                SetQuality( int nQuality )                  { mnQuality = nQuality; }
     void                IncreaseQualityBy( int nQualityAmount )     { mnQuality += nQualityAmount; }
 
+    FontAttributes(const OUString& familyName, const OUString& styleName, FontWeight weight, FontFamily family, FontPitch pitch, FontWidth width, FontItalic italic, bool microsoftSymbolEncoded, int quality)
+        : maFamilyName(familyName)
+          , maStyleName(styleName)
+          , meWeight(weight)
+          , meFamily(family)
+          , mePitch(pitch)
+          , meWidthType(width)
+          , meItalic(italic)
+          , mbMicrosoftSymbolEncoded(microsoftSymbolEncoded)
+          , mnQuality(quality){}
+
 private:
     // device independent variables
     OUString            maFamilyName;               // Font Family Name
