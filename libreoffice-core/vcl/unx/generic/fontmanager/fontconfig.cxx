@@ -724,7 +724,8 @@ void PrintFontManager::countFontconfigFonts()
             m_aFonts.emplace(nFontID, aFont);
             m_aFontFileToFontID[aBase].insert(nFontID);
             roaring::Roaring bitmap;
-            m_aCodepointBitmap.emplace(nFontID, buildRoaringBitmap(pPattern, bitmap));
+            buildRoaringBitmap(pPattern, bitmap);
+            m_aCodepointBitmap.emplace(nFontID, bitmap);
             nFonts++;
 
             FcPatternReference(pPattern);
