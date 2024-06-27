@@ -44,18 +44,21 @@ namespace helpers
 
 std::string toString(const OUString& value) { return std::string(value.toUtf8()); }
 
-std::vector<std::string> split(const std::string& str, char delimiter)
-{
-    std::vector<std::string> tokens;
-    std::stringstream ss(str);
-    std::string token;
+// https://github.com/chase/awrit/blob/main/awrit/string/string_utils.cc#L11-L26
+std::vector<std::string_view> split(const std::string_view& str, char delimiter) {
+  if (str.empty()) return {};
 
-    while (std::getline(ss, token, delimiter))
-    {
-        tokens.push_back(token);
-    }
+  std::vector<std::string_view> tokens;
+  size_t start = 0;
+  size_t end = str.find(delimiter);
+  while (end != std::string_view::npos) {
+    tokens.push_back(str.substr(start, end - start));
+    start = end + 1;
+    end = str.find(delimiter, start);
+  }
+  tokens.push_back(str.substr(start));
 
-    return tokens;
+  return tokens;
 }
 
 OUString toHexString(const std::vector<unsigned char>& a)
@@ -110,13 +113,13 @@ ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& context_,
 
 void ExpandedStorage::addPart(const std::string& path, const std::string& content)
 {
-    std::vector<std::string> pathParts = helpers::split(path, '/');
+    std::vector<std::string_view> pathParts = helpers::split(path, '/');
     for (int idx = 0; idx < pathParts.size() - 1; idx++)
     {
         bool found = std::find(m_dirs.begin(), m_dirs.end(), pathParts[idx]) != m_dirs.end();
         if (!found)
         {
-            m_dirs.push_back(pathParts[idx]);
+            m_dirs.push_back(std::string(pathParts[idx]));
         }
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
@@ -238,6 +241,7 @@ bool shouldCreateStreamElement(sal_Int32 openMode)
     return (openMode != embed::ElementModes::READ) && (openMode != embed::ElementModes::NOCREATE)
            && (openMode != embed::ElementModes::SEEKABLEREAD);
 }
+
 Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
                                                           PathType pathType)
 {
@@ -311,11 +315,16 @@ Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OU
     return Reference<embed::XStorage>(expandedStorage);
 }
 
-Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUString&)
+Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUString& path)
 {
-    SAL_WARN("expandedstorage", "cloneStreamElement: not implemented");
-    // TODO: @synoet - Implement this
-    throw css::embed::StorageWrappedTargetException();
+    auto it = m_files->find(helpers::toString(path));
+
+    // copy the content of the original file
+    auto content = std::vector<sal_Int8>(it->second.content);
+    Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(content));
+    Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(content));
+
+    return Reference<io::XStream>(new comphelper::VecStreamSupplier(std::move(inputStream), std::move(outputStream)));
 }
 
 /// ExpandedStorage does not support encrypted streams, so this method is equivalent to cloneStreamElement.
