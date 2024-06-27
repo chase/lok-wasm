@@ -1,3 +1,5 @@
+import JsZip from "jszip";
+
 export function downloadFile(name: string, buffer: ArrayBuffer, type: string) {
   const a = document.createElement('a');
   const blob = new Blob([buffer], {type: type})
@@ -10,4 +12,19 @@ export function downloadFile(name: string, buffer: ArrayBuffer, type: string) {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   }, 0);
+}
+
+export async function unzipDocxFile(blob: Blob): Promise<Array<{path: string, content: ArrayBuffer}>> {
+  const zip = await JsZip.loadAsync(blob);
+
+  const files = Promise.all(Object.keys(zip.files).map(async (key) => {
+    const file = zip.files[key];
+    console.log("processing file", key);
+    return {
+      path: key,
+      content: new Uint8Array(await file.async('uint8array')).buffer,
+    }
+  }));
+
+  return files;
 }

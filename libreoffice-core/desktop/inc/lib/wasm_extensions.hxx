@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oox/helper/expandedstorage.hxx"
+#include "sal/types.h"
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 
@@ -104,7 +105,7 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions = nullptr, const int documentId = 0);
 
-    std::optional<std::pair<std::string, std::string>> getExpandedPart(const std::string& path) const;
+    std::optional<std::pair<std::string, std::vector<sal_Int8>>> getExpandedPart(const std::string& path) const;
     void removePart(const std::string& path) const;
     std::vector<std::pair<const std::string, const std::string>> listParts() const;
 

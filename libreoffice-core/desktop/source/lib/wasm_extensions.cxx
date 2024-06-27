@@ -333,7 +333,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     return nullptr;
 }
 
-std::optional<std::pair<std::string, std::string>> WasmDocumentExtension::getExpandedPart(const std::string& path) const
+std::optional<std::pair<std::string, std::vector<sal_Int8>>> WasmDocumentExtension::getExpandedPart(const std::string& path) const
 {
     return expandedStorage->getPart(path);
 }

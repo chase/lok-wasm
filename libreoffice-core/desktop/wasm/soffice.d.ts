@@ -150,7 +150,7 @@ export declare class ExpandedPart {
 
 export declare class ExpandedDocument {
   constructor(): void;
-  addPart(path: string, name: string): void;
+  addPart(path: string, name: ArrayBuffer): void;
   delete(): void;
 }
 
@@ -256,7 +256,7 @@ export declare class Document {
   gotoOutline(index: number): RectArray;
   setAuthor(author: string): void;
   setAuthor(author: string): void;
-  getExpandedPart(path: string): {path: string, content: string} | null;
+  getExpandedPart(path: string): {path: string, content: ArrayBuffer} | null;
   listExpandedParts(): Array<{path: string, sha: string}>;
 }
 

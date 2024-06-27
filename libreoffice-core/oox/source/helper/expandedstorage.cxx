@@ -121,17 +121,13 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
         }
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
-    Sequence<sal_Int8> seqContent;
-    comphelper::Base64::decode(seqContent, OUString::fromUtf8(content));
-    std::vector<sal_Int8> fileContent
-        = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
+    std::vector<sal_Int8> fileContent(content.begin(), content.end());
     ShaVec sha = helpers::getContentHash(fileContent);
-    seqContent.realloc(0);
 
     m_files->insert({ path, { sPath, fileContent, sha } });
 }
 
-std::optional<std::pair<std::string, std::string>>
+std::optional<std::pair<std::string, std::vector<sal_Int8>>>
 ExpandedStorage::getPart(const std::string& path) const
 {
     auto it = std::find_if(m_files->begin(), m_files->end(),
@@ -143,9 +139,7 @@ ExpandedStorage::getPart(const std::string& path) const
         return {};
     }
 
-    std::string contentString(it->second.content.begin(), it->second.content.end());
-
-    return std::make_pair(helpers::toString(it->second.path), contentString);
+    return std::make_pair(helpers::toString(it->second.path), it->second.content);
 }
 
 void ExpandedStorage::removePart(const std::string& path)

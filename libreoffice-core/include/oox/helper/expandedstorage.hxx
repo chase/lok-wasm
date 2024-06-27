@@ -1,5 +1,6 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
+#include "sal/types.h"
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <boost/unordered/unordered_map_fwd.hpp>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
@@ -23,6 +24,7 @@
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <cppuhelper/weak.hxx>
 #include <comphelper/interfacecontainer4.hxx>
+#include <unordered_map>
 
 namespace com::sun::star
 {
@@ -107,7 +109,7 @@ public:
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
 
     void addPart(const std::string& path, const std::string& content);
-    std::optional<std::pair<std::string, std::string>> getPart(const std::string& path) const;
+    std::optional<std::pair<std::string, std::vector<sal_Int8>>> getPart(const std::string& path) const;
     void removePart(const std::string& path);
     std::vector<std::pair<const std::string, const std::string>> listParts();
 

@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.0.0-alpha.9",
+    "@types/jszip": "^3.4.1",
+    "jszip": "^3.10.1",
     "prettier": "^3.2.5",
     "solid-js": "^1.8.15",
     "tailwindcss": "^4.0.0-alpha.9"

@@ -657,7 +657,7 @@ public:
         }
 
         result.set("path", val(part->first));
-        result.set("content", part->second);
+        result.set("content", val(typed_memory_view(part->second.size(), part->second.data())));
 
         return result;
     }
@@ -755,6 +755,7 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<bool>();
     register_optional<std::string>();
     register_optional<int>();
+    register_vector<int8_t>("IntVec");
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
 

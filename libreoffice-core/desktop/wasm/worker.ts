@@ -87,14 +87,14 @@ const globalHandler: GlobalMethod = {
     docMap[ref] = doc;
     return ref;
   },
-  loadFromExpandedParts: function(data: any) {
+  loadFromExpandedParts: function(name: string, data: Array<{path: string, content: ArrayBuffer}>) {
     const { Document, ExpandedDocument} = lok;
     const expandedDoc = new ExpandedDocument();
     for (const part of data) {
-      part.content.length > 0 && expandedDoc.addPart(part.path, part.content);
+      expandedDoc.addPart(part.path, part.content);
     }
 
-    const doc = new Document(expandedDoc, "test");
+    const doc = new Document(expandedDoc, name);
     const ref = doc.ref();
 
     if (!doc.valid()) {
@@ -134,11 +134,9 @@ const handler: DocumentMethodHandler<Document> = {
     // only buffer is transferable
     return lok.readUnlink(tmpFile).buffer;
   },
-
   parts: function (doc: Document): number {
     return doc.getParts();
   },
-
   partRectanglesTwips: function (doc: Document): RectangleTwips[] {
     return doc.pageRects().map(rectArrayToRectangleTwips);
   },
