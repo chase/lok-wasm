@@ -419,7 +419,7 @@ Sequence< OUString > SAL_CALL FilterDetect::getSupportedServiceNames()
 
 // com.sun.star.document.XExtendedFilterDetection interface -------------------
 
-void FilterDetect::ZipDetect( MediaDescriptor& aMediaDescriptor, Reference< XComponentContext > rxContext, OUString& aFilterName)
+void FilterDetect::ZipDetect( MediaDescriptor& aMediaDescriptor, OUString& aFilterName)
 {
     aMediaDescriptor.addInputStream();
 
@@ -452,7 +452,7 @@ void FilterDetect::ZipDetect( MediaDescriptor& aMediaDescriptor, Reference< XCom
     }
 }
 
-void FilterDetect::ExpandedDetect(utl::MediaDescriptor &aMediaDescriptor, css::uno::Reference<com::sun::star::uno::XComponentContext> rxContext, OUString &aFilterName)
+void FilterDetect::ExpandedDetect(utl::MediaDescriptor &aMediaDescriptor, OUString &aFilterName)
 {
     std::shared_ptr< oox::StorageBase > xStorageBase = comphelper::OStorageHelper::GetExpandedStorageBase();
 
@@ -483,11 +483,11 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
     {
         if (comphelper::OStorageHelper::IsExpandedStorage())
         {
-            ExpandedDetect(aMediaDescriptor, mxContext, aFilterName);
+            ExpandedDetect(aMediaDescriptor, aFilterName);
         }
         else
         {
-            ZipDetect(aMediaDescriptor, mxContext, aFilterName);
+            ZipDetect(aMediaDescriptor, aFilterName);
         }
     }
     catch( const Exception& )

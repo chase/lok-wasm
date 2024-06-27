@@ -796,47 +796,47 @@ bool SfxObjectShell::DoLoad( SfxMedium *pMed )
         if ( IsReadOnlyMedium() || IsLoadReadonly() )
             SetReadOnlyUI();
 
-        /* try */
-        /* { */
-        /*     ::ucbhelper::Content aContent( pMedium->GetName(), utl::UCBContentHelper::getDefaultCommandEnvironment(), comphelper::getProcessComponentContext() ); */
-        /*     css::uno::Reference < XPropertySetInfo > xProps = aContent.getProperties(); */
-        /*     if ( xProps.is() ) */
-        /*     { */
-        /*         static constexpr OUString aAuthor( u"Author"_ustr ); */
-        /*         static constexpr OUString aKeywords( u"Keywords"_ustr ); */
-        /*         static constexpr OUString aSubject( u"Subject"_ustr ); */
-        /*         Any aAny; */
-        /*         OUString aValue; */
-        /*         uno::Reference<document::XDocumentPropertiesSupplier> xDPS( */
-        /*             GetModel(), uno::UNO_QUERY_THROW); */
-        /*         uno::Reference<document::XDocumentProperties> xDocProps */
-        /*             = xDPS->getDocumentProperties(); */
-        /*         if ( xProps->hasPropertyByName( aAuthor ) ) */
-        /*         { */
-        /*             aAny = aContent.getPropertyValue( aAuthor ); */
-        /*             if ( aAny >>= aValue ) */
-        /*                 xDocProps->setAuthor(aValue); */
-        /*         } */
-        /*         if ( xProps->hasPropertyByName( aKeywords ) ) */
-        /*         { */
-        /*             aAny = aContent.getPropertyValue( aKeywords ); */
-        /*             if ( aAny >>= aValue ) */
-        /*                 xDocProps->setKeywords( */
-        /*                   ::comphelper::string::convertCommaSeparated(aValue)); */
-/* ; */
-        /*         } */
-        /*         if ( xProps->hasPropertyByName( aSubject ) ) */
-        /*         { */
-        /*             aAny = aContent.getPropertyValue( aSubject ); */
-        /*             if ( aAny >>= aValue ) { */
-        /*                 xDocProps->setSubject(aValue); */
-        /*             } */
-        /*         } */
-        /*     } */
-        /* } */
-        /* catch( Exception& ) */
-        /* { */
-        /* } */
+        try
+        {
+            ::ucbhelper::Content aContent( pMedium->GetName(), utl::UCBContentHelper::getDefaultCommandEnvironment(), comphelper::getProcessComponentContext() );
+            css::uno::Reference < XPropertySetInfo > xProps = aContent.getProperties();
+            if ( xProps.is() )
+            {
+                static constexpr OUString aAuthor( u"Author"_ustr );
+                static constexpr OUString aKeywords( u"Keywords"_ustr );
+                static constexpr OUString aSubject( u"Subject"_ustr );
+                Any aAny;
+                OUString aValue;
+                uno::Reference<document::XDocumentPropertiesSupplier> xDPS(
+                    GetModel(), uno::UNO_QUERY_THROW);
+                uno::Reference<document::XDocumentProperties> xDocProps
+                    = xDPS->getDocumentProperties();
+                if ( xProps->hasPropertyByName( aAuthor ) )
+                {
+                    aAny = aContent.getPropertyValue( aAuthor );
+                    if ( aAny >>= aValue )
+                        xDocProps->setAuthor(aValue);
+                }
+                if ( xProps->hasPropertyByName( aKeywords ) )
+                {
+                    aAny = aContent.getPropertyValue( aKeywords );
+                    if ( aAny >>= aValue )
+                        xDocProps->setKeywords(
+                          ::comphelper::string::convertCommaSeparated(aValue));
+;
+                }
+                if ( xProps->hasPropertyByName( aSubject ) )
+                {
+                    aAny = aContent.getPropertyValue( aSubject );
+                    if ( aAny >>= aValue ) {
+                        xDocProps->setSubject(aValue);
+                    }
+                }
+            }
+        }
+        catch( Exception& )
+        {
+        }
 
         // If not loaded asynchronously call FinishedLoading
         if ( !( pImpl->nLoadedFlags & SfxLoadedFlags::MAINDOCUMENT ) &&
@@ -2397,7 +2397,6 @@ bool SfxObjectShell::ImportFrom(SfxMedium& rMedium,
             // #i119492# During loading, some OLE objects like chart will be set
             // modified flag, so needs to reset the flag to false after loading
             bool bRtn = xLoader->filter(aArgs);
-            if (!comphelper::OStorageHelper::IsExpandedStorage()){
             const uno::Sequence < OUString > aNames = GetEmbeddedObjectContainer().GetObjectNames();
             for ( const auto& rName : aNames )
             {
@@ -2419,7 +2418,6 @@ bool SfxObjectShell::ImportFrom(SfxMedium& rMedium,
                         }
                     }
                 }
-            }
             }
 
             // tdf#107690 import custom document property _MarkAsFinal as SecurityOptOpenReadonly

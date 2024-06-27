@@ -20,7 +20,6 @@
 #ifndef INCLUDED_OOX_CORE_FILTERDETECT_HXX
 #define INCLUDED_OOX_CORE_FILTERDETECT_HXX
 
-#include "com/sun/star/uno/XComponentContext.hdl"
 #include <vector>
 
 #include <com/sun/star/document/XExtendedFilterDetection.hpp>
@@ -158,8 +157,8 @@ public:
         interface of the temporary file will be stored in the 'ComponentData'
         property of the passed media descriptor.
      */
-    void ZipDetect( utl::MediaDescriptor& rMediaDesc, css::uno::Reference< com::sun::star::uno::XComponentContext> rxContext, OUString& aFilterName);
-    void ExpandedDetect( utl::MediaDescriptor& rMediaDesc, css::uno::Reference< com::sun::star::uno::XComponentContext> rxContext, OUString& aFilterName);
+    void ZipDetect( utl::MediaDescriptor& rMediaDesc, OUString& aFilterName);
+    void ExpandedDetect( utl::MediaDescriptor& rMediaDesc, OUString& aFilterName);
     virtual OUString SAL_CALL
                         detect( css::uno::Sequence< css::beans::PropertyValue >& rMediaDescSeq ) override;
 

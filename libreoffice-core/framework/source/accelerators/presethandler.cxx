@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "comphelper/storagehelper.hxx"
 #include <accelerators/presethandler.hxx>
 
 #include <classes/fwkresid.hxx>
@@ -311,7 +312,10 @@ void PresetHandler::connectToResource(      PresetHandler::EConfigType          
                                       const css::uno::Reference< css::embed::XStorage >& xDocumentRoot,
                                       const LanguageTag&                                 rLanguageTag )
 {
-    return;
+    // MACRO : This is unneeded if using expanded storage
+    // since it does alot of unrelated storage operations
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+        return;
     // TODO free all current open storages!
 
     {
