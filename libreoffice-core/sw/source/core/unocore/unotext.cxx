@@ -1238,7 +1238,7 @@ SwXText::Impl::finishOrAppendParagraph(
     m_pDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::END, nullptr);
     if (bIllegalException || bRuntimeException)
     {
-        /* m_pDoc->GetIDocumentUndoRedo().Undo(); */
+        m_pDoc->GetIDocumentUndoRedo().Undo();
         if (bIllegalException)
         {
             throw lang::IllegalArgumentException(sMessage, nullptr, 0);

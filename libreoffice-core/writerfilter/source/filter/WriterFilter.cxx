@@ -236,6 +236,7 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
         catch (uno::Exception const&)
         {
             css::uno::Any anyEx = cppu::getCaughtException();
+            SAL_WARN("writerfilter", "WriterFilter::filter(): failed with " << exceptionToString(anyEx));
             throw lang::WrappedTargetRuntimeException("", getXWeak(), anyEx);
         }
 
@@ -258,6 +259,7 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
 
         oox::core::XmlFilterBase::putPropertiesToDocumentGrabBag(m_xDstDoc, aGrabBagProperties);
 
+        // MACRO: don't support VBA project
         /* writerfilter::ooxml::OOXMLStream::Pointer_t pVBAProjectStream( */
         /*     writerfilter::ooxml::OOXMLDocumentFactory::createStream( */
         /*         pDocStream, writerfilter::ooxml::OOXMLStream::VBAPROJECT)); */

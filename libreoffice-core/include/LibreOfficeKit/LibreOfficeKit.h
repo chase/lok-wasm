@@ -18,7 +18,6 @@
 # ifndef _WIN32
 #  include <stdbool.h>
 # endif
-# include <stdint.h>
 #endif
 
 #include <LibreOfficeKit/LibreOfficeKitTypes.h>
@@ -125,9 +124,6 @@ struct _LibreOfficeKitClass
 
     // MACRO:
     LibreOfficeKitDocument* (*loadFromMemory) (LibreOfficeKit* pThis, char *data, size_t size);
-
-    // MACRO:
-    void* (*getXComponentContext) (LibreOfficeKit* pThis);
 
     /** @see lok::Office::extractRequest.
      */

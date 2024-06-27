@@ -1,20 +1,21 @@
-#include "com/sun/star/document/MacroExecMode.hdl"
-#include "com/sun/star/embed/XStorage.hdl"
-#include "com/sun/star/frame/Desktop.hpp"
-#include "com/sun/star/frame/XDesktop2.hdl"
-#include "com/sun/star/ucb/OpenMode.hdl"
-#include "com/sun/star/uno/Any.h"
-#include "com/sun/star/uno/Reference.h"
-#include "comphelper/base64.hxx"
-#include "comphelper/diagnose_ex.hxx"
-#include "comphelper/seqstream.hxx"
-#include "comphelper/storagehelper.hxx"
-#include "cppuhelper/exc_hlp.hxx"
-#include "lib/init.hxx"
-#include "oox/helper/expandedstorage.hxx"
-#include "sal/log.hxx"
-#include "sot/stg.hxx"
-#include "unotools/mediadescriptor.hxx"
+#include <com/sun/star/document/MacroExecMode.hpp>
+#include <com/sun/star/frame/Desktop.hpp>
+#include <com/sun/star/frame/XDesktop2.hpp>
+#include <com/sun/star/ucb/OpenMode.hpp>
+#include <com/sun/star/uno/Any.h>
+#include <com/sun/star/uno/Reference.h>
+#include <comphelper/base64.hxx>
+#include <comphelper/diagnose_ex.hxx>
+#include <comphelper/processfactory.hxx>
+#include <comphelper/seqstream.hxx>
+#include <comphelper/vecstream.hxx>
+#include <comphelper/storagehelper.hxx>
+#include <cppuhelper/exc_hlp.hxx>
+#include <lib/init.hxx>
+#include <oox/helper/expandedstorage.hxx>
+#include <sal/log.hxx>
+#include <sot/stg.hxx>
+#include <unotools/mediadescriptor.hxx>
 #include <com/sun/star/uno/Reference.hxx>
 #include <editeng/sizeitem.hxx>
 #include <sfx2/bindings.hxx>
@@ -235,14 +236,13 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::Expa
 
 void ExpandedDocument::addPart(std::string path, std::string content)
 {
-    parts.emplace_back(path, content);
+    parts.emplace_back(std::move(path), std::move(content));
 }
 
 _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions, const int documentId)
 {
     using namespace com::sun::star;
-    uno::XComponentContext * xContext =
-        static_cast<uno::XComponentContext*>(pThis->pClass->getXComponentContext(pThis));
+    uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
 
     if (!xContext) {
         return nullptr;
@@ -255,11 +255,12 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
         SAL_WARN("lok", "ComponentLoader is not available");
         return nullptr;
     }
-    // Create an empty sequence
-    uno::Sequence<sal_Int8> aEmptyData;
 
-    // Wrap the empty sequence in a SequenceInputStream
-    uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::SequenceInputStream(aEmptyData));
+
+    // Parts of the import pipeline expect a stream
+    // this stream isn't actually used, but is required to be passed along
+    std::vector<sal_Int8> aEmptyData;
+    uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::VectorInputStream(aEmptyData));
 
     uno::Reference<oox::ExpandedStorage> storage(new oox::ExpandedStorage(xContext, xEmptyInputStream));
 
@@ -303,7 +304,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     // and use the storage instead of the stream
     aMediaDescriptor["InputStream"] <<= xEmptyInputStream;
     // Silences various exceptions
-    aMediaDescriptor["Silent"] <<= false;
+    aMediaDescriptor["Silent"] <<= true;
 
     {
         SolarMutexGuard aGuard;

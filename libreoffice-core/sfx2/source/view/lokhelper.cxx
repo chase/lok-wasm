@@ -241,9 +241,7 @@ SfxViewShell* SfxLokHelper::getViewOfId(int nId)
 int SfxLokHelper::getView(const SfxViewShell* pViewShell)
 {
     if (!pViewShell)
-    {
         pViewShell = SfxViewShell::Current();
-    }
     // Still no valid view shell? Then no idea.
     if (!pViewShell)
         return -1;

@@ -529,7 +529,8 @@ void SAL_CALL SfxBaseController::attachFrame( const Reference< frame::XFrame >& 
     if ( m_pData->m_pViewShell )
     {
         ConnectSfxFrame_Impl( E_CONNECT );
-        //MACRO: uneeded
+        // MACRO: unneeded since this is only for opening from remote storage
+        // which we don't support right now
         /* ShowInfoBars( ); */
 
         // attaching the frame to the controller is the last step in the creation of a new view, so notify this
@@ -1322,8 +1323,7 @@ void SfxBaseController::ConnectSfxFrame_Impl( const ConnectSfxFrame i_eConnect )
         pViewFrame->GetBindings().Invalidate( nViewNo + SID_VIEWSHELL0 );
 }
 
-// NOTE @synoet
-// Don't think this needs to be called.
+// MACRO: unneeded since this is only for opening from remote storage
 void SfxBaseController::ShowInfoBars( )
 {
     if ( !m_pData->m_pViewShell )

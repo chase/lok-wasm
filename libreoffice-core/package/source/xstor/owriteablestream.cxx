@@ -20,8 +20,10 @@
 #include <sal/config.h>
 
 #include <cassert>
+#include <memory>
 #include <sal/log.hxx>
 #include <com/sun/star/packages/NoEncryptionException.hpp>
+
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>

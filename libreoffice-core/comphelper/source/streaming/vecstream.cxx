@@ -1,9 +1,9 @@
-#include "com/sun/star/io/BufferSizeExceededException.hdl"
-#include "com/sun/star/io/NotConnectedException.hdl"
-#include "com/sun/star/lang/IllegalArgumentException.hdl"
-#include "com/sun/star/lang/XEventListener.hdl"
-#include "cppuhelper/queryinterface.hxx"
-#include "sal/types.h"
+#include <com/sun/star/io/BufferSizeExceededException.hpp>
+#include <com/sun/star/io/NotConnectedException.hpp>
+#include <com/sun/star/lang/IllegalArgumentException.hpp>
+#include <com/sun/star/lang/XEventListener.hpp>
+#include <cppuhelper/queryinterface.hxx>
+#include <sal/types.h>
 #include <vector>
 #include <comphelper/vecstream.hxx>
 
@@ -117,7 +117,7 @@ void SAL_CALL VectorOutputStream::writeBytes(const Sequence<sal_Int8>& data)
         std::size_t newSize = static_cast<std::size_t>(m_pos + data.getLength());
         m_vec.resize(newSize);
     }
-    std::copy(data.getConstArray(), data.getConstArray() + data.getLength(), m_vec.data() + m_pos);
+    memcpy(m_vec.data() + m_pos, data.getConstArray(), data.getLength());
     m_pos += data.getLength();
 }
 

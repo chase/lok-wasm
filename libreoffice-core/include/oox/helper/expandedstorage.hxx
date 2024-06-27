@@ -1,15 +1,14 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
-
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
-#include "boost/unordered/unordered_map_fwd.hpp"
-#include "com/sun/star/embed/XExtendedStorageStream.hdl"
-#include "com/sun/star/io/XInputStream.hdl"
-#include "com/sun/star/io/XSeekable.hdl"
-#include "com/sun/star/lang/XComponent.hdl"
-#include "comphelper/seqstream.hxx"
-#include "cppuhelper/implbase.hxx"
-#include "oox/helper/storagebase.hxx"
+#include <boost/unordered/unordered_map_fwd.hpp>
+#include <com/sun/star/embed/XExtendedStorageStream.hpp>
+#include <com/sun/star/io/XInputStream.hpp>
+#include <com/sun/star/io/XSeekable.hpp>
+#include <com/sun/star/lang/XComponent.hpp>
+#include <comphelper/seqstream.hxx>
+#include <cppuhelper/implbase.hxx>
+#include <oox/helper/storagebase.hxx>
 #include <rtl/ustring.hxx>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <string>
@@ -24,7 +23,6 @@
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <cppuhelper/weak.hxx>
 #include <comphelper/interfacecontainer4.hxx>
-#include <unordered_set>
 
 namespace com::sun::star
 {

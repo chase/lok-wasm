@@ -1,24 +1,24 @@
-#include "com/sun/star/beans/UnknownPropertyException.hdl"
-#include "com/sun/star/beans/XPropertySetInfo.hdl"
-#include "com/sun/star/embed/ElementModes.hdl"
-#include "com/sun/star/embed/XExtendedStorageStream.hdl"
-#include "com/sun/star/embed/XStorage.hdl"
-#include "com/sun/star/io/XInputStream.hdl"
-#include "com/sun/star/io/XStream.hdl"
-#include "com/sun/star/packages/NoEncryptionException.hdl"
-#include "com/sun/star/uno/Reference.h"
-#include "com/sun/star/uno/Sequence.h"
-#include "comphelper/base64.hxx"
-#include "comphelper/diagnose_ex.hxx"
-#include "comphelper/hash.hxx"
-#include "comphelper/vecstream.hxx"
-#include "comphelper/sequence.hxx"
-#include "oox/helper/binaryinputstream.hxx"
-#include "oox/helper/binaryoutputstream.hxx"
-#include "oox/helper/storagebase.hxx"
-#include "osl/thread.h"
-#include "sal/log.hxx"
-#include "sot/stg.hxx"
+#include <com/sun/star/beans/UnknownPropertyException.hpp>
+#include <com/sun/star/beans/XPropertySetInfo.hpp>
+#include <com/sun/star/embed/ElementModes.hpp>
+#include <com/sun/star/embed/XExtendedStorageStream.hpp>
+#include <com/sun/star/embed/XStorage.hpp>
+#include <com/sun/star/io/XInputStream.hpp>
+#include <com/sun/star/io/XStream.hpp>
+#include <com/sun/star/packages/NoEncryptionException.hpp>
+#include <com/sun/star/uno/Reference.h>
+#include <com/sun/star/uno/Sequence.h>
+#include <comphelper/base64.hxx>
+#include <comphelper/diagnose_ex.hxx>
+#include <comphelper/hash.hxx>
+#include <comphelper/vecstream.hxx>
+#include <comphelper/sequence.hxx>
+#include <oox/helper/binaryinputstream.hxx>
+#include <oox/helper/binaryoutputstream.hxx>
+#include <oox/helper/storagebase.hxx>
+#include <osl/thread.h>
+#include <sal/log.hxx>
+#include <sot/stg.hxx>
 #include <memory>
 #include <oox/helper/expandedstorage.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>
@@ -41,8 +41,6 @@ namespace oox
 
 namespace helpers
 {
-
-OUString toOUString(const std::string& value) { return OUString::createFromAscii(value.c_str()); }
 
 std::string toString(const OUString& value) { return std::string(value.toUtf8()); }
 
@@ -95,7 +93,7 @@ ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
 
 OUString ExpandedStorage::getFullPath(const OUString& path) const
 {
-    return helpers::toOUString(m_basePath.value_or("")) + "/" + path;
+    return OUString::fromUtf8(m_basePath.value_or("")) + "/" + path;
 }
 
 ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& context_,
@@ -123,7 +121,7 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
     Sequence<sal_Int8> seqContent;
-    comphelper::Base64::decode(seqContent, helpers::toOUString(content));
+    comphelper::Base64::decode(seqContent, OUString::fromUtf8(content));
     std::vector<sal_Int8> fileContent
         = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
     OUString sha = helpers::getContentHash(fileContent);
@@ -544,7 +542,7 @@ void ExpandedStorage::implGetElementNames(::std::vector<OUString>& orElementName
     size_t i = 0;
     for (const auto& pair : *m_files)
     {
-        orElementNames[i++] = helpers::toOUString(pair.first);
+        orElementNames[i++] = OUString::fromUtf8(pair.first);
     }
 }
 
@@ -599,7 +597,7 @@ void ExpandedStorage::readRelationshipInfo()
 
     for (const std::string& path : relFilePaths)
     {
-        auto seq = getRelInfoFromName(helpers::toOUString(path));
+        auto seq = getRelInfoFromName(OUString::fromUtf8(path));
 
         for (const auto& rels : seq)
         {

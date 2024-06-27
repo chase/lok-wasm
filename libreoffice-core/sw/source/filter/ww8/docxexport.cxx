@@ -955,7 +955,6 @@ void DocxExport::WriteProperties( )
         bSecurityOptOpenReadOnly = pDocShell->IsSecurityOptOpenReadOnly();
     }
 
-
     m_rFilter.exportDocumentProperties( xDocProps, bSecurityOptOpenReadOnly );
 }
 

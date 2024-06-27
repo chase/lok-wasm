@@ -1220,12 +1220,6 @@ public:
         return mpThis->pClass->extractRequest(mpThis, pFilePath);
     }
 
-    void* getXComponentContext()
-    {
-        return mpThis->pClass->getXComponentContext(mpThis);
-    }
-
-
     /**
      * Trim memory usage.
      *

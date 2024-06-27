@@ -1,5 +1,5 @@
-#include "com/sun/star/embed/XExtendedStorageStream.hdl"
-#include "com/sun/star/io/XStream.hdl"
+#include <com/sun/star/embed/XExtendedStorageStream.hpp>
+#include <com/sun/star/io/XStream.hpp>
 #include <config_options.h>
 #include <com/sun/star/uno/Sequence.hxx>
 #include <com/sun/star/io/XInputStream.hpp>
@@ -9,9 +9,9 @@
 #include <comphelper/comphelperdllapi.h>
 #include <comphelper/bytereader.hxx>
 #include <comphelper/interfacecontainer4.hxx>
-#include "cppuhelper/implbase.hxx"
+#include <cppuhelper/implbase.hxx>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
-#include "com/sun/star/embed/XExtendedStorageStream.hdl"
+#include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <mutex>
 
 namespace comphelper

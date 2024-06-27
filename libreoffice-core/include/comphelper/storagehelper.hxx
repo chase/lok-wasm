@@ -19,8 +19,8 @@
 #ifndef INCLUDED_COMPHELPER_STORAGEHELPER_HXX
 #define INCLUDED_COMPHELPER_STORAGEHELPER_HXX
 
-#include "oox/helper/storagebase.hxx"
-#include "sot/stg.hxx"
+#include <oox/helper/storagebase.hxx>
+#include <sot/stg.hxx>
 #include <com/sun/star/uno/Sequence.h>
 #include <com/sun/star/uno/Reference.hxx>
 #include <com/sun/star/embed/ElementModes.hpp>

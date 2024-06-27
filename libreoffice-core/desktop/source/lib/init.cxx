@@ -2811,8 +2811,6 @@ static void lo_dumpState(LibreOfficeKit* pThis, const char* pOptions, char** pSt
 
 // MACRO
 static LibreOfficeKitDocument* lo_loadFromMemory(LibreOfficeKit* pThis, char *data, size_t size);
-// MACRO
-static void* lo_getXComponentContext(LibreOfficeKit* pThis);
 
 LibLibreOffice_Impl::LibLibreOffice_Impl()
     : m_pOfficeClass( gOfficeClass.lock() )
@@ -2844,7 +2842,6 @@ LibLibreOffice_Impl::LibLibreOffice_Impl()
 
         // MACRO: {
         m_pOfficeClass->loadFromMemory = lo_loadFromMemory;
-        m_pOfficeClass->getXComponentContext = lo_getXComponentContext;
         // MACRO: }
 
         m_pOfficeClass->extractRequest = lo_extractRequest;
@@ -3030,7 +3027,7 @@ static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* pThis,
         // as regular files, otherwise we cannot save them; it will try
         // to bring saveas dialog which cannot work with LOK case
         uno::Sequence<css::beans::PropertyValue> aFilterOptions{
-            /* comphelper::makePropertyValue(u"FilterOptions"_ustr, aOptions), */
+            comphelper::makePropertyValue(u"FilterOptions"_ustr, aOptions),
             comphelper::makePropertyValue(u"FilterName"_ustr, OUString("MS Word 2007 XML")),
             comphelper::makePropertyValue(u"InteractionHandler"_ustr, xInteraction),
             comphelper::makePropertyValue(u"MacroExecutionMode"_ustr, nMacroExecMode),
@@ -5484,12 +5481,6 @@ static void lo_dumpState (LibreOfficeKit* pThis, const char* /* pOptions */, cha
     pLib->dumpState(aState);
 
     *pState = convertOString(aState.makeStringAndClear());
-}
-
-// MACRO:
-static void* lo_getXComponentContext(LibreOfficeKit* /*pThis*/)
-{
-    return xContext.is() ? xContext.get() : nullptr;
 }
 
 void LibLibreOffice_Impl::dumpState(rtl::OStringBuffer &rState)

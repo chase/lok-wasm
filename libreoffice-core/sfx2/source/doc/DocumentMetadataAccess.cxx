@@ -350,8 +350,6 @@ addContentOrStylesFileImpl(struct DocumentMetadataAccess_Impl const & i_rImpl,
         xType.set(getURI<rdf::URIs::ODF_STYLESFILE>(i_rImpl.m_xContext));
     } else {
         return false;
-        SAL_WARN("metadata", "FAILED TO ADD CONTENT OR STYLE 1");
-
     }
     addFile(i_rImpl, xType, i_rPath, nullptr);
     return true;
@@ -555,10 +553,8 @@ collectFilesFromStorage(uno::Reference<embed::XStorage> const& i_xStorage,
         if (i_xStorage->hasByName(s_content) &&
             i_xStorage->isStreamElement(s_content))
         {
-
             o_rFiles.insert(s_content);
         }
-
         if (i_xStorage->hasByName(s_styles) &&
             i_xStorage->isStreamElement(s_styles))
         {

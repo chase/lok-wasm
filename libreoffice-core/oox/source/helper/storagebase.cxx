@@ -254,10 +254,8 @@ void StorageBase::commit()
 
 StorageRef StorageBase::getSubStorage( const OUString& rElementName, bool bCreateMissing )
 {
-    SAL_WARN("storagebase", "open sub storage " << rElementName << " create missing " << bCreateMissing);
     if (comphelper::OStorageHelper::IsExpandedStorage())
     {
-        SAL_WARN("storagebase", "expanded storage");
         return implOpenSubStorage(rElementName, bCreateMissing);
     }
     StorageRef& rxSubStrg = maSubStorages[ rElementName ];

@@ -197,9 +197,7 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
         xImporter->importProperties(m_pImpl->m_xDocumentStorage,
                                     xPropSupplier->getDocumentProperties());
     }
-    catch( const uno::Exception& ) {
-        SAL_WARN("DomainMapper", "FAILED TO IMPORT DOCUMENT PROPERTIES");
-    }
+    catch( const uno::Exception& ) {}
 }
 
 void DomainMapper::setDocumentReference(writerfilter::ooxml::OOXMLDocument* pDocument)
