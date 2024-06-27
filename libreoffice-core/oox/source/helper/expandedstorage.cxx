@@ -61,20 +61,18 @@ std::vector<std::string_view> split(const std::string_view& str, char delimiter)
   return tokens;
 }
 
-OUString toHexString(const std::vector<unsigned char>& a)
+std::string shaVecToString(const std::vector<unsigned char>& a)
 {
-    std::stringstream aStrm;
+    std::stringstream stringStream;
     for (auto& i : a)
     {
-        aStrm << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(i);
+        stringStream << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(i);
     }
 
-    std::string str = aStrm.str();
-
-    return OUString(str.data(), str.length(), osl_getThreadTextEncoding());
+    return stringStream.str();
 }
 
-OUString getContentHash(const std::vector<sal_Int8>& content)
+ShaVec getContentHash(const std::vector<sal_Int8>& content)
 {
     const unsigned char* unsignedData = reinterpret_cast<const unsigned char*>(content.data());
 
@@ -82,7 +80,7 @@ OUString getContentHash(const std::vector<sal_Int8>& content)
     std::vector<unsigned char> hashVec = comphelper::Hash::calculateHash(
         unsignedData, content.size(), comphelper::HashType::SHA256);
 
-    return toHexString(hashVec);
+    return hashVec;
 }
 }
 
@@ -127,7 +125,7 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     comphelper::Base64::decode(seqContent, OUString::fromUtf8(content));
     std::vector<sal_Int8> fileContent
         = comphelper::sequenceToContainer<std::vector<sal_Int8>>(seqContent);
-    OUString sha = helpers::getContentHash(fileContent);
+    ShaVec sha = helpers::getContentHash(fileContent);
     seqContent.realloc(0);
 
     m_files->insert({ path, { sPath, fileContent, sha } });
@@ -163,15 +161,11 @@ void ExpandedStorage::removePart(const std::string& path)
 
 std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::listParts()
 {
-    for (auto& [path, file] : *m_files)
-    {
-        file.sha = helpers::getContentHash(file.content);
-    }
     std::vector<std::pair<const std::string, const std::string>> parts;
     for (const auto& [path, file] : *m_files)
     {
         const std::string pathString = helpers::toString(file.path);
-        const std::string shaString = helpers::toString(file.sha);
+        const std::string shaString = helpers::shaVecToString(file.sha);
 
         parts.push_back({ pathString, shaString });
     }
@@ -256,7 +250,7 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
             throw css::container::NoSuchElementException();
         }
 
-        it = m_files->insert({ path, { name, std::vector<sal_Int8>(), "" } }).first;
+        it = m_files->insert({ path, { name, std::vector<sal_Int8>(), std::vector<unsigned char>() } }).first;
     }
 
     auto& file = it->second;
@@ -277,8 +271,6 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     {
         Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
         maybeOutputStream = outputStream;
-
-        m_staleSha = true;
     }
 
     Reference<io::XStream> xStream
@@ -571,7 +563,27 @@ Reference<io::XOutputStream> ExpandedStorage::implOpenOutputStream(const OUStrin
     return openStreamElement(rElementName, embed::ElementModes::READWRITE)->getOutputStream();
 }
 
-void ExpandedStorage::implCommit() const {}
+void ExpandedStorage::implCommit() const {
+    // implCommit is defined as const in StorageBase
+    // we don't have this limitation and need to call afterCommit
+    // which modifies the sha of the files after changes
+    const_cast<ExpandedStorage*>( this )->afterCommit();
+}
+
+void ExpandedStorage::afterCommit() const {
+
+    for (auto& [path, file] : *m_files)
+    {
+        auto newSha = helpers::getContentHash(file.content);
+
+        if (newSha != file.sha)
+        {
+            // TODO: emit a callback indicating that the file sha has changed
+            file.sha = newSha;
+            SAL_WARN("expanded storage", "file has changed " << path);
+        }
+    }
+}
 
 const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& rSeq,
                                             const OUString& rName)

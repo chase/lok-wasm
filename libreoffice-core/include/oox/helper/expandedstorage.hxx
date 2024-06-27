@@ -53,13 +53,15 @@ using namespace com::sun::star;
 namespace oox
 {
 
+typedef std::vector<unsigned char> ShaVec;
+
 struct ExpandedFile
 {
     const OUString path;
-    OUString sha;
+    ShaVec sha;
     std::vector<sal_Int8> content;
 
-    ExpandedFile(const OUString& path_, const std::vector<sal_Int8>& content_, const OUString& sha_)
+    ExpandedFile(const OUString& path_, const std::vector<sal_Int8>& content_, const ShaVec& sha_)
         : path(path_)
         , sha(sha_)
         , content(content_){};
@@ -89,7 +91,6 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
     std::optional<std::string> m_basePath;
     css::uno::Reference<css::io::XInputStream> m_inputStream;
     std::unordered_map<OUString, css::uno::Any> m_properties;
-    bool m_staleSha = false;
 
 public:
     ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
@@ -109,6 +110,8 @@ public:
     std::optional<std::pair<std::string, std::string>> getPart(const std::string& path) const;
     void removePart(const std::string& path);
     std::vector<std::pair<const std::string, const std::string>> listParts();
+
+    void afterCommit() const;
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
 
