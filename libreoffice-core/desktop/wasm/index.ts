@@ -338,7 +338,7 @@ const WITHOUT_VIEW_ID: Record<keyof DocumentMethods, true> = {
 
 function documentClient<T extends DocumentClient>(
   ref: DocumentRef | null,
-  viewId: number | undefined = 0
+  viewId: number | undefined = -1
 ): T | null {
   console.log('ref', ref, viewId)
   if (!ref) return null;
