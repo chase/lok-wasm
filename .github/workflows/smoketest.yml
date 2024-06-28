@@ -1,16 +1,6 @@
 name: Smoke test
 
 on: 
-  push:
-    branches: [chase/feat/undo-manager]
-    paths:
-      - '.github/workflows/**'
-      - 'emsdk-patches/**'
-      - 'libreoffice-core/**'
-      - 'scripts/setup'
-      - 'scripts/configure'
-      - 'scripts/build'
-      - 'scripts/finalize'
   pull_request:
     types: [review_requested]
     paths:
@@ -155,13 +145,10 @@ jobs:
 
     - name: Cache external tarballs
       uses: runs-on/cache/save@v4
+      if: steps.external-tarballs.outputs.cache-hit != 'true'
       with:
-        if: steps.external-tarballs.outputs.cache-hit != 'true'
         path: libreoffice-core/external/tarballs
         key: ${{ env.EXTERNALS_KEY }}
-        restore-keys: |
-          external-tar-${{ hashFiles('libreoffice-core/download.lst') }}-
-          external-tar-
 
     - name: Cache workdir if newer
       if: steps.workdir.outputs.cache-hit != 'true'

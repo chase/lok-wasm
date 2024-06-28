@@ -133,13 +133,10 @@ jobs:
 
       - name: Cache external tarballs
         uses: runs-on/cache/save@v4
+        if: steps.external-tarballs.outputs.cache-hit != 'true'
         with:
-          if: steps.external-tarballs.outputs.cache-hit != 'true'
           path: libreoffice-core/external/tarballs
           key: ${{ env.EXTERNALS_KEY }}
-          restore-keys: |
-            external-tar-${{ hashFiles('libreoffice-core/download.lst') }}-
-            external-tar-
 
       - name: Cache ccache if newer
         if: steps.ccache.outputs.cache-hit != 'true'
