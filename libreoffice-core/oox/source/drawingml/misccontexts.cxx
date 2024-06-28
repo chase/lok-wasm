@@ -17,11 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "com/sun/star/embed/XRelationshipAccess.hdl"
-#include "com/sun/star/embed/XStorage.hdl"
-#include "comphelper/storagehelper.hxx"
-#include "oox/helper/storagebase.hxx"
-#include "sal/log.hxx"
+#include <com/sun/star/embed/XRelationshipAccess.hdl>
+#include <com/sun/star/embed/XStorage.hdl>
+#include <comphelper/storagehelper.hxx>
+#include <oox/helper/storagebase.hxx>
+#include <sal/log.hxx>
 #include <drawingml/misccontexts.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/helper/graphichelper.hxx>

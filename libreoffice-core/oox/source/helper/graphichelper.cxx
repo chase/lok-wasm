@@ -17,10 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "com/sun/star/embed/XStorage.hdl"
-#include "com/sun/star/io/XStream.hdl"
-#include "comphelper/storagehelper.hxx"
-#include "oox/helper/storagebase.hxx"
+#include <com/sun/star/embed/XStorage.hdl>
+#include <com/sun/star/io/XStream.hdl>
+#include <comphelper/storagehelper.hxx>
+#include <oox/helper/storagebase.hxx>
 #include <oox/helper/graphichelper.hxx>
 
 #include <com/sun/star/awt/Point.hpp>
