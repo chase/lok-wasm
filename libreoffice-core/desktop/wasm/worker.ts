@@ -610,6 +610,11 @@ const handler: DocumentMethodHandler<Document> = {
     doc.setCurrentView(viewId);
     doc.redo(count);
   },
+
+  getRedlineTextRange: function (doc: Document, viewId: ViewId, id: number) {
+    doc.setCurrentView(viewId);
+    return doc.getRedlineTextRange(id);
+  }
 };
 
 const forwarding: ForwardingMethodHandlers<Document> = {

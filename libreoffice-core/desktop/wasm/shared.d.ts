@@ -184,6 +184,8 @@ export type DocumentWithViewMethods = {
   redo(count: number): void;
 
   setAuthor(author: string): void;
+
+  getRedlineTextRange(id: number): RectArray[] | undefined;
 };
 
 /** methods that forward to a class weakly bound to the Document that forwards calls */

@@ -768,6 +768,8 @@ public:
     void undo(sal_Int32 count) { return writer()->undo(count); };
     void redo(sal_Int32 count) { return writer()->redo(count); };
 
+    val getRedlineTextRange(int redlineId) { return writer()->getRedlineTextRange(redlineId); }
+
 private:
     struct DocWithId
     {
@@ -934,5 +936,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("getRedoCount", &DocumentClient::getRedoCount)
         .function("undo", &DocumentClient::undo)
         .function("redo", &DocumentClient::redo)
+        .function("getRedlineTextRange", &DocumentClient::getRedlineTextRange)
         .function("newView", &DocumentClient::newView);
 }

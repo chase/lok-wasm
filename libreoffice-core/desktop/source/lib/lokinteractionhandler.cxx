@@ -413,6 +413,15 @@ sal_Bool SAL_CALL LOKInteractionHandler::handleInteractionRequest(
     uno::Sequence<uno::Reference<task::XInteractionContinuation>> const &rContinuations = xRequest->getContinuations();
     uno::Any const request(xRequest->getRequest());
 
+    // MACRO: MACRO-2700 Always approve broken package requests {
+    document::BrokenPackageRequest aBrokenPackageRequest;
+    if (request >>= aBrokenPackageRequest)
+    {
+        selectApproved(rContinuations);
+        return true;
+    }
+    // MACRO: }
+
     if (handleIOException(rContinuations, request))
         return true;
 

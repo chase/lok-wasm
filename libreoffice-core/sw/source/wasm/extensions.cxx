@@ -1,3 +1,4 @@
+#include "redline.hxx"
 #include "sal/types.h"
 #include "undobj.hxx"
 #include <unordered_set>
@@ -388,6 +389,33 @@ val SwXTextDocument::headerFooterRect()
     result.set("type", bInHeader ? val::u8string("header") : val::u8string("footer"));
     result.set("rect", rectToArray(aRect));
     return result;
+}
+
+val SwXTextDocument::getRedlineTextRange(int redlineId)
+{
+    auto wrtShell = GetDocShell()->GetWrtShell();
+    const SwRedlineTable& rRedlineTable = wrtShell->getIDocumentRedlineAccess().GetRedlineTable();
+    for (SwRedlineTable::size_type i = 0; i < rRedlineTable.size(); ++i)
+    {
+        if (redlineId == rRedlineTable[i]->GetId()) {
+            SwRangeRedline* pRedline = rRedlineTable[i];
+            auto [pStartPos, pEndPos] = pRedline->StartEnd(); // SwPosition*
+            SwContentNode* pContentNd = pRedline->GetPointContentNode();
+            if (pContentNd)
+            {
+                SwShellCursor aCursor(*wrtShell, *pStartPos);
+                aCursor.SetMark();
+                *aCursor.GetMark() = *pEndPos;
+                aCursor.FillRects();
+                SwRects* pRects(&aCursor);
+                bottomTwips(pRects);
+                val rects = swRectsToArray(pRects);
+                return rects;
+            }
+            break;
+        }
+    }
+    return {};
 }
 
 namespace

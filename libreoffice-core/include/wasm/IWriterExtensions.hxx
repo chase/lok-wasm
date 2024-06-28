@@ -70,5 +70,7 @@ public:
     virtual sal_Int32 getRedoCount() const { return 0; };
     virtual void undo(sal_Int32 /* count */) {};
     virtual void redo(sal_Int32 /* count */) {};
+
+    virtual val getRedlineTextRange(int /* redlineId */) { return {}; };
 };
 }

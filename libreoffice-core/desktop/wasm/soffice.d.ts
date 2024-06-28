@@ -252,6 +252,8 @@ export declare class Document {
   getRedoCount(): number;
   undo(count: number): void;
   redo(count: number): void;
+
+  getRedlineTextRange(id: number): RectArray[] | undefined;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

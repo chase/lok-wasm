@@ -582,6 +582,7 @@ public:
     void undo(sal_Int32 count) override;
     void redo(sal_Int32 count) override;
 
+    emscripten::val getRedlineTextRange(int redlineId) override;
     /// MACRO-2313: }
 };
 
