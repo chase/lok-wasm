@@ -42,5 +42,6 @@ npm run dev
 
 # Docs
 
+<!-- TIP: in neovim, you can use `gf` to go to the file linked if the cursor is between ( ) -->
 - [Remote Development](./remote_dev.md)
 - [Important Files](./important_files.md)
