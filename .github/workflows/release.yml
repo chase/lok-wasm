@@ -10,13 +10,9 @@ on:
       - 'scripts/configure'
       - 'scripts/build'
       - 'scripts/finalize'
+
 env:
-  CCACHE_VERSION: 4.10
-  CCACHE_BASEDIR: ${GITHUB_WORKSPACE}
-  CCACHE_DIR: ${GITHUB_WORKSPACE}/.ccache
-  CCACHE_COMPRESS: true
-  CCACHE_COMPRESSLEVEL: 6
-  CCACHE_MAXSIZE: 5G
+  CCACHE_VERSION: '4.10'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -86,9 +82,9 @@ jobs:
 
       - name: Setup ccache
         run: |
-          curl -Lo ccache.tar.xz "https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION-linux-x86_64.tar.xz"
+          wget -O ccache.tar.xz "https://github.com/ccache/ccache/releases/download/v${{ env.CCACHE_VERSION }}/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64.tar.xz"
           tar xf ccache.tar.xz
-          echo "$(pwd)/ccache-$CCACHE_VERSION-linux-x86_64" >> $GITHUB_PATH
+          echo "$(pwd)/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64" >> $GITHUB_PATH
 
       - name: Restore ccache cache
         id: ccache
@@ -126,6 +122,11 @@ jobs:
 
       - name: Build
         run: |
+          export CCACHE_BASEDIR="${GITHUB_WORKSPACE}"
+          export CCACHE_DIR="${GITHUB_WORKSPACE}/.ccache"
+          export CCACHE_COMPRESS=true
+          export CCACHE_COMPRESSLEVEL=6
+          export CCACHE_MAXSIZE=5G
           ./scripts/configure && ./scripts/build && ./script/finalize
           tar -czf lok-wasm.tar.gz -C ./build .
 
@@ -187,6 +188,11 @@ jobs:
           token: ${{ steps.generate-token.outputs.token }}
           repository: coparse-inc/app-monorepo
           ref: main
+
+      - name: Git LFS
+        run: |
+          git config lfs.fetchinclude "*.wasm,*.patch"
+          git lfs install
 
       - name: Restore artifacts for PR
         uses: runs-on/cache/save@v4

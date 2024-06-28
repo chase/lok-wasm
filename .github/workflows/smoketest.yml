@@ -1,6 +1,16 @@
 name: Smoke test
 
 on: 
+  push:
+    branches: [chase/feat/undo-manager]
+    paths:
+      - '.github/workflows/**'
+      - 'emsdk-patches/**'
+      - 'libreoffice-core/**'
+      - 'scripts/setup'
+      - 'scripts/configure'
+      - 'scripts/build'
+      - 'scripts/finalize'
   pull_request:
     types: [review_requested]
     paths:
@@ -10,13 +20,9 @@ on:
       - 'scripts/configure'
       - 'scripts/build'
       - 'scripts/finalize'
+
 env:
-  CCACHE_VERSION: 4.10
-  CCACHE_BASEDIR: ${GITHUB_WORKSPACE}
-  CCACHE_DIR: ${GITHUB_WORKSPACE}/.ccache
-  CCACHE_COMPRESS: true
-  CCACHE_COMPRESSLEVEL: 6
-  CCACHE_MAXSIZE: 5G
+  CCACHE_VERSION: '4.10'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -48,7 +54,6 @@ jobs:
           libxml2-utils \
           bison \
           flex \
-          pkg-config \
           cmake \
           locales \
           libnss3 \
@@ -82,9 +87,9 @@ jobs:
 
     - name: Setup ccache
       run: |
-        curl -Lo ccache.tar.xz "https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION-linux-x86_64.tar.xz"
+        wget -O ccache.tar.xz "https://github.com/ccache/ccache/releases/download/v${{ env.CCACHE_VERSION }}/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64.tar.xz"
         tar xf ccache.tar.xz
-        echo "$(pwd)/ccache-$CCACHE_VERSION-linux-x86_64" >> $GITHUB_PATH
+        echo "$(pwd)/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64" >> $GITHUB_PATH
 
     - name: Restore ccache cache
       id: ccache
@@ -134,12 +139,17 @@ jobs:
     - name: Touch changed files so they are marked newer than workdir
       run: |
         GIT_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
-        git clone --no-checkout --filter=blob:none "${{ github.repository }}" .no-checkout
+        git clone --no-checkout --filter=blob:none https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git .no-checkout
         CHANGES="$(cd .no-checkout && git diff --name-only --diff-filter=d "origin/main..origin/$GIT_BRANCH")"
         echo "$CHANGES" | xargs touch
 
     - name: Build
       run: |
+        export CCACHE_BASEDIR="${GITHUB_WORKSPACE}"
+        export CCACHE_DIR="${GITHUB_WORKSPACE}/.ccache"
+        export CCACHE_COMPRESS=true
+        export CCACHE_COMPRESSLEVEL=6
+        export CCACHE_MAXSIZE=5G
         ./scripts/configure && ./scripts/build
 
     - name: Cache external tarballs
