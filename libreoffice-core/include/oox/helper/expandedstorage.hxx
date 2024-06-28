@@ -101,7 +101,8 @@ public:
     ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
                     const std::shared_ptr<ExpandedFileMap>& fileMap,
                     const css::uno::Reference<io::XInputStream>& rxInputStream,
-                    const OUString& basePath);
+                    const OUString& basePath,
+                    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo);
 
     ExpandedStorage(const ExpandedStorage&) = delete;
     ExpandedStorage(ExpandedStorage&&) = delete;
@@ -109,7 +110,8 @@ public:
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
 
     void addPart(const std::string& path, const std::string& content);
-    std::optional<std::pair<std::string, std::vector<sal_Int8>>> getPart(const std::string& path) const;
+    std::optional<std::pair<std::string, std::vector<sal_Int8>>>
+    getPart(const std::string& path) const;
     void removePart(const std::string& path);
     std::vector<std::pair<const std::string, const std::string>> listParts();
 

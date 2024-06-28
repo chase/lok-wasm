@@ -16,6 +16,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
+#include "com/sun/star/embed/ElementModes.hdl"
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/uno/Reference.h>
 #include <oox/helper/expandedstorage.hxx>
@@ -103,6 +104,11 @@ void OStorageHelper::SetIsExpandedStorage(bool bIsExpanded)
 void OStorageHelper::SetExpandedStorageBase(std::shared_ptr<oox::StorageBase>& xStorage)
 {
     expandedStorageBase = xStorage;
+}
+
+uno::Reference<embed::XStorage> OStorageHelper::GetExpandedDocSubStorage()
+{
+    return uno::Reference<embed::XStorage>(expandedStorage->openStorageElement(WORD_DIR_NAME, embed::ElementModes::READWRITE));
 }
 
 std::shared_ptr<oox::StorageBase> OStorageHelper::GetExpandedStorageBase()

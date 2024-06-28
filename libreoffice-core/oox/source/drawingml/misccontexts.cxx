@@ -17,6 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "com/sun/star/embed/XRelationshipAccess.hdl"
+#include "com/sun/star/embed/XStorage.hdl"
+#include "comphelper/storagehelper.hxx"
+#include "oox/helper/storagebase.hxx"
+#include "sal/log.hxx"
 #include <drawingml/misccontexts.hxx>
 #include <oox/helper/attributelist.hxx>
 #include <oox/helper/graphichelper.hxx>
@@ -300,8 +305,19 @@ BlipContext::BlipContext(ContextHandler2Helper const & rParent, const AttributeL
 {
     if( rAttribs.hasAttribute( R_TOKEN( embed ) ) )
     {
-        // internal picture URL
-        OUString aFragmentPath = getFragmentPathFromRelId( rAttribs.getStringDefaulted( R_TOKEN( embed )) );
+        OUString aFragmentPath;
+        if (comphelper::OStorageHelper::IsExpandedStorage())
+        {
+            Reference<embed::XStorage> subStorage = comphelper::OStorageHelper::GetExpandedDocSubStorage();
+            uno::Reference<embed::XRelationshipAccess> relAccess(subStorage, UNO_QUERY);
+            aFragmentPath = relAccess->getTargetByID(rAttribs.getStringDefaulted(R_TOKEN(embed)));
+        }
+        else
+        {
+            // internal picture URL
+            aFragmentPath = getFragmentPathFromRelId( rAttribs.getStringDefaulted( R_TOKEN( embed )) );
+        }
+
         if (!aFragmentPath.isEmpty())
         {
             auto xGraphic = getFilter().getGraphicHelper().importEmbeddedGraphic(aFragmentPath);
@@ -625,6 +641,7 @@ ContextHandlerRef BlipExtensionContext::onCreateContext(sal_Int32 nElement, cons
             if (rAttribs.hasAttribute(R_TOKEN(embed)))
             {
                 OUString aFragmentPath = getFragmentPathFromRelId(rAttribs.getStringDefaulted(R_TOKEN(embed)));
+                SAL_WARN("misccontexts", "importEmbeddedGraphic " << aFragmentPath);
                 if (!aFragmentPath.isEmpty())
                 {
                     // Read the graphic from the fragment path

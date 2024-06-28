@@ -17,6 +17,10 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include "com/sun/star/embed/XStorage.hdl"
+#include "com/sun/star/io/XStream.hdl"
+#include "comphelper/storagehelper.hxx"
+#include "oox/helper/storagebase.hxx"
 #include <oox/helper/graphichelper.hxx>
 
 #include <com/sun/star/awt/Point.hpp>
@@ -283,11 +287,21 @@ Reference< XGraphic > GraphicHelper::importEmbeddedGraphic( const OUString& rStr
         xGraphic = mxGraphicMapper->findGraphic(rStreamName);
         if (!xGraphic.is())
         {
+            uno::Reference<io::XInputStream> inputStream;
+            if (comphelper::OStorageHelper::IsExpandedStorage())
+            {
+                inputStream = comphelper::OStorageHelper::GetExpandedDocSubStorage()
+                    ->openStreamElement(rStreamName, embed::ElementModes::READ)
+                    ->getInputStream();
+            }
+            else
+            {
+                inputStream = mxStorage->openInputStream(rStreamName);
+            }
             // Lazy-loading doesn't work with cropped TIFF images, because in case of Lazy-load TIFF images
             // we are using MapUnit::MapPixel, but in case of cropped images we are using MapUnit::Map100thMM
             // and the crop values are relative to original bitmap size.
-            auto xStream = mxStorage->openInputStream(rStreamName);
-            xGraphic = importGraphic(xStream, pExtHeader, !rStreamName.endsWith(".tiff"));
+            xGraphic = importGraphic(inputStream, pExtHeader, !rStreamName.endsWith(".tiff"));
             if (xGraphic.is())
                 mxGraphicMapper->putGraphic(rStreamName, xGraphic);
         }
