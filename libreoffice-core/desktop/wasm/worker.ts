@@ -575,6 +575,41 @@ const handler: DocumentMethodHandler<Document> = {
     doc.setCurrentView(viewId);
     doc.updateComment(id, text);
   },
+
+  addExternalUndo: function (doc: Document, viewId: ViewId) {
+    doc.setCurrentView(viewId);
+    return doc.addExternalUndo();
+  },
+
+  getNextUndoId: function (doc: Document, viewId: ViewId) {
+    doc.setCurrentView(viewId);
+    return doc.getNextUndoId();
+  },
+
+  getNextRedoId: function (doc: Document, viewId: ViewId) {
+    doc.setCurrentView(viewId);
+    return doc.getNextRedoId();
+  },
+
+  getUndoCount: function (doc: Document, viewId: ViewId) {
+    doc.setCurrentView(viewId);
+    return doc.getUndoCount();
+  },
+
+  getRedoCount: function (doc: Document, viewId: ViewId) {
+    doc.setCurrentView(viewId);
+    return doc.getRedoCount();
+  },
+
+  undo: function (doc: Document, viewId: ViewId, count: number) {
+    doc.setCurrentView(viewId);
+    doc.undo(count);
+  },
+
+  redo: function (doc: Document, viewId: ViewId, count: number) {
+    doc.setCurrentView(viewId);
+    doc.redo(count);
+  },
 };
 
 const forwarding: ForwardingMethodHandlers<Document> = {

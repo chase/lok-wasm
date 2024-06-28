@@ -48,7 +48,7 @@ export type OutlineItem = {
   text: string;
 };
 
-export declare enum LayoutStatus {
+export declare const enum LayoutStatus {
   INVISIBLE,
   VISIBLE,
   INSERTED,
@@ -244,6 +244,14 @@ export declare class Document {
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
   setAuthor(author: string): void;
+
+  addExternalUndo(): number;
+  getNextUndoId(): number;
+  getNextRedoId(): number;
+  getUndoCount(): number;
+  getRedoCount(): number;
+  undo(count: number): void;
+  redo(count: number): void;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

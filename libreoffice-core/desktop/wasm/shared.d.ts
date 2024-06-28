@@ -174,6 +174,15 @@ export type DocumentWithViewMethods = {
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
 
+  /** adds an undo item and returns the external id number to track it */
+  addExternalUndo(): number;
+  getNextUndoId(): number;
+  getNextRedoId(): number;
+  getUndoCount(): number;
+  getRedoCount(): number;
+  undo(count: number): void;
+  redo(count: number): void;
+
   setAuthor(author: string): void;
 };
 

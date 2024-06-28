@@ -17,7 +17,7 @@ using namespace emscripten;
 class VCL_DLLPUBLIC SAL_LOPLUGIN_ANNOTATE("crosscast") ITextRanges
 {
 public:
-    virtual ~ITextRanges(){};
+    virtual ~ITextRanges() = default;
     virtual int length() { return 0; };
     virtual val rect(int /* index */) { return {}; };
     virtual val rects(int /* startYPosTwips */, int /* endYPosTwips */) { return {}; };
@@ -62,5 +62,13 @@ public:
     virtual val gotoOutline(int /* outlineIndex */) { return {}; };
     virtual void bumpInvalidationGeneration() {};
     virtual sal_uInt32 invalidationGeneration() { return 0; };
+
+    virtual sal_Int32 addExternalUndo() { return 0; };
+    virtual sal_Int32 getNextUndoId() const { return 0; };
+    virtual sal_Int32 getNextRedoId() const { return 0; };
+    virtual sal_Int32 getUndoCount() const { return 0; };
+    virtual sal_Int32 getRedoCount() const { return 0; };
+    virtual void undo(sal_Int32 /* count */) {};
+    virtual void redo(sal_Int32 /* count */) {};
 };
 }

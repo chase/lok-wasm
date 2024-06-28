@@ -71,6 +71,10 @@ public:
     }
     void put(std::string_view pPropName, bool);
 
+    // MACRO: Sometimes a string is just a number, like undo comments
+    void putNumberString(std::string_view pPropName, const OUString& n);
+    // MACRO: }
+
     void putSimpleValue(const OUString& rPropValue);
 
     /// This assumes that this data belongs at this point in the stream, and is valid, and properly encoded

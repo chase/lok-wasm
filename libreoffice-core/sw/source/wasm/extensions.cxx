@@ -1,4 +1,5 @@
 #include "sal/types.h"
+#include "undobj.hxx"
 #include <unordered_set>
 #include <vector>
 #include <docufld.hxx>
@@ -53,6 +54,7 @@
 #include <tools/json_writer.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <DocumentRedlineManager.hxx>
+#include <UndoManager.hxx>
 
 using namespace emscripten;
 
@@ -300,8 +302,8 @@ void SwXTextDocument::deleteComment(int commentId)
 
 void SwXTextDocument::resolveCommentThread(int parentId)
 {
-    css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
-        { { "Id", uno::Any(OUString::number(parentId)) } }));
+    css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(
+        comphelper::InitPropertySequence({ { "Id", uno::Any(OUString::number(parentId)) } }));
 
     SolarMutexGuard aGuard;
     WithoutRedlines dontTrackComments(GetDocOrThrow());
@@ -311,8 +313,8 @@ void SwXTextDocument::resolveCommentThread(int parentId)
 
 void SwXTextDocument::resolveComment(int commentId)
 {
-    css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
-        { { "Id", uno::Any(OUString::number(commentId)) } }));
+    css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(
+        comphelper::InitPropertySequence({ { "Id", uno::Any(OUString::number(commentId)) } }));
 
     SolarMutexGuard aGuard;
     WithoutRedlines dontTrackComments(GetDocOrThrow());
@@ -1095,6 +1097,94 @@ void SwXTextDocument::bumpInvalidationGeneration()
 sal_uInt32 SwXTextDocument::invalidationGeneration()
 {
     return __c11_atomic_load(&m_nInvalidationGeneration, __ATOMIC_RELAXED);
+}
+
+namespace
+{
+
+sal_Int32 g_undoExternalId = 0;
+
+class SwUndoExternal final : public SwUndo
+{
+public:
+    SwUndoExternal(SwDoc& rDoc, SfxViewShell* pViewShell)
+        : SwUndo(SwUndoId::EXTERNAL, &rDoc)
+        , id_(++g_undoExternalId)
+        , pViewShell_(pViewShell)
+    {
+    }
+
+    virtual ~SwUndoExternal() override {}
+
+    virtual void UndoImpl(::sw::UndoRedoContext&) override
+    {
+        if (!pViewShell_)
+            return;
+        tools::JsonWriter aJson;
+        aJson.put("id", id_);
+        pViewShell_->libreOfficeKitViewCallback(LOK_CALLBACK_UNDO_EXTERNAL,
+                                                aJson.finishAndGetAsOString());
+    };
+    virtual void RedoImpl(::sw::UndoRedoContext&) override
+    {
+        if (!pViewShell_)
+            return;
+        tools::JsonWriter aJson;
+        aJson.put("id", id_);
+        pViewShell_->libreOfficeKitViewCallback(LOK_CALLBACK_REDO_EXTERNAL,
+                                                aJson.finishAndGetAsOString());
+    };
+    sal_Int32 id_;
+
+private:
+    SfxViewShell* pViewShell_;
+};
+
+}
+
+sal_Int32 SwXTextDocument::addExternalUndo()
+{
+    SwDoc& rDoc = GetDocOrThrow();
+    auto undo = std::make_unique<SwUndoExternal>(rDoc, m_pDocShell->GetViewShell());
+    sal_Int32 id = undo->id_;
+    rDoc.GetUndoManager().AppendUndo(std::move(undo));
+    return id;
+}
+sal_Int32 SwXTextDocument::getNextUndoId() const
+{
+    SwUndoId r(SwUndoId::EMPTY);
+    GetDocOrThrow().GetUndoManager().GetLastUndoInfo(nullptr, &r);
+    return static_cast<sal_Int32>(r);
+}
+sal_Int32 SwXTextDocument::getNextRedoId() const
+{
+    SwUndoId r(SwUndoId::EMPTY);
+    GetDocOrThrow().GetUndoManager().GetLastUndoInfo(nullptr, &r);
+    return static_cast<sal_Int32>(r);
+}
+sal_Int32 SwXTextDocument::getUndoCount() const
+{
+    return GetDocOrThrow().GetUndoManager().GetUndoActionCount();
+}
+sal_Int32 SwXTextDocument::getRedoCount() const
+{
+    return GetDocOrThrow().GetUndoManager().GetRedoActionCount();
+}
+void SwXTextDocument::undo(sal_Int32 count)
+{
+    sw::UndoManager& m = GetDocOrThrow().GetUndoManager();
+    for (sal_Int32 i = 0; i < count; ++i)
+    {
+        m.Undo();
+    }
+}
+void SwXTextDocument::redo(sal_Int32 count)
+{
+    sw::UndoManager& m = GetDocOrThrow().GetUndoManager();
+    for (sal_Int32 i = 0; i < count; ++i)
+    {
+        m.Redo();
+    }
 }
 
 namespace sw
