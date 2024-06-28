@@ -39,6 +39,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo add-apt-repository universe multiverse && \
+          sudo apt update && \
           sudo apt-get install -y --no-install-recommends \
             zip \
             nasm \
