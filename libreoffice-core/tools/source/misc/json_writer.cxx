@@ -384,6 +384,23 @@ void JsonWriter::ensureSpaceAndWriteNameColon(std::string_view name, int valSize
     mPos += 3;
 }
 
+void JsonWriter::putNumberString(std::string_view propName, const OUString& rPropVal)
+{
+    ensureSpaceAndWriteNameColon(propName, rPropVal.getLength());
+    sal_Int32 i = 0;
+    while (i < rPropVal.getLength())
+    {
+        sal_uInt32 ch = rPropVal.iterateCodePoints(&i);
+        if (ch >= '0' && ch <= '9')
+        {
+            *mPos = static_cast<char>(ch);
+            ++mPos;
+        }
+    }
+
+    validate();
+}
+
 void JsonWriter::putLiteral(std::string_view propName, std::string_view propValue)
 {
     ensureSpaceAndWriteNameColon(propName, propValue.size());

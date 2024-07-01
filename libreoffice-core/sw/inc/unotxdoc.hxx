@@ -573,6 +573,16 @@ public:
     _Atomic sal_uInt32 m_nInvalidationGeneration = 0;
     void bumpInvalidationGeneration() override;
     sal_uInt32 invalidationGeneration() override;
+
+    sal_Int32 addExternalUndo() override;
+    sal_Int32 getNextUndoId() const override;
+    sal_Int32 getNextRedoId() const override;
+    sal_Int32 getUndoCount() const override;
+    sal_Int32 getRedoCount() const override;
+    void undo(sal_Int32 count) override;
+    void redo(sal_Int32 count) override;
+
+    emscripten::val getRedlineTextRange(int redlineId) override;
     /// MACRO-2313: }
 };
 

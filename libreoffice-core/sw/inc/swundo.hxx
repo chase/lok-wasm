@@ -28,6 +28,9 @@ typedef std::vector< OUString > SwUndoComments_t;
 // The IDs for StdActions.
 enum class SwUndoId
 {
+    // MACRO: Allow external actions to be registered on the stack {
+    EXTERNAL = 512,
+    // MACRO: }
     EMPTY = 0,
     STD_BEGIN = 1,
     START = STD_BEGIN,                 //  1

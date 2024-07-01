@@ -176,10 +176,20 @@ export type DocumentWithViewMethods = {
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
 
+  /** adds an undo item and returns the external id number to track it */
+  addExternalUndo(): number;
+  getNextUndoId(): number;
+  getNextRedoId(): number;
+  getUndoCount(): number;
+  getRedoCount(): number;
+  undo(count: number): void;
+  redo(count: number): void;
+
   setAuthor(author: string): void;
 
   getExpandedPart(path: string): {path: string, content: ArrayBuffer} | null;
   listExpandedParts(): Array<{path: string, sha: string}>;
+  getRedlineTextRange(id: number): RectArray[] | undefined;
 };
 
 /** methods that forward to a class weakly bound to the Document that forwards calls */
