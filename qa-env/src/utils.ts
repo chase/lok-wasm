@@ -19,7 +19,6 @@ export async function unzipDocxFile(blob: Blob): Promise<Array<{path: string, co
 
   const files = Promise.all(Object.keys(zip.files).map(async (key) => {
     const file = zip.files[key];
-    console.log("processing file", key);
     return {
       path: key,
       content: new Uint8Array(await file.async('uint8array')).buffer,

@@ -26,6 +26,7 @@ import type {
   Comment,
   Document,
   DocumentRef,
+  ExpandedPart,
   HeaderFooterRect,
   ITextRanges,
   ParagraphStyle,
@@ -87,7 +88,7 @@ const globalHandler: GlobalMethod = {
     docMap[ref] = doc;
     return ref;
   },
-  loadFromExpandedParts: function(name: string, data: Array<{path: string, content: ArrayBuffer}>) {
+  loadFromExpandedParts: function(name: string, data: Array<ExpandedPart>) {
     const { Document, ExpandedDocument} = lok;
     const expandedDoc = new ExpandedDocument();
     for (const part of data) {

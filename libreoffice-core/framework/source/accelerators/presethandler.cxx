@@ -16,8 +16,7 @@
  *   except in compliance with the License. You may obtain a copy of
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
-
-#include "comphelper/storagehelper.hxx"
+#include <comphelper/storagehelper.hxx>
 #include <accelerators/presethandler.hxx>
 
 #include <classes/fwkresid.hxx>

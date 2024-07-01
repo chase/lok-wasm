@@ -8,7 +8,6 @@
 #include <com/sun/star/packages/NoEncryptionException.hpp>
 #include <com/sun/star/uno/Reference.h>
 #include <com/sun/star/uno/Sequence.h>
-#include <comphelper/base64.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <comphelper/hash.hxx>
 #include <comphelper/vecstream.hxx>
@@ -44,7 +43,7 @@ namespace helpers
 
 std::string toString(const OUString& value) { return std::string(value.toUtf8()); }
 
-// https://github.com/chase/awrit/blob/main/awrit/string/string_utils.cc#L11-L26
+// https://github.com/chase/awrit/blob/546772897461f7a4654d30450547f95f11c0f6b6/awrit/string/string_utils.cc#L11-L26
 std::vector<std::string_view> split(const std::string_view& str, char delimiter)
 {
     if (str.empty())
@@ -97,7 +96,7 @@ ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
 
 OUString ExpandedStorage::getFullPath(const OUString& path) const
 {
-    return OUString::fromUtf8(m_basePath.value_or("")) + "/" + path;
+    return m_basePath.value_or("") + "/" + path;
 }
 
 ExpandedStorage::ExpandedStorage(
@@ -108,7 +107,7 @@ ExpandedStorage::ExpandedStorage(
     , m_files(fileMap_)
     , m_xContext(context_)
     , m_aRelInfo(aRelInfo_)
-    , m_basePath(helpers::toString(basePath_))
+    , m_basePath(basePath_)
     , m_inputStream(inputStream_)
 {
 }
@@ -118,10 +117,10 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
     std::vector<std::string_view> pathParts = helpers::split(path, '/');
     for (int idx = 0; idx < pathParts.size() - 1; idx++)
     {
-        bool found = std::find(m_dirs.begin(), m_dirs.end(), pathParts[idx]) != m_dirs.end();
+        bool found = std::find(m_dirs.begin(), m_dirs.end(), OUString::fromUtf8(pathParts[idx])) != m_dirs.end();
         if (!found)
         {
-            m_dirs.push_back(std::string(pathParts[idx]));
+            m_dirs.push_back(OUString::fromUtf8(pathParts[idx]));
         }
     }
     OUString sPath = OUString::createFromAscii(path.c_str());
@@ -346,7 +345,7 @@ sal_Bool SAL_CALL ExpandedStorage::isStreamElement(const OUString& aElementName)
 
 sal_Bool SAL_CALL ExpandedStorage::isStorageElement(const OUString& path)
 {
-    return std::find(m_dirs.begin(), m_dirs.end(), helpers::toString(path)) != m_dirs.end();
+    return std::find(m_dirs.begin(), m_dirs.end(), path) != m_dirs.end();
 }
 
 void SAL_CALL ExpandedStorage::removeElement(const OUString& aElementName)
@@ -800,7 +799,7 @@ Sequence<beans::StringPair> SAL_CALL ExpandedStorage::getRelationshipByID(const 
 {
     const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     const beans::StringPair aIDRel("Id", sID);
-    const beans::StringPair aDirNameRel("DirName", OUString::fromUtf8(m_basePath.value_or("/")));
+    const beans::StringPair aDirNameRel("DirName", m_basePath.value_or("/"));
 
     auto pRel = std::find_if(aSeq.begin(), aSeq.end(),
                              [&aIDRel, &aDirNameRel](const Sequence<beans::StringPair>& rRel)

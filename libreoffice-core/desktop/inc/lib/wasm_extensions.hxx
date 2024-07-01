@@ -1,7 +1,7 @@
 #pragma once
 
-#include "oox/helper/expandedstorage.hxx"
-#include "sal/types.h"
+#include <oox/helper/expandedstorage.hxx>
+#include <sal/types.h>
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 

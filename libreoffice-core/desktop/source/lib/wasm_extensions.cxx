@@ -241,6 +241,7 @@ void ExpandedDocument::addPart(std::string path, std::string content)
 
 _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions, const int documentId)
 {
+    SAL_WARN("lok", "loadFromExpanded");
     using namespace com::sun::star;
     uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
 

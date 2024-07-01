@@ -755,7 +755,6 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<bool>();
     register_optional<std::string>();
     register_optional<int>();
-    register_vector<int8_t>("IntVec");
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
 
@@ -776,7 +775,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .constructor()
         .function("addPart", &desktop::ExpandedDocument::addPart);
 
-    class_<desktop::ExpandedPart>("ExpandedPart")
+    class_<desktop::ExpandedPart>("ExpandedDocPart")
         .constructor<std::string, std::string>();
 
     register_vector<desktop::ExpandedPart>("ExpandedPartVector");
