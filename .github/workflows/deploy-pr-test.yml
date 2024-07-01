@@ -1,0 +1,26 @@
+name: Deploy PR test
+
+on:
+  push:
+    branches: [chase/fix/deploy-pr]
+
+jobs:
+  deploy-pr-test:
+    name: Create PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: 845235 # LOK WASM App Id
+          private-key: ${{ secrets.LOK_WASM_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: 'app-monorepo'
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          repository: coparse-inc/app-monorepo
+          ref: main
