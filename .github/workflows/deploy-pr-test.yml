@@ -7,7 +7,7 @@ on:
 jobs:
   deploy-pr-test:
     name: Create PR
-    runs-on: ubuntu-latest
+    runs-on: runs-on,runner=2cpu-linux-x64
     steps:
       - name: Generate a token
         id: generate-token
@@ -18,9 +18,39 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: 'app-monorepo'
 
+      - name: Git LFS
+        run: |
+          git config --global lfs.fetchinclude "*.wasm,*.patch"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           token: ${{ steps.generate-token.outputs.token }}
           repository: coparse-inc/app-monorepo
           ref: main
+          lfs: true
+
+      - name: Restore artifacts for PR
+        uses: runs-on/cache/restore@v4
+        with:
+          fail-on-cache-miss: true
+          path: packages/editor/src/lok
+          key: release-v0.0.1
+
+      - name: Git LFS
+        run: |
+          sha256sum packages/editor/src/lok/soffice.wasm
+          git status
+
+      - name: Create or update PR on monorepo
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          branch: update-lok-wasm
+          delete-branch: true
+          commit-message: Update LOK WASM to v0.0.1
+          title: Update LOK WASM to v0.0.1
+          body: 'This is an automated PR created from the [`lok-wasm`](https://github.com/coparse-inc/lok-wasm) repository'
+          assignees: chase
+          reviewers: chase,synoet,whutchinson98
+          labels: lok-wasm
