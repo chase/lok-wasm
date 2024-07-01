@@ -2052,6 +2052,7 @@ StyleSheetTable::ConvertStyleName(const OUString& rWWName)
 
 void StyleSheetTable::applyDefaults(bool bParaProperties)
 {
+    return;
     try{
 
         if (!m_pImpl->m_bIsNewDoc)

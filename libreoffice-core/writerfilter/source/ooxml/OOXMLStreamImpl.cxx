@@ -37,10 +37,18 @@ OOXMLStreamImpl::OOXMLStreamImpl
  StreamType_t nType, bool bRepairStorage)
 : mxContext(xContext), mxStorageStream(std::move(xStorageStream)), mnStreamType(nType)
 {
-    mxStorage.set
-        (comphelper::OStorageHelper::GetStorageOfFormatFromInputStream
-         (OFOPXML_STORAGE_FORMAT_STRING, mxStorageStream, xContext, bRepairStorage));
-    mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        mxStorage.set(comphelper::OStorageHelper::GetExpandedStorage());
+        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
+    }
+    else
+    {
+        mxStorage.set
+            (comphelper::OStorageHelper::GetStorageOfFormatFromInputStream
+             (OFOPXML_STORAGE_FORMAT_STRING, mxStorageStream, xContext, bRepairStorage));
+        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
+    }
 
     init();
 }
@@ -58,7 +66,7 @@ OOXMLStreamImpl::OOXMLStreamImpl
     // so we need to rely on the storage for relationship access
     if (comphelper::OStorageHelper::IsExpandedStorage())
     {
-        mxStorage.set(comphelper::OStorageHelper::GetExpandedStorage());
+        mxStorage.set(comphelper::OStorageHelper::GetExpandedDocSubStorage());
         mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
     }
     else
@@ -110,6 +118,7 @@ bool OOXMLStreamImpl::lcl_getTarget(const uno::Reference<embed::XRelationshipAcc
                                     const OUString & rId,
                                     OUString & rDocumentTarget)
 {
+    SAL_WARN("OOXMlStreamImpl", "GET TARGET" );
     static const char sId[] = "Id";
     static const char sTarget[] = "Target";
     static const char sTargetMode[] = "TargetMode";
