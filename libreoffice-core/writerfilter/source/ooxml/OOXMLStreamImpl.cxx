@@ -380,10 +380,8 @@ void OOXMLStreamImpl::init()
     bool bFound = lcl_getTarget(mxRelationshipAccess,
                                 mnStreamType, msId, msTarget);
 
-    if (!bFound){
-        SAL_WARN("streamimpl", "OOXMLStreamImpl::init() - target not found");
+    if (!bFound)
         return;
-    }
 
     sal_Int32 nLastIndex = msTarget.lastIndexOf('/');
     if (nLastIndex >= 0)
