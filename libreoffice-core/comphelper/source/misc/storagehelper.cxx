@@ -79,6 +79,7 @@ namespace comphelper {
 
 static uno::Reference<embed::XStorage> expandedStorage;
 static std::shared_ptr<oox::StorageBase> expandedStorageBase;
+static uno::Reference<embed::XStorage> expandedDocSubStorage;
 static bool bIsExpandedStorage = false;
 
 uno::Reference<embed::XStorage> OStorageHelper::GetExpandedStorage()
@@ -108,7 +109,10 @@ void OStorageHelper::SetExpandedStorageBase(std::shared_ptr<oox::StorageBase>& x
 
 uno::Reference<embed::XStorage> OStorageHelper::GetExpandedDocSubStorage()
 {
-    return uno::Reference<embed::XStorage>(expandedStorage->openStorageElement(WORD_DIR_NAME, embed::ElementModes::READWRITE));
+    if (!expandedDocSubStorage.is())
+        expandedDocSubStorage = uno::Reference<embed::XStorage>(expandedStorage->openStorageElement(WORD_DIR_NAME, embed::ElementModes::READWRITE));
+
+    return expandedDocSubStorage;
 }
 
 std::shared_ptr<oox::StorageBase> OStorageHelper::GetExpandedStorageBase()

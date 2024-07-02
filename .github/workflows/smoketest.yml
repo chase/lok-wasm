@@ -1,0 +1,168 @@
+name: Smoke test
+
+on: 
+  pull_request:
+    types: [review_requested]
+    paths:
+      - 'emsdk-patches/**'
+      - 'libreoffice-core/**'
+      - 'scripts/setup'
+      - 'scripts/configure'
+      - 'scripts/build'
+      - 'scripts/finalize'
+
+env:
+  CCACHE_VERSION: '4.10'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoketest:
+    name: Check for build failure
+    runs-on: runs-on,runner=64cpu-linux-x64,hdd=100,spot=lowest-price,ssh=false
+
+    steps:
+    - name: Turn off line ending conversion in git
+      run: |
+        git config --global core.autocrlf false
+        git config --global core.eol lf
+
+    - name: Install dependencies
+      run: |
+        sudo add-apt-repository universe multiverse && \
+        sudo apt update && \
+        sudo apt-get install -y --no-install-recommends \
+          zip \
+          nasm \
+          python3 \
+          python3-dev \
+          autoconf \
+          gperf \
+          xsltproc \
+          libxml2-utils \
+          bison \
+          flex \
+          cmake \
+          locales \
+          libnss3 \
+          libnspr4 \
+          libdbus-1-3 \
+          libatk1.0-0 \
+          libatk-bridge2.0-0 \
+          libcups2 \
+          libdrm2 \
+          libatspi2.0-0 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxfixes3 \
+          libxrandr2 \
+          libgbm1 \
+          libxkbcommon0 \
+          libasound2
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Get week number
+      run: echo "CACHE_WEEK=$(date +%Y-%V)" >> $GITHUB_ENV
+
+    - name: Restore emsdk
+      id: emsdk
+      uses: runs-on/cache/restore@v4
+      with:
+        path: emsdk
+        key: emsdk-${{ hashFiles('scripts/setup') }}-${{ hashFiles('emsdk-patches/*.patch') }}
+
+    - name: Setup ccache
+      run: |
+        wget -O ccache.tar.xz "https://github.com/ccache/ccache/releases/download/v${{ env.CCACHE_VERSION }}/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64.tar.xz"
+        tar xf ccache.tar.xz
+        echo "$(pwd)/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64" >> $GITHUB_PATH
+
+    - name: Restore ccache cache
+      id: ccache
+      uses: runs-on/cache/restore@v4
+      with:
+        path: .ccache
+        key: ccache-${{ env.CACHE_WEEK }}
+        restore-keys: |
+          ccache-
+
+    - name: Restore workdir cacche
+      id: workdir
+      uses: runs-on/cache/restore@v4
+      with:
+        path: |
+          libreoffice-core/workdir
+          libreoffice-core/workdir_for_build
+        key: workdir-${{ env.CACHE_WEEK }}
+        restore-keys: |
+          workdir-
+
+    - name: Setup if emsdk is not cached
+      if: steps.emsdk.outputs.cache-hit != 'true'
+      run: ./scripts/setup
+
+    - name: Cache emsdk if newer
+      if: steps.emsdk.outputs.cache-hit != 'true'
+      uses: runs-on/cache/save@v4
+      with:
+        path: emsdk
+        key: emsdk-${{ hashFiles('scripts/setup') }}-${{ hashFiles('emsdk-patches/*.patch') }}
+
+    - name: Get external tarballs key
+      run: |
+        echo "EXTERNALS_KEY=external-tar-${{ hashFiles('libreoffice-core/download.lst') }}-${{ hashFiles('libreoffice-core/external/**/*') }}" >> $GITHUB_ENV
+
+    - name: Restore external tarballs
+      id: external-tarballs
+      uses: runs-on/cache/restore@v4
+      with:
+        path: libreoffice-core/external/tarballs
+        key: ${{ env.EXTERNALS_KEY }}
+        restore-keys: |
+          external-tar-${{ hashFiles('libreoffice-core/download.lst') }}-
+          external-tar-
+
+    - name: Touch changed files so they are marked newer than workdir
+      run: |
+        GIT_BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+        git clone --no-checkout --filter=blob:none https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git .no-checkout
+        CHANGES="$(cd .no-checkout && git diff --name-only --diff-filter=d "origin/main..origin/$GIT_BRANCH")"
+        echo "$CHANGES" | xargs touch
+
+    - name: Build
+      run: |
+        export CCACHE_BASEDIR="${GITHUB_WORKSPACE}"
+        export CCACHE_DIR="${GITHUB_WORKSPACE}/.ccache"
+        export CCACHE_COMPRESS=true
+        export CCACHE_COMPRESSLEVEL=6
+        export CCACHE_MAXSIZE=5G
+        (cd libreoffice-core/desktop/wasm && npm install --loglevel=error)
+        ./scripts/configure && ./scripts/build
+
+    - name: Cache external tarballs
+      uses: runs-on/cache/save@v4
+      if: steps.external-tarballs.outputs.cache-hit != 'true'
+      with:
+        path: libreoffice-core/external/tarballs
+        key: ${{ env.EXTERNALS_KEY }}
+
+    - name: Cache workdir if newer
+      if: steps.workdir.outputs.cache-hit != 'true'
+      uses: runs-on/cache/save@v4
+      with:
+        path: |
+          libreoffice-core/workdir
+          libreoffice-core/workdir_for_build
+        key: workdir-${{ env.CACHE_WEEK }}
+
+    - name: Cache ccache if newer
+      if: steps.ccache.outputs.cache-hit != 'true'
+      uses: runs-on/cache/save@v4
+      with:
+        path: .ccache
+        key: ccache-${{ env.CACHE_WEEK }}
+

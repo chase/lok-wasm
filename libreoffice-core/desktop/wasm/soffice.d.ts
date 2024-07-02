@@ -48,7 +48,7 @@ export type OutlineItem = {
   text: string;
 };
 
-export declare enum LayoutStatus {
+export declare const enum LayoutStatus {
   INVISIBLE,
   VISIBLE,
   INSERTED,
@@ -144,7 +144,7 @@ export type ITextRanges = {
   replaceAll(text: string): void;
 };
 
-export declare class ExpandedPart {
+export declare class ExpandedDocPart {
   constructor(path: string, content: string): void;
 }
 
@@ -153,6 +153,8 @@ export declare class ExpandedDocument {
   addPart(path: string, name: ArrayBuffer): void;
   delete(): void;
 }
+
+export type ExpandedPart = { path: string; content: ArrayBuffer };
 
 /** Embind ocument class, see main_wasm.cxx */
 export declare class Document {
@@ -256,8 +258,18 @@ export declare class Document {
   gotoOutline(index: number): RectArray;
   setAuthor(author: string): void;
   setAuthor(author: string): void;
-  getExpandedPart(path: string): {path: string, content: ArrayBuffer} | null;
-  listExpandedParts(): Array<{path: string, sha: string}>;
+  getExpandedPart(path: string): ExpandedPart | null;
+  listExpandedParts(): Array<ExpandedPart>;
+
+  addExternalUndo(): number;
+  getNextUndoId(): number;
+  getNextRedoId(): number;
+  getUndoCount(): number;
+  getRedoCount(): number;
+  undo(count: number): void;
+  redo(count: number): void;
+
+  getRedlineTextRange(id: number): RectArray[] | undefined;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

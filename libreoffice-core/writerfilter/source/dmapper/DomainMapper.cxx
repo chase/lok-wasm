@@ -4647,6 +4647,7 @@ void DomainMapper::lcl_props(writerfilter::Reference<Properties>::Pointer_t ref)
 void DomainMapper::lcl_table(Id name, writerfilter::Reference<Table>::Pointer_t ref)
 {
     m_pImpl->SetAnyTableImport(true);
+    SAL_WARN("writerfilter", "DomainMapper::lcl_table " << name);
     switch(name)
     {
     case NS_ooxml::LN_FONTTABLE:

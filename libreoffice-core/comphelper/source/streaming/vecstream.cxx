@@ -84,7 +84,7 @@ void SAL_CALL VectorInputStream::skipBytes(sal_Int32 skip)
 
 void SAL_CALL VectorInputStream::seek(sal_Int64 location)
 {
-    if (location > m_vec.size() || location < 0 || location > SAL_MAX_INT32)
+    if (location > (sal_Int64)m_vec.size() || location < 0 || location > SAL_MAX_INT32)
         throw IllegalArgumentException("bad location", static_cast<cppu::OWeakObject*>(this), 1);
     std::scoped_lock gaurd(m_mutex);
     m_pos = static_cast<sal_Int32>(location);

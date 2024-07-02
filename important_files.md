@@ -16,10 +16,13 @@ The LibreOffice "core" from which LOK is built, forked from upstream with propri
 
 [`desktop/wasm/`](./libreoffice-core/desktop/wasm/) - JavaScript/TypeScript for the WASM library, worker, and tiled renderer
 
-[`desktop/inc/lib/init.hxx`](./libreoffice-core/desktop/inc/lib/init.hxx) 
-[`desktop/source/lib/init.cxx`](./libreoffice-core/desktop/source/lib/init.cxx) - the implementation for the original LOK bindings
-
 [`desktop/inc/lib/wasm_extensions.hxx`](./libreoffice-core/desktop/inc/lib/wasm_extensions.hxx)
-[`desktop/source/lib/wasm_extensions.cxx`](./libreoffice-core/desktop/source/lib/wasm_extensions.cxx) - extensions to LibreOfficeDocument used by the Emscripten bindings
+[`desktop/source/lib/wasm_extensions.cxx`](./libreoffice-core/desktop/source/lib/wasm_extensions.cxx) - extensions to LibreOfficeDocument that are exposed to WASM using `ext()` in `main_wasm.cxx`
+
+[`include/wasm/IWriterExtensions.hxx`](./libreoffice-core/include/wasm/IWriterExtensions.hxx)
+[`sw/source/wasm/extensions.cxx`](./libreoffice-core/include/wasm/IWriterExtensions.hxx) - extensions to SwXTextDocument that are exposed to WASM using `writer()` in `main_wasm.cxx`
+
+[`desktop/inc/lib/init.hxx`](./libreoffice-core/desktop/inc/lib/init.hxx) 
+[`desktop/source/lib/init.cxx`](./libreoffice-core/desktop/source/lib/init.cxx) - the implementation for the original LOK bindings, don't add new things here or in `LibreOfficeKit.hxx/h`
 
 ## `qa-env`

@@ -36,6 +36,12 @@
 #include <rtl/string.hxx>
 #include <rtl/ustring.hxx>
 #include <o3tl/any.hxx>
+#include <com/sun/star/document/XUndoManagerSupplier.hpp>
+#include <com/sun/star/document/XUndoManager.hpp>
+#include <o3tl/string_view.hxx>
+#include <cppuhelper/implbase.hxx>
+#include <rtl/ref.hxx>
+#include <tools/json_writer.hxx>
 
 namespace
 {
@@ -188,15 +194,108 @@ css::uno::Sequence<rtl::OUString> valStrArrayToSequence(val v)
     return rv;
 }
 
-class DocumentClient final
+class INotifier
+{
+public:
+    virtual void notify(LibreOfficeKitCallbackType type, OString payload) const = 0;
+};
+
+using ::com::sun::star::document::UndoManagerEvent;
+using ::com::sun::star::lang::EventObject;
+typedef ::cppu::WeakImplHelper<css::document::XUndoManagerListener> UndoManagerContextListener_Base;
+
+class UndoManagerContextListener : public UndoManagerContextListener_Base
+{
+public:
+    explicit UndoManagerContextListener(
+        const css::uno::Reference<css::document::XUndoManager>& xUndoManager,
+        wasm::IWriterExtensions* writer, INotifier* notifier)
+        : xUndoManager_(xUndoManager)
+        , writer_(writer)
+        , notifier_(notifier)
+        , documentDisposed_(false)
+    {
+        osl_atomic_increment(&m_refCount);
+        {
+            xUndoManager_->addUndoManagerListener(this);
+        }
+        osl_atomic_decrement(&m_refCount);
+    }
+
+    void finish()
+    {
+        if (documentDisposed_)
+            return;
+        xUndoManager_->removeUndoManagerListener(this);
+    }
+
+    // XUndoManagerListener
+    virtual void SAL_CALL undoActionAdded(const UndoManagerEvent& event) override
+    {
+        tools::JsonWriter notify;
+        notify.put("type", "add");
+        notify.putNumberString("id", event.UndoActionTitle);
+        notify.put("count", writer_->getUndoCount());
+        notifier_->notify(LOK_CALLBACK_UNDOMANAGER, notify.finishAndGetAsOString());
+    };
+
+    virtual void SAL_CALL actionUndone(const UndoManagerEvent& event) override
+    {
+        tools::JsonWriter notify;
+        notify.put("type", "undo");
+        notify.putNumberString("id", event.UndoActionTitle);
+        notify.put("count", writer_->getUndoCount());
+        notifier_->notify(LOK_CALLBACK_UNDOMANAGER, notify.finishAndGetAsOString());
+    };
+
+    virtual void SAL_CALL actionRedone(const UndoManagerEvent& event) override
+    {
+        tools::JsonWriter notify;
+        notify.put("type", "redo");
+        notify.putNumberString("id", event.UndoActionTitle);
+        notify.put("count", writer_->getUndoCount());
+        notifier_->notify(LOK_CALLBACK_UNDOMANAGER, notify.finishAndGetAsOString());
+    };
+    virtual void SAL_CALL allActionsCleared(const EventObject&) override
+    {
+        tools::JsonWriter notify;
+        notify.put("type", "undos-empty");
+        notifier_->notify(LOK_CALLBACK_UNDOMANAGER, notify.finishAndGetAsOString());
+    };
+    virtual void SAL_CALL redoActionsCleared(const EventObject&) override {
+        // this is actually useless since it fires basically all the time
+    };
+    virtual void SAL_CALL resetAll(const EventObject&) override
+    {
+        tools::JsonWriter notify;
+        notify.put("type", "reset");
+        notifier_->notify(LOK_CALLBACK_UNDOMANAGER, notify.finishAndGetAsOString());
+    };
+    virtual void SAL_CALL enteredContext(const UndoManagerEvent&) override {};
+    virtual void SAL_CALL enteredHiddenContext(const UndoManagerEvent&) override {};
+    virtual void SAL_CALL leftContext(const UndoManagerEvent&) override {};
+    virtual void SAL_CALL leftHiddenContext(const UndoManagerEvent&) override {};
+    virtual void SAL_CALL cancelledContext(const UndoManagerEvent&) override {};
+
+    // XEventListener
+    virtual void SAL_CALL disposing(const EventObject&) override { documentDisposed_ = true; }
+
+private:
+    css::uno::Reference<css::document::XUndoManager> const xUndoManager_;
+    wasm::IWriterExtensions* writer_;
+    INotifier* notifier_;
+    bool documentDisposed_;
+};
+
+class DocumentClient final : public INotifier
 {
 private:
-    desktop::WasmDocumentExtension* ext()
+    desktop::WasmDocumentExtension* ext() const
     {
         return static_cast<desktop::WasmDocumentExtension*>(doc_->get());
     }
 
-    wasm::IWriterExtensions* writer()
+    wasm::IWriterExtensions* writer() const
     {
         return dynamic_cast<wasm::IWriterExtensions*>(ext()->mxComponent.get());
     }
@@ -223,8 +322,25 @@ public:
         : ref_(++document_id_counter)
         , doc_(instance()->documentLoad(path.c_str()))
     {
-    }
+        using namespace css;
+        using namespace css::uno;
+        try
+        {
+            Reference<document::XUndoManagerSupplier> xUndoSupplier(ext()->mxComponent, UNO_QUERY);
+            if (!xUndoSupplier.is())
+                return;
+            Reference<document::XUndoManager> xUndoManager(xUndoSupplier->getUndoManager());
 
+            if (!xUndoManager.is())
+                return;
+
+            undoListener_.set(new UndoManagerContextListener(xUndoManager, writer(), this));
+        }
+        catch (const Exception&)
+        {
+            SAL_WARN("wasm", "Failed to setup undo listener");
+        }
+    }
     explicit DocumentClient(desktop::ExpandedDocument expandedDoc, std::string name)
         : ref_(++document_id_counter)
     {
@@ -234,6 +350,20 @@ public:
         SAL_WARN("wasm", "expanded load done");
         lok::Document* aDoc = new lok::Document(doc);
         doc_ = aDoc;
+    }
+    ~DocumentClient()
+    {
+        using namespace css::uno;
+        try
+        {
+            if (undoListener_.is())
+                undoListener_->finish();
+            undoListener_.clear();
+        }
+        catch (const Exception&)
+        {
+            SAL_WARN("wasm", "Failed to remove undo listener");
+        }
     }
 
     bool valid() { return doc_ != nullptr; }
@@ -489,10 +619,7 @@ public:
         return result;
     }
 
-    void stopTileRenderer(int32_t viewId)
-    {
-        ext()->stopTileRenderer(viewId);
-    }
+    void stopTileRenderer(int32_t viewId) { ext()->stopTileRenderer(viewId); }
 
     void dispatchCommand(int viewId, std::string command, std::optional<std::string> arguments,
                          std::optional<bool> notifyWhenFinished)
@@ -618,10 +745,7 @@ public:
     {
         writer()->replyComment(parentId, std::move(text));
     }
-    void updateComment(int id, std::string text)
-    {
-        writer()->updateComment(id, std::move(text));
-    }
+    void updateComment(int id, std::string text) { writer()->updateComment(id, std::move(text)); }
     void deleteCommentThreads(val parentIds) { writer()->deleteCommentThreads(parentIds); }
     void deleteComment(int commentId) { writer()->deleteComment(commentId); }
     void resolveCommentThread(int parentId) { writer()->resolveCommentThread(parentId); }
@@ -682,6 +806,15 @@ public:
         }
         return values;
     }
+    sal_Int32 addExternalUndo() { return writer()->addExternalUndo(); };
+    sal_Int32 getNextUndoId() const { return writer()->getNextUndoId(); };
+    sal_Int32 getNextRedoId() const { return writer()->getNextRedoId(); };
+    sal_Int32 getUndoCount() const { return writer()->getUndoCount(); };
+    sal_Int32 getRedoCount() const { return writer()->getRedoCount(); };
+    void undo(sal_Int32 count) { return writer()->undo(count); };
+    void redo(sal_Int32 count) { return writer()->redo(count); };
+
+    val getRedlineTextRange(int redlineId) { return writer()->getRedlineTextRange(redlineId); }
 
 private:
     struct DocWithId
@@ -700,6 +833,7 @@ private:
     bool rendering_tiles_ = false;
     css::uno::Reference<css::text::XTextRange> stored_range_;
     std::shared_ptr<wasm::ITextRanges> find_text_ranges_;
+    ::rtl::Reference<UndoManagerContextListener> undoListener_;
 
     static constexpr int MAX_TILE_DIM = 2048; // this is the de facto max dim for WebGL
     static constexpr int BYTES_PER_PIXEL = 4; /** RGBA **/
@@ -746,6 +880,26 @@ private:
         doc_->registerCallback(DocumentClient::handleCallback, new DocWithId(this, viewId));
         callback_registered_[viewId] = true;
     }
+
+    void notify(LibreOfficeKitCallbackType type, OString payload) const override
+    {
+        int viewId = doc_->getView();
+        auto events = subscribed_events_.at(viewId);
+        // we copy to safePayload because the lifetime of the string is on the stack
+        // and the call to the main thread is async
+        SafeString safePayload;
+        if (events.find(type) != events.end())
+        {
+            if (!safePayload.first)
+                safePayload = makeSafeString(payload.getStr());
+            MAIN_THREAD_ASYNC_EM_ASM(
+                {
+                    Module.callbackHandlers.callback($0, $1, UTF8ToString($2));
+                    Module.freeSafeString($3);
+                },
+                ref_, type, safePayload.second, safePayload.first);
+        }
+    }
 };
 
 }
@@ -755,7 +909,6 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<bool>();
     register_optional<std::string>();
     register_optional<int>();
-    register_vector<int8_t>("IntVec");
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
 
@@ -776,7 +929,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .constructor()
         .function("addPart", &desktop::ExpandedDocument::addPart);
 
-    class_<desktop::ExpandedPart>("ExpandedPart")
+    class_<desktop::ExpandedPart>("ExpandedDocPart")
         .constructor<std::string, std::string>();
 
     register_vector<desktop::ExpandedPart>("ExpandedPartVector");
@@ -835,5 +988,14 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("newView", &DocumentClient::newView)
         .function("getExpandedPart", &DocumentClient::getExpandedPart)
         .function("removeExpandedPart", &DocumentClient::removePart)
-        .function("listExpandedParts", &DocumentClient::listExpandedParts);
+        .function("listExpandedParts", &DocumentClient::listExpandedParts)
+        .function("addExternalUndo", &DocumentClient::addExternalUndo)
+        .function("getNextUndoId", &DocumentClient::getNextUndoId)
+        .function("getNextRedoId", &DocumentClient::getNextRedoId)
+        .function("getUndoCount", &DocumentClient::getUndoCount)
+        .function("getRedoCount", &DocumentClient::getRedoCount)
+        .function("undo", &DocumentClient::undo)
+        .function("redo", &DocumentClient::redo)
+        .function("getRedlineTextRange", &DocumentClient::getRedlineTextRange)
+        .function("newView", &DocumentClient::newView);
 }

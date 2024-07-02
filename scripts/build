@@ -14,8 +14,12 @@ source "$BASE_DIR/emsdk/emsdk_env.sh"
 cd "$BASE_DIR/libreoffice-core"
 echo "Building LOK"
 make || exit 1
-echo "Generating FcCache"
-# shellcheck disable=SC2046
-$FILE_PACKAGER "$FCCAHCE_OUT" --preload $(cd "$QA_ENV_DIR" && node generate_fccache.mjs) \
-  --js-output="$QA_ENV_DIR/workdir/$FCCACHE_FILE.js" \
-  --separate-metadata && mv "$QA_ENV_DIR/workdir/$FCCACHE_FILE$METADATA_SUFFIX" "$FCCAHCE_OUT$METADATA_SUFFIX"
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  echo "Skipping FcCache generation"
+else
+  echo "Generating FcCache"
+  # shellcheck disable=SC2046
+  $FILE_PACKAGER "$FCCAHCE_OUT" --preload $(cd "$QA_ENV_DIR" && node generate_fccache.mjs) \
+    --js-output="$QA_ENV_DIR/workdir/$FCCACHE_FILE.js" \
+    --separate-metadata && mv "$QA_ENV_DIR/workdir/$FCCACHE_FILE$METADATA_SUFFIX" "$FCCAHCE_OUT$METADATA_SUFFIX"
+fi

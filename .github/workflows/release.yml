@@ -1,0 +1,218 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release.yml'
+      - 'emsdk-patches/**'
+      - 'libreoffice-core/**'
+      - 'scripts/setup'
+      - 'scripts/configure'
+      - 'scripts/build'
+      - 'scripts/finalize'
+
+env:
+  CCACHE_VERSION: '4.10'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check_version:
+    name: Check version
+    uses: ./.github/workflows/check-version-tag.yml
+  build_release:
+    name: Build
+    needs: [check_version]
+    if: ${{ needs.check_version.outputs.should_run != 'false' }}
+    runs-on: runs-on,runner=64cpu-linux-x64,hdd=100,spot=lowest-price,ssh=false
+
+    steps:
+      - name: Turn off line ending conversion in git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Install dependencies
+        run: |
+          sudo add-apt-repository universe multiverse && \
+          sudo apt update && \
+          sudo apt-get install -y --no-install-recommends \
+            zip \
+            nasm \
+            python3 \
+            python3-dev \
+            autoconf \
+            gperf \
+            xsltproc \
+            libxml2-utils \
+            bison \
+            flex \
+            pkg-config \
+            cmake \
+            locales \
+            libnss3 \
+            libnspr4 \
+            libdbus-1-3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libatspi2.0-0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libxkbcommon0 \
+            libasound2
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get week number
+        run: echo "CACHE_WEEK=$(date +%Y-%V)" >> $GITHUB_ENV
+
+      - name: Restore emsdk
+        id: emsdk
+        uses: runs-on/cache/restore@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ hashFiles('scripts/setup') }}-${{ hashFiles('emsdk-patches/*.patch') }}
+
+      - name: Setup ccache
+        run: |
+          wget -O ccache.tar.xz "https://github.com/ccache/ccache/releases/download/v${{ env.CCACHE_VERSION }}/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64.tar.xz"
+          tar xf ccache.tar.xz
+          echo "$(pwd)/ccache-${{ env.CCACHE_VERSION }}-linux-x86_64" >> $GITHUB_PATH
+
+      - name: Restore ccache cache
+        id: ccache
+        uses: runs-on/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ env.CACHE_WEEK }}
+          restore-keys: |
+            ccache-
+
+      - name: Setup if emsdk is not cached
+        if: steps.emsdk.outputs.cache-hit != 'true'
+        run: ./scripts/setup
+
+      - name: Cache emsdk if newer
+        if: steps.emsdk.outputs.cache-hit != 'true'
+        uses: runs-on/cache/save@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ hashFiles('scripts/setup') }}-${{ hashFiles('emsdk-patches/*.patch') }}
+
+      - name: Get external tarballs key
+        run: |
+          echo "EXTERNALS_KEY=external-tar-${{ hashFiles('libreoffice-core/download.lst') }}-${{ hashFiles('libreoffice-core/external/**/*') }}" >> $GITHUB_ENV
+
+      - name: Restore external tarballs
+        id: external-tarballs
+        uses: runs-on/cache/restore@v4
+        with:
+          path: libreoffice-core/external/tarballs
+          key: ${{ env.EXTERNALS_KEY }}
+          restore-keys: |
+            external-tar-${{ hashFiles('libreoffice-core/download.lst') }}-
+            external-tar-
+
+      - name: Build
+        run: |
+          export CCACHE_BASEDIR="${GITHUB_WORKSPACE}"
+          export CCACHE_DIR="${GITHUB_WORKSPACE}/.ccache"
+          export CCACHE_COMPRESS=true
+          export CCACHE_COMPRESSLEVEL=6
+          export CCACHE_MAXSIZE=5G
+          (cd libreoffice-core/desktop/wasm && npm install --loglevel=error)
+          ./scripts/configure && ./scripts/build && ./scripts/finalize
+          tar -czf lok-wasm.tar.gz -C ./build .
+
+      - name: Cache external tarballs
+        uses: runs-on/cache/save@v4
+        if: steps.external-tarballs.outputs.cache-hit != 'true'
+        with:
+          path: libreoffice-core/external/tarballs
+          key: ${{ env.EXTERNALS_KEY }}
+
+      - name: Cache ccache if newer
+        if: steps.ccache.outputs.cache-hit != 'true'
+        uses: runs-on/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ env.CACHE_WEEK }}
+
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: 'lok-wasm.tar.gz'
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          name: ${{ needs.check_version.outputs.version }}
+          tag: ${{ needs.check_version.outputs.version }}
+          body: |
+            This is an automated release built from the `main` branch.
+            For changes, please review the commit log.
+
+      - name: Prepare artifacts for PR
+        run: |
+          mkdir -p packages/editor/src/lok
+          # intentionally skip the .data and .metadata files, they rarely change and can be manually updated
+          cp ./build/*{.js,.d.ts,.wasm,.mjs} ./packages/editor/src/lok/
+
+      - name: Save artifacts for PR
+        uses: runs-on/cache/save@v4
+        with:
+          path: packages/editor/src/lok
+          key: release-${{ needs.check_version.outputs.version }}
+
+  create-pull-request:
+    name: Create PR
+    runs-on: ubuntu-latest
+    needs: [build_release]
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: 845235 # LOK WASM App Id
+          private-key: ${{ secrets.LOK_WASM_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          repository: coparse-inc/app-monorepo
+          ref: main
+
+      - name: Git LFS
+        run: |
+          git config lfs.fetchinclude "*.wasm,*.patch"
+          git lfs install
+
+      - name: Restore artifacts for PR
+        uses: runs-on/cache/save@v4
+        with:
+          fail-on-cache-miss: true
+          path: packages/editor/src/lok
+          key: release-${{ needs.check_version.outputs.version }}
+
+      - name: Create or update PR on monorepo
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          branch: update-lok-wasm
+          delete-branch: true
+          commit-message: Update LOK WASM to v${{ needs.check_version.outputs.version }}
+          title: Update LOK WASM to v${{ needs.check_version.outputs.version }}
+          body: 'This is an automated PR created from the [`lok-wasm`](https://github.com/coparse-inc/lok-wasm) repository'
+          assignees: chase
+          reviewers: chase,synoet,whutchinson98
+          labels: lok-wasm
+          add-paths: |
+            packages/editor/src/lok

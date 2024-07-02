@@ -56,7 +56,7 @@ else
 gb_LinkTarget_EXCEPTIONFLAGS += $(gb_EMSCRIPTEN_EXCEPT)
 endif
 
-gb_LinkTarget_CFLAGS += $(gb_EMSCRIPTEN_CPPFLAGS)
+gb_LinkTarget_CFLAGS += $(gb_EMSCRIPTEN_CPPFLAGS) -Wno-c99-compat 
 gb_LinkTarget_CXXFLAGS += $(gb_EMSCRIPTEN_CPPFLAGS) $(gb_EMSCRIPTEN_EXCEPT)
 ifeq ($(ENABLE_QT5),TRUE)
 gb_LinkTarget_CFLAGS += $(gb_EMSCRIPTEN_QTDEFS)

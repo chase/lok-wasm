@@ -124,6 +124,27 @@ typedef enum
      * 1 if inside a header/footer, 0 if outside a header/footer
      */
     LOK_CALLBACK_HEADER_FOOTER = 1024,
+
+    /**
+    * Fires when the undo manager emits an event
+    * JS Object:
+    * { type: "add" | "undo" | "redo", id: number, count: number } |
+    * { type: "reset" | "undos-empty" }
+    */
+    LOK_CALLBACK_UNDOMANAGER = 1025,
+
+    /**
+    * An external action is undone
+    * { "id": number }
+    */
+    LOK_CALLBACK_UNDO_EXTERNAL = 1026,
+
+    /**
+    * An external action is redone
+    * { "id": number }
+    */
+    LOK_CALLBACK_REDO_EXTERNAL = 1027,
+
     // MACRO: }
 
     /**

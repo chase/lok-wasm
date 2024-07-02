@@ -37,7 +37,7 @@ inline constexpr OUString PACKAGE_ENCRYPTIONDATA_SHA1UTF8 = u"PackageSHA1UTF8Enc
 inline constexpr OUString PACKAGE_ENCRYPTIONDATA_SHA1MS1252  = u"PackageSHA1MS1252EncryptionKey"_ustr;
 inline constexpr OUString PACKAGE_ENCRYPTIONDATA_SHA1CORRECT  = u"PackageSHA1CorrectEncryptionKey"_ustr;
 
-inline constexpr OUString WORD_DIR_NAME = OUString(u"word"_ustr);
+inline constexpr OUString WORD_DIR_NAME = u"word"_ustr;
 
 namespace com::sun::star {
     namespace beans { struct NamedValue; }

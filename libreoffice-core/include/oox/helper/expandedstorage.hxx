@@ -1,6 +1,6 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
-#include "sal/types.h"
+#include <sal/types.h>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <boost/unordered/unordered_map_fwd.hpp>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
@@ -85,12 +85,12 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
                               public StorageBase
 {
     std::shared_ptr<ExpandedFileMap> m_files;
-    std::vector<std::string> m_dirs;
+    std::vector<OUString> m_dirs;
     std::mutex m_aMutex;
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
     ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_aListenersContainer;
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
-    std::optional<std::string> m_basePath;
+    std::optional<OUString> m_basePath;
     css::uno::Reference<css::io::XInputStream> m_inputStream;
     std::unordered_map<OUString, css::uno::Any> m_properties;
 

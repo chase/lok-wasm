@@ -530,7 +530,6 @@ void SAL_CALL SfxBaseController::attachFrame( const Reference< frame::XFrame >& 
     {
         ConnectSfxFrame_Impl( E_CONNECT );
         // MACRO: unneeded since this is only for opening from remote storage
-        // which we don't support right now
         /* ShowInfoBars( ); */
 
         // attaching the frame to the controller is the last step in the creation of a new view, so notify this
