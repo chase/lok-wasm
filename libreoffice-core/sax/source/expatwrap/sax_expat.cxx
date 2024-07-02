@@ -806,6 +806,7 @@ bool SaxExpatParser_Impl::callbackExternalEntityRef(
     SAL_UNUSED_PARAMETER const XML_Char * /*base*/, const XML_Char *systemId,
     const XML_Char *publicId)
 {
+    SAL_WARN("sax.expat", "callbackExternalEntityRef");
     bool bOK = true;
     SaxExpatParser_Impl *pImpl = static_cast<SaxExpatParser_Impl*>(XML_GetUserData( parser ));
 

@@ -1,3 +1,4 @@
+#include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/container/NoSuchElementException.hpp>
 #include <com/sun/star/embed/InvalidStorageException.hpp>
 #include <com/sun/star/embed/StorageWrappedTargetException.hpp>
@@ -5,14 +6,11 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <comphelper/sequence.hxx>
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
-#include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
 #include <com/sun/star/lang/XEventListener.hpp>
-#include <cppuhelper/queryinterface.hxx>
 #include <sal/types.h>
-#include <vector>
-#include <comphelper/vecstream.hxx>
+
 namespace comphelper
 {
 using namespace ::com::sun::star::lang;
@@ -184,7 +182,8 @@ sal_Bool SAL_CALL RelationshipAccessImpl::hasByID(const OUString& sID)
     return false;
 }
 
-Sequence<beans::StringPair> SAL_CALL RelationshipAccessImpl::getRelationshipByID(const OUString& sID)
+Sequence<beans::StringPair>
+    SAL_CALL RelationshipAccessImpl::getRelationshipByID(const OUString& sID)
 {
     const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     const beans::StringPair aIDRel("Id", sID);

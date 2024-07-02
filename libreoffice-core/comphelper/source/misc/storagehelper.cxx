@@ -110,7 +110,10 @@ void OStorageHelper::SetExpandedStorageBase(std::shared_ptr<oox::StorageBase>& x
 uno::Reference<embed::XStorage> OStorageHelper::GetExpandedDocSubStorage()
 {
     if (!expandedDocSubStorage.is())
-        expandedDocSubStorage = uno::Reference<embed::XStorage>(expandedStorage->openStorageElement(WORD_DIR_NAME, embed::ElementModes::READWRITE));
+    {
+        auto docSubStorage = expandedStorage->openStorageElement(WORD_DIR_NAME, embed::ElementModes::READWRITE);
+        expandedDocSubStorage = uno::Reference<embed::XStorage>(docSubStorage);
+    }
 
     return expandedDocSubStorage;
 }

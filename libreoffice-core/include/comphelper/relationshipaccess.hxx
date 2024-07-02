@@ -1,31 +1,23 @@
+#pragma once
 #include <com/sun/star/embed/XRelationshipAccess.hpp>
-#include <com/sun/star/io/XStream.hpp>
-#include <config_options.h>
 #include <com/sun/star/uno/Sequence.hxx>
-#include <com/sun/star/io/XInputStream.hpp>
-#include <com/sun/star/io/XOutputStream.hpp>
-#include <com/sun/star/io/XSeekable.hpp>
 #include <cppuhelper/implbase.hxx>
-#include <comphelper/comphelperdllapi.h>
-#include <comphelper/bytereader.hxx>
-#include <comphelper/interfacecontainer4.hxx>
-#include <cppuhelper/implbase.hxx>
-#include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <mutex>
-
 
 namespace comphelper
 {
 using namespace com::sun::star::uno;
 using namespace com::sun::star;
 
-class RelationshipAccessImpl : public ::cppu::WeakImplHelper<embed::XRelationshipAccess>
+typedef css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> RelInfoSeq;
+
+class RelationshipAccessImpl final : public ::cppu::WeakImplHelper<embed::XRelationshipAccess>
 {
 public:
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
     std::mutex m_mutex;
 
-    RelationshipAccessImpl() {};
+    RelationshipAccessImpl(){};
 
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override;
 

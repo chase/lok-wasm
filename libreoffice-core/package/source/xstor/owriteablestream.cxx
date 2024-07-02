@@ -1044,8 +1044,14 @@ uno::Sequence< uno::Sequence< beans::StringPair > > OWriteStream_Impl::GetAllRel
 
     ReadRelInfoIfNecessary();
 
+
+    SAL_WARN("owritestream", "relationships " << m_aOrigRelInfo.getLength());
     if ( m_nRelInfoStatus == RELINFO_READ )
+    {
+
         return m_aOrigRelInfo;
+
+    }
     else if ( m_nRelInfoStatus == RELINFO_CHANGED_STREAM_READ || m_nRelInfoStatus == RELINFO_CHANGED )
         return m_aNewRelInfo;
     else // m_nRelInfoStatus == RELINFO_CHANGED_BROKEN || m_nRelInfoStatus == RELINFO_BROKEN

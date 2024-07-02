@@ -32,6 +32,7 @@
 #include "OOXMLBinaryObjectReference.hxx"
 #include "OOXMLFastDocumentHandler.hxx"
 #include "OOXMLPropertySet.hxx"
+#include "comphelper/storagehelper.hxx"
 
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
@@ -175,6 +176,7 @@ uno::Reference<xml::dom::XDocument> OOXMLDocumentImpl::importSubStream(OOXMLStre
 
 void OOXMLDocumentImpl::importSubStreamRelations(const OOXMLStream::Pointer_t& pStream, OOXMLStream::StreamType_t nType)
 {
+    SAL_WARN("writerfilter", "OOXMLDocumentImpl::importSubStreamRelations");
     uno::Reference<xml::dom::XDocument> xRelation;
     OOXMLStream::Pointer_t cStream;
     try
@@ -438,6 +440,7 @@ private:
 
 void OOXMLDocumentImpl::resolve(Stream & rStream)
 {
+    SAL_WARN("writerfilter", "OOXMLDocumentImpl::resolve");
     StatusIndicatorGuard aStatusIndicatorGuard(mxStatusIndicator);
 
     if (utl::MediaDescriptor(maMediaDescriptor).getUnpackedValueOrDefault("ReadGlossaries", false))
@@ -645,12 +648,21 @@ void OOXMLDocumentImpl::resolveGlossaryStream(Stream & /*rStream*/)
         return;
     }
     uno::Reference<embed::XRelationshipAccess> xRelationshipAccess;
-    xRelationshipAccess.set(dynamic_cast<OOXMLStreamImpl&>(*pStream).accessDocumentStream(), uno::UNO_QUERY);
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        uno::Reference<embed::XRelationshipAccess> relAccess(comphelper::OStorageHelper::GetExpandedStorage(), uno::UNO_QUERY);
+        xRelationshipAccess.set(relAccess);
+    }
+    else
+    {
+
+        xRelationshipAccess.set(dynamic_cast<OOXMLStreamImpl&>(*pStream).accessDocumentStream(), uno::UNO_QUERY);
+    }
     if (!xRelationshipAccess.is())
         return;
 
-
     const uno::Sequence< uno::Sequence< beans::StringPair > >aSeqs = xRelationshipAccess->getAllRelationships();
+    SAL_WARN("ooxml", "relationships " << aSeqs.getLength());
     std::vector< uno::Sequence<beans::NamedValue> > aGlossaryDomList;
     for (const uno::Sequence< beans::StringPair >& aSeq : aSeqs)
     {
@@ -729,6 +741,7 @@ void OOXMLDocumentImpl::resolveEmbeddingsStream(const OOXMLStream::Pointer_t& pS
         bool bHeaderFooterFound = false;
         OOXMLStream::StreamType_t streamType = OOXMLStream::UNKNOWN;
         const uno::Sequence< uno::Sequence< beans::StringPair > >aSeqs = xRelationshipAccess->getAllRelationships();
+        SAL_WARN("ooxml", "relationships " << aSeqs.getLength());
         for (const uno::Sequence< beans::StringPair >& aSeq : aSeqs)
         {
             for (const beans::StringPair& aPair : aSeq)

@@ -1,3 +1,4 @@
+#include "com/sun/star/embed/XRelationshipAccess.hdl"
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -163,6 +164,37 @@ sal_Int64 SAL_CALL VecStreamSupplier::getLength()
     return m_seekable->getLength();
 }
 
+Any SAL_CALL VecStreamSupplier::queryInterface(const Type& rType)
+{
+    Any aRet
+        = cppu::queryInterface(rType, static_cast<embed::XRelationshipAccess*>(this),
+                               static_cast<lang::XTypeProvider*>(this),
+                               static_cast<io::XStream*>(this), static_cast<io::XSeekable*>(this));
+    if (aRet.hasValue())
+        return aRet;
+
+    return OWeakObject::queryInterface(rType);
+}
+Sequence<Type> SAL_CALL VecStreamSupplier::getTypes()
+{
+    static css::uno::Sequence<css::uno::Type> aTypes = {
+        cppu::UnoType<css::lang::XTypeProvider>::get(),
+        cppu::UnoType<embed::XRelationshipAccess>::get(),
+        cppu::UnoType<io::XStream>::get(),
+        cppu::UnoType<io::XSeekable>::get(),
+    };
+    return aTypes;
+}
+
+Sequence<sal_Int8> SAL_CALL VecStreamSupplier::getImplementationId()
+{
+    return Sequence<sal_Int8>();
+}
+
+void SAL_CALL VecStreamSupplier::acquire() noexcept { OWeakObject::acquire(); }
+
+void SAL_CALL VecStreamSupplier::release() noexcept { OWeakObject::release(); }
+
 VecStreamContainer::VecStreamContainer(Reference<io::XStream>& stream)
     : m_stream(stream)
 {
@@ -180,7 +212,8 @@ Reference<io::XOutputStream> SAL_CALL VecStreamContainer::getOutputStream()
 Any SAL_CALL VecStreamContainer::queryInterface(const Type& rType)
 {
     Any aRet = cppu::queryInterface(rType, static_cast<embed::XExtendedStorageStream*>(this),
-                                    static_cast<io::XStream*>(this));
+                                    static_cast<io::XStream*>(this),
+                                    static_cast<embed::XRelationshipAccess*>(this));
     if (aRet.hasValue())
         return aRet;
 
@@ -215,4 +248,5 @@ VecStreamContainer::removeEventListener(const Reference<lang::XEventListener>& l
 
     m_listeners.removeInterface(gaurd, listener);
 }
+
 }

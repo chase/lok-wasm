@@ -18,6 +18,8 @@
  */
 
 #include "OOXMLStreamImpl.hxx"
+#include "com/sun/star/embed/XRelationshipAccess.hdl"
+#include "com/sun/star/uno/Reference.h"
 #include "sal/log.hxx"
 #include <oox/core/fasttokenhandler.hxx>
 
@@ -37,21 +39,15 @@ OOXMLStreamImpl::OOXMLStreamImpl
  StreamType_t nType, bool bRepairStorage)
 : mxContext(xContext), mxStorageStream(std::move(xStorageStream)), mnStreamType(nType)
 {
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        mxStorage.set(comphelper::OStorageHelper::GetExpandedStorage());
-        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
-    }
-    else
-    {
-        mxStorage.set
-            (comphelper::OStorageHelper::GetStorageOfFormatFromInputStream
-             (OFOPXML_STORAGE_FORMAT_STRING, mxStorageStream, xContext, bRepairStorage));
-        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
-    }
+    mxStorage.set
+        (comphelper::OStorageHelper::GetStorageOfFormatFromInputStream
+         (OFOPXML_STORAGE_FORMAT_STRING, mxStorageStream, xContext, bRepairStorage));
+    mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
 
     init();
 }
+
+
 
 OOXMLStreamImpl::OOXMLStreamImpl
 (OOXMLStreamImpl const & rOOXMLStream, StreamType_t nStreamType)
@@ -61,19 +57,7 @@ OOXMLStreamImpl::OOXMLStreamImpl
   mnStreamType(nStreamType),
   msPath(rOOXMLStream.msPath)
 {
-    // MACRO: {
-    // Expanded storage will give an empty stream,
-    // so we need to rely on the storage for relationship access
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        mxStorage.set(comphelper::OStorageHelper::GetExpandedDocSubStorage());
-        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
-    }
-    else
-    {
-        mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
-    }
-    // MACRO: }
+    mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
     init();
 }
 
@@ -86,21 +70,11 @@ OOXMLStreamImpl::OOXMLStreamImpl
   msId(std::move(sId)),
   msPath(rOOXMLStream.msPath)
 {
-    // MACRO: {
-    // Expanded storage will give an empty stream,
-    // so we need to rely on the storage for relationship access
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        mxStorage.set(comphelper::OStorageHelper::GetExpandedStorage());
-        mxRelationshipAccess.set(mxStorage, uno::UNO_QUERY_THROW);
-    }
-    else
-    {
-        mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
-    }
-    // MACRO: }
+
+    mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
 
     init();
+
 }
 
 OOXMLStreamImpl::~OOXMLStreamImpl()
@@ -480,5 +454,6 @@ OOXMLDocumentFactory::createStream
 }
 
 }
+
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

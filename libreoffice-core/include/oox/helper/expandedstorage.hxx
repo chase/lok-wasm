@@ -1,7 +1,6 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #include <sal/types.h>
-#include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <boost/unordered/unordered_map_fwd.hpp>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
@@ -25,6 +24,7 @@
 #include <com/sun/star/lang/XTypeProvider.hpp>
 #include <cppuhelper/weak.hxx>
 #include <comphelper/interfacecontainer4.hxx>
+#include <comphelper/relationshipaccess.hxx>
 #include <unordered_map>
 
 namespace com::sun::star
@@ -120,12 +120,13 @@ public:
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
 
+    std::optional<comphelper::RelInfoSeq> getRelInfoForElement(const std::string& path);
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
-    getRelInfoFromName(const OUString& rName);
+    getRelInfoFromName(const OUString& name);
     void readRelationshipInfo();
     OUString getFullPath(const OUString& path) const;
     uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,
-                                                  PathType pathType);
+                                                  PathType pathType, bool readRelInfo = true);
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -239,30 +240,57 @@ public:
     virtual void implCommit() const override;
 
     /* // XRelationshipAccess */
-    virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override { return m_relAccess.hasByID(sID); }
+    virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
+    {
+        return m_relAccess.hasByID(sID);
+    }
 
-    virtual OUString SAL_CALL getTargetByID(const OUString& sID) override { return m_relAccess.getTargetByID(sID); }
+    virtual OUString SAL_CALL getTargetByID(const OUString& sID) override
+    {
+        return m_relAccess.getTargetByID(sID);
+    }
 
-    virtual OUString SAL_CALL getTypeByID(const OUString& sID) override { return m_relAccess.getTypeByID(sID); }
+    virtual OUString SAL_CALL getTypeByID(const OUString& sID) override
+    {
+        return m_relAccess.getTypeByID(sID);
+    }
 
     virtual css::uno::Sequence<css::beans::StringPair>
-        SAL_CALL getRelationshipByID(const OUString& sID) override { return m_relAccess.getRelationshipByID(sID); }
+        SAL_CALL getRelationshipByID(const OUString& sID) override
+    {
+        return m_relAccess.getRelationshipByID(sID);
+    }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
-        SAL_CALL getRelationshipsByType(const OUString& sType) override { return m_relAccess.getRelationshipsByType(sType); }
+        SAL_CALL getRelationshipsByType(const OUString& sType) override
+    {
+        return m_relAccess.getRelationshipsByType(sType);
+    }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
-        SAL_CALL getAllRelationships() override { return m_relAccess.getAllRelationships(); }
+        SAL_CALL getAllRelationships() override
+    {
+        return m_relAccess.getAllRelationships();
+    }
 
     virtual void SAL_CALL insertRelationshipByID(
         const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
-        sal_Bool bReplace) override { m_relAccess.insertRelationshipByID(sID, aEntry, bReplace); }
+        sal_Bool bReplace) override
+    {
+        m_relAccess.insertRelationshipByID(sID, aEntry, bReplace);
+    }
 
-    virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override { m_relAccess.removeRelationshipByID(sID); }
+    virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override
+    {
+        m_relAccess.removeRelationshipByID(sID);
+    }
 
     virtual void SAL_CALL insertRelationships(
         const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
-        sal_Bool bReplace) override { m_relAccess.insertRelationships(aEntries, bReplace); }
+        sal_Bool bReplace) override
+    {
+        m_relAccess.insertRelationships(aEntries, bReplace);
+    }
 
     virtual void SAL_CALL clearRelationships() override { m_relAccess.clearRelationships(); }
 };
