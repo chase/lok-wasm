@@ -604,6 +604,7 @@ StorageRef ExpandedStorage::implOpenSubStorage(const OUString& path, bool bCreat
 
 Reference<io::XInputStream> ExpandedStorage::implOpenInputStream(const OUString& rElementName)
 {
+    SAL_WARN("expandedstorage", "openInputStream" << rElementName);
     return openStreamElement(rElementName, embed::ElementModes::READ)->getInputStream();
 }
 
@@ -679,6 +680,11 @@ void ExpandedStorage::readRelationshipInfo()
     }
 
     m_relAccess.m_aRelInfo = comphelper::containerToSequence(allRelsVec);
+}
+
+css::uno::Reference<css::io::XInputStream> ExpandedStorage::openInputStream(const OUString &rStreamName)
+{
+    return openStreamElementByHierarchicalName(rStreamName, embed::ElementModes::READ)->getInputStream();
 }
 
 } // namespace oox

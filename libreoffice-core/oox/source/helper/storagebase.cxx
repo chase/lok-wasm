@@ -152,7 +152,9 @@ Reference< XInputStream > StorageBase::openInputStream( const OUString& rStreamN
         {
             StorageRef xSubStorage = getSubStorage( aElement, false );
             if( xSubStorage )
+            {
                 xInStream = xSubStorage->openInputStream( aRemainder );
+            }
         }
         else
         {

@@ -236,6 +236,9 @@ public:
     virtual css::uno::Reference<css::io::XOutputStream>
     implOpenOutputStream(const OUString& rElementName) override;
 
+    virtual css::uno::Reference< css::io::XInputStream >
+                        openInputStream( const OUString& rStreamName ) override;
+
     /** Commits the current storage. */
     virtual void implCommit() const override;
 

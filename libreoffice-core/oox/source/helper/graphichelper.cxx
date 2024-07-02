@@ -288,16 +288,7 @@ Reference< XGraphic > GraphicHelper::importEmbeddedGraphic( const OUString& rStr
         if (!xGraphic.is())
         {
             uno::Reference<io::XInputStream> inputStream;
-            if (comphelper::OStorageHelper::IsExpandedStorage())
-            {
-                inputStream = comphelper::OStorageHelper::GetExpandedDocSubStorage()
-                    ->openStreamElement(rStreamName, embed::ElementModes::READ)
-                    ->getInputStream();
-            }
-            else
-            {
-                inputStream = mxStorage->openInputStream(rStreamName);
-            }
+            inputStream = mxStorage->openInputStream(rStreamName);
             // Lazy-loading doesn't work with cropped TIFF images, because in case of Lazy-load TIFF images
             // we are using MapUnit::MapPixel, but in case of cropped images we are using MapUnit::Map100thMM
             // and the crop values are relative to original bitmap size.

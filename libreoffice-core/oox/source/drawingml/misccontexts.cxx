@@ -305,18 +305,7 @@ BlipContext::BlipContext(ContextHandler2Helper const & rParent, const AttributeL
 {
     if( rAttribs.hasAttribute( R_TOKEN( embed ) ) )
     {
-        OUString aFragmentPath;
-        if (comphelper::OStorageHelper::IsExpandedStorage())
-        {
-            Reference<embed::XStorage> subStorage = comphelper::OStorageHelper::GetExpandedDocSubStorage();
-            uno::Reference<embed::XRelationshipAccess> relAccess(subStorage, UNO_QUERY);
-            aFragmentPath = relAccess->getTargetByID(rAttribs.getStringDefaulted(R_TOKEN(embed)));
-        }
-        else
-        {
-            // internal picture URL
-            aFragmentPath = getFragmentPathFromRelId( rAttribs.getStringDefaulted( R_TOKEN( embed )) );
-        }
+        OUString aFragmentPath = getFragmentPathFromRelId( rAttribs.getStringDefaulted( R_TOKEN( embed )) );
 
         if (!aFragmentPath.isEmpty())
         {
