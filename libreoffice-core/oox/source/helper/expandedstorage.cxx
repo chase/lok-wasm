@@ -38,9 +38,12 @@ using namespace com::sun::star::uno;
 
 namespace oox
 {
+inline constexpr char REL_DIR_NAME[] = "/_rels/";
+inline constexpr char REL_EXT[] = ".rels";
 
 namespace helpers
 {
+
 
 std::string toString(const OUString& value) { return std::string(value.toUtf8()); }
 
@@ -235,11 +238,15 @@ bool shouldCreateStreamElement(sal_Int32 openMode)
            && (openMode != embed::ElementModes::SEEKABLEREAD);
 }
 
+// TODO: @synoet
+// There should be a more efficient way to load relations per file
+// Maybe moving back to the original approach of loading all relations then copying over
+// as needed instead of per element / storage
 std::optional<comphelper::RelInfoSeq> ExpandedStorage::getRelInfoForElement(const std::string& path)
 {
-    auto base = path.substr(0, path.find_last_of('/'));
-    auto name = path.substr(path.find_last_of('/') + 1);
-    std::string relInfoPath = base + "/_rels/" + name + ".rels";
+    std::string base = path.substr(0, path.find_last_of('/'));
+    std::string name = path.substr(path.find_last_of('/') + 1);
+    std::string relInfoPath = base + REL_DIR_NAME + name + REL_EXT;
 
     if (!m_files->contains(relInfoPath))
     {
@@ -252,7 +259,6 @@ std::optional<comphelper::RelInfoSeq> ExpandedStorage::getRelInfoForElement(cons
 Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
                                                           PathType pathType, bool readRelInfo)
 {
-    SAL_WARN("expanded storage", "open stream element " << name << " " << pathType);
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
 
@@ -506,7 +512,6 @@ void SAL_CALL ExpandedStorage::removeVetoableChangeListener(
 {
 }
 
-// streamPath is absolute
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
 ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath, sal_Int32 openMode)
 {
@@ -516,8 +521,8 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
     Reference<comphelper::VecStreamContainer> aStreamContainer(
         new comphelper::VecStreamContainer(xStream));
 
+    // Copy over the relationship info
     auto relInfo = getRelInfoForElement(helpers::toString(streamPath));
-
     if (relInfo.has_value())
         aStreamContainer->m_relAccess.m_aRelInfo = relInfo.value();
 
@@ -654,7 +659,7 @@ void ExpandedStorage::readRelationshipInfo()
         = (m_basePath.has_value() ? helpers::toString(m_basePath.value()) + "/" : "") + "_rels";
     for (const auto& [path, _file] : *m_files)
     {
-        if (!path.starts_with(suffix) || path.find(".rels") == std::string::npos)
+        if (!path.starts_with(suffix) || path.find(REL_EXT) == std::string::npos)
         {
             continue;
         }

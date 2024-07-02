@@ -344,10 +344,8 @@ public:
     explicit DocumentClient(desktop::ExpandedDocument expandedDoc, std::string name)
         : ref_(++document_id_counter)
     {
-        SAL_WARN("wasm", "expanded load");
         desktop::WasmOfficeExtension* ext = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
         auto doc = ext->documentExpandedLoad(expandedDoc, name, nullptr, ref_);
-        SAL_WARN("wasm", "expanded load done");
         lok::Document* aDoc = new lok::Document(doc);
         doc_ = aDoc;
     }

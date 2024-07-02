@@ -241,7 +241,6 @@ void ExpandedDocument::addPart(std::string path, std::string content)
 
 _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions, const int documentId)
 {
-    SAL_WARN("lok", "loadFromExpanded");
     using namespace com::sun::star;
     uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
 
@@ -315,7 +314,6 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
             SfxViewShell::SetCurrentDocId(ViewShellDocId(documentId));
             uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
                 "private:stream", "_blank", documentId, aMediaDescriptor.getAsConstPropertyValueList());
-            SAL_WARN("lok", "Loaded in memory doc");
 
             if (!xComponent.is()) {
                 SAL_WARN("lok", "Could not load in memory doc");

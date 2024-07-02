@@ -92,7 +92,6 @@ bool OOXMLStreamImpl::lcl_getTarget(const uno::Reference<embed::XRelationshipAcc
                                     const OUString & rId,
                                     OUString & rDocumentTarget)
 {
-    SAL_WARN("OOXMlStreamImpl", "GET TARGET" );
     static const char sId[] = "Id";
     static const char sTarget[] = "Target";
     static const char sTargetMode[] = "TargetMode";
