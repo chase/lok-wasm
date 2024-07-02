@@ -18,9 +18,9 @@
  */
 
 #include "OOXMLStreamImpl.hxx"
-#include "com/sun/star/embed/XRelationshipAccess.hdl"
-#include "com/sun/star/uno/Reference.h"
-#include "sal/log.hxx"
+#include <com/sun/star/embed/XRelationshipAccess.hdl>
+#include <com/sun/star/uno/Reference.h>
+#include <sal/log.hxx>
 #include <oox/core/fasttokenhandler.hxx>
 
 #include <com/sun/star/embed/XHierarchicalStorageAccess.hpp>
@@ -47,8 +47,6 @@ OOXMLStreamImpl::OOXMLStreamImpl
     init();
 }
 
-
-
 OOXMLStreamImpl::OOXMLStreamImpl
 (OOXMLStreamImpl const & rOOXMLStream, StreamType_t nStreamType)
 : mxContext(rOOXMLStream.mxContext),
@@ -58,6 +56,7 @@ OOXMLStreamImpl::OOXMLStreamImpl
   msPath(rOOXMLStream.msPath)
 {
     mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
+
     init();
 }
 
@@ -70,11 +69,9 @@ OOXMLStreamImpl::OOXMLStreamImpl
   msId(std::move(sId)),
   msPath(rOOXMLStream.msPath)
 {
-
     mxRelationshipAccess.set(rOOXMLStream.mxDocumentStream, uno::UNO_QUERY_THROW);
 
     init();
-
 }
 
 OOXMLStreamImpl::~OOXMLStreamImpl()
@@ -264,8 +261,6 @@ bool OOXMLStreamImpl::lcl_getTarget(const uno::Reference<embed::XRelationshipAcc
             break;
     }
 
-
-
     if (xRelationshipAccess.is())
     {
         const uno::Sequence< uno::Sequence< beans::StringPair > >aSeqs =
@@ -453,6 +448,5 @@ OOXMLDocumentFactory::createStream
 }
 
 }
-
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

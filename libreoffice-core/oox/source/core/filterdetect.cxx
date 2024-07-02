@@ -17,11 +17,11 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "com/sun/star/embed/XStorage.hdl"
-#include "com/sun/star/uno/Reference.h"
-#include "comphelper/storagehelper.hxx"
-#include "oox/helper/storagebase.hxx"
-#include "sot/stg.hxx"
+#include <com/sun/star/embed/XStorage.hpp>
+#include <com/sun/star/uno/Reference.h>
+#include <comphelper/storagehelper.hxx>
+#include <oox/helper/storagebase.hxx>
+#include <sot/stg.hxx>
 #include <memory>
 #include <oox/core/filterdetect.hxx>
 

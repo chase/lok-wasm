@@ -17,8 +17,8 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include "comphelper/storagehelper.hxx"
-#include "sal/log.hxx"
+#include <comphelper/storagehelper.hxx>
+#include <sal/log.hxx>
 #include <oox/helper/storagebase.hxx>
 
 #include <com/sun/star/io/XStream.hpp>

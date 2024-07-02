@@ -1,4 +1,4 @@
-#include "comphelper/relationshipaccess.hxx"
+#include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
 #include <com/sun/star/embed/ElementModes.hpp>

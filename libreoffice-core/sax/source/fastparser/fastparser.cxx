@@ -1040,7 +1040,6 @@ void FastSaxParserImpl::pushEntity(const ParserData& rEntityData,
     if (!rSource.aInputStream.is())
         throw SAXException("No input source", Reference<XInterface>(), Any());
 
-
     maEntities.emplace(rEntityData);
     mpTop = &maEntities.top();
 

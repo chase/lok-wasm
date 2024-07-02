@@ -4733,8 +4733,6 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OStorage::getAllRel
                                                  aCaught);
     }
 
-    SAL_WARN("xstorage", "relationships " << aRet.getLength());
-
     return aRet;
 }
 

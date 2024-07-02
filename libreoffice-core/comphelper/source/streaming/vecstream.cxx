@@ -1,4 +1,4 @@
-#include "com/sun/star/embed/XRelationshipAccess.hdl"
+#include <com/sun/star/embed/XRelationshipAccess.hpp>
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
 #include <com/sun/star/io/NotConnectedException.hpp>
 #include <com/sun/star/lang/IllegalArgumentException.hpp>

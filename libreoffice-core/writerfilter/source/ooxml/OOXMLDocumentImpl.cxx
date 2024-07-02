@@ -32,7 +32,7 @@
 #include "OOXMLBinaryObjectReference.hxx"
 #include "OOXMLFastDocumentHandler.hxx"
 #include "OOXMLPropertySet.hxx"
-#include "comphelper/storagehelper.hxx"
+#include <comphelper/storagehelper.hxx>
 
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
