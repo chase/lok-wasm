@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'VERSION'
       - '.github/workflows/release.yml'
       - 'emsdk-patches/**'
       - 'libreoffice-core/**'
