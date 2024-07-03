@@ -262,7 +262,6 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
 
-    /* std::lock_guard<std::mutex> lock(m_aMutex); */
     auto it = m_files->find(std::string(path));
     if (it == m_files->end())
     {
