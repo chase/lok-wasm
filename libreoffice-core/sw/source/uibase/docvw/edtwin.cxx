@@ -1491,8 +1491,10 @@ void SwEditWin::KeyInput(const KeyEvent &rKEvt)
 
     KeyEvent aKeyEvent( rKEvt );
     // look for vertical mappings
-    if( !bIsViewReadOnly && !rSh.IsSelFrameMode() && !rSh.IsObjSelected() )
+    // MACRO-2720: Allow basic cursor movement in read only mode {
+    if( !rSh.IsSelFrameMode() && !rSh.IsObjSelected() )
     {
+    // MACRO-2720: }
         if( KEY_UP == nKey || KEY_DOWN == nKey ||
             KEY_LEFT == nKey || KEY_RIGHT == nKey )
         {

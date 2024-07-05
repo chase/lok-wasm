@@ -111,47 +111,24 @@ bool SwWrtShell::SimpleMove( FNSimpleMove FnSimpleMove, bool bSelect )
 bool SwWrtShell::Left( SwCursorSkipMode nMode, bool bSelect,
                             sal_uInt16 nCount, bool bBasicCall, bool bVisual )
 {
-    if ( !bSelect && !bBasicCall && IsCursorReadonly()  && !GetViewOptions()->IsSelectionInReadonly())
-    {
-        Point aTmp( VisArea().Pos() );
-        aTmp.AdjustX( -(VisArea().Width() * nReadOnlyScrollOfst / 100) );
-        m_rView.SetVisArea( aTmp );
-        return true;
-    }
-    else
-    {
-        ShellMoveCursor aTmp( this, bSelect );
-        return SwCursorShell::Left( nCount, nMode, bVisual );
-    }
+    // MACRO-2720: Allow basic cursor movement in read only mode (why is this even necessary???) {
+    ShellMoveCursor aTmp( this, bSelect );
+    return SwCursorShell::Left( nCount, nMode, bVisual );
+    // MACRO-2720: }
 }
 
 bool SwWrtShell::Right( SwCursorSkipMode nMode, bool bSelect,
                             sal_uInt16 nCount, bool bBasicCall, bool bVisual )
 {
-    if ( !bSelect && !bBasicCall && IsCursorReadonly() && !GetViewOptions()->IsSelectionInReadonly() )
-    {
-        Point aTmp( VisArea().Pos() );
-        aTmp.AdjustX(VisArea().Width() * nReadOnlyScrollOfst / 100 );
-        aTmp.setX( m_rView.SetHScrollMax( aTmp.X() ) );
-        m_rView.SetVisArea( aTmp );
-        return true;
-    }
-    else
-    {
-        ShellMoveCursor aTmp( this, bSelect );
-        return SwCursorShell::Right( nCount, nMode, bVisual );
-    }
+    // MACRO-2720: Allow basic cursor movement in read only mode (why is this even necessary???) {
+    ShellMoveCursor aTmp( this, bSelect );
+    return SwCursorShell::Right( nCount, nMode, bVisual );
+    // MACRO-2720: }
 }
 
 bool SwWrtShell::Up( bool bSelect, sal_uInt16 nCount, bool bBasicCall )
 {
-    if ( !bSelect && !bBasicCall && IsCursorReadonly()  && !GetViewOptions()->IsSelectionInReadonly())
-    {
-        Point aTmp( VisArea().Pos() );
-        aTmp.AdjustY( -(VisArea().Height() * nReadOnlyScrollOfst / 100) );
-        m_rView.SetVisArea( aTmp );
-        return true;
-    }
+    // MACRO-2720: Allow basic cursor movement in read only mode (why is this even necessary???)
 
     ShellMoveCursor aTmp( this, bSelect );
     return SwCursorShell::Up(nCount);
@@ -159,14 +136,7 @@ bool SwWrtShell::Up( bool bSelect, sal_uInt16 nCount, bool bBasicCall )
 
 bool SwWrtShell::Down( bool bSelect, sal_uInt16 nCount, bool bBasicCall )
 {
-    if ( !bSelect && !bBasicCall && IsCursorReadonly() && !GetViewOptions()->IsSelectionInReadonly())
-    {
-        Point aTmp( VisArea().Pos() );
-        aTmp.AdjustY(VisArea().Height() * nReadOnlyScrollOfst / 100 );
-        aTmp.setY( m_rView.SetVScrollMax( aTmp.Y() ) );
-        m_rView.SetVisArea( aTmp );
-        return true;
-    }
+    // MACRO-2720: Allow basic cursor movement in read only mode (why is this even necessary???)
 
     ShellMoveCursor aTmp( this, bSelect );
     return SwCursorShell::Down(nCount);
@@ -174,36 +144,18 @@ bool SwWrtShell::Down( bool bSelect, sal_uInt16 nCount, bool bBasicCall )
 
 bool SwWrtShell::LeftMargin( bool bSelect, bool bBasicCall )
 {
-    if ( !bSelect && !bBasicCall && IsCursorReadonly() )
-    {
-        Point aTmp( VisArea().Pos() );
-        aTmp.setX( DOCUMENTBORDER );
-        m_rView.SetVisArea( aTmp );
-        return true;
-    }
-    else
-    {
-        ShellMoveCursor aTmp( this, bSelect );
-        return SwCursorShell::LeftMargin();
-    }
+    // MACRO-2720: Allow basic cursor movement in read only mode (why is this even necessary???) {
+    ShellMoveCursor aTmp( this, bSelect );
+    return SwCursorShell::LeftMargin();
+    // MACRO-2720: }
 }
 
 bool SwWrtShell::RightMargin( bool bSelect, bool bBasicCall  )
 {
-    if ( !bSelect && !bBasicCall && IsCursorReadonly() )
-    {
-        Point aTmp( VisArea().Pos() );
-        aTmp.setX( GetDocSize().Width() - VisArea().Width() + DOCUMENTBORDER );
-        if( DOCUMENTBORDER > aTmp.X() )
-            aTmp.setX( DOCUMENTBORDER );
-        m_rView.SetVisArea( aTmp );
-        return true;
-    }
-    else
-    {
-        ShellMoveCursor aTmp( this, bSelect );
-        return SwCursorShell::RightMargin(bBasicCall);
-    }
+    // MACRO-2720: Allow basic cursor movement in read only mode (why is this even necessary???) {
+    ShellMoveCursor aTmp( this, bSelect );
+    return SwCursorShell::RightMargin(bBasicCall);
+    // MACRO-2720: }
 }
 
 bool SwWrtShell::GoStart( bool bKeepArea, bool *pMoveTable,
