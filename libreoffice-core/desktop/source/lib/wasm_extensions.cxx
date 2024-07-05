@@ -221,7 +221,7 @@ std::string WasmDocumentExtension::getPageOrientation ()
     return bIsLandscape ? "landscape" : "portrait";
 }
 
-_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const char* pFilterOptions, const int documentId)
+_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const int documentId, const bool readOnly)
 {
     LibreOfficeKitDocument* pDoc = NULL;
     desktop::WasmDocumentExtension* ext
@@ -230,7 +230,7 @@ _LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::Expa
     LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
 
 
-    return ext->loadFromExpanded(pThis, expandedDoc, pFilterOptions, documentId);
+    return ext->loadFromExpanded(pThis, expandedDoc, documentId, readOnly);
 }
 
 
@@ -239,7 +239,7 @@ void ExpandedDocument::addPart(std::string path, std::string content)
     parts.emplace_back(std::move(path), std::move(content));
 }
 
-_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const char* pFilterOptions, const int documentId)
+_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const int documentId, const bool readOnly)
 {
     using namespace com::sun::star;
     uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
@@ -296,15 +296,22 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     utl::MediaDescriptor aMediaDescriptor;
 
     // Expanded Storage only supports .DOCX
-    aMediaDescriptor["FilterName"] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
-    aMediaDescriptor["MacroExecutionMode"] <<= document::MacroExecMode::NEVER_EXECUTE;
+    aMediaDescriptor[utl::MediaDescriptor::PROP_FILTERNAME] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
+    aMediaDescriptor[utl::MediaDescriptor::PROP_MACROEXECUTIONMODE] <<= document::MacroExecMode::NEVER_EXECUTE;
     // We don't have a general document input stream,
     // so we pass in an empty one. Down the line its crucial we
     // check if we are currently loading from expanded storage
     // and use the storage instead of the stream
-    aMediaDescriptor["InputStream"] <<= xEmptyInputStream;
+    aMediaDescriptor[utl::MediaDescriptor::PROP_INPUTSTREAM] <<= xEmptyInputStream;
     // Silences various exceptions
-    aMediaDescriptor["Silent"] <<= true;
+    aMediaDescriptor[utl::MediaDescriptor::PROP_SILENT] <<= true;
+
+    if (readOnly)
+    {
+        aMediaDescriptor[utl::MediaDescriptor::PROP_READONLY] <<= true;
+        // disable comments which are still enabled with read only:
+        aMediaDescriptor[utl::MediaDescriptor::PROP_VIEWONLY] <<= true;
+    }
 
     {
         SolarMutexGuard aGuard;

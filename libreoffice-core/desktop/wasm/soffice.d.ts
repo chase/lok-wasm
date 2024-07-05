@@ -156,10 +156,10 @@ export declare class ExpandedDocument {
 
 export type ExpandedPart = { path: string; content: ArrayBuffer };
 
-/** Embind ocument class, see main_wasm.cxx */
+/** Embind document class, see main_wasm.cxx */
 export declare class Document {
   constructor(path: string): void;
-  constructor(expanded: ExpandedDocument, name: string): void;
+  constructor(expanded: ExpandedDocument, name: string, readOnly: boolean): void;
   delete(): void;
 
   valid(): boolean;

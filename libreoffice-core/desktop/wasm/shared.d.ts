@@ -20,9 +20,7 @@ export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
   @returns the corresponding document on success, null otherwise */
   load(name: string, blob: Blob): DocumentRef | null;
-  loadFromExpandedParts(name: string, data: Array<ExpandedPart>): DocumentRef | null;
-  // NOTE: Disabled until unoembind startup cost is under 1s
-  // importScript(url: string): void;
+  loadFromExpandedParts(name: string, data: Array<ExpandedPart>, readOnly: boolean): DocumentRef | null;
   preload(): void;
   setIsMacOSForConfig(): void;
 };

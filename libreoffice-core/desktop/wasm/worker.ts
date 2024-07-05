@@ -88,14 +88,14 @@ const globalHandler: GlobalMethod = {
     docMap[ref] = doc;
     return ref;
   },
-  loadFromExpandedParts: function(name: string, data: Array<ExpandedPart>) {
+  loadFromExpandedParts: function(name: string, data: Array<ExpandedPart>, readOnly: boolean) {
     const { Document, ExpandedDocument} = lok;
     const expandedDoc = new ExpandedDocument();
     for (const part of data) {
       expandedDoc.addPart(part.path, part.content);
     }
 
-    const doc = new Document(expandedDoc, name);
+    const doc = new Document(expandedDoc, name, readOnly);
     const ref = doc.ref();
 
     if (!doc.valid()) {

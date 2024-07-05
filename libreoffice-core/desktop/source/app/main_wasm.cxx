@@ -1,3 +1,4 @@
+#include <optional>
 #define LOK_USE_UNSTABLE_API
 #include <unordered_set>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
@@ -341,13 +342,33 @@ public:
             SAL_WARN("wasm", "Failed to setup undo listener");
         }
     }
-    explicit DocumentClient(desktop::ExpandedDocument expandedDoc, std::string name)
+
+    DocumentClient(desktop::ExpandedDocument expandedDoc, std::string name, std::optional<bool> readOnly)
         : ref_(++document_id_counter)
     {
-        desktop::WasmOfficeExtension* ext = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
-        auto doc = ext->documentExpandedLoad(expandedDoc, name, nullptr, ref_);
+        desktop::WasmOfficeExtension* officeExt = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
+        auto doc = officeExt->documentExpandedLoad(expandedDoc, name, ref_, readOnly.value_or(false));
         lok::Document* aDoc = new lok::Document(doc);
         doc_ = aDoc;
+
+        using namespace css;
+        using namespace css::uno;
+        try
+        {
+            Reference<document::XUndoManagerSupplier> xUndoSupplier(ext()->mxComponent, UNO_QUERY);
+            if (!xUndoSupplier.is())
+                return;
+            Reference<document::XUndoManager> xUndoManager(xUndoSupplier->getUndoManager());
+
+            if (!xUndoManager.is())
+                return;
+
+            undoListener_.set(new UndoManagerContextListener(xUndoManager, writer(), this));
+        }
+        catch (const Exception&)
+        {
+            SAL_WARN("wasm", "Failed to setup undo listener");
+        }
     }
     ~DocumentClient()
     {
@@ -934,7 +955,7 @@ EMSCRIPTEN_BINDINGS(lok)
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()
-        .constructor<desktop::ExpandedDocument, std::string>()
+        .constructor<desktop::ExpandedDocument, std::string, std::optional<bool>>()
         .function("valid", &DocumentClient::valid)
         .function("saveAs", &DocumentClient::saveAs)
         .function("getParts", &DocumentClient::getParts)

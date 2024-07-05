@@ -393,13 +393,14 @@ export async function loadDocumentFromExpandedParts<
   T extends DocumentClient = DocumentClient,
 >(
   name: string,
-  parts: Array<{path: string, content: ArrayBuffer}>
+  parts: Array<{path: string, content: ArrayBuffer}>,
+  readOnly = false
 ): Promise<DocumentClient | null> {
   const [i, future] = registerFuture<DocumentRef | null>();
   const message: ToWorker = {
     f: 'loadFromExpandedParts',
     i,
-    a: [name, parts],
+    a: [name, parts, readOnly],
   };
   loadWorkerOnce().postMessage(message);
   return future.promise.then(documentClient<T>);
