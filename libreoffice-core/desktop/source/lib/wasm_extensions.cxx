@@ -352,7 +352,6 @@ void WasmDocumentExtension::removePart(const std::string& path) const
 
 std::vector<std::pair<const std::string, const std::string>> WasmDocumentExtension::listParts() const
 {
-    /* SAL_WARN("wasm_extensions", " expandedStorage "  << (size_t)(expandedStorage.get())); */
     return comphelper::OStorageHelper::GetExpandedStorageInstance()->listParts();
 }
 

@@ -125,9 +125,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc.delete();
   },
   save: function (doc: Document): Array<{ path: string; sha: string }> {
-    const parts =  doc.save();
-    console.log(parts);
-    return parts;
+    return doc.save();
   },
   saveAs: function (doc: Document, format: string): ArrayBuffer {
     const tmpFile = `/${Date.now()}.${format}`;
@@ -691,7 +689,7 @@ type TransferableResult<K extends keyof Message = keyof Message> =
   };
 
 const tranferables: Partial<Record<keyof Message, boolean>> = {
-  save: true,
+  saveAs: true,
 };
 
 function isTransferable<K extends keyof Message = keyof Message>(
