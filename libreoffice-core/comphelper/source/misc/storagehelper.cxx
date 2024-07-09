@@ -77,10 +77,21 @@ using namespace ::com::sun::star;
 
 namespace comphelper {
 
+static uno::Reference<oox::ExpandedStorage> expandedStorageInstance;
 static uno::Reference<embed::XStorage> expandedStorage;
 static std::shared_ptr<oox::StorageBase> expandedStorageBase;
 static uno::Reference<embed::XStorage> expandedDocSubStorage;
 static bool bIsExpandedStorage = false;
+
+uno::Reference<oox::ExpandedStorage> OStorageHelper::GetExpandedStorageInstance()
+{
+    return expandedStorageInstance;
+}
+
+void OStorageHelper::SetExpandedStorageInstance(uno::Reference<oox::ExpandedStorage>& xStorage)
+{
+    expandedStorageInstance = xStorage;
+}
 
 uno::Reference<embed::XStorage> OStorageHelper::GetExpandedStorage()
 {

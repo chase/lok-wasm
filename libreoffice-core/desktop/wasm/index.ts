@@ -329,6 +329,7 @@ function registerFuture<T>(): [Id, Future<T>] {
 const WITHOUT_VIEW_ID: Record<keyof DocumentMethods, true> = {
   close: true,
   save: true,
+  saveAs: true,
   newView: true,
   parts: true,
   partRectanglesTwips: true,

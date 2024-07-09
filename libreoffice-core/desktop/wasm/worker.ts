@@ -124,8 +124,10 @@ const handler: DocumentMethodHandler<Document> = {
   close: function (doc: Document): void {
     doc.delete();
   },
-
-  save: function (doc: Document, format: string): ArrayBuffer {
+  save: function (doc: Document): Array<{ path: string; sha: string }> {
+    return doc.save();
+  },
+  saveAs: function (doc: Document, format: string): ArrayBuffer {
     const tmpFile = `/${Date.now()}.${format}`;
     // Optional arguments as emscripten can be undefined,
     // but the number of parameters must match the binding signature

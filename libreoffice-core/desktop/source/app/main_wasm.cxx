@@ -394,6 +394,21 @@ public:
                             filterOptions.has_value() ? filterOptions->c_str() : nullptr);
     }
 
+    val save()
+    {
+        auto changedFiles = ext()->save();
+        val values = val::array();
+        for (auto& file : changedFiles)
+        {
+            val item = val::object();
+            item.set("path", val(file.first));
+            item.set("sha", val(file.second));
+            values.call<void>("push", item);
+        }
+
+        return values;
+    }
+
     int getParts() { return doc_->getParts(); }
     val getPartRectangles() { return val::u8string(doc_->getPartPageRectangles()); }
     val paintTile(int tileWidth, int tileHeight, int xTwips, int yTwips, int widthTwips,
@@ -957,6 +972,7 @@ EMSCRIPTEN_BINDINGS(lok)
         .constructor<std::string>()
         .constructor<desktop::ExpandedDocument, std::string, std::optional<bool>>()
         .function("valid", &DocumentClient::valid)
+        .function("save", &DocumentClient::save)
         .function("saveAs", &DocumentClient::saveAs)
         .function("getParts", &DocumentClient::getParts)
         .function("pageRects", &DocumentClient::pageRects)

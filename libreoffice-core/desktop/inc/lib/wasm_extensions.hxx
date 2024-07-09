@@ -94,7 +94,6 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::vector<pthread_t> tileRendererThreads_;
     std::vector<TileRendererData> tileRendererData_;
     css::uno::Reference<css::lang::XComponent> mxComponent;
-    uno::Reference<oox::ExpandedStorage> expandedStorage;
 
     WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
     TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
@@ -108,6 +107,8 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::optional<std::pair<std::string, std::vector<sal_Int8>>> getExpandedPart(const std::string& path) const;
     void removePart(const std::string& path) const;
     std::vector<std::pair<const std::string, const std::string>> listParts() const;
+
+    std::vector<std::pair<std::string, std::string>> save();
 
 };
 

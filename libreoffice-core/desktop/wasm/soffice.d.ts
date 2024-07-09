@@ -164,6 +164,7 @@ export declare class Document {
 
   valid(): boolean;
   saveAs(path: string, format?: string, filterOptions?: string): boolean;
+  save(): Array<{ path: string; sha: string }>;
   getParts(): number;
   pageRects(): RectArray[];
   paintTile(

@@ -51,6 +51,8 @@ namespace com::sun::star {
     namespace uno { class XComponentContext; }
 }
 
+namespace oox { class ExpandedStorage; }
+
 namespace comphelper {
 
 // Unfortunately - the impl.s of XStorage like to invalidate all
@@ -208,6 +210,9 @@ public:
     static bool IsExpandedStorage();
     static void SetIsExpandedStorage(bool bIsExpanded);
     static css::uno::Reference<css::embed::XStorage> GetExpandedDocSubStorage();
+
+    static css::uno::Reference<oox::ExpandedStorage> GetExpandedStorageInstance();
+    static void SetExpandedStorageInstance(css::uno::Reference<oox::ExpandedStorage>& xStorage);
 
 };
 

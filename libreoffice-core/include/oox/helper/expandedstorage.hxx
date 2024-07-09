@@ -1,5 +1,6 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
+#include "sal/log.hxx"
 #include <sal/types.h>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <boost/unordered/unordered_map_fwd.hpp>
@@ -77,6 +78,29 @@ enum PathType
     Absolute
 };
 
+struct Commit
+{
+    std::vector<std::pair<std::string, std::string>> filesChanged;
+    std::time_t timestamp;
+
+    Commit(std::vector<std::pair<std::string, std::string>> filesChanged_, std::time_t timestamp_)
+        : filesChanged(filesChanged_)
+        , timestamp(timestamp_) {}
+};
+
+class CommitLog
+{
+std::vector<Commit> m_commits;
+mutable std::mutex m_mutex;
+
+public:
+    void addCommit(Commit&& commit);
+    const std::vector<Commit>& getCommits() const;
+    ~CommitLog() {
+        SAL_WARN("expandedstorage", "destroyed");
+    }
+};
+
 class ExpandedStorage final : public css::lang::XTypeProvider,
                               public css::embed::XStorage,
                               public css::embed::XHierarchicalStorageAccess,
@@ -87,6 +111,7 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
 {
     comphelper::RelationshipAccessImpl m_relAccess;
     std::shared_ptr<ExpandedFileMap> m_files;
+    std::shared_ptr<CommitLog> m_commitLog;
     std::vector<OUString> m_dirs;
     std::mutex m_aMutex;
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
@@ -103,7 +128,9 @@ public:
                     const std::shared_ptr<ExpandedFileMap>& fileMap,
                     const css::uno::Reference<io::XInputStream>& rxInputStream,
                     const OUString& basePath,
-                    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo);
+                    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
+                    std::shared_ptr<CommitLog> commitLog
+                    );
 
     ExpandedStorage(const ExpandedStorage&) = delete;
     ExpandedStorage(ExpandedStorage&&) = delete;
@@ -116,7 +143,9 @@ public:
     void removePart(const std::string& path);
     std::vector<std::pair<const std::string, const std::string>> listParts();
 
-    void afterCommit() const;
+    void afterCommit();
+
+    std::vector<std::pair<std::string, std::string>> getRecentlyChangedFiles();
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
 

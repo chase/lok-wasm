@@ -1,3 +1,4 @@
+#include "sfx2/sfxsids.hrc"
 #include <com/sun/star/document/MacroExecMode.hpp>
 #include <com/sun/star/frame/Desktop.hpp>
 #include <com/sun/star/frame/XDesktop2.hpp>
@@ -280,6 +281,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     storage->setPropertyValue("MS Word 2007 XML", uno::Any(OUString("1")));
 
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
+    storage->acquire();
     auto storageBase = std::shared_ptr<oox::StorageBase>(storage.get());
 
     // ExpandedStorage can represent both a BaseStorage and an XStorage
@@ -291,7 +293,7 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     comphelper::OStorageHelper::SetIsExpandedStorage(true);
     comphelper::OStorageHelper::SetExpandedStorage(xStorage);
     comphelper::OStorageHelper::SetExpandedStorageBase(storageBase);
-    expandedStorage = uno::Reference<oox::ExpandedStorage>(storage.get());
+    comphelper::OStorageHelper::SetExpandedStorageInstance(storage);
 
     utl::MediaDescriptor aMediaDescriptor;
 
@@ -341,15 +343,31 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
 
 std::optional<std::pair<std::string, std::vector<sal_Int8>>> WasmDocumentExtension::getExpandedPart(const std::string& path) const
 {
-    return expandedStorage->getPart(path);
+    return comphelper::OStorageHelper::GetExpandedStorageInstance()->getPart(path);
 }
 void WasmDocumentExtension::removePart(const std::string& path) const
 {
-    return expandedStorage->removePart(path);
+    return comphelper::OStorageHelper::GetExpandedStorageInstance()->removePart(path);
 }
 
 std::vector<std::pair<const std::string, const std::string>> WasmDocumentExtension::listParts() const
 {
-    return expandedStorage->listParts();
+    /* SAL_WARN("wasm_extensions", " expandedStorage "  << (size_t)(expandedStorage.get())); */
+    return comphelper::OStorageHelper::GetExpandedStorageInstance()->listParts();
+}
+
+std::vector<std::pair<std::string, std::string>>  WasmDocumentExtension::save()
+{
+    SfxViewFrame* viewFrame = SfxViewFrame::Current();
+    if (!viewFrame)
+    {
+        return {};
+    }
+
+    viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
+
+    auto files = comphelper::OStorageHelper::GetExpandedStorageInstance()->getRecentlyChangedFiles();
+    return files;
 }
 }
+
