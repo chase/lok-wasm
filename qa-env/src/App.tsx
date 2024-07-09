@@ -23,6 +23,7 @@ declare global {
     // global for debugging
     d: DocumentClient | undefined;
     saveAsPDF(doc: DocumentClient | null): void;
+    expandedSave(doc: DocumentClient | null): void;
   }
 }
 
@@ -68,8 +69,14 @@ async function fileOpen(files: FileList | null) {
 
 window.saveAsPDF = async function saveAsPDF(doc: DocumentClient | null) {
   if (!doc) return;
-  const buffer = await doc.save('pdf');
+  const buffer = await doc.saveAs('pdf', "Pdf Export.pdf");
   downloadFile('Pdf Export.pdf', buffer, 'application/pdf');
+};
+
+window.expandedSave = async function save(doc: DocumentClient | null) {
+  if (!doc) return;
+  const filesChanged = await doc.save();
+  console.log("files changed", filesChanged);
 };
 
 const MOD = IS_MAC ? 'cmd' : 'ctrl';
