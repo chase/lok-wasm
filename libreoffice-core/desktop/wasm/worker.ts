@@ -125,7 +125,9 @@ const handler: DocumentMethodHandler<Document> = {
     doc.delete();
   },
   save: function (doc: Document): Array<{ path: string; sha: string }> {
-    return doc.save();
+    const parts =  doc.save();
+    console.log(parts);
+    return parts;
   },
   saveAs: function (doc: Document, format: string): ArrayBuffer {
     const tmpFile = `/${Date.now()}.${format}`;

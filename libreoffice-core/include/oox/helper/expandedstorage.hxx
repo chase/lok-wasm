@@ -88,19 +88,6 @@ struct Commit
         , timestamp(timestamp_) {}
 };
 
-class CommitLog
-{
-std::vector<Commit> m_commits;
-mutable std::mutex m_mutex;
-
-public:
-    void addCommit(Commit&& commit);
-    const std::vector<Commit>& getCommits() const;
-    ~CommitLog() {
-        SAL_WARN("expandedstorage", "destroyed");
-    }
-};
-
 class ExpandedStorage final : public css::lang::XTypeProvider,
                               public css::embed::XStorage,
                               public css::embed::XHierarchicalStorageAccess,
@@ -111,7 +98,7 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
 {
     comphelper::RelationshipAccessImpl m_relAccess;
     std::shared_ptr<ExpandedFileMap> m_files;
-    std::shared_ptr<CommitLog> m_commitLog;
+    std::shared_ptr<Commit> m_lastCommit;
     std::vector<OUString> m_dirs;
     std::mutex m_aMutex;
     css::uno::Reference<css::uno::XComponentContext> m_xContext;
@@ -129,7 +116,7 @@ public:
                     const css::uno::Reference<io::XInputStream>& rxInputStream,
                     const OUString& basePath,
                     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
-                    std::shared_ptr<CommitLog> commitLog
+                    std::shared_ptr<Commit> lastCommit
                     );
 
     ExpandedStorage(const ExpandedStorage&) = delete;
