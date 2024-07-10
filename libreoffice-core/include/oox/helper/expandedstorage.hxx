@@ -1,6 +1,5 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
-#include "sal/log.hxx"
 #include <sal/types.h>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <boost/unordered/unordered_map_fwd.hpp>
