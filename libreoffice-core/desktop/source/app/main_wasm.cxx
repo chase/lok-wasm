@@ -815,7 +815,7 @@ public:
         }
 
         result.set("path", val(part->first));
-        result.set("content", val(typed_memory_view(part->second.size(), part->second.data())));
+        result.set("content", val(typed_memory_view(part->second.size(), (uint8_t*)part->second.data())));
 
         return result;
     }
