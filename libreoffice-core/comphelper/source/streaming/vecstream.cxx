@@ -1,3 +1,4 @@
+#include <sal/log.hxx>
 #include <com/sun/star/embed/XRelationshipAccess.hpp>
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
 #include <com/sun/star/io/NotConnectedException.hpp>
@@ -15,13 +16,13 @@ using namespace ::com::sun::star::io;
 using namespace ::com::sun::star::uno;
 using namespace ::osl;
 
-VectorInputStream::VectorInputStream(std::vector<sal_Int8>& vec)
+VectorInputStream::VectorInputStream(std::shared_ptr<std::vector<sal_Int8>> vec)
     : m_vec(vec)
     , m_pos(0)
 {
 }
 
-sal_Int32 SAL_CALL VectorInputStream::available() { return m_vec.size() - m_pos; }
+sal_Int32 SAL_CALL VectorInputStream::available() { return m_vec->size() - m_pos; }
 
 void SAL_CALL VectorInputStream::closeInput() {}
 
@@ -35,13 +36,13 @@ sal_Int32 SAL_CALL VectorInputStream::readBytes(css::uno::Sequence<sal_Int8>& da
 
     std::scoped_lock gaurd(m_mutex);
 
-    sal_Int32 avail = m_vec.size() - m_pos;
+    sal_Int32 avail = m_vec->size() - m_pos;
 
     if (avail < count)
         count = avail;
 
     data.realloc(count);
-    memcpy(data.getArray(), m_vec.data() + m_pos, count);
+    memcpy(data.getArray(), m_vec->data() + m_pos, count);
     m_pos += count;
 
     return count;
@@ -52,12 +53,12 @@ sal_Int32 VectorInputStream::readSomeBytes(sal_Int8* data, sal_Int32 count)
         throw BufferSizeExceededException(OUString(), *this);
 
     std::scoped_lock gaurd(m_mutex);
-    sal_Int32 avail = m_vec.size() - m_pos;
+    sal_Int32 avail = m_vec->size() - m_pos;
 
     if (avail < count)
         count = avail;
 
-    memcpy(data, m_vec.data() + m_pos, count);
+    memcpy(data, m_vec->data() + m_pos, count);
     m_pos += count;
 
     return count;
@@ -75,7 +76,7 @@ void SAL_CALL VectorInputStream::skipBytes(sal_Int32 skip)
 
     std::scoped_lock aGuard(m_mutex);
 
-    sal_Int32 avail = m_vec.size() - m_pos;
+    sal_Int32 avail = m_vec->size() - m_pos;
 
     if (avail < skip)
         skip = avail;
@@ -85,7 +86,7 @@ void SAL_CALL VectorInputStream::skipBytes(sal_Int32 skip)
 
 void SAL_CALL VectorInputStream::seek(sal_Int64 location)
 {
-    if (location > (sal_Int64)m_vec.size() || location < 0 || location > SAL_MAX_INT32)
+    if (location > (sal_Int64)m_vec->size() || location < 0 || location > SAL_MAX_INT32)
         throw IllegalArgumentException("bad location", static_cast<cppu::OWeakObject*>(this), 1);
     std::scoped_lock gaurd(m_mutex);
     m_pos = static_cast<sal_Int32>(location);
@@ -100,30 +101,42 @@ sal_Int64 SAL_CALL VectorInputStream::getPosition()
 sal_Int64 SAL_CALL VectorInputStream::getLength()
 {
     std::scoped_lock gaurd(m_mutex);
-    return m_vec.size();
+    return m_vec->size();
 }
 
-VectorOutputStream::VectorOutputStream(std::vector<sal_Int8>& vec)
+VectorOutputStream::VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> vec)
     : m_vec(vec)
     , m_pos(0)
 {
+    // the vector is always cleared when a new output stream is created because the original zip format always assumed
+    // that the file never existed on write, so truncate is never passed
+    m_vec->clear();
 }
 
 void SAL_CALL VectorOutputStream::writeBytes(const Sequence<sal_Int8>& data)
 {
     std::scoped_lock gaurd(m_mutex);
-    sal_Int32 available = m_vec.size() - m_pos;
+    sal_Int32 available = m_vec->size() - m_pos;
     if (available < data.getLength())
     {
         std::size_t newSize = static_cast<std::size_t>(m_pos + data.getLength());
-        m_vec.resize(newSize);
+        m_vec->resize(newSize);
     }
-    memcpy(m_vec.data() + m_pos, data.getConstArray(), data.getLength());
+    memcpy(m_vec->data() + m_pos, data.getConstArray(), data.getLength());
     m_pos += data.getLength();
 }
 
-void SAL_CALL VectorOutputStream::flush() {}
-void SAL_CALL VectorOutputStream::closeOutput() {}
+void SAL_CALL VectorOutputStream::flush()
+{
+    // if the vector is the right size, this is a no-op, if it's writing over an existing stream, it gets truncated to end of the last write
+    m_vec->resize(m_pos);
+}
+
+void SAL_CALL VectorOutputStream::closeOutput()
+{
+    // see ::flush() for why
+    m_vec->resize(m_pos);
+}
 
 VecStreamSupplier::VecStreamSupplier(Reference<io::XInputStream> inputStream,
                                      Reference<io::XOutputStream> outputStream)

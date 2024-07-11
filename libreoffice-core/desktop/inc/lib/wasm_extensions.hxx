@@ -62,7 +62,9 @@ struct TileRendererData
         , paintedTile(new uint8_t[paintedTileAllocSize])
         , docHeightTwips(docHeightTwips_)
         , docWidthTwips(docWidthTwips_)
-        , doc(doc_){}
+        , doc(doc_)
+    {
+    }
 
     /** x, y, w, h */
     void pushInvalidation(uint32_t invalidation[4]);
@@ -75,8 +77,8 @@ struct ExpandedPart
     std::string content;
 
     ExpandedPart(std::string path_, std::string content_)
-        : path(path_)
-        , content(content_){};
+        : path(std::move(path_))
+        , content(std::move(content_)){};
 };
 
 struct ExpandedDocument
@@ -102,19 +104,24 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::string getPageColor();
     std::string getPageOrientation();
 
-    _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const int documentId = 0, const bool readOnly = false);
+    _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis,
+                                              desktop::ExpandedDocument expandedDoc,
+                                              const int documentId = 0,
+                                              const bool readOnly = false);
 
-    std::optional<std::pair<std::string, std::vector<sal_Int8>>> getExpandedPart(const std::string& path) const;
+    std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
+    getExpandedPart(const std::string& path) const;
     void removePart(const std::string& path) const;
     std::vector<std::pair<const std::string, const std::string>> listParts() const;
-
     std::vector<std::pair<std::string, std::string>> save();
 
 };
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit
 {
-    _LibreOfficeKitDocument* documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const int documentId = 0, const bool readOnly = false);
+    _LibreOfficeKitDocument* documentExpandedLoad(desktop::ExpandedDocument expandedDoc,
+                                                  std::string name, const int documentId = 0,
+                                                  const bool readOnly = false);
 };
 
 }

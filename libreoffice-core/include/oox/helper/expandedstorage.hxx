@@ -1,5 +1,6 @@
 #ifndef INCLUDED_OOX_EXPANDEDSTORAGE_HXX
 #define INCLUDED_OOX_EXPANDEDSTORAGE_HXX
+#include <memory>
 #include <sal/types.h>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <boost/unordered/unordered_map_fwd.hpp>
@@ -61,13 +62,13 @@ typedef std::vector<unsigned char> ShaVec;
 struct ExpandedFile
 {
     const OUString path;
-    ShaVec sha;
-    std::vector<sal_Int8> content;
+    std::shared_ptr<ShaVec> sha;
+    std::shared_ptr<std::vector<sal_Int8>> content;
 
-    ExpandedFile(const OUString& path_, const std::vector<sal_Int8>& content_, const ShaVec& sha_)
+    ExpandedFile(const OUString& path_, const std::vector<sal_Int8>&& content_, const ShaVec&& sha_)
         : path(path_)
-        , sha(sha_)
-        , content(content_){};
+        , sha(std::make_shared<ShaVec>(std::move(sha_)))
+        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))){};
 };
 
 typedef boost::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
@@ -124,8 +125,10 @@ public:
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
 
     void addPart(const std::string& path, const std::string& content);
-    std::optional<std::pair<std::string, std::vector<sal_Int8>>>
+
+    std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
     getPart(const std::string& path) const;
+
     void removePart(const std::string& path);
     std::vector<std::pair<const std::string, const std::string>> listParts();
 
@@ -251,8 +254,8 @@ public:
     virtual css::uno::Reference<css::io::XOutputStream>
     implOpenOutputStream(const OUString& rElementName) override;
 
-    virtual css::uno::Reference< css::io::XInputStream >
-                        openInputStream( const OUString& rStreamName ) override;
+    virtual css::uno::Reference<css::io::XInputStream>
+    openInputStream(const OUString& rStreamName) override;
 
     /** Commits the current storage. */
     virtual void implCommit() const override;

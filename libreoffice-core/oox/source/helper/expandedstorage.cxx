@@ -1,3 +1,4 @@
+#include "com/sun/star/embed/ElementModes.hdl"
 #include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
@@ -44,7 +45,6 @@ inline constexpr char REL_EXT[] = ".rels";
 namespace helpers
 {
 
-
 std::string toString(const OUString& value) { return std::string(value.toUtf8()); }
 
 // https://github.com/chase/awrit/blob/546772897461f7a4654d30450547f95f11c0f6b6/awrit/string/string_utils.cc#L11-L26
@@ -83,8 +83,8 @@ ShaVec getContentHash(const std::vector<sal_Int8>& content)
     const unsigned char* unsignedData = reinterpret_cast<const unsigned char*>(content.data());
 
     // Generate SHA-256 hash
-    std::vector<unsigned char> hashVec = comphelper::Hash::calculateHash(
-        unsignedData, content.size(), comphelper::HashType::SHA256);
+    ShaVec hashVec = comphelper::Hash::calculateHash(unsignedData, content.size(),
+                                                     comphelper::HashType::SHA256);
 
     return hashVec;
 }
@@ -96,7 +96,8 @@ ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
     , m_lastCommit(std::shared_ptr<Commit>())
     , m_xContext(rxContext)
     , m_inputStream(rxInStream)
-{}
+{
+}
 
 OUString ExpandedStorage::getFullPath(const OUString& path) const
 {
@@ -106,7 +107,8 @@ OUString ExpandedStorage::getFullPath(const OUString& path) const
 ExpandedStorage::ExpandedStorage(
     const Reference<XComponentContext>& context_, const std::shared_ptr<ExpandedFileMap>& fileMap_,
     const Reference<io::XInputStream>& inputStream_, const OUString& basePath_,
-    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo_,
+    css::uno::Sequence<css::uno::Sequence<
+        css::beans::StringPair>> /* aRelInfo_ */ /* @chase: Why is this unused? */,
     std::shared_ptr<Commit> commitLog_)
     : StorageBase(inputStream_, false, false)
     , m_files(fileMap_)
@@ -121,7 +123,7 @@ ExpandedStorage::ExpandedStorage(
 void ExpandedStorage::addPart(const std::string& path, const std::string& content)
 {
     std::vector<std::string_view> pathParts = helpers::split(path, '/');
-    for (int idx = 0; idx < pathParts.size() - 1; idx++)
+    for (size_t idx = 0; idx < pathParts.size() - 1; idx++)
     {
         bool found = std::find(m_dirs.begin(), m_dirs.end(), OUString::fromUtf8(pathParts[idx]))
                      != m_dirs.end();
@@ -130,14 +132,14 @@ void ExpandedStorage::addPart(const std::string& path, const std::string& conten
             m_dirs.push_back(OUString::fromUtf8(pathParts[idx]));
         }
     }
-    OUString sPath = OUString::createFromAscii(path.c_str());
+    OUString sPath = OUString::fromUtf8(path);
     std::vector<sal_Int8> fileContent(content.begin(), content.end());
     ShaVec sha = helpers::getContentHash(fileContent);
 
-    m_files->insert({ path, { sPath, fileContent, sha } });
+    m_files->insert({ path, { sPath, std::move(fileContent), std::move(sha) } });
 }
 
-std::optional<std::pair<std::string, std::vector<sal_Int8>>>
+std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
 ExpandedStorage::getPart(const std::string& path) const
 {
     auto it = std::find_if(m_files->begin(), m_files->end(),
@@ -169,7 +171,7 @@ std::vector<std::pair<const std::string, const std::string>> ExpandedStorage::li
     for (const auto& [path, file] : *m_files)
     {
         const std::string pathString = helpers::toString(file.path);
-        const std::string shaString = helpers::shaVecToString(file.sha);
+        const std::string shaString = helpers::shaVecToString(*file.sha);
 
         parts.push_back({ pathString, shaString });
     }
@@ -240,7 +242,7 @@ void SAL_CALL ExpandedStorage::copyToStorage(const Reference<embed::XStorage>& x
         Reference<io::XStream> xStream = xDest->openStreamElement(
             file.path, embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE);
         Reference<io::XOutputStream> xOut = xStream->getOutputStream();
-        xOut->writeBytes(comphelper::containerToSequence(file.content));
+        xOut->writeBytes(comphelper::containerToSequence(*file.content));
         xOut->closeOutput();
     }
 }
@@ -256,16 +258,17 @@ bool shouldCreateStreamElement(sal_Int32 openMode)
 // as needed instead of per element / storage
 std::optional<comphelper::RelInfoSeq> ExpandedStorage::getRelInfoForElement(const std::string& path)
 {
-    std::string base = path.substr(0, path.find_last_of('/'));
-    std::string name = path.substr(path.find_last_of('/') + 1);
-    std::string relInfoPath = base + REL_DIR_NAME + name + REL_EXT;
+    size_t sepIndex = path.find_last_of('/');
+    std::string base = path.substr(0, sepIndex);
+    std::string name = path.substr(sepIndex + 1);
+    std::string relInfoPath = std::move(base) + REL_DIR_NAME + std::move(name) + REL_EXT;
 
     if (!m_files->contains(relInfoPath))
     {
         return {};
     }
 
-    return getRelInfoFromName(OUString::fromUtf8(relInfoPath));
+    return getRelInfoFromName(OUString::fromUtf8(std::move(relInfoPath)));
 }
 
 Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
@@ -283,9 +286,7 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
         }
 
         it = m_files
-                 ->insert({ path,
-                            { OUString::fromUtf8(path), std::vector<sal_Int8>(),
-                              std::vector<unsigned char>() } })
+                 ->insert({ path, { OUString::fromUtf8(path), std::vector<sal_Int8>(), ShaVec() } })
                  .first;
     }
 
@@ -294,16 +295,14 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
     Reference<io::XInputStream> maybeInputStream;
     Reference<io::XOutputStream> maybeOutputStream;
 
-    if (nOpenMode == embed::ElementModes::READWRITE || nOpenMode == embed::ElementModes::READ
-        || nOpenMode == embed::ElementModes::SEEKABLE
-        || nOpenMode == embed::ElementModes::SEEKABLEREAD)
+    // Vector*Stream only holds a reference to the content
+    if (nOpenMode & embed::ElementModes::READ)
     {
         Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(file.content));
         maybeInputStream = inputStream;
     }
 
-    if (nOpenMode == embed::ElementModes::READWRITE || nOpenMode == embed::ElementModes::WRITE
-        || nOpenMode == embed::ElementModes::TRUNCATE)
+    if (nOpenMode & embed::ElementModes::WRITE)
     {
         Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
         maybeOutputStream = outputStream;
@@ -347,11 +346,10 @@ Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OU
     {
         return this;
     }
-
     OUString base = m_basePath.has_value() ? m_basePath.value() + "/" : OUString("");
     OUString newPath = base + path;
-    Reference<ExpandedStorage> expandedStorage(
-        new ExpandedStorage(m_xContext, m_files, m_inputStream, newPath, m_relAccess.m_aRelInfo, m_lastCommit));
+    Reference<ExpandedStorage> expandedStorage(new ExpandedStorage(
+        m_xContext, m_files, m_inputStream, newPath, m_relAccess.m_aRelInfo, m_lastCommit));
     return Reference<embed::XStorage>(expandedStorage);
 }
 
@@ -360,7 +358,7 @@ Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUStri
     auto it = m_files->find(helpers::toString(path));
 
     // copy the content of the original file
-    auto content = std::vector<sal_Int8>(it->second.content);
+    auto content = std::make_shared<std::vector<sal_Int8>>(*it->second.content);
     Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(content));
     Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(content));
 
@@ -428,7 +426,7 @@ void SAL_CALL ExpandedStorage::copyElementTo(const OUString& aElementName,
     Reference<io::XStream> xStream = xDest->openStreamElement(
         aNewName, embed::ElementModes::READWRITE | embed::ElementModes::TRUNCATE);
     Reference<io::XOutputStream> xOut = xStream->getOutputStream();
-    xOut->writeBytes(comphelper::containerToSequence(file.content));
+    xOut->writeBytes(comphelper::containerToSequence(*file.content));
     xOut->closeOutput();
 }
 
@@ -609,13 +607,12 @@ StorageRef ExpandedStorage::implOpenSubStorage(const OUString& path, bool bCreat
             throw css::uno::RuntimeException();
         }
     }
-    return std::shared_ptr<StorageBase>(
-        new ExpandedStorage(m_xContext, m_files, m_inputStream, path, m_relAccess.m_aRelInfo, m_lastCommit));
+    return std::shared_ptr<StorageBase>(new ExpandedStorage(
+        m_xContext, m_files, m_inputStream, path, m_relAccess.m_aRelInfo, m_lastCommit));
 }
 
 Reference<io::XInputStream> ExpandedStorage::implOpenInputStream(const OUString& rElementName)
 {
-    SAL_WARN("expandedstorage", "openInputStream" << rElementName);
     return openStreamElement(rElementName, embed::ElementModes::READ)->getInputStream();
 }
 
@@ -637,14 +634,10 @@ void ExpandedStorage::afterCommit()
     std::vector<std::pair<std::string, std::string>> filesChanged;
     for (auto& [path, file] : *m_files)
     {
-        auto newSha = helpers::getContentHash(file.content);
-
-        if (newSha != file.sha)
-        {
-            file.sha = newSha;
-            std::string shaString = helpers::shaVecToString(newSha);
-            filesChanged.push_back({ path, shaString });
-        }
+        auto newSha = helpers::getContentHash(*file.content);
+        if (newSha != *file.sha)
+            filesChanged.push_back({ path, helpers::shaVecToString(newSha) });
+        file.sha->swap(newSha);
     }
 
     auto ts = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -698,9 +691,11 @@ void ExpandedStorage::readRelationshipInfo()
     m_relAccess.m_aRelInfo = comphelper::containerToSequence(allRelsVec);
 }
 
-css::uno::Reference<css::io::XInputStream> ExpandedStorage::openInputStream(const OUString &rStreamName)
+css::uno::Reference<css::io::XInputStream>
+ExpandedStorage::openInputStream(const OUString& rStreamName)
 {
-    return openStreamElementByHierarchicalName(rStreamName, embed::ElementModes::READ)->getInputStream();
+    return openStreamElementByHierarchicalName(rStreamName, embed::ElementModes::READ)
+        ->getInputStream();
 }
 
 } // namespace oox

@@ -103,8 +103,9 @@ static void* tileRendererWorker(void* data_)
     return nullptr;
 }
 
-WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent) : mxComponent(std::move(xComponent)) {
-
+WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent)
+    : mxComponent(std::move(xComponent))
+{
 }
 
 TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int32_t tileSize_)
@@ -112,7 +113,8 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
     pthread_t& threadId = tileRendererThreads_.emplace_back();
-    TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h, threadId);
+    TileRendererData& data
+        = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h, threadId);
     if (pthread_create(&threadId, nullptr, tileRendererWorker, &data))
     {
         std::abort();
@@ -124,10 +126,9 @@ TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int3
 
 void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
 {
-    auto it = std::find_if(tileRendererData_.begin(), tileRendererData_.end(),
-        [viewId](const TileRendererData& data) {
-            return data.viewId == viewId;
-        });
+    auto it
+        = std::find_if(tileRendererData_.begin(), tileRendererData_.end(),
+                       [viewId](const TileRendererData& data) { return data.viewId == viewId; });
 
     if (it != tileRendererData_.end())
     {
@@ -135,9 +136,8 @@ void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
         changeState(data, RenderState::QUIT);
 
         auto threadIt = std::find_if(tileRendererThreads_.begin(), tileRendererThreads_.end(),
-            [data](const pthread_t& threadId) {
-                return pthread_equal(threadId, data->threadId);
-            });
+                                     [data](const pthread_t& threadId)
+                                     { return pthread_equal(threadId, data->threadId); });
 
         if (threadIt != tileRendererThreads_.end())
         {
@@ -148,7 +148,6 @@ void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
         delete data;
     }
 }
-
 
 void TileRendererData::pushInvalidation(uint32_t invalidation[4])
 {
@@ -174,7 +173,8 @@ void TileRendererData::reset()
     __builtin_wasm_memory_atomic_notify((int32_t*)&hasInvalidations, MAX_THREADS_TO_NOTIFY);
 }
 
-static std::string OUStringToString(OUString str) {
+static std::string OUStringToString(OUString str)
+{
     return OUStringToOString(str, RTL_TEXTENCODING_UTF8).getStr();
 }
 
@@ -190,11 +190,11 @@ std::string WasmDocumentExtension::getPageColor()
 
     static constexpr std::string_view defaultColorHex = "#ffffff";
 
-
     SfxPoolItemHolder pState;
-    const SfxItemState eState (pDispatch->QueryState(SID_ATTR_PAGE_COLOR, pState));
-    if (eState < SfxItemState::DEFAULT) {
-        return std::string (defaultColorHex);
+    const SfxItemState eState(pDispatch->QueryState(SID_ATTR_PAGE_COLOR, pState));
+    if (eState < SfxItemState::DEFAULT)
+    {
+        return std::string(defaultColorHex);
     }
     if (pState.getItem())
     {
@@ -202,10 +202,10 @@ std::string WasmDocumentExtension::getPageColor()
         OUString aColorHex = pColor->GetColorValue().AsRGBHEXString();
         return OUStringToString(aColorHex);
     }
-    return std::string (defaultColorHex);
+    return std::string(defaultColorHex);
 }
 
-std::string WasmDocumentExtension::getPageOrientation ()
+std::string WasmDocumentExtension::getPageOrientation()
 {
     SfxViewFrame* pViewFrm = SfxViewFrame::Current();
     if (!pViewFrm)
@@ -222,30 +222,34 @@ std::string WasmDocumentExtension::getPageOrientation ()
     return bIsLandscape ? "landscape" : "portrait";
 }
 
-_LibreOfficeKitDocument* WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc, std::string name, const int documentId, const bool readOnly)
+_LibreOfficeKitDocument*
+WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc,
+                                          std::string /* name */ /* why is this unused? */,
+                                          const int documentId, const bool readOnly)
 {
     LibreOfficeKitDocument* pDoc = NULL;
-    desktop::WasmDocumentExtension* ext
-        = static_cast<desktop::WasmDocumentExtension*>(pDoc);
+    desktop::WasmDocumentExtension* ext = static_cast<desktop::WasmDocumentExtension*>(pDoc);
 
     LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
 
-
     return ext->loadFromExpanded(pThis, expandedDoc, documentId, readOnly);
 }
-
 
 void ExpandedDocument::addPart(std::string path, std::string content)
 {
     parts.emplace_back(std::move(path), std::move(content));
 }
 
-_LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis, desktop::ExpandedDocument expandedDoc, const int documentId, const bool readOnly)
+_LibreOfficeKitDocument*
+WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis,
+                                        desktop::ExpandedDocument expandedDoc, const int documentId,
+                                        const bool readOnly)
 {
     using namespace com::sun::star;
     uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
 
-    if (!xContext) {
+    if (!xContext)
+    {
         return nullptr;
     }
 
@@ -257,20 +261,20 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
         return nullptr;
     }
 
-
     // Parts of the import pipeline expect a stream
     // this stream isn't actually used, but is required to be passed along
-    std::vector<sal_Int8> aEmptyData;
-    uno::Reference<io::XInputStream> xEmptyInputStream(new comphelper::VectorInputStream(aEmptyData));
+    uno::Reference<io::XInputStream> xEmptyInputStream(
+        new comphelper::VectorInputStream(std::make_shared<std::vector<sal_Int8>>()));
 
-    uno::Reference<oox::ExpandedStorage> storage(new oox::ExpandedStorage(xContext, xEmptyInputStream));
+    uno::Reference<oox::ExpandedStorage> storage(
+        new oox::ExpandedStorage(xContext, xEmptyInputStream));
 
     auto it = expandedDoc.parts.begin();
-    while(it != expandedDoc.parts.end())
+    while (it != expandedDoc.parts.end())
     {
         if (it->content.length() == 0 || it->path.length() == 0)
             continue;
-        storage->addPart(it->path, it->content);
+        storage->addPart(std::move(it->path), std::move(it->content));
         it = expandedDoc.parts.erase(it);
     }
 
@@ -298,8 +302,10 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     utl::MediaDescriptor aMediaDescriptor;
 
     // Expanded Storage only supports .DOCX
-    aMediaDescriptor[utl::MediaDescriptor::PROP_FILTERNAME] <<= OUString("MS Word 2007 XML"); // just hardcode this for now
-    aMediaDescriptor[utl::MediaDescriptor::PROP_MACROEXECUTIONMODE] <<= document::MacroExecMode::NEVER_EXECUTE;
+    aMediaDescriptor[utl::MediaDescriptor::PROP_FILTERNAME]
+        <<= OUString("MS Word 2007 XML"); // just hardcode this for now
+    aMediaDescriptor[utl::MediaDescriptor::PROP_MACROEXECUTIONMODE]
+        <<= document::MacroExecMode::NEVER_EXECUTE;
     // We don't have a general document input stream,
     // so we pass in an empty one. Down the line its crucial we
     // check if we are currently loading from expanded storage
@@ -322,16 +328,18 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
             Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
             SfxViewShell::SetCurrentDocId(ViewShellDocId(documentId));
             uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
-                "private:stream", "_blank", documentId, aMediaDescriptor.getAsConstPropertyValueList());
+                "private:stream", "_blank", documentId,
+                aMediaDescriptor.getAsConstPropertyValueList());
 
-            if (!xComponent.is()) {
+            if (!xComponent.is())
+            {
                 SAL_WARN("lok", "Could not load in memory doc");
                 return nullptr;
             }
 
             return new LibLODocument_Impl(xComponent, documentId);
         }
-        catch (const uno::Exception& exception)
+        catch (const uno::Exception& /*exception*/)
         {
             uno::Any exAny(getCaughtException());
             SAL_WARN("lok", "Failed to load to in-memory stream: " + exceptionToString(exAny));
@@ -341,7 +349,8 @@ _LibreOfficeKitDocument* WasmDocumentExtension::loadFromExpanded(LibreOfficeKit*
     return nullptr;
 }
 
-std::optional<std::pair<std::string, std::vector<sal_Int8>>> WasmDocumentExtension::getExpandedPart(const std::string& path) const
+std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
+WasmDocumentExtension::getExpandedPart(const std::string& path) const
 {
     return comphelper::OStorageHelper::GetExpandedStorageInstance()->getPart(path);
 }
@@ -350,12 +359,13 @@ void WasmDocumentExtension::removePart(const std::string& path) const
     return comphelper::OStorageHelper::GetExpandedStorageInstance()->removePart(path);
 }
 
-std::vector<std::pair<const std::string, const std::string>> WasmDocumentExtension::listParts() const
+std::vector<std::pair<const std::string, const std::string>>
+WasmDocumentExtension::listParts() const
 {
     return comphelper::OStorageHelper::GetExpandedStorageInstance()->listParts();
 }
 
-std::vector<std::pair<std::string, std::string>>  WasmDocumentExtension::save()
+std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
 {
     SfxViewFrame* viewFrame = SfxViewFrame::Current();
     if (!viewFrame)
@@ -365,8 +375,8 @@ std::vector<std::pair<std::string, std::string>>  WasmDocumentExtension::save()
 
     viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
 
-    auto files = comphelper::OStorageHelper::GetExpandedStorageInstance()->getRecentlyChangedFiles();
+    auto files
+        = comphelper::OStorageHelper::GetExpandedStorageInstance()->getRecentlyChangedFiles();
     return files;
 }
 }
-

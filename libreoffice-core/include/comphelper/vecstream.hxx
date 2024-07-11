@@ -24,12 +24,12 @@ class COMPHELPER_DLLPUBLIC VectorInputStream final
     : public ::cppu::WeakImplHelper<io::XInputStream, io::XSeekable>,
       public comphelper::ByteReader
 {
-    std::vector<sal_Int8>& m_vec;
+    std::shared_ptr<std::vector<sal_Int8>> m_vec;
     std::mutex m_mutex;
     sal_Int32 m_pos;
 
 public:
-    VectorInputStream(std::vector<sal_Int8>& vec);
+    VectorInputStream(std::shared_ptr<std::vector<sal_Int8>> vec);
     virtual sal_Int32 SAL_CALL readBytes(Sequence<sal_Int8>& aData,
                                          sal_Int32 nBytesToRead) override;
 
@@ -52,13 +52,13 @@ public:
 class COMPHELPER_DLLPUBLIC VectorOutputStream final
     : public ::cppu::WeakImplHelper<io::XOutputStream>
 {
-    std::vector<sal_Int8>& m_vec;
+    std::shared_ptr<std::vector<sal_Int8>> m_vec;
     sal_Int32 m_pos;
 
     std::mutex m_mutex;
 
 public:
-    VectorOutputStream(std::vector<sal_Int8>& vec);
+    VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> vec);
     virtual void SAL_CALL writeBytes(const Sequence<sal_Int8>& aData) override;
     virtual void SAL_CALL flush() override;
     virtual void SAL_CALL closeOutput() override;
@@ -179,7 +179,7 @@ public:
     virtual void SAL_CALL
     removeEventListener(const css::uno::Reference<css::lang::XEventListener>& aListener) override;
 
-    /* // XRelationshipAccess */
+    // XRelationshipAccess
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
     {
         return m_relAccess.hasByID(sID);
