@@ -33,13 +33,10 @@ const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& r
 void RelationshipAccessImpl::setRelationships(
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
 {
-    m_aRelInfo = aRelInfo;
+    m_aRelInfo = std::move(aRelInfo);
 }
 
-void SAL_CALL RelationshipAccessImpl::clearRelationships()
-{
-    m_aRelInfo.realloc(0);
-}
+void SAL_CALL RelationshipAccessImpl::clearRelationships() { m_aRelInfo.realloc(0); }
 
 void SAL_CALL RelationshipAccessImpl::insertRelationships(
     const Sequence<Sequence<beans::StringPair>>& aEntries, sal_Bool bReplace)
@@ -98,7 +95,7 @@ void SAL_CALL RelationshipAccessImpl::removeRelationshipByID(const OUString& sID
         auto nInd = static_cast<sal_Int32>(std::distance(std::cbegin(aSeq), pRel));
         comphelper::removeElementAt(aSeq, nInd);
 
-        m_aRelInfo = aSeq;
+        m_aRelInfo = std::move(aSeq);
 
         // TODO/LATER: in future the unification of the ID could be checked
         return;

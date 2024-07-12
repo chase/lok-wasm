@@ -15,6 +15,7 @@ class RelationshipAccessImpl final : public ::cppu::WeakImplHelper<embed::XRelat
 {
 public:
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
+    std::string m_path;
 
     std::mutex m_mutex;
 

@@ -26,12 +26,16 @@ class COMPHELPER_DLLPUBLIC VectorInputStream final
       public embed::XRelationshipAccess
 {
     std::shared_ptr<std::vector<sal_Int8>> m_vec;
-    comphelper::RelationshipAccessImpl m_relAccess;
+    std::shared_ptr<comphelper::RelationshipAccessImpl> m_relAccess;
     std::mutex m_mutex;
     sal_Int32 m_pos;
 
 public:
     VectorInputStream(std::shared_ptr<std::vector<sal_Int8>> vec);
+    void setRelationshipAccess(std::shared_ptr<comphelper::RelationshipAccessImpl> relAccess)
+    {
+        m_relAccess = relAccess;
+    }
     virtual sal_Int32 SAL_CALL readBytes(Sequence<sal_Int8>& aData,
                                          sal_Int32 nBytesToRead) override;
 
@@ -53,57 +57,57 @@ public:
     /* // XRelationshipAccess */
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
     {
-        return m_relAccess.hasByID(sID);
+        return m_relAccess->hasByID(sID);
     }
 
     virtual OUString SAL_CALL getTargetByID(const OUString& sID) override
     {
-        return m_relAccess.getTargetByID(sID);
+        return m_relAccess->getTargetByID(sID);
     }
 
     virtual OUString SAL_CALL getTypeByID(const OUString& sID) override
     {
-        return m_relAccess.getTypeByID(sID);
+        return m_relAccess->getTypeByID(sID);
     }
 
     virtual css::uno::Sequence<css::beans::StringPair>
         SAL_CALL getRelationshipByID(const OUString& sID) override
     {
-        return m_relAccess.getRelationshipByID(sID);
+        return m_relAccess->getRelationshipByID(sID);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getRelationshipsByType(const OUString& sType) override
     {
-        return m_relAccess.getRelationshipsByType(sType);
+        return m_relAccess->getRelationshipsByType(sType);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getAllRelationships() override
     {
-        return m_relAccess.getAllRelationships();
+        return m_relAccess->getAllRelationships();
     }
 
     virtual void SAL_CALL insertRelationshipByID(
         const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationshipByID(sID, aEntry, bReplace);
+        m_relAccess->insertRelationshipByID(sID, aEntry, bReplace);
     }
 
     virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override
     {
-        m_relAccess.removeRelationshipByID(sID);
+        m_relAccess->removeRelationshipByID(sID);
     }
 
     virtual void SAL_CALL insertRelationships(
         const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationships(aEntries, bReplace);
+        m_relAccess->insertRelationships(aEntries, bReplace);
     }
 
-    virtual void SAL_CALL clearRelationships() override { m_relAccess.clearRelationships(); }
+    virtual void SAL_CALL clearRelationships() override { m_relAccess->clearRelationships(); }
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -120,16 +124,20 @@ class COMPHELPER_DLLPUBLIC VectorOutputStream final
       public embed::XRelationshipAccess
 {
     std::shared_ptr<std::vector<sal_Int8>> m_vec;
-    comphelper::RelationshipAccessImpl m_relAccess;
+    std::shared_ptr<comphelper::RelationshipAccessImpl> m_relAccess;
     sal_Int32 m_pos;
 
     std::mutex m_mutex;
 
 public:
     VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> vec);
+    void setRelationshipAccess(std::shared_ptr<comphelper::RelationshipAccessImpl> relAccess)
+    {
+        m_relAccess = relAccess;
+    }
     void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
-        m_relAccess.setRelationships(aRelInfo);
+        m_relAccess->setRelationships(aRelInfo);
     }
     virtual void SAL_CALL writeBytes(const Sequence<sal_Int8>& aData) override;
     virtual void SAL_CALL flush() override;
@@ -138,57 +146,57 @@ public:
     /* // XRelationshipAccess */
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
     {
-        return m_relAccess.hasByID(sID);
+        return m_relAccess->hasByID(sID);
     }
 
     virtual OUString SAL_CALL getTargetByID(const OUString& sID) override
     {
-        return m_relAccess.getTargetByID(sID);
+        return m_relAccess->getTargetByID(sID);
     }
 
     virtual OUString SAL_CALL getTypeByID(const OUString& sID) override
     {
-        return m_relAccess.getTypeByID(sID);
+        return m_relAccess->getTypeByID(sID);
     }
 
     virtual css::uno::Sequence<css::beans::StringPair>
         SAL_CALL getRelationshipByID(const OUString& sID) override
     {
-        return m_relAccess.getRelationshipByID(sID);
+        return m_relAccess->getRelationshipByID(sID);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getRelationshipsByType(const OUString& sType) override
     {
-        return m_relAccess.getRelationshipsByType(sType);
+        return m_relAccess->getRelationshipsByType(sType);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getAllRelationships() override
     {
-        return m_relAccess.getAllRelationships();
+        return m_relAccess->getAllRelationships();
     }
 
     virtual void SAL_CALL insertRelationshipByID(
         const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationshipByID(sID, aEntry, bReplace);
+        m_relAccess->insertRelationshipByID(sID, aEntry, bReplace);
     }
 
     virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override
     {
-        m_relAccess.removeRelationshipByID(sID);
+        m_relAccess->removeRelationshipByID(sID);
     }
 
     virtual void SAL_CALL insertRelationships(
         const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationships(aEntries, bReplace);
+        m_relAccess->insertRelationships(aEntries, bReplace);
     }
 
-    virtual void SAL_CALL clearRelationships() override { m_relAccess.clearRelationships(); }
+    virtual void SAL_CALL clearRelationships() override { m_relAccess->clearRelationships(); }
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -214,13 +222,19 @@ private:
     ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_listeners;
 
 public:
-    comphelper::RelationshipAccessImpl m_relAccess;
+    std::shared_ptr<comphelper::RelationshipAccessImpl> m_relAccess;
     VecStreamSupplier(css::uno::Reference<VectorInputStream> xInput,
                       css::uno::Reference<VectorOutputStream> xOutput);
+    void setRelationshipAccess(std::shared_ptr<comphelper::RelationshipAccessImpl> relAccess)
+    {
+        m_relAccess = relAccess;
+        m_inputStream->setRelationshipAccess(relAccess);
+        m_outputStream->setRelationshipAccess(relAccess);
+    }
 
     void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
-        m_relAccess.setRelationships(aRelInfo);
+        m_relAccess->setRelationships(aRelInfo);
     }
 
     // XStream
@@ -235,57 +249,57 @@ public:
     /* // XRelationshipAccess */
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
     {
-        return m_relAccess.hasByID(sID);
+        return m_relAccess->hasByID(sID);
     }
 
     virtual OUString SAL_CALL getTargetByID(const OUString& sID) override
     {
-        return m_relAccess.getTargetByID(sID);
+        return m_relAccess->getTargetByID(sID);
     }
 
     virtual OUString SAL_CALL getTypeByID(const OUString& sID) override
     {
-        return m_relAccess.getTypeByID(sID);
+        return m_relAccess->getTypeByID(sID);
     }
 
     virtual css::uno::Sequence<css::beans::StringPair>
         SAL_CALL getRelationshipByID(const OUString& sID) override
     {
-        return m_relAccess.getRelationshipByID(sID);
+        return m_relAccess->getRelationshipByID(sID);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getRelationshipsByType(const OUString& sType) override
     {
-        return m_relAccess.getRelationshipsByType(sType);
+        return m_relAccess->getRelationshipsByType(sType);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getAllRelationships() override
     {
-        return m_relAccess.getAllRelationships();
+        return m_relAccess->getAllRelationships();
     }
 
     virtual void SAL_CALL insertRelationshipByID(
         const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationshipByID(sID, aEntry, bReplace);
+        m_relAccess->insertRelationshipByID(sID, aEntry, bReplace);
     }
 
     virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override
     {
-        m_relAccess.removeRelationshipByID(sID);
+        m_relAccess->removeRelationshipByID(sID);
     }
 
     virtual void SAL_CALL insertRelationships(
         const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationships(aEntries, bReplace);
+        m_relAccess->insertRelationships(aEntries, bReplace);
     }
 
-    virtual void SAL_CALL clearRelationships() override { m_relAccess.clearRelationships(); }
+    virtual void SAL_CALL clearRelationships() override { m_relAccess->clearRelationships(); }
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -306,12 +320,18 @@ class VecStreamContainer final : public embed::XExtendedStorageStream,
     ::comphelper::OInterfaceContainerHelper4<css::lang::XEventListener> m_listeners;
 
 public:
-    comphelper::RelationshipAccessImpl m_relAccess;
+    std::shared_ptr<comphelper::RelationshipAccessImpl> m_relAccess;
     VecStreamContainer(css::uno::Reference<VecStreamSupplier>& xStream);
+
+    void setRelationshipAccess(std::shared_ptr<comphelper::RelationshipAccessImpl> relAccess)
+    {
+        m_relAccess = relAccess;
+        m_stream->setRelationshipAccess(relAccess);
+    }
 
     void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
-        m_relAccess.setRelationships(aRelInfo);
+        m_relAccess->setRelationships(aRelInfo);
         m_stream->setRelationships(aRelInfo);
     }
 
@@ -329,57 +349,57 @@ public:
     // XRelationshipAccess
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
     {
-        return m_relAccess.hasByID(sID);
+        return m_relAccess->hasByID(sID);
     }
 
     virtual OUString SAL_CALL getTargetByID(const OUString& sID) override
     {
-        return m_relAccess.getTargetByID(sID);
+        return m_relAccess->getTargetByID(sID);
     }
 
     virtual OUString SAL_CALL getTypeByID(const OUString& sID) override
     {
-        return m_relAccess.getTypeByID(sID);
+        return m_relAccess->getTypeByID(sID);
     }
 
     virtual css::uno::Sequence<css::beans::StringPair>
         SAL_CALL getRelationshipByID(const OUString& sID) override
     {
-        return m_relAccess.getRelationshipByID(sID);
+        return m_relAccess->getRelationshipByID(sID);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getRelationshipsByType(const OUString& sType) override
     {
-        return m_relAccess.getRelationshipsByType(sType);
+        return m_relAccess->getRelationshipsByType(sType);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getAllRelationships() override
     {
-        return m_relAccess.getAllRelationships();
+        return m_relAccess->getAllRelationships();
     }
 
     virtual void SAL_CALL insertRelationshipByID(
         const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationshipByID(sID, aEntry, bReplace);
+        m_relAccess->insertRelationshipByID(sID, aEntry, bReplace);
     }
 
     virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override
     {
-        m_relAccess.removeRelationshipByID(sID);
+        m_relAccess->removeRelationshipByID(sID);
     }
 
     virtual void SAL_CALL insertRelationships(
         const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationships(aEntries, bReplace);
+        m_relAccess->insertRelationships(aEntries, bReplace);
     }
 
-    virtual void SAL_CALL clearRelationships() override { m_relAccess.clearRelationships(); }
+    virtual void SAL_CALL clearRelationships() override { m_relAccess->clearRelationships(); }
 
     // XStream
     virtual css::uno::Reference<css::io::XInputStream> SAL_CALL getInputStream() override;

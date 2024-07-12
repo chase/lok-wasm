@@ -372,6 +372,7 @@ std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
     {
         return {};
     }
+    comphelper::OStorageHelper::GetExpandedStorageInstance()->clearCachedRelationships();
 
     viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
 
