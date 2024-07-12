@@ -19,9 +19,10 @@ public:
 
     std::mutex m_mutex;
 
-    RelationshipAccessImpl(){};
+    RelationshipAccessImpl() {};
 
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo, std::shared_ptr<std::vector<sal_Int8>> relContent);
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
+                          std::shared_ptr<std::vector<sal_Int8>> relContent);
 
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override;
 

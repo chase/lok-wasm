@@ -280,10 +280,9 @@ std::optional<comphelper::RelInfoSeq> ExpandedStorage::getRelInfoForElement(cons
     return getRelInfoFromName(OUString::fromUtf8(std::move(relInfoPath)));
 }
 
-
-
-Reference<comphelper::VecStreamSupplier> ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpenMode,
-                                                          PathType pathType, bool readRelInfo)
+Reference<comphelper::VecStreamSupplier>
+ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpenMode,
+                                           PathType pathType, bool readRelInfo)
 {
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
@@ -309,27 +308,34 @@ Reference<comphelper::VecStreamSupplier> ExpandedStorage::openStreamElementSuppl
     // Vector*Stream only holds a reference to the content
     if (nOpenMode & embed::ElementModes::READ)
     {
-        Reference<comphelper::VectorInputStream> inputStream(new comphelper::VectorInputStream(file.content));
+        Reference<comphelper::VectorInputStream> inputStream(
+            new comphelper::VectorInputStream(file.content));
         maybeInputStream = inputStream;
     }
 
     if (nOpenMode & embed::ElementModes::WRITE)
     {
-        Reference<comphelper::VectorOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
+        Reference<comphelper::VectorOutputStream> outputStream(
+            new comphelper::VectorOutputStream(file.content));
+        // If we are opening an output stream for the first time, clear the original content
+        if (file.writeRefCount == 0)
+        {
+            file.content->clear();
+        }
+
+        file.writeRefCount++;
+
         maybeOutputStream = outputStream;
     }
 
-    Reference<comphelper::VecStreamSupplier> streamSupplier(
-        new comphelper::VecStreamSupplier(std::move(maybeInputStream), std::move(maybeOutputStream)));
+    Reference<comphelper::VecStreamSupplier> streamSupplier(new comphelper::VecStreamSupplier(
+        std::move(maybeInputStream), std::move(maybeOutputStream)));
 
     if (readRelInfo)
     {
         auto relInfo = getRelInfoForElement(path);
         if (relInfo.has_value())
         {
-            /* streamSupplier->m_relAccess.m_aRelInfo = relInfo.value(); */
-
-            /* streamSupplier->m_relAccess.m_relContent = m_files->find(getRelInfoPath(path))->second.content; */
             streamSupplier->setRelationships(relInfo.value(), nullptr);
         }
     }
@@ -337,10 +343,12 @@ Reference<comphelper::VecStreamSupplier> ExpandedStorage::openStreamElementSuppl
     return streamSupplier;
 }
 
-uno::Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
-                                                          PathType pathType, bool readRelInfo)
+uno::Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name,
+                                                               sal_Int32 nOpenMode,
+                                                               PathType pathType, bool readRelInfo)
 {
-    return uno::Reference<io::XStream>(openStreamElementSupplier(name, nOpenMode, pathType, readRelInfo), UNO_QUERY);
+    return uno::Reference<io::XStream>(
+        openStreamElementSupplier(name, nOpenMode, pathType, readRelInfo), UNO_QUERY);
 }
 
 // name is relative
@@ -370,7 +378,9 @@ Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OU
     OUString newPath = base + path;
     Reference<ExpandedStorage> expandedStorage(new ExpandedStorage(
         m_xContext, m_files, m_inputStream, newPath, m_relAccess.m_aRelInfo, m_lastCommit));
-    SAL_WARN("expandedstorage", "relationship info "<<  newPath << " " << expandedStorage->m_relAccess.m_aRelInfo.getLength());
+    SAL_WARN("expandedstorage", "relationship info "
+                                    << newPath << " "
+                                    << expandedStorage->m_relAccess.m_aRelInfo.getLength());
     return Reference<embed::XStorage>(expandedStorage);
 }
 
@@ -380,8 +390,10 @@ Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUStri
 
     // copy the content of the original file
     auto content = std::make_shared<std::vector<sal_Int8>>(*it->second.content);
-    Reference<comphelper::VectorInputStream> inputStream(new comphelper::VectorInputStream(content));
-    Reference<comphelper::VectorOutputStream> outputStream(new comphelper::VectorOutputStream(content));
+    Reference<comphelper::VectorInputStream> inputStream(
+        new comphelper::VectorInputStream(content));
+    Reference<comphelper::VectorOutputStream> outputStream(
+        new comphelper::VectorOutputStream(content));
 
     return Reference<io::XStream>(
         new comphelper::VecStreamSupplier(std::move(inputStream), std::move(outputStream)));
@@ -558,7 +570,7 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
         aStreamContainer->setRelationships(relInfo.value(), nullptr);
     }
 
-    return Reference<embed::XExtendedStorageStream> (aStreamContainer, UNO_QUERY_THROW);
+    return Reference<embed::XExtendedStorageStream>(aStreamContainer, UNO_QUERY_THROW);
 }
 
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
@@ -609,7 +621,8 @@ bool ExpandedStorage::implIsStorage() const { return true; }
 Reference<embed::XStorage> ExpandedStorage::implGetXStorage() const
 {
     SAL_WARN("oox", "get x storage " << m_basePath.value_or("/"));
-    return uno::Reference<embed::XStorage>(new ExpandedStorage(m_xContext, m_files, m_inputStream, "word", m_relAccess.m_aRelInfo, m_lastCommit));
+    return uno::Reference<embed::XStorage>(new ExpandedStorage(
+        m_xContext, m_files, m_inputStream, "word", m_relAccess.m_aRelInfo, m_lastCommit));
     return Reference<embed::XStorage>(const_cast<ExpandedStorage*>(this));
 }
 
@@ -662,6 +675,8 @@ void ExpandedStorage::afterCommit()
         if (newSha != *file.sha)
             filesChanged.push_back({ path, helpers::shaVecToString(newSha) });
         file.sha->swap(newSha);
+        // Reset the write ref count for all files
+        file.writeRefCount = 0;
     }
 
     auto ts = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());

@@ -1666,13 +1666,6 @@ void OStorage_Impl::CommitRelInfo( const uno::Reference< container::XNameContain
             if (!xOutStream.is())
                 throw uno::RuntimeException(THROW_WHERE);
 
-            for (const auto& rPair : m_aRelInfo)
-            {
-                for (const auto& [rName, rValue] : rPair)
-                    SAL_WARN("package.xstor", "Relation: " << rName << " Value: " << rValue);
-
-            }
-
             ::comphelper::OFOPXMLHelper::WriteRelationsInfoSequence(xOutStream, m_aRelInfo,
                                                                     m_xContext);
 
@@ -1690,7 +1683,6 @@ void OStorage_Impl::CommitRelInfo( const uno::Reference< container::XNameContain
     else if (m_nRelInfoStatus == RELINFO_CHANGED_STREAM_READ
              || m_nRelInfoStatus == RELINFO_CHANGED_STREAM)
     {
-        SAL_WARN("package.xstor", "Rel info changed, but not committed");
         CreateRelStorage();
 
         uno::Reference<io::XStream> xRelsStream = m_xRelStorage->openStreamElement(
@@ -4747,9 +4739,6 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OStorage::getAllRel
 
 void SAL_CALL OStorage::insertRelationshipByID(  const OUString& sID, const uno::Sequence< beans::StringPair >& aEntry, sal_Bool bReplace  )
 {
-    SAL_WARN("xstorage", "TODO: insertRelationshipByID" << sID);
-    for (const auto& rPair : aEntry)
-        SAL_WARN("xstorage", rPair.First << "=" << rPair.Second);
     ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )

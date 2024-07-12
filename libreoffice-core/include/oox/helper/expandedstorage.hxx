@@ -69,11 +69,13 @@ struct ExpandedFile
     const OUString path;
     std::shared_ptr<ShaVec> sha;
     std::shared_ptr<std::vector<sal_Int8>> content;
+    // Track the number of opened output streams for the content in the file;
+    sal_Int32 writeRefCount;
 
     ExpandedFile(const OUString& path_, const std::vector<sal_Int8>&& content_, const ShaVec&& sha_)
         : path(path_)
         , sha(std::make_shared<ShaVec>(std::move(sha_)))
-        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))){};
+        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))) {};
 };
 
 typedef boost::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
@@ -90,7 +92,9 @@ struct Commit
 
     Commit(std::vector<std::pair<std::string, std::string>> filesChanged_, std::time_t timestamp_)
         : filesChanged(filesChanged_)
-        , timestamp(timestamp_) {}
+        , timestamp(timestamp_)
+    {
+    }
 };
 
 class ExpandedStorage final : public css::lang::XTypeProvider,
@@ -121,8 +125,7 @@ public:
                     const css::uno::Reference<io::XInputStream>& rxInputStream,
                     const OUString& basePath,
                     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
-                    std::shared_ptr<Commit> lastCommit
-                    );
+                    std::shared_ptr<Commit> lastCommit);
 
     ExpandedStorage(const ExpandedStorage&) = delete;
     ExpandedStorage(ExpandedStorage&&) = delete;
@@ -151,8 +154,9 @@ public:
     uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,
                                                   PathType pathType, bool readRelInfo = true);
 
-uno::Reference<comphelper::VecStreamSupplier> openStreamElementSupplier(const OUString& name, sal_Int32 openMode,
-                                                  PathType pathType, bool readRelInfo = true);
+    uno::Reference<comphelper::VecStreamSupplier>
+    openStreamElementSupplier(const OUString& name, sal_Int32 openMode, PathType pathType,
+                              bool readRelInfo = true);
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;

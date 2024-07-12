@@ -113,7 +113,6 @@ public:
     // XTypeProvider
     virtual css::uno::Sequence<css::uno::Type> SAL_CALL getTypes() override;
     virtual css::uno::Sequence<sal_Int8> SAL_CALL getImplementationId() override;
-
 };
 
 class COMPHELPER_DLLPUBLIC VectorOutputStream final
@@ -128,7 +127,9 @@ class COMPHELPER_DLLPUBLIC VectorOutputStream final
 
 public:
     VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> vec);
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo, std::shared_ptr<std::vector<sal_Int8>> relContent) {
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
+                          std::shared_ptr<std::vector<sal_Int8>> relContent)
+    {
         m_relAccess.setRelationships(aRelInfo, relContent);
     }
     virtual void SAL_CALL writeBytes(const Sequence<sal_Int8>& aData) override;
@@ -218,7 +219,9 @@ public:
     VecStreamSupplier(css::uno::Reference<VectorInputStream> xInput,
                       css::uno::Reference<VectorOutputStream> xOutput);
 
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo, std::shared_ptr<std::vector<sal_Int8>> relContent) {
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
+                          std::shared_ptr<std::vector<sal_Int8>> relContent)
+    {
         m_relAccess.setRelationships(aRelInfo, relContent);
     }
 
@@ -308,7 +311,9 @@ public:
     comphelper::RelationshipAccessImpl m_relAccess;
     VecStreamContainer(css::uno::Reference<VecStreamSupplier>& xStream);
 
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo, std::shared_ptr<std::vector<sal_Int8>> relContent) {
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
+                          std::shared_ptr<std::vector<sal_Int8>> relContent)
+    {
         m_relAccess.setRelationships(aRelInfo, relContent);
         m_stream->setRelationships(aRelInfo, relContent);
     }

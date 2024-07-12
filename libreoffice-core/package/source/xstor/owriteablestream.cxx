@@ -2603,9 +2603,6 @@ uno::Sequence< uno::Sequence< beans::StringPair > > SAL_CALL OWriteStream::getAl
 
 void SAL_CALL OWriteStream::insertRelationshipByID(  const OUString& sID, const uno::Sequence< beans::StringPair >& aEntry, sal_Bool bReplace  )
 {
-    SAL_WARN("writeablestream", "insertRelationshipByID is not implemented " << sID);
-    for (const auto& rPair : aEntry)
-        SAL_WARN("writeablestream", rPair.First << "=" << rPair.Second);
     ::osl::MutexGuard aGuard( m_xSharedMutex->GetMutex() );
 
     if ( !m_pImpl )

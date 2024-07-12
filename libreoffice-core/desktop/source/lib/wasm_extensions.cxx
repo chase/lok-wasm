@@ -282,7 +282,7 @@ WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis,
     // Is this necesarry ?
     storage->setPropertyValue("OpenMode", uno::Any(ucb::OpenMode::ALL));
     storage->setPropertyValue("Version", uno::Any(OUString("1")));
-    /* storage->setPropertyValue("MS Word 2007 XML", uno::Any(OUString("1"))); */
+    storage->setPropertyValue("MS Word 2007 XML", uno::Any(OUString("1")));
 
     uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
     storage->acquire();
@@ -302,8 +302,8 @@ WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis,
     utl::MediaDescriptor aMediaDescriptor;
 
     // Expanded Storage only supports .DOCX
-    /* aMediaDescriptor[utl::MediaDescriptor::PROP_FILTERNAME] */
-        /* <<= OUString("MS Word 2007 XML"); // just hardcode this for now */
+    aMediaDescriptor[utl::MediaDescriptor::PROP_FILTERNAME]
+        <<= OUString("MS Word 2007 XML"); // just hardcode this for now
     aMediaDescriptor[utl::MediaDescriptor::PROP_MACROEXECUTIONMODE]
         <<= document::MacroExecMode::NEVER_EXECUTE;
     // We don't have a general document input stream,
