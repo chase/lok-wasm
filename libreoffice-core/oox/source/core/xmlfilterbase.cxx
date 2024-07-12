@@ -537,6 +537,7 @@ OUString lclAddRelation( const Reference< XRelationshipAccess >& rRelations, sal
 
 OUString XmlFilterBase::addRelation( const OUString& rType, std::u16string_view rTarget )
 {
+    SAL_WARN("xmlfilterbase", "addRelation storage" << rType);
     Reference< XRelationshipAccess > xRelations( getStorage()->getXStorage(), UNO_QUERY );
     if( xRelations.is() )
         return lclAddRelation( xRelations, mnRelId ++, rType, rTarget, false/*bExternal*/ );
@@ -546,6 +547,8 @@ OUString XmlFilterBase::addRelation( const OUString& rType, std::u16string_view 
 
 OUString XmlFilterBase::addRelation( const Reference< XOutputStream >& rOutputStream, const OUString& rType, std::u16string_view rTarget, bool bExternal )
 {
+
+    SAL_WARN("xmlfilterbase", "addRelation stream HERE" << rType);
     sal_Int32 nId = 0;
 
     PropertySet aPropSet( rOutputStream );
@@ -554,7 +557,10 @@ OUString XmlFilterBase::addRelation( const Reference< XOutputStream >& rOutputSt
     else
         nId = mnRelId++;
 
-    Reference< XRelationshipAccess > xRelations( rOutputStream, UNO_QUERY );
+    uno::Reference<io::XOutputStream> outputStream(comphelper::OStorageHelper::GetExpandedStorageBase()->openOutputStream("word/document.xml"), UNO_QUERY);
+
+    Reference< XRelationshipAccess > xRelations( outputStream, UNO_QUERY );
+    SAL_WARN("xmlfilterbase", "addRelation stream" << xRelations.is());
     if( xRelations.is() )
         return lclAddRelation( xRelations, nId, rType, rTarget, bExternal );
 

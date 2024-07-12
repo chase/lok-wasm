@@ -1,4 +1,9 @@
+#include "comphelper/ofopxmlhelper.hxx"
+#include <vector>
+#include "comphelper/processfactory.hxx"
+#include "sal/log.hxx"
 #include <comphelper/relationshipaccess.hxx>
+#include <comphelper/vecstream.hxx>
 #include <com/sun/star/container/NoSuchElementException.hpp>
 #include <com/sun/star/embed/InvalidStorageException.hpp>
 #include <com/sun/star/embed/StorageWrappedTargetException.hpp>
@@ -25,11 +30,21 @@ const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& r
                         [&rName](const beans::StringPair& rPair) { return rPair.First == rName; });
 }
 
-void SAL_CALL RelationshipAccessImpl::clearRelationships() { m_aRelInfo.realloc(0); }
+void RelationshipAccessImpl::setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo, std::shared_ptr<std::vector<sal_Int8>> relContent)
+{
+    m_aRelInfo = aRelInfo;
+    m_relContent = relContent;
+}
+
+void SAL_CALL RelationshipAccessImpl::clearRelationships() {
+    SAL_WARN("package.xstor", "clearing relationships");
+    m_aRelInfo.realloc(0);
+}
 
 void SAL_CALL RelationshipAccessImpl::insertRelationships(
     const Sequence<Sequence<beans::StringPair>>& aEntries, sal_Bool bReplace)
 {
+    SAL_WARN("package.xstor", "inserting relationships" <<  aEntries.getLength());
     OUString aIDTag("Id");
     const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     std::vector<Sequence<beans::StringPair>> aResultVec;
@@ -74,6 +89,7 @@ void SAL_CALL RelationshipAccessImpl::insertRelationships(
 
 void SAL_CALL RelationshipAccessImpl::removeRelationshipByID(const OUString& sID)
 {
+    SAL_WARN("package.xstor", "removing relationship by id" <<  sID);
     Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     const beans::StringPair aIDRel("Id", sID);
     auto pRel = std::find_if(std::cbegin(aSeq), std::cend(aSeq),
@@ -95,6 +111,11 @@ void SAL_CALL RelationshipAccessImpl::removeRelationshipByID(const OUString& sID
 void SAL_CALL RelationshipAccessImpl::insertRelationshipByID(
     const OUString& sID, const uno::Sequence<beans::StringPair>& aEntry, sal_Bool bReplace)
 {
+    SAL_WARN("package.xstor", "inserting relationship by id" <<  sID);
+    for (auto& i : aEntry)
+    {
+        SAL_WARN("package.xstor", "inserting relationship by id" <<  sID << " " << i.First << " " << i.Second);
+    }
     const beans::StringPair aIDRel("Id", sID);
 
     uno::Sequence<beans::StringPair>* pResult = nullptr;
@@ -125,6 +146,11 @@ void SAL_CALL RelationshipAccessImpl::insertRelationshipByID(
     *pResult = comphelper::containerToSequence(aResult);
 
     m_aRelInfo = aSeq;
+    if (!m_relContent)
+        return;
+    m_relContent->clear();
+    uno::Reference<comphelper::VectorOutputStream> xStream = new comphelper::VectorOutputStream(m_relContent);
+    comphelper::OFOPXMLHelper::WriteRelationsInfoSequence(xStream, aSeq, comphelper::getProcessComponentContext());
 }
 
 Sequence<Sequence<beans::StringPair>>

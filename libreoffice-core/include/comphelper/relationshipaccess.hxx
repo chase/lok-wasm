@@ -15,9 +15,13 @@ class RelationshipAccessImpl final : public ::cppu::WeakImplHelper<embed::XRelat
 {
 public:
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> m_aRelInfo;
+    std::shared_ptr<std::vector<sal_Int8>> m_relContent;
+
     std::mutex m_mutex;
 
     RelationshipAccessImpl(){};
+
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo, std::shared_ptr<std::vector<sal_Int8>> relContent);
 
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override;
 

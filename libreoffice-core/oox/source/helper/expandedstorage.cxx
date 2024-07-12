@@ -1,4 +1,5 @@
 #include "com/sun/star/embed/ElementModes.hdl"
+#include "com/sun/star/io/XStream.hdl"
 #include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
@@ -252,6 +253,14 @@ bool shouldCreateStreamElement(sal_Int32 openMode)
            && (openMode != embed::ElementModes::SEEKABLEREAD);
 }
 
+std::string getRelInfoPath(const std::string& path)
+{
+    size_t sepIndex = path.find_last_of('/');
+    std::string base = path.substr(0, sepIndex);
+    std::string name = path.substr(sepIndex + 1);
+    return std::move(base) + REL_DIR_NAME + std::move(name) + REL_EXT;
+}
+
 // TODO: @synoet
 // There should be a more efficient way to load relations per file
 // Maybe moving back to the original approach of loading all relations then copying over
@@ -271,7 +280,9 @@ std::optional<comphelper::RelInfoSeq> ExpandedStorage::getRelInfoForElement(cons
     return getRelInfoFromName(OUString::fromUtf8(std::move(relInfoPath)));
 }
 
-Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
+
+
+Reference<comphelper::VecStreamSupplier> ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpenMode,
                                                           PathType pathType, bool readRelInfo)
 {
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
@@ -292,35 +303,44 @@ Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, 
 
     auto& file = it->second;
 
-    Reference<io::XInputStream> maybeInputStream;
-    Reference<io::XOutputStream> maybeOutputStream;
+    Reference<comphelper::VectorInputStream> maybeInputStream;
+    Reference<comphelper::VectorOutputStream> maybeOutputStream;
 
     // Vector*Stream only holds a reference to the content
     if (nOpenMode & embed::ElementModes::READ)
     {
-        Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(file.content));
+        Reference<comphelper::VectorInputStream> inputStream(new comphelper::VectorInputStream(file.content));
         maybeInputStream = inputStream;
     }
 
     if (nOpenMode & embed::ElementModes::WRITE)
     {
-        Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
+        Reference<comphelper::VectorOutputStream> outputStream(new comphelper::VectorOutputStream(file.content));
         maybeOutputStream = outputStream;
     }
 
     Reference<comphelper::VecStreamSupplier> streamSupplier(
-        new comphelper::VecStreamSupplier(maybeInputStream, maybeOutputStream));
+        new comphelper::VecStreamSupplier(std::move(maybeInputStream), std::move(maybeOutputStream)));
 
     if (readRelInfo)
     {
         auto relInfo = getRelInfoForElement(path);
         if (relInfo.has_value())
         {
-            streamSupplier->m_relAccess.m_aRelInfo = relInfo.value();
+            /* streamSupplier->m_relAccess.m_aRelInfo = relInfo.value(); */
+
+            /* streamSupplier->m_relAccess.m_relContent = m_files->find(getRelInfoPath(path))->second.content; */
+            streamSupplier->setRelationships(relInfo.value(), nullptr);
         }
     }
 
-    return Reference<io::XStream>(streamSupplier);
+    return streamSupplier;
+}
+
+uno::Reference<io::XStream> ExpandedStorage::openStreamElement(const OUString& name, sal_Int32 nOpenMode,
+                                                          PathType pathType, bool readRelInfo)
+{
+    return uno::Reference<io::XStream>(openStreamElementSupplier(name, nOpenMode, pathType, readRelInfo), UNO_QUERY);
 }
 
 // name is relative
@@ -350,6 +370,7 @@ Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OU
     OUString newPath = base + path;
     Reference<ExpandedStorage> expandedStorage(new ExpandedStorage(
         m_xContext, m_files, m_inputStream, newPath, m_relAccess.m_aRelInfo, m_lastCommit));
+    SAL_WARN("expandedstorage", "relationship info "<<  newPath << " " << expandedStorage->m_relAccess.m_aRelInfo.getLength());
     return Reference<embed::XStorage>(expandedStorage);
 }
 
@@ -359,8 +380,8 @@ Reference<io::XStream> SAL_CALL ExpandedStorage::cloneStreamElement(const OUStri
 
     // copy the content of the original file
     auto content = std::make_shared<std::vector<sal_Int8>>(*it->second.content);
-    Reference<io::XInputStream> inputStream(new comphelper::VectorInputStream(content));
-    Reference<io::XOutputStream> outputStream(new comphelper::VectorOutputStream(content));
+    Reference<comphelper::VectorInputStream> inputStream(new comphelper::VectorInputStream(content));
+    Reference<comphelper::VectorOutputStream> outputStream(new comphelper::VectorOutputStream(content));
 
     return Reference<io::XStream>(
         new comphelper::VecStreamSupplier(std::move(inputStream), std::move(outputStream)));
@@ -524,8 +545,8 @@ void SAL_CALL ExpandedStorage::removeVetoableChangeListener(
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
 ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath, sal_Int32 openMode)
 {
-    css::uno::Reference<io::XStream> xStream
-        = openStreamElement(streamPath, openMode, PathType::Absolute, true);
+    css::uno::Reference<comphelper::VecStreamSupplier> xStream
+        = openStreamElementSupplier(streamPath, openMode, PathType::Absolute, true);
 
     Reference<comphelper::VecStreamContainer> aStreamContainer(
         new comphelper::VecStreamContainer(xStream));
@@ -533,10 +554,11 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
     // Copy over the relationship info
     auto relInfo = getRelInfoForElement(helpers::toString(streamPath));
     if (relInfo.has_value())
-        aStreamContainer->m_relAccess.m_aRelInfo = relInfo.value();
+    {
+        aStreamContainer->setRelationships(relInfo.value(), nullptr);
+    }
 
-    Reference<embed::XExtendedStorageStream> xExtendedStream(aStreamContainer, UNO_QUERY_THROW);
-    return xExtendedStream;
+    return Reference<embed::XExtendedStorageStream> (aStreamContainer, UNO_QUERY_THROW);
 }
 
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
@@ -586,6 +608,8 @@ bool ExpandedStorage::implIsStorage() const { return true; }
 
 Reference<embed::XStorage> ExpandedStorage::implGetXStorage() const
 {
+    SAL_WARN("oox", "get x storage " << m_basePath.value_or("/"));
+    return uno::Reference<embed::XStorage>(new ExpandedStorage(m_xContext, m_files, m_inputStream, "word", m_relAccess.m_aRelInfo, m_lastCommit));
     return Reference<embed::XStorage>(const_cast<ExpandedStorage*>(this));
 }
 
@@ -688,7 +712,11 @@ void ExpandedStorage::readRelationshipInfo()
         }
     }
 
+    /* std::string relInfoPath = m_basePath.has_value() ? "word/_rels/document.xml.rels" : "_rels/.rels"; */
+
+    /* m_relAccess.setRelationships(comphelper::containerToSequence(allRelsVec), m_files->find(relInfoPath)->second.content); */
     m_relAccess.m_aRelInfo = comphelper::containerToSequence(allRelsVec);
+    /* m_relAccess.m_relContent = m_files->find(relInfoPath)->second.content; */
 }
 
 css::uno::Reference<css::io::XInputStream>
@@ -696,6 +724,13 @@ ExpandedStorage::openInputStream(const OUString& rStreamName)
 {
     return openStreamElementByHierarchicalName(rStreamName, embed::ElementModes::READ)
         ->getInputStream();
+}
+
+css::uno::Reference<css::io::XOutputStream>
+ExpandedStorage::openOutputStream(const OUString& rStreamName)
+{
+    return openStreamElementByHierarchicalName(rStreamName, embed::ElementModes::READWRITE)
+        ->getOutputStream();
 }
 
 } // namespace oox

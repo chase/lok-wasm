@@ -1,3 +1,4 @@
+#include "com/sun/star/io/XOutputStream.hdl"
 #include <sal/log.hxx>
 #include <com/sun/star/embed/XRelationshipAccess.hpp>
 #include <com/sun/star/io/BufferSizeExceededException.hpp>
@@ -16,6 +17,7 @@ using namespace ::com::sun::star::io;
 using namespace ::com::sun::star::uno;
 using namespace ::osl;
 
+// ----------- VectorInputStream -----------
 VectorInputStream::VectorInputStream(std::shared_ptr<std::vector<sal_Int8>> vec)
     : m_vec(vec)
     , m_pos(0)
@@ -103,6 +105,37 @@ sal_Int64 SAL_CALL VectorInputStream::getLength()
     std::scoped_lock gaurd(m_mutex);
     return m_vec->size();
 }
+Any SAL_CALL VectorInputStream::queryInterface(const Type& rType)
+{
+    Any aRet
+        = cppu::queryInterface(rType, static_cast<embed::XRelationshipAccess*>(this),
+                               static_cast<lang::XTypeProvider*>(this),
+                               static_cast<io::XInputStream*>(this));
+    if (aRet.hasValue())
+        return aRet;
+
+    return OWeakObject::queryInterface(rType);
+}
+Sequence<Type> SAL_CALL VectorInputStream::getTypes()
+{
+    static css::uno::Sequence<css::uno::Type> aTypes = {
+        cppu::UnoType<css::lang::XTypeProvider>::get(),
+        cppu::UnoType<embed::XRelationshipAccess>::get(),
+        cppu::UnoType<io::XInputStream>::get(),
+    };
+    return aTypes;
+}
+
+Sequence<sal_Int8> SAL_CALL VectorInputStream::getImplementationId()
+{
+    return Sequence<sal_Int8>();
+}
+
+void SAL_CALL VectorInputStream::acquire() noexcept { OWeakObject::acquire(); }
+
+void SAL_CALL VectorInputStream::release() noexcept { OWeakObject::release(); }
+
+// ----------- VectorOutputStream -----------
 
 VectorOutputStream::VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> vec)
     : m_vec(vec)
@@ -137,9 +170,45 @@ void SAL_CALL VectorOutputStream::closeOutput()
     // see ::flush() for why
     m_vec->resize(m_pos);
 }
+Any SAL_CALL VectorOutputStream::queryInterface(const Type& rType)
+{
+    Any aRet
+        = cppu::queryInterface(rType, static_cast<embed::XRelationshipAccess*>(this),
+                               static_cast<lang::XTypeProvider*>(this),
+                               static_cast<io::XOutputStream*>(this));
+    if (aRet.hasValue())
+        return aRet;
 
-VecStreamSupplier::VecStreamSupplier(Reference<io::XInputStream> inputStream,
-                                     Reference<io::XOutputStream> outputStream)
+    return OWeakObject::queryInterface(rType);
+}
+Sequence<Type> SAL_CALL VectorOutputStream::getTypes()
+{
+    static css::uno::Sequence<css::uno::Type> aTypes = {
+        cppu::UnoType<css::lang::XTypeProvider>::get(),
+        cppu::UnoType<embed::XRelationshipAccess>::get(),
+        cppu::UnoType<io::XOutputStream>::get(),
+    };
+    return aTypes;
+}
+
+Sequence<sal_Int8> SAL_CALL VectorOutputStream::getImplementationId()
+{
+    return Sequence<sal_Int8>();
+}
+
+void SAL_CALL VectorOutputStream::acquire() noexcept { OWeakObject::acquire(); }
+
+void SAL_CALL VectorOutputStream::release() noexcept { OWeakObject::release(); }
+
+VecStreamContainer::VecStreamContainer(Reference<VecStreamSupplier>& stream)
+    : m_stream(stream)
+{
+}
+
+// ----------- VecStreamSupplier -----------
+
+VecStreamSupplier::VecStreamSupplier(Reference<VectorInputStream> inputStream,
+                                     Reference<VectorOutputStream> outputStream)
     : m_inputStream(std::move(inputStream))
     , m_outputStream(std::move(outputStream))
 {
@@ -208,11 +277,7 @@ void SAL_CALL VecStreamSupplier::acquire() noexcept { OWeakObject::acquire(); }
 
 void SAL_CALL VecStreamSupplier::release() noexcept { OWeakObject::release(); }
 
-VecStreamContainer::VecStreamContainer(Reference<io::XStream>& stream)
-    : m_stream(stream)
-{
-}
-
+// ----------- VecStreamContainer -----------
 Reference<io::XInputStream> SAL_CALL VecStreamContainer::getInputStream()
 {
     return m_stream->getInputStream();

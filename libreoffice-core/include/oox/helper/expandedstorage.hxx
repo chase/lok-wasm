@@ -52,6 +52,11 @@ class XComponentContext;
 }
 }
 
+namespace comphelper
+{
+class VecStreamSupplier;
+}
+
 using namespace com::sun::star;
 
 namespace oox
@@ -144,6 +149,9 @@ public:
     void readRelationshipInfo();
     OUString getFullPath(const OUString& path) const;
     uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,
+                                                  PathType pathType, bool readRelInfo = true);
+
+uno::Reference<comphelper::VecStreamSupplier> openStreamElementSupplier(const OUString& name, sal_Int32 openMode,
                                                   PathType pathType, bool readRelInfo = true);
 
     // XInterface
@@ -256,6 +264,9 @@ public:
 
     virtual css::uno::Reference<css::io::XInputStream>
     openInputStream(const OUString& rStreamName) override;
+
+    virtual css::uno::Reference<css::io::XOutputStream>
+    openOutputStream(const OUString& rStreamName) override;
 
     /** Commits the current storage. */
     virtual void implCommit() const override;
