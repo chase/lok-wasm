@@ -1,10 +1,7 @@
 import { CallbackType } from '@lok/lok_enums';
 import { DocumentClient } from '@lok/shared';
 import { Accessor } from 'solid-js';
-import {
-    createDocEventSignal,
-    createInitalizedDocEventSignal,
-} from './docEventSignal';
+import { createInitalizedDocEventSignal } from './docEventSignal';
 
 const cursorVisibleMap = new WeakMap<DocumentClient, Accessor<boolean>>();
 export function getOrCreateCursorVisible(
@@ -42,25 +39,28 @@ const cursorPositionMap = new WeakMap<
   DocumentClient,
   Accessor<CursorRectTwips | undefined>
 >();
+
 export function getOrCreateCursorPosition(
   doc: Accessor<DocumentClient>
 ): Accessor<CursorRectTwips | undefined> {
   const doc_ = doc();
   let result = cursorPositionMap.get(doc_);
+  const cursorTransform = (payload: string | undefined) => {
+    if (!payload) return undefined as any;
+    const { viewId } = doc_;
+    const event: ParsedInvalidateVisibleCursor = JSON.parse(payload);
+    // if the view ID doesn't match, don't set the signal
+    if (viewId !== Number(event.viewId)) return undefined;
+
+    const rect = event.rectangle.split(', ').map(toInt);
+    return rect as CursorRectTwips;
+  };
   if (result == null) {
-    result = createDocEventSignal(
+    result = createInitalizedDocEventSignal(
       doc,
       CallbackType.INVALIDATE_VISIBLE_CURSOR,
-      (payload) => {
-        const { viewId } = doc_;
-        const event: ParsedInvalidateVisibleCursor = JSON.parse(payload);
-        // if the view ID doesn't match, don't set the signal
-        if (viewId !== Number(event.viewId)) return undefined;
-
-        const rect = event.rectangle.split(', ').map(toInt);
-        return rect as CursorRectTwips;
-      },
-      true
+      cursorTransform,
+      doc_.getCursor().then(cursorTransform)
     );
   }
   return result;

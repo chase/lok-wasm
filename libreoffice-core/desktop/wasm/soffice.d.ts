@@ -271,6 +271,8 @@ export declare class Document {
   redo(count: number): void;
 
   getRedlineTextRange(id: number): RectArray[] | undefined;
+
+  getCursor(viewId: number): string | undefined;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

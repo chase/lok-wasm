@@ -639,7 +639,11 @@ const handler: DocumentMethodHandler<Document> = {
   getRedlineTextRange: function (doc: Document, viewId: ViewId, id: number) {
     doc.setCurrentView(viewId);
     return doc.getRedlineTextRange(id);
-  }
+  },
+
+  getCursor: function (doc: Document, viewId: ViewId) {
+    return doc.getCursor(viewId);
+  },
 };
 
 const forwarding: ForwardingMethodHandlers<Document> = {

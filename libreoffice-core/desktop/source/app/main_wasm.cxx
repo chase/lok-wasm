@@ -850,6 +850,8 @@ public:
 
     val getRedlineTextRange(int redlineId) { return writer()->getRedlineTextRange(redlineId); }
 
+    std::optional<std::string> getCursor(int viewId) { return ext()->getCursor(viewId); }
+
 private:
     struct DocWithId
     {
@@ -1032,5 +1034,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("undo", &DocumentClient::undo)
         .function("redo", &DocumentClient::redo)
         .function("getRedlineTextRange", &DocumentClient::getRedlineTextRange)
+        .function("getCursor", &DocumentClient::getCursor)
         .function("newView", &DocumentClient::newView);
 }

@@ -47,9 +47,15 @@ export function createInitalizedDocEventSignal<T>(
   doc: Accessor<DocumentClient>,
   type: CallbackType,
   transform: (payload: string) => T | undefined,
-  initial: Exclude<T, Function>
+  initial: Exclude<T, Function> | Promise<Exclude<T, Function>>
 ): Accessor<T> {
-  const [payload, setPayload] = createSignal<T>(initial);
+  const [payload, setPayload] =
+    initial instanceof Promise
+      ? createSignal<T>(undefined as T)
+      : createSignal<T>(initial);
+  if (initial instanceof Promise) {
+    initial.then(setPayload);
+  }
   const callback = frameThrottle(
     transform
       ? (payload: string) => {

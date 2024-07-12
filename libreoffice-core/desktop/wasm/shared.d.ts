@@ -189,6 +189,7 @@ export type DocumentWithViewMethods = {
   getExpandedPart(path: string): {path: string, content: ArrayBuffer} | null;
   listExpandedParts(): Array<{path: string, sha: string}>;
   getRedlineTextRange(id: number): RectArray[] | undefined;
+  getCursor(): string | undefined;
 };
 
 /** methods that forward to a class weakly bound to the Document that forwards calls */
