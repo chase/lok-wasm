@@ -332,7 +332,6 @@ public:
     void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
         m_relAccess->setRelationships(aRelInfo);
-        m_stream->setRelationships(aRelInfo);
     }
 
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;

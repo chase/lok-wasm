@@ -136,6 +136,7 @@ void SAL_CALL RelationshipAccessImpl::insertRelationshipByID(
     *pResult = comphelper::containerToSequence(aResult);
 
     m_aRelInfo = aSeq;
+    SAL_WARN("relationshipaccess", "insertRelationshipByID done " << m_aRelInfo.getLength());
 }
 
 Sequence<Sequence<beans::StringPair>>
@@ -213,6 +214,6 @@ Sequence<beans::StringPair>
 
 Sequence<Sequence<beans::StringPair>> SAL_CALL RelationshipAccessImpl::getAllRelationships()
 {
-    return m_aRelInfo;
+    return *new RelInfoSeq(m_aRelInfo);
 }
 }
