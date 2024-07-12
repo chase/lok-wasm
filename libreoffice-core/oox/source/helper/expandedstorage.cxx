@@ -336,7 +336,7 @@ ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpen
         auto relInfo = getRelInfoForElement(path);
         if (relInfo.has_value())
         {
-            streamSupplier->setRelationships(relInfo.value(), nullptr);
+            streamSupplier->setRelationships(relInfo.value());
         }
     }
 
@@ -567,7 +567,7 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
     auto relInfo = getRelInfoForElement(helpers::toString(streamPath));
     if (relInfo.has_value())
     {
-        aStreamContainer->setRelationships(relInfo.value(), nullptr);
+        aStreamContainer->setRelationships(relInfo.value());
     }
 
     return Reference<embed::XExtendedStorageStream>(aStreamContainer, UNO_QUERY_THROW);

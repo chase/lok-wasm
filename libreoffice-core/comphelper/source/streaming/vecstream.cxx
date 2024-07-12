@@ -140,17 +140,10 @@ VectorOutputStream::VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> ve
     : m_vec(vec)
     , m_pos(0)
 {
-    // the vector is always cleared when a new output stream is created because the original zip format always assumed
-    // that the file never existed on write, so truncate is never passed
-    SAL_WARN("vecstream", "clearing vector");
-    /* m_vec->clear(); */
-    /* m_pos = 0; */
 }
 
 void SAL_CALL VectorOutputStream::writeBytes(const Sequence<sal_Int8>& data)
 {
-    SAL_WARN("vecstream", "writing " << data.getLength() << " bytes" << " at " << m_pos << " of "
-                                     << m_vec->size());
     std::scoped_lock gaurd(m_mutex);
     sal_Int32 available = m_vec->size() - m_pos;
     if (available < data.getLength())
@@ -160,7 +153,6 @@ void SAL_CALL VectorOutputStream::writeBytes(const Sequence<sal_Int8>& data)
     }
     memcpy(m_vec->data() + m_pos, data.getConstArray(), data.getLength());
     m_pos += data.getLength();
-    SAL_WARN("vecstream", "wrote at " << m_pos << " of ");
 }
 
 void SAL_CALL VectorOutputStream::flush()

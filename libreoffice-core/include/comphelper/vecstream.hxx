@@ -127,10 +127,9 @@ class COMPHELPER_DLLPUBLIC VectorOutputStream final
 
 public:
     VectorOutputStream(std::shared_ptr<std::vector<sal_Int8>> vec);
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
-                          std::shared_ptr<std::vector<sal_Int8>> relContent)
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
-        m_relAccess.setRelationships(aRelInfo, relContent);
+        m_relAccess.setRelationships(aRelInfo);
     }
     virtual void SAL_CALL writeBytes(const Sequence<sal_Int8>& aData) override;
     virtual void SAL_CALL flush() override;
@@ -219,10 +218,9 @@ public:
     VecStreamSupplier(css::uno::Reference<VectorInputStream> xInput,
                       css::uno::Reference<VectorOutputStream> xOutput);
 
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
-                          std::shared_ptr<std::vector<sal_Int8>> relContent)
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
-        m_relAccess.setRelationships(aRelInfo, relContent);
+        m_relAccess.setRelationships(aRelInfo);
     }
 
     // XStream
@@ -311,11 +309,10 @@ public:
     comphelper::RelationshipAccessImpl m_relAccess;
     VecStreamContainer(css::uno::Reference<VecStreamSupplier>& xStream);
 
-    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
-                          std::shared_ptr<std::vector<sal_Int8>> relContent)
+    void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
     {
-        m_relAccess.setRelationships(aRelInfo, relContent);
-        m_stream->setRelationships(aRelInfo, relContent);
+        m_relAccess.setRelationships(aRelInfo);
+        m_stream->setRelationships(aRelInfo);
     }
 
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
