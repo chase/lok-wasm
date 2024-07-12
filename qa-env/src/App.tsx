@@ -8,7 +8,7 @@ import { cleanup } from './OfficeDocument/cleanup';
 import { IS_MAC } from './OfficeDocument/isMac';
 import { Shortcut } from './OfficeDocument/vclKeys';
 import { ZOOM_STEP, updateZoom } from './OfficeDocument/zoom';
-import { downloadFile, unzipDocxFile } from './utils';
+import { downloadFile, unzipDocxFile, zipDocxFile } from './utils';
 
 const [loading, setLoading] = createSignal(false);
 const [getDoc, setDoc] = createSignal<DocumentClient | null>(null);
@@ -70,6 +70,25 @@ window.saveAsPDF = async function saveAsPDF(doc: DocumentClient | null) {
   if (!doc) return;
   const buffer = await doc.saveAs('pdf', "Pdf Export.pdf");
   downloadFile('Pdf Export.pdf', buffer, 'application/pdf');
+};
+
+window.docxExport = async function docxExport(doc: DocumentClient | null) {
+  if (!doc) return;
+  await doc.save();
+  let parts = await doc.listExpandedParts();
+  let newParts = [];
+  for (let part of parts) {
+    let p = await doc.getExpandedPart(part.path);
+    if (!p) continue;
+    let view = new Int8Array(p.content)
+
+    newParts.push({
+      path: part.path,
+      content: view.buffer,
+    });
+  }
+  const blob = await zipDocxFile(newParts);
+  downloadFile('docxExport.docx', await blob.arrayBuffer(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 };
 
 const MOD = IS_MAC ? 'cmd' : 'ctrl';

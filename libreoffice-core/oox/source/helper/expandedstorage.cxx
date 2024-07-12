@@ -688,6 +688,16 @@ void ExpandedStorage::implCommit() const
 
 void ExpandedStorage::afterCommit()
 {
+    auto context = comphelper::getProcessComponentContext();
+    for (auto& [path, rels] : *m_allRelAccessMap)
+    {
+        SAL_WARN("expandedstorage", "Committing relationship info for " << path);
+        if (!rels->m_aRelInfo.hasElements()) continue;
+        if (path.find(REL_EXT) != std::string::npos) continue;
+        uno::Reference<io::XOutputStream> outStream = openOutputStream(OUString::fromUtf8(path));
+        comphelper::OFOPXMLHelper::WriteRelationsInfoSequence(outStream, rels->m_aRelInfo, context);
+    }
+
     std::vector<std::pair<std::string, std::string>> filesChanged;
     for (auto& [path, file] : *m_files)
     {
