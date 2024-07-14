@@ -137,8 +137,6 @@ public:
     ExpandedStorage& operator=(const ExpandedStorage&) = delete;
     ExpandedStorage& operator=(ExpandedStorage&&) = delete;
 
-    void clearCachedRelationships();
-
     void addPart(const std::string& path, const std::string& content);
 
     std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
@@ -148,6 +146,8 @@ public:
     std::vector<std::pair<const std::string, const std::string>> listParts();
 
     void afterCommit();
+
+    void commitRelationships();
 
     std::vector<std::pair<std::string, std::string>> getRecentlyChangedFiles();
 

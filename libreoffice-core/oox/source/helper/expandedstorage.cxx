@@ -691,7 +691,7 @@ void ExpandedStorage::implCommit() const
     const_cast<ExpandedStorage*>(this)->afterCommit();
 }
 
-void ExpandedStorage::afterCommit()
+void ExpandedStorage::commitRelationships()
 {
     auto context = comphelper::getProcessComponentContext();
     for (auto& [path, rels] : *m_allRelAccessMap)
@@ -702,8 +702,23 @@ void ExpandedStorage::afterCommit()
         SAL_WARN("expandedstorage", "Committing relationship info for " << path << " " << rels->m_aRelInfo.getLength());
         uno::Reference<io::XOutputStream> outStream = openOutputStream(OUString::fromUtf8(path));
         comphelper::OFOPXMLHelper::WriteRelationsInfoSequence(outStream, rels->m_aRelInfo, context);
-    }
 
+        auto it = m_files->find(path);
+
+        if (it != m_files->end())
+        {
+            auto newSha = helpers::getContentHash(*it->second.content);
+            if (newSha != *it->second.sha)
+                m_lastCommit->filesChanged.push_back({ path, helpers::shaVecToString(newSha) });
+            it->second.sha->swap(newSha);
+            // Reset the write ref count for all files
+            it->second.writeRefCount = 0;
+        }
+    }
+}
+
+void ExpandedStorage::afterCommit()
+{
     std::vector<std::pair<std::string, std::string>> filesChanged;
     for (auto& [path, file] : *m_files)
     {
@@ -719,7 +734,6 @@ void ExpandedStorage::afterCommit()
 
     m_lastCommit.reset(new Commit(std::move(filesChanged), ts));
 
-    clearCachedRelationships();
 }
 
 const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& rSeq,
@@ -737,12 +751,6 @@ ExpandedStorage::getRelInfoFromName(const OUString& name)
                         ->getInputStream();
 
     return ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(relInfoStream, name, m_xContext);
-}
-
-void ExpandedStorage::clearCachedRelationships()
-{
-    m_allRelAccessMap->clear();
-    m_relAccess = std::make_shared<comphelper::RelationshipAccessImpl>();
 }
 
 void ExpandedStorage::readRelationshipInfo()
@@ -763,6 +771,7 @@ void ExpandedStorage::readRelationshipInfo()
     {
         SAL_WARN("expandedstorage",
                  "no relationship info found for base path" << m_basePath.value());
+
         return;
     }
 
@@ -770,8 +779,8 @@ void ExpandedStorage::readRelationshipInfo()
     {
         SAL_WARN("expandedstorage",
                  "multiple relationship info files found for base path" << m_basePath.value());
-        return;
     }
+
     std::string relInfoPath = relFilePaths.front();
     auto it = m_allRelAccessMap->find(relInfoPath);
     if (it == m_allRelAccessMap->end())
