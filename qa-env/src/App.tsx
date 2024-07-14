@@ -72,7 +72,7 @@ window.saveAsPDF = async function saveAsPDF(doc: DocumentClient | null) {
   downloadFile('Pdf Export.pdf', buffer, 'application/pdf');
 };
 
-window.docxExport = async function docxExport(doc: DocumentClient | null) {
+async function docxExport(doc: DocumentClient | null) {
   if (!doc) return;
   await doc.save();
   let parts = await doc.listExpandedParts();
@@ -181,6 +181,7 @@ function App() {
         hover:file:bg-blue-100 h-auto"
           onChange={(evt) => fileOpen(evt.target.files)}
         />
+        <button class="border border-blue-500" onClick={() => docxExport(getDoc())}>Export</button>
       </div>
       <Show when={loading()}>
         <div class="loadsection">

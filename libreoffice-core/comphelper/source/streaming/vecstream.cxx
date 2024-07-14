@@ -1,4 +1,4 @@
-#include "com/sun/star/io/XOutputStream.hdl"
+#include <com/sun/star/io/XOutputStream.hpp>
 #include <sal/log.hxx>
 #include <com/sun/star/embed/XRelationshipAccess.hpp>
 #include <com/sun/star/io/BufferSizeExceededException.hpp>

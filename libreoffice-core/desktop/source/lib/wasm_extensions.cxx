@@ -375,6 +375,10 @@ std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
 
     viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
 
+    // TODO: @synoet it shouldn't be necessary to commit relationships seperately
+    // from the implCommit call from save. But there is some funky behavior going on
+    // with relationship ptr's not existing if called from within save.
+    // Investigate more post Aug 1st.
     comphelper::OStorageHelper::GetExpandedStorageInstance()->commitRelationships();
 
     auto files

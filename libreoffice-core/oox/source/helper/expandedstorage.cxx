@@ -1,5 +1,5 @@
-#include "com/sun/star/embed/ElementModes.hdl"
-#include "com/sun/star/io/XStream.hdl"
+#include <com/sun/star/embed/ElementModes.hpp>
+#include <com/sun/star/io/XStream.hpp>
 #include <comphelper/relationshipaccess.hxx>
 #include <com/sun/star/beans/UnknownPropertyException.hpp>
 #include <com/sun/star/beans/XPropertySetInfo.hpp>
@@ -343,9 +343,9 @@ ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpen
         {
             auto seq = getRelInfoForElement(path);
             it = m_allRelAccessMap
-                     ->insert({ std::move(relPath), std::make_shared<comphelper::RelationshipAccessImpl>() })
+                     ->insert({ std::move(relPath),
+                                std::make_shared<comphelper::RelationshipAccessImpl>() })
                      .first;
-
 
             streamSupplier->setRelationshipAccess(it->second);
             comphelper::RelInfoSeq relInfo;
@@ -584,7 +584,8 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
     {
         auto seq = getRelInfoForElement(helpers::toString(streamPath));
         it = m_allRelAccessMap
-                 ->insert({ std::move(path), std::make_shared<comphelper::RelationshipAccessImpl>() })
+                 ->insert(
+                     { std::move(path), std::make_shared<comphelper::RelationshipAccessImpl>() })
                  .first;
 
         aStreamContainer->setRelationshipAccess(it->second);
@@ -646,7 +647,7 @@ bool ExpandedStorage::implIsStorage() const { return true; }
 
 Reference<embed::XStorage> ExpandedStorage::implGetXStorage() const
 {
-     return uno::Reference<embed::XStorage>(new ExpandedStorage(
+    return uno::Reference<embed::XStorage>(new ExpandedStorage(
         m_xContext, m_files, m_inputStream, "word", m_allRelAccessMap, m_lastCommit));
     return Reference<embed::XStorage>(const_cast<ExpandedStorage*>(this));
 }
@@ -696,10 +697,10 @@ void ExpandedStorage::commitRelationships()
     auto context = comphelper::getProcessComponentContext();
     for (auto& [path, rels] : *m_allRelAccessMap)
     {
-        SAL_WARN("expandedstorage", "MAYBE Committing relationship info for " << path << " " << rels->m_aRelInfo.getLength());
-        if (path.find(REL_EXT) == std::string::npos) continue;
-        if (!rels || rels->m_aRelInfo.getLength() == 0) continue;
-        SAL_WARN("expandedstorage", "Committing relationship info for " << path << " " << rels->m_aRelInfo.getLength());
+        if (path.find(REL_EXT) == std::string::npos)
+            continue;
+        if (!rels || rels->m_aRelInfo.getLength() == 0)
+            continue;
         uno::Reference<io::XOutputStream> outStream = openOutputStream(OUString::fromUtf8(path));
         comphelper::OFOPXMLHelper::WriteRelationsInfoSequence(outStream, rels->m_aRelInfo, context);
 
@@ -733,7 +734,6 @@ void ExpandedStorage::afterCommit()
     auto ts = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
     m_lastCommit.reset(new Commit(std::move(filesChanged), ts));
-
 }
 
 const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& rSeq,
@@ -786,9 +786,9 @@ void ExpandedStorage::readRelationshipInfo()
     if (it == m_allRelAccessMap->end())
     {
         auto seq = getRelInfoFromName(OUString::fromUtf8(relInfoPath));
-        SAL_WARN("expandedstorage", "setRelationships " << relInfoPath << " "  << seq.getLength());
         it = m_allRelAccessMap
-                 ->insert({ std::move(relInfoPath), std::make_shared<comphelper::RelationshipAccessImpl>() })
+                 ->insert({ std::move(relInfoPath),
+                            std::make_shared<comphelper::RelationshipAccessImpl>() })
                  .first;
         it->second->setRelationships(std::move(seq));
     }

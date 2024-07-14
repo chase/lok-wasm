@@ -1,7 +1,6 @@
-#include "comphelper/ofopxmlhelper.hxx"
+#include <comphelper/ofopxmlhelper.hxx>
 #include <vector>
-#include "comphelper/processfactory.hxx"
-#include "sal/log.hxx"
+#include <comphelper/processfactory.hxx>
 #include <comphelper/relationshipaccess.hxx>
 #include <comphelper/vecstream.hxx>
 #include <com/sun/star/container/NoSuchElementException.hpp>
@@ -136,7 +135,6 @@ void SAL_CALL RelationshipAccessImpl::insertRelationshipByID(
     *pResult = comphelper::containerToSequence(aResult);
 
     m_aRelInfo = aSeq;
-    SAL_WARN("relationshipaccess", "insertRelationshipByID done " << m_aRelInfo.getLength());
 }
 
 Sequence<Sequence<beans::StringPair>>
