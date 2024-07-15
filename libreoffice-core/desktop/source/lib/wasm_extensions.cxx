@@ -388,4 +388,21 @@ std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
         = comphelper::OStorageHelper::GetExpandedStorageInstance()->getRecentlyChangedFiles();
     return files;
 }
+
+std::optional<std::string> WasmDocumentExtension::getCursor(int viewId)
+{
+    if (SfxViewShell* viewShell
+        = SfxViewShell::GetFirst(false, [viewId](const SfxViewShell* shell)
+                                 { return shell->GetViewShellId().get() == viewId; }))
+    {
+        std::optional<OString> payload
+            = viewShell->getLOKPayload(LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR, viewId);
+        if (payload)
+        {
+            return std::string(static_cast<std::string_view>(*payload));
+        }
+    }
+    return {};
+}
+
 }

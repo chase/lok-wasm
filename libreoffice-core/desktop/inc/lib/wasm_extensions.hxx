@@ -114,7 +114,7 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     void removePart(const std::string& path) const;
     std::vector<std::pair<const std::string, const std::string>> listParts() const;
     std::vector<std::pair<std::string, std::string>> save();
-
+    std::optional<std::string> getCursor(int viewId);
 };
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit
