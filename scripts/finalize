@@ -8,23 +8,8 @@ mkdir "$BUILD_DIR" &>/dev/null || true;
 
 cd "$BASE_DIR/libreoffice-core/instdir/program";
 
-if [ "$1" != "no-wasm" ]; then
-echo 'Optimizing WASM...'
-"$BASE_DIR"/emsdk/upstream/bin/wasm-opt \
-  -o "$BUILD_DIR/soffice.wasm" \
-  -O4 \
-  -g \
-  --dce \
-  --remove-unused-names \
-  --enable-simd \
-  --enable-bulk-memory \
-  --enable-exception-handling \
-  --enable-threads \
-  soffice.wasm
-fi
-
 echo 'Copying files...'
-cp ./*.data ./*.mjs ./*.js ./*.d.ts ./*.metadata "$BUILD_DIR"
+cp ./*.wasm ./*.data ./*.mjs ./*.js ./*.d.ts ./*.metadata "$BUILD_DIR"
 
 cd "$BUILD_DIR"
 rm fccache.* fccache_worker.* bindings_uno.* webgl2_draw_image.* || true;

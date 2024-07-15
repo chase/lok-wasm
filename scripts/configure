@@ -5,6 +5,7 @@ set -e
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")" &> /dev/null && pwd)
 
 # Add emscripten toolchain
+export EMSDK_QUIET=1
 source "$SCRIPT_DIR/../emsdk/emsdk_env.sh"
 cd "$SCRIPT_DIR/../libreoffice-core"
 
@@ -19,4 +20,16 @@ if [[ $GCC_VERSION -lt 12 ]]; then
   fi
 fi
 
-./autogen.sh --with-distro=CPWASM-LOKit $BUILD_CC $BUILD_CXX
+BUILD_TYPE=
+if [[ "$1" == "dev" ]]; then
+  echo "Configuring dev build"
+  echo
+  BUILD_TYPE=--enable-optimized=debug
+fi
+if [[ "$1" == "debug" ]]; then
+  echo "Configuring debug build"
+  echo
+  BUILD_TYPE=--enable-optimized=no
+fi
+
+./autogen.sh --with-distro=CPWASM-LOKit $BUILD_CC $BUILD_CXX $BUILD_TYPE

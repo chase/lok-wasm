@@ -24,7 +24,7 @@ gb_EMSCRIPTEN_CPPFLAGS := -pthread -s USE_PTHREADS=1 -D_LARGEFILE64_SOURCE -D_LA
 gb_EMSCRIPTEN_LDFLAGS := $(gb_EMSCRIPTEN_CPPFLAGS)
 
 # Initial memory size and worker thread pool
-gb_EMSCRIPTEN_LDFLAGS += -s INITIAL_MEMORY=2GB -s PTHREAD_POOL_SIZE=6
+gb_EMSCRIPTEN_LDFLAGS += -s INITIAL_MEMORY=2GB
 
 # To keep the link time (and memory) down, prevent all rewriting options from wasm-emscripten-finalize
 # See emscripten.py, finalize_wasm, modify_wasm = True
@@ -75,12 +75,13 @@ ifeq ($(HAVE_EXTERNAL_DWARF),TRUE)
 gb_DEBUGINFO_FLAGS += -gseparate-dwarf
 endif
 
-gb_COMPILEROPTFLAGS := -O3
+gb_COMPILEROPTFLAGS := -O3 -Wl,-O4 --profiling -s PTHREAD_POOL_SIZE=3
 
 # We need at least code elimination, otherwise linking OOMs even with 64GB.
-# So we "fake" -Og support to mean -O1 for Emscripten and always enable it for debug in configure.
-gb_COMPILERDEBUGOPTFLAGS := -O1
-gb_COMPILERNOOPTFLAGS := -O1 -fstrict-aliasing -fstrict-overflow
+# Debug opt flags means "development" mode
+gb_COMPILERDEBUGOPTFLAGS := -O3 -Wl,-O1 --profiling -s PTHREAD_POOL_SIZE=3
+# No opt flags means "debug" mode
+gb_COMPILERNOOPTFLAGS := -O1 -fstrict-aliasing -fstrict-overflow --profiling -s PTHREAD_POOL_SIZE=1 -g -gsplit-dwarf -gpubnames
 
 # cleanup addition JS and wasm files for binaries
 define gb_Executable_Executable_platform
@@ -88,6 +89,7 @@ $(call gb_LinkTarget_add_auxtargets,$(2),\
         $(patsubst %.lib,%.linkdeps,$(3)) \
         $(patsubst %.lib,%.wasm,$(3)) \
         $(patsubst %.lib,%.worker.mjs,$(3)) \
+        $(patsubst %.lib,%.wasm.dwp,$(3)) \
 )
 
 $(foreach pre_js,$(gb_EMSCRIPTEN_PRE_JS_FILES),$(call gb_Executable_add_prejs,$(1),$(pre_js)))
@@ -99,6 +101,7 @@ $(call gb_LinkTarget_add_auxtargets,$(2),\
         $(patsubst %.lib,%.linkdeps,$(3)) \
         $(patsubst %.lib,%.wasm,$(3)) \
         $(patsubst %.lib,%.worker.mjs,$(3)) \
+        $(patsubst %.lib,%.wasm.dwp,$(3)) \
 )
 
 $(foreach pre_js,$(gb_EMSCRIPTEN_PRE_JS_FILES),$(call gb_CppunitTest_add_prejs,$(1),$(pre_js)))

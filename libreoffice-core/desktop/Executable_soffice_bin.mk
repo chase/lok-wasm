@@ -91,7 +91,6 @@ $(eval $(call gb_Library_use_custom_headers,soffice_bin,\
 # See: https://github.com/emscripten-core/emscripten/blob/main/src/settings.js
 $(eval $(call gb_Executable_add_ldflags,soffice_bin,\
     --pre-js $(SRCDIR)/desktop/wasm/pre-js.js \
-    --profiling \
     -lworkerfs.js -s MODULARIZE=1 -s EXPORT_NAME=LOK -s EXPORT_ES6=1 -s ENVIRONMENT=worker --no-entry \
 ))
 

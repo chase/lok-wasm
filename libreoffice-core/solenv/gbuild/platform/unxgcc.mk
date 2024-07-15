@@ -170,6 +170,7 @@ $(call gb_Helper_abbreviate_dirs,\
                 ) \
 		-o $(1) \
 	$(if $(SOVERSIONSCRIPT),&& ln -sf ../../program/$(notdir $(1)) $(ILIBTARGET)) \
+	$(if $(filter EMSCRIPTEN,$(OS)),$(if $(ENABLE_OPTIMIZED),,$(if $(ENABLE_OPTIMIZED_DEBUG),,&& emdwp -e $(patsubst %.html,%.wasm,$(1)) -o $(patsubst %.html,%.wasm.dwp,$(1))))) \
 	$(if $(call gb_LinkTarget__WantLock,$(2)),; RC=$$? ; rm -f $(gb_LinkTarget__Lock); if test $$RC -ne 0; then exit $$RC; fi))
 
 $(if $(filter Library,$(TARGETTYPE)), $(call gb_Helper_abbreviate_dirs,\

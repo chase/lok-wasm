@@ -141,7 +141,7 @@ jobs:
         export CCACHE_COMPRESSLEVEL=6
         export CCACHE_MAXSIZE=5G
         (cd libreoffice-core/desktop/wasm && npm install --loglevel=error)
-        ./scripts/configure && ./scripts/build
+        ./scripts/configure dev && ./scripts/build
 
     - name: Cache external tarballs
       uses: runs-on/cache/save@v4
