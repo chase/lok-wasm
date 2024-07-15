@@ -378,6 +378,9 @@ std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
     // TODO: @synoet it shouldn't be necessary to commit relationships seperately
     // from the implCommit call from save. But there is some funky behavior going on
     // with relationship ptr's not existing if called from within save.
+    // Accessing the relationship access for the document.xml.rels file's shared_ptr shows
+    // up as a nullptr, even though in previous and later method invocations it is a valid pointer
+    // even within the same expanded storage instance.
     // Investigate more post Aug 1st.
     comphelper::OStorageHelper::GetExpandedStorageInstance()->commitRelationships();
 

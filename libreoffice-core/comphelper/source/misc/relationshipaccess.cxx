@@ -212,6 +212,6 @@ Sequence<beans::StringPair>
 
 Sequence<Sequence<beans::StringPair>> SAL_CALL RelationshipAccessImpl::getAllRelationships()
 {
-    return *new RelInfoSeq(m_aRelInfo);
+    return m_aRelInfo;
 }
 }

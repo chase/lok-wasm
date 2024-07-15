@@ -348,8 +348,7 @@ ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpen
                      .first;
 
             streamSupplier->setRelationshipAccess(it->second);
-            comphelper::RelInfoSeq relInfo;
-            it->second->setRelationships(seq.has_value() ? std::move(seq.value()) : relInfo);
+            it->second->setRelationships(seq.has_value() ? std::move(seq.value()) : comphelper::RelInfoSeq());
         }
         else
         {
@@ -647,8 +646,6 @@ bool ExpandedStorage::implIsStorage() const { return true; }
 
 Reference<embed::XStorage> ExpandedStorage::implGetXStorage() const
 {
-    return uno::Reference<embed::XStorage>(new ExpandedStorage(
-        m_xContext, m_files, m_inputStream, "word", m_allRelAccessMap, m_lastCommit));
     return Reference<embed::XStorage>(const_cast<ExpandedStorage*>(this));
 }
 

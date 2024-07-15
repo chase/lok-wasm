@@ -1640,7 +1640,6 @@ uno::Reference< io::XInputStream > OStorage_Impl::GetRelInfoStreamForName(
 
 void OStorage_Impl::CommitRelInfo( const uno::Reference< container::XNameContainer >& xNewPackageFolder )
 {
-    SAL_WARN("package.xstor", "Commiting Relationship info");
     // this method should be used only in OStorage_Impl::Commit() method
     OUString aRelsStorName("_rels");
 
