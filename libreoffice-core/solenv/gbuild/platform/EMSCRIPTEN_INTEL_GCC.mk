@@ -58,9 +58,27 @@ endif
 
 gb_LinkTarget_CFLAGS += $(gb_EMSCRIPTEN_CPPFLAGS) -Wno-c99-compat 
 gb_LinkTarget_CXXFLAGS += $(gb_EMSCRIPTEN_CPPFLAGS) $(gb_EMSCRIPTEN_EXCEPT)
+
 ifeq ($(ENABLE_QT5),TRUE)
 gb_LinkTarget_CFLAGS += $(gb_EMSCRIPTEN_QTDEFS)
 gb_LinkTarget_CXXFLAGS += $(gb_EMSCRIPTEN_QTDEFS)
+endif
+
+# Linking is really expensive, so split based on prod/dev/debug modes
+# Prod (default) mode
+ifeq ($(ENABLE_OPTIMIZED),TRUE)
+gb_LinkTarget_CXXFLAGS += -O3 --profiling
+gb_LinkTarget_LDFLAGS += -s PTHREAD_POOL_SIZE=3 -O4
+else
+# Dev mode
+ifeq ($(ENABLE_OPTIMIZED_DEBUG),TRUE)
+gb_LinkTarget_CXXFLAGS += -O3 --profiling
+gb_LinkTarget_LDFLAGS += -s PTHREAD_POOL_SIZE=3 -O1
+else
+# Debug mode
+gb_LinkTarget_CXXFLAGS += -O1 -g -fstrict-aliasing -fstrict-overflow
+gb_LinkTarget_LDFLAGS += -g -gsplit-dwarf -gpubnames -s PTHREAD_POOL_SIZE=1
+endif
 endif
 gb_LinkTarget_LDFLAGS += $(gb_EMSCRIPTEN_LDFLAGS) $(gb_EMSCRIPTEN_CPPFLAGS) $(gb_EMSCRIPTEN_EXCEPT)
 
@@ -75,13 +93,11 @@ ifeq ($(HAVE_EXTERNAL_DWARF),TRUE)
 gb_DEBUGINFO_FLAGS += -gseparate-dwarf
 endif
 
-gb_COMPILEROPTFLAGS := -O3 -Wl,-O4 --profiling -s PTHREAD_POOL_SIZE=3
+gb_COMPILEROPTFLAGS :=
 
-# We need at least code elimination, otherwise linking OOMs even with 64GB.
-# Debug opt flags means "development" mode
-gb_COMPILERDEBUGOPTFLAGS := -O3 -Wl,-O1 --profiling -s PTHREAD_POOL_SIZE=3
+gb_COMPILERDEBUGOPTFLAGS :=
 # No opt flags means "debug" mode
-gb_COMPILERNOOPTFLAGS := -O1 -fstrict-aliasing -fstrict-overflow --profiling -s PTHREAD_POOL_SIZE=1 -g -gsplit-dwarf -gpubnames
+gb_COMPILERNOOPTFLAGS :=
 
 # cleanup addition JS and wasm files for binaries
 define gb_Executable_Executable_platform
