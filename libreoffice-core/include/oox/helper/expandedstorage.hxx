@@ -52,6 +52,11 @@ class XComponentContext;
 }
 }
 
+namespace comphelper
+{
+class VecStreamSupplier;
+}
+
 using namespace com::sun::star;
 
 namespace oox
@@ -64,11 +69,13 @@ struct ExpandedFile
     const OUString path;
     std::shared_ptr<ShaVec> sha;
     std::shared_ptr<std::vector<sal_Int8>> content;
+    // Track the number of opened output streams for the content in the file;
+    sal_Int32 writeRefCount;
 
     ExpandedFile(const OUString& path_, const std::vector<sal_Int8>&& content_, const ShaVec&& sha_)
         : path(path_)
         , sha(std::make_shared<ShaVec>(std::move(sha_)))
-        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))){};
+        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))) {};
 };
 
 typedef boost::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
@@ -85,7 +92,9 @@ struct Commit
 
     Commit(std::vector<std::pair<std::string, std::string>> filesChanged_, std::time_t timestamp_)
         : filesChanged(filesChanged_)
-        , timestamp(timestamp_) {}
+        , timestamp(timestamp_)
+    {
+    }
 };
 
 class ExpandedStorage final : public css::lang::XTypeProvider,
@@ -96,7 +105,10 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
                               public cppu::OWeakObject,
                               public StorageBase
 {
-    comphelper::RelationshipAccessImpl m_relAccess;
+    std::shared_ptr<comphelper::RelationshipAccessImpl> m_relAccess;
+    std::shared_ptr<
+        boost::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
+        m_allRelAccessMap;
     std::shared_ptr<ExpandedFileMap> m_files;
     std::shared_ptr<Commit> m_lastCommit;
     std::vector<OUString> m_dirs;
@@ -111,13 +123,14 @@ public:
     ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
                     const css::uno::Reference<css::io::XInputStream>& rxStream);
     // Constructor for creating a sub storage
-    ExpandedStorage(const css::uno::Reference<css::uno::XComponentContext>& rxContext,
-                    const std::shared_ptr<ExpandedFileMap>& fileMap,
-                    const css::uno::Reference<io::XInputStream>& rxInputStream,
-                    const OUString& basePath,
-                    css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo,
-                    std::shared_ptr<Commit> lastCommit
-                    );
+    ExpandedStorage(
+        const css::uno::Reference<css::uno::XComponentContext>& rxContext,
+        const std::shared_ptr<ExpandedFileMap>& fileMap,
+        const css::uno::Reference<io::XInputStream>& rxInputStream, const OUString& basePath,
+        std::shared_ptr<
+            boost::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
+            allRelAccessMap,
+        std::shared_ptr<Commit> lastCommit);
 
     ExpandedStorage(const ExpandedStorage&) = delete;
     ExpandedStorage(ExpandedStorage&&) = delete;
@@ -134,6 +147,8 @@ public:
 
     void afterCommit();
 
+    void commitRelationships();
+
     std::vector<std::pair<std::string, std::string>> getRecentlyChangedFiles();
 
     void disposeImpl(std::unique_lock<std::mutex>& rGuard);
@@ -145,6 +160,10 @@ public:
     OUString getFullPath(const OUString& path) const;
     uno::Reference<io::XStream> openStreamElement(const OUString& name, sal_Int32 openMode,
                                                   PathType pathType, bool readRelInfo = true);
+
+    uno::Reference<comphelper::VecStreamSupplier>
+    openStreamElementSupplier(const OUString& name, sal_Int32 openMode, PathType pathType,
+                              bool readRelInfo = true);
 
     // XInterface
     virtual css::uno::Any SAL_CALL queryInterface(const css::uno::Type& rType) override;
@@ -257,63 +276,66 @@ public:
     virtual css::uno::Reference<css::io::XInputStream>
     openInputStream(const OUString& rStreamName) override;
 
+    virtual css::uno::Reference<css::io::XOutputStream>
+    openOutputStream(const OUString& rStreamName) override;
+
     /** Commits the current storage. */
     virtual void implCommit() const override;
 
     /* // XRelationshipAccess */
     virtual sal_Bool SAL_CALL hasByID(const OUString& sID) override
     {
-        return m_relAccess.hasByID(sID);
+        return m_relAccess->hasByID(sID);
     }
 
     virtual OUString SAL_CALL getTargetByID(const OUString& sID) override
     {
-        return m_relAccess.getTargetByID(sID);
+        return m_relAccess->getTargetByID(sID);
     }
 
     virtual OUString SAL_CALL getTypeByID(const OUString& sID) override
     {
-        return m_relAccess.getTypeByID(sID);
+        return m_relAccess->getTypeByID(sID);
     }
 
     virtual css::uno::Sequence<css::beans::StringPair>
         SAL_CALL getRelationshipByID(const OUString& sID) override
     {
-        return m_relAccess.getRelationshipByID(sID);
+        return m_relAccess->getRelationshipByID(sID);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getRelationshipsByType(const OUString& sType) override
     {
-        return m_relAccess.getRelationshipsByType(sType);
+        return m_relAccess->getRelationshipsByType(sType);
     }
 
     virtual css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>
         SAL_CALL getAllRelationships() override
     {
-        return m_relAccess.getAllRelationships();
+        return m_relAccess->getAllRelationships();
     }
 
     virtual void SAL_CALL insertRelationshipByID(
         const OUString& sID, const css::uno::Sequence<css::beans::StringPair>& aEntry,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationshipByID(sID, aEntry, bReplace);
+        m_relAccess->insertRelationshipByID(sID, aEntry, bReplace);
     }
 
     virtual void SAL_CALL removeRelationshipByID(const OUString& sID) override
     {
-        m_relAccess.removeRelationshipByID(sID);
+        m_relAccess->removeRelationshipByID(sID);
     }
 
     virtual void SAL_CALL insertRelationships(
         const css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>>& aEntries,
         sal_Bool bReplace) override
     {
-        m_relAccess.insertRelationships(aEntries, bReplace);
+        m_relAccess->insertRelationships(aEntries, bReplace);
     }
 
-    virtual void SAL_CALL clearRelationships() override { m_relAccess.clearRelationships(); }
+    virtual void SAL_CALL clearRelationships() override { m_relAccess->clearRelationships(); }
 };
 
 } // namespace oox

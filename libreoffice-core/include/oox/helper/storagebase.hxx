@@ -117,7 +117,7 @@ public:
             stream access has been enabled in the constructor, the base stream
             can be accessed by passing an empty string as stream name.
      */
-    css::uno::Reference< css::io::XOutputStream >
+    virtual css::uno::Reference< css::io::XOutputStream >
                         openOutputStream( const OUString& rStreamName );
 
     /** Copies the specified element from this storage to the passed

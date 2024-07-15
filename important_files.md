@@ -25,4 +25,11 @@ The LibreOffice "core" from which LOK is built, forked from upstream with propri
 [`desktop/inc/lib/init.hxx`](./libreoffice-core/desktop/inc/lib/init.hxx) 
 [`desktop/source/lib/init.cxx`](./libreoffice-core/desktop/source/lib/init.cxx) - the implementation for the original LOK bindings, don't add new things here or in `LibreOfficeKit.hxx/h`
 
+
+#### Expanded Storage
+[`libreoffice-core/oox/source/helper/expandedstorage.cxx`](./libreoffice-core/oox/source/helper/expandedstorage.cxx) - ExpandedStorage implementation that allows for loading/saving docx files in memory using their expanded parts  
+[`libreoffice-core/comphelper/source/misc/relationshipaccess.cxx`](./libreoffice-core/comphelper/source/misc/relationshipaccess.cxx) - relationship access for file streams in expanded storage  
+[`libreoffice-core/comphelper/source/streaming/vecstream.cxx`](./libreoffice-core/comphelper/source/streaming/vecstream.cxx) - implementation for vector input/output streams used in expanded storage  
+
+
 ## `qa-env`

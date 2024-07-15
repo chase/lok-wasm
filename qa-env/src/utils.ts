@@ -27,3 +27,13 @@ export async function unzipDocxFile(blob: Blob): Promise<Array<{path: string, co
 
   return files;
 }
+
+export async function zipDocxFile(parts: Array<{path: string, content: ArrayBuffer}>): Promise<Blob> {
+  const zip = new JsZip();
+
+  for (let part of parts) {
+    zip.file(part.path, part.content);
+  }
+
+  return await zip.generateAsync({type: 'blob'});
+}
