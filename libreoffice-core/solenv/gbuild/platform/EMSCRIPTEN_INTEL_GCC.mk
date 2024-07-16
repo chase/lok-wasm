@@ -20,7 +20,7 @@ gb_EMSCRIPTEN_PRE_JS_FILES = \
 
 gb_RUN_CONFIGURE := $(SRCDIR)/solenv/bin/run-configure
 # avoid -s SAFE_HEAP=1 - c.f. gh#8584 this breaks source maps
-gb_EMSCRIPTEN_CPPFLAGS := -pthread -s USE_PTHREADS=1 -D_LARGEFILE64_SOURCE -D_LARGEFILE_SOURCE -mbulk-memory
+gb_EMSCRIPTEN_CPPFLAGS := -pthread -s USE_PTHREADS=1 -D_LARGEFILE64_SOURCE -D_LARGEFILE_SOURCE -mbulk-memory -msimd128 -msse4.2 -msse4.1 -mssse3 -msse3 -msse2 -msse
 gb_EMSCRIPTEN_LDFLAGS := $(gb_EMSCRIPTEN_CPPFLAGS)
 
 # Initial memory size and worker thread pool
@@ -67,17 +67,20 @@ endif
 # Linking is really expensive, so split based on prod/dev/debug modes
 # Prod (default) mode
 ifeq ($(ENABLE_OPTIMIZED),TRUE)
-gb_LinkTarget_CXXFLAGS += -O3 --profiling
-gb_LinkTarget_LDFLAGS += -s PTHREAD_POOL_SIZE=3 -O4
+gb_CXXFLAGS += -O3 --profiling -g2
+gb_LinkTarget_CXXFLAGS += -O3 --profiling -g2
+gb_LinkTarget_LDFLAGS += -s PTHREAD_POOL_SIZE=3 -O3 -s BINARYEN_EXTRA_PASSES=-O4 --profiling -g2
 else
 # Dev mode
 ifeq ($(ENABLE_OPTIMIZED_DEBUG),TRUE)
-gb_LinkTarget_CXXFLAGS += -O3 --profiling
-gb_LinkTarget_LDFLAGS += -s PTHREAD_POOL_SIZE=3 -O1
+gb_CXXFLAGS += -O3 --profiling -g2
+gb_LinkTarget_CXXFLAGS += -O3 --profiling -g2
+gb_LinkTarget_LDFLAGS += -s PTHREAD_POOL_SIZE=3 -s REVERSE_DEPS=all -O1 --profiling -g
 else
 # Debug mode
-gb_LinkTarget_CXXFLAGS += -O1 -g -fstrict-aliasing -fstrict-overflow
-gb_LinkTarget_LDFLAGS += -g -gsplit-dwarf -gpubnames -s PTHREAD_POOL_SIZE=1
+gb_CXXFLAGS += -O1 -g -gsplit-dwarf -gpubnames -gdwarf-5
+gb_LinkTarget_CXXFLAGS += -O1 -g -gsplit-dwarf -gpubnames -gdwarf-5
+gb_LinkTarget_LDFLAGS += -O1 -g -gsplit-dwarf -gpubnames -s PTHREAD_POOL_SIZE=1 -s REVERSE_DEPS=all -s ERROR_ON_WASM_CHANGES_AFTER_LINK
 endif
 endif
 gb_LinkTarget_LDFLAGS += $(gb_EMSCRIPTEN_LDFLAGS) $(gb_EMSCRIPTEN_CPPFLAGS) $(gb_EMSCRIPTEN_EXCEPT)
@@ -93,11 +96,11 @@ ifeq ($(HAVE_EXTERNAL_DWARF),TRUE)
 gb_DEBUGINFO_FLAGS += -gseparate-dwarf
 endif
 
-gb_COMPILEROPTFLAGS :=
+gb_COMPILEROPTFLAGS := -O3
 
-gb_COMPILERDEBUGOPTFLAGS :=
+gb_COMPILERDEBUGOPTFLAGS := -O1
 # No opt flags means "debug" mode
-gb_COMPILERNOOPTFLAGS :=
+gb_COMPILERNOOPTFLAGS := -O1 -g
 
 # cleanup addition JS and wasm files for binaries
 define gb_Executable_Executable_platform

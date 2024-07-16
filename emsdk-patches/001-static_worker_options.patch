@@ -1,0 +1,49 @@
+diff --git a/./upstream/emscripten/src/library_pthread.js b/./upstream/emscripten/src/library_pthread.js
+index 79ec001..85d60a1 100644
+--- a/./upstream/emscripten/src/library_pthread.js
++++ b/./upstream/emscripten/src/library_pthread.js
+@@ -421,21 +421,6 @@ var LibraryPThread = {
+     // Creates a new web Worker and places it in the unused worker pool to wait for its use.
+     allocateUnusedWorker() {
+       var worker;
+-      var workerOptions = {
+-#if EXPORT_ES6
+-        'type': 'module',
+-#endif
+-#if ENVIRONMENT_MAY_BE_NODE
+-        // This is the way that we signal to the node worker that it is hosting
+-        // a pthread.
+-        'workerData': 'em-pthread',
+-#endif
+-#if ENVIRONMENT_MAY_BE_WEB || ENVIRONMENT_MAY_BE_WORKER
+-        // This is the way that we signal to the Web Worker that it is hosting
+-        // a pthread.
+-        'name': 'em-pthread',
+-#endif
+-      };
+ #if EXPORT_ES6 && USE_ES6_IMPORT_META
+       // If we're using module output, use bundler-friendly pattern.
+ #if PTHREADS_DEBUG
+@@ -457,7 +442,21 @@ var LibraryPThread = {
+       // instead of just using new URL(import.meta.url) because bundler's only recognize
+       // the first case in their bundling step. The latter ends up producing an invalid
+       // URL to import from the server (e.g., for webpack the file:// path).
+-      worker = new Worker(new URL('{{{ TARGET_JS_NAME }}}', import.meta.url), workerOptions);
++      worker = new Worker(new URL('{{{ TARGET_JS_NAME }}}', import.meta.url), {
++#if EXPORT_ES6
++        'type': 'module',
++#endif
++#if ENVIRONMENT_MAY_BE_NODE
++        // This is the way that we signal to the node worker that it is hosting
++        // a pthread.
++        'workerData': 'em-pthread',
++#endif
++#if ENVIRONMENT_MAY_BE_WEB || ENVIRONMENT_MAY_BE_WORKER
++        // This is the way that we signal to the Web Worker that it is hosting
++        // a pthread.
++        'name': 'em-pthread',
++#endif
++      });
+ #else
+       var pthreadMainJs = _scriptName;
+ #if expectToReceiveOnModule('mainScriptUrlOrBlob')
