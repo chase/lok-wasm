@@ -25,9 +25,9 @@ import { getOrCreateDPISignal } from './twipConversion';
 
 // These give us good scaling behavior until the render actually finishes
 /** Cover on Zoom In, will stretch the image to fit as the canvas size changes */
-const ZOOM_IN_CANVAS_FIT = 'contain';
-/** Contain on Zoom Out, squeezes the image to fit as the canvas size changes */
-const ZOOM_OUT_CANVAS_FIT = 'contain';
+const ZOOM_IN_CANVAS_FIT = 'cover';
+/** Contain on Zoom Out and after Zoom In, squeezes the image to fit as the canvas size changes */
+const CANVAS_FIT = 'contain';
 const OBSERVED_SIZE_DEBOUNCE = 100; //ms
 
 const BORDER_WIDTH = 1;
@@ -115,6 +115,7 @@ export function OfficeDocument(props: Props) {
   const [canvas0, setCanvas0] = createSignal<HTMLCanvasElement | undefined>();
   const [canvas1, setCanvas1] = createSignal<HTMLCanvasElement | undefined>();
   let activeCanvas = 0;
+  let canvasSwitchLock = false;
 
   const cursorType = createDocEventSignal(
     () => props.doc,
@@ -159,20 +160,31 @@ export function OfficeDocument(props: Props) {
 
   const [getZoom] = getOrCreateZoomSignal(() => props.doc);
 
-  const didZoomOut = createMemo(
+  const didZoomIn = createMemo(
     on(
       getZoom,
       (zoom, lastZoom) => {
-        return lastZoom != null && zoom < lastZoom;
+        return lastZoom != null && zoom > lastZoom;
       },
       { defer: true }
     ),
     false
   );
 
+  // resets the object fit to 'contain' so that it isn't blurry after the
+  // paint for zooming in is finished
+  createEffect(() => {
+    props.doc.afterIdle(() => {
+      if (didZoomIn()) {
+        canvas0()!.style.objectFit = CANVAS_FIT;
+        canvas1()!.style.objectFit = CANVAS_FIT;
+      }
+    });
+  });
+
   onCleanup(() => {
     props.doc.stopRendering();
-  })
+  });
 
   createEffect(async () => {
     if (didInitialRender.has(props.doc)) return;
@@ -191,16 +203,12 @@ export function OfficeDocument(props: Props) {
     canvas0_.height = scaledHeight;
     canvas1_.width = scaledWidth;
     canvas1_.height = scaledHeight;
-    await props.doc.startRendering(
-      [
-        canvas0_.transferControlToOffscreen(),
-        canvas1_.transferControlToOffscreen(),
-      ],
-      256,
-      zoom,
-      dpi
-    );
+    const canvases = [
+      canvas0_.transferControlToOffscreen(),
+      canvas1_.transferControlToOffscreen(),
+    ];
     didInitialRender.add(props.doc);
+    await props.doc.startRendering(canvases, 256, zoom, dpi);
   });
 
   const [focused, setFocused] = getOrCreateFocusedSignal(() => props.doc);
@@ -238,29 +246,38 @@ export function OfficeDocument(props: Props) {
     )
   );
 
-  const handleScroll = frameThrottle(async (yPx, xPx) => {
+  const handleScroll = async (yPx: number, xPx: number) => {
     setScrollPos({ x: xPx, y: yPx });
-    handleScroll.cancel();
     const c0 = canvas0();
     const c1 = canvas1();
     if (!c0 || !c1) return;
     const previousCanvas = activeCanvas;
-    activeCanvas = await props.doc.setScrollTop(yPx);
     const dpi = getOrCreateDPISignal();
+    const scaledTileDim = TILE_DIM_PX / dpi();
+    // because this function is async, scroll events have a race condition that can cause flickering
+    // if switching the canvas isn't explicitly blocked until an ongoing setScrollTop resolves
+    if (canvasSwitchLock) {
+      // during the lock, the old active canvas is still displayed until the previous setScrollTop resolves
+      const c = activeCanvas === 0 ? c1 : c0;
+      c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % scaledTileDim}px, 0)`;
+      return;
+    }
+    canvasSwitchLock = true;
+    activeCanvas = await props.doc.setScrollTop(yPx);
+    canvasSwitchLock = false;
+
     const c = activeCanvas === 0 ? c0 : c1;
-    c.style.willChange = 'transform';
-    // yPx is technically in css pixels, but it is referring to the position 
+    // xPx/yPx is technically in css pixels, but it is referring to the position
     // of the document rendered on the canvas which is in physical pixels
     // so the offset should be scaled down aswell.
-    const scaledTileDim = TILE_DIM_PX / dpi();
-    c.style.transform = `translate3d(-${xPx}px, -${(Math.floor(yPx) % (scaledTileDim))}px, 0)`;
-    c.style.willChange = '';
+    c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % scaledTileDim}px, 0)`;
     if (previousCanvas !== activeCanvas) {
-      c.style.display = '';
+      const c = activeCanvas === 0 ? c0 : c1;
+      c.style.display = 'block';
       const priorC = previousCanvas === 0 ? c0 : c1;
       priorC.style.display = 'none';
     }
-  });
+  };
 
   return (
     <>
@@ -274,23 +291,20 @@ export function OfficeDocument(props: Props) {
               ref={setCanvas0}
               class="absolute top-0 pointer-events-none"
               style={{
-                'object-fit': didZoomOut()
-                  ? ZOOM_OUT_CANVAS_FIT
-                  : ZOOM_IN_CANVAS_FIT,
+                'object-fit': didZoomIn() ? ZOOM_IN_CANVAS_FIT : CANVAS_FIT,
                 'object-position': 'top center',
                 'image-rendering': 'crisp-edges',
                 'transform-origin': 'top center',
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()!}px`,
+                display: 'block',
               }}
             />
             <canvas
               ref={setCanvas1}
               class="absolute top-0 pointer-events-none"
               style={{
-                'object-fit': didZoomOut()
-                  ? ZOOM_OUT_CANVAS_FIT
-                  : ZOOM_IN_CANVAS_FIT,
+                'object-fit': didZoomIn() ? ZOOM_IN_CANVAS_FIT : CANVAS_FIT,
                 'object-position': 'top center',
                 'image-rendering': 'crisp-edges',
                 'transform-origin': 'top center',

@@ -64,14 +64,18 @@ let scheduledWidthPx: number = -1;
 let scheduledHeightPx: number = -1;
 let renderedTileTop: number = 0;
 let didScroll = false;
+let missingRanges: TileIndexRange[] = [];
+let firstPaint = true;
+let ignorePostPaint = false;
 
 const visibleInvalidations: Rect[] = [];
 const nonVisibleInvalidations: Rect[] = [];
 
 let pendingStateChange = false;
 let running = false;
-let idleAreaPaint = false;
 let zoomResetTimeout: number | undefined;
+
+let ignorePostPaintTimeout: ReturnType<typeof setTimeout>;
 
 onmessage = ({ data }: { data: ToTileRenderer }) => {
   switch (data.t) {
@@ -80,19 +84,28 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 's': // scroll
       if (!activeCanvas) return;
-      idleAreaPaint = false;
 
       // even though technically data.y is in css pixels
       // we need to treat it as physical pixels because
       // it represents the amount we have scrolled through the canvas
       // document which is rendered in physical pixels
       scheduledTopTwips = pxToTwips(data.y);
+      ignorePostPaint = true;
+      if (ignorePostPaintTimeout) clearTimeout(ignorePostPaintTimeout);
+      ignorePostPaintTimeout = setTimeout(() => {
+        ignorePostPaint = false;
+      }, 60);
 
       // Checks that the tile row has changed since the last scroll
-      if (Math.floor(scheduledTopTwips / tileDimTwips) !== renderedTileTop) {
+      const newTop = Math.floor(scheduledTopTwips / tileDimTwips);
+      if (newTop !== renderedTileTop) {
         didScroll = true;
+        const oldCanvas = canvases[activeCanvasIndex];
         activeCanvasIndex ^= 1;
         activeCanvas = canvases[activeCanvasIndex];
+        activeCanvas
+          .getContext('2d')
+          .drawImage(oldCanvas, 0, newTop - renderedTileTop);
         ctx = getContext(activeCanvas);
         setState(RenderState.IDLE);
         if (!running) stateMachine();
@@ -102,7 +115,6 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       break;
     case 'r': // resize
       if (!activeCanvas) return;
-      idleAreaPaint = false;
       scheduledHeightPx = cssPxToPx(data.h, dpi);
       scheduledHeightTwips = pxToTwips(data.h);
       setState(RenderState.IDLE);
@@ -113,7 +125,12 @@ onmessage = ({ data }: { data: ToTileRenderer }) => {
       // Clear the previously scheduled zoom reset
       if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
 
-      idleAreaPaint = false;
+      ignorePostPaint = true;
+      if (ignorePostPaintTimeout) clearTimeout(ignorePostPaintTimeout);
+      ignorePostPaintTimeout = setTimeout(() => {
+        ignorePostPaint = false;
+      }, 60);
+
       zoom(data.s, data.d);
 
       // Ensure we debounce a reset in combination with shouldStopPaint
@@ -213,7 +230,28 @@ function idle() {
   const visibleHeight = scheduledHeightTwips;
   let needsRender = false;
 
-  if (Atomics.load(d.pendingFullPaint, 0) === 1) {
+  if (missingRanges.length !== 0) {
+    const visibleRanges = rectToTileIndexRanges([
+      0,
+      visibleTop,
+      docWidthTwips,
+      visibleHeight,
+    ]);
+    const visibleStart = visibleRanges.at(0)[0];
+    const visibleEnd = visibleRanges.at(-1)[1];
+    const rangesToPaint = missingRanges.filter(
+      ([start, end]) => start >= visibleStart && end <= visibleEnd
+    );
+    missingRanges.length = 0;
+    for (let y = 0; y < rangesToPaint.length; ++y) {
+      const [start, endInclusive] = rangesToPaint[y];
+      for (let x = start; x <= endInclusive; ++x) {
+        visibleRingTiles.add(blockingPaintTile(x));
+      }
+    }
+
+    needsRender = true;
+  } else if (Atomics.load(d.pendingFullPaint, 0) === 1) {
     // clear invalidations, because the whole area will be repainted
     visibleInvalidations.length = 0;
     nonVisibleInvalidations.length = 0;
@@ -351,12 +389,11 @@ function rendering() {
   for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
     const [start, endInclusive] = rangesToRender[y];
     for (let x = start; x <= endInclusive; ++x) {
-      // TODO: mark missing and invalidate
       const [xCoord] = tileIndexToGridCoord(x);
       const img: ImageData = tileRing.get(tileIndexToTileRingIndex.get(x));
       if (!img) {
-        console.error('missing texture at ', x, xCoord, y);
-        continue;
+        missingRanges.push(rangesToRender[y]);
+        break;
       }
       const dstX: number = xCoord * d.tileSize;
       const dstY: number = y * d.tileSize;
@@ -376,15 +413,21 @@ function rendering() {
       ctx.closePath();
     }
   }
+  if (missingRanges.length !== 0) {
+    setState(RenderState.IDLE);
+    return;
+  }
 
   Atomics.store(d.pendingFullPaint, 0, 0);
 
+  postPaint();
   setState(RenderState.IDLE);
   if (didScroll) {
     renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
     postMessage({ s: activeCanvasIndex });
     didScroll = false;
   }
+  firstPaint = false;
 }
 
 let pendingInvalidate: boolean;
@@ -401,6 +444,7 @@ const afterInvalidate: () => Promise<boolean> = Atomics.waitAsync
         });
       }
       pendingInvalidate = false;
+      if (missingRanges.length !== 0) return Promise.resolve(true);
       return Promise.resolve(false);
     }
   : /** FireFox polyfill or other cases where Atomics.waitAsync doesn't exist  */
@@ -471,7 +515,7 @@ const postIdle = throttle(() => {
 });
 
 const postPaint = throttle(() => {
-  postMessage({ paint: true });
+  if (!ignorePostPaint) postMessage({ paint: true });
 });
 
 let idleDebounceTimeout: number;
@@ -497,10 +541,8 @@ function stateMachine() {
         self.close();
     }
   }
-  idleAreaPaint = true;
   if (!pendingInvalidate) {
     afterInvalidate().then((shouldRun) => {
-      idleAreaPaint = false;
       pendingStateChange ||= shouldRun;
       if (shouldRun && !running) {
         stateMachine();
@@ -509,51 +551,9 @@ function stateMachine() {
     if (idleDebounceTimeout) clearTimeout(idleDebounceTimeout);
   }
   running = false;
-  idleDebounceTimeout = setTimeout(
-    paintNonVisibleAreasWhileIdle,
-    Math.max(trimmedMean(paintTimes), 10)
-  );
   if (lowPriorityIdleDebounceTimeout)
     clearTimeout(lowPriorityIdleDebounceTimeout);
   lowPriorityIdleDebounceTimeout = setTimeout(postIdle, 200);
-}
-
-function paintNonVisibleAreasWhileIdle(): void {
-  if (!idleAreaPaint) return;
-  const visibleHeight = renderedHeightTwips;
-  const docHeight = Atomics.load(d.docHeightTwips, 0);
-  const visibleTop = renderedTopTwips;
-  // heuristic is one whole visible area below the fold, primarily for zooming out, but also helps with scrolling a little
-  const lowerFoldTop = visibleTop + visibleHeight;
-  const lowerFoldHeight = Math.min(docHeight - lowerFoldTop, visibleHeight);
-  const rangesToPaint = rectToTileIndexRanges([
-    0,
-    lowerFoldTop,
-    docWidthTwips,
-    lowerFoldHeight,
-  ]);
-
-  let didPaint = false;
-  for (let y = 0; y < rangesToPaint.length; ++y) {
-    const [start, endInclusive] = rangesToPaint[y];
-    for (let x = start; x <= endInclusive; ++x) {
-      if (running || !idleAreaPaint) {
-        return;
-      }
-      if (!validTiles.has(x)) {
-        blockingPaintTile(x);
-        didPaint = true;
-      }
-    }
-  }
-
-  if (didPaint) {
-    idleDebounceTimeout = setTimeout(
-      paintNonVisibleAreasWhileIdle,
-      Math.max(trimmedMean(paintTimes), 10)
-    );
-  }
-  postPaint();
 }
 
 function shouldPausePaint(): boolean {
@@ -776,37 +776,6 @@ function isContainedOrEqual(a: Rect, b: Rect): boolean {
     a[0] + a[2] <= b[0] + b[2] &&
     a[1] + a[3] <= b[1] + b[3]
   );
-}
-
-const PERCENT_OUTLIER = 0.2;
-const MINIMUM_TIME_SAMPLES = 10; // Allows 1, 20% outliers to be trimmed from either side
-const MAXIMUM_TIME_SAMPLES = 20; // Allows 2, 20% outliers to be trimmed from either side
-// TODO: sample tile paint times then run paints in the background during idle
-/** attempts to calculate a mean time per paint while excluding outliers */
-function trimmedMean(input: number[]): number {
-  // skips work when there aren't enough viable samples
-  if (input.length < MINIMUM_TIME_SAMPLES)
-    return input.reduce((acc, val) => acc + val) / input.length;
-
-  // sort the input array in-place, since mostly-sorted data performs better and it the side effect has no impact outside of this
-  input.sort((a, b) => a - b);
-
-  // calculate the number of elements to trim from each end
-  const trimCount = Math.floor((input.length * PERCENT_OUTLIER) / 2);
-
-  // trim the elements from both ends and calculate the mean of the remaining elements
-  const trimmedArray = input.slice(trimCount, input.length - trimCount);
-
-  // reduces work to the maximum number of time samples
-  if (input.length > MAXIMUM_TIME_SAMPLES) {
-    // permanently apply the previous trim
-    input.splice(0, trimCount);
-    input.splice(-trimCount, trimCount);
-  }
-
-  const sum = trimmedArray.reduce((acc, val) => acc + val, 0);
-
-  return sum / trimmedArray.length;
 }
 
 function addBorder(imageData: ImageData) {
