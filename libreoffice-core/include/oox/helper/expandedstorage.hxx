@@ -3,7 +3,6 @@
 #include <memory>
 #include <sal/types.h>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
-#include <boost/unordered/unordered_map_fwd.hpp>
 #include <com/sun/star/embed/XExtendedStorageStream.hpp>
 #include <com/sun/star/io/XInputStream.hpp>
 #include <com/sun/star/io/XSeekable.hpp>
@@ -15,7 +14,6 @@
 #include <com/sun/star/uno/Sequence.hxx>
 #include <string>
 #include <unordered_map>
-#include <boost/unordered_map.hpp>
 #include <mutex>
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/embed/XHierarchicalStorageAccess.hpp>
@@ -26,7 +24,6 @@
 #include <cppuhelper/weak.hxx>
 #include <comphelper/interfacecontainer4.hxx>
 #include <comphelper/relationshipaccess.hxx>
-#include <unordered_map>
 
 namespace com::sun::star
 {
@@ -75,10 +72,10 @@ struct ExpandedFile
     ExpandedFile(const OUString& path_, const std::vector<sal_Int8>&& content_, const ShaVec&& sha_)
         : path(path_)
         , sha(std::make_shared<ShaVec>(std::move(sha_)))
-        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))) {};
+        , content(std::make_shared<std::vector<sal_Int8>>(std::move(content_))){};
 };
 
-typedef boost::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
+typedef std::unordered_map<std::string, ExpandedFile> ExpandedFileMap;
 enum PathType
 {
     Relative,
@@ -107,7 +104,7 @@ class ExpandedStorage final : public css::lang::XTypeProvider,
 {
     std::shared_ptr<comphelper::RelationshipAccessImpl> m_relAccess;
     std::shared_ptr<
-        boost::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
+        std::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
         m_allRelAccessMap;
     std::shared_ptr<ExpandedFileMap> m_files;
     std::shared_ptr<Commit> m_lastCommit;
@@ -128,7 +125,7 @@ public:
         const std::shared_ptr<ExpandedFileMap>& fileMap,
         const css::uno::Reference<io::XInputStream>& rxInputStream, const OUString& basePath,
         std::shared_ptr<
-            boost::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
+            std::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
             allRelAccessMap,
         std::shared_ptr<Commit> lastCommit);
 

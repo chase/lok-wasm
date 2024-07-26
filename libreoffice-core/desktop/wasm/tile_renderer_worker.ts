@@ -373,7 +373,6 @@ function rendering() {
     docWidthTwips,
     visibleHeight,
   ]);
-  // TODO: mark missing and invalidate
   ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
   if (renderedHeightTwips !== scheduledHeightTwips) {
     canvases[0].height = scheduledHeightPx;
@@ -672,11 +671,9 @@ function seekNonVisibleRingIndex() {
   }
 }
 
-let paintTimes: number[] = [];
 /** blocks the worker thread while painting a tile at tileIndex, returning the corresponding tileRingIndex */
 function blockingPaintTile(tileIndex: number): number {
   Atomics.wait(d.state, 0, RenderState.TILE_PAINT); // wait for existing paint to finish if necessary
-  const start = Date.now();
   const rect = tileIndexToTwipsRect(tileIndex);
   for (let i = 0; i < RECT_SIZE; ++i) {
     Atomics.store(d.tileTwips, i, rect[i]);
@@ -701,7 +698,6 @@ function blockingPaintTile(tileIndex: number): number {
     )
   );
   validTiles.add(tileIndex);
-  paintTimes.push(Date.now() - start);
 
   return tileRingIndex;
 }

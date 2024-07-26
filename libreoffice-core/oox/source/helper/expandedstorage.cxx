@@ -94,8 +94,9 @@ ShaVec getContentHash(const std::vector<sal_Int8>& content)
 ExpandedStorage::ExpandedStorage(const Reference<XComponentContext>& rxContext,
                                  const Reference<io::XInputStream>& rxInStream)
     : StorageBase(rxInStream, false, false)
-    , m_allRelAccessMap(std::make_shared<boost::unordered_map<
+    , m_allRelAccessMap(std::make_shared<std::unordered_map<
                             std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>())
+    , m_files(std::make_shared<ExpandedFileMap>())
     , m_lastCommit(std::shared_ptr<Commit>())
     , m_xContext(rxContext)
     , m_inputStream(rxInStream)
@@ -111,7 +112,7 @@ ExpandedStorage::ExpandedStorage(
     const Reference<XComponentContext>& context_, const std::shared_ptr<ExpandedFileMap>& fileMap_,
     const Reference<io::XInputStream>& inputStream_, const OUString& basePath_,
     std::shared_ptr<
-        boost::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
+        std::unordered_map<std::string, std::shared_ptr<comphelper::RelationshipAccessImpl>>>
         allRelAccessMap_,
     std::shared_ptr<Commit> commitLog_)
     : StorageBase(inputStream_, false, false)
@@ -291,20 +292,21 @@ ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpen
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
 
-    auto it = m_files->find(std::string(path));
-    if (it == m_files->end())
+    auto file_it = m_files->find(std::string(path));
+    if (file_it == m_files->end())
     {
         if (!shouldCreateStreamElement(nOpenMode))
         {
             throw css::container::NoSuchElementException();
         }
 
-        it = m_files
-                 ->insert({ path, { OUString::fromUtf8(path), std::vector<sal_Int8>(), ShaVec() } })
-                 .first;
+        file_it = m_files
+                      ->insert(
+                          { path, { OUString::fromUtf8(path), std::vector<sal_Int8>(), ShaVec() } })
+                      .first;
     }
 
-    auto& file = it->second;
+    auto& file = file_it->second;
 
     Reference<comphelper::VectorInputStream> maybeInputStream;
     Reference<comphelper::VectorOutputStream> maybeOutputStream;
@@ -338,21 +340,22 @@ ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpen
     if (readRelInfo)
     {
         std::string relPath = getRelInfoPath(path);
-        auto it = m_allRelAccessMap->find(relPath);
-        if (it == m_allRelAccessMap->end())
+        auto rel_it = m_allRelAccessMap->find(relPath);
+        if (rel_it == m_allRelAccessMap->end())
         {
             auto seq = getRelInfoForElement(path);
-            it = m_allRelAccessMap
-                     ->insert({ std::move(relPath),
-                                std::make_shared<comphelper::RelationshipAccessImpl>() })
-                     .first;
+            rel_it = m_allRelAccessMap
+                         ->insert({ std::move(relPath),
+                                    std::make_shared<comphelper::RelationshipAccessImpl>() })
+                         .first;
 
-            streamSupplier->setRelationshipAccess(it->second);
-            it->second->setRelationships(seq.has_value() ? std::move(seq.value()) : comphelper::RelInfoSeq());
+            streamSupplier->setRelationshipAccess(rel_it->second);
+            rel_it->second->setRelationships(seq.has_value() ? std::move(seq.value())
+                                                             : comphelper::RelInfoSeq());
         }
         else
         {
-            streamSupplier->setRelationshipAccess(it->second);
+            streamSupplier->setRelationshipAccess(rel_it->second);
         }
     }
 
@@ -384,7 +387,7 @@ Reference<io::XStream> SAL_CALL ExpandedStorage::openEncryptedStreamElement(cons
 
 /// ExpandedStorage is flat, so this method always returns itself.
 Reference<embed::XStorage> SAL_CALL ExpandedStorage::openStorageElement(const OUString& path,
-                                                                        sal_Int32 openMode)
+                                                                        sal_Int32 /* openMode */)
 {
     if (path == "/")
     {

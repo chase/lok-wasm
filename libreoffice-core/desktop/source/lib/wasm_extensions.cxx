@@ -74,7 +74,7 @@ static void* tileRendererWorker(void* data_)
                 {
                     d->doc->pClass->setView(d->doc, d->viewId);
                 }
-                std::fill_n(d->paintedTile, d->paintedTileAllocSize, 0);
+                __builtin_memset(d->paintedTile, 0, d->paintedTileAllocSize);
                 d->doc->pClass->paintTile(d->doc, d->paintedTile, d->tileSize, d->tileSize,
                                           d->tileTwips[0], d->tileTwips[1], d->tileTwips[2],
                                           d->tileTwips[3]);

@@ -228,8 +228,10 @@ public:
     void setRelationshipAccess(std::shared_ptr<comphelper::RelationshipAccessImpl> relAccess)
     {
         m_relAccess = relAccess;
-        m_inputStream->setRelationshipAccess(relAccess);
-        m_outputStream->setRelationshipAccess(relAccess);
+        if (m_inputStream)
+            m_inputStream->setRelationshipAccess(relAccess);
+        if (m_outputStream)
+            m_outputStream->setRelationshipAccess(relAccess);
     }
 
     void setRelationships(css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
