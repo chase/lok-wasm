@@ -187,7 +187,6 @@ $(eval $(call gb_Module_add_moduledirs,libreoffice,\
 	vcl \
 	wizards \
 	writerfilter \
-	writerperfect \
 	xmerge \
     $(call gb_Helper_optional,XMLHELP,xmlhelp) \
 	xmloff \

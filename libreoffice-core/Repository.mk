@@ -496,7 +496,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,ooo, \
 		vbahelper \
 	) \
 	vcl \
-	writerperfect \
 	xmlscript \
 	xmlfa \
 	xmlfd \
@@ -568,7 +567,6 @@ $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,writer, \
 	swd \
 	t602filter \
 	$(call gb_Helper_optional,SCRIPTING,vbaswobj) \
-	wpftwriter \
 	writerfilter \
 	$(call gb_Helper_optional,DBCONNECTIVITY,writer) \
 ))
@@ -1278,7 +1276,6 @@ $(eval $(call gb_Helper_register_uiconfigs,\
 	svx \
 	uui \
 	vcl \
-	writerperfect \
 	$(if $(ENABLE_NSS)$(ENABLE_OPENSSL),xmlsec) \
 ))
 

@@ -348,10 +348,12 @@ public:
 
 class AbstractSwInsertDBColAutoPilot_Impl :  public AbstractSwInsertDBColAutoPilot
 {
-    std::unique_ptr<SwInsertDBColAutoPilot> m_xDlg;
+    // MACRO: removed
+    // std::unique_ptr<SwInsertDBColAutoPilot> m_xDlg;
 public:
-    explicit AbstractSwInsertDBColAutoPilot_Impl(std::unique_ptr<SwInsertDBColAutoPilot> p)
-        : m_xDlg(std::move(p))
+    explicit AbstractSwInsertDBColAutoPilot_Impl(std::unique_ptr<SwInsertDBColAutoPilot>)
+        // MACRO: removed
+        // : m_xDlg(std::move(p))
     {
     }
     virtual short Execute() override;

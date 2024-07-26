@@ -199,7 +199,8 @@ short AbstractSwConvertTableDlg_Impl::Execute()
 
 short AbstractSwInsertDBColAutoPilot_Impl::Execute()
 {
-    return m_xDlg->run();
+    // MACRO: removed
+    return 0;
 }
 
 short AbstractDropDownFieldDialog_Impl::Execute()
@@ -902,7 +903,8 @@ bool AbstractMailMergeWizard_Impl::StartExecuteAsync(AsyncContext &rCtx)
 
 short AbstractMailMergeWizard_Impl::Execute()
 {
-    return m_xDlg->run();
+    // MACRO: will not compile without removing mail merge implementation
+    return 0;
 }
 
 OUString AbstractMailMergeWizard_Impl::GetReloadDocument() const

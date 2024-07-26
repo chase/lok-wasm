@@ -5931,8 +5931,9 @@ if test "$cross_compiling" = "yes"; then
         PYTHON
         SCRIPTING
         ZLIB
-        ZXCVBN
 "
+# MACRO: remove zxcvbn
+
     # converts BUILD_TYPE and PERMITTED_BUILD_TARGETS into non-whitespace,
     # newlined lists, to use grep as a filter
     PERMITTED_BUILD_TARGETS=$(echo "$PERMITTED_BUILD_TARGETS" | sed -e '/^ *$/d' -e 's/ *//')
@@ -9732,49 +9733,7 @@ REVENGE_LIBS_internal="-L${librevenge_libdir} -lrevenge-0.0"
 libo_CHECK_SYSTEM_MODULE([librevenge],[REVENGE],[librevenge-0.0 >= 0.0.1])
 
 libo_CHECK_SYSTEM_MODULE([libodfgen],[ODFGEN],[libodfgen-0.1])
-
-libo_CHECK_SYSTEM_MODULE([libepubgen],[EPUBGEN],[libepubgen-0.1])
-
-WPD_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/libwpd/inc"
-AS_IF([test "$COM" = "MSC"],
-      [libwpd_libdir="${WORKDIR}/LinkTarget/Library"],
-      [libwpd_libdir="${WORKDIR}/UnpackedTarball/libwpd/src/lib/.libs"]
-)
-WPD_LIBS_internal="-L${libwpd_libdir} -lwpd-0.10"
-libo_CHECK_SYSTEM_MODULE([libwpd],[WPD],[libwpd-0.10])
-
-libo_CHECK_SYSTEM_MODULE([libwpg],[WPG],[libwpg-0.3])
-
-libo_CHECK_SYSTEM_MODULE([libwps],[WPS],[libwps-0.4])
-libo_PKG_VERSION([WPS], [libwps-0.4], [0.4.14])
-
-libo_CHECK_SYSTEM_MODULE([libvisio],[VISIO],[libvisio-0.1])
-
-libo_CHECK_SYSTEM_MODULE([libcdr],[CDR],[libcdr-0.1])
-
-libo_CHECK_SYSTEM_MODULE([libmspub],[MSPUB],[libmspub-0.1])
-
-libo_CHECK_SYSTEM_MODULE([libmwaw],[MWAW],[libmwaw-0.3 >= 0.3.21])
-libo_PKG_VERSION([MWAW], [libmwaw-0.3], [0.3.21])
-
-libo_CHECK_SYSTEM_MODULE([libetonyek],[ETONYEK],[libetonyek-0.1])
-libo_PKG_VERSION([ETONYEK], [libetonyek-0.1], [0.1.10])
-
-libo_CHECK_SYSTEM_MODULE([libfreehand],[FREEHAND],[libfreehand-0.1])
-
-libo_CHECK_SYSTEM_MODULE([libebook],[EBOOK],[libe-book-0.1])
-libo_PKG_VERSION([EBOOK], [libe-book-0.1], [0.1.2])
-
-libo_CHECK_SYSTEM_MODULE([libabw],[ABW],[libabw-0.1])
-
-libo_CHECK_SYSTEM_MODULE([libpagemaker],[PAGEMAKER],[libpagemaker-0.0])
-
-libo_CHECK_SYSTEM_MODULE([libqxp],[QXP],[libqxp-0.0])
-
-libo_CHECK_SYSTEM_MODULE([libzmf],[ZMF],[libzmf-0.0])
-
-libo_CHECK_SYSTEM_MODULE([libstaroffice],[STAROFFICE],[libstaroffice-0.0])
-libo_PKG_VERSION([STAROFFICE], [libstaroffice-0.0], [0.0.7])
+# MACRO: remove unused document formats
 
 dnl ===================================================================
 dnl Check for system lcms2
@@ -10905,19 +10864,7 @@ else
 fi
 AC_SUBST(TLS)
 
-dnl ===================================================================
-dnl Check for system sane
-dnl ===================================================================
-AC_MSG_CHECKING([which sane header to use])
-if test "$with_system_sane" = "yes"; then
-    AC_MSG_RESULT([external])
-    AC_CHECK_HEADER(sane/sane.h, [],
-      [AC_MSG_ERROR(sane not found. install sane)], [])
-else
-    AC_MSG_RESULT([internal])
-    BUILD_TYPE="$BUILD_TYPE SANE"
-fi
-
+# MACRO: don't compile SANE (no scanner access anyway)
 dnl ===================================================================
 dnl Check for system icu
 dnl ===================================================================
@@ -11338,24 +11285,7 @@ AC_SUBST(SYSTEM_HUNSPELL)
 AC_SUBST(HUNSPELL_CFLAGS)
 AC_SUBST(HUNSPELL_LIBS)
 
-dnl ===================================================================
-dnl Check for system zxcvbn
-dnl ===================================================================
-AC_MSG_CHECKING([which zxcvbn to use])
-if test "$with_system_zxcvbn" = "yes"; then
-    AC_MSG_RESULT([external])
-    SYSTEM_ZXCVBN=TRUE
-    AC_CHECK_HEADER(zxcvbn.h, [],
-       [ AC_MSG_ERROR(zxcvbn headers not found.)], [])
-    AC_CHECK_LIB(zxcvbn, ZxcvbnMatch, [],
-        [ AC_MSG_ERROR(zxcvbn library not found.)], [])
-else
-   AC_MSG_RESULT([internal])
-   BUILD_TYPE="$BUILD_TYPE ZXCVBN"
-   SYSTEM_ZXCVBN=
-fi
-AC_SUBST(SYSTEM_ZXCVBN)
-
+# MACRO: remove zxcvbn
 dnl ===================================================================
 dnl Check for system zxing
 dnl ===================================================================

@@ -25,7 +25,7 @@
 #include <unicode/regex.h>
 #include <unicode/unistr.h>
 #include <unicode/errorcode.h>
-#include <zxcvbn.h>
+// MACRO: removed zxcvbn, because we don't have the password dialog that checks password strength
 #include <sal/log.hxx>
 
 using namespace com::sun::star;
@@ -136,10 +136,8 @@ bool SvPasswordHelper::CompareHashPassword(const uno::Sequence<sal_Int8>& rOldPa
 
 double SvPasswordHelper::GetPasswordStrengthPercentage(const char* pPassword)
 {
-    // Entropy bits corresponding to 100% password strength
-    static constexpr double fMaxPassStrengthEntorpyBits = 112.0;
-    return std::min(100.0,
-                    ZxcvbnMatch(pPassword, nullptr, nullptr) * 100.0 / fMaxPassStrengthEntorpyBits);
+    // MACRO: removed zxcvbn, because we don't have the password dialog that checks password strength
+    return 0.0;
 }
 
 double SvPasswordHelper::GetPasswordStrengthPercentage(const OUString& aPassword)

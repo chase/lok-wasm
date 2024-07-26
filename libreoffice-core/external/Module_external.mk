@@ -93,13 +93,11 @@ $(eval $(call gb_Module_add_moduledirs,external,\
 	$(call gb_Helper_optional,POSTGRESQL,postgresql) \
 	$(call gb_Helper_optional,PYTHON,python3) \
 	$(call gb_Helper_optional,QXP,libqxp) \
-	$(call gb_Helper_optional,ZXCVBN,zxcvbn-c) \
 	$(call gb_Helper_optional,ZXING,zxing) \
 	$(call gb_Helper_optional,REDLAND,redland) \
 	$(call gb_Helper_optional,REVENGE,librevenge) \
 	$(call gb_Helper_optional,RHINO,rhino) \
 	$(call gb_Helper_optional,SKIA,skia) \
-	$(call gb_Helper_optional,STAROFFICE,libstaroffice) \
 	$(if $(filter WNT,$(OS)),twain_dsm) \
 	$(call gb_Helper_optional,VISIO,libvisio) \
 	$(call gb_Helper_optional,WPD,libwpd) \

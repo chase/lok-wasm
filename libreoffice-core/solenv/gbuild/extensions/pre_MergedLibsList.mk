@@ -162,7 +162,6 @@ gb_MERGE_LIBRARY_LIST += \
 	$(if $(filter WNT,$(OS)), \
 		wininetbe1 \
 	) \
-	writerperfect \
 	xmlsecurity \
 
 endif
