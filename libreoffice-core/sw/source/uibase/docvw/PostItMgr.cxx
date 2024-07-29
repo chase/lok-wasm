@@ -530,8 +530,8 @@ bool SwPostItMgr::CalcRects()
         for (auto const& pItem : mvPostItFields)
         {
             // MACRO: skip layout for non-root comments {
-            if (!pItem->mpPostIt ||
-                !pItem->mpPostIt->GetPostItField() ||
+            if (pItem->mpPostIt &&
+                pItem->mpPostIt->GetPostItField() &&
                 pItem->mpPostIt->GetPostItField()->GetParentPostItId() != 0) continue;
             // MACRO: }
             if (!pItem->UseElement(*mpWrtShell->GetLayout(), rIDRA))
