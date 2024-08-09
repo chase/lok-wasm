@@ -322,20 +322,7 @@ FcFontSet* FontCfgWrapper::getFontSet()
     if( !m_pFontSet )
     {
         m_pFontSet = FcFontSetCreate();
-#if HAVE_MORE_FONTS
-        m_bRestrictFontSetToApplicationFonts = [] {
-            return getenv("SAL_NON_APPLICATION_FONT_USE") != nullptr;
-        }();
-#endif
-        // Add the application fonts before the system fonts.
-        // tdf#157939 We will remove duplicate fonts, where the duplicate is
-        // the one with a smaller version number. If the same version font is
-        // available system-wide or bundled with our application, then we
-        // prefer via stable-sort the first one we see. Load application fonts
-        // first to prefer the one we bundle in the application in that case.
         addFontSet( FcSetApplication );
-        if (!m_bRestrictFontSetToApplicationFonts)
-            addFontSet( FcSetSystem );
 
         std::stable_sort(m_pFontSet->fonts,m_pFontSet->fonts+m_pFontSet->nfont,SortFont());
     }
@@ -608,6 +595,8 @@ void PrintFontManager::countFontconfigFonts()
 
         for( int i = 0; i < pFSet->nfont; i++ )
         {
+            FcPattern* pPattern = pFSet->fonts[i];
+
             FcChar8* file = nullptr;
             FcChar8* family = nullptr;
             FcChar8* style = nullptr;
@@ -620,19 +609,19 @@ void PrintFontManager::countFontconfigFonts()
             int nEntryId = -1;
             FcBool scalable = false;
 
-            FcResult eFileRes         = FcPatternGetString(pFSet->fonts[i], FC_FILE, 0, &file);
-            FcResult eFamilyRes       = rWrapper.LocalizedElementFromPattern( pFSet->fonts[i], &family, FC_FAMILY, FC_FAMILYLANG );
+            FcResult eFileRes         = FcPatternGetString(pPattern, FC_FILE, 0, &file);
+            FcResult eFamilyRes       = rWrapper.LocalizedElementFromPattern( pPattern, &family, FC_FAMILY, FC_FAMILYLANG );
             if (bMinimalFontset && strncmp(reinterpret_cast<char*>(family), "Liberation", strlen("Liberation")))
                 continue;
-            FcResult eStyleRes        = rWrapper.LocalizedElementFromPattern( pFSet->fonts[i], &style, FC_STYLE, FC_STYLELANG );
-            FcResult eSlantRes        = FcPatternGetInteger(pFSet->fonts[i], FC_SLANT, 0, &slant);
-            FcResult eWeightRes       = FcPatternGetInteger(pFSet->fonts[i], FC_WEIGHT, 0, &weight);
-            FcResult eWidthRes        = FcPatternGetInteger(pFSet->fonts[i], FC_WIDTH, 0, &width);
-            FcResult eSpacRes         = FcPatternGetInteger(pFSet->fonts[i], FC_SPACING, 0, &spacing);
-            FcResult eScalableRes     = FcPatternGetBool(pFSet->fonts[i], FC_SCALABLE, 0, &scalable);
-            FcResult eSymbolRes       = FcPatternGetBool(pFSet->fonts[i], FC_SYMBOL, 0, &symbol);
-            FcResult eIndexRes        = FcPatternGetInteger(pFSet->fonts[i], FC_INDEX, 0, &nEntryId);
-            FcResult eFormatRes       = FcPatternGetString(pFSet->fonts[i], FC_FONTFORMAT, 0, &format);
+            FcResult eStyleRes        = rWrapper.LocalizedElementFromPattern( pPattern, &style, FC_STYLE, FC_STYLELANG );
+            FcResult eSlantRes        = FcPatternGetInteger(pPattern, FC_SLANT, 0, &slant);
+            FcResult eWeightRes       = FcPatternGetInteger(pPattern, FC_WEIGHT, 0, &weight);
+            FcResult eWidthRes        = FcPatternGetInteger(pPattern, FC_WIDTH, 0, &width);
+            FcResult eSpacRes         = FcPatternGetInteger(pPattern, FC_SPACING, 0, &spacing);
+            FcResult eScalableRes     = FcPatternGetBool(pPattern, FC_SCALABLE, 0, &scalable);
+            FcResult eSymbolRes       = FcPatternGetBool(pPattern, FC_SYMBOL, 0, &symbol);
+            FcResult eIndexRes        = FcPatternGetInteger(pPattern, FC_INDEX, 0, &nEntryId);
+            FcResult eFormatRes       = FcPatternGetString(pPattern, FC_FONTFORMAT, 0, &format);
 
             if( eFileRes != FcResultMatch || eFamilyRes != FcResultMatch || eScalableRes != FcResultMatch || eStyleRes != FcResultMatch )
                 continue;
@@ -650,7 +639,7 @@ void PrintFontManager::countFontconfigFonts()
                     ? reinterpret_cast<const char*>(format) : "<unknown>")
                 << " symbol = " << (eSymbolRes == FcResultMatch ? symbol : -1));
 
-//            OSL_ASSERT(eScalableRes != FcResultMatch || scalable);
+            // OSL_ASSERT(eScalableRes != FcResultMatch || scalable);
 
             // We support only scalable fonts
             if( eScalableRes == FcResultMatch && ! scalable )
@@ -696,16 +685,13 @@ void PrintFontManager::countFontconfigFonts()
                 rFA.SetMicrosoftSymbolEncoded(bool(symbol));
 
             // sort into known fonts
-            fontID nFontID = m_nNextFontID++;
-            m_aFonts.emplace(nFontID, aFont);
-            m_aFontFileToFontID[aBase].insert(nFontID);
-            nFonts++;
-
-            FcPattern* pPattern = pFSet->fonts[i];
+            m_aFonts.emplace(m_nNextFontID, aFont);
+            m_aFontFileToFontID[aBase].insert(m_nNextFontID);
             FcPatternReference(pPattern);
             FcFontSetAdd(pFilteredSet, pPattern);
 
-            SAL_INFO("vcl.fonts.detail", "inserted font " << family << " as fontID " << nFontID);
+            SAL_INFO("vcl.fonts.detail", "inserted font " << family << " as fontID " << m_nNextFontID);
+            m_nNextFontID++;
         }
 
         // tdf#157939 if we drop fonts, drop them from the FcConfig set too so they are not
