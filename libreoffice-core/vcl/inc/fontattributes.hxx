@@ -23,6 +23,7 @@
 #include <vcl/dllapi.h>
 #include <rtl/ustring.hxx>
 #include <tools/fontenum.hxx>
+#include <iostream>
 
 
 /* The following class is extraordinarily similar to ImplFont. */
@@ -60,12 +61,13 @@ public:
     // Device dependent functions
     int                 GetQuality() const                          { return mnQuality; }
 
-
     void                SetQuality( int nQuality )                  { mnQuality = nQuality; }
     void                IncreaseQualityBy( int nQualityAmount )     { mnQuality += nQualityAmount; }
 
+    void                PrintFontAttributes();
+
 private:
-    // device independent variables
+    // Device independent variables
     OUString            maFamilyName;               // Font Family Name
     OUString            maStyleName;                // Font Style Name
     FontWeight          meWeight;                   // Weight Type
@@ -75,7 +77,7 @@ private:
     FontItalic          meItalic;                   // Slant Type
     bool                mbMicrosoftSymbolEncoded;   // Is font microsoft symbol encoded?
 
-    // device dependent variables
+    // Device dependent variables
     int                 mnQuality;                  // Quality (used when similar fonts compete)
 
 };
@@ -83,6 +85,18 @@ private:
 inline void FontAttributes::SetMicrosoftSymbolEncoded(const bool bMicrosoftSymbolEncoded)
 {
     mbMicrosoftSymbolEncoded = bMicrosoftSymbolEncoded;
+}
+
+inline void FontAttributes::PrintFontAttributes()
+{
+    std::cout << GetFamilyName() <<  std::endl;
+    std::cout << GetFamilyType() <<  std::endl;
+    std::cout << GetStyleName() <<  std::endl;
+    std::cout << GetWeight() <<  std::endl;
+    std::cout << GetItalic() <<  std::endl;
+    std::cout << GetPitch() <<  std::endl;
+    std::cout << GetWidthType() <<  std::endl;
+    std::cout << IsMicrosoftSymbolEncoded() <<  std::endl;
 }
 
 #endif // INCLUDED_VCL_INC_FONTATTRIBUTES_HXX
