@@ -21,10 +21,14 @@
 #define INCLUDED_VCL_INC_FONTATTRIBUTES_HXX
 
 #include <vcl/dllapi.h>
+#include <roaring.hh>
 #include <rtl/ustring.hxx>
 #include <tools/fontenum.hxx>
 #include <iostream>
 
+
+typedef std::pair<uint32_t, std::vector<std::string>> FontCharSetRange;
+typedef std::vector<FontCharSetRange> FontCharSet;
 
 /* The following class is extraordinarily similar to ImplFont. */
 
@@ -64,6 +68,11 @@ public:
     void                SetQuality( int nQuality )                  { mnQuality = nQuality; }
     void                IncreaseQualityBy( int nQualityAmount )     { mnQuality += nQualityAmount; }
 
+    const roaring::Roaring&
+                        GetCodepointBitmap() const                  { return mCodepointBitmap; }
+
+    void                SetBitmap(const roaring::Roaring& bitmap)   { mCodepointBitmap = bitmap; }
+    void                SetBitmapFromCharSet(const FontCharSet& charset);
     void                PrintFontAttributes();
 
 private:
@@ -79,6 +88,8 @@ private:
 
     // Device dependent variables
     int                 mnQuality;                  // Quality (used when similar fonts compete)
+    roaring::Roaring    mCodepointBitmap;           // MACRO-2573: Fast missing codepoint bitmap
+
 
 };
 

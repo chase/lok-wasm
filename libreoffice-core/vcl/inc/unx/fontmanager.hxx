@@ -59,6 +59,7 @@ typedef int fontID;
 
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
+public:
     struct PrintFont;
     friend struct PrintFont;
 
@@ -74,6 +75,7 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
         explicit PrintFont();
     };
 
+private:
     fontID                                      m_nNextFontID;
     std::unordered_map< fontID, PrintFont >     m_aFonts;
     // for speeding up findFontFileID
