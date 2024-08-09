@@ -58,4 +58,34 @@ bool FontAttributes::CompareDeviceIndependentFontAttributes(const FontAttributes
     return true;
 }
 
+/*
+* Populate the character set bitmaps
+*/
+void FontAttributes::SetBitmapFromCharSet(const FontCharSet& charset) {
+{
+    for (FontCharSetRange range : charset)
+    {
+        uint32_t range_start;
+        for (size_t i = 0; i < range.second.size(); i++)
+        {
+            range_start = range.first * 256 + i * 32;
+            std::vector<uint32_t> enabledBits;
+
+            uint32_t decimal = static_cast<uint32_t>(std::stoul(range.second[i], nullptr, 16));
+            while (decimal)
+            {
+                if (decimal & 1)
+                {
+                    enabledBits.push_back(range_start);
+                }
+                decimal >>= 1;
+                range_start++;
+            }
+            mCodepointBitmap.addMany(enabledBits.size(), enabledBits.data());
+        }
+    }
+    mCodepointBitmap.runOptimize();
+}
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
