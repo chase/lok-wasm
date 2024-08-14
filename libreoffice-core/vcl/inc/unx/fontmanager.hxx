@@ -19,6 +19,8 @@
 
 #pragma once
 
+#define USE_FONT_CONFIGLESS 1
+
 #include <sal/config.h>
 
 #include <o3tl/sorted_vector.hxx>
@@ -63,9 +65,7 @@ typedef int fontID;
 
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
-    struct PrintFont;
-    friend struct PrintFont;
-
+public:
     struct VCL_DLLPRIVATE PrintFont
     {
         FontAttributes m_aFontAttributes;
@@ -77,11 +77,12 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
 
         explicit PrintFont();
     };
+    friend struct PrintFont;
 
     fontID m_nNextFontID;
     std::unordered_map<fontID, PrintFont> m_aFonts;
-    // for speeding up findFontFileID
-    std::unordered_map<OString, o3tl::sorted_vector<fontID>> m_aFontFileToFontID;
+    std::unordered_map<OString, o3tl::sorted_vector<fontID>>
+        m_aFontFileToFontID; // for speeding up findFontFileID
 
     std::unordered_map<OString, int> m_aDirToAtom;
     std::unordered_map<int, OString> m_aAtomToDir;
@@ -125,6 +126,15 @@ class VCL_PLUGIN_PUBLIC PrintFontManager
 
     /* register an application specific font file for libfontconfig */
     static void addFontconfigFile(const OString& rFile);
+
+    PrintFont* getFontFromAttributes(const std::string fontfamily, const FontItalic fontItalic,
+                                     const FontWeight fontWeight);
+    PrintFont* MatchFromCompatibilityChart(const FontAttributes& attributes);
+    PrintFont* MatchSansOrSerifFamily(const FontAttributes& attributes);
+    std::vector<fontID> MatchWidthStyleWeight(const FontAttributes& attributes);
+    std::vector<fontID> MatchCharSet(const FontAttributes& attributes, const std::vector<fontID> fontset);
+    PrintFont* GetBestRankedFont(const std::vector<fontID> fontset);
+    PrintFont* FontSetMatch_Configless(const FontAttributes& attributes);
 
     std::set<OString> m_aPreviousLangSupportRequests;
     std::vector<OUString> m_aCurrentRequests;
