@@ -19,6 +19,8 @@
 
 #pragma once
 
+#define USE_FONT_CONFIGLESS 1
+
 #include <sal/config.h>
 
 #include <o3tl/sorted_vector.hxx>
@@ -47,10 +49,14 @@ namespace vcl::font
 {
 class FontSelectPattern;
 }
-namespace vcl { struct NameRecord; }
+namespace vcl
+{
+struct NameRecord;
+}
 class GenericUnixSalData;
 
-namespace psp {
+namespace psp
+{
 class PPDParser;
 
 typedef int fontID;
@@ -60,48 +66,45 @@ typedef int fontID;
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
 public:
-    struct PrintFont;
-    friend struct PrintFont;
-
     struct VCL_DLLPRIVATE PrintFont
     {
-        FontAttributes    m_aFontAttributes;
+        FontAttributes m_aFontAttributes;
 
-        int               m_nDirectory;       // atom containing system dependent path
-        OString           m_aFontFile;        // relative to directory
-        int               m_nCollectionEntry; // 0 for regular fonts, 0 to ... for fonts stemming from collections
-        int               m_nVariationEntry;  // 0 for regular fonts, 0 to ... for fonts stemming from font variations
+        int m_nDirectory; // atom containing system dependent path
+        OString m_aFontFile; // relative to directory
+        int m_nCollectionEntry; // 0 for regular fonts, 0 to ... for fonts stemming from collections
+        int m_nVariationEntry; // 0 for regular fonts, 0 to ... for fonts stemming from font variations
 
         explicit PrintFont();
     };
+    friend struct PrintFont;
 
-private:
-    fontID                                      m_nNextFontID;
-    std::unordered_map< fontID, PrintFont >     m_aFonts;
-    // for speeding up findFontFileID
-    std::unordered_map< OString, o3tl::sorted_vector< fontID > >
-                                                m_aFontFileToFontID;
+    fontID m_nNextFontID;
+    std::unordered_map<fontID, PrintFont> m_aFonts;
+    std::unordered_map<OString, o3tl::sorted_vector<fontID>>
+        m_aFontFileToFontID; // for speeding up findFontFileID
 
-    std::unordered_map< OString, int >
-    m_aDirToAtom;
-    std::unordered_map< int, OString >          m_aAtomToDir;
-    int                                         m_nNextDirAtom;
+    std::unordered_map<OString, int> m_aDirToAtom;
+    std::unordered_map<int, OString> m_aAtomToDir;
+    int m_nNextDirAtom;
 
     OString getFontFile(const PrintFont& rFont) const;
 
-    std::vector<PrintFont> analyzeFontFile(int nDirID, const OString& rFileName, const char *pFormat=nullptr) const;
+    std::vector<PrintFont> analyzeFontFile(int nDirID, const OString& rFileName,
+                                           const char* pFormat = nullptr) const;
     bool analyzeSfntFile(PrintFont& rFont) const;
     // finds the font id for the nFaceIndex face in this font file
     // There may be multiple font ids for font collections
-    fontID findFontFileID(int nDirID, const OString& rFile, int nFaceIndex, int nVariationIndex) const;
+    fontID findFontFileID(int nDirID, const OString& rFile, int nFaceIndex,
+                          int nVariationIndex) const;
 
     // There may be multiple font ids for font collections
-    std::vector<fontID> findFontFileIDs( int nDirID, const OString& rFile ) const;
+    std::vector<fontID> findFontFileIDs(int nDirID, const OString& rFile) const;
 
-    static FontFamily matchFamilyName( std::u16string_view rFamily );
+    static FontFamily matchFamilyName(std::u16string_view rFamily);
 
-    OString getDirectory( int nAtom ) const;
-    int getDirectoryAtom( const OString& rDirectory );
+    OString getDirectory(int nAtom) const;
+    int getDirectoryAtom(const OString& rDirectory);
 
     /* try to initialize fonts from libfontconfig
 
@@ -124,44 +127,51 @@ private:
     /* register an application specific font file for libfontconfig */
     static void addFontconfigFile(const OString& rFile);
 
+    PrintFont* getFontFromAttributes(const std::string fontfamily, const FontItalic fontItalic,
+                                     const FontWeight fontWeight);
+    PrintFont* MatchFromCompatibilityChart(const FontAttributes& attributes);
+    PrintFont* MatchSansOrSerifFamily(const FontAttributes& attributes);
+    std::vector<fontID> MatchWidthStyleWeight(const FontAttributes& attributes);
+    std::vector<fontID> MatchCharSet(const FontAttributes& attributes, const std::vector<fontID> fontset);
+    PrintFont* GetBestRankedFont(const std::vector<fontID> fontset);
+    PrintFont* FontSetMatch_Configless(const FontAttributes& attributes);
+
     std::set<OString> m_aPreviousLangSupportRequests;
     std::vector<OUString> m_aCurrentRequests;
     Timer m_aFontInstallerTimer;
 
-    DECL_DLLPRIVATE_LINK( autoInstallFontLangSupport, Timer*, void );
+    DECL_DLLPRIVATE_LINK(autoInstallFontLangSupport, Timer*, void);
     PrintFontManager();
+
 public:
     ~PrintFontManager();
     friend class ::GenericUnixSalData;
     static PrintFontManager& get(); // one instance only
 
     // There may be multiple font ids for font collections
-    std::vector<fontID> addFontFile( std::u16string_view rFileUrl );
+    std::vector<fontID> addFontFile(std::u16string_view rFileUrl);
 
     void initialize();
 
-    const PrintFont* getFont( fontID nID ) const
+    const PrintFont* getFont(fontID nID) const
     {
-        auto it = m_aFonts.find( nID );
+        auto it = m_aFonts.find(nID);
         return it == m_aFonts.end() ? nullptr : &it->second;
     }
 
     // returns the ids of all managed fonts.
-    void getFontList( std::vector< fontID >& rFontIDs );
+    void getFontList(std::vector<fontID>& rFontIDs);
 
     // routines to get font info in small pieces
 
     // get a specific fonts system dependent filename
-    OString getFontFileSysPath( fontID nFontID ) const
-    {
-        return getFontFile( *getFont( nFontID ) );
-    }
+    OString getFontFileSysPath(fontID nFontID) const { return getFontFile(*getFont(nFontID)); }
 
     // get the ttc face number
-    int getFontFaceNumber( fontID nFontID ) const;
+    int getFontFaceNumber(fontID nFontID) const;
 
     // get the ttc face variation
-    int getFontFaceVariation( fontID nFontID ) const;
+    int getFontFaceVariation(fontID nFontID) const;
 
     // font administration functions
 
@@ -195,10 +205,10 @@ public:
      */
     bool matchFont(FontAttributes& rDFA, const css::lang::Locale& rLocale);
 
-    static std::unique_ptr<FontConfigFontOptions> getFontOptions(const FontAttributes& rFontAttributes, int nSize);
+    static std::unique_ptr<FontConfigFontOptions>
+    getFontOptions(const FontAttributes& rFontAttributes, int nSize);
 
-    void Substitute(vcl::font::FontSelectPattern &rPattern, OUString& rMissingCodes);
-
+    void Substitute(vcl::font::FontSelectPattern& rPattern, OUString& rMissingCodes);
 };
 
 } // namespace
