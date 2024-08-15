@@ -1036,7 +1036,9 @@ static bool toVclFont(const QFont& rQFont, const css::lang::Locale& rLocale, vcl
     FontAttributes aFA;
     QtFontFace::fillAttributesFromQFont(rQFont, aFA);
 
+    // should use MatchFont_Configless, but this isn't part of the build
     bool bFound = psp::PrintFontManager::get().matchFont(aFA, rLocale);
+
     SAL_INFO("vcl.qt", "font match result for '"
                            << rQFont.family() << "': "
                            << (bFound ? OUString::Concat("'") + aFA.GetFamilyName() + "'"

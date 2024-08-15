@@ -120,6 +120,8 @@ public:
         aInfo.m_eItalic = ITALIC_NORMAL;
         aInfo.m_eWeight = WEIGHT_NORMAL;
         aInfo.m_eWidth = WIDTH_NORMAL;
+
+        // should use MatchFont_Configless, but this isn't part of the build
         psp::PrintFontManager::get().matchFont( aInfo, rSettings.GetUILocale() );
 #endif
 

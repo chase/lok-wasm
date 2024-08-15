@@ -205,6 +205,7 @@ public:
     in different fonts in e.g. english and japanese
      */
     bool matchFont(FontAttributes& rDFA, const css::lang::Locale& rLocale);
+    bool MatchFont_Configless(FontAttributes& rDFA);
 
     static std::unique_ptr<FontConfigFontOptions>
     getFontOptions(const FontAttributes& rFontAttributes, int nSize);

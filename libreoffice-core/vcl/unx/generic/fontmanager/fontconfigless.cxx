@@ -600,4 +600,23 @@ void PrintFontManager::CountFontConfigFonts_Configless()
     m_nNextFontID = 33;
 }
 
+/**
+ * @brief Matches the Font to the list of supported fonts
+ * 
+ * @param rDFA 
+ * @return true 
+ * @return false 
+ */
+bool PrintFontManager::MatchFont_Configless(FontAttributes& rDFA)
+{
+    FADefaultSubstitute(rDFA);
+    PrintFont* matchedPrintFont = FontSetMatch_Configless(rDFA);
+    if (matchedPrintFont)
+    {
+        rDFA = matchedPrintFont->m_aFontAttributes;
+        return true;
+    }
+    return false;
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

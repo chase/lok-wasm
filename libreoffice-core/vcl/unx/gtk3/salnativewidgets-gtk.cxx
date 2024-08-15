@@ -2263,6 +2263,7 @@ vcl::Font pango_to_vcl(const PangoFontDescription* font, const css::lang::Locale
             << aFamily << "\".");
 #endif
 
+    // should use MatchFont_Configless, but this isn't part of the build
     // match font to e.g. resolve "Sans"
     bool bFound = psp::PrintFontManager::get().matchFont(aDFA, rLocale);
 
