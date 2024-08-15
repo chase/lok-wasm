@@ -64,7 +64,13 @@ static vcl::font::FontSelectPattern GetFcSubstitute(const vcl::font::FontSelectP
 {
     vcl::font::FontSelectPattern aSubstituted(rFontSelData);
     psp::PrintFontManager& rMgr = psp::PrintFontManager::get();
+
+#if USE_FONT_CONFIGLESS == 1
+    rMgr.Substitute_Configless(aSubstituted, rMissingCodes);
+#else
     rMgr.Substitute(aSubstituted, rMissingCodes);
+#endif
+
     return aSubstituted;
 }
 
