@@ -211,6 +211,7 @@ public:
     getFontOptions(const FontAttributes& rFontAttributes, int nSize);
 
     void Substitute(vcl::font::FontSelectPattern& rPattern, OUString& rMissingCodes);
+    void Substitute_Configless(vcl::font::FontSelectPattern& rPattern, OUString& rMissingCodes);
 };
 
 } // namespace

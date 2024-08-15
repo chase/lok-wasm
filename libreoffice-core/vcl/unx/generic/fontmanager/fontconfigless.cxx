@@ -608,13 +608,101 @@ void PrintFontManager::CountFontConfigFonts_Configless()
 bool PrintFontManager::MatchFont_Configless(FontAttributes& rDFA)
 {
     FADefaultSubstitute(rDFA);
-    PrintFont* matchedPrintFont = FontSetMatch_Configless(rDFA);
+    PrintFontManager::PrintFont* matchedPrintFont = FontSetMatch_Configless(rDFA);
     if (matchedPrintFont)
     {
         rDFA = matchedPrintFont->m_aFontAttributes;
         return true;
     }
     return false;
+}
+
+/**
+ * @brief Substitutes based on what chars are missing in a font's charset
+ * 
+ * @param rPattern 
+ * @param rMissingCodes 
+ */
+void PrintFontManager::Substitute_Configless(vcl::font::FontSelectPattern& rPattern,
+                                             OUString& rMissingCodes)
+{
+    FontAttributes attributes;
+
+    const OString aTargetName = OUStringToOString(rPattern.maTargetName, RTL_TEXTENCODING_UTF8);
+    attributes.SetFamilyName(OUString::createFromAscii(aTargetName.getStr()));
+    attributes.SetItalic(rPattern.GetItalic());
+    attributes.SetWeight(rPattern.GetWeight());
+    attributes.SetWidthType(rPattern.GetWidthType());
+    /*
+        Pitch isnt used in the font matching algorithm
+        attributes.SetPitch(rPattern.GetPitch()); 
+    */
+
+    roaring::Roaring missingCodepointBitmap;
+    if (!rMissingCodes.isEmpty())
+    {
+        for (sal_Int32 index = 0; index < rMissingCodes.getLength();)
+        {
+            missingCodepointBitmap.add(rMissingCodes.iterateCodePoints(&index));
+        }
+    }
+    attributes.SetBitmap(missingCodepointBitmap);
+
+    FADefaultSubstitute(attributes);
+    if (PrintFont* matchedPrintFont = FontSetMatch_Configless(attributes))
+    {
+        rPattern.maSearchName = matchedPrintFont->m_aFontAttributes.GetFamilyName();
+        rPattern.SetWeight(matchedPrintFont->m_aFontAttributes.GetWeight());
+        rPattern.SetItalic(matchedPrintFont->m_aFontAttributes.GetItalic());
+        rPattern.SetPitch(matchedPrintFont->m_aFontAttributes.GetPitch());
+        rPattern.SetWidthType(matchedPrintFont->m_aFontAttributes.GetWidthType());
+        /*
+            Note: the mbEmbolden and maItalicMatrix fields of rPattern are also
+            set in FontConfig; however, those fields are always empty
+        */
+
+        if (!rMissingCodes.isEmpty())
+        {
+            std::unique_ptr<sal_uInt32[]> const pRemainingCodes(
+                new sal_uInt32[rMissingCodes.getLength()]);
+            int nRemainingLen = 0;
+
+            for (sal_Int32 nStrIndex = 0; nStrIndex < rMissingCodes.getLength();)
+            {
+                const sal_uInt32 nCode = rMissingCodes.iterateCodePoints(&nStrIndex);
+                if (!matchedPrintFont->m_aFontAttributes.GetCodepointBitmap().contains(nCode))
+                    pRemainingCodes[nRemainingLen++] = nCode;
+            }
+            OUString sStillMissing(pRemainingCodes.get(), nRemainingLen);
+            if (!Application::IsHeadlessModeEnabled()
+                && officecfg::Office::Common::PackageKit::EnableFontInstallation::get())
+            {
+                // replaced nothing
+                if (sStillMissing == rMissingCodes)
+                {
+                    for (sal_Int32 i = 0; i < nRemainingLen; ++i)
+                    {
+                        LanguageTag aOurTag(getExemplarLangTagForCodePoint(pRemainingCodes[i]));
+                        OString sTag = OUStringToOString(aOurTag.getBcp47(), RTL_TEXTENCODING_UTF8);
+                        if (!m_aPreviousLangSupportRequests.insert(sTag).second)
+                            continue;
+                        sTag = mapToFontConfigLangTag(aOurTag);
+                        if (!sTag.isEmpty()
+                            && m_aPreviousLangSupportRequests.find(sTag)
+                                   == m_aPreviousLangSupportRequests.end())
+                        {
+                            OString sReq = OString::Concat(":lang=") + sTag;
+                            m_aCurrentRequests.push_back(OUString::fromUtf8(sReq));
+                            m_aPreviousLangSupportRequests.insert(sTag);
+                        }
+                    }
+                }
+                if (!m_aCurrentRequests.empty())
+                    m_aFontInstallerTimer.Start();
+            }
+            rMissingCodes = sStillMissing;
+        }
+    }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
