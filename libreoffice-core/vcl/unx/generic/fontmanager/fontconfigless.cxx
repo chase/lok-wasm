@@ -588,4 +588,16 @@ PrintFontManager::FontSetMatch_Configless(const FontAttributes& attributes)
     return getFontFromAttributes("Noto Serif", attributes.GetItalic(), attributes.GetWeight());
 }
 
+/**
+ * @brief Initialized harcoded PrintFont Data
+ * 
+ */
+void PrintFontManager::CountFontConfigFonts_Configless()
+{
+    FontData::populatePrintFontManagerData(m_aFonts, m_aFontFileToFontID);
+    getDirectoryAtom(OString("/instdir/share/fonts/truetype"));
+    getDirectoryAtom(OString("/instdir/program/resource/common/fonts"));
+    m_nNextFontID = 33;
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

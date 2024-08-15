@@ -112,6 +112,7 @@ public:
     */
     static void initFontconfig();
     void countFontconfigFonts();
+    void CountFontConfigFonts_Configless();
     /* deinitialize fontconfig
      */
     static void deinitFontconfig();

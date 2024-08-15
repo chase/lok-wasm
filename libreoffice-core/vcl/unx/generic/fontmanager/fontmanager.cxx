@@ -624,7 +624,11 @@ void PrintFontManager::initialize()
         } while( nIndex >= 0 );
     }
 
+#if USE_FONT_CONFIGLESS == 1
+    CountFontConfigFonts_Configless();
+#else
     countFontconfigFonts();
+#endif
 
 #if OSL_DEBUG_LEVEL > 1
     aStep1 = times( &tms );
