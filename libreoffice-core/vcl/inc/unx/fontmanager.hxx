@@ -61,6 +61,18 @@ class PPDParser;
 
 typedef int fontID;
 
+struct VCL_DLLPRIVATE PrintFont
+{
+    FontAttributes m_aFontAttributes;
+
+    int m_nDirectory; // atom containing system dependent path
+    OString m_aFontFile; // relative to directory
+    int m_nCollectionEntry; // 0 for regular fonts, 0 to ... for fonts stemming from collections
+    int m_nVariationEntry; // 0 for regular fonts, 0 to ... for fonts stemming from font variations
+
+    explicit PrintFont();
+};
+
 // a class to manage printable fonts
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
@@ -79,18 +91,6 @@ public:
 
     PrintFontManager(PrintFontManager const&) = delete;
     void operator=(PrintFontManager const&) = delete;
-
-    struct VCL_DLLPRIVATE PrintFont
-    {
-        FontAttributes m_aFontAttributes;
-
-        int m_nDirectory; // atom containing system dependent path
-        OString m_aFontFile; // relative to directory
-        int m_nCollectionEntry; // 0 for regular fonts, 0 to ... for fonts stemming from collections
-        int m_nVariationEntry; // 0 for regular fonts, 0 to ... for fonts stemming from font variations
-
-        explicit PrintFont();
-    };
     friend struct PrintFont;
 
     ~PrintFontManager();

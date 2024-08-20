@@ -87,7 +87,7 @@ static sal_uInt16 getUInt16BE( const sal_uInt8*& pBuffer )
 /*
  *  PrintFont implementations
  */
-PrintFontManager::PrintFont::PrintFont()
+PrintFont::PrintFont()
 :   m_nDirectory(0)
 ,   m_nCollectionEntry(0)
 ,   m_nVariationEntry(0)
@@ -174,9 +174,9 @@ std::vector<fontID> PrintFontManager::addFontFile( std::u16string_view rFileUrl 
     return aFontIds;
 }
 
-std::vector<PrintFontManager::PrintFont> PrintFontManager::analyzeFontFile( int nDirID, const OString& rFontFile, const char *pFormat ) const
+std::vector<PrintFont> PrintFontManager::analyzeFontFile( int nDirID, const OString& rFontFile, const char *pFormat ) const
 {
-    std::vector<PrintFontManager::PrintFont> aNewFonts;
+    std::vector<PrintFont> aNewFonts;
 
     OString aDir( getDirectory( nDirID ) );
 

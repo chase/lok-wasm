@@ -20,44 +20,44 @@ class FontData
 {
 public:
     static void populatePrintFontManagerData(
-        std::unordered_map<fontID, PrintFontManager::PrintFont>& PrintFontMap,
+        std::unordered_map<fontID, PrintFont>& PrintFontMap,
         std::unordered_map<OString, o3tl::sorted_vector<fontID>>& FontFileToFontIDMap);
 
 private:
     // Print Fonts
-    static PrintFontManager::PrintFont GetPrintFontCaladeaBold();
-    static PrintFontManager::PrintFont GetPrintFontCaladeaBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontCaladeaItalic();
-    static PrintFontManager::PrintFont GetPrintFontCaladeaRegular();
-    static PrintFontManager::PrintFont GetPrintFontCarlitoBold();
-    static PrintFontManager::PrintFont GetPrintFontCarlitoBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontCarlitoItalic();
-    static PrintFontManager::PrintFont GetPrintFontCarlitoRegular();
-    static PrintFontManager::PrintFont GetPrintFontLiberationMonoBold();
-    static PrintFontManager::PrintFont GetPrintFontLiberationMonoBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationMonoItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationMonoRegular();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansBold();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansRegular();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansNarrowBold();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansNarrowBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansNarrowItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSansNarrowRegular();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSerifBold();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSerifBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSerifItalic();
-    static PrintFontManager::PrintFont GetPrintFontLiberationSerifRegular();
-    static PrintFontManager::PrintFont GetPrintFontNotoSansBold();
-    static PrintFontManager::PrintFont GetPrintFontNotoSansBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontNotoSansItalic();
-    static PrintFontManager::PrintFont GetPrintFontNotoSansRegular();
-    static PrintFontManager::PrintFont GetPrintFontNotoSerifBold();
-    static PrintFontManager::PrintFont GetPrintFontNotoSerifRegular();
-    static PrintFontManager::PrintFont GetPrintFontNotoSerifBoldItalic();
-    static PrintFontManager::PrintFont GetPrintFontNotoSerifItalic();
-    static PrintFontManager::PrintFont GetPrintFontOpens();
+    static PrintFont GetPrintFontCaladeaBold();
+    static PrintFont GetPrintFontCaladeaBoldItalic();
+    static PrintFont GetPrintFontCaladeaItalic();
+    static PrintFont GetPrintFontCaladeaRegular();
+    static PrintFont GetPrintFontCarlitoBold();
+    static PrintFont GetPrintFontCarlitoBoldItalic();
+    static PrintFont GetPrintFontCarlitoItalic();
+    static PrintFont GetPrintFontCarlitoRegular();
+    static PrintFont GetPrintFontLiberationMonoBold();
+    static PrintFont GetPrintFontLiberationMonoBoldItalic();
+    static PrintFont GetPrintFontLiberationMonoItalic();
+    static PrintFont GetPrintFontLiberationMonoRegular();
+    static PrintFont GetPrintFontLiberationSansBold();
+    static PrintFont GetPrintFontLiberationSansBoldItalic();
+    static PrintFont GetPrintFontLiberationSansItalic();
+    static PrintFont GetPrintFontLiberationSansRegular();
+    static PrintFont GetPrintFontLiberationSansNarrowBold();
+    static PrintFont GetPrintFontLiberationSansNarrowBoldItalic();
+    static PrintFont GetPrintFontLiberationSansNarrowItalic();
+    static PrintFont GetPrintFontLiberationSansNarrowRegular();
+    static PrintFont GetPrintFontLiberationSerifBold();
+    static PrintFont GetPrintFontLiberationSerifBoldItalic();
+    static PrintFont GetPrintFontLiberationSerifItalic();
+    static PrintFont GetPrintFontLiberationSerifRegular();
+    static PrintFont GetPrintFontNotoSansBold();
+    static PrintFont GetPrintFontNotoSansBoldItalic();
+    static PrintFont GetPrintFontNotoSansItalic();
+    static PrintFont GetPrintFontNotoSansRegular();
+    static PrintFont GetPrintFontNotoSerifBold();
+    static PrintFont GetPrintFontNotoSerifRegular();
+    static PrintFont GetPrintFontNotoSerifBoldItalic();
+    static PrintFont GetPrintFontNotoSerifItalic();
+    static PrintFont GetPrintFontOpens();
 
     // Font Attributes
     static void SetCaladeaBoldFont(FontAttributes& fontAttributes);
