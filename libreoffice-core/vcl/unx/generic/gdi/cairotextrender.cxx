@@ -22,12 +22,14 @@
 #include <comphelper/scopeguard.hxx>
 #include <unx/cairotextrender.hxx>
 #include <unx/fc_fontoptions.hxx>
+#include <unx/fontmanager.hxx>
 #include <unx/freetype_glyphcache.hxx>
 #include <unx/gendata.hxx>
 #include <headless/CairoCommon.hxx>
 #include <vcl/svapp.hxx>
 #include <sallayout.hxx>
 #include <salinst.hxx>
+#include <ft2build.h>
 
 #include <cairo.h>
 #include <cairo-ft.h>
@@ -191,10 +193,27 @@ static void ApplyFont(cairo_t* cr, const CairoFontsCache::CacheId& rId, double n
     cairo_font_face_t* font_face = CairoFontsCache::FindCachedFont(rId);
     if (!font_face)
     {
-        const FontConfigFontOptions *pOptions = rId.mpOptions;
-        FcPattern *pPattern = pOptions->GetPattern();
-        font_face = cairo_ft_font_face_create_for_pattern(pPattern);
-        CairoFontsCache::CacheFont(font_face, rId);
+#if USE_FONT_CONFIGLESS == 1
+    const FontConfigFontOptions *pOptions = rId.mpOptions;
+
+    FT_Library library;
+    FT_Face face;
+
+    FT_Init_FreeType(&library);
+    FT_New_Face(library, pOptions->GetFontFile(), 0, &face);
+    
+    font_face = cairo_ft_font_face_create_for_ft_face(face, 0);
+    CairoFontsCache::CacheFont(font_face, rId);
+
+    // clean up when the font face is done being used
+    // FT_Done_Face(face);
+    // FT_Done_FreeType(library);
+#else
+    const FontConfigFontOptions *pOptions = rId.mpOptions;
+    FcPattern *pPattern = pOptions->GetPattern();
+    font_face = cairo_ft_font_face_create_for_pattern(pPattern);
+    CairoFontsCache::CacheFont(font_face, rId);
+#endif
     }
     cairo_set_font_face(cr, font_face);
 

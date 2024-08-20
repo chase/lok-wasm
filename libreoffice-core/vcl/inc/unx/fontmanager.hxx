@@ -23,6 +23,7 @@
 
 #include <sal/config.h>
 
+#include <o3tl/lru_map.hxx>
 #include <o3tl/sorted_vector.hxx>
 #include <tools/fontenum.hxx>
 #include <vcl/dllapi.h>
@@ -37,6 +38,70 @@
 #include <string_view>
 #include <vector>
 #include <unordered_map>
+#include <o3tl/hash_combine.hxx>
+
+namespace
+{
+struct FontOptionsKey
+{
+    OUString m_sFamilyName;
+    int m_nFontSize;
+    FontItalic m_eItalic;
+    FontWeight m_eWeight;
+    FontWidth m_eWidth;
+    FontPitch m_ePitch;
+
+    bool operator==(const FontOptionsKey& rOther) const
+    {
+        return m_sFamilyName == rOther.m_sFamilyName && m_nFontSize == rOther.m_nFontSize
+               && m_eItalic == rOther.m_eItalic && m_eWeight == rOther.m_eWeight
+               && m_eWidth == rOther.m_eWidth && m_ePitch == rOther.m_ePitch;
+    }
+};
+}
+
+namespace std
+{
+template <> struct hash<FontOptionsKey>
+{
+    std::size_t operator()(const FontOptionsKey& k) const noexcept
+    {
+        std::size_t seed = k.m_sFamilyName.hashCode();
+        o3tl::hash_combine(seed, k.m_nFontSize);
+        o3tl::hash_combine(seed, k.m_eItalic);
+        o3tl::hash_combine(seed, k.m_eWeight);
+        o3tl::hash_combine(seed, k.m_eWidth);
+        o3tl::hash_combine(seed, k.m_ePitch);
+        return seed;
+    }
+};
+}
+
+class FontOptionsCache
+{
+private:
+    o3tl::lru_map<FontOptionsKey, std::unique_ptr<FontConfigFontOptions>> lru_options_cache;
+
+public:
+    FontOptionsCache()
+        : lru_options_cache(10) // arbitrary cache size of 10
+    {
+    }
+
+    std::unique_ptr<FontConfigFontOptions> lookup(const FontOptionsKey& rKey)
+    {
+        auto it = lru_options_cache.find(rKey);
+        if (it != lru_options_cache.end())
+            return std::make_unique<FontConfigFontOptions>(*it->second);
+        return nullptr;
+    }
+
+    void cache(const FontOptionsKey& rKey, const OString& fontfile)
+    {
+        lru_options_cache.insert(
+            std::make_pair(rKey, std::make_unique<FontConfigFontOptions>(fontfile)));
+    }
+};
 
 /*
  *  some words on metrics: every length returned by PrintFontManager and
@@ -76,8 +141,7 @@ struct VCL_DLLPRIVATE PrintFont
 // a class to manage printable fonts
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
-
-// PrintFontManager Singleton Instance
+    // PrintFontManager Singleton Instance
 
 private:
     static std::unique_ptr<PrintFontManager> printFontManagerInstance;
@@ -105,7 +169,7 @@ private:
     std::unordered_map<int, OString> m_aAtomToDir;
     int m_nNextDirAtom;
 
-    OString getFontFile(const PrintFont& rFont) const;
+    FontOptionsCache m_FontOptionsCache;
 
     std::vector<PrintFont> analyzeFontFile(int nDirID, const OString& rFileName,
                                            const char* pFormat = nullptr) const;
@@ -170,6 +234,8 @@ public:
         return it == m_aFonts.end() ? nullptr : &it->second;
     }
 
+    OString getFontFile(const PrintFont& rFont) const;
+
     // returns the ids of all managed fonts.
     void getFontList(std::vector<fontID>& rFontIDs);
 
@@ -218,7 +284,9 @@ public:
     bool MatchFont_Configless(FontAttributes& rDFA);
 
     static std::unique_ptr<FontConfigFontOptions>
-    getFontOptions(const FontAttributes& rFontAttributes, int nSize);
+        getFontOptions(const FontAttributes& rFontAttributes, int nSize);
+    std::unique_ptr<FontConfigFontOptions>
+        GetFontOptions_Configless(const FontAttributes& rFontAttributes, int nSize);
 
     void Substitute(vcl::font::FontSelectPattern& rPattern, OUString& rMissingCodes);
     void Substitute_Configless(vcl::font::FontSelectPattern& rPattern, OUString& rMissingCodes);
