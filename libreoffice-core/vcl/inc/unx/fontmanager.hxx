@@ -62,10 +62,24 @@ class PPDParser;
 typedef int fontID;
 
 // a class to manage printable fonts
-
 class VCL_PLUGIN_PUBLIC PrintFontManager
 {
+
+// PrintFontManager Singleton Instance
+
+private:
+    static std::unique_ptr<PrintFontManager> printFontManagerInstance;
+
+    PrintFontManager();
+
+    void initialize();
+
 public:
+    static PrintFontManager& get();
+
+    PrintFontManager(PrintFontManager const&) = delete;
+    void operator=(PrintFontManager const&) = delete;
+
     struct VCL_DLLPRIVATE PrintFont
     {
         FontAttributes m_aFontAttributes;
@@ -79,6 +93,9 @@ public:
     };
     friend struct PrintFont;
 
+    ~PrintFontManager();
+
+private:
     fontID m_nNextFontID;
     std::unordered_map<fontID, PrintFont> m_aFonts;
     std::unordered_map<OString, o3tl::sorted_vector<fontID>>
@@ -142,17 +159,10 @@ public:
     Timer m_aFontInstallerTimer;
 
     DECL_DLLPRIVATE_LINK(autoInstallFontLangSupport, Timer*, void);
-    PrintFontManager();
 
 public:
-    ~PrintFontManager();
-    friend class ::GenericUnixSalData;
-    static PrintFontManager& get(); // one instance only
-
     // There may be multiple font ids for font collections
     std::vector<fontID> addFontFile(std::u16string_view rFileUrl);
-
-    void initialize();
 
     const PrintFont* getFont(fontID nID) const
     {
