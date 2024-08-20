@@ -19,9 +19,9 @@ namespace psp
 /*
 * Creating Print Fonts Data
 */
-PrintFontManager::PrintFont FontData::GetPrintFontCaladeaBold()
+PrintFont FontData::GetPrintFontCaladeaBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Caladea-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -30,9 +30,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCaladeaBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCaladeaBoldItalic()
+PrintFont FontData::GetPrintFontCaladeaBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Caladea-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -41,9 +41,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCaladeaBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCaladeaItalic()
+PrintFont FontData::GetPrintFontCaladeaItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Caladea-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -52,9 +52,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCaladeaItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCaladeaRegular()
+PrintFont FontData::GetPrintFontCaladeaRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Caladea-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -63,9 +63,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCaladeaRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCarlitoBold()
+PrintFont FontData::GetPrintFontCarlitoBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Carlito-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -74,9 +74,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCarlitoBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCarlitoBoldItalic()
+PrintFont FontData::GetPrintFontCarlitoBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Carlito-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -85,9 +85,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCarlitoBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCarlitoItalic()
+PrintFont FontData::GetPrintFontCarlitoItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Carlito-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -96,9 +96,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCarlitoItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontCarlitoRegular()
+PrintFont FontData::GetPrintFontCarlitoRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("Carlito-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -107,9 +107,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontCarlitoRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoBold()
+PrintFont FontData::GetPrintFontLiberationMonoBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationMono-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -118,9 +118,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoBoldItalic()
+PrintFont FontData::GetPrintFontLiberationMonoBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationMono-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -129,9 +129,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoItalic()
+PrintFont FontData::GetPrintFontLiberationMonoItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationMono-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -140,9 +140,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoRegular()
+PrintFont FontData::GetPrintFontLiberationMonoRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationMono-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -151,9 +151,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationMonoRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansBold()
+PrintFont FontData::GetPrintFontLiberationSansBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSans-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -162,9 +162,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansBoldItalic()
+PrintFont FontData::GetPrintFontLiberationSansBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSans-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -173,9 +173,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansItalic()
+PrintFont FontData::GetPrintFontLiberationSansItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSans-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -184,9 +184,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansRegular()
+PrintFont FontData::GetPrintFontLiberationSansRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSans-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -195,9 +195,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowBold()
+PrintFont FontData::GetPrintFontLiberationSansNarrowBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSansNarrow-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -206,9 +206,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowBoldItalic()
+PrintFont FontData::GetPrintFontLiberationSansNarrowBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSansNarrow-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -217,9 +217,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowBoldItalic
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowItalic()
+PrintFont FontData::GetPrintFontLiberationSansNarrowItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSansNarrow-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -228,9 +228,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowRegular()
+PrintFont FontData::GetPrintFontLiberationSansNarrowRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSansNarrow-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -239,9 +239,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSansNarrowRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifBold()
+PrintFont FontData::GetPrintFontLiberationSerifBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSerif-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -250,9 +250,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifBoldItalic()
+PrintFont FontData::GetPrintFontLiberationSerifBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSerif-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -261,9 +261,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifItalic()
+PrintFont FontData::GetPrintFontLiberationSerifItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSerif-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -272,9 +272,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifRegular()
+PrintFont FontData::GetPrintFontLiberationSerifRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("LiberationSerif-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -283,9 +283,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontLiberationSerifRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSansBold()
+PrintFont FontData::GetPrintFontNotoSansBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSans-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -294,9 +294,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSansBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSansBoldItalic()
+PrintFont FontData::GetPrintFontNotoSansBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSans-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -305,9 +305,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSansBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSansItalic()
+PrintFont FontData::GetPrintFontNotoSansItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSans-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -316,9 +316,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSansItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSansRegular()
+PrintFont FontData::GetPrintFontNotoSansRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSans-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -327,9 +327,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSansRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifBold()
+PrintFont FontData::GetPrintFontNotoSerifBold()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSerif-Bold.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -338,9 +338,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifBold()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifRegular()
+PrintFont FontData::GetPrintFontNotoSerifRegular()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSerif-Regular.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -349,9 +349,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifRegular()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifBoldItalic()
+PrintFont FontData::GetPrintFontNotoSerifBoldItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSerif-BoldItalic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -360,9 +360,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifBoldItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifItalic()
+PrintFont FontData::GetPrintFontNotoSerifItalic()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 1;
     printFont.m_aFontFile = OString("NotoSerif-Italic.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -371,9 +371,9 @@ PrintFontManager::PrintFont FontData::GetPrintFontNotoSerifItalic()
     return printFont;
 }
 
-PrintFontManager::PrintFont FontData::GetPrintFontOpens()
+PrintFont FontData::GetPrintFontOpens()
 {
-    PrintFontManager::PrintFont printFont;
+    PrintFont printFont;
     printFont.m_nDirectory = 2;
     printFont.m_aFontFile = OString("opens___.ttf");
     printFont.m_nCollectionEntry = 0;
@@ -1691,14 +1691,14 @@ void FontData::SetOpenSymbolRegularFont(FontAttributes& fontAttributes)
  * @param FontFileToFontIDMap 
  */
 void FontData::populatePrintFontManagerData(
-    std::unordered_map<fontID, PrintFontManager::PrintFont>& PrintFontMap,
+    std::unordered_map<fontID, PrintFont>& PrintFontMap,
     std::unordered_map<OString, o3tl::sorted_vector<fontID>>& FontFileToFontIDMap)
 {
     /*
         There should be 33 Fonts
         8 Families * 4 Options (Bold, BoldItalic, Italic, Regular) + 1 Opens Font
     */
-    std::vector<PrintFontManager::PrintFont> PrintFontArray
+    std::vector<PrintFont> PrintFontArray
         = { GetPrintFontCaladeaBold(),
             GetPrintFontCaladeaBoldItalic(),
             GetPrintFontCaladeaItalic(),
@@ -1734,7 +1734,7 @@ void FontData::populatePrintFontManagerData(
             GetPrintFontOpens() };
 
     fontID id = 0;
-    for (PrintFontManager::PrintFont printFont : PrintFontArray)
+    for (PrintFont printFont : PrintFontArray)
     {
         PrintFontMap.emplace(id, printFont);
         FontFileToFontIDMap[printFont.m_aFontFile].insert(id);

@@ -94,11 +94,11 @@ const std::map<std::string, std::string> fontToFallback = {
  * @param fontfamily 
  * @param fontItalic 
  * @param fontWeight 
- * @return PrintFontManager::PrintFont* 
+ * @return PrintFont* 
  */
-PrintFontManager::PrintFont* PrintFontManager::getFontFromAttributes(const std::string fontfamily,
-                                                                     const FontItalic fontItalic,
-                                                                     const FontWeight fontWeight)
+PrintFont* PrintFontManager::getFontFromAttributes(const std::string fontfamily,
+                                                   const FontItalic fontItalic,
+                                                   const FontWeight fontWeight)
 {
     const bool isItalic
         = fontItalic == FontItalic::ITALIC_NORMAL || fontItalic == FontItalic::ITALIC_OBLIQUE;
@@ -148,10 +148,9 @@ PrintFontManager::PrintFont* PrintFontManager::getFontFromAttributes(const std::
  * @brief Matching Fonts based off the Font Config metric based compatibility
  * 
  * @param attributes 
- * @return PrintFontManager::PrintFont* 
+ * @return PrintFont* 
  */
-PrintFontManager::PrintFont*
-PrintFontManager::MatchFromCompatibilityChart(const FontAttributes& attributes)
+PrintFont* PrintFontManager::MatchFromCompatibilityChart(const FontAttributes& attributes)
 {
     std::string familyname
         = OUStringToOString(attributes.GetFamilyName(), RTL_TEXTENCODING_UTF8).getStr();
@@ -169,10 +168,9 @@ PrintFontManager::MatchFromCompatibilityChart(const FontAttributes& attributes)
  * @brief Matches Fonts based off the Family Type
  * 
  * @param attributes 
- * @return PrintFontManager::PrintFont* 
+ * @return PrintFont* 
  */
-PrintFontManager::PrintFont*
-PrintFontManager::MatchSansOrSerifFamily(const FontAttributes& attributes)
+PrintFont* PrintFontManager::MatchSansOrSerifFamily(const FontAttributes& attributes)
 {
     std::string font_family;
     switch (attributes.GetFamilyType())
@@ -553,16 +551,15 @@ void FADefaultSubstitute(FontAttributes& attributes)
  * https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/#font-matching-algorithm
  * 
  * @param attributes 
- * @return PrintFontManager::PrintFont* 
+ * @return PrintFont* 
  */
-PrintFontManager::PrintFont*
-PrintFontManager::FontSetMatch_Configless(const FontAttributes& attributes)
+PrintFont* PrintFontManager::FontSetMatch_Configless(const FontAttributes& attributes)
 {
-    if (PrintFontManager::PrintFont* result = MatchFromCompatibilityChart(attributes))
+    if (PrintFont* result = MatchFromCompatibilityChart(attributes))
         return result;
 
     // Try to match to a Sans or Serif family
-    if (PrintFontManager::PrintFont* result = MatchSansOrSerifFamily(attributes))
+    if (PrintFont* result = MatchSansOrSerifFamily(attributes))
         return result;
 
     // Font Face Matching Algorithm
