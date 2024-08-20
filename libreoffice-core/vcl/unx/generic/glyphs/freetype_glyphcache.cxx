@@ -460,20 +460,16 @@ FreetypeFont::FreetypeFont(FreetypeFontInstance& rFontInstance, std::shared_ptr<
     mbFaceOk = true;
 }
 
-namespace
-{
-    std::unique_ptr<FontConfigFontOptions> GetFCFontOptions(const FontAttributes& rFontAttributes, int nSize)
-    {
-        return psp::PrintFontManager::getFontOptions(rFontAttributes, nSize);
-    }
-}
-
 const FontConfigFontOptions* FreetypeFont::GetFontOptions() const
 {
     if (!mxFontOptions)
     {
-        mxFontOptions = GetFCFontOptions(mxFontInfo->GetFontAttributes(), mrFontInstance.GetFontSelectPattern().mnHeight);
+#if USE_FONT_CONFIGLESS == 1
+        mxFontOptions = psp::PrintFontManager::get().GetFontOptions_Configless(mxFontInfo->GetFontAttributes(), mrFontInstance.GetFontSelectPattern().mnHeight);
+#else
+        mxFontOptions = psp::PrintFontManager::getFontOptions(mxFontInfo->GetFontAttributes(), mrFontInstance.GetFontSelectPattern().mnHeight);
         mxFontOptions->SyncPattern(GetFontFileName(), GetFontFaceIndex(), GetFontFaceVariation(), mrFontInstance.NeedsArtificialBold());
+#endif
     }
     return mxFontOptions.get();
 }

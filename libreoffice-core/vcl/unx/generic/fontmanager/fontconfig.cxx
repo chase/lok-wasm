@@ -64,50 +64,6 @@ using namespace osl;
 namespace
 {
 
-struct FontOptionsKey
-{
-    OUString m_sFamilyName;
-    int m_nFontSize;
-    FontItalic m_eItalic;
-    FontWeight m_eWeight;
-    FontWidth m_eWidth;
-    FontPitch m_ePitch;
-
-    bool operator==(const FontOptionsKey& rOther) const
-    {
-        return m_sFamilyName == rOther.m_sFamilyName &&
-               m_nFontSize == rOther.m_nFontSize &&
-               m_eItalic == rOther.m_eItalic &&
-               m_eWeight == rOther.m_eWeight &&
-               m_eWidth == rOther.m_eWidth &&
-               m_ePitch == rOther.m_ePitch;
-    }
-};
-
-}
-
-namespace std
-{
-
-template <> struct hash<FontOptionsKey>
-{
-    std::size_t operator()(const FontOptionsKey& k) const noexcept
-    {
-        std::size_t seed = k.m_sFamilyName.hashCode();
-        o3tl::hash_combine(seed, k.m_nFontSize);
-        o3tl::hash_combine(seed, k.m_eItalic);
-        o3tl::hash_combine(seed, k.m_eWeight);
-        o3tl::hash_combine(seed, k.m_eWidth);
-        o3tl::hash_combine(seed, k.m_ePitch);
-        return seed;
-    }
-};
-
-} // end std namespace
-
-namespace
-{
-
 struct FcPatternDeleter
 {
     void operator()(FcPattern* pPattern) const

@@ -704,4 +704,38 @@ void PrintFontManager::Substitute_Configless(vcl::font::FontSelectPattern& rPatt
     }
 }
 
+/**
+ * @brief GetFontOptions
+ * 
+ * @param rInfo 
+ * @return std::unique_ptr<FontConfigFontOptions> 
+ */
+std::unique_ptr<FontConfigFontOptions>
+PrintFontManager::GetFontOptions_Configless(const FontAttributes& rInfo, int nSize)
+{
+    const FontOptionsKey aKey{ rInfo.GetFamilyName(), nSize,
+                         rInfo.GetItalic(),     rInfo.GetWeight(),
+                         rInfo.GetWidthType(),  rInfo.GetPitch() };
+    
+    if (std::unique_ptr<FontConfigFontOptions> pOptions = m_FontOptionsCache.lookup(aKey))
+        return pOptions;
+
+    FontAttributes attributes;
+    attributes.SetFamilyName(rInfo.GetFamilyName());
+    attributes.SetItalic(rInfo.GetItalic());
+    attributes.SetWeight(rInfo.GetWeight());
+    attributes.SetWidthType(rInfo.GetWidthType());
+    /*
+        Pitch isnt used in the font matching algorithm
+        attributes.SetPitch(rInfo.GetPitch()); 
+    */
+
+    FADefaultSubstitute(attributes);
+    if (PrintFont* matchedPrintFont = FontSetMatch_Configless(attributes))
+    {
+        m_FontOptionsCache.cache(aKey, getFontFile(*matchedPrintFont));
+    }
+    return m_FontOptionsCache.lookup(aKey);
+}
+
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
