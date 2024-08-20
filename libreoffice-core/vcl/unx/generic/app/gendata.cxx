@@ -38,6 +38,8 @@ SalData::~SalData() {}
 
 GenericUnixSalData::GenericUnixSalData()
     : m_pDisplay(nullptr)
+,     m_pPrintFontManager(psp::PrintFontManager::get())
+    
 {
 }
 
@@ -45,7 +47,6 @@ GenericUnixSalData::~GenericUnixSalData()
 {
 #ifndef IOS
     // at least for InitPrintFontManager the sequence is important
-    m_pPrintFontManager.reset();
     m_pFreetypeManager.reset();
     m_pPrinterInfoManager.reset();
 #endif
@@ -61,8 +62,6 @@ void GenericUnixSalData::InitPrintFontManager()
 {
 #ifndef IOS
     GetFreetypeManager();
-    m_pPrintFontManager.reset(new psp::PrintFontManager);
-    m_pPrintFontManager->initialize();
 #endif
 }
 

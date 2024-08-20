@@ -68,6 +68,10 @@ using namespace com::sun::star::uno;
 using namespace com::sun::star::beans;
 using namespace com::sun::star::lang;
 
+namespace psp {
+    std::unique_ptr<PrintFontManager> PrintFontManager::printFontManagerInstance = nullptr;
+}
+
 /*
  *  static helpers
  */
@@ -91,13 +95,16 @@ PrintFontManager::PrintFont::PrintFont()
 }
 
 /*
- *  one instance only
+ * singleton instance of PrintFontManager
  */
 PrintFontManager& PrintFontManager::get()
 {
-    GenericUnixSalData* const pSalData(GetGenericUnixSalData());
-    assert(pSalData);
-    return *pSalData->GetPrintFontManager();
+    // very unlikely, but potential race condition???
+    if (!printFontManagerInstance) {
+        printFontManagerInstance = std::unique_ptr<PrintFontManager>(new PrintFontManager());
+        printFontManagerInstance->initialize();
+    }
+    return *printFontManagerInstance;
 }
 
 /*
