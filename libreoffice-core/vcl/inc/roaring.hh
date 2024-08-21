@@ -1799,7 +1799,8 @@ public:
         //
         // we put std::numeric_limits<>::max/min in parentheses
         // to avoid a clash with the Windows.h header under Windows
-        return roarings.size() ==
+        uint64_t roaring_size = roarings.size();
+        return roaring_size ==
             ((uint64_t)(std::numeric_limits<uint32_t>::max)()) + 1
             ? std::all_of(
                 roarings.cbegin(), roarings.cend(),

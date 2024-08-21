@@ -268,7 +268,7 @@ typedef ROARING_CONTAINER_T container_t;
 #include <stdint.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -610,7 +610,7 @@ extern "C" { namespace roaring {
 #include <stdint.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -866,7 +866,7 @@ uint64_t bitset_flip_list_withcard(uint64_t *words, uint64_t card,
 
 void bitset_flip_list(uint64_t *words, const uint16_t *list, uint64_t length);
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 /***
  * BEGIN Harley-Seal popcount functions.
  */
@@ -6729,7 +6729,7 @@ void ra_shift_tail(roaring_array_t *ra, int32_t count, int32_t distance);
 #include <string.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -6743,7 +6743,7 @@ extern "C" { namespace roaring { namespace internal {
 extern inline int32_t binarySearch(const uint16_t *array, int32_t lenarray,
                                    uint16_t ikey);
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 // used by intersect_vector16
 ALIGNED(0x1000)
 static const uint8_t shuffle_mask16[] = {
@@ -7947,7 +7947,7 @@ int32_t xor_uint16(const uint16_t *array_1, int32_t card_1,
     return pos_out;
 }
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 
 /***
  * start of the SIMD 16-bit union code
@@ -8700,7 +8700,7 @@ size_t union_uint32_card(const uint32_t *set_1, size_t size_1,
 
 size_t fast_union_uint16(const uint16_t *set_1, size_t size_1, const uint16_t *set_2,
                     size_t size_2, uint16_t *buffer) {
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     if( croaring_hardware_support() & ROARING_SUPPORTS_AVX2 ) {
         // compute union with smallest array first
       if (size_1 < size_2) {
@@ -8731,7 +8731,7 @@ size_t fast_union_uint16(const uint16_t *set_1, size_t size_1, const uint16_t *s
     }
 #endif
 }
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #if CROARING_COMPILER_SUPPORTS_AVX512
 CROARING_TARGET_AVX512
 static inline bool _avx512_memequals(const void *s1, const void *s2, size_t n) {
@@ -8839,7 +8839,7 @@ bool memequals(const void *s1, const void *s2, size_t n) {
     if (n == 0) {
         return true;
     }
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     int support = croaring_hardware_support();
 #if CROARING_COMPILER_SUPPORTS_AVX512
     if( support & ROARING_SUPPORTS_AVX512 ) {
@@ -8857,7 +8857,7 @@ bool memequals(const void *s1, const void *s2, size_t n) {
 }
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #if CROARING_COMPILER_SUPPORTS_AVX512
 CROARING_TARGET_AVX512
 ALLOW_UNALIGNED
@@ -8882,7 +8882,7 @@ int avx512_array_container_to_uint32_array(void *vout, const uint16_t* array, si
 }
 CROARING_UNTARGET_AVX512
 #endif // #if CROARING_COMPILER_SUPPORTS_AVX512
-#endif // #if CROARING_IS_X64
+#endif // #if defined(CROARING_IS_X64) && CROARING_IS_X64
 
 
 #ifdef __cplusplus
@@ -9352,7 +9352,7 @@ bool bitset_trim(bitset_t *bitset) {
 #include <string.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -9363,7 +9363,7 @@ using namespace ::roaring::internal;
 extern "C" { namespace roaring { namespace api {
 #endif
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 static uint8_t lengthTable[256] = {
     0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3, 3, 4,
     2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
@@ -9378,7 +9378,7 @@ static uint8_t lengthTable[256] = {
     4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8};
 #endif
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 ALIGNED(32)
 static uint32_t vecDecodeTable[256][8] = {
     {0, 0, 0, 0, 0, 0, 0, 0}, /* 0x00 (00000000) */
@@ -9639,9 +9639,9 @@ static uint32_t vecDecodeTable[256][8] = {
     {1, 2, 3, 4, 5, 6, 7, 8}  /* 0xFF (11111111) */
 };
 
-#endif  // #if CROARING_IS_X64
+#endif  // #if defined(CROARING_IS_X64) && CROARING_IS_X64
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 // same as vecDecodeTable but in 16 bits
 ALIGNED(32)
 static uint16_t vecDecodeTable_uint16[256][8] = {
@@ -9905,7 +9905,7 @@ static uint16_t vecDecodeTable_uint16[256][8] = {
 
 #endif
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #if CROARING_COMPILER_SUPPORTS_AVX512
 CROARING_TARGET_AVX512
 const uint8_t vbmi2_table[64] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63};
@@ -10109,7 +10109,7 @@ size_t bitset_extract_intersection_setbits_uint16(const uint64_t * __restrict__ 
     return outpos;
 }
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 /*
  * Given a bitset containing "length" 64-bit words, write out the position
  * of all the set bits to "out" as 16-bit integers, values start at "base" (can
@@ -10483,7 +10483,7 @@ void bitset_flip_list(uint64_t *words, const uint16_t *list, uint64_t length) {
 #include <stdio.h>
 #include <stdlib.h>
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -10697,7 +10697,7 @@ void array_container_andnot(const array_container_t *array_1,
                             array_container_t *out) {
     if (out->capacity < array_1->cardinality)
         array_container_grow(out, array_1->cardinality, false);
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     if(( croaring_hardware_support() & ROARING_SUPPORTS_AVX2 ) && (out != array_1) && (out != array_2)) {
       out->cardinality =
           difference_vector16(array_1->array, array_1->cardinality,
@@ -10728,7 +10728,7 @@ void array_container_xor(const array_container_t *array_1,
         array_container_grow(out, max_cardinality, false);
     }
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     if( croaring_hardware_support() & ROARING_SUPPORTS_AVX2 ) {
       out->cardinality =
         xor_vector16(array_1->array, array_1->cardinality, array_2->array,
@@ -10759,7 +10759,7 @@ void array_container_intersection(const array_container_t *array1,
     int32_t card_1 = array1->cardinality, card_2 = array2->cardinality,
             min_card = minimum_int32(card_1, card_2);
     const int threshold = 64;  // subject to tuning
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     if (out->capacity < min_card) {
       array_container_grow(out, min_card + sizeof(__m128i) / sizeof(uint16_t),
         false);
@@ -10777,7 +10777,7 @@ void array_container_intersection(const array_container_t *array1,
         out->cardinality = intersect_skewed_uint16(
             array2->array, card_2, array1->array, card_1, out->array);
     } else {
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
        if( croaring_hardware_support() & ROARING_SUPPORTS_AVX2 ) {
         out->cardinality = intersect_vector16(
             array1->array, card_1, array2->array, card_2, out->array);
@@ -10805,7 +10805,7 @@ int array_container_intersection_cardinality(const array_container_t *array1,
         return intersect_skewed_uint16_cardinality(array2->array, card_2,
                                                    array1->array, card_1);
     } else {
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     if( croaring_hardware_support() & ROARING_SUPPORTS_AVX2 ) {
         return intersect_vector16_cardinality(array1->array, card_1,
                                               array2->array, card_2);
@@ -10851,7 +10851,7 @@ void array_container_intersection_inplace(array_container_t *src_1,
         src_1->cardinality = intersect_skewed_uint16(
             src_2->array, card_2, src_1->array, card_1, src_1->array);
     } else {
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
         if (croaring_hardware_support() & ROARING_SUPPORTS_AVX2) {
             src_1->cardinality = intersect_vector16_inplace(
                 src_1->array, card_1, src_2->array, card_2);
@@ -10870,7 +10870,7 @@ ALLOW_UNALIGNED
 int array_container_to_uint32_array(void *vout, const array_container_t *cont,
                                     uint32_t base) {
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     int support = croaring_hardware_support();
 #if CROARING_COMPILER_SUPPORTS_AVX512
     if (support & ROARING_SUPPORTS_AVX512) {
@@ -11048,7 +11048,7 @@ bool array_container_iterate64(const array_container_t *cont, uint32_t base,
 #include <string.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -11093,7 +11093,7 @@ bitset_container_t *bitset_container_create(void) {
     }
 
     size_t align_size = 32;
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     int support = croaring_hardware_support();
     if ( support & ROARING_SUPPORTS_AVX512 ) {
 	    // sizeof(__m512i) == 64
@@ -11169,7 +11169,7 @@ bitset_container_t *bitset_container_clone(const bitset_container_t *src) {
     }
 
     size_t align_size = 32;
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
     if ( croaring_hardware_support() & ROARING_SUPPORTS_AVX512 ) {
 	    // sizeof(__m512i) == 64
 	    align_size = 64;
@@ -11275,7 +11275,7 @@ bool bitset_container_intersect(const bitset_container_t *src_1,
 }
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef WORDS_IN_AVX2_REG
 #define WORDS_IN_AVX2_REG sizeof(__m256i) / sizeof(uint64_t)
 #endif
@@ -11355,7 +11355,7 @@ int bitset_container_compute_cardinality(const bitset_container_t *bitset) {
 
 #endif // CROARING_IS_X64
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 
 #define BITSET_CONTAINER_FN_REPEAT 8
 #ifndef WORDS_IN_AVX512_REG
@@ -11964,7 +11964,7 @@ int bitset_container_to_uint32_array(
     const bitset_container_t *bc,
     uint32_t base
 ){
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
    int support = croaring_hardware_support();
 #if CROARING_COMPILER_SUPPORTS_AVX512
    if(( support & ROARING_SUPPORTS_AVX512 ) &&  (bc->cardinality >= 8192))  // heuristic
@@ -12114,7 +12114,7 @@ bool bitset_container_iterate64(const bitset_container_t *cont, uint32_t base, r
   return true;
 }
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #if CROARING_COMPILER_SUPPORTS_AVX512
 CROARING_TARGET_AVX512
 ALLOW_UNALIGNED
@@ -12161,7 +12161,7 @@ bool bitset_container_equals(const bitset_container_t *container1, const bitset_
       return true;
     }
   }
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
   int support = croaring_hardware_support();
 #if CROARING_COMPILER_SUPPORTS_AVX512
   if( support & ROARING_SUPPORTS_AVX512 ) {
@@ -12623,7 +12623,7 @@ extern inline container_t *container_andnot(
 #include <stdio.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -12672,7 +12672,7 @@ array_container_t *array_container_from_bitset(const bitset_container_t *bits) {
     array_container_t *result =
         array_container_create_given_capacity(bits->cardinality);
     result->cardinality = bits->cardinality;
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #if CROARING_COMPILER_SUPPORTS_AVX512
     if( croaring_hardware_support() & ROARING_SUPPORTS_AVX512 ) {
         bitset_extract_setbits_avx512_uint16(bits->words, BITSET_CONTAINER_SIZE_IN_WORDS,
@@ -15195,7 +15195,7 @@ int run_run_container_ixor(
 #include <stdlib.h>
 
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -16313,7 +16313,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <cpuid.h>
 #endif // CROARING_REGULAR_VISUAL_STUDIO
 
-#if CROARING_IS_X64
+#if defined(CROARING_IS_X64) && CROARING_IS_X64
 #ifndef CROARING_COMPILER_SUPPORTS_AVX512
 #error "CROARING_COMPILER_SUPPORTS_AVX512 needs to be defined."
 #endif // CROARING_COMPILER_SUPPORTS_AVX512
@@ -16819,7 +16819,7 @@ roaring_bitmap_t *roaring_bitmap_of(size_t n_args, ...) {
     // todo: could be greatly optimized but we do not expect this call to ever
     // include long lists
     roaring_bitmap_t *answer = roaring_bitmap_create();
-    roaring_bulk_context_t context = {0};
+    roaring_bulk_context_t context = { .container = NULL, .idx = 0, .key = 0, .typecode = 0 };
     va_list ap;
     va_start(ap, n_args);
     for (size_t i = 0; i < n_args; i++) {
@@ -18178,7 +18178,7 @@ roaring_bitmap_t *roaring_bitmap_deserialize(const void *buf) {
         if (bitmap == NULL) {
             return NULL;
         }
-        roaring_bulk_context_t context = {0};
+        roaring_bulk_context_t context = { .container = NULL, .idx = 0, .key = 0, .typecode = 0 };
         for (uint32_t i = 0; i < card; i++) {
             // elems may not be aligned, read with memcpy
             uint32_t elem;
@@ -18220,7 +18220,7 @@ roaring_bitmap_t* roaring_bitmap_deserialize_safe(const void *buf, size_t maxbyt
         if (bitmap == NULL) {
             return NULL;
         }
-        roaring_bulk_context_t context = {0};
+        roaring_bulk_context_t context = { .container = NULL, .idx = 0, .key = 0, .typecode = 0 };
         for (uint32_t i = 0; i < card; i++) {
             // elems may not be aligned, read with memcpy
             uint32_t elem;
