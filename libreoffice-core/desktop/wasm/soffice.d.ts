@@ -286,9 +286,6 @@ export declare class Document {
 // }
 
 export interface Module extends EmscriptenModule {
-  /** indicate whether to load fccache with the module */
-  withFcCache?: boolean;
-
   /** mounts the blob at a file path with `name` and returns the file path */
   mountBlob(name: string, blob: Blob): string;
 
@@ -307,9 +304,6 @@ export interface Module extends EmscriptenModule {
 
   /** makes it so that all accelerator configuration files are handled as if they are on macOS */
   setIsMacOSForConfig(): void;
-
-  /** creates the font config cache so that it can be exported to optimize load times */
-  createFontConfigCache(): void;
 
   getDirectoryFiles(dir: string): Array<{ name: string; buffer: ArrayBuffer }>;
 
