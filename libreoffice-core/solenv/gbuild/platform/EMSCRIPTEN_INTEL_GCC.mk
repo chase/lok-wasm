@@ -16,7 +16,6 @@ gb_EMSCRIPTEN_PRE_JS_FILES = \
     $(SRCDIR)/static/emscripten/environment.js \
     $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice.data.js.link \
     $(call gb_CustomTarget_get_workdir,static/emscripten_fs_image)/soffice_fonts.data.js.link \
-    $(SRCDIR)/static/emscripten/soffice_fccache_loader.js \
 
 gb_RUN_CONFIGURE := $(SRCDIR)/solenv/bin/run-configure
 # avoid -s SAFE_HEAP=1 - c.f. gh#8584 this breaks source maps

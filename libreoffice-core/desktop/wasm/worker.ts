@@ -51,7 +51,6 @@ const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
 
 const lok = await LOK({
-  withFcCache: true,
   callbackHandlers: {
     callback: function (ref: DocumentRef, type: number, payload: string): void {
       const message: WorkerCallback = {
