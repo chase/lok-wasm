@@ -26,10 +26,6 @@
 #include <tools/fontenum.hxx>
 #include <iostream>
 
-
-typedef std::pair<uint32_t, std::vector<std::string>> FontCharSetRange;
-typedef std::vector<FontCharSetRange> FontCharSet;
-
 /* The following class is extraordinarily similar to ImplFont. */
 
 class VCL_DLLPUBLIC FontAttributes
@@ -72,7 +68,6 @@ public:
                         GetCodepointBitmap() const                  { return mCodepointBitmap; }
 
     void                SetBitmap(const roaring::Roaring& bitmap)   { mCodepointBitmap = bitmap; }
-    void                SetBitmapFromCharSet(const FontCharSet& charset);
     void                PrintFontAttributes();
 
 private:
