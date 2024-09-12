@@ -1375,6 +1375,8 @@ EMSCRIPTEN_MIN_TINY=31
 EMSCRIPTEN_MIN_VERSION="${EMSCRIPTEN_MIN_MAJOR}.${EMSCRIPTEN_MIN_MINOR}.${EMSCRIPTEN_MIN_TINY}"
 
 if test "$_os" = "Emscripten"; then
+    SYSTEM_DICTS=TRUE
+    DICT_SYSTEM_DIR=file:///home/danielkweon/Desktop/dev/lok-wasm/libreoffice-core/instdir/share/extensions
     AC_MSG_CHECKING([if Emscripten is at least $EMSCRIPTEN_MIN_VERSION])
     AS_IF([test -z "$EMSDK"],
           [AC_MSG_ERROR([No \$EMSDK environment variable.])])

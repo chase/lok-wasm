@@ -1326,7 +1326,7 @@ SwRect SwTextFrame::AutoSpell_(SwTextNode & rNode, sal_Int32 nActPos)
     const bool bAddAutoCmpl = pNode->IsAutoCompleteWordDirty() &&
                                   SwViewOption::IsAutoCompleteWords();
 
-    if( pNode->GetWrong() )
+    if(pNode->GetWrong() )
     {
         nBegin = pNode->GetWrong()->GetBeginInv();
         if( COMPLETE_STRING != nBegin )

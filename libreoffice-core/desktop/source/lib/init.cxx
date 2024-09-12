@@ -8260,8 +8260,16 @@ static void preloadData()
     // setup LanguageTool config before spell checking init
     setLanguageToolConfig();
 
+    std::cout << "creating the dictionary list" << std::endl;
+
     // preload all available dictionaries
+
+        setLanguageAndLocale(u"en-US"_ustr);
+
     linguistic2::DictionaryList::create(comphelper::getProcessComponentContext());
+
+    std::cout << "preloading the dictionary list" << std::endl;
+
     css::uno::Reference<css::linguistic2::XLinguServiceManager> xLngSvcMgr =
         css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
     css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
@@ -8276,6 +8284,13 @@ static void preloadData()
         xSpellChecker->isValid(u"forcefed"_ustr, it, aNone);
     }
     std::cerr << "\n";
+
+    std::cout << "DONE --- preloading the dictionary list" << std::endl;
+
+    css::lang::Locale defaultLocale("en", "US", "");
+    css::beans::PropertyValues aNone;
+    std::cout << "DONE ---" << "PRELOADING DONE: "  << xSpellChecker->isValid(u"asdf"_ustr, defaultLocale, aNone) << std::endl;
+
 
     // Hack to load and cache the module liblocaledata_others.so which is not loaded normally
     // (when loading dictionaries of just non-Asian locales). Creating a XCalendar4 of one Asian locale
@@ -8802,7 +8817,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                 SAL_INFO("lok", "CheckExtensionDependencies failed");
 #endif
 
-            if (eStage == PRE_INIT)
+            if (true) // || eStage == PRE_INIT)
             {
                 {
                     comphelper::ProfileZone aInit("Init vcl");
@@ -8842,8 +8857,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
 
                 // Release Solar Mutex, lo_startmain thread should acquire it.
                 Application::ReleaseSolarMutex();
-            }
-
+        }
             setLanguageAndLocale(u"en-US"_ustr);
         }
 
@@ -8942,6 +8956,25 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     if (eStage == PRE_INIT)
         rtl_alloc_preInit(false);
 
+
+    // preload all available dictionaries
+    // SAL_WARN("lok", "PRELOADING DICTIONARIES");
+    // setLanguageAndLocale(u"en-US"_ustr);
+    // linguistic2::DictionaryList::create(comphelper::getProcessComponentContext());
+    // css::uno::Reference<css::linguistic2::XLinguServiceManager> xLngSvcMgr =
+    //     css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
+    // css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
+
+    // css::uno::Reference<linguistic2::XSupportedLocales> xSpellLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
+    // uno::Sequence< css::lang::Locale > aLocales = xSpellLocales->getLocales();
+    // SAL_WARN("lok", "Locale length: " << aLocales.getLength());
+    // css::lang::Locale defaultLocale("en", "US", "");
+    // css::beans::PropertyValues aNone;
+    // bool result = xSpellChecker->isValid(u"forcefed"_ustr, defaultLocale, aNone);
+    // bool r2 = xSpellChecker->hasLocale(defaultLocale);
+    // SAL_WARN("lok", "PRELOADING DONE: "  << result << " " << r2);
+
+    
     return bInitialized;
 }
 
