@@ -216,6 +216,7 @@ Reference<XInterface > OFactoryComponentHelper::createInstanceWithArguments(
 Reference< XInterface > OFactoryComponentHelper::createInstanceWithContext(
     Reference< XComponentContext > const & xContext )
 {
+    std::cout << "attempting to create the instance with context 1" << std::endl;
     if( bOneInstance )
     {
         if( !xTheInstance.is() )

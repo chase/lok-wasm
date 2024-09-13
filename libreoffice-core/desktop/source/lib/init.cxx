@@ -8261,7 +8261,10 @@ static void preloadData()
     setLanguageToolConfig();
 
     // preload all available dictionaries
+    std::cout << "gets stuck here" << std::endl;
     linguistic2::DictionaryList::create(comphelper::getProcessComponentContext());
+
+    std::cout << "gets stuck here 1" << std::endl;
     css::uno::Reference<css::linguistic2::XLinguServiceManager> xLngSvcMgr =
         css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
     css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
@@ -8637,6 +8640,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     else
         eStage = FULL_INIT;
 
+    std::cout << "eStage is initialized to: " << eStage << std::endl;
     LibLibreOffice_Impl* pLib = static_cast<LibLibreOffice_Impl*>(pThis);
 
     if (bInitialized)
@@ -8802,6 +8806,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                 SAL_INFO("lok", "CheckExtensionDependencies failed");
 #endif
 
+        std::cout << "before running preload eStage is: " << eStage << std::endl;
             if (eStage == PRE_INIT)
             {
                 {
@@ -8844,8 +8849,12 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                 Application::ReleaseSolarMutex();
             }
 
+            preloadData();
+            std::cout << "made it past preloadData" << std::endl;
+
             setLanguageAndLocale(u"en-US"_ustr);
         }
+
 
         if (eStage != PRE_INIT)
         {
@@ -8902,6 +8911,8 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                  OUStringToOString(exception.Message, RTL_TEXTENCODING_UTF8).getStr());
     }
 
+    std::cout << "outside the try catch block" << std::endl;
+
     if (eStage == PRE_INIT)
     {
         comphelper::ThreadPool::getSharedOptimalPool().shutdown();
@@ -8950,16 +8961,23 @@ LibreOfficeKit *libreofficekit_hook_2(const char* install_path, const char* user
 {
     static bool alreadyCalled = false;
 
+    std::cout << "bools" << std::endl;
+
+    // lok_preinit_2_called = true;
+    // int result = lo_initialize(nullptr, install_path, user_profile_url);
+
     if ((!lok_preinit_2_called && !gImpl) || (lok_preinit_2_called && !alreadyCalled))
     {
         alreadyCalled = true;
 
         if (!lok_preinit_2_called)
         {
+            std::cout << "lok_preinit_2_called was called apparent" << std::endl;
             SAL_INFO("lok", "Create libreoffice object");
             gImpl = new LibLibreOffice_Impl();
         }
 
+        std::cout << "running lo_initialize 0" << std::endl;
         if (!lo_initialize(gImpl, install_path, user_profile_url))
         {
             lo_destroy(gImpl);
@@ -8977,6 +8995,7 @@ LibreOfficeKit *libreofficekit_hook(const char* install_path)
 SAL_JNI_EXPORT
 int lok_preinit(const char* install_path, const char* user_profile_url)
 {
+    std::cout << "running lo_initialize 1" << std::endl;
     return lo_initialize(nullptr, install_path, user_profile_url);
 }
 
@@ -8984,6 +9003,7 @@ SAL_JNI_EXPORT
 int lok_preinit_2(const char* install_path, const char* user_profile_url, LibreOfficeKit** kit)
 {
     lok_preinit_2_called = true;
+    std::cout << "running lo_initialize 2" << std::endl;
     int result = lo_initialize(nullptr, install_path, user_profile_url);
     if (kit != nullptr)
         *kit = gImpl;

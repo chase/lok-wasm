@@ -17,6 +17,7 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <iostream>
 #include <sal/config.h>
 
 #include <o3tl/any.hxx>
@@ -754,6 +755,9 @@ Reference< XInterface > OServiceManager::createInstanceWithContext(
     OUString const & rServiceSpecifier,
     Reference< XComponentContext > const & xContext )
 {
+    std::cout << "attempting to create the instance with context" << std::endl;
+
+
     check_undisposed();
 #if OSL_DEBUG_LEVEL > 0
     Reference< beans::XPropertySet > xProps( xContext->getServiceManager(), UNO_QUERY );
