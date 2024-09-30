@@ -567,7 +567,8 @@ void SwEditWin::UpdatePointer(const Point &rLPt, sal_uInt16 nModifier )
                     IsAttrAtPos::ClickField |
                     IsAttrAtPos::InetAttr |
                     IsAttrAtPos::Ftn |
-                    IsAttrAtPos::SmartTag);
+                    IsAttrAtPos::SmartTag | 
+                    IsAttrAtPos::FormControl);
                 if( rSh.GetContentAtPos( rLPt, aSwContentAtPos) )
                 {
                     // Is edit inline input field
@@ -578,6 +579,13 @@ void SwEditWin::UpdatePointer(const Point &rLPt, sal_uInt16 nModifier )
                         const SwField *pCursorField = rSh.CursorInsideInputField() ? rSh.GetCurField( true ) : nullptr;
                         if (!(pCursorField && pCursorField == aSwContentAtPos.pFndTextAttr->GetFormatField().GetField()))
                             eStyle = PointerStyle::RefHand;
+                    }
+                    else if (IsAttrAtPos::FormControl == aSwContentAtPos.eContentAtPos) {
+                        if (aSwContentAtPos.aFnd.pFieldmark != nullptr) {
+                            IFieldmark *fieldBM = const_cast<IFieldmark*> (aSwContentAtPos.aFnd.pFieldmark);
+                            if (fieldBM->GetFieldname() == ODF_FORMCHECKBOX)
+                                eStyle = PointerStyle::RefHand;
+                        }
                     }
                     else
                     {
