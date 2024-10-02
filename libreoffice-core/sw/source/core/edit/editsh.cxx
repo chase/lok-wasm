@@ -56,6 +56,7 @@
 #include <SwNodeNum.hxx>
 #include <unocrsr.hxx>
 #include <calbck.hxx>
+#include <xmloff/odffields.hxx>
 
 using namespace com::sun::star;
 
@@ -183,6 +184,8 @@ void SwEditShell::SplitNode( bool bAutoFormat, bool bCheckTableStart )
 {
     StartAllAction();
     GetDoc()->GetIDocumentUndoRedo().StartUndo(SwUndoId::EMPTY, nullptr);
+    SwPaM* pCursorPos = GetCursor();
+    bool hasCheckbox = GetDoc()->getIDocumentContentOperations().NodeStartsWithCheckbox(*pCursorPos->GetPoint());
 
     for(SwPaM& rPaM : GetCursor()->GetRingContainer())
     {
@@ -191,10 +194,23 @@ void SwEditShell::SplitNode( bool bAutoFormat, bool bCheckTableStart )
         GetDoc()->getIDocumentContentOperations().SplitNode( *rPaM.GetPoint(), bCheckTableStart );
     }
 
+    // Insert a checkbox at the start of the new paragraph
+    if (hasCheckbox) {
+        GetDoc()->getIDocumentContentOperations().InsertString( *pCursorPos, "\t");
+        GetDoc()->getIDocumentMarkAccess()->makeNoTextFieldBookmark(*pCursorPos, OUString(), ODF_FORMCHECKBOX);
+        GetDoc()->getIDocumentContentOperations().InsertString( *pCursorPos, " ");
+    }
+
     GetDoc()->GetIDocumentUndoRedo().EndUndo(SwUndoId::EMPTY, nullptr);
 
     if( bAutoFormat )
         AutoFormatBySplitNode();
+
+    if (hasCheckbox) {
+        pCursorPos->Move();
+        pCursorPos->Move();
+        pCursorPos->Move();
+    }
 
     ClearTableBoxContent();
 

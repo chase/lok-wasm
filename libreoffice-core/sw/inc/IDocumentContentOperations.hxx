@@ -205,6 +205,8 @@ public:
         const SwPaM &rRg, const OUString& rObjName, sal_Int64 nAspect,
         const SfxItemSet* pFlyAttrSet, const SfxItemSet* pGrfAttrSet) = 0;
 
+    virtual bool NodeStartsWithCheckbox(const SwPosition &rPos) = 0;
+
     /** Split a node at rPos (implemented only for TextNode).
     */
     virtual bool SplitNode(const SwPosition &rPos, bool bChkTableStart) = 0;

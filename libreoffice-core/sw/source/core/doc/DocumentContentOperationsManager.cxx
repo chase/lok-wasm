@@ -92,6 +92,7 @@
 #include <com/sun/star/i18n/WordType.hpp>
 #include <com/sun/star/i18n/XBreakIterator.hpp>
 #include <com/sun/star/embed/XEmbeddedObject.hpp>
+#include <xmloff/odffields.hxx>
 
 #include <tuple>
 #include <memory>
@@ -3419,6 +3420,23 @@ SwDrawFrameFormat* DocumentContentOperationsManager::InsertDrawObj(
 
     m_rDoc.getIDocumentState().SetModified();
     return pFormat;
+}
+
+bool DocumentContentOperationsManager::NodeStartsWithCheckbox( const SwPosition &rPos) {
+    IDocumentMarkAccess* pMarksAccess = m_rDoc.getIDocumentMarkAccess();    
+    SwTextNode* pTextNode = rPos.GetNode().GetTextNode();
+
+    SwPosition pos(*pTextNode, 0);
+    sw::mark::IFieldmark* pFieldBookmark = pMarksAccess->getInnerFieldmarkFor(pos);
+    if (pFieldBookmark && pFieldBookmark->GetFieldname() == ODF_FORMCHECKBOX)
+        return true;
+
+    pos = SwPosition(*pTextNode, 1);
+    pFieldBookmark = pMarksAccess->getInnerFieldmarkFor(pos);
+    if (pFieldBookmark && pFieldBookmark->GetFieldname() == ODF_FORMCHECKBOX)
+        return true;
+
+    return false;
 }
 
 bool DocumentContentOperationsManager::SplitNode( const SwPosition &rPos, bool bChkTableStart )
