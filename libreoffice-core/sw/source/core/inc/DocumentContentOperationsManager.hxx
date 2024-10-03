@@ -75,9 +75,9 @@ public:
     SwFlyFrameFormat* InsertOLE(const SwPaM &rRg, const OUString& rObjName, sal_Int64 nAspect, const SfxItemSet* pFlyAttrSet,
                            const SfxItemSet* pGrfAttrSet) override;
 
-    // MACRO-2286: Check if paragraph starts with checkbox
+    // MACRO-2286: Check if paragraph starts with checkbox {
     bool NodeStartsWithCheckbox(const SwPosition &rPos) override;
-    // MACRO-2286
+    // MACRO-2286 }
 
     bool SplitNode(const SwPosition &rPos, bool bChkTableStart) override;
 
