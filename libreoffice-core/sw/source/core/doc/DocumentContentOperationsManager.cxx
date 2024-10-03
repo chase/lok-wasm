@@ -3422,9 +3422,12 @@ SwDrawFrameFormat* DocumentContentOperationsManager::InsertDrawObj(
     return pFormat;
 }
 
+// MACRO-2286: Check if paragraph starts with checkbox
 bool DocumentContentOperationsManager::NodeStartsWithCheckbox( const SwPosition &rPos) {
     IDocumentMarkAccess* pMarksAccess = m_rDoc.getIDocumentMarkAccess();    
     SwTextNode* pTextNode = rPos.GetNode().GetTextNode();
+    if(nullptr == pTextNode)
+        return false;
 
     SwPosition pos(*pTextNode, 0);
     sw::mark::IFieldmark* pFieldBookmark = pMarksAccess->getInnerFieldmarkFor(pos);
@@ -3438,6 +3441,7 @@ bool DocumentContentOperationsManager::NodeStartsWithCheckbox( const SwPosition 
 
     return false;
 }
+// MACRO-2286
 
 bool DocumentContentOperationsManager::SplitNode( const SwPosition &rPos, bool bChkTableStart )
 {

@@ -567,8 +567,10 @@ void SwEditWin::UpdatePointer(const Point &rLPt, sal_uInt16 nModifier )
                     IsAttrAtPos::ClickField |
                     IsAttrAtPos::InetAttr |
                     IsAttrAtPos::Ftn |
+                    // MACRO-2286: Check if hovering over Checkbox
                     IsAttrAtPos::SmartTag | 
                     IsAttrAtPos::FormControl);
+                    // MACRO-2286
                 if( rSh.GetContentAtPos( rLPt, aSwContentAtPos) )
                 {
                     // Is edit inline input field
@@ -580,6 +582,7 @@ void SwEditWin::UpdatePointer(const Point &rLPt, sal_uInt16 nModifier )
                         if (!(pCursorField && pCursorField == aSwContentAtPos.pFndTextAttr->GetFormatField().GetField()))
                             eStyle = PointerStyle::RefHand;
                     }
+                    // MACRO-2286: Check if hovering over Checkbox
                     else if (IsAttrAtPos::FormControl == aSwContentAtPos.eContentAtPos) {
                         if (aSwContentAtPos.aFnd.pFieldmark != nullptr) {
                             IFieldmark *fieldBM = const_cast<IFieldmark*> (aSwContentAtPos.aFnd.pFieldmark);
@@ -587,6 +590,7 @@ void SwEditWin::UpdatePointer(const Point &rLPt, sal_uInt16 nModifier )
                                 eStyle = PointerStyle::RefHand;
                         }
                     }
+                    // MACRO-2286
                     else
                     {
                         const bool bClickToFollow = IsAttrAtPos::InetAttr == aSwContentAtPos.eContentAtPos ||
