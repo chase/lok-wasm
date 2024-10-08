@@ -273,6 +273,9 @@ export declare class Document {
   getRedlineTextRange(id: number): RectArray[] | undefined;
 
   getCursor(viewId: number): string | undefined;
+
+  getCustomStringProperty(property: string): string | any;
+  setCustomStringProperty(property: string, value: any): void;
 }
 
 // NOTE: Disabled until unoembind startup cost is under 1s

@@ -644,6 +644,14 @@ const handler: DocumentMethodHandler<Document> = {
   getCursor: function (doc: Document, viewId: ViewId) {
     return doc.getCursor(viewId);
   },
+
+  getCustomStringProperty: function (doc: Document, _viewId: ViewId, property: string) {
+    return doc.getCustomStringProperty(property);
+  },
+
+  setCustomStringProperty: function (doc: Document, _viewId: ViewId, property: string, value: string) {
+    doc.setCustomStringProperty(property, value);
+  },
 };
 
 const forwarding: ForwardingMethodHandlers<Document> = {

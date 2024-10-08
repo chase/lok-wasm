@@ -190,6 +190,9 @@ export type DocumentWithViewMethods = {
   listExpandedParts(): Array<{path: string, sha: string}>;
   getRedlineTextRange(id: number): RectArray[] | undefined;
   getCursor(): string | undefined;
+
+  getCustomStringProperty(property: string): string | null;
+  setCustomStringProperty(property: string, value: any): void;
 };
 
 /** methods that forward to a class weakly bound to the Document that forwards calls */
