@@ -12,7 +12,6 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
-#include <iostream>
 #include <lib/wasm_extensions.hxx>
 #include <sal/log.hxx>
 #include <com/sun/star/uno/Any.hxx>
@@ -866,24 +865,24 @@ public:
                                                                            UNO_QUERY);
             if (!xPropSupplier.is())
             {
-                std::cerr << "Failed to get XDocumentPropertiesSupplier" << std::endl;
-                return std::nullopt;
+                SAL_WARN("wasm", "Failed to get XDocumentPropertiesSupplier");
+                return {};
             }
 
             Reference<document::XDocumentProperties> xDocProps
                 = xPropSupplier->getDocumentProperties();
             if (!xDocProps.is())
             {
-                std::cerr << "Failed to get XDocumentProperties" << std::endl;
-                return std::nullopt;
+                SAL_WARN("wasm", "Failed to get XDocumentProperties");
+                return {};
             }
 
             Reference<beans::XPropertyContainer> xUserDefinedProps
                 = xDocProps->getUserDefinedProperties();
             if (!xUserDefinedProps.is())
             {
-                std::cerr << "Failed to get user-defined properties" << std::endl;
-                return std::nullopt;
+                SAL_WARN("wasm", "Failed to get user-defined properties");
+                return {};
             }
 
             Reference<beans::XPropertySet> xPropSet(xUserDefinedProps, UNO_QUERY);
@@ -895,16 +894,16 @@ public:
             }
             else
             {
-                std::cerr << "Property '" << property << "' not found." << std::endl;
-                return std::nullopt;
+                SAL_WARN("wasm", "Property '" << property << "' not found.");
+                return {};
             }
         }
         catch (const Exception& e)
         {
-            std::cerr << "Error getting document property: " << property
-                      << ". Error: " << OUStringToOString(e.Message, RTL_TEXTENCODING_UTF8).getStr()
-                      << std::endl;
-            return std::nullopt;
+            SAL_WARN("wasm", "Error getting document property: "
+                                 << property << ". Error: "
+                                 << OUStringToOString(e.Message, RTL_TEXTENCODING_UTF8).getStr());
+            return {};
         }
     }
 
@@ -917,14 +916,14 @@ public:
                                                                        UNO_QUERY);
         if (!xPropSupplier.is())
         {
-            std::cerr << "Failed to get XDocumentPropertiesSupplier" << std::endl;
+            SAL_WARN("wasm", "Failed to get XDocumentPropertiesSupplier");
             return;
         }
 
         Reference<document::XDocumentProperties> xDocProps = xPropSupplier->getDocumentProperties();
         if (!xDocProps.is())
         {
-            std::cerr << "Failed to get XDocumentProperties" << std::endl;
+            SAL_WARN("wasm", "Failed to get XDocumentProperties");
             return;
         }
 
@@ -932,7 +931,7 @@ public:
             = xDocProps->getUserDefinedProperties();
         if (!xUserDefinedProps.is())
         {
-            std::cerr << "Failed to get user-defined properties" << std::endl;
+            SAL_WARN("wasm", "Failed to get user-defined properties");
             return;
         }
 
@@ -954,9 +953,9 @@ public:
         }
         catch (const Exception& e)
         {
-            std::cerr << "Failed to set document property: '" << property
-                      << "'. Error: " << OUStringToOString(e.Message, RTL_TEXTENCODING_UTF8).getStr()
-                      << std::endl;
+            SAL_WARN("wasm", "Failed to set document property: '"
+                                 << property << "'. Error: "
+                                 << OUStringToOString(e.Message, RTL_TEXTENCODING_UTF8).getStr());
         }
     }
     // MACRO-3360 }
