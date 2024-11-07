@@ -10,10 +10,12 @@
 #pragma once
 
 #include <vcl/weld.hxx>
+#include <formula/funcutl.hxx>
 
 class ScDocument;
 class ScConditionalFormat;
 class ScConditionalFormatList;
+class ScFormatEntry;
 
 class ScCondFormatManagerWindow
 {
@@ -30,6 +32,9 @@ public:
 
     void DeleteSelection();
     ScConditionalFormat* GetSelection();
+    const ScFormatEntry* GetSelectedEntry() const;
+    sal_Int32 GetSelectedFormatKey() const;
+    sal_Int32 GetSelectedEntryIndex() const;
 };
 
 class ScCondFormatManagerDlg : public weld::GenericDialogController
@@ -44,11 +49,16 @@ public:
     void SetModified();
 
     ScConditionalFormat* GetCondFormatSelected();
+    void ShowEasyConditionalDialog(bool isEdit = false);
 
 private:
     bool m_bModified;
     std::unique_ptr<ScConditionalFormatList> m_xFormatList;
 
+    std::unique_ptr<weld::ComboBox> m_xConditionalType;
+    std::unique_ptr<weld::ComboBox> m_xConditionalCellValue;
+    std::unique_ptr<formula::RefEdit> m_xConditionalFormula;
+    std::unique_ptr<weld::ComboBox> m_xConditionalDate;
     std::unique_ptr<weld::Button> m_xBtnAdd;
     std::unique_ptr<weld::Button> m_xBtnRemove;
     std::unique_ptr<weld::Button> m_xBtnEdit;
@@ -61,6 +71,8 @@ private:
     DECL_LINK(EditBtnClickHdl, weld::Button&, void);
     DECL_LINK(AddBtnHdl, weld::Button&, void);
     DECL_LINK(EditBtnHdl, weld::TreeView&, bool);
+    DECL_LINK(ComboHdl, weld::ComboBox&, void);
+    DECL_LINK(EntryFocus, weld::TreeView&, void);
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -135,6 +135,20 @@ class DummyInputStream : public ::cppu::WeakImplHelper< XInputStream >
         {}
 };
 
+} // namespace
+
+sal_Int32 GetDefaultDerivedKeySize(sal_Int32 const nCipherID)
+{
+    switch (nCipherID)
+    {
+        case css::xml::crypto::CipherID::BLOWFISH_CFB_8:
+            return 16;
+        case css::xml::crypto::CipherID::AES_CBC_W3C_PADDING:
+        case css::xml::crypto::CipherID::AES_GCM_W3C:
+            return 32;
+        default:
+            O3TL_UNREACHABLE;
+    }
 }
 
 ZipPackage::ZipPackage ( uno::Reference < XComponentContext > xContext )
@@ -163,6 +177,39 @@ ZipPackage::~ZipPackage()
 bool ZipPackage::isLocalFile() const
 {
     return comphelper::isFileUrl(m_aURL);
+}
+
+// note: don't check for StorageFormats::ZIP, it breaks signing!
+void ZipPackage::checkZipEntriesWithDD()
+{
+    if (!m_bForceRecovery)
+    {
+        ZipEnumeration entries{m_pZipFile->entries()};
+        while (entries.hasMoreElements())
+        {
+            ZipEntry const& rEntry{*entries.nextElement()};
+            if ((rEntry.nFlag & 0x08) != 0 && rEntry.nMethod == STORED)
+            {
+                uno::Reference<XPropertySet> xStream;
+                getByHierarchicalName(rEntry.sPath) >>= xStream;
+                uno::Reference<XServiceInfo> const xStreamSI{xStream, uno::UNO_QUERY_THROW};
+                if (!xStreamSI->supportsService("com.sun.star.packages.PackageStream"))
+                {
+                    SAL_INFO("package", "entry STORED with data descriptor is folder: \"" << rEntry.sPath << "\"");
+                    throw ZipIOException(
+                        THROW_WHERE
+                        "entry STORED with data descriptor is folder");
+                }
+                if (!xStream->getPropertyValue("WasEncrypted").get<bool>())
+                {
+                    SAL_INFO("package", "entry STORED with data descriptor but not encrypted: \"" << rEntry.sPath << "\"");
+                    throw ZipIOException(
+                        THROW_WHERE
+                        "entry STORED with data descriptor but not encrypted");
+                }
+            }
+        }
+    }
 }
 
 void ZipPackage::parseManifest()
@@ -295,11 +342,9 @@ void ZipPackage::parseManifest()
 
                                         assert(pDigestAlg->has<sal_Int32>());
                                         oDigestAlg.emplace(pDigestAlg->get<sal_Int32>());
-                                        pStream->SetImportedChecksumAlgorithm(oDigestAlg);
                                     }
 
                                     *pEncryptionAlg >>= nEncryptionAlg;
-                                    pStream->SetImportedEncryptionAlgorithm( nEncryptionAlg );
 
                                     *pKeyInfo >>= m_aGpgProps;
 
@@ -313,7 +358,14 @@ void ZipPackage::parseManifest()
                                     // c.f. ZipPackageStream::GetEncryptionKey()
                                     // trying to get key value from properties
                                     const sal_Int32 nStartKeyAlg = xml::crypto::DigestID::SHA256;
-                                    pStream->SetImportedStartKeyAlgorithm( nStartKeyAlg );
+
+                                    pStream->SetImportedAlgorithms({
+                                        .nImportedStartKeyAlgorithm = nStartKeyAlg,
+                                        .nImportedEncryptionAlgorithm = nEncryptionAlg,
+                                        .oImportedChecksumAlgorithm = oDigestAlg,
+                                        // note m_nCommonEncryptionID is not inited yet here
+                                        .nImportedDerivedKeySize = ::GetDefaultDerivedKeySize(nEncryptionAlg),
+                                        });
 
                                     if (!m_bHasEncryptedEntries
                                         && (pStream->getName() == "content.xml"
@@ -380,19 +432,22 @@ void ZipPackage::parseManifest()
 
                                         assert(pDigestAlg->has<sal_Int32>());
                                         oDigestAlg.emplace(pDigestAlg->get<sal_Int32>());
-                                        pStream->SetImportedChecksumAlgorithm(oDigestAlg);
                                     }
 
                                     *pEncryptionAlg >>= nEncryptionAlg;
-                                    pStream->SetImportedEncryptionAlgorithm( nEncryptionAlg );
 
                                     if ( pDerivedKeySize )
                                         *pDerivedKeySize >>= nDerivedKeySize;
-                                    pStream->SetImportedDerivedKeySize( nDerivedKeySize );
 
                                     if ( pStartKeyAlg )
                                         *pStartKeyAlg >>= nStartKeyAlg;
-                                    pStream->SetImportedStartKeyAlgorithm( nStartKeyAlg );
+
+                                    pStream->SetImportedAlgorithms({
+                                        .nImportedStartKeyAlgorithm = nStartKeyAlg,
+                                        .nImportedEncryptionAlgorithm = nEncryptionAlg,
+                                        .oImportedChecksumAlgorithm = oDigestAlg,
+                                        .nImportedDerivedKeySize = nDerivedKeySize,
+                                        });
 
                                     pStream->SetToBeCompressed ( true );
                                     pStream->SetToBeEncrypted ( true );
@@ -418,6 +473,8 @@ void ZipPackage::parseManifest()
 
                     bManifestParsed = true;
                 }
+
+                checkZipEntriesWithDD(); // check before removing entries!
 
                 // now hide the manifest.xml file from user
                 xMetaInfFolder->removeByName( sManifest );
@@ -626,7 +683,11 @@ void ZipPackage::getZipFileContents()
                 if ( !pCurrent->hasByName( sTemp ) )
                 {
                     rtl::Reference<ZipPackageFolder> pPkgFolder = new ZipPackageFolder(m_xContext, m_nFormat, m_bAllowRemoveOnInsert);
-                    pPkgFolder->setName( sTemp );
+                    try {
+                        pPkgFolder->setName( sTemp );
+                    } catch (uno::RuntimeException const& e) {
+                        throw css::packages::zip::ZipIOException(e.Message);
+                    }
                     pPkgFolder->doSetParent( pCurrent );
                     pCurrent = pPkgFolder.get();
                 }
@@ -661,7 +722,10 @@ void ZipPackage::getZipFileContents()
     if ( m_nFormat == embed::StorageFormats::PACKAGE )
         parseManifest();
     else if ( m_nFormat == embed::StorageFormats::OFOPXML )
+    {
         parseContentType();
+        checkZipEntriesWithDD();
+    }
 }
 
 void SAL_CALL ZipPackage::initialize( const uno::Sequence< Any >& aArguments )
@@ -840,7 +904,13 @@ void SAL_CALL ZipPackage::initialize( const uno::Sequence< Any >& aArguments )
     OUString message;
     try
     {
-        m_pZipFile.emplace(m_aMutexHolder, m_xContentStream, m_xContext, true, m_bForceRecovery);
+        m_pZipFile.emplace(m_aMutexHolder, m_xContentStream, m_xContext, true,
+            m_bForceRecovery,
+            m_nFormat == embed::StorageFormats::ZIP
+                ? ZipFile::Checks::Default
+                : m_nFormat == embed::StorageFormats::OFOPXML
+                    ? ZipFile::Checks::CheckInsensitive
+                    : ZipFile::Checks::TryCheckInsensitive);
         getZipFileContents();
     }
     catch ( IOException & e )
@@ -1213,7 +1283,13 @@ void ZipPackage::ConnectTo( const uno::Reference< io::XInputStream >& xInStream 
     if ( m_pZipFile )
         m_pZipFile->setInputStream( m_xContentStream );
     else
-        m_pZipFile.emplace(m_aMutexHolder, m_xContentStream, m_xContext, false);
+        m_pZipFile.emplace(m_aMutexHolder, m_xContentStream, m_xContext, false,
+            false,
+            m_nFormat == embed::StorageFormats::ZIP
+                ? ZipFile::Checks::Default
+                : m_nFormat == embed::StorageFormats::OFOPXML
+                    ? ZipFile::Checks::CheckInsensitive
+                    : ZipFile::Checks::TryCheckInsensitive);
 }
 
 uno::Reference< io::XInputStream > ZipPackage::writeTempFile()

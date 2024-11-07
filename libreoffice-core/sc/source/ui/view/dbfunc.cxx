@@ -344,8 +344,10 @@ void ScDBFunc::ToggleAutoFilter()
             if (!bHeader)
             {
                 std::shared_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pViewData->GetDialogParent(),
-                                                          VclMessageType::Question,
-                                                          VclButtonsType::YesNo, ScResId(STR_MSSG_MAKEAUTOFILTER_0))); // header from first row?
+                                                                                           VclMessageType::Question,
+                                                                                           VclButtonsType::YesNo,
+                                                                                           // header from first row?
+                                                                                           ScResId(STR_MSSG_MAKEAUTOFILTER_0)));
                 xBox->set_title(ScResId(STR_MSSG_DOSUBTOTALS_0)); // "StarCalc"
                 xBox->set_default_response(RET_YES);
                 xBox->SetInstallLOKNotifierHdl(LINK(this, ScDBFunc, InstallLOKNotifierHdl));
@@ -404,9 +406,11 @@ void ScDBFunc::ModifiedAutoFilter(ScDocShell* pDocSh)
     ScDocShellModificator aModificator(*pDocSh);
     aModificator.SetDocumentModified();
 
-    SfxBindings* pBindings = pDocSh->GetViewBindings();
-    pBindings->Invalidate(SID_AUTO_FILTER);
-    pBindings->Invalidate(SID_AUTOFILTER_HIDE);
+    if (SfxBindings* pBindings = pDocSh->GetViewBindings())
+    {
+        pBindings->Invalidate(SID_AUTO_FILTER);
+        pBindings->Invalidate(SID_AUTOFILTER_HIDE);
+    }
 }
 
 //      just hide, no data change

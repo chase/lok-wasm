@@ -144,7 +144,7 @@ SfxChildWinInfo ScInputWindowWrapper::GetInfo() const
 }
 
 
-static VclPtr<ScInputBarGroup> lcl_chooseRuntimeImpl( vcl::Window* pParent, const SfxBindings* pBind )
+static ScTabViewShell* lcl_chooseRuntimeImpl( const SfxBindings* pBind )
 {
     ScTabViewShell* pViewSh = nullptr;
     SfxDispatcher* pDisp = pBind->GetDispatcher();
@@ -154,15 +154,14 @@ static VclPtr<ScInputBarGroup> lcl_chooseRuntimeImpl( vcl::Window* pParent, cons
         if ( pViewFrm )
             pViewSh = dynamic_cast<ScTabViewShell*>( pViewFrm->GetViewShell()  );
     }
-
-    return VclPtr<ScInputBarGroup>::Create( pParent, pViewSh );
+    return pViewSh;
 }
 
 ScInputWindow::ScInputWindow( vcl::Window* pParent, const SfxBindings* pBind ) :
         // With WB_CLIPCHILDREN otherwise we get flickering
         ToolBox         ( pParent, WinBits(WB_CLIPCHILDREN | WB_BORDER | WB_NOSHADOW) ),
-        aWndPos         ( !comphelper::LibreOfficeKit::isActive() ? VclPtr<ScPosWnd>::Create(this) : nullptr ),
-        mxTextWindow    ( lcl_chooseRuntimeImpl( this, pBind ) ),
+        aWndPos         ( VclPtr<ScPosWnd>::Create( this, lcl_chooseRuntimeImpl(pBind)) ),
+        mxTextWindow    ( VclPtr<ScInputBarGroup>::Create( this, lcl_chooseRuntimeImpl(pBind)) ),
         pInputHdl       ( nullptr ),
         mpViewShell     ( nullptr ),
         mnMaxY          (0),
@@ -559,8 +558,7 @@ void ScInputWindow::SetFuncString( const OUString& rString, bool bDoEdit )
 
 void ScInputWindow::SetPosString( const OUString& rStr )
 {
-    if (!comphelper::LibreOfficeKit::isActive())
-        aWndPos->SetPos( rStr );
+    aWndPos->SetPos( rStr );
 }
 
 void ScInputWindow::SetTextString( const OUString& rString, bool bKitUpdate )
@@ -1759,6 +1757,7 @@ bool ScTextWnd::Command( const CommandEvent& rCEvt )
                 if (pHdl)
                     pHdl->InputCommand(rCEvt);
             }
+            SC_MOD()->InputChanged( m_xEditView.get() );
         }
         else if ( nCommand == CommandEventId::CursorPos )
         {
@@ -1825,6 +1824,9 @@ bool ScTextWnd::Command( const CommandEvent& rCEvt )
 
         if (!m_xEditView)
             return true;
+
+        // if we focus input after "Accept Formula" command, we need to notify to get it working
+        SC_MOD()->InputChanged(m_xEditView.get());
 
         // information about paragraph is in additional data
         // information about position in a paragraph in a Mouse Pos
@@ -2250,8 +2252,9 @@ void ScTextWnd::TextGrabFocus()
 }
 
 // Position window
-ScPosWnd::ScPosWnd(vcl::Window* pParent)
-    : InterimItemWindow(pParent, "modules/scalc/ui/posbox.ui", "PosBox")
+ScPosWnd::ScPosWnd(vcl::Window* pParent, ScTabViewShell* pViewShell)
+    : InterimItemWindow(pParent, "modules/scalc/ui/posbox.ui", "PosBox", false,
+                        reinterpret_cast<sal_uInt64>(pViewShell))
     , m_xWidget(m_xBuilder->weld_combo_box("pos_window"))
     , m_nAsyncGetFocusId(nullptr)
     , nTipVisible(nullptr)
@@ -2267,7 +2270,7 @@ ScPosWnd::ScPosWnd(vcl::Window* pParent)
     m_xWidget->set_size_request(aSize.Width(), -1);
     SetSizePixel(m_xContainer->get_preferred_size());
 
-    FillRangeNames();
+    FillRangeNames(true);
 
     StartListening( *SfxGetpApp() ); // For Navigator rangename updates
 
@@ -2329,21 +2332,15 @@ OUString ScPosWnd::createLocalRangeName(std::u16string_view rName, std::u16strin
     return OUString::Concat(rName) + " (" + rTableName + ")";
 }
 
-void ScPosWnd::FillRangeNames()
+void ScPosWnd::FillRangeNames(bool initialize)
 {
-    m_xWidget->clear();
-    m_xWidget->freeze();
-
+    std::set<OUString> aSet;
     SfxObjectShell* pObjSh = SfxObjectShell::Current();
-    if ( auto pDocShell = dynamic_cast<ScDocShell*>( pObjSh) )
+    if (auto pDocShell = dynamic_cast<ScDocShell*>(pObjSh))
     {
         ScDocument& rDoc = pDocShell->GetDocument();
 
-        m_xWidget->append_text(ScResId(STR_MANAGE_NAMES));
-        m_xWidget->append_separator("separator");
-
         ScRange aDummy;
-        std::set<OUString> aSet;
         ScRangeName* pRangeNames = rDoc.GetRangeName();
         for (const auto& rEntry : *pRangeNames)
         {
@@ -2364,14 +2361,24 @@ void ScPosWnd::FillRangeNames()
                 }
             }
         }
+    }
 
-        for (const auto& rItem : aSet)
-        {
-            m_xWidget->append_text(rItem);
-        }
+    if (aSet == aRangeNames && !initialize)
+        return;
+
+    aRangeNames = aSet;
+
+    m_xWidget->clear();
+    m_xWidget->freeze();
+    m_xWidget->append_text(ScResId(STR_MANAGE_NAMES));
+    m_xWidget->append_separator("separator");
+    for (const auto& rItem : aSet)
+    {
+        m_xWidget->append_text(rItem);
     }
     m_xWidget->thaw();
-    m_xWidget->set_entry_text(aPosStr);
+    if (!aPosStr.isEmpty())
+        m_xWidget->set_entry_text(aPosStr);
 }
 
 void ScPosWnd::FillFunctions()

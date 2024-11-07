@@ -476,6 +476,10 @@ Components::Components(
 {
     assert(context.is());
     lock_ = lock();
+
+    bool staticize = !!getenv("SAL_CONFIG_STATICIZE");
+    Node::setStaticizedFlag(staticize);
+
     OUString conf(expand("${CONFIGURATION_LAYERS}"));
     int layer = 0;
     for (sal_Int32 i = 0;;) {
@@ -613,6 +617,8 @@ Components::Components(
         }
         i = n;
     }
+
+    Node::setStaticizedFlag(false);
 }
 
 Components::~Components()

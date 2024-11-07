@@ -259,7 +259,7 @@ public:
                       sal_uInt64 nWindowId = 0);
     /// used for formulabar
     JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRoot, const OUString& rUIFile,
-                      sal_uInt64 nLOKWindowId);
+                      sal_uInt64 nLOKWindowId, const OUString& sTypeOfJSON);
 
     static std::unique_ptr<JSInstanceBuilder>
     CreateDialogBuilder(weld::Widget* pParent, const OUString& rUIRoot, const OUString& rUIFile);
@@ -277,6 +277,11 @@ public:
                                                                       const OUString& rUIRoot,
                                                                       const OUString& rUIFile,
                                                                       sal_uInt64 nLOKWindowId);
+
+    static std::unique_ptr<JSInstanceBuilder> CreateAddressInputBuilder(vcl::Window* pParent,
+                                                                        const OUString& rUIRoot,
+                                                                        const OUString& rUIFile,
+                                                                        sal_uInt64 nLOKWindowId);
 
     virtual ~JSInstanceBuilder() override;
     virtual std::unique_ptr<weld::MessageDialog> weld_message_dialog(const OUString& id) override;
@@ -351,6 +356,12 @@ public:
     virtual void sendPopup(vcl::Window* pPopup, OUString sParentId, OUString sCloseId) = 0;
 
     virtual void sendClosePopup(vcl::LOKWindowId nWindowId) = 0;
+};
+
+class SAL_LOPLUGIN_ANNOTATE("crosscast") OnDemandRenderingHandler
+{
+public:
+    virtual void render_entry(int pos, int dpix, int dpiy) = 0;
 };
 
 template <class BaseInstanceClass, class VclClass>
@@ -616,7 +627,8 @@ public:
     virtual void set_active(int pos) override;
 };
 
-class JSComboBox final : public JSWidget<SalInstanceComboBoxWithEdit, ::ComboBox>
+class JSComboBox final : public JSWidget<SalInstanceComboBoxWithEdit, ::ComboBox>,
+                         public OnDemandRenderingHandler
 {
 public:
     JSComboBox(JSDialogSender* pSender, ::ComboBox* pComboBox, SalInstanceBuilder* pBuilder,
@@ -630,7 +642,8 @@ public:
     virtual void set_active_id(const OUString& rText) override;
     virtual bool changed_by_direct_pick() const override;
 
-    void render_entry(int pos, int dpix, int dpiy);
+    // OnDemandRenderingHandler
+    virtual void render_entry(int pos, int dpix, int dpiy) override;
 };
 
 class JSNotebook final : public JSWidget<SalInstanceNotebook, ::TabControl>
@@ -763,6 +776,11 @@ public:
     virtual void set_toggle(int pos, TriState eState, int col = -1) override;
     virtual void set_toggle(const weld::TreeIter& rIter, TriState bOn, int col = -1) override;
 
+    using SalInstanceTreeView::set_sensitive;
+    /// pos is used differently here, it defines how many steps of iterator we need to perform to take entry
+    virtual void set_sensitive(int pos, bool bSensitive, int col = -1) override;
+    virtual void set_sensitive(const weld::TreeIter& rIter, bool bSensitive, int col = -1) override;
+
     using SalInstanceTreeView::select;
     /// pos is used differently here, it defines how many steps of iterator we need to perform to take entry
     virtual void select(int pos) override;
@@ -804,7 +822,8 @@ public:
     virtual void set_expanded(bool bExpand) override;
 };
 
-class JSIconView final : public JSWidget<SalInstanceIconView, ::IconView>
+class JSIconView final : public JSWidget<SalInstanceIconView, ::IconView>,
+                         public OnDemandRenderingHandler
 {
 public:
     JSIconView(JSDialogSender* pSender, ::IconView* pIconView, SalInstanceBuilder* pBuilder,
@@ -821,6 +840,9 @@ public:
     virtual void clear() override;
     virtual void select(int pos) override;
     virtual void unselect(int pos) override;
+
+    // OnDemandRenderingHandler
+    virtual void render_entry(int pos, int dpix, int dpiy) override;
 };
 
 class JSRadioButton final : public JSWidget<SalInstanceRadioButton, ::RadioButton>

@@ -3703,6 +3703,11 @@ SwShortCut::SwShortCut( const SwFrame& rFrame, const SwRect& rRect )
 
 void SwLayoutFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const& rRect, SwPrintData const*const) const
 {
+    if (!getFramePrintArea().HasArea() && !IsRowFrame())
+    {   // tdf#163032 row frame may contain rowspan>1 cell that must be painted
+        return; // do not paint hidden frame
+    }
+
     // #i16816# tagged pdf support
     Frame_Info aFrameInfo(*this, false);
     SwTaggedPDFHelper aTaggedPDFHelper( nullptr, &aFrameInfo, nullptr, rRenderContext );
@@ -3765,6 +3770,7 @@ void SwLayoutFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect cons
         if ( rRect.Overlaps( aPaintRect ) )
         {
             if ( bCnt && pFrame->IsCompletePaint() &&
+                 !(comphelper::LibreOfficeKit::isActive() && comphelper::LibreOfficeKit::isTiledPainting()) &&
                  !rRect.Contains( aPaintRect ) && Application::AnyInput( VclInputFlags::KEYBOARD ) )
             {
                 //fix(8104): It may happen, that the processing wasn't complete
@@ -4642,9 +4648,15 @@ void SwTextFrame::PaintOutlineContentVisibilityButton() const
 
 void SwTabFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const& rRect, SwPrintData const*const) const
 {
+    if (!getFramePrintArea().HasArea())
+    {
+        return; // do not paint hidden frame
+    }
     const SwViewOption* pViewOption = gProp.pSGlobalShell->GetViewOptions();
     if (pViewOption->IsTable())
     {
+        SwLayoutFrame::PaintSwFrame( rRenderContext, rRect );
+
         // #i29550#
         if ( IsCollapsingBorders() )
         {
@@ -4662,8 +4674,6 @@ void SwTabFrame::PaintSwFrame(vcl::RenderContext& rRenderContext, SwRect const& 
             SwTabFramePainter aHelper(*this);
             aHelper.PaintLines(rRenderContext, rRect);
         }
-
-        SwLayoutFrame::PaintSwFrame( rRenderContext, rRect );
     }
     // #i6467# - no light grey rectangle for page preview
     else if ( gProp.pSGlobalShell->GetWin() && !gProp.pSGlobalShell->IsPreview() )

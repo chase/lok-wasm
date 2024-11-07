@@ -509,6 +509,9 @@ enum OpCode : sal_uInt16
         ocFilter            = SC_OPCODE_FILTER,
         ocSort              = SC_OPCODE_SORT,
         ocSortBy            = SC_OPCODE_SORTBY,
+        ocMatSequence       = SC_OPCODE_MAT_SEQUENCE,
+        ocRandArray         = SC_OPCODE_RANDARRAY,
+        ocUnique            = SC_OPCODE_UNIQUE,
     // internal stuff
         ocInternalBegin     = SC_OPCODE_INTERNAL_BEGIN,
         ocTTT               = SC_OPCODE_TTT,
@@ -838,6 +841,7 @@ inline std::string OpCodeEnumToString(OpCode eCode)
     case ocMatDet: return "MatDet";
     case ocMatInv: return "MatInv";
     case ocMatMult: return "MatMult";
+    case ocMatSequence: return "MatSequence";
     case ocMatTrans: return "MatTrans";
     case ocMatrixUnit: return "MatrixUnit";
     case ocBackSolver: return "BackSolver";
@@ -987,9 +991,11 @@ inline std::string OpCodeEnumToString(OpCode eCode)
     case ocEncodeURL: return "EncodeURL";
     case ocFourier: return "Fourier";
     case ocRandbetweenNV: return "RandbetweenNV";
+    case ocRandArray: return "RandArray";
     case ocFilter: return "Filter";
     case ocSort: return "Sort";
     case ocSortBy: return "SortBy";
+    case ocUnique: return "Unique";
     case ocTTT: return "TTT";
     case ocDebugVar: return "DebugVar";
     case ocDataToken1: return "DataToken1";

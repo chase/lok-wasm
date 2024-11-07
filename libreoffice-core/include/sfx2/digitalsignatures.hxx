@@ -9,12 +9,16 @@
 
 #pragma once
 
+#include <functional>
+
 #include <com/sun/star/embed/XStorage.hpp>
 #include <com/sun/star/frame/XModel.hpp>
 #include <com/sun/star/io/XStream.hpp>
 #include <com/sun/star/security/XCertificate.hpp>
 
 #include <sal/types.h>
+
+class SfxViewShell;
 
 namespace sfx2
 {
@@ -28,6 +32,25 @@ public:
                              const css::uno::Reference<css::security::XCertificate>& xCertificate,
                              const css::uno::Reference<css::embed::XStorage>& xStorage,
                              const css::uno::Reference<css::io::XStream>& xStream)
+        = 0;
+
+    /// Async replacement for signDocumentContent().
+    virtual void SignDocumentContentAsync(const css::uno::Reference<css::embed::XStorage>& xStorage,
+                                          const css::uno::Reference<css::io::XStream>& xSignStream,
+                                          SfxViewShell* pViewShell,
+                                          const std::function<void(bool)>& rCallback)
+        = 0;
+
+    /// Async replacement for signScriptingContent().
+    virtual void
+    SignScriptingContentAsync(const css::uno::Reference<css::embed::XStorage>& rxStorage,
+                              const css::uno::Reference<css::io::XStream>& xSignStream,
+                              const std::function<void(bool)>& rCallback)
+        = 0;
+
+    /// Create a scripting signature before creating a document signature.
+    virtual void
+    SetSignScriptingContent(const css::uno::Reference<css::io::XStream>& xScriptingSignStream)
         = 0;
 
 protected:

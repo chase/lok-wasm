@@ -735,7 +735,7 @@ bool SwViewShell::IsDummyPage( sal_uInt16 nPageNum ) const
  * type is sent (???).
  * @param[in] bCloseDB Passed in to GetDoc()->UpdateFields. [TODO] Purpose???
  */
-void SwViewShell::UpdateFields(bool bCloseDB)
+void SwViewShell::UpdateFields(bool bCloseDB, bool bSetModified)
 {
     CurrShell aCurr( this );
 
@@ -745,7 +745,7 @@ void SwViewShell::UpdateFields(bool bCloseDB)
     else
         StartAction();
 
-    GetDoc()->getIDocumentFieldsAccess().UpdateFields(bCloseDB);
+    GetDoc()->getIDocumentFieldsAccess().UpdateFields(bCloseDB, bSetModified);
 
     if ( pCursorShell )
         pCursorShell->EndAction();

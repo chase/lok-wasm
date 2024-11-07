@@ -54,6 +54,7 @@ class XComponentContext;
 }
 }
 class PDFSignatureHelper;
+class Xmlsec;
 
 /// Manages signatures (addition, removal), used by DigitalSignaturesDialog.
 class XMLSECURITY_DLLPUBLIC DocumentSignatureManager
@@ -67,6 +68,7 @@ private:
     DocumentSignatureMode const meSignatureMode;
     css::uno::Sequence<css::uno::Sequence<css::beans::PropertyValue>> m_manifest;
     css::uno::Reference<css::io::XStream> mxSignatureStream;
+    css::uno::Reference<css::io::XStream> mxScriptingSignatureStream;
     css::uno::Reference<css::frame::XModel> mxModel;
     rtl::Reference<utl::TempFileFastService> mxTempSignatureStream;
     /// Storage containing all OOXML signatures, unused for ODF.
@@ -75,6 +77,7 @@ private:
     css::uno::Reference<css::xml::crypto::XXMLSecurityContext> mxSecurityContext;
     css::uno::Reference<css::xml::crypto::XSEInitializer> mxGpgSEInitializer;
     css::uno::Reference<css::xml::crypto::XXMLSecurityContext> mxGpgSecurityContext;
+    std::shared_ptr<Xmlsec> mpXmlsecLibrary;
 
 public:
     DocumentSignatureManager(const css::uno::Reference<css::uno::XComponentContext>& xContext,
@@ -123,6 +126,12 @@ public:
     void setSignatureStream(const css::uno::Reference<css::io::XStream>& xSignatureStream)
     {
         mxSignatureStream = xSignatureStream;
+    }
+    css::uno::Reference<css::io::XStream> getSignatureStream() const { return mxSignatureStream; }
+    void setScriptingSignatureStream(
+        const css::uno::Reference<css::io::XStream>& xScriptingSignatureStream)
+    {
+        mxScriptingSignatureStream = xScriptingSignatureStream;
     }
     void setModel(const css::uno::Reference<css::frame::XModel>& xModel);
     const css::uno::Reference<css::embed::XStorage>& getStore() const { return mxStore; }

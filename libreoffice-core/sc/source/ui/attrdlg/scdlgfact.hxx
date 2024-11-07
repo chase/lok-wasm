@@ -115,6 +115,7 @@ public:
     virtual bool CondFormatsChanged() const override;
     virtual void SetModified() override;
     virtual ScConditionalFormat* GetCondFormatSelected() override;
+    virtual void ShowEasyConditionalDialog(bool isEdit = false) override;
 };
 
 class AbstractScDataPilotDatabaseDlg_Impl  :public AbstractScDataPilotDatabaseDlg
@@ -316,13 +317,14 @@ public:
 
 class AbstractScSelEntryDlg_Impl : public AbstractScSelEntryDlg
 {
-    std::unique_ptr<ScSelEntryDlg> m_xDlg;
+    std::shared_ptr<ScSelEntryDlg> m_xDlg;
 public:
     explicit AbstractScSelEntryDlg_Impl(std::unique_ptr<ScSelEntryDlg> p)
         : m_xDlg(std::move(p))
     {
     }
     virtual short    Execute() override;
+    virtual bool StartExecuteAsync(AsyncContext& rCtx) override;
     virtual OUString GetSelectedEntry() const override;
 };
 

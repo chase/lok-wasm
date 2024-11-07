@@ -93,6 +93,7 @@ public:
     virtual std::unique_ptr<ScConditionalFormatList> GetConditionalFormatList() = 0;
 
     virtual bool CondFormatsChanged() const = 0;
+    virtual void ShowEasyConditionalDialog(bool isEdit = false) = 0;
 
     virtual void SetModified() = 0;
 
@@ -470,7 +471,7 @@ public:
     virtual VclPtr<AbstractScInsertTableDlg> CreateScInsertTableDlg(weld::Window* pParent, ScViewData& rViewData,
         SCTAB nTabCount, bool bFromFile) = 0;
 
-    virtual VclPtr<AbstractScSelEntryDlg > CreateScSelEntryDlg(weld::Window* pParent, const std::vector<OUString> &rEntryList) = 0;
+    virtual VclPtr<AbstractScSelEntryDlg> CreateScSelEntryDlg(weld::Window* pParent, const std::vector<OUString> &rEntryList) = 0;
     virtual VclPtr<AbstractScLinkedAreaDlg> CreateScLinkedAreaDlg(weld::Widget* pParent) = 0;
 
     virtual VclPtr<AbstractScMetricInputDlg> CreateScMetricInputDlg(weld::Window* pParent,

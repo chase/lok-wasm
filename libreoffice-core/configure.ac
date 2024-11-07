@@ -1000,6 +1000,7 @@ ios*) # iOS
     test_libcmis=no
     test_openldap=no
     test_webdav=no
+    with_gssapi=no
     if test -n "$LODE_HOME" ; then
         mac_sanitize_path
         AC_MSG_NOTICE([sanitized the PATH to $PATH])
@@ -1097,6 +1098,7 @@ linux-android*)
     test_openldap=no
     test_system_freetype=no
     test_webdav=no
+    with_gssapi=no
     disable_database_connectivity_dependencies
     enable_lotuswordpro=no
     enable_mpl_subset=yes
@@ -2189,6 +2191,14 @@ libo_FUZZ_ARG_WITH(fonts,
          known to be available on the system then you should use this option.]),
 ,)
 
+libo_FUZZ_ARG_WITH(docrepair-fonts,
+    AS_HELP_STRING([--with-docrepair-fonts],
+        [LibreOffice optionally includes fonts from 'The DocRepair Project' that
+         provide metrically equivalent fallback fonts for a variety of common fonts
+         seen in Office Open XML documents. See https://github.com/docrepair-fonts
+         for more details. This option has no effect when --without-fonts is used.]),
+,)
+
 AC_ARG_ENABLE(noto-font,
     AS_HELP_STRING([--enable-noto-font],
         [Add more Google Noto fonts.]),
@@ -2730,6 +2740,7 @@ AC_ARG_WITH(locales,
 ,)
 
 # Kerberos and GSSAPI used only by PostgreSQL as of LibO 3.5
+# and also by libcurl since LibO 24.2.6
 libo_FUZZ_ARG_WITH(krb5,
     AS_HELP_STRING([--with-krb5],
         [Enable MIT Kerberos 5 support in modules that support it.
@@ -3619,18 +3630,12 @@ if test $_os = Darwin; then
     if test "$my_xcode_ver3" -ge 1205; then
         AC_MSG_RESULT([yes ($my_xcode_ver2)])
         if test $MAC_OS_X_VERSION_MIN_REQUIRED -lt 120000; then
-            if test "$my_xcode_ver3" -ge 1600; then
-                dnl the Xcode 15 relnotes state that the classic linker will disappear in the next version, but nothing about
-                dnl fixing the problem with weak symbols/macOS 11 compatibility, so assume for now that Xcode 16 will break it...
-                AC_MSG_ERROR([Check that Xcode 16 still supports the old linker/that it doesn't break macOS 11 compatibility, then remove this check]);
-            fi
-            if test "$my_xcode_ver3" -ge 1500; then
-                AC_MSG_WARN([Xcode 15 has a new linker that causes runtime crashes on macOS 11])
-                add_warning "Xcode 15 has a new linker that causes runtime crashes on macOS 11, forcing the old linker."
-                add_warning "see https://developer.apple.com/documentation/xcode-release-notes/xcode-15-release-notes#Linking"
-                LDFLAGS="$LDFLAGS -Wl,-ld_classic"
-                # if LDFLAGS weren't set already, a check above sets x_LDFLAGS=[#] to comment-out the export LDFLAGS line in config_host.mk
-                x_LDFLAGS=
+            if test "$my_xcode_ver3" -eq 1500; then
+                dnl the bug was aleady fixed on 15.1 and 15.2 still has the same OS requirements as 15.0
+                dnl in other words all affected users could update to a working Xcode version
+                AC_MSG_WARN([Use a current version of XCode or bump the minimum deployment target])
+                AC_MSG_WARN([[see https://developer.apple.com/documentation/xcode-release-notes/xcode-15-release-notes#Linking]])
+                AC_MSG_ERROR([Xcode 15.0 has a bug in the new linker that causes runtime crashes on macOS 11 - aborting])
             fi
         fi
     else
@@ -10088,7 +10093,7 @@ if test \( "$cross_compiling" = yes -a -z "$PYTHON_FOR_BUILD" \) -o "$enable_pyt
     SYSTEM_PYTHON=
     PYTHON_VERSION_MAJOR=3
     PYTHON_VERSION_MINOR=8
-    PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.19
+    PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.20
     if ! grep -q -i python.*${PYTHON_VERSION} ${SRC_ROOT}/download.lst; then
         AC_MSG_ERROR([PYTHON_VERSION ${PYTHON_VERSION} but no matching file in download.lst])
     fi
@@ -10613,6 +10618,17 @@ dnl Check for system curl
 dnl ===================================================================
 libo_CHECK_SYSTEM_MODULE([curl],[CURL],[libcurl >= 7.68.0],enabled)
 
+if test "$enable_curl" = "yes" -a "$with_system_curl" != "yes" -a "$with_gssapi" != "no"; then
+    if test "$_os" != "WINNT"; then
+        WITH_GSSAPI=TRUE
+        save_LIBS=$LIBS
+        AC_SEARCH_LIBS(gss_init_sec_context, [gssapi_krb5 gss 'gssapi -lkrb5 -lcrypto'], [],
+            [AC_MSG_ERROR([could not find function 'gss_init_sec_context' required for GSSAPI])])
+        GSSAPI_LIBS=$LIBS
+        LIBS=$save_LIBS
+    fi
+fi
+
 dnl ===================================================================
 dnl Check for system boost
 dnl ===================================================================
@@ -10910,7 +10926,7 @@ AC_SUBST(ICU_MINOR)
 dnl ==================================================================
 dnl CURL
 dnl ==================================================================
-if test "$enable_curl" == "yes"; then
+if test "$enable_curl" = "yes"; then
     AC_DEFINE([HAVE_FEATURE_CURL])
 fi
 
@@ -10956,7 +10972,7 @@ AC_SUBST(DEFAULT_CRASHDUMP_VALUE)
 dnl ==================================================================
 dnl libcmis
 dnl ==================================================================
-if test "$enable_libcmis" == "yes"; then
+if test "$enable_libcmis" = "yes"; then
     if test "$enable_curl" != "yes"; then
         AC_MSG_ERROR([--disable-libcmis must be used when --disable-curl is used])
     fi
@@ -13610,18 +13626,25 @@ AC_SUBST(FONTFORGE)
 dnl ===================================================================
 dnl Test whether to include fonts
 dnl ===================================================================
+WITH_FONTS=
+WITH_DOCREPAIR_FONTS=
 AC_MSG_CHECKING([whether to include third-party fonts])
 if test "$with_fonts" != "no"; then
     AC_MSG_RESULT([yes])
     WITH_FONTS=TRUE
     BUILD_TYPE="$BUILD_TYPE MORE_FONTS"
     AC_DEFINE(HAVE_MORE_FONTS)
+    AC_MSG_CHECKING([whether to include 'docrepair' fonts])
+    if test "$with_docrepair_fonts" = "yes"; then
+        AC_MSG_RESULT([yes])
+        WITH_DOCREPAIR_FONTS=TRUE
+    fi
 else
     AC_MSG_RESULT([no])
-    WITH_FONTS=
     SCPDEFS="$SCPDEFS -DWITHOUT_FONTS"
 fi
 AC_SUBST(WITH_FONTS)
+AC_SUBST(WITH_DOCREPAIR_FONTS)
 
 dnl Test whether to include more Google Noto fonts
 dnl ===================================================================
@@ -14750,11 +14773,14 @@ dnl expression' with consteval constructor", <https://bugs.llvm.org/show_bug.cgi
 dnl using consteval: 'clang/lib/CodeGen/Address.h:38: llvm::Value*
 dnl clang::CodeGen::Address::getPointer() const: Assertion `isValid()' failed.'" (which should be
 dnl fixed since Clang 14), <https://developercommunity.visualstudio.com/t/1581879> "Bogus error
-dnl C7595 with consteval constructor in ternary expression (/std:c++latest)", or
+dnl C7595 with consteval constructor in ternary expression (/std:c++latest)" (which appears to be
+dnl fixed at least in Visual Studio Community 2022 Preview 17.9.0 Preview 5.0),
 dnl <https://github.com/llvm/llvm-project/issues/54612> "C++20, consteval, anonymous union:
 dnl llvm/lib/IR/Instructions.cpp:1491: void llvm::StoreInst::AssertOK(): Assertion
 dnl `cast<PointerType>(getOperand(1)->getType())->isOpaqueOrPointeeTypeMatches(getOperand(0)->getType())
-dnl && "Ptr must be a pointer to Val type!"' failed." (which should be fixed since Clang 17):
+dnl && "Ptr must be a pointer to Val type!"' failed." (which should be fixed since Clang 17), or
+dnl <https://developercommunity.visualstudio.com/t/Bogus-error-C2440-with-consteval-constru/10579616>
+dnl "Bogus error C2440 with consteval constructor (/std:c++20)":
 AC_LANG_PUSH([C++])
 save_CXX=$CXX
 if test "$COM" = MSC && test "$COM_IS_CLANG" != TRUE; then
@@ -14799,6 +14825,18 @@ AC_RUN_IFELSE([AC_LANG_PROGRAM([
             };
         };
         auto s5 = S5().f();
+
+        struct S6 {
+            consteval S6(char const (&lit)[2]) {
+                buf[0] = lit[0];
+                buf[1] = lit[1];
+            }
+            union {
+                int x;
+                char buf[2];
+            };
+        };
+        void f6() { S6("a"); }
     ], [
         return (s.i == 1) ? 0 : 1;
     ])], [

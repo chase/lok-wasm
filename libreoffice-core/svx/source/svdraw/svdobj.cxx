@@ -326,8 +326,6 @@ void SdrObject::SetBoundRectDirty()
     resetOutRectangle();
 }
 
-#ifdef DBG_UTIL
-// SdrObjectLifetimeWatchDog:
 void impAddIncarnatedSdrObjectToSdrModel(SdrObject& rSdrObject, SdrModel& rSdrModel)
 {
     rSdrModel.maAllIncarnatedObjects.insert(&rSdrObject);
@@ -339,7 +337,6 @@ void impRemoveIncarnatedSdrObjectToSdrModel(SdrObject& rSdrObject, SdrModel& rSd
         assert(false && "SdrObject::~SdrObject: Destructed incarnation of SdrObject not member of this SdrModel (!)");
     }
 }
-#endif
 
 SdrObject::SdrObject(SdrModel& rSdrModel)
     : mpFillGeometryDefiningShape(nullptr)
@@ -374,10 +371,7 @@ SdrObject::SdrObject(SdrModel& rSdrModel)
     m_bIs3DObj=false;
     m_bMarkProt=false;
     m_bIsUnoObj=false;
-#ifdef DBG_UTIL
-    // SdrObjectLifetimeWatchDog:
     impAddIncarnatedSdrObjectToSdrModel(*this, getSdrModelFromSdrObject());
-#endif
 }
 
 SdrObject::SdrObject(SdrModel& rSdrModel, SdrObject const & rSource)
@@ -445,10 +439,7 @@ SdrObject::SdrObject(SdrModel& rSdrModel, SdrObject const & rSource)
     m_pGrabBagItem.reset();
     if (rSource.m_pGrabBagItem!=nullptr)
         m_pGrabBagItem.reset(rSource.m_pGrabBagItem->Clone());
-#ifdef DBG_UTIL
-    // SdrObjectLifetimeWatchDog:
     impAddIncarnatedSdrObjectToSdrModel(*this, getSdrModelFromSdrObject());
-#endif
 }
 
 SdrObject::~SdrObject()
@@ -475,10 +466,7 @@ SdrObject::~SdrObject()
     m_pGrabBagItem.reset();
     mpProperties.reset();
     mpViewContact.reset();
-#ifdef DBG_UTIL
-    // SdrObjectLifetimeWatchDog:
     impRemoveIncarnatedSdrObjectToSdrModel(*this, getSdrModelFromSdrObject());
-#endif
 }
 
 void SdrObject::acquire() noexcept
@@ -690,7 +678,7 @@ void SdrObject::RemoveListener(SfxListener& rListener)
     }
 }
 
-const SfxBroadcaster* SdrObject::GetBroadcaster() const
+SfxBroadcaster* SdrObject::GetBroadcaster() const
 {
     return m_pPlusData!=nullptr ? m_pPlusData->pBroadcast.get() : nullptr;
 }
@@ -930,6 +918,36 @@ void SdrObject::SetOrdNum(sal_uInt32 nNum)
     m_nOrdNum = nNum;
 }
 
+/// Try to ensure the desired result __without__ triggering RecalcObjOrdNums
+void SdrObject::ensureSortedImmediatelyAfter(const SdrObject& rFirst)
+{
+    SdrObjList* pParentList = getParentSdrObjListFromSdrObject();
+    assert(pParentList == rFirst.getParentSdrObjListFromSdrObject());
+    bool bDirty = pParentList->IsObjOrdNumsDirty();
+    if (!bDirty)
+    {
+        pParentList->SetObjectOrdNum(GetOrdNum(), rFirst.GetOrdNum() + 1);
+    }
+    else
+    {
+        std::optional<decltype(pParentList->begin())> itFound1, itFound2;
+        for (auto it = pParentList->begin(), itEnd = pParentList->end(); it != itEnd; ++it)
+        {
+            if (*it == this)
+                itFound1 = it;
+            else if (*it == &rFirst)
+                itFound2 = it;
+            if (itFound1 && itFound2)
+            {
+                auto ord1 = std::distance(pParentList->begin(), *itFound1);
+                auto ord2 = std::distance(pParentList->begin(), *itFound2);
+                pParentList->SetObjectOrdNum(ord1, ord2 + 1);
+                break;
+            }
+        }
+    }
+}
+
 void SdrObject::GetGrabBagItem(css::uno::Any& rVal) const
 {
     if (m_pGrabBagItem != nullptr)
@@ -996,8 +1014,8 @@ void SdrObject::RecalcBoundRect()
     if ((getSdrModelFromSdrObject().isLocked()) || utl::ConfigManager::IsFuzzing())
         return;
 
-    auto const& rRectangle = getOutRectangle();
 
+    auto const& rRectangle = getOutRectangle();
     // central new method which will calculate the BoundRect using primitive geometry
     if (!rRectangle.IsEmpty())
         return;
@@ -1539,15 +1557,26 @@ void SdrObject::NbcShear(const Point& rRef, Degree100 /*nAngle*/, double tn, boo
     SetGlueReallyAbsolute(false);
 }
 
-void SdrObject::Move(const Size& rSiz)
+void SdrObject::Move(const Size& rSize)
 {
-    if (rSiz.Width()!=0 || rSiz.Height()!=0) {
-        tools::Rectangle aBoundRect0; if (m_pUserCall!=nullptr) aBoundRect0=GetLastBoundRect();
-        NbcMove(rSiz);
-        SetChanged();
-        BroadcastObjectChange();
-        SendUserCall(SdrUserCallType::MoveOnly,aBoundRect0);
+    if (rSize.Width() == 0 && rSize.Height() == 0)
+        return;
+
+    tools::Rectangle aBoundRect0;
+    if (m_pUserCall != nullptr)
+        aBoundRect0 = GetLastBoundRect();
+    NbcMove(rSize);
+    if (isAnnotationObject())
+    {
+        css::geometry::RealPoint2D aNewPosition(
+            GetLogicRect().Left() / 100.0,
+            GetLogicRect().Top() / 100.0);
+
+        getAnnotationData()->mxAnnotation->SetPosition(aNewPosition);
     }
+    SetChanged();
+    BroadcastObjectChange();
+    SendUserCall(SdrUserCallType::MoveOnly, aBoundRect0);
 }
 
 void SdrObject::NbcCrop(const basegfx::B2DPoint& /*aRef*/, double /*fxFact*/, double /*fyFact*/)
@@ -1568,11 +1597,23 @@ void SdrObject::Resize(const Point& rRef, const Fraction& xFact, const Fraction&
         mpImpl->meRelativeHeightRelation = text::RelOrientation::PAGE_FRAME;
         mpImpl->mnRelativeHeight.reset();
     }
-    tools::Rectangle aBoundRect0; if (m_pUserCall!=nullptr) aBoundRect0=GetLastBoundRect();
-    NbcResize(rRef,xFact,yFact);
+    tools::Rectangle aBoundRect0;
+
+    if (m_pUserCall != nullptr)
+        aBoundRect0 = GetLastBoundRect();
+
+    NbcResize(rRef, xFact, yFact);
+
+    if (isAnnotationObject())
+    {
+        auto& rRect = GetCurrentBoundRect();
+        css::geometry::RealSize2D aNewSize(rRect.GetWidth() / 100.0, rRect.GetHeight() / 100.0);
+        getAnnotationData()->mxAnnotation->SetSize(aNewSize);
+    }
+
     SetChanged();
     BroadcastObjectChange();
-    SendUserCall(SdrUserCallType::Resize,aBoundRect0);
+    SendUserCall(SdrUserCallType::Resize, aBoundRect0);
 }
 
 void SdrObject::Crop(const basegfx::B2DPoint& rRef, double fxFact, double fyFact)
@@ -3225,6 +3266,15 @@ SdrTextObj* DynCastSdrTextObj(SdrObject* pObj)
     // to be safer.
     if( pObj && pObj->IsSdrTextObj() )
         return static_cast<SdrTextObj*>(pObj);
+    return nullptr;
+}
+
+SdrOle2Obj* DynCastSdrOle2Obj(SdrObject* pObj)
+{
+    // SdrTextObj has subclasses, with lots of SdrObjKind identifiers, so use a virtual method
+    // to be safer.
+    if( pObj && pObj->IsSdrOle2Obj() )
+        return static_cast<SdrOle2Obj*>(pObj);
     return nullptr;
 }
 

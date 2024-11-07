@@ -467,6 +467,7 @@ public:
     ScFormulaCell * const * GetFormulaCellBlockAddress( SCROW nRow, size_t& rBlockSize ) const;
     CellType    GetCellType( SCROW nRow ) const;
     SCSIZE      GetCellCount() const;
+    bool        IsCellCountZero() const;
     sal_uInt64  GetWeightedCount() const;
     sal_uInt64  GetWeightedCount(SCROW nStartRow, SCROW nEndRow) const;
     sal_uInt64  GetCodeCount() const;       // RPN-Code in formulas
@@ -604,7 +605,7 @@ public:
 
     void GetBackColorFilterEntries(SCROW nRow1, SCROW nRow2, ScFilterEntries& rFilterEntries );
 
-    bool GetDataEntries( SCROW nRow, std::set<ScTypedStrData>& rStrings) const;
+    bool GetDataEntries( SCROW nRow, ScTypedCaseStrSet& rStrings) const;
 
     void UpdateInsertTabAbs(SCTAB nNewPos);
     bool    TestTabRefAbs(SCTAB nTable) const;

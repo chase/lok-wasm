@@ -244,7 +244,7 @@ void SAL_CALL OZipFileAccess::initialize( const uno::Sequence< uno::Any >& aArgu
                 m_aMutexHolder,
                 m_xContentStream,
                 m_xContext,
-                true );
+                true, false, ZipFile::Checks::Default);
 }
 
 // XNameAccess
@@ -267,7 +267,7 @@ uno::Any SAL_CALL OZipFileAccess::getByName( const OUString& aName )
     {
         xEntryStream  = m_pZipFile->getDataStream((*aIter).second,
                                                   ::rtl::Reference< EncryptionData >(),
-                                                  false,
+                                                  {},
                                                   m_aMutexHolder);
     }
     catch (const container::NoSuchElementException&)
@@ -391,7 +391,7 @@ uno::Reference< io::XInputStream > SAL_CALL OZipFileAccess::getStreamByPattern( 
     {
         uno::Reference< io::XInputStream > xEntryStream( m_pZipFile->getDataStream( (*aIter).second,
                                                                                     ::rtl::Reference< EncryptionData >(),
-                                                                                    false,
+                                                                                    {},
                                                                                     m_aMutexHolder ) );
 
         if ( !xEntryStream.is() )

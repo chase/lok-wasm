@@ -520,17 +520,27 @@ void SectionPropertyMap::removeXTextContent(uno::Reference<text::XText> const& r
  */
 void SectionPropertyMap::setHeaderFooterProperties(DomainMapper_Impl& rDM_Impl)
 {
-    if (!m_aPageStyle.is())
+    // do not alter header/footer during copy/paste
+    if (!m_aPageStyle.is() || !rDM_Impl.IsNewDoc())
         return;
 
     bool bHasHeader = false;
     bool bHasFooter = false;
+    bool bHeaderIsShared = false;
+    bool bFooterIsShared = false;
+    bool bFirstIsShared = false;
 
     const OUString& sHeaderIsOn = getPropertyName(PROP_HEADER_IS_ON);
     const OUString& sFooterIsOn = getPropertyName(PROP_FOOTER_IS_ON);
+    const OUString& sHeaderIsShared = getPropertyName(PROP_HEADER_IS_SHARED);
+    const OUString& sFooterIsShared = getPropertyName(PROP_FOOTER_IS_SHARED);
+    const OUString& sFirstIsShared = getPropertyName(PROP_FIRST_IS_SHARED);
 
     m_aPageStyle->getPropertyValue(sHeaderIsOn) >>= bHasHeader;
     m_aPageStyle->getPropertyValue(sFooterIsOn) >>= bHasFooter;
+    m_aPageStyle->getPropertyValue(sHeaderIsShared) >>= bHeaderIsShared;
+    m_aPageStyle->getPropertyValue(sFooterIsShared) >>= bFooterIsShared;
+    m_aPageStyle->getPropertyValue(sFirstIsShared) >>= bFirstIsShared;
 
     bool bEvenAndOdd = rDM_Impl.GetSettingsTable()->GetEvenAndOddHeaders();
 
@@ -566,12 +576,15 @@ void SectionPropertyMap::setHeaderFooterProperties(DomainMapper_Impl& rDM_Impl)
             SectionPropertyMap::removeXTextContent(xText);
     }
 
-    m_aPageStyle->setPropertyValue(getPropertyName(PROP_HEADER_IS_SHARED), uno::Any(!bEvenAndOdd));
-    m_aPageStyle->setPropertyValue(getPropertyName(PROP_FOOTER_IS_SHARED), uno::Any(!bEvenAndOdd));
-    m_aPageStyle->setPropertyValue(getPropertyName(PROP_FIRST_IS_SHARED), uno::Any(!m_bTitlePage));
+    if ( bHeaderIsShared != !bEvenAndOdd )
+        m_aPageStyle->setPropertyValue(sHeaderIsShared, uno::Any(!bEvenAndOdd));
+    if ( bFooterIsShared != !bEvenAndOdd )
+        m_aPageStyle->setPropertyValue(sFooterIsShared, uno::Any(!bEvenAndOdd));
+    if ( bFirstIsShared != !m_bTitlePage )
+        m_aPageStyle->setPropertyValue(sFirstIsShared, uno::Any(!m_bTitlePage));
 
     bool bHadFirstHeader = m_bHadFirstHeader && m_bTitlePage;
-    if (bHasHeader && !bHadFirstHeader && !m_bHadLeftHeader && !m_bHadRightHeader && rDM_Impl.IsNewDoc())
+    if (bHasHeader && !bHadFirstHeader && !m_bHadLeftHeader && !m_bHadRightHeader)
     {
         m_aPageStyle->setPropertyValue(sHeaderIsOn, uno::Any(false));
     }
@@ -1029,11 +1042,23 @@ void copyHeaderFooter(const DomainMapper_Impl& rDM_Impl,
     xStyle->getPropertyValue(sHeaderIsOn) >>= bHasHeader;
     xStyle->getPropertyValue(sFooterIsOn) >>= bHasFooter;
 
-    xStyle->setPropertyValue(sHeaderIsOn, uno::Any(bPreviousHasHeader || bHasHeader));
-    xStyle->setPropertyValue(sFooterIsOn, uno::Any(bPreviousHasFooter || bHasFooter));
-    xStyle->setPropertyValue(sHeaderIsShared, uno::Any(false));
-    xStyle->setPropertyValue(sFooterIsShared, uno::Any(false));
-    xStyle->setPropertyValue(sFirstIsShared, uno::Any(false));
+    // Set all properties at once before the copy, to avoid needless SwPageDesc copying.
+    uno::Sequence<OUString> aNames = {
+        sHeaderIsOn,
+        sFooterIsOn,
+        sHeaderIsShared,
+        sFooterIsShared,
+        sFirstIsShared,
+    };
+    uno::Sequence<uno::Any> aValues = {
+        uno::Any(bPreviousHasHeader || bHasHeader),
+        uno::Any(bPreviousHasFooter || bHasFooter),
+        uno::Any(false),
+        uno::Any(false),
+        uno::Any(false),
+    };
+    uno::Reference<beans::XMultiPropertySet> xMultiPropertySet(xStyle, uno::UNO_QUERY);
+    xMultiPropertySet->setPropertyValues(aNames, aValues);
 
     if (bPreviousHasHeader && bCopyHeader)
     {
@@ -1055,12 +1080,22 @@ void copyHeaderFooter(const DomainMapper_Impl& rDM_Impl,
             copyHeaderFooterTextProperty(xPreviousStyle, xStyle, PROP_FOOTER_TEXT_FIRST);
     }
 
-    xStyle->setPropertyValue(sHeaderIsOn, uno::Any(bPreviousHasHeader || bHasHeader));
-    xStyle->setPropertyValue(sFooterIsOn, uno::Any(bPreviousHasFooter || bHasFooter));
-
-    xStyle->setPropertyValue(sHeaderIsShared, uno::Any(!bEvenAndOdd));
-    xStyle->setPropertyValue(sFooterIsShared, uno::Any(!bEvenAndOdd));
-    xStyle->setPropertyValue(sFirstIsShared, uno::Any(!bTitlePage));
+    // Set all properties at once after the copy, to avoid needless SwPageDesc copying.
+    aNames = {
+        sHeaderIsOn,
+        sFooterIsOn,
+        sHeaderIsShared,
+        sFooterIsShared,
+        sFirstIsShared,
+    };
+    aValues = {
+        uno::Any(bPreviousHasHeader || bHasHeader),
+        uno::Any(bPreviousHasFooter || bHasFooter),
+        uno::Any(!bEvenAndOdd),
+        uno::Any(!bEvenAndOdd),
+        uno::Any(!bTitlePage),
+    };
+    xMultiPropertySet->setPropertyValues(aNames, aValues);
 }
 
 } // end anonymous namespace
@@ -1180,6 +1215,8 @@ void SectionPropertyMap::HandleMarginsHeaderFooter(DomainMapper_Impl& rDM_Impl)
                     rDM_Impl.GetPageStyles()->getByName("Standard"), uno::UNO_QUERY_THROW);
         for (const beans::Property& rProp : m_aPageStyle->getPropertySetInfo()->getProperties())
         {
+            if (!rProp.Name.startsWith("Fill")) // only copy XATTR_FILL properties
+                continue;
             try
             {
                 const uno::Any aFillValue = xDefaultPageStyle->getPropertyValue(rProp.Name);

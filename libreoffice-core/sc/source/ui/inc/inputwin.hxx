@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <set>
 #include <vector>
 #include <memory>
 #include <vcl/customweld.hxx>
@@ -167,12 +168,13 @@ private:
 
     ImplSVEvent* m_nAsyncGetFocusId;
 
-    OUString        aPosStr;
-    void*           nTipVisible;
-    bool            bFormulaMode;
+    OUString aPosStr;
+    void* nTipVisible;
+    bool bFormulaMode;
+    std::set<OUString> aRangeNames;
 
 public:
-                    ScPosWnd( vcl::Window* pParent );
+    ScPosWnd(vcl::Window* pParent, ScTabViewShell* pViewSh);
     virtual         ~ScPosWnd() override;
     virtual void    dispose() override;
 
@@ -192,7 +194,7 @@ private:
     virtual void    Notify( SfxBroadcaster& rBC, const SfxHint& rHint ) override;
 
 private:
-    void            FillRangeNames();
+    void            FillRangeNames(bool initialize = false);
     void            FillFunctions();
     void            DoEnter();
     void            HideTip();

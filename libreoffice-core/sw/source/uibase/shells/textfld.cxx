@@ -27,6 +27,7 @@
 #include <txtfld.hxx>
 #include <svl/itempool.hxx>
 #include <svl/numformat.hxx>
+#include <editeng/editobj.hxx>
 #include <tools/lineend.hxx>
 #include <svl/whiter.hxx>
 #include <svl/eitem.hxx>
@@ -37,10 +38,15 @@
 #include <svx/hlnkitem.hxx>
 #include <svx/svxdlg.hxx>
 #include <osl/diagnose.h>
+#include <charatr.hxx>
+#include <fmtfsize.hxx>
 #include <fmthdft.hxx>
 #include <fmtinfmt.hxx>
 #include <fldwrap.hxx>
+#include <frmatr.hxx>
+#include <hfspacingitem.hxx>
 #include <redline.hxx>
+#include <swfont.hxx>
 #include <view.hxx>
 #include <viewopt.hxx>
 #include <wrtsh.hxx>
@@ -59,9 +65,9 @@
 #include <svtools/strings.hrc>
 #include <svtools/svtresid.hxx>
 
-#include <editeng/ulspitem.hxx>
 #include <xmloff/odffields.hxx>
 #include <IDocumentContentOperations.hxx>
+#include <IDocumentLayoutAccess.hxx>
 #include <IDocumentRedlineAccess.hxx>
 #include <IDocumentUndoRedo.hxx>
 #include <svl/zforlist.hxx>
@@ -107,6 +113,23 @@ static OUString lcl_BuildTitleWithRedline( const SwRangeRedline *pRedline )
     }
 
     return sTitle + SwResId(pResId);
+}
+
+static bool lcl_canUserModifyAnnotation(const SwView& rView, std::u16string_view sAuthor)
+{
+    return !comphelper::LibreOfficeKit::isActive() || !rView.IsLokReadOnlyView()
+           || sAuthor == rView.GetRedlineAuthor();
+}
+
+static bool lcl_canUserModifyAnnotation(const SwView& rView,
+                                        const sw::annotation::SwAnnotationWin* pAnnotationWin)
+{
+    return lcl_canUserModifyAnnotation(rView, pAnnotationWin->GetAuthor());
+}
+
+static bool lcl_canUserModifyAnnotation(const SwView& rView, sal_uInt32 nPostItId)
+{
+    return lcl_canUserModifyAnnotation(rView, rView.GetPostItMgr()->GetAnnotationWin(nPostItId));
 }
 
 void SwTextShell::ExecField(SfxRequest &rReq)
@@ -380,12 +403,17 @@ void SwTextShell::ExecField(SfxRequest &rReq)
             const SvxPostItIdItem* pIdItem = rReq.GetArg<SvxPostItIdItem>(SID_ATTR_POSTIT_ID);
             if (pIdItem && !pIdItem->GetValue().isEmpty() && GetView().GetPostItMgr())
             {
-                GetView().GetPostItMgr()->Delete(pIdItem->GetValue().toUInt32());
+                sal_uInt32 nPostItId = pIdItem->GetValue().toUInt32();
+                if (lcl_canUserModifyAnnotation(GetView(), nPostItId))
+                    GetView().GetPostItMgr()->Delete(nPostItId);
             }
             else if ( GetView().GetPostItMgr() &&
                       GetView().GetPostItMgr()->HasActiveSidebarWin() )
             {
-                GetView().GetPostItMgr()->DeleteActiveSidebarWin();
+                sw::annotation::SwAnnotationWin* pAnnotationWin
+                    = GetView().GetPostItMgr()->GetActiveSidebarWin();
+                if (lcl_canUserModifyAnnotation(GetView(), pAnnotationWin))
+                    GetView().GetPostItMgr()->DeleteActiveSidebarWin();
             }
             break;
         }
@@ -394,12 +422,16 @@ void SwTextShell::ExecField(SfxRequest &rReq)
             const SvxPostItIdItem* pIdItem = rReq.GetArg<SvxPostItIdItem>(SID_ATTR_POSTIT_ID);
             if (pIdItem && !pIdItem->GetValue().isEmpty() && GetView().GetPostItMgr())
             {
-                GetView().GetPostItMgr()->DeleteCommentThread(pIdItem->GetValue().toUInt32());
+                sal_uInt32 nPostItId = pIdItem->GetValue().toUInt32();
+                if (lcl_canUserModifyAnnotation(GetView(), nPostItId))
+                    GetView().GetPostItMgr()->DeleteCommentThread(nPostItId);
             }
-            else if ( GetView().GetPostItMgr() &&
-                        GetView().GetPostItMgr()->HasActiveSidebarWin() )
+            else if (GetView().GetPostItMgr() && GetView().GetPostItMgr()->HasActiveSidebarWin())
             {
-                GetView().GetPostItMgr()->DeleteActiveSidebarWin();
+                sw::annotation::SwAnnotationWin* pAnnotationWin
+                    = GetView().GetPostItMgr()->GetActiveSidebarWin();
+                if (lcl_canUserModifyAnnotation(GetView(), pAnnotationWin))
+                    GetView().GetPostItMgr()->DeleteActiveSidebarWin();
             }
             break;
         }
@@ -435,8 +467,9 @@ void SwTextShell::ExecField(SfxRequest &rReq)
         case FN_DELETE_NOTE_AUTHOR:
         {
             const SfxStringItem* pNoteItem = rReq.GetArg<SfxStringItem>(nSlot);
-            if ( pNoteItem && GetView().GetPostItMgr() )
-                GetView().GetPostItMgr()->Delete( pNoteItem->GetValue() );
+            if (pNoteItem && GetView().GetPostItMgr()
+                && lcl_canUserModifyAnnotation(GetView(), pNoteItem->GetValue()))
+                GetView().GetPostItMgr()->Delete(pNoteItem->GetValue());
         }
         break;
         case FN_HIDE_NOTE:
@@ -469,23 +502,20 @@ void SwTextShell::ExecField(SfxRequest &rReq)
                     auto pWin = pMgr->GetAnnotationWin(pIdItem->GetValue().toUInt32());
                     if(pWin)
                     {
+                        if (const SvxPostItTextItem* pHtmlItem = rReq.GetArg<SvxPostItTextItem>(SID_ATTR_POSTIT_HTML))
+                        {
+                            SwDocShell* pDocSh = GetView().GetDocShell();
+                            Outliner aOutliner(&pDocSh->GetPool(), OutlinerMode::TextObject);
+                            SwPostItHelper::ImportHTML(aOutliner, pHtmlItem->GetValue());
+                            if (std::optional<OutlinerParaObject> oPara = aOutliner.CreateParaObject())
+                                pMgr->RegisterAnswer(oPara.value());
+                        }
+
                         OUString sText;
                         if(const auto pTextItem = rReq.GetArg<SvxPostItTextItem>(SID_ATTR_POSTIT_TEXT))
                             sText = pTextItem->GetValue();
                         pMgr->RegisterAnswerText(sText);
                         pWin->ExecuteCommand(nSlot);
-
-                        SwPostItField* pLatestPostItField = pMgr->GetLatestPostItField();
-                        if (pLatestPostItField)
-                        {
-                            // Set the parent postit id of the reply.
-                            pLatestPostItField->SetParentPostItId(pIdItem->GetValue().toUInt32());
-
-                            // If name of the replied comment is empty, we need to set a name in order to connect them in the xml file.
-                            pWin->GeneratePostItName(); // Generates a name if the current name is empty.
-
-                            pLatestPostItField->SetParentName(pWin->GetPostItField()->GetName());
-                        }
                     }
                 }
             }
@@ -501,15 +531,19 @@ void SwTextShell::ExecField(SfxRequest &rReq)
             const SvxPostItIdItem* pIdItem = rReq.GetArg<SvxPostItIdItem>(SID_ATTR_POSTIT_ID);
             if (pIdItem && !pIdItem->GetValue().isEmpty())
             {
-                const SvxPostItTextItem* pTextItem = rReq.GetArg<SvxPostItTextItem>(SID_ATTR_POSTIT_TEXT);
-                OUString sText;
-                if ( pTextItem )
-                    sText = pTextItem->GetValue();
-
                 sw::annotation::SwAnnotationWin* pAnnotationWin = GetView().GetPostItMgr()->GetAnnotationWin(pIdItem->GetValue().toUInt32());
-                if (pAnnotationWin)
+                if (pAnnotationWin && lcl_canUserModifyAnnotation(GetView(), pAnnotationWin))
                 {
-                    pAnnotationWin->UpdateText(sText);
+                    if (const SvxPostItTextItem* pHtmlItem = rReq.GetArg<SvxPostItTextItem>(SID_ATTR_POSTIT_HTML))
+                        pAnnotationWin->UpdateHTML(pHtmlItem->GetValue());
+                    else
+                    {
+                        const SvxPostItTextItem* pTextItem = rReq.GetArg<SvxPostItTextItem>(SID_ATTR_POSTIT_TEXT);
+                        OUString sText;
+                        if (pTextItem)
+                            sText = pTextItem->GetValue();
+                        pAnnotationWin->UpdateText(sText);
+                    }
 
                     // explicit state update to get the Undo state right
                     GetView().AttrChangedNotify(nullptr);
@@ -517,6 +551,15 @@ void SwTextShell::ExecField(SfxRequest &rReq)
             }
         }
         break;
+        case FN_PROMOTE_COMMENT:
+        {
+            const SvxPostItIdItem* pIdItem = rReq.GetArg<SvxPostItIdItem>(SID_ATTR_POSTIT_ID);
+            if (pIdItem && !pIdItem->GetValue().isEmpty() && GetView().GetPostItMgr())
+            {
+                GetView().GetPostItMgr()->PromoteToRoot(pIdItem->GetValue().toUInt32());
+            }
+            break;
+        }
         case FN_REDLINE_COMMENT:
         {
             /*  this code can be used once we want redline comments in the margin, all other stuff can
@@ -1080,12 +1123,12 @@ FIELD_INSERT:
         pDlg->StartExecuteAsync([pShell, &rSh, pDlg](int nResult) {
             if ( nResult == RET_OK )
             {
-                auto rDoc = rSh.GetDoc();
+                auto& rDoc = *rSh.GetDoc();
 
                 rSh.LockView(true);
                 rSh.StartAllAction();
                 rSh.SwCursorShell::Push();
-                rDoc->GetIDocumentUndoRedo().StartUndo(SwUndoId::INSERT_PAGE_NUMBER, nullptr);
+                rDoc.GetIDocumentUndoRedo().StartUndo(SwUndoId::INSERT_PAGE_NUMBER, nullptr);
 
                 const size_t nPageDescIndex = rSh.GetCurPageDesc();
                 const SwPageDesc& rDesc = rSh.GetPageDesc(nPageDescIndex);
@@ -1105,7 +1148,7 @@ FIELD_INSERT:
                 if (ppMark != rIDMA.getAllMarksEnd() && *ppMark)
                 {
                     SwPaM aDeleteOldPageNum((*ppMark)->GetMarkStart(), (*ppMark)->GetMarkEnd());
-                    rDoc->getIDocumentContentOperations().DeleteAndJoin(aDeleteOldPageNum);
+                    rDoc.getIDocumentContentOperations().DeleteAndJoin(aDeleteOldPageNum);
                 }
 
                 SwPageDesc aNewDesc(rDesc);
@@ -1140,6 +1183,72 @@ FIELD_INSERT:
                               : const_cast<SwFrameFormat&>(*rMaster.GetFooter().GetFooterFormat());
                     rFormat.SetFormatAttr(aUL);
                     rFormat.SetFormatAttr(aFill);
+
+                    if (pDlg->GetFitIntoExistingMargins())
+                    {
+                        SvxULSpaceItem aPageUL(aNewDesc.GetMaster().GetULSpace());
+                        tools::Long nPageMargin = bHeader ? aPageUL.GetUpper() : aPageUL.GetLower();
+
+                        // most printers can't print to paper edge - use arbitrary ~14pt as minimum
+                        if (nPageMargin > constTwips_5mm)
+                        {
+                            // reduce existing margin by the "Spacing"
+                            nPageMargin -= constTwips_5mm;
+
+                            // also reduce by the "Height" (as calculated from the font)
+                            tools::Long nFontHeight = constTwips_5mm; // appropriate for 12pt font
+                            const OutputDevice* pOutDev = Application::GetDefaultDevice();
+                            const SwViewShell* pViewSh
+                                = rDoc.getIDocumentLayoutAccess().GetCurrentViewShell();
+                            OUString sParaStyle(bHeader ? "Header" : "Footer");
+                            SwTextFormatColl* pStyle = rDoc.FindTextFormatCollByName(sParaStyle);
+                            if (pStyle && pOutDev)
+                            {
+                                SwFont aFont(
+                                    &pStyle->GetAttrSet(), /*IDocumentSettingAccess=*/nullptr);
+
+                                // sledgehammer approach: since the in-use-font (Latin/CTL/CKJ)
+                                // is not known, use the tallest of the three just to ensure fit.
+                                sal_uInt16 nHeight = aFont.GetHeight(pViewSh, *pOutDev); // Latin
+
+                                aFont.SetActual(SwFontScript::CTL);
+                                nHeight = std::max(nHeight, aFont.GetHeight(pViewSh, *pOutDev));
+
+                                aFont.SetActual(SwFontScript::CJK);
+                                nFontHeight = std::max(nHeight, aFont.GetHeight(pViewSh, *pOutDev));
+
+                                // Spacing: above and below paragraph
+                                const SvxULSpaceItem& rParaStyleUL = pStyle->GetULSpace();
+                                nFontHeight += rParaStyleUL.GetUpper() + rParaStyleUL.GetLower();
+
+                                // Border padding: top and bottom
+                                const SvxBoxItem rBorders = pStyle->GetBox();
+                                nFontHeight += rBorders.CalcLineSpace(SvxBoxItemLine::TOP, true);
+                                nFontHeight += rBorders.CalcLineSpace(SvxBoxItemLine::BOTTOM, true);
+                            }
+                            nPageMargin -= nFontHeight;
+
+                            nPageMargin = std::max(nPageMargin, constTwips_5mm);
+                            if (bHeader)
+                                aPageUL.SetUpper(nPageMargin);
+                            else
+                                aPageUL.SetLower(nPageMargin);
+                            aNewDesc.GetMaster().SetFormatAttr(aPageUL);
+
+                            // force aggressively calculated font height as minimum to ensure
+                            // effective margin stays the same (instead of getting smaller)
+                            SwFormatFrameSize aSize(rFormat.GetFrameSize());
+                            aSize.SetHeightSizeType(SwFrameSize::Minimum);
+                            // frame size property includes both Spacing + Height
+                            aSize.SetHeight(constTwips_5mm + nFontHeight);
+                            rFormat.SetFormatAttr(aSize);
+
+                            // in case the calculated font height isn't actually large enough,
+                            // eat into spacing first before pushing into the content area.
+                            rFormat.SetFormatAttr(SwHeaderAndFooterEatSpacingItem(
+                                RES_HEADER_FOOTER_EAT_SPACING, true));
+                        }
+                    }
 
                     // Might as well turn on margin mirroring too - if appropriate
                     if (pDlg->GetMirrorOnEvenPages() && !bHeaderAlreadyOn && !bFooterAlreadyOn
@@ -1230,7 +1339,7 @@ FIELD_INSERT:
                 if (ppMark != rIDMA.getAllMarksEnd() && *ppMark)
                 {
                     SwPaM aDeleteOldPageNum((*ppMark)->GetMarkStart(), (*ppMark)->GetMarkEnd());
-                    rDoc->getIDocumentContentOperations().DeleteAndJoin(aDeleteOldPageNum);
+                    rDoc.getIDocumentContentOperations().DeleteAndJoin(aDeleteOldPageNum);
                 }
 
                 SwTextNode* pTextNode = rSh.GetCursor()->GetPoint()->GetNode().GetTextNode();
@@ -1238,7 +1347,7 @@ FIELD_INSERT:
                 // Insert new line if there is already text in header/footer
                 if (pTextNode && !pTextNode->GetText().isEmpty())
                 {
-                    rDoc->getIDocumentContentOperations().SplitNode(*rSh.GetCursor()->GetPoint(), false);
+                    rDoc.getIDocumentContentOperations().SplitNode(*rSh.GetCursor()->GetPoint(), false);
 
                     // Go back to start of header/footer
                     if (bHeader)
@@ -1280,7 +1389,7 @@ FIELD_INSERT:
                 aMgr.InsertField(aData);
                 if (pDlg->GetIncludePageTotal())
                 {
-                    rDoc->getIDocumentContentOperations().InsertString(*rSh.GetCursor(), " / ");
+                    rDoc.getIDocumentContentOperations().InsertString(*rSh.GetCursor(), u" / "_ustr);
                     SwInsertField_Data aPageTotalData(SwFieldTypesEnum::DocumentStatistics, DS_PAGE,
                                                       OUString(), OUString(), SVX_NUM_PAGEDESC);
                     aMgr.InsertField(aPageTotalData);
@@ -1305,7 +1414,7 @@ FIELD_INSERT:
                     if (ppMark != rIDMA.getAllMarksEnd() && *ppMark)
                     {
                         SwPaM aDeleteOldPageNum((*ppMark)->GetMarkStart(), (*ppMark)->GetMarkEnd());
-                        rDoc->getIDocumentContentOperations().DeleteAndJoin(aDeleteOldPageNum);
+                        rDoc.getIDocumentContentOperations().DeleteAndJoin(aDeleteOldPageNum);
                     }
 
                     pTextNode = rSh.GetCursor()->GetPoint()->GetNode().GetTextNode();
@@ -1313,7 +1422,7 @@ FIELD_INSERT:
                     // Insert new line if there is already text in header/footer
                     if (pTextNode && !pTextNode->GetText().isEmpty())
                     {
-                        rDoc->getIDocumentContentOperations().SplitNode(
+                        rDoc.getIDocumentContentOperations().SplitNode(
                             *rSh.GetCursor()->GetPoint(), false);
                         // Go back to start of header/footer
                         rSh.SetCursorInHdFt(nPageDescIndex, bHeader, /*Even=*/true);
@@ -1334,7 +1443,7 @@ FIELD_INSERT:
                     aEvenMgr.InsertField(aData);
                     if (pDlg->GetIncludePageTotal())
                     {
-                        rDoc->getIDocumentContentOperations().InsertString(*rSh.GetCursor(), " / ");
+                        rDoc.getIDocumentContentOperations().InsertString(*rSh.GetCursor(), u" / "_ustr);
                         SwInsertField_Data aPageTotalData(SwFieldTypesEnum::DocumentStatistics,
                                                           DS_PAGE, OUString(), OUString(),
                                                           SVX_NUM_PAGEDESC);
@@ -1354,7 +1463,11 @@ FIELD_INSERT:
                 rSh.SwCursorShell::Pop(SwCursorShell::PopMode::DeleteCurrent);
                 rSh.EndAllAction();
                 rSh.LockView(false);
-                rDoc->GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_PAGE_NUMBER, nullptr);
+                rDoc.GetIDocumentUndoRedo().EndUndo(SwUndoId::INSERT_PAGE_NUMBER, nullptr);
+
+                // avoid various ways to crash related to undo of SwPageDesc (tdf#161741, tdf#161705)
+                if (bChangePageDesc)
+                    rDoc.GetIDocumentUndoRedo().DelAllUndoObj();
             }
             pDlg->disposeOnce();
         });

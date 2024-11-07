@@ -404,6 +404,31 @@ public:
     virtual void updateRedlines( const css::uno::Sequence<sal_uInt32>& /*rArguments*/) {}
 
     // MACRO: }
+
+    /** Return JSON structure filled with the information about the presentation (Impress only function) */
+    virtual OString getPresentationInfo() const
+    {
+        return {};
+    }
+    /** Creates a slide show renderer (Impress only function) */
+    virtual bool createSlideRenderer(
+        const OString& /*rSlideHash*/,
+        sal_Int32 /*nSlideNumber*/, sal_Int32& /*nViewWidth*/, sal_Int32& /*nViewHeight*/,
+        bool /*bRenderBackground*/, bool /*bRenderMasterPage*/)
+   {
+        return false;
+   }
+
+    /** Clean-up slideshow */
+    virtual void postSlideshowCleanup()
+    {
+    }
+
+    /** render slideshow layer*/
+    virtual bool renderNextSlideLayer(unsigned char* /*pBuffer*/, bool& /*bIsBitmapLayer*/, OUString& /*rJsonMsg*/)
+    {
+        return true;
+    }
 };
 } // namespace vcl
 

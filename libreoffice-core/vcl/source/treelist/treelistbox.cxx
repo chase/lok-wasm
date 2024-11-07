@@ -393,6 +393,7 @@ SvTreeListBox::SvTreeListBox(vcl::Window* pParent, WinBits nWinStyle) :
     mbActivateOnSingleClick(false),
     mbHoverSelection(false),
     mbSelectingByHover(false),
+    mbIsTextColumEnabled(false),
     mnClicksToToggle(0), //at default clicking on a row won't toggle its default checkbox
     eSelMode(SelectionMode::NONE),
     nMinWidthInChars(0),
@@ -1705,6 +1706,18 @@ SvButtonState SvTreeListBox::GetCheckButtonState( SvTreeListEntry* pEntry ) cons
         eState = SvLBoxButtonData::ConvertToButtonState( nButtonFlags );
     }
     return eState;
+}
+
+bool SvTreeListBox::GetCheckButtonEnabled(SvTreeListEntry* pEntry) const
+{
+    if (pEntry && (nTreeFlags & SvTreeFlags::CHKBTN))
+    {
+        SvLBoxButton* pItem
+            = static_cast<SvLBoxButton*>(pEntry->GetFirstItem(SvLBoxItemType::Button));
+        if (pItem)
+            return pItem->isEnable();
+    }
+    return false;
 }
 
 void SvTreeListBox::CheckButtonHdl()
@@ -3567,6 +3580,10 @@ bool SvTreeListBox::set_property(const OUString &rKey, const OUString &rValue)
     {
         if (toBool(rValue))
             SetDragDropMode(DragDropMode::CTRL_MOVE | DragDropMode::ENABLE_TOP);
+    }
+    else if (rKey == "text-column")
+    {
+        SetTextColumnEnabled(toBool(rValue));
     }
     else
         return Control::set_property(rKey, rValue);

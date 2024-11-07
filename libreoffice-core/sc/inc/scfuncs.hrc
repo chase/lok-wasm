@@ -3390,9 +3390,9 @@ const TranslateId SC_OPCODE_X_LOOKUP_ARY[] =
     NC_("SC_OPCODE_X_LOOKUP", "Result if not found"),
     NC_("SC_OPCODE_X_LOOKUP", "If given, return given text, otherwise return #N/A."),
     NC_("SC_OPCODE_X_LOOKUP", "Match Mode"),
-    NC_("SC_OPCODE_X_LOOKUP", "0, -1, 1 or 2 "), // TODO : add explanation of values
+    NC_("SC_OPCODE_X_LOOKUP", "0 - Exact match. Will return #N/A if no match. (default).\n-1 - Exact match or the next smaller item.\n1 - Exact match or the next larger item.\n2 - Wildcard or regular expression match."),
     NC_("SC_OPCODE_X_LOOKUP", "Search Mode"),
-    NC_("SC_OPCODE_X_LOOKUP", "1, -1, 2 or -2 ") // TODO : add explanation of values
+    NC_("SC_OPCODE_X_LOOKUP", "1 - Search from the first value (default).\n-1 - Search from the last value (reverse).\n2 - Binary search values sorted in ascending order.\n-2 - Binary search values sorted in descending order.")
 };
 
 // -=*# Resource for function INDEX #*=-
@@ -3452,9 +3452,9 @@ const TranslateId SC_OPCODE_X_MATCH_ARY[] =
     NC_("SC_OPCODE_X_MATCH", "Search Array"),
     NC_("SC_OPCODE_X_MATCH", "The array or range to search."),
     NC_("SC_OPCODE_X_MATCH", "Match Mode"),
-    NC_("SC_OPCODE_X_MATCH", "0, -1, 1 or 2 "), // TODO : add explanation of values
+    NC_("SC_OPCODE_X_MATCH", "0 - Exact match. Will return #N/A if no match. (default).\n-1 - Exact match or the next smaller item.\n1 - Exact match or the next larger item.\n2 - Wildcard or regular expression match."),
     NC_("SC_OPCODE_X_MATCH", "Search Mode"),
-    NC_("SC_OPCODE_X_MATCH", "1, -1, 2 or -2 ") // TODO : add explanation of values
+    NC_("SC_OPCODE_X_MATCH", "1 - Search from the first value (default).\n-1 - Search from the last value (reverse).\n2 - Binary search values sorted in ascending order.\n-2 - Binary search values sorted in descending order.")
 };
 
 // -=*# Resource for function OFFSET #*=-
@@ -4219,6 +4219,48 @@ const TranslateId SC_OPCODE_SORTBY_ARY[] =
     NC_("SC_OPCODE_SORTBY", "Range 1, range 2,... are the arrays or ranges to sort on."),
     NC_("SC_OPCODE_SORTBY", "Sort order "),
     NC_("SC_OPCODE_SORTBY", "Order 1, order 2,... are the orders to use for sorting. 1 for ascending, -1 for descending. Default is ascending.")
+};
+
+// -=*# Resource for function SEQUENCE #*=-
+const TranslateId SC_OPCODE_MAT_SEQUENCE_ARY[] =
+{
+    NC_("SC_OPCODE_MAT_SEQUENCE", "Allows you to generate a list of sequential numbers in an array, such as 1, 2, 3, 4."),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "Rows"),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "The number of rows to return."),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "Columns"),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "The number of columns to return."),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "Start"),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "The first number in the sequence."),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "Step"),
+    NC_("SC_OPCODE_MAT_SEQUENCE", "The amount to increment each subsequent value in the array.")
+};
+
+// -=*# Resource for function RANDARRAY #*=-
+const TranslateId SC_OPCODE_RANDARRAY_ARY[] =
+{
+    NC_("SC_OPCODE_RANDARRAY", "RANDARRAY function generates an array of random numbers between two values."),
+    NC_("SC_OPCODE_RANDARRAY", "Rows"),
+    NC_("SC_OPCODE_RANDARRAY", "The number of rows to return."),
+    NC_("SC_OPCODE_RANDARRAY", "Columns"),
+    NC_("SC_OPCODE_RANDARRAY", "The number of columns to return."),
+    NC_("SC_OPCODE_RANDARRAY", "Min"),
+    NC_("SC_OPCODE_RANDARRAY", "The minimum number you would like returned."),
+    NC_("SC_OPCODE_RANDARRAY", "Max"),
+    NC_("SC_OPCODE_RANDARRAY", "The maximum number you would like returned."),
+    NC_("SC_OPCODE_RANDARRAY", "Whole number"),
+    NC_("SC_OPCODE_RANDARRAY", "Return a whole number or a decimal value.")
+};
+
+// -=*# Resource for function UNIQUE #*=-
+const TranslateId SC_OPCODE_UNIQUE_ARY[] =
+{
+    NC_("SC_OPCODE_UNIQUE", "Returns a list of unique values from a range or array."),
+    NC_("SC_OPCODE_UNIQUE", "Array"),
+    NC_("SC_OPCODE_UNIQUE", "The range or array from which to return unique values."),
+    NC_("SC_OPCODE_UNIQUE", "By col"),
+    NC_("SC_OPCODE_UNIQUE", "Logical value indicating how to compare data: TRUE - compares data across columns. FALSE or omitted (default) - compares data across rows."),
+    NC_("SC_OPCODE_UNIQUE", "Exactly once"),
+    NC_("SC_OPCODE_UNIQUE", "Logical value that defines what values are considered unique: TRUE - returns values that occur only once, which is the database notion of unique. FALSE or omitted (default) - returns all distinct (different) values in the range or array.")
 };
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

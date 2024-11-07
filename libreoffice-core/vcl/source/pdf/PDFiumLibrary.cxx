@@ -28,6 +28,8 @@
 #include <o3tl/string_view.hxx>
 
 #include <vcl/BitmapWriteAccess.hxx>
+#include <vcl/bitmapex.hxx>
+#include <vcl/dibtools.hxx>
 
 using namespace com::sun::star;
 
@@ -168,6 +170,36 @@ static_assert(static_cast<int>(vcl::pdf::PDFAnnotAActionType::Calculate)
                   == FPDF_ANNOT_AACTION_CALCULATE,
               "PDFAnnotAActionType::Calculate) value mismatch");
 
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Unknown) == FPDF_ANNOT_UNKNOWN);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Text) == FPDF_ANNOT_TEXT);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Link) == FPDF_ANNOT_LINK);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::FreeText) == FPDF_ANNOT_FREETEXT);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Line) == FPDF_ANNOT_LINE);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Square) == FPDF_ANNOT_SQUARE);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Circle) == FPDF_ANNOT_CIRCLE);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Polygon) == FPDF_ANNOT_POLYGON);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Polyline) == FPDF_ANNOT_POLYLINE);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Highlight) == FPDF_ANNOT_HIGHLIGHT);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Underline) == FPDF_ANNOT_UNDERLINE);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Squiggly) == FPDF_ANNOT_SQUIGGLY);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Strikeout) == FPDF_ANNOT_STRIKEOUT);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Stamp) == FPDF_ANNOT_STAMP);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Caret) == FPDF_ANNOT_CARET);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Ink) == FPDF_ANNOT_INK);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Popup) == FPDF_ANNOT_POPUP);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::FileAttachment) == FPDF_ANNOT_FILEATTACHMENT);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Sound) == FPDF_ANNOT_SOUND);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Movie) == FPDF_ANNOT_MOVIE);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Widget) == FPDF_ANNOT_WIDGET);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Screen) == FPDF_ANNOT_SCREEN);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Printermark) == FPDF_ANNOT_PRINTERMARK);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Trapnet) == FPDF_ANNOT_TRAPNET);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Watermark) == FPDF_ANNOT_WATERMARK);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Threed) == FPDF_ANNOT_THREED);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Richmedia) == FPDF_ANNOT_RICHMEDIA);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::XFAWidget) == FPDF_ANNOT_XFAWIDGET);
+static_assert(int(vcl::pdf::PDFAnnotationSubType::Redact) == FPDF_ANNOT_REDACT);
+
 namespace
 {
 /// Callback class to be used with FPDF_SaveWithVersion().
@@ -214,6 +246,7 @@ public:
     int getWidth() override;
     int getHeight() override;
     PDFBitmapType getFormat() override;
+    BitmapEx createBitmapFromBuffer() override;
 };
 
 class PDFiumPathSegmentImpl final : public PDFiumPathSegment
@@ -264,11 +297,13 @@ public:
     std::vector<basegfx::B2DPoint> getLineGeometry() override;
     PDFFormFieldType getFormFieldType(PDFiumDocument* pDoc) override;
     float getFontSize(PDFiumDocument* pDoc) override;
+    Color getFontColor(PDFiumDocument* pDoc) override;
     OUString getFormFieldAlternateName(PDFiumDocument* pDoc) override;
     int getFormFieldFlags(PDFiumDocument* pDoc) override;
     OUString getFormAdditionalActionJavaScript(PDFiumDocument* pDoc,
                                                PDFAnnotAActionType eEvent) override;
     OUString getFormFieldValue(PDFiumDocument* pDoc) override;
+    int getOptionCount(PDFiumDocument* pDoc) override;
 };
 
 class PDFiumPageObjectImpl final : public PDFiumPageObject
@@ -1097,6 +1132,67 @@ PDFBitmapType PDFiumBitmapImpl::getFormat()
     return static_cast<PDFBitmapType>(FPDFBitmap_GetFormat(mpBitmap));
 }
 
+BitmapEx PDFiumBitmapImpl::createBitmapFromBuffer()
+{
+    BitmapEx aBitmapEx;
+
+    const vcl::pdf::PDFBitmapType eFormat = getFormat();
+    if (eFormat == vcl::pdf::PDFBitmapType::Unknown)
+        return aBitmapEx;
+
+    const int nWidth = getWidth();
+    const int nHeight = getHeight();
+    const int nStride = getStride();
+
+    switch (eFormat)
+    {
+        case vcl::pdf::PDFBitmapType::BGR:
+        {
+            aBitmapEx = BitmapEx(Size(nWidth, nHeight), vcl::PixelFormat::N24_BPP);
+            ReadRawDIB(aBitmapEx, getBuffer(), ScanlineFormat::N24BitTcBgr, nHeight, nStride);
+        }
+        break;
+
+        case vcl::pdf::PDFBitmapType::BGRx:
+        {
+            aBitmapEx = BitmapEx(Size(nWidth, nHeight), vcl::PixelFormat::N24_BPP);
+            ReadRawDIB(aBitmapEx, getBuffer(), ScanlineFormat::N32BitTcRgba, nHeight, nStride);
+        }
+        break;
+
+        case vcl::pdf::PDFBitmapType::BGRA:
+        {
+            Bitmap aBitmap(Size(nWidth, nHeight), vcl::PixelFormat::N24_BPP);
+            AlphaMask aMask(Size(nWidth, nHeight));
+            {
+                BitmapScopedWriteAccess pWriteAccess(aBitmap);
+                BitmapScopedWriteAccess pMaskAccess(aMask);
+                ConstScanline pBuffer = getBuffer();
+                std::vector<sal_uInt8> aScanlineAlpha(nWidth);
+                for (int nRow = 0; nRow < nHeight; ++nRow)
+                {
+                    ConstScanline pLine = pBuffer + (nStride * nRow);
+                    pWriteAccess->CopyScanline(nRow, pLine, ScanlineFormat::N32BitTcBgra, nStride);
+                    for (int nCol = 0; nCol < nWidth; ++nCol)
+                    {
+                        aScanlineAlpha[nCol] = pLine[3];
+                        pLine += 4;
+                    }
+                    pMaskAccess->CopyScanline(nRow, aScanlineAlpha.data(), ScanlineFormat::N8BitPal,
+                                              nWidth);
+                }
+            }
+            aBitmapEx = BitmapEx(aBitmap, aMask);
+        }
+        break;
+
+        default:
+            break;
+    }
+
+    return aBitmapEx;
+}
+
 PDFiumAnnotationImpl::PDFiumAnnotationImpl(FPDF_ANNOTATION pAnnotation)
     : mpAnnotation(pAnnotation)
 {
@@ -1216,6 +1312,18 @@ float PDFiumAnnotationImpl::getFontSize(PDFiumDocument* pDoc)
     return fRet;
 }
 
+Color PDFiumAnnotationImpl::getFontColor(PDFiumDocument* pDoc)
+{
+    auto pDocImpl = static_cast<PDFiumDocumentImpl*>(pDoc);
+    unsigned int nR, nG, nB;
+    if (!FPDFAnnot_GetFontColor(pDocImpl->getFormHandlePointer(), mpAnnotation, &nR, &nG, &nB))
+    {
+        return Color();
+    }
+
+    return Color(nR, nG, nB);
+}
+
 OUString PDFiumAnnotationImpl::getFormFieldAlternateName(PDFiumDocument* pDoc)
 {
     auto pDocImpl = static_cast<PDFiumDocumentImpl*>(pDoc);
@@ -1274,6 +1382,11 @@ OUString PDFiumAnnotationImpl::getFormFieldValue(PDFiumDocument* pDoc)
         }
     }
     return aString;
+}
+int PDFiumAnnotationImpl::getOptionCount(PDFiumDocument* pDoc)
+{
+    auto pDocImpl = static_cast<PDFiumDocumentImpl*>(pDoc);
+    return FPDFAnnot_GetOptionCount(pDocImpl->getFormHandlePointer(), mpAnnotation);
 }
 
 OUString PDFiumAnnotationImpl::getFormAdditionalActionJavaScript(PDFiumDocument* pDoc,

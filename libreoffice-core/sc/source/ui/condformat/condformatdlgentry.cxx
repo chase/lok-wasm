@@ -102,52 +102,45 @@ void ScCondFrmtEntry::Deselect()
     mbActive = false;
 }
 
-//condition
-
-namespace {
-
-void FillStyleListBox( const ScDocument* pDoc, weld::ComboBox& rLbStyle )
-{
-    std::set<OUString> aStyleNames;
-    SfxStyleSheetIterator aStyleIter( pDoc->GetStyleSheetPool(), SfxStyleFamily::Para );
-    for ( SfxStyleSheetBase* pStyle = aStyleIter.First(); pStyle; pStyle = aStyleIter.Next() )
-    {
-        aStyleNames.insert(pStyle->GetName());
-    }
-    for(const auto& rStyleName : aStyleNames)
-    {
-        rLbStyle.append_text(rStyleName);
-    }
-}
-
-}
-
-const ScConditionMode ScConditionFrmtEntry::mpEntryToCond[ScConditionFrmtEntry::NUM_COND_ENTRIES] = {
-    ScConditionMode::Equal,
-    ScConditionMode::Less,
-    ScConditionMode::Greater,
-    ScConditionMode::EqLess,
-    ScConditionMode::EqGreater,
-    ScConditionMode::NotEqual,
-    ScConditionMode::Between,
-    ScConditionMode::NotBetween,
-    ScConditionMode::Duplicate,
-    ScConditionMode::NotDuplicate,
-    ScConditionMode::Top10,
-    ScConditionMode::Bottom10,
-    ScConditionMode::TopPercent,
-    ScConditionMode::BottomPercent,
-    ScConditionMode::AboveAverage,
-    ScConditionMode::BelowAverage,
-    ScConditionMode::AboveEqualAverage,
-    ScConditionMode::BelowEqualAverage,
-    ScConditionMode::Error,
-    ScConditionMode::NoError,
-    ScConditionMode::BeginsWith,
-    ScConditionMode::EndsWith,
-    ScConditionMode::ContainsText,
-    ScConditionMode::NotContainsText
-};
+const ScConditionMode ScConditionFrmtEntry::mpEntryToCond[ScConditionFrmtEntry::NUM_COND_ENTRIES]
+    = { ScConditionMode::Equal,
+        ScConditionMode::Less,
+        ScConditionMode::Greater,
+        ScConditionMode::EqLess,
+        ScConditionMode::EqGreater,
+        ScConditionMode::NotEqual,
+        ScConditionMode::Between,
+        ScConditionMode::NotBetween,
+        ScConditionMode::Duplicate,
+        ScConditionMode::NotDuplicate,
+        ScConditionMode::Top10,
+        ScConditionMode::Bottom10,
+        ScConditionMode::TopPercent,
+        ScConditionMode::BottomPercent,
+        ScConditionMode::AboveAverage,
+        ScConditionMode::BelowAverage,
+        ScConditionMode::AboveEqualAverage,
+        ScConditionMode::BelowEqualAverage,
+        ScConditionMode::Error,
+        ScConditionMode::NoError,
+        ScConditionMode::BeginsWith,
+        ScConditionMode::EndsWith,
+        ScConditionMode::ContainsText,
+        ScConditionMode::NotContainsText,
+        ScConditionMode::Formula,
+        ScConditionMode::Today,
+        ScConditionMode::Yesterday,
+        ScConditionMode::Tomorrow,
+        ScConditionMode::Last7days,
+        ScConditionMode::ThisWeek,
+        ScConditionMode::LastWeek,
+        ScConditionMode::NextWeek,
+        ScConditionMode::ThisMonth,
+        ScConditionMode::LastMonth,
+        ScConditionMode::NextMonth,
+        ScConditionMode::ThisYear,
+        ScConditionMode::LastYear,
+        ScConditionMode::NextYear };
 
 ScConditionFrmtEntry::ScConditionFrmtEntry(ScCondFormatList* pParent, ScDocument* pDoc, ScCondFormatDlg* pDialogParent,
         const ScAddress& rPos, const ScCondFormatEntry* pFormatEntry)
@@ -222,7 +215,7 @@ void ScConditionFrmtEntry::Init(ScCondFormatDlg* pDialogParent)
     mxEdVal1->SetModifyHdl( LINK( this, ScConditionFrmtEntry, OnEdChanged ) );
     mxEdVal2->SetModifyHdl( LINK( this, ScConditionFrmtEntry, OnEdChanged ) );
 
-    FillStyleListBox( mpDoc, *mxLbStyle );
+    ScCondFormatHelper::FillStyleListBox(mpDoc, *mxLbStyle);
     mxLbStyle->connect_changed( LINK( this, ScConditionFrmtEntry, StyleSelectHdl ) );
 
     mxLbCondType->connect_changed( LINK( this, ScConditionFrmtEntry, ConditionTypeSelectHdl ) );
@@ -249,48 +242,7 @@ ScFormatEntry* ScConditionFrmtEntry::createConditionEntry() const
 IMPL_LINK(ScConditionFrmtEntry, OnEdChanged, formula::RefEdit&, rRefEdit, void)
 {
     weld::Entry& rEdit = *rRefEdit.GetWidget();
-    OUString aFormula = rEdit.get_text();
-
-    if( aFormula.isEmpty() )
-    {
-        mxFtVal->set_label(ScResId(STR_ENTER_VALUE));
-        return;
-    }
-
-    ScCompiler aComp( *mpDoc, maPos, mpDoc->GetGrammar() );
-    aComp.SetExtendedErrorDetection( ScCompiler::ExtendedErrorDetection::EXTENDED_ERROR_DETECTION_NAME_BREAK);
-    std::unique_ptr<ScTokenArray> ta(aComp.CompileString(aFormula));
-
-    // Error, warn the user if it is not an unknown name.
-    if (ta->GetCodeError() != FormulaError::NoName && (ta->GetCodeError() != FormulaError::NONE || ta->GetLen() == 0))
-    {
-        rEdit.set_message_type(weld::EntryMessageType::Error);
-        mxFtVal->set_label(ScResId(STR_VALID_DEFERROR));
-        return;
-    }
-
-    // Unrecognized name, warn the user; i.e. happens when starting to type and
-    // will go away once a valid name is completed.
-    if (ta->GetCodeError() == FormulaError::NoName)
-    {
-        rEdit.set_message_type(weld::EntryMessageType::Warning);
-        mxFtVal->set_label(ScResId(STR_UNQUOTED_STRING));
-        return;
-    }
-
-    // Generate RPN to detect further errors.
-    if (ta->GetLen() > 0)
-        aComp.CompileTokenArray();
-    // Error, warn the user.
-    if (ta->GetCodeError() != FormulaError::NONE || (ta->GetCodeLen() == 0))
-    {
-        rEdit.set_message_type(weld::EntryMessageType::Error);
-        mxFtVal->set_label(ScResId(STR_VALID_DEFERROR));
-        return;
-    }
-
-    rEdit.set_message_type(weld::EntryMessageType::Normal);
-    mxFtVal->set_label("");
+    ScCondFormatHelper::ValidateInputField(rEdit, *mxFtVal, mpDoc, maPos);
 }
 
 void ScConditionFrmtEntry::Select()
@@ -351,6 +303,20 @@ sal_Int32 ScConditionFrmtEntry::GetNumberEditFields( ScConditionMode eMode )
         case ScConditionMode::BelowEqualAverage:
         case ScConditionMode::Duplicate:
         case ScConditionMode::NotDuplicate:
+        case ScConditionMode::Formula:
+        case ScConditionMode::Today:
+        case ScConditionMode::Yesterday:
+        case ScConditionMode::Tomorrow:
+        case ScConditionMode::Last7days:
+        case ScConditionMode::ThisWeek:
+        case ScConditionMode::LastWeek:
+        case ScConditionMode::NextWeek:
+        case ScConditionMode::ThisMonth:
+        case ScConditionMode::LastMonth:
+        case ScConditionMode::NextMonth:
+        case ScConditionMode::ThisYear:
+        case ScConditionMode::LastYear:
+        case ScConditionMode::NextYear:
             return 0;
         case ScConditionMode::Between:
         case ScConditionMode::NotBetween:
@@ -404,102 +370,19 @@ void ScConditionFrmtEntry::SetInactive()
     Deselect();
 }
 
-namespace {
-
-void UpdateStyleList(weld::ComboBox& rLbStyle, const ScDocument* pDoc)
-{
-    OUString aSelectedStyle = rLbStyle.get_active_text();
-    for (sal_Int32 i = rLbStyle.get_count(); i > 1; --i)
-        rLbStyle.remove(i - 1);
-    FillStyleListBox(pDoc, rLbStyle);
-    rLbStyle.set_active_text(aSelectedStyle);
-}
-
-}
-
 void ScConditionFrmtEntry::Notify(SfxBroadcaster&, const SfxHint& rHint)
 {
     if(rHint.GetId() == SfxHintId::StyleSheetModified)
     {
         if(!mbIsInStyleCreate)
-            UpdateStyleList(*mxLbStyle, mpDoc);
+            ScCondFormatHelper::UpdateStyleList(*mxLbStyle, mpDoc);
     }
-}
-
-namespace {
-
-void StyleSelect(weld::Window* pDialogParent, weld::ComboBox& rLbStyle, const ScDocument* pDoc, SvxFontPrevWindow& rWdPreview)
-{
-    if (rLbStyle.get_active() == 0)
-    {
-        // call new style dialog
-        SfxUInt16Item aFamilyItem( SID_STYLE_FAMILY, sal_uInt16(SfxStyleFamily::Para) );
-        SfxStringItem aRefItem( SID_STYLE_REFERENCE, ScResId(STR_STYLENAME_STANDARD) );
-        css::uno::Any aAny(pDialogParent->GetXWindow());
-        SfxUnoAnyItem aDialogParent( SID_DIALOG_PARENT, aAny );
-
-        // unlock the dispatcher so SID_STYLE_NEW can be executed
-        // (SetDispatcherLock would affect all Calc documents)
-        if (ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell())
-        {
-            SfxDispatcher* pDisp = pViewShell->GetDispatcher();
-            bool bLocked = pDisp->IsLocked();
-            if (bLocked)
-                pDisp->Lock(false);
-
-            // Execute the "new style" slot, complete with undo and all necessary updates.
-            // The return value (SfxUInt16Item) is ignored, look for new styles instead.
-            pDisp->ExecuteList(SID_STYLE_NEW,
-                SfxCallMode::SYNCHRON | SfxCallMode::RECORD,
-                { &aFamilyItem, &aRefItem }, { &aDialogParent });
-
-            if (bLocked)
-                pDisp->Lock(true);
-
-            // Find the new style and add it into the style list boxes
-            SfxStyleSheetIterator aStyleIter( pDoc->GetStyleSheetPool(), SfxStyleFamily::Para );
-            bool bFound = false;
-            for ( SfxStyleSheetBase* pStyle = aStyleIter.First(); pStyle && !bFound; pStyle = aStyleIter.Next() )
-            {
-                const OUString& aName = pStyle->GetName();
-                if (rLbStyle.find_text(aName) == -1)    // all lists contain the same entries
-                {
-                    for( sal_Int32 i = 1, n = rLbStyle.get_count(); i <= n && !bFound; ++i)
-                    {
-                        OUString aStyleName = ScGlobal::getCharClass().uppercase(rLbStyle.get_text(i));
-                        if( i == n )
-                        {
-                            rLbStyle.append_text(aName);
-                            rLbStyle.set_active_text(aName);
-                            bFound = true;
-                        }
-                        else if( aStyleName > ScGlobal::getCharClass().uppercase(aName) )
-                        {
-                            rLbStyle.insert_text(i, aName);
-                            rLbStyle.set_active_text(aName);
-                            bFound = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    OUString aStyleName = rLbStyle.get_active_text();
-    SfxStyleSheetBase* pStyleSheet = pDoc->GetStyleSheetPool()->Find( aStyleName, SfxStyleFamily::Para );
-    if(pStyleSheet)
-    {
-        const SfxItemSet& rSet = pStyleSheet->GetItemSet();
-        rWdPreview.SetFromItemSet(rSet, false);
-    }
-}
-
 }
 
 IMPL_LINK_NOARG(ScConditionFrmtEntry, StyleSelectHdl, weld::ComboBox&, void)
 {
     mbIsInStyleCreate = true;
-    StyleSelect(mpParent->GetFrameWeld(), *mxLbStyle, mpDoc, maWdPreview);
+    ScCondFormatHelper::StyleSelect(mpParent->GetFrameWeld(), *mxLbStyle, mpDoc, maWdPreview);
     mbIsInStyleCreate = false;
 }
 
@@ -541,13 +424,13 @@ void ScFormulaFrmtEntry::Init(ScCondFormatDlg* pDialogParent)
 {
     mxEdFormula->SetGetFocusHdl( LINK( pDialogParent, ScCondFormatDlg, RangeGetFocusHdl ) );
 
-    FillStyleListBox( mpDoc, *mxLbStyle );
+    ScCondFormatHelper::FillStyleListBox(mpDoc, *mxLbStyle);
     mxLbStyle->connect_changed( LINK( this, ScFormulaFrmtEntry, StyleSelectHdl ) );
 }
 
 IMPL_LINK_NOARG(ScFormulaFrmtEntry, StyleSelectHdl, weld::ComboBox&, void)
 {
-    StyleSelect(mpParent->GetFrameWeld(), *mxLbStyle, mpDoc, maWdPreview);
+    ScCondFormatHelper::StyleSelect(mpParent->GetFrameWeld(), *mxLbStyle, mpDoc, maWdPreview);
 }
 
 ScFormatEntry* ScFormulaFrmtEntry::createFormulaEntry() const
@@ -1257,7 +1140,7 @@ void ScDateFrmtEntry::Init()
     mxLbDateEntry->set_active(0);
     mxLbType->set_active(3);
 
-    FillStyleListBox( mpDoc, *mxLbStyle );
+    ScCondFormatHelper::FillStyleListBox(mpDoc, *mxLbStyle);
     mxLbStyle->connect_changed( LINK( this, ScDateFrmtEntry, StyleSelectHdl ) );
     mxLbStyle->set_active(1);
 }
@@ -1287,7 +1170,7 @@ void ScDateFrmtEntry::Notify( SfxBroadcaster&, const SfxHint& rHint )
     if(rHint.GetId() == SfxHintId::StyleSheetModified)
     {
         if(!mbIsInStyleCreate)
-            UpdateStyleList(*mxLbStyle, mpDoc);
+            ScCondFormatHelper::UpdateStyleList(*mxLbStyle, mpDoc);
     }
 }
 
@@ -1309,7 +1192,7 @@ OUString ScDateFrmtEntry::GetExpressionString()
 IMPL_LINK_NOARG( ScDateFrmtEntry, StyleSelectHdl, weld::ComboBox&, void )
 {
     mbIsInStyleCreate = true;
-    StyleSelect(mpParent->GetFrameWeld(), *mxLbStyle, mpDoc, maWdPreview);
+    ScCondFormatHelper::StyleSelect(mpParent->GetFrameWeld(), *mxLbStyle, mpDoc, maWdPreview);
     mbIsInStyleCreate = false;
 }
 

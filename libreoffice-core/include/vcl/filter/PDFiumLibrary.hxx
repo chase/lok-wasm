@@ -37,6 +37,7 @@
 #include <vcl/pdf/PDFAnnotAActionType.hxx>
 
 class SvMemoryStream;
+class BitmapEx;
 
 namespace vcl::pdf
 {
@@ -45,6 +46,8 @@ inline constexpr OString constDictionaryKeyContents = "Contents"_ostr;
 inline constexpr OString constDictionaryKeyPopup = "Popup"_ostr;
 inline constexpr OString constDictionaryKeyModificationDate = "M"_ostr;
 inline constexpr OString constDictionaryKeyInteriorColor = "IC"_ostr;
+inline constexpr OString constDictionaryKey_DefaultStyle = "DS"_ostr;
+inline constexpr OString constDictionaryKey_RichContent = "RC"_ostr;
 
 class PDFiumBitmap;
 class PDFiumDocument;
@@ -80,6 +83,8 @@ public:
     virtual int getWidth() = 0;
     virtual int getHeight() = 0;
     virtual PDFBitmapType getFormat() = 0;
+    /// Convert the bitmap buffer to a BitmapEx
+    virtual BitmapEx createBitmapFromBuffer() = 0;
 };
 
 class VCL_DLLPUBLIC PDFiumAnnotation
@@ -105,12 +110,14 @@ public:
     virtual std::vector<basegfx::B2DPoint> getLineGeometry() = 0;
     virtual PDFFormFieldType getFormFieldType(PDFiumDocument* pDoc) = 0;
     virtual float getFontSize(PDFiumDocument* pDoc) = 0;
+    virtual Color getFontColor(PDFiumDocument* pDoc) = 0;
     virtual OUString getFormFieldAlternateName(PDFiumDocument* pDoc) = 0;
     virtual int getFormFieldFlags(PDFiumDocument* pDoc) = 0;
     virtual OUString getFormAdditionalActionJavaScript(PDFiumDocument* pDoc,
                                                        PDFAnnotAActionType eEvent)
         = 0;
     virtual OUString getFormFieldValue(PDFiumDocument* pDoc) = 0;
+    virtual int getOptionCount(PDFiumDocument* pDoc) = 0;
 };
 
 class PDFiumTextPage;

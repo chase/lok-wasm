@@ -153,6 +153,7 @@ class SwUINumRuleItem;
 #define FN_REDLINE_REJECT_ALL        (FN_EDIT2 + 44)    /* Redlining Reject All*/
 #define FN_REDLINE_ACCEPT_TONEXT     (FN_EDIT2 + 45)    /* Redlining Accept and jump to next*/
 #define FN_REDLINE_REJECT_TONEXT     (FN_EDIT2 + 46)    /* Redlining Reject and jump to next*/
+#define FN_TRANSFORM_DOCUMENT_STRUCTURE (FN_EDIT2 + 47) /* overwrite text of content control, and more*/
 
 // Region: View
 #define FN_DRAW_WRAP_DLG        TypedWhichId<SfxInt16Item>(FN_VIEW + 3)   /* Draw wrapping dlg */
@@ -337,6 +338,7 @@ class SwUINumRuleItem;
 #define FN_DELETE_BOOKMARKS (FN_INSERT2 + 39)
 #define FN_DELETE_FIELDS (FN_INSERT2 + 40)
 #define FN_DELETE_SECTIONS (FN_INSERT2 + 41)
+#define FN_DELETE_CONTENT_CONTROL (FN_INSERT2 + 42) /* Delete content control formatting */
 
 // Region: Format
 #define FN_AUTOFORMAT_APPLY     (FN_FORMAT + 1 ) /* apply autoformat options */
@@ -677,6 +679,7 @@ class SwUINumRuleItem;
 #define FN_UNO_GRAPHIC_PREVIEW              (FN_EXTRA2 + 130)
 #define FN_UNO_LINEBREAK (FN_EXTRA2 + 131)
 #define FN_UNO_CONTENT_CONTROL (FN_EXTRA2 + 132)
+#define FN_UNO_IS_CONTENT_EMPTY  (FN_EXTRA2 + 133)
 
 // Area: Help
 // Region: Traveling & Selection
@@ -802,6 +805,7 @@ class SwUINumRuleItem;
 #define FN_RESOLVE_NOTE             (FN_NOTES+9)
 #define FN_RESOLVE_NOTE_THREAD      (FN_NOTES+10)
 #define FN_DELETE_COMMENT_THREAD    (FN_NOTES+11)
+#define FN_PROMOTE_COMMENT          (FN_NOTES+12)
 
 // Region: Parameter
 #define FN_PARAM_MOVE_COUNT         TypedWhichId<SfxInt32Item>(FN_PARAM+2)

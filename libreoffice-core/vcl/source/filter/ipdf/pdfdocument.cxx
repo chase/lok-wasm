@@ -1102,6 +1102,14 @@ bool PDFDocument::Tokenize(SvStream& rStream, TokenizeMode eMode,
                     pObjectStream = pObject;
                 else
                     pObjectKey = pNameElement;
+
+                if (bInObject && !nDepth && pObject)
+                {
+                    // Name element inside an object, but outside a
+                    // dictionary / array: remember it.
+                    pObject->SetNameElement(pNameElement);
+                }
+
                 break;
             }
             case '(':
@@ -1374,6 +1382,12 @@ bool PDFDocument::Read(SvStream& rStream)
     rStream.Seek(0);
     m_aEditBuffer.WriteStream(rStream);
 
+    // clear out key items that may have been filled with info from any previous read attempt
+    m_aOffsetTrailers.clear();
+    m_aTrailerOffsets.clear();
+    m_pTrailer = nullptr;
+    m_pXRefStream = nullptr;
+
     // Look up the offset of the xref table.
     size_t nStartXRef = FindStartXRef(rStream);
     SAL_INFO("vcl.filter", "PDFDocument::Read: nStartXRef is " << nStartXRef);
@@ -1419,6 +1433,7 @@ bool PDFDocument::Read(SvStream& rStream)
             nStartXRef = pPrev->GetValue();
 
         // Reset state, except the edit buffer.
+        m_aOffsetTrailers.clear(); // contents are lifecycle managed by m_aElements
         m_aElements.clear();
         m_aOffsetObjects.clear();
         m_aIDObjects.clear();
@@ -2291,6 +2306,7 @@ PDFObjectElement::PDFObjectElement(PDFDocument& rDoc, double fObjectValue, doubl
     , m_fObjectValue(fObjectValue)
     , m_fGenerationValue(fGenerationValue)
     , m_pNumberElement(nullptr)
+    , m_pNameElement(nullptr)
     , m_nDictionaryOffset(0)
     , m_nDictionaryLength(0)
     , m_pDictionaryElement(nullptr)
@@ -2461,6 +2477,13 @@ void PDFObjectElement::SetNumberElement(PDFNumberElement* pNumberElement)
 }
 
 PDFNumberElement* PDFObjectElement::GetNumberElement() const { return m_pNumberElement; }
+
+void PDFObjectElement::SetNameElement(PDFNameElement* pNameElement)
+{
+    m_pNameElement = pNameElement;
+}
+
+PDFNameElement* PDFObjectElement::GetNameElement() const { return m_pNameElement; }
 
 const std::vector<PDFReferenceElement*>& PDFObjectElement::GetDictionaryReferences() const
 {

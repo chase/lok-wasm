@@ -2277,6 +2277,12 @@
         original software.</p>
         <p>3. This notice may not be removed or altered from any source distribution.</p>
     </div>
+    <div class="ZXING">
+        <h2>ZXing-C++</h2>
+        <p>The following software may be included in this product: ZXing-C++. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p><a href="#a__Apache_License_version_2_0">Jump to Apache License Version 2.0</a></p>
+    </div>
     <div class="SKIA">
         <h2>Skia</h2>
         <p>The following software may be included in this product: Skia. Use of any of this software is governed by
@@ -2329,6 +2335,13 @@
     <div class="MORE_FONTS">
         <hr />
         <h1><a id="a__Fonts" name="a__Fonts">Fonts</a></h1>
+        <h2>Agdasima</h2>
+        <p>The following software may be included in this product: Agdasima fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Agdasima Project Authors (https://github.com/docrepair-fonts/agdasima-fonts).</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
         <h2>Alef</h2>
         <p>Copyright (c) 2012, HaGilda &amp; Mushon Zer-Aviv (&lt;http://hagilda.com|info@hagilda.com&gt;), with
         Reserved Font Name Alef Regular.</p>
@@ -2340,10 +2353,33 @@
         <p>Copyright (c) 2010-2017, Khaled Hosny (&lt;khaledhosny@eglug.org&gt;)</p>
         <p>This Font Software is licensed under the SIL Open Font License, Version 1.1 as shown below.</p>
         <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
+        <h2>Bacasime Antique</h2>
+        <p>The following software may be included in this product: Bacasime Antique fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Bacasime Antique Project Authors (https://github.com/docrepair-fonts/bacasime-antique-fonts),
+        with Reserved Font Name "Playfair".</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
+        <h2>Belanosima</h2>
+        <p>The following software may be included in this product: Belanosima fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Belanosima Project Authors (https://github.com/docrepair-fonts/belanosima-fonts),
+        with Reserved Font Name "Josefin Sans".</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
         <h2>Caladea</h2>
         <p>Copyright (c) 2012 Huerta Tipográfica</p>
         <p>This Font Software is licensed under the Apache License, Version 2.0 as shown below.</p>
         <p><a href="#a__Apache_License_version_2_0">Jump to Apache License Version 2.0</a></p>
+        <h2>Caprasimo</h2>
+        <p>The following software may be included in this product: Caprasimo fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Caprasimo Project Authors (https://github.com/docrepair-fonts/caprasimo-fonts).</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
         <h2>Carlito</h2>
         <p>Copyright (c) 2010-2013 by tyPoland Lukasz Dziedzic with Reserved Font Name "Carlito".</p>
         <p>This Font Software is licensed under the SIL Open Font License, Version 1.1 as shown below.</p>
@@ -2660,6 +2696,27 @@
         <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
         and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
         <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
+        <h2>Lugrasimo</h2>
+        <p>The following software may be included in this product: Lugrasimo fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Lugrasimo Project Authors (https://github.com/docrepair-fonts/lugrasimo-fonts).</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
+        <h2>Lumanosimo</h2>
+        <p>The following software may be included in this product: Lumanosimo fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Lumanosimo Project Authors (https://github.com/docrepair-fonts/lumanosimo-fonts).</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
+        <h2>Lunasima</h2>
+        <p>The following software may be included in this product: Lunasima fonts. Use of any of this software is governed
+        by the terms of the license below:</p>
+        <p>Copyright 2023 The Lunasima Project Authors (https://github.com/docrepair-fonts/lunasima-fonts).</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
         <h2>Noto</h2>
         <p>The following software may be included in this product: Google Noto fonts. Use of any of this software is
         governed by the terms of the license below:</p>
@@ -2691,6 +2748,15 @@
         <p>This Font Software is licensed under the SIL Open Font License, Version 1.1, with Reserved Font Names
         "Scheherazade" and "SIL". This license is copied below, and is also available with a FAQ at:
         <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
+        <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
+        <h2>Source Sans Pro</h2>
+        <p>The following software may be included in this product: Source Sans Pro fonts. Use of any of this software
+        is governed by the terms of the license below:</p>
+        <p>Copyright 2010, 2012 Adobe Systems Incorporated (<a href="http://www.adobe.com/">http://www.adobe.com/</a>),
+        with Reserved Font Name 'Source'. All Rights Reserved. Source is a trademark of Adobe Systems Incorporated in
+        the United States and/or other countries.</p>
+        <p>This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is copied below,
+        and is also available with a FAQ at: <a href="http://scripts.sil.org/OFL">http://scripts.sil.org/OFL</a></p>
         <p><a href="#a__SIL_Open_Font_License__version_1_1">Jump to SIL Open Font License, Version 1.1</a></p>
     </div>
     <div class="DICTIONARIES">

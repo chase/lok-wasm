@@ -336,6 +336,10 @@ interface BaseText
         ExecMethod = ExecInsert ;
         StateMethod = GetState ;
     ]
+    FN_TRANSFORM_DOCUMENT_STRUCTURE
+    [
+        ExecMethod = Execute ;
+    ]
     FN_INSERT_COLUMN_BREAK // status(final|play)
     [
         ExecMethod = ExecInsert ;
@@ -1106,6 +1110,11 @@ interface BaseText
         ExecMethod = ExecField ;
         StateMethod = StateField;
     ]
+    FN_PROMOTE_COMMENT
+    [
+        ExecMethod = ExecField ;
+        StateMethod = StateField;
+    ]
     FN_REDLINE_COMMENT // status(play)
     [
         ExecMethod = ExecField ;
@@ -1869,6 +1878,12 @@ interface BaseText
     [
         ExecMethod = Execute ;
         DisableFlags="SfxDisableFlags::SwOnProtectedCursor";
+    ]
+
+    FN_DELETE_CONTENT_CONTROL
+    [
+        ExecMethod = Execute ;
+        StateMethod = GetState ;
     ]
 
     FN_DELETE_FIELDS

@@ -719,6 +719,11 @@ ScConditionalFormat* AbstractScCondFormatManagerDlg_Impl::GetCondFormatSelected(
     return m_xDlg->GetCondFormatSelected();
 }
 
+void AbstractScCondFormatManagerDlg_Impl::ShowEasyConditionalDialog(bool isEdit)
+{
+    m_xDlg->ShowEasyConditionalDialog(isEdit);
+}
+
 int AbstractScMetricInputDlg_Impl::GetInputValue() const
 {
     return m_xDlg->GetInputValue();
@@ -1033,6 +1038,11 @@ void ScAsyncTabController_Impl::SetCurPageId( const OUString &rName )
 const SfxItemSet* ScAsyncTabController_Impl::GetOutputItemSet() const
 {
     return m_xDlg->GetOutputItemSet();
+}
+
+bool AbstractScSelEntryDlg_Impl::StartExecuteAsync(VclAbstractDialog::AsyncContext &rCtx)
+{
+    return weld::DialogController::runAsync(m_xDlg, rCtx.maEndDialogFn);
 }
 
 // =========================Factories  for createdialog ===================

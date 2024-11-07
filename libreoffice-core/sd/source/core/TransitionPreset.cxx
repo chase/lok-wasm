@@ -116,7 +116,10 @@ bool TransitionPreset::importTransitionsFile( TransitionPresetList& rList,
             TransitionType::WATERFALLWIPE,
             TransitionType::SPIRALWIPE,
             TransitionType::MISCDIAGONALWIPE,
-            TransitionType::BOXSNAKESWIPE
+            TransitionType::BOXSNAKESWIPE,
+            TransitionType::BLINDSWIPE,
+            TransitionType::MISCSHAPEWIPE,
+            TransitionType::ZOOM
     };
 
     const std::set<sal_Int16> LOKSupportedTransitionSubTypes = {
@@ -210,7 +213,20 @@ bool TransitionPreset::importTransitionsFile( TransitionPresetList& rList,
             TransitionSubType::TWOBOXLEFT,
             TransitionSubType::TWOBOXRIGHT,
             TransitionSubType::FOURBOXVERTICAL,
-            TransitionSubType::FOURBOXHORIZONTAL
+            TransitionSubType::FOURBOXHORIZONTAL,
+            TransitionSubType::COMBVERTICAL,
+            TransitionSubType::COMBHORIZONTAL,
+            TransitionSubType::FANOUTHORIZONTAL,
+            TransitionSubType::HEART,
+            TransitionSubType::ROTATEIN
+    };
+
+    const std::set<sal_Int16> LOKMiscShapeWipeNonSupportedTransitionSubTypes = {
+            TransitionSubType::DIAMOND,
+            TransitionSubType::HEART,
+            TransitionSubType::CIRCLE,
+            TransitionSubType::VERTICAL,
+            TransitionSubType::TOPLEFT
     };
 
     try {
@@ -231,6 +247,12 @@ bool TransitionPreset::importTransitionsFile( TransitionPresetList& rList,
                     sal_Int16 eTransitionSubType = pPreset->getSubtype();
                     if( LOKSupportedTransitionTypes.find(eTransitionType) == LOKSupportedTransitionTypes.end()
                             || LOKSupportedTransitionSubTypes.find(eTransitionSubType) == LOKSupportedTransitionSubTypes.end() )
+                    {
+                        continue;
+                    }
+
+                    if( eTransitionType == TransitionType::MISCSHAPEWIPE
+                            && LOKMiscShapeWipeNonSupportedTransitionSubTypes.find(eTransitionSubType) != LOKMiscShapeWipeNonSupportedTransitionSubTypes.end() )
                     {
                         continue;
                     }

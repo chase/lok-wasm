@@ -247,7 +247,7 @@ void SwVisibleCursor::SetPosAndShow(SfxViewShell const * pViewShell)
                     LOK_CALLBACK_INVALIDATE_VIEW_CURSOR);
             }
         }
-        else
+        else if (m_pCursorShell->m_bIsCursorPosChanged || m_pCursorShell->IsTableMode())
         {
             SfxLokHelper::notifyUpdatePerViewId(m_pCursorShell->GetSfxViewShell(), SfxViewShell::Current(),
                 m_pCursorShell->GetSfxViewShell(), LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR);
@@ -988,8 +988,20 @@ void SwShellCursor::Show(SfxViewShell const * pViewShell)
     }
     else
     {
-        GetShell()->GetSfxViewShell()->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRect);
-        SfxLokHelper::notifyOtherViews(GetShell()->GetSfxViewShell(), LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", sRect);
+        const SwCursorShell* pShell = GetShell();
+        if (!pShell)
+        {
+            return;
+        }
+
+        SfxViewShell* pSfxViewShell = pShell->GetSfxViewShell();
+        if (!pSfxViewShell)
+        {
+            return;
+        }
+
+        pSfxViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_TEXT_SELECTION, sRect);
+        SfxLokHelper::notifyOtherViews(pSfxViewShell, LOK_CALLBACK_TEXT_VIEW_SELECTION, "selection", sRect);
     }
 }
 

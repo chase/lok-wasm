@@ -45,6 +45,7 @@
 #include <svx/svdpool.hxx>
 #include <svx/svdobj.hxx>
 #include <svx/svdotext.hxx>
+#include <svx/unoshape.hxx>
 #include <textchain.hxx>
 #include <svx/svdetc.hxx>
 #include <svx/svdoutl.hxx>
@@ -132,8 +133,6 @@ SdrModel::SdrModel(SfxItemPool* pPool, comphelper::IEmbeddedHelper* pEmbeddedHel
     , m_bThemedControls(true)
     , mbUndoEnabled(true)
     , mbChanged(false)
-    , m_bPagNumsDirty(false)
-    , m_bMPgNumsDirty(false)
     , m_bTransportContainer(false)
     , m_bReadOnly(false)
     , m_bTransparentTextFrames(false)
@@ -142,6 +141,7 @@ SdrModel::SdrModel(SfxItemPool* pPool, comphelper::IEmbeddedHelper* pEmbeddedHel
     , m_bStarDrawPreviewMode(false)
     , mbDisableTextEditUsesCommonUndoManager(false)
     , mbVOCInvalidationIsReliable(false)
+    , m_bIsPDFDocument(false)
     , m_nDefaultTabulator(0)
     , m_nMaxUndoCount(16)
     , m_pTextChain(new TextChain)
@@ -223,7 +223,6 @@ SdrModel::~SdrModel()
     implDtorClearModel();
 
 #ifdef DBG_UTIL
-    // SdrObjectLifetimeWatchDog:
     if(!maAllIncarnatedObjects.empty())
     {
         SAL_WARN("svx",
@@ -581,6 +580,25 @@ void SdrModel::ClearModel(bool bCalledFromDestructor)
         mbInDestruction = true;
     }
 
+    // Disconnect all SvxShape's from their SdrObjects to prevent the SdrObjects
+    // from hanging around and causing use-after-free.
+    // Make a copy because it might modified during InvalidateSdrObject calls.
+    std::vector<rtl::Reference<SdrObject>> allObjs(maAllIncarnatedObjects.begin(), maAllIncarnatedObjects.end());
+    for (const auto & pSdrObj : allObjs)
+    {
+        uno::Reference<uno::XInterface> xShape = pSdrObj->getWeakUnoShape().get();
+        rtl::Reference<SvxShape> pSvxShape = dynamic_cast<SvxShape*>(xShape.get());
+        // calling getWeakUnoShape so we don't accidentally create new UNO shapes
+        if (pSvxShape)
+            pSvxShape->InvalidateSdrObject();
+        else
+        {
+            // because some things like SwXShape don't subclass SvxShape
+            uno::Reference<lang::XComponent> xComp(xShape, uno::UNO_QUERY);
+            if (xComp)
+                xComp->dispose();
+        }
+    }
     sal_Int32 i;
     // delete all drawing pages
     sal_Int32 nCount=GetPageCount();
@@ -1156,23 +1174,27 @@ void SdrModel::RecalcPageNums(bool bMaster)
 {
     if(bMaster)
     {
-        sal_uInt16 nCount=sal_uInt16(maMasterPages.size());
-        sal_uInt16 i;
-        for (i=0; i<nCount; i++) {
-            SdrPage* pPg = maMasterPages[i].get();
-            pPg->SetPageNum(i);
+        if (m_nMasterPageNumsDirtyFrom != SAL_MAX_UINT16)
+        {
+            sal_uInt16 nCount=sal_uInt16(maMasterPages.size());
+            for (sal_uInt16 i=m_nMasterPageNumsDirtyFrom; i<nCount; i++) {
+                SdrPage* pPg = maMasterPages[i].get();
+                pPg->SetPageNum(i);
+            }
+            m_nMasterPageNumsDirtyFrom = SAL_MAX_UINT16;
         }
-        m_bMPgNumsDirty=false;
     }
     else
     {
-        sal_uInt16 nCount=sal_uInt16(maPages.size());
-        sal_uInt16 i;
-        for (i=0; i<nCount; i++) {
-            SdrPage* pPg = maPages[i].get();
-            pPg->SetPageNum(i);
+        if (m_nPageNumsDirtyFrom != SAL_MAX_UINT16)
+        {
+            sal_uInt16 nCount=sal_uInt16(maPages.size());
+            for (sal_uInt16 i = m_nPageNumsDirtyFrom; i<nCount; i++) {
+                SdrPage* pPg = maPages[i].get();
+                pPg->SetPageNum(i);
+            }
+            m_nPageNumsDirtyFrom = SAL_MAX_UINT16;
         }
-        m_bPagNumsDirty=false;
     }
 }
 
@@ -1190,7 +1212,7 @@ void SdrModel::InsertPage(SdrPage* pPage, sal_uInt16 nPos)
     if (mbMakePageObjectsNamesUnique)
         pPage->MakePageObjectsNamesUnique();
 
-    if (nPos<nCount) m_bPagNumsDirty=true;
+    if (nPos<nCount) m_nPageNumsDirtyFrom = std::min(m_nPageNumsDirtyFrom, static_cast<sal_uInt16>(nPos + 1));
     SetChanged();
     SdrHint aHint(SdrHintKind::PageOrderChange, pPage);
     Broadcast(aHint);
@@ -1209,7 +1231,7 @@ rtl::Reference<SdrPage> SdrModel::RemovePage(sal_uInt16 nPgNum)
     if (pPg) {
         pPg->SetInserted(false);
     }
-    m_bPagNumsDirty=true;
+    m_nPageNumsDirtyFrom = std::min(m_nPageNumsDirtyFrom, nPgNum);
     SetChanged();
     SdrHint aHint(SdrHintKind::PageOrderChange, pPg.get());
     Broadcast(aHint);
@@ -1239,7 +1261,7 @@ void SdrModel::InsertMasterPage(SdrPage* pPage, sal_uInt16 nPos)
     pPage->SetPageNum(nPos);
 
     if (nPos<nCount) {
-        m_bMPgNumsDirty=true;
+        m_nMasterPageNumsDirtyFrom = std::min(m_nMasterPageNumsDirtyFrom, static_cast<sal_uInt16>(nPos + 1));
     }
 
     SetChanged();
@@ -1271,7 +1293,7 @@ rtl::Reference<SdrPage> SdrModel::RemoveMasterPage(sal_uInt16 nPgNum)
         pRetPg->SetInserted(false);
     }
 
-    m_bMPgNumsDirty=true;
+    m_nMasterPageNumsDirtyFrom = std::min(m_nMasterPageNumsDirtyFrom, nPgNum);
     SetChanged();
     SdrHint aHint(SdrHintKind::PageOrderChange, pRetPg.get());
     Broadcast(aHint);
@@ -1288,7 +1310,7 @@ void SdrModel::MoveMasterPage(sal_uInt16 nPgNum, sal_uInt16 nNewPos)
         maMasterPages.insert(maMasterPages.begin()+nNewPos,pPg);
         MasterPageListChanged();
     }
-    m_bMPgNumsDirty=true;
+    m_nMasterPageNumsDirtyFrom = std::min(m_nMasterPageNumsDirtyFrom, std::min(nPgNum, nNewPos));
     SetChanged();
     SdrHint aHint(SdrHintKind::PageOrderChange, pPg.get());
     Broadcast(aHint);
@@ -1464,7 +1486,7 @@ void SdrModel::Merge(SdrModel& rSourceModel,
                     maMasterPages.insert(maMasterPages.begin()+nDstMasterPageCnt, pPg);
                     MasterPageListChanged();
                     pPg->SetInserted();
-                    m_bMPgNumsDirty=true;
+                    m_nMasterPageNumsDirtyFrom = std::min(m_nMasterPageNumsDirtyFrom, nDstMasterPageCnt);
                     if (bUndo) AddUndo(GetSdrUndoFactory().CreateUndoNewPage(*pPg));
                 } else {
                     OSL_FAIL("SdrModel::Merge(): MasterPage not found in SourceModel.");
@@ -1547,8 +1569,8 @@ void SdrModel::Merge(SdrModel& rSourceModel,
     pMasterMap.reset();
     pMasterNeed.reset();
 
-    m_bMPgNumsDirty=true;
-    m_bPagNumsDirty=true;
+    m_nMasterPageNumsDirtyFrom = 0;
+    m_nPageNumsDirtyFrom = 0;
 
     SetChanged();
     // TODO: Missing: merging and mapping of layers

@@ -45,6 +45,7 @@
 #include <DrawDocShell.hxx>
 
 #include <svl/itemset.hxx>
+#include <svx/annotation/ObjectAnnotationData.hxx>
 
 using namespace ::sd;
 using namespace ::com::sun::star;
@@ -377,21 +378,6 @@ void SdPage::lateInit(const SdPage& rSrcPage)
     // animations
     rSrcPage.cloneAnimations(*this);
 
-    // annotations
-    for (auto const& rSourceAnnotation : rSrcPage.maAnnotations)
-    {
-        rtl::Reference<sdr::annotation::Annotation> aNewAnnotation = createAnnotation();
-        aNewAnnotation->setPosition(rSourceAnnotation->getPosition());
-        aNewAnnotation->setSize(rSourceAnnotation->getSize());
-        aNewAnnotation->setAuthor(rSourceAnnotation->getAuthor());
-        aNewAnnotation->setInitials(rSourceAnnotation->getInitials());
-        aNewAnnotation->setDateTime(rSourceAnnotation->getDateTime());
-        uno::Reference<css::text::XTextCopy> xSourceRange (rSourceAnnotation->getTextRange(), uno::UNO_QUERY);
-        uno::Reference<css::text::XTextCopy> xRange (aNewAnnotation->getTextRange(), uno::UNO_QUERY);
-        if(xSourceRange.is() && xRange.is())
-            xRange->copyText(xSourceRange);
-    }
-
     // fix user calls for duplicated slide
     SdrObjListIter aSourceIter( &rSrcPage, SdrIterMode::DeepWithGroups );
     SdrObjListIter aTargetIter( this, SdrIterMode::DeepWithGroups );
@@ -554,9 +540,7 @@ bool SdPage::Equals(const SdPage& rOtherPage) const
 
 rtl::Reference<sdr::annotation::Annotation> SdPage::createAnnotation()
 {
-    rtl::Reference<sdr::annotation::Annotation> xAnnotation;
-    sd::createAnnotation(xAnnotation, this);
-    return xAnnotation;
+    return sd::createAnnotation(this);
 }
 
 void SdPage::addAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex)
@@ -613,6 +597,16 @@ void SdPage::removeAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation
         std::unique_ptr<SdrUndoAction> pAction = CreateUndoInsertOrRemoveAnnotation(xUnconstAnnotation, false);
         if (pAction)
             rModel.AddUndo(std::move(pAction));
+    }
+
+    for (size_t nObjectIndex = 0; nObjectIndex < GetObjCount(); ++nObjectIndex)
+    {
+        SdrObject* pObject = GetObj(nObjectIndex);
+        if (pObject->isAnnotationObject() && pObject->getAnnotationData()->mxAnnotation == xAnnotation)
+        {
+            pObject->getAnnotationData()->mpAnnotationPopup->closePopup();
+            RemoveObject(nObjectIndex);
+        }
     }
 
     auto iterator = std::find(maAnnotations.begin(), maAnnotations.end(), xAnnotation);

@@ -37,6 +37,9 @@ static bool g_bLocalRendering(false);
 
 static Compat g_eCompatFlags(Compat::none);
 
+static std::function<bool(void*)> g_pAnyInputCallback;
+static void* g_pAnyInputCallbackData;
+
 namespace
 {
 
@@ -313,6 +316,25 @@ void statusIndicatorFinish()
 {
     if (pStatusIndicatorCallback)
         pStatusIndicatorCallback(pStatusIndicatorCallbackData, statusIndicatorCallbackType::Finish, 0, nullptr);
+}
+
+void setAnyInputCallback(std::function<bool(void*)> pAnyInputCallback, void* pData)
+{
+    g_pAnyInputCallback = pAnyInputCallback;
+    g_pAnyInputCallbackData = pData;
+}
+
+bool anyInput()
+{
+    bool bRet = false;
+
+    // Ignore input events during background save.
+    if (!g_bForkedChild && g_pAnyInputCallback && g_pAnyInputCallbackData)
+    {
+        bRet = g_pAnyInputCallback(g_pAnyInputCallbackData);
+    }
+
+    return bRet;
 }
 
 } // namespace

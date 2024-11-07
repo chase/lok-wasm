@@ -1202,6 +1202,8 @@ bool FormulaCompiler::IsOpCodeVolatile( OpCode eOp )
         case ocOffset:
             // ocDebugVar shows internal value that may change as the internal state changes.
         case ocDebugVar:
+            // ocRandArray is a volatile function.
+        case ocRandArray:
             bRet = true;
             break;
         default:
@@ -1255,6 +1257,7 @@ bool FormulaCompiler::IsMatrixFunction( OpCode eOpCode )
         case ocLogest :
         case ocLinest :
         case ocFrequency :
+        case ocMatSequence :
         case ocMatTrans :
         case ocMatMult :
         case ocMatInv :
@@ -1264,6 +1267,8 @@ bool FormulaCompiler::IsMatrixFunction( OpCode eOpCode )
         case ocFilter :
         case ocSort :
         case ocSortBy :
+        case ocRandArray :
+        case ocUnique :
             return true;
         default:
         {
@@ -1274,17 +1279,21 @@ bool FormulaCompiler::IsMatrixFunction( OpCode eOpCode )
 }
 
 
-void FormulaCompiler::OpCodeMap::putCopyOpCode( const OUString& rSymbol, OpCode eOp )
+void FormulaCompiler::OpCodeMap::putCopyOpCode( const OUString& rSymbol, OpCode eOp, const CharClass* pCharClass )
 {
     SAL_WARN_IF( !mpTable[eOp].isEmpty() && rSymbol.isEmpty(), "formula.core",
             "OpCodeMap::putCopyOpCode: NOT replacing OpCode " << static_cast<sal_uInt16>(eOp)
             << " '" << mpTable[eOp] << "' with empty name!");
     if (!mpTable[eOp].isEmpty() && rSymbol.isEmpty())
-        maHashMap.emplace(mpTable[eOp], eOp);
+    {
+        OUString aUpper( pCharClass ? pCharClass->uppercase( mpTable[eOp]) : mpTable[eOp].toAsciiUpperCase());
+        maHashMap.emplace(aUpper, eOp);
+    }
     else
     {
+        OUString aUpper( pCharClass ? pCharClass->uppercase( rSymbol) : rSymbol.toAsciiUpperCase());
         mpTable[eOp] = rSymbol;
-        maHashMap.emplace(rSymbol, eOp);
+        maHashMap.emplace(aUpper, eOp);
     }
 }
 
@@ -1302,6 +1311,9 @@ void FormulaCompiler::OpCodeMap::copyFrom( const OpCodeMap& r )
     SAL_WARN_IF( !mpTable[0].isEmpty() || !r.mpTable[0].isEmpty(), "formula.core",
             "OpCodeMap::copyFrom: OpCode 0 assigned, this: '"
             << mpTable[0] << "'  that: '" << r.mpTable[0] << "'");
+
+    std::unique_ptr<CharClass> xCharClass( r.mbEnglish ? nullptr : createCharClassIfNonEnglishUI());
+    const CharClass* pCharClass = xCharClass.get();
 
     // For bOverrideKnownBad when copying from the English core map (ODF 1.1
     // and API) to the native map (UI "use English function names") replace the
@@ -1325,7 +1337,7 @@ void FormulaCompiler::OpCodeMap::copyFrom( const OpCodeMap& r )
                 default:
                     aSymbol = r.mpTable[i];
             }
-            putCopyOpCode( aSymbol, eOp);
+            putCopyOpCode( aSymbol, eOp, pCharClass);
         }
     }
     else
@@ -1334,7 +1346,7 @@ void FormulaCompiler::OpCodeMap::copyFrom( const OpCodeMap& r )
         {
             OpCode eOp = OpCode(i);
             const OUString& rSymbol = r.mpTable[i];
-            putCopyOpCode( rSymbol, eOp);
+            putCopyOpCode( rSymbol, eOp, pCharClass);
         }
     }
 

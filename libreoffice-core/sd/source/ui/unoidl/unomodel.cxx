@@ -21,6 +21,8 @@
 
 #include <com/sun/star/presentation/XPresentation2.hpp>
 
+#include <com/sun/star/drawing/FillStyle.hpp>
+#include <com/sun/star/drawing/LineStyle.hpp>
 #include <com/sun/star/lang/DisposedException.hpp>
 #include <com/sun/star/lang/IndexOutOfBoundsException.hpp>
 #include <com/sun/star/lang/ServiceNotRegisteredException.hpp>
@@ -29,8 +31,37 @@
 #include <com/sun/star/document/IndexedPropertyValues.hpp>
 #include <com/sun/star/beans/PropertyAttribute.hpp>
 #include <com/sun/star/util/XTheme.hpp>
+#include <com/sun/star/animations/AnimationFill.hpp>
+#include <com/sun/star/animations/AnimationRestart.hpp>
+#include <com/sun/star/animations/AnimationEndSync.hpp>
+#include <com/sun/star/animations/AnimationCalcMode.hpp>
+#include <com/sun/star/animations/AnimationAdditiveMode.hpp>
+#include <com/sun/star/animations/AnimationNodeType.hpp>
+#include <com/sun/star/animations/AnimationTransformType.hpp>
+#include <com/sun/star/animations/AnimationColorSpace.hpp>
+#include <com/sun/star/animations/Event.hpp>
+#include <com/sun/star/animations/EventTrigger.hpp>
+#include <com/sun/star/animations/Timing.hpp>
+#include <com/sun/star/animations/TransitionType.hpp>
+#include <com/sun/star/animations/TransitionSubType.hpp>
+#include <com/sun/star/animations/ValuePair.hpp>
+#include <com/sun/star/animations/XAnimate.hpp>
+#include <com/sun/star/animations/XAnimateMotion.hpp>
+#include <com/sun/star/animations/XAnimateColor.hpp>
+#include <com/sun/star/animations/XAnimateTransform.hpp>
+#include <com/sun/star/animations/XIterateContainer.hpp>
+#include <com/sun/star/animations/XTimeContainer.hpp>
+#include <com/sun/star/animations/XTransitionFilter.hpp>
+#include <com/sun/star/presentation/EffectNodeType.hpp>
+#include <com/sun/star/presentation/EffectPresetClass.hpp>
+#include <com/sun/star/presentation/ParagraphTarget.hpp>
+#include <com/sun/star/presentation/ShapeAnimationSubType.hpp>
+#include <com/sun/star/presentation/TextAnimationType.hpp>
+
 
 #include <com/sun/star/embed/Aspects.hpp>
+
+#include <animations/animationnodehelper.hxx>
 
 #include <officecfg/Office/Common.hxx>
 #include <comphelper/dispatchcommand.hxx>
@@ -57,6 +88,7 @@
 
 #include <editeng/UnoForbiddenCharsTable.hxx>
 #include <svx/svdoutl.hxx>
+#include <o3tl/any.hxx>
 #include <o3tl/safeint.hxx>
 #include <o3tl/string_view.hxx>
 #include <o3tl/unit_conversion.hxx>
@@ -64,6 +96,7 @@
 #include <svx/svdlayer.hxx>
 #include <svx/svdsob.hxx>
 #include <svx/svdundo.hxx>
+#include <svx/svdomedia.hxx>
 #include <svx/unoapi.hxx>
 #include <svx/unofill.hxx>
 #include <svx/sdrpagewindow.hxx>
@@ -78,7 +111,13 @@
 #include <editeng/unonrule.hxx>
 #include <editeng/eeitem.hxx>
 #include <unotools/datetime.hxx>
+#include <sax/tools/converter.hxx>
 #include <xmloff/autolayout.hxx>
+#include <xmloff/xmltoken.hxx>
+#include <rtl/math.hxx>
+#include <tools/helpers.hxx>
+#include <tools/json_writer.hxx>
+#include <tools/helpers.hxx>
 
 // Support creation of GraphicStorageHandler and EmbeddedObjectResolver
 #include <svx/xmleohlp.hxx>
@@ -109,6 +148,7 @@
 #include <ViewShell.hxx>
 #include <Window.hxx>
 #include <optsitem.hxx>
+#include <SlideshowLayerRenderer.hxx>
 
 #include <vcl/pdfextoutdevdata.hxx>
 #include <vcl/pdf/PDFNote.hxx>
@@ -136,6 +176,10 @@
 #include <tools/UnitConversion.hxx>
 #include <svx/ColorSets.hxx>
 #include <docmodel/theme/Theme.hxx>
+
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_map.h>
 
 #include <app.hrc>
 
@@ -190,7 +234,1305 @@ private:
     SdrModel*   mpModel;
 };
 
+class SlideBackgroundInfo
+{
+public:
+    SlideBackgroundInfo(const uno::Reference<drawing::XDrawPage>& xDrawPage,
+                        const uno::Reference<drawing::XDrawPage>& xMasterPage);
+    bool slideHasOwnBackground() const { return mbIsCustom; }
+    bool hasBackground() const { return bHasBackground; }
+    bool isSolidColor() const { return mbIsSolidColor; }
+    ::Color getFillColor() const;
+    sal_Int32 getFillTransparency() const;
+    OString getFillColorAsRGBA() const;
+private:
+    bool getFillStyleImpl(const uno::Reference<drawing::XDrawPage>& xDrawPage);
+private:
+    uno::Reference<drawing::XDrawPage> mxDrawPage;
+    uno::Reference<drawing::XDrawPage> mxMasterPage;
+    uno::Reference<beans::XPropertySet> mxBackground;
+    bool mbIsCustom;
+    bool bHasBackground;
+    bool mbIsSolidColor;
+    drawing::FillStyle maFillStyle;
+};
+
+SlideBackgroundInfo::SlideBackgroundInfo(
+        const uno::Reference<drawing::XDrawPage>& xDrawPage,
+        const uno::Reference<drawing::XDrawPage>& xMasterPage)
+    : mxDrawPage(xDrawPage)
+    , mxMasterPage(xMasterPage)
+    , mbIsCustom(false)
+    , bHasBackground(false)
+    , mbIsSolidColor(false)
+    , maFillStyle(drawing::FillStyle_NONE)
+{
+    mbIsCustom = getFillStyleImpl(xDrawPage);
+    bHasBackground = mbIsCustom;
+    if (!bHasBackground)
+    {
+        bHasBackground = getFillStyleImpl(xMasterPage);
+    }
+    if (bHasBackground)
+    {
+        if (maFillStyle == drawing::FillStyle_SOLID)
+        {
+            OUString sGradientName;
+            mxBackground->getPropertyValue("FillTransparenceGradientName") >>= sGradientName;
+            if (sGradientName.isEmpty())
+            {
+                mbIsSolidColor = true;
+            }
+        }
+    }
 }
+
+sal_Int32 SlideBackgroundInfo::getFillTransparency() const
+{
+    if (!mxBackground.is())
+        return 0;
+    sal_Int32 nFillTransparency = 0;
+    mxBackground->getPropertyValue("FillTransparence") >>= nFillTransparency;
+    return nFillTransparency;
+}
+
+::Color SlideBackgroundInfo::getFillColor() const
+{
+    if (!mxBackground.is())
+        return {};
+    if (sal_Int32 nFillColor; mxBackground->getPropertyValue("FillColor") >>= nFillColor)
+    {
+        return ::Color(ColorTransparency, nFillColor & 0xffffff);
+    }
+    return {};
+}
+
+OString SlideBackgroundInfo::getFillColorAsRGBA() const
+{
+    ::Color aColor = getFillColor();
+    OString sColor = aColor.AsRGBHEXString().toUtf8();
+    sal_uInt32 nAlpha = std::round((100 - getFillTransparency()) * 255 / 100.0);
+    std::stringstream ss;
+    ss << std::hex << std::uppercase << std::setfill ('0') << std::setw(2) << nAlpha;
+    sColor += ss.str().c_str();
+    return sColor;
+}
+
+bool SlideBackgroundInfo::getFillStyleImpl(const uno::Reference<drawing::XDrawPage>& xDrawPage)
+{
+    if( xDrawPage.is() )
+    {
+        uno::Reference< beans::XPropertySet > xPropSet( xDrawPage, uno::UNO_QUERY );
+        if( xPropSet.is() )
+        {
+            uno::Reference< beans::XPropertySet > xBackground;
+            if (xPropSet->getPropertySetInfo()->hasPropertyByName("Background"))
+                xPropSet->getPropertyValue( "Background" ) >>= xBackground;
+            if( xBackground.is() )
+            {
+                drawing::FillStyle aFillStyle;
+                if( xBackground->getPropertyValue( "FillStyle" ) >>= aFillStyle )
+                {
+                    maFillStyle = aFillStyle;
+                    if (aFillStyle != drawing::FillStyle_NONE)
+                    {
+                        mxBackground = xBackground;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+using namespace ::css::animations;
+using namespace ::css::beans;
+using namespace ::css::container;
+using namespace ::css::uno;
+using namespace ::xmloff::token;
+using namespace ::css::presentation;
+
+template <typename T, std::size_t N>
+constexpr auto mapEnumToString(std::pair<T, std::string_view> const (&items)[N])
+{
+    return frozen::make_unordered_map<T, std::string_view, N>(items);
+}
+
+constexpr auto constTransitionTypeToString = mapEnumToString<sal_Int16>({
+    { animations::TransitionType::BARWIPE, "BarWipe" }, // Wipe
+    { animations::TransitionType::PINWHEELWIPE, "PineWheelWipe" }, // Wheel
+    { animations::TransitionType::SLIDEWIPE, "SlideWipe" }, // Cover, Uncover
+    { animations::TransitionType::RANDOMBARWIPE, "RandomBarWipe" }, // Bars
+    { animations::TransitionType::CHECKERBOARDWIPE, "CheckerBoardWipe" }, // Checkers
+    { animations::TransitionType::FOURBOXWIPE, "FourBoxWipe" }, // Shape
+    { animations::TransitionType::IRISWIPE, "IrisWipe" }, // Box
+    { animations::TransitionType::FANWIPE, "FanWipe" }, // Wedge
+    { animations::TransitionType::BLINDSWIPE, "BlindWipe"}, // Venetian
+    { animations::TransitionType::FADE, "Fade"},
+    { animations::TransitionType::DISSOLVE, "Dissolve"},
+    { animations::TransitionType::PUSHWIPE, "PushWipe"}, // Comb
+    { animations::TransitionType::ELLIPSEWIPE, "EllipseWipe"}, // Shape
+    { animations::TransitionType::BARNDOORWIPE, "BarnDoorWipe"}, // Split
+    { animations::TransitionType::WATERFALLWIPE, "WaterfallWipe"}, // Diagonal
+    { animations::TransitionType::MISCSHAPEWIPE, "MiscShapeWipe"},
+    { animations::TransitionType::ZOOM, "Zoom"}
+});
+
+constexpr auto constTransitionSubTypeToString = mapEnumToString<sal_Int16>({
+    { animations::TransitionSubType::LEFTTORIGHT, "LeftToRight" },
+    { animations::TransitionSubType::TOPTOBOTTOM, "TopToBottom" },
+    { animations::TransitionSubType::EIGHTBLADE, "8Blade" },
+    { animations::TransitionSubType::FOURBLADE, "4Blade" },
+    { animations::TransitionSubType::THREEBLADE, "3Blade" },
+    { animations::TransitionSubType::TWOBLADEVERTICAL, "2BladeVertical" },
+    { animations::TransitionSubType::ONEBLADE, "1Blade" },
+    { animations::TransitionSubType::FROMTOPLEFT, "FromTopLeft" },
+    { animations::TransitionSubType::FROMTOPRIGHT, "FromTopRight"},
+    { animations::TransitionSubType::FROMBOTTOMLEFT, "FromBottomLeft"},
+    { animations::TransitionSubType::FROMBOTTOMRIGHT, "FromBottomRight"},
+    { animations::TransitionSubType::VERTICAL, "Vertical"},
+    { animations::TransitionSubType::HORIZONTAL, "Horizontal"},
+    { animations::TransitionSubType::DOWN, "Down"},
+    { animations::TransitionSubType::ACROSS, "Across"},
+    { animations::TransitionSubType::CORNERSOUT, "CornersOut"},
+    { animations::TransitionSubType::DIAMOND, "Diamond"},
+    { animations::TransitionSubType::CIRCLE, "Circle"},
+    { animations::TransitionSubType::RECTANGLE, "Rectangle"},
+    { animations::TransitionSubType::CENTERTOP, "CenterTop"},
+    { animations::TransitionSubType::CROSSFADE, "CrossFade"},
+    { animations::TransitionSubType::FADEOVERCOLOR, "FadeOverColor"},
+    { animations::TransitionSubType::FROMLEFT, "FromLeft"},
+    { animations::TransitionSubType::FROMRIGHT, "FromRight"},
+    { animations::TransitionSubType::FROMTOP, "FromTop"},
+    { animations::TransitionSubType::HORIZONTALLEFT, "HorizontalLeft"},
+    { animations::TransitionSubType::HORIZONTALRIGHT, "HorizontalRight"},
+    { animations::TransitionSubType::COMBVERTICAL, "CombVertical"},
+    { animations::TransitionSubType::COMBHORIZONTAL, "CombHorizontal"},
+    { animations::TransitionSubType::TOPLEFT, "TopLeft"},
+    { animations::TransitionSubType::TOPRIGHT, "TopRight"},
+    { animations::TransitionSubType::BOTTOMRIGHT, "BottomRight"},
+    { animations::TransitionSubType::BOTTOMLEFT, "BottomLeft"},
+    { animations::TransitionSubType::TOPCENTER, "TopCenter"},
+    { animations::TransitionSubType::RIGHTCENTER, "RightCenter"},
+    { animations::TransitionSubType::BOTTOMCENTER, "BottomCenter"},
+    { animations::TransitionSubType::FANOUTHORIZONTAL, "FanOutHorizontal"},
+    { animations::TransitionSubType::CORNERSIN, "CornersIn"},
+    { animations::TransitionSubType::HEART, "Heart"},
+    { animations::TransitionSubType::ROTATEIN, "RotateIn"}
+});
+
+constexpr auto constAnimationNodeTypeToString = mapEnumToString<sal_Int16>({
+    { AnimationNodeType::ANIMATE, "Animate" },
+    { AnimationNodeType::ANIMATECOLOR, "AnimateColor" },
+    { AnimationNodeType::ANIMATEMOTION, "Animate" },
+    { AnimationNodeType::ANIMATEPHYSICS, "Animate" },
+    { AnimationNodeType::ANIMATETRANSFORM, "AnimateTransform" },
+    { AnimationNodeType::AUDIO, "Audio" },
+    { AnimationNodeType::COMMAND, "Command" },
+    { AnimationNodeType::CUSTOM, "Custom" },
+    { AnimationNodeType::ITERATE, "Iterate" },
+    { AnimationNodeType::PAR, "Par" },
+    { AnimationNodeType::SEQ, "Seq" },
+    { AnimationNodeType::SET, "Set" },
+    { AnimationNodeType::TRANSITIONFILTER, "TransitionFilter" },
+});
+
+constexpr auto constFillToString = mapEnumToString<sal_Int16>({
+    { AnimationFill::DEFAULT, "Default" },
+    { AnimationFill::REMOVE, "Remove" },
+    { AnimationFill::FREEZE, "Freeze" },
+    { AnimationFill::HOLD, "Hold" },
+    { AnimationFill::TRANSITION, "Transition" },
+    { AnimationFill::AUTO, "Auto" },
+});
+
+constexpr auto constRestartToString = mapEnumToString<sal_Int16>({
+    { AnimationRestart::DEFAULT, "Default" },
+    { AnimationRestart::ALWAYS, "Always" },
+    { AnimationRestart::WHEN_NOT_ACTIVE, "WhenNotActive" },
+    { AnimationRestart::NEVER, "Never" },
+});
+
+constexpr auto constEndSyncToString = mapEnumToString<sal_Int16>({
+    { AnimationEndSync::FIRST, "First" },
+    { AnimationEndSync::LAST, "Last" },
+    { AnimationEndSync::ALL, "All" },
+    { AnimationEndSync::MEDIA, "Media" },
+});
+
+constexpr auto constCalcModeToString = mapEnumToString<sal_Int16>({
+    { AnimationCalcMode::DISCRETE, "Discrete" },
+    { AnimationCalcMode::LINEAR, "Linear" },
+    { AnimationCalcMode::PACED, "Paced" },
+    { AnimationCalcMode::SPLINE, "Spline" },
+});
+
+constexpr auto constAdditiveModeToString = mapEnumToString<sal_Int16>({
+    { AnimationAdditiveMode::BASE, "Base" },
+    { AnimationAdditiveMode::SUM, "Sum" },
+    { AnimationAdditiveMode::REPLACE, "Replace" },
+    { AnimationAdditiveMode::MULTIPLY, "Multiply" },
+    { AnimationAdditiveMode::NONE, "None" },
+});
+
+constexpr auto constEffectPresetClassToString = mapEnumToString<sal_Int16>({
+    { EffectPresetClass::CUSTOM, "Custom" },
+    { EffectPresetClass::ENTRANCE, "Entrance" },
+    { EffectPresetClass::EXIT, "Exit" },
+    { EffectPresetClass::EMPHASIS, "Emphasis" },
+    { EffectPresetClass::MOTIONPATH, "MotionPath" },
+    { EffectPresetClass::OLEACTION, "OleAction" },
+    { EffectPresetClass::MEDIACALL, "MediaCall" },
+});
+
+constexpr auto constEffectNodeTypeToString = mapEnumToString<sal_Int16>({
+    { EffectNodeType::DEFAULT, "Default" },
+    { EffectNodeType::ON_CLICK, "OnClick" },
+    { EffectNodeType::WITH_PREVIOUS, "WithPrevious" },
+    { EffectNodeType::AFTER_PREVIOUS, "AfterPrevious" },
+    { EffectNodeType::MAIN_SEQUENCE, "MainSequence" },
+    { EffectNodeType::TIMING_ROOT, "TimingRoot" },
+    { EffectNodeType::INTERACTIVE_SEQUENCE, "InteractiveSequence" },
+});
+
+constexpr auto constEventTriggerToString = mapEnumToString<sal_Int16>({
+    { EventTrigger::BEGIN_EVENT, "BeginEvent" },
+    { EventTrigger::END_EVENT, "EndEvent" },
+    { EventTrigger::NONE, "None" },
+    { EventTrigger::ON_BEGIN, "OnBegin" },
+    { EventTrigger::ON_CLICK, "OnClick" },
+    { EventTrigger::ON_DBL_CLICK, "OnDblClick" },
+    { EventTrigger::ON_END, "OnEnd" },
+    { EventTrigger::ON_MOUSE_ENTER, "OnMouseEnter" },
+    { EventTrigger::ON_MOUSE_LEAVE, "OnMouseLeave" },
+    { EventTrigger::ON_NEXT, "OnNext" },
+    { EventTrigger::ON_PREV, "OnPrev" },
+    { EventTrigger::ON_STOP_AUDIO, "OnStopAudio" },
+    { EventTrigger::REPEAT, "Repeat" },
+});
+
+constexpr auto constTimingToString = mapEnumToString<Timing>({
+    { Timing_INDEFINITE, "indefinite" },
+    { Timing_MEDIA, "media" },
+});
+
+constexpr auto constTransformTypeToString = mapEnumToString<sal_Int16>({
+    { AnimationTransformType::TRANSLATE, "Translate" },
+    { AnimationTransformType::SCALE, "Scale" },
+    { AnimationTransformType::ROTATE, "Rotate" },
+    { AnimationTransformType::SKEWX, "SkewX" },
+    { AnimationTransformType::SKEWY, "SkewY" },
+});
+
+constexpr auto constSubItemToString = mapEnumToString<sal_Int16>({
+    { ShapeAnimationSubType::AS_WHOLE, "AsWhole" },
+    { ShapeAnimationSubType::ONLY_BACKGROUND, "OnlyBackground" },
+    { ShapeAnimationSubType::ONLY_TEXT, "OnlyText" },
+});
+
+constexpr auto constIterateTypeToString = mapEnumToString<sal_Int16>({
+    { TextAnimationType::BY_PARAGRAPH, "ByParagraph" },
+    { TextAnimationType::BY_WORD, "ByWord" },
+    { TextAnimationType::BY_LETTER, "ByLetter" },
+});
+
+constexpr auto constFillStyleToString = mapEnumToString<drawing::FillStyle>({
+    { drawing::FillStyle_NONE, "None" },
+    { drawing::FillStyle_SOLID, "Solid" },
+    { drawing::FillStyle_BITMAP, "Bitmap" },
+    { drawing::FillStyle_GRADIENT, "Gradient" },
+    { drawing::FillStyle_HATCH, "Hatch" },
+});
+
+constexpr auto constLineStyleToString = mapEnumToString<drawing::LineStyle>({
+    { drawing::LineStyle_NONE, "None" },
+    { drawing::LineStyle_SOLID, "Solid" },
+    { drawing::LineStyle_DASH, "Dash" },
+});
+
+
+constexpr auto constAttributeNameToXMLEnum
+    = frozen::make_unordered_map<std::string_view, XMLTokenEnum>({
+        { "X", XML_X },
+        { "Y", XML_Y },
+        { "Width", XML_WIDTH },
+        { "Height", XML_HEIGHT },
+        { "Rotate", XML_ROTATE },
+        { "SkewX", XML_SKEWX },
+        { "FillColor", XML_FILL_COLOR },
+        { "FillStyle", XML_FILL },
+        { "LineColor", XML_STROKE_COLOR },
+        { "LineStyle",XML_STROKE  },
+        { "CharColor", XML_COLOR },
+        { "CharRotation", XML_TEXT_ROTATION_ANGLE },
+        { "CharWeight", XML_FONT_WEIGHT },
+        { "CharUnderline", XML_TEXT_UNDERLINE },
+        { "CharFontName", XML_FONT_FAMILY },
+        { "CharHeight", XML_FONT_SIZE },
+        { "CharPosture", XML_FONT_STYLE },
+        { "Visibility", XML_VISIBILITY },
+        { "Opacity", XML_OPACITY },
+        { "DimColor", XML_DIM },
+});
+
+class AnimationsExporter
+{
+public:
+    AnimationsExporter(::tools::JsonWriter& rWriter,
+                       const Reference<drawing::XDrawPage>& xDrawPage);
+    void exportAnimations();
+    void exportTriggers() const;
+    [[nodiscard]] bool hasEffects() const { return mbHasEffects; }
+
+private:
+    void exportNode(const Reference<XAnimationNode>& xNode);
+    void exportNodeImpl(const Reference<XAnimationNode>& xNode);
+    void exportContainer(const Reference<XTimeContainer>& xContainer);
+
+    void exportAnimate(const Reference<XAnimate>& xAnimate);
+
+    void convertValue(XMLTokenEnum eAttributeName, OStringBuffer& sTmp, const Any& rValue) const;
+    void convertTiming(OStringBuffer& sTmp, const Any& rValue);
+
+    void appendTrigger(const css::uno::Any& rTarget, const OString& rTriggerHash);
+    void exportTriggersImpl(const uno::Reference<drawing::XShapes>& xShapes) const;
+
+private:
+    ::tools::JsonWriter& mrWriter;
+    Reference<drawing::XDrawPage> mxDrawPage;
+    Reference<XPropertySet> mxPageProps;
+    Reference<XAnimationNode> mxRootNode;
+    bool mbHasEffects;
+    std::unordered_map<SdrObject*, OString> maEventTriggerSet;
+};
+
+AnimationsExporter::AnimationsExporter(::tools::JsonWriter& rWriter,
+                                       const Reference<drawing::XDrawPage>& xDrawPage)
+    : mrWriter(rWriter)
+    , mxDrawPage(xDrawPage)
+    , mbHasEffects(false)
+{
+    if (!mxDrawPage.is())
+        return;
+
+    try
+    {
+        mxPageProps = Reference<XPropertySet>(xDrawPage, UNO_QUERY);
+        if (!mxPageProps.is())
+            return;
+
+        Reference<XAnimationNodeSupplier> xAnimNodeSupplier(mxDrawPage, UNO_QUERY);
+        if (!xAnimNodeSupplier.is())
+            return;
+
+        Reference<XAnimationNode> xRootNode = xAnimNodeSupplier->getAnimationNode();
+        if (xRootNode.is())
+        {
+            // first check if there are no animations
+            Reference<XEnumerationAccess> xEnumerationAccess(xRootNode, UNO_QUERY_THROW);
+            Reference<XEnumeration> xEnumeration(xEnumerationAccess->createEnumeration(),
+                                                 css::uno::UNO_SET_THROW);
+            if (xEnumeration->hasMoreElements())
+            {
+                // first child node may be an empty main sequence, check this
+                Reference<XAnimationNode> xMainNode(xEnumeration->nextElement(), UNO_QUERY_THROW);
+                Reference<XEnumerationAccess> xMainEnumerationAccess(xMainNode, UNO_QUERY_THROW);
+                Reference<XEnumeration> xMainEnumeration(
+                    xMainEnumerationAccess->createEnumeration(), css::uno::UNO_SET_THROW);
+
+                // only export if the main sequence is not empty or if there are additional
+                // trigger sequences
+                mbHasEffects
+                    = xMainEnumeration->hasMoreElements() || xEnumeration->hasMoreElements();
+            }
+        }
+        if (mbHasEffects)
+            mxRootNode = xRootNode;
+    }
+    catch (const RuntimeException&)
+    {
+        TOOLS_WARN_EXCEPTION("sd", "unomodel: AnimationsExporter");
+    }
+}
+
+template <typename EnumT, size_t N>
+constexpr bool convertEnum(OStringBuffer& rBuffer, EnumT nValue,
+                           const frozen::unordered_map<EnumT, std::string_view, N>& rMap)
+{
+    auto iterator = rMap.find(nValue);
+    if (iterator == rMap.end())
+        return false;
+    rBuffer.append(iterator->second);
+    return true;
+}
+
+void convertDouble(OStringBuffer& rBuffer, double fValue)
+{
+        ::rtl::math::doubleToStringBuffer(rBuffer, fValue, rtl_math_StringFormat_Automatic,
+                                          rtl_math_DecimalPlaces_Max, '.', true);
+}
+
+void convertBool(OStringBuffer& rBuffer, bool bValue)
+{
+    rBuffer.append( bValue );
+}
+
+void convertPath(OStringBuffer& sTmp, const Any& rPath)
+{
+    OUString aStr;
+    rPath >>= aStr;
+    sTmp = aStr.toUtf8();
+}
+
+void convertColor(OStringBuffer& rBuffer, sal_Int32 nColor)
+{
+    OUStringBuffer aUBuffer;
+    ::sax::Converter::convertColor(aUBuffer, nColor);
+    rBuffer.append(aUBuffer.makeStringAndClear().toUtf8());
+}
+
+void convertColor(OStringBuffer& rBuffer, const Any& rValue)
+{
+    sal_Int32 nColor = 0;
+    if (rValue >>= nColor)
+    {
+        convertColor(rBuffer, nColor);
+    }
+    else
+    {
+        Sequence<double> aHSL;
+        if ((rValue >>= aHSL) && (aHSL.getLength() == 3))
+        {
+            rBuffer.append("hsl(" + OString::number(aHSL[0]) + ","
+                           + OString::number(aHSL[1] * 100.0) + "%,"
+                           + OString::number(aHSL[2] * 100.0) + "%)");
+        }
+    }
+}
+
+bool isValidNode(const Reference<XAnimationNode>& xNode)
+{
+    if (xNode.is())
+    {
+        sal_Int16 nNodeType = xNode->getType();
+        auto iterator = constAnimationNodeTypeToString.find(nNodeType);
+        return iterator != constAnimationNodeTypeToString.end();
+    }
+    return false;
+}
+
+void AnimationsExporter::exportAnimations()
+{
+    if (!mxDrawPage.is() || !mxPageProps.is() || !mxRootNode.is() || !hasEffects())
+        return;
+
+    if (isValidNode(mxRootNode))
+    {
+        ::tools::ScopedJsonWriterNode aNode = mrWriter.startNode("root");
+        exportNodeImpl(mxRootNode);
+    }
+}
+void AnimationsExporter::exportNode(const Reference<XAnimationNode>& xNode)
+{
+     if (!isValidNode(xNode))
+         return;
+     ::tools::ScopedJsonWriterStruct aStruct = mrWriter.startStruct();
+     exportNodeImpl(xNode);
+}
+
+void AnimationsExporter::exportNodeImpl(const Reference<XAnimationNode>& xNode)
+{
+    try
+    {
+        std::string sId = GetInterfaceHash(xNode);
+        mrWriter.put("id", sId);
+        sal_Int16 nNodeType = xNode->getType();
+        auto iterator = constAnimationNodeTypeToString.find(nNodeType);
+        mrWriter.put("nodeName", iterator->second);
+
+        // common properties
+        OStringBuffer sTmp;
+        Any aTemp;
+        double fTemp = 0;
+        sal_Int16 nTemp;
+
+        aTemp = xNode->getBegin();
+        if (aTemp.hasValue())
+        {
+            convertTiming(sTmp, aTemp);
+            mrWriter.put("begin", sTmp.makeStringAndClear());
+        }
+        aTemp = xNode->getDuration();
+        if (aTemp.hasValue())
+        {
+            if (aTemp >>= fTemp)
+            {
+                convertDouble(sTmp, fTemp);
+                sTmp.append('s');
+                mrWriter.put("dur", sTmp.makeStringAndClear());
+            }
+            else
+            {
+                Timing eTiming;
+                if (aTemp >>= eTiming)
+                {
+                    mrWriter.put("dur", eTiming == Timing_INDEFINITE ? "indefinite" : "media");
+                }
+            }
+        }
+        aTemp = xNode->getEnd();
+        if (aTemp.hasValue())
+        {
+            convertTiming(sTmp, aTemp);
+            mrWriter.put("end", sTmp.makeStringAndClear());
+        }
+        nTemp = xNode->getFill();
+        if (nTemp != AnimationFill::DEFAULT)
+        {
+            convertEnum(sTmp, nTemp, constFillToString);
+            mrWriter.put("fill", sTmp.makeStringAndClear());
+        }
+        nTemp = xNode->getFillDefault();
+        if (nTemp != AnimationFill::INHERIT)
+        {
+            convertEnum(sTmp, nTemp, constFillToString);
+            mrWriter.put("fillDefault", sTmp.makeStringAndClear());
+        }
+        nTemp = xNode->getRestart();
+        if (nTemp != AnimationRestart::DEFAULT)
+        {
+            convertEnum(sTmp, nTemp, constRestartToString);
+            mrWriter.put("restart", sTmp.makeStringAndClear());
+        }
+        nTemp = xNode->getRestartDefault();
+        if (nTemp != AnimationRestart::INHERIT)
+        {
+            convertEnum(sTmp, nTemp, constRestartToString);
+            mrWriter.put("restartDefault", sTmp.makeStringAndClear());
+        }
+        fTemp = xNode->getAcceleration();
+        if (fTemp != 0.0)
+        {
+            convertDouble(sTmp, fTemp);
+            mrWriter.put("accelerate", sTmp.makeStringAndClear());
+        }
+        fTemp = xNode->getDecelerate();
+        if (fTemp != 0.0)
+        {
+            convertDouble(sTmp, fTemp);
+            mrWriter.put("decelerate", sTmp.makeStringAndClear());
+        }
+        bool bTemp = xNode->getAutoReverse();
+        if (bTemp)
+        {
+            convertBool(sTmp, bTemp);
+            mrWriter.put("autoreverse", sTmp.makeStringAndClear());
+        }
+        aTemp = xNode->getRepeatCount();
+        if (aTemp.hasValue())
+        {
+            Timing eTiming;
+            if ((aTemp >>= eTiming) && (eTiming == Timing_INDEFINITE))
+            {
+                mrWriter.put("repeatCount", "indefinite");
+            }
+            else if (aTemp >>= fTemp)
+            {
+                convertDouble(sTmp, fTemp);
+                mrWriter.put("repeatCount", sTmp.makeStringAndClear());
+            }
+        }
+        aTemp = xNode->getRepeatDuration();
+        if (aTemp.hasValue())
+        {
+            Timing eTiming;
+            if ((aTemp >>= eTiming) && (eTiming == Timing_INDEFINITE))
+            {
+                mrWriter.put("repeatDur", "indefinite");
+            }
+            else if (aTemp >>= fTemp)
+            {
+                convertDouble(sTmp, fTemp);
+                mrWriter.put("repeatDur", sTmp.makeStringAndClear());
+            }
+        }
+        aTemp = xNode->getEndSync();
+        if (aTemp.hasValue() && (aTemp >>= nTemp))
+        {
+            convertEnum(sTmp, nTemp, constEndSyncToString);
+            mrWriter.put("endSync", sTmp.makeStringAndClear());
+        }
+
+        sal_Int16 nContainerNodeType = EffectNodeType::DEFAULT;
+        const Sequence<NamedValue> aUserData(xNode->getUserData());
+        for (const auto& rValue : aUserData)
+        {
+            if (IsXMLToken(rValue.Name, XML_NODE_TYPE))
+            {
+                if ((rValue.Value >>= nContainerNodeType)
+                    && (nContainerNodeType != EffectNodeType::DEFAULT))
+                {
+                    convertEnum(sTmp, nContainerNodeType, constEffectNodeTypeToString);
+                    mrWriter.put("nodeType", sTmp.makeStringAndClear());
+                }
+            }
+            else if (IsXMLToken(rValue.Name, XML_PRESET_ID))
+            {
+                OUString aPresetId;
+                if (rValue.Value >>= aPresetId)
+                {
+                    mrWriter.put("presetId", aPresetId);
+                }
+            }
+            else if (IsXMLToken(rValue.Name, XML_PRESET_SUB_TYPE))
+            {
+                OUString aPresetSubType;
+                if (rValue.Value >>= aPresetSubType)
+                {
+                    mrWriter.put("presetSubType", aPresetSubType);
+                }
+            }
+            else if (IsXMLToken(rValue.Name, XML_PRESET_CLASS))
+            {
+                sal_Int16 nEffectPresetClass = sal_uInt16(0);
+                if (rValue.Value >>= nEffectPresetClass)
+                {
+                    convertEnum(sTmp, nEffectPresetClass, constEffectPresetClassToString);
+                    mrWriter.put("presetClass", sTmp.makeStringAndClear());
+                }
+            }
+            else if (IsXMLToken(rValue.Name, XML_MASTER_ELEMENT))
+            {
+                Reference<XInterface> xMaster;
+                rValue.Value >>= xMaster;
+                if (xMaster.is())
+                {
+                    const std::string& rIdentifier(GetInterfaceHash(xMaster));
+                    if (!rIdentifier.empty())
+                        mrWriter.put("masterElement", rIdentifier);
+                }
+            }
+            else if (IsXMLToken(rValue.Name, XML_GROUP_ID))
+            {
+                sal_Int32 nGroupId = 0;
+                if (rValue.Value >>= nGroupId)
+                    mrWriter.put("groupId", nGroupId);
+            }
+            else
+            {
+                OUString aTmp;
+                if (rValue.Value >>= aTmp)
+                    mrWriter.put(rValue.Name, aTmp);
+            }
+        }
+
+        switch (nNodeType)
+        {
+            case AnimationNodeType::PAR:
+            case AnimationNodeType::SEQ:
+            case AnimationNodeType::ITERATE:
+            {
+                Reference<XTimeContainer> xContainer(xNode, UNO_QUERY_THROW);
+                exportContainer(xContainer);
+            }
+            break;
+
+            case AnimationNodeType::ANIMATE:
+            case AnimationNodeType::SET:
+            case AnimationNodeType::ANIMATEMOTION:
+            case AnimationNodeType::ANIMATEPHYSICS:
+            case AnimationNodeType::ANIMATECOLOR:
+            case AnimationNodeType::ANIMATETRANSFORM:
+            case AnimationNodeType::TRANSITIONFILTER:
+            {
+                Reference<XAnimate> xAnimate(xNode, UNO_QUERY_THROW);
+                exportAnimate(xAnimate);
+            }
+            break;
+            case AnimationNodeType::AUDIO:
+            {
+                SAL_WARN("sd", "AnimationsExporter::exportNode(): Audio Node not supported.");
+            }
+            break;
+            case AnimationNodeType::COMMAND:
+            {
+                SAL_WARN("sd", "AnimationsExporter::exportNode(): Command Node not supported.");
+            }
+            break;
+            default:
+            {
+                OSL_FAIL(
+                    "sd unomodel: AnimationsExporter::exportNode(), invalid AnimationNodeType!");
+            }
+        }
+    }
+    catch (const RuntimeException&)
+    {
+        TOOLS_WARN_EXCEPTION("sd", "unomodel: AnimationsExporter");
+    }
+}
+
+void AnimationsExporter::convertTiming(OStringBuffer& sTmp, const Any& rValue)
+{
+    if (!rValue.hasValue())
+        return;
+
+    if (auto pSequence = o3tl::tryAccess<Sequence<Any>>(rValue))
+    {
+        const sal_Int32 nLength = pSequence->getLength();
+        sal_Int32 nElement;
+        const Any* pAny = pSequence->getConstArray();
+
+        OStringBuffer sTmp2;
+
+        for (nElement = 0; nElement < nLength; nElement++, pAny++)
+        {
+            if (!sTmp.isEmpty())
+                sTmp.append(';');
+            convertTiming(sTmp2, *pAny);
+            sTmp.append(sTmp2);
+            sTmp2.setLength(0);
+        }
+    }
+    else if (auto x = o3tl::tryAccess<double>(rValue))
+    {
+        sTmp.append(*x);
+        sTmp.append('s');
+    }
+    else if (auto pTiming = o3tl::tryAccess<Timing>(rValue))
+    {
+        const auto svTiming = (*pTiming == Timing_MEDIA)
+                                  ? constTimingToString.at(Timing_MEDIA)
+                                  : constTimingToString.at(Timing_INDEFINITE);
+        sTmp.append(svTiming);
+    }
+    else if (auto pEvent = o3tl::tryAccess<Event>(rValue))
+    {
+        OStringBuffer sTmp2;
+
+        if (pEvent->Trigger != EventTrigger::NONE)
+        {
+            if (pEvent->Source.hasValue())
+            {
+                OStringBuffer aTriggerBuffer;
+                // hash must not start with a digit or on client it is parsed as a time in seconds
+                aTriggerBuffer.append("id");
+                anim::convertTarget(aTriggerBuffer, pEvent->Source);
+                OString sTriggerHash(aTriggerBuffer.makeStringAndClear());
+                sTmp.append(sTriggerHash);
+                sTmp.append('.');
+                appendTrigger(pEvent->Source, sTriggerHash);
+            }
+
+            convertEnum(sTmp2, pEvent->Trigger, constEventTriggerToString);
+
+            sTmp.append(sTmp2);
+            sTmp2.setLength(0);
+        }
+
+        if (pEvent->Offset.hasValue())
+        {
+            convertTiming(sTmp2, pEvent->Offset);
+
+            if (!sTmp.isEmpty())
+                sTmp.append('+');
+
+            sTmp.append(sTmp2);
+            sTmp2.setLength(0);
+        }
+    }
+    else
+    {
+        OSL_FAIL("sd.unomodel: AnimationsExporter::convertTiming, invalid value type!");
+    }
+}
+
+void AnimationsExporter::appendTrigger(const css::uno::Any& rTarget, const OString& rTriggerHash)
+{
+    css::uno::Reference<css::uno::XInterface> xRef;
+    rTarget >>= xRef;
+
+    uno::Reference<drawing::XShape> xShape(xRef, uno::UNO_QUERY);
+    if (!xShape.is())
+    {
+        if (auto xParagraphTarget = o3tl::tryAccess<css::presentation::ParagraphTarget>(rTarget))
+        {
+            xShape = xParagraphTarget->Shape;
+        }
+    }
+    if (xShape.is())
+    {
+        auto* pObject = SdrObject::getSdrObjectFromXShape(xShape);
+        maEventTriggerSet[pObject] = rTriggerHash;
+    }
+}
+
+void AnimationsExporter::exportTriggersImpl(const uno::Reference<drawing::XShapes>& xShapes) const
+{
+    if (!xShapes.is())
+        return;
+
+    sal_Int32 nCount = xShapes->getCount();
+    for (sal_Int32 i = 0; i < nCount; ++i)
+    {
+        auto xObject = xShapes->getByIndex(i);
+        uno::Reference<drawing::XShape> xShape(xObject, uno::UNO_QUERY);
+        if (!xShape.is())
+            continue;
+
+        auto* pObject = SdrObject::getSdrObjectFromXShape(xShape);
+        if (maEventTriggerSet.find(pObject) == maEventTriggerSet.end())
+            continue;
+        {
+            ::tools::ScopedJsonWriterStruct aShape = mrWriter.startStruct();
+            mrWriter.put("hash", maEventTriggerSet.at(pObject));
+            {
+                auto const& rRectangle = pObject->GetLogicRect();
+                auto aRectangle
+                    = o3tl::convert(rRectangle, o3tl::Length::mm100, o3tl::Length::twip);
+                ::tools::ScopedJsonWriterNode aRect = mrWriter.startNode("bounds");
+                mrWriter.put("x", aRectangle.Left());
+                mrWriter.put("y", aRectangle.Top());
+                mrWriter.put("width", aRectangle.GetWidth());
+                mrWriter.put("height", aRectangle.GetHeight());
+            }
+        }
+    }
+}
+
+void AnimationsExporter::exportTriggers() const
+{
+    uno::Reference<drawing::XShapes> const xShapes(mxDrawPage, uno::UNO_QUERY_THROW);
+    if (!xShapes.is())
+        return;
+
+    ::tools::ScopedJsonWriterArray aTriggerList = mrWriter.startArray("triggers");
+    exportTriggersImpl(xShapes);
+}
+
+void AnimationsExporter::convertValue(XMLTokenEnum eAttributeName, OStringBuffer& sTmp,
+                                      const Any& rValue) const
+{
+    if (!rValue.hasValue())
+        return;
+
+    if (auto pValuePair = o3tl::tryAccess<ValuePair>(rValue))
+    {
+        OStringBuffer sTmp2;
+        convertValue(eAttributeName, sTmp, pValuePair->First);
+        sTmp.append(',');
+        convertValue(eAttributeName, sTmp2, pValuePair->Second);
+        sTmp.append(sTmp2);
+    }
+    else if (auto pSequence = o3tl::tryAccess<Sequence<Any>>(rValue))
+    {
+        const sal_Int32 nLength = pSequence->getLength();
+        sal_Int32 nElement;
+        const Any* pAny = pSequence->getConstArray();
+
+        OStringBuffer sTmp2;
+
+        for (nElement = 0; nElement < nLength; nElement++, pAny++)
+        {
+            if (!sTmp.isEmpty())
+                sTmp.append(';');
+            convertValue(eAttributeName, sTmp2, *pAny);
+            sTmp.append(sTmp2);
+            sTmp2.setLength(0);
+        }
+    }
+    else
+    {
+        switch (eAttributeName)
+        {
+            case XML_X:
+            case XML_Y:
+            case XML_WIDTH:
+            case XML_HEIGHT:
+            case XML_ANIMATETRANSFORM:
+            case XML_ANIMATEMOTION:
+            case XML_ANIMATEPHYSICS:
+            {
+                if (auto sValue = o3tl::tryAccess<OUString>(rValue))
+                {
+                    sTmp.append(sValue->toUtf8());
+                }
+                else if (auto aValue = o3tl::tryAccess<double>(rValue))
+                {
+                    sTmp.append(*aValue);
+                }
+                else
+                {
+                    OSL_FAIL("sd::AnimationsExporter::convertValue(), invalid value type!");
+                }
+                return;
+            }
+            case XML_SKEWX:
+            case XML_ROTATE:
+            case XML_OPACITY:
+            case XML_TRANSITIONFILTER:
+                if (auto aValue = o3tl::tryAccess<double>(rValue))
+                {
+                    sTmp.append(*aValue);
+                }
+                break;
+            case XML_TEXT_ROTATION_ANGLE:
+                if (auto aValue = o3tl::tryAccess<sal_Int16>(rValue))
+                {
+                    // on win and armv7 platforms compiler complains
+                    // that append(sal_Int16) is ambiguous
+                    sTmp.append(static_cast<sal_Int32>(*aValue));
+                }
+                break;
+            case XML_FILL_COLOR:
+            case XML_STROKE_COLOR:
+            case XML_DIM:
+            case XML_COLOR:
+            {
+                convertColor(sTmp, rValue);
+            }
+            break;
+            case XML_FILL:
+                if (auto aValue = o3tl::tryAccess<drawing::FillStyle>(rValue))
+                {
+                    convertEnum(sTmp, *aValue, constFillStyleToString);
+                }
+                break;
+            case XML_STROKE:
+                if (auto aValue = o3tl::tryAccess<drawing::LineStyle>(rValue))
+                {
+                    convertEnum(sTmp, *aValue, constLineStyleToString);
+                }
+                break;
+            case XML_FONTSIZE:
+                if (auto aValue = o3tl::tryAccess<double>(rValue))
+                {
+                    double fValue = *aValue * 100;
+                    fValue += fValue > 0 ? 0.5 : -0.5;
+                    auto nValue = static_cast<sal_Int32>(fValue);
+                    sTmp.append(nValue); // percent
+                }
+                break;
+            case XML_FONT_WEIGHT:
+            case XML_FONT_STYLE:
+            case XML_TEXT_UNDERLINE:
+                SAL_WARN("sd", "AnimationsExporter::convertValue(): value type "
+                                   << GetXMLToken(eAttributeName) << " not supported");
+                break;
+            case XML_VISIBILITY:
+                if (auto aValue = o3tl::tryAccess<bool>(rValue))
+                {
+                    OUString sValue = *aValue ? GetXMLToken(XML_VISIBLE) : GetXMLToken(XML_HIDDEN);
+                    sTmp.append(sValue.toUtf8());
+                }
+                break;
+            default:
+                OSL_FAIL("unomdel: AnimationsExporter::convertValue(), invalid AttributeName!");
+        }
+    }
+}
+
+void AnimationsExporter::exportContainer(const Reference<XTimeContainer>& xContainer)
+{
+    try
+    {
+        const sal_Int32 nNodeType = xContainer->getType();
+
+        if (nNodeType == AnimationNodeType::ITERATE)
+        {
+            OStringBuffer sTmp;
+            Reference<XIterateContainer> xIter(xContainer, UNO_QUERY_THROW);
+
+            Any aTemp(xIter->getTarget());
+            if (aTemp.hasValue())
+            {
+                anim::convertTarget(sTmp, aTemp);
+                mrWriter.put("targetElement", sTmp.makeStringAndClear());
+            }
+            sal_Int16 nTemp = xIter->getSubItem();
+            if (nTemp)
+            {
+                convertEnum(sTmp, nTemp, constSubItemToString);
+                mrWriter.put("subItem", sTmp.makeStringAndClear());
+            }
+            nTemp = xIter->getIterateType();
+            if (nTemp)
+            {
+                convertEnum(sTmp, nTemp, constIterateTypeToString);
+                mrWriter.put("iterateType", sTmp.makeStringAndClear());
+            }
+            double fTemp = xIter->getIterateInterval();
+            if (fTemp != 0)
+            {
+                OUStringBuffer buf;
+                ::sax::Converter::convertDuration(buf, fTemp / (24 * 60 * 60));
+                mrWriter.put("iterateInterval", sTmp.makeStringAndClear());
+            }
+        }
+
+        ::tools::ScopedJsonWriterArray anArray = mrWriter.startArray("children");
+
+        Reference<XEnumerationAccess> xEnumerationAccess(xContainer, UNO_QUERY_THROW);
+        Reference<XEnumeration> xEnumeration(xEnumerationAccess->createEnumeration(),
+                                             css::uno::UNO_SET_THROW);
+        while (xEnumeration->hasMoreElements())
+        {
+            Reference<XAnimationNode> xChildNode(xEnumeration->nextElement(), UNO_QUERY_THROW);
+            exportNode(xChildNode);
+        }
+    }
+    catch (const RuntimeException&)
+    {
+        TOOLS_WARN_EXCEPTION("sd", "unomodel: AnimationsExporter");
+    }
+}
+
+void AnimationsExporter::exportAnimate(const Reference<XAnimate>& xAnimate)
+{
+    try
+    {
+        const sal_Int16 nNodeType = xAnimate->getType();
+
+        OStringBuffer sTmp;
+        sal_Int16 nTemp;
+        bool bTemp;
+
+        Any aTemp(xAnimate->getTarget());
+        if (aTemp.hasValue())
+        {
+            anim::convertTarget(sTmp, aTemp);
+            mrWriter.put("targetElement", sTmp.makeStringAndClear());
+        }
+        nTemp = xAnimate->getSubItem();
+        if (nTemp)
+        {
+            convertEnum(sTmp, nTemp, constSubItemToString);
+            mrWriter.put("subItem", sTmp.makeStringAndClear());
+        }
+
+        XMLTokenEnum eAttributeName = XML_TOKEN_INVALID;
+        if (nNodeType == AnimationNodeType::TRANSITIONFILTER)
+        {
+            eAttributeName = XML_TRANSITIONFILTER;
+        }
+        else if (nNodeType == AnimationNodeType::ANIMATETRANSFORM)
+        {
+            eAttributeName = XML_ANIMATETRANSFORM;
+        }
+        else if (nNodeType == AnimationNodeType::ANIMATEMOTION)
+        {
+            eAttributeName = XML_ANIMATEMOTION;
+        }
+        else if (nNodeType == AnimationNodeType::ANIMATEPHYSICS)
+        {
+            eAttributeName = XML_ANIMATEPHYSICS;
+        }
+        else
+        {
+            OString sTemp(xAnimate->getAttributeName().toUtf8());
+            if (!sTemp.isEmpty())
+            {
+                auto iterator = constAttributeNameToXMLEnum.find(sTemp);
+                if (iterator != constAttributeNameToXMLEnum.end())
+                {
+                    eAttributeName = iterator->second;
+                    mrWriter.put("attributeName", sTemp);
+                }
+                else
+                {
+                    mrWriter.put("attributeName", "invalid");
+                }
+            }
+        }
+
+        Sequence<Any> aValues(xAnimate->getValues());
+        if (aValues.hasElements())
+        {
+            aTemp <<= aValues;
+            convertValue(eAttributeName, sTmp, aTemp);
+            mrWriter.put("values", sTmp.makeStringAndClear());
+        }
+        else
+        {
+            aTemp = xAnimate->getFrom();
+            if (aTemp.hasValue())
+            {
+                convertValue(eAttributeName, sTmp, aTemp);
+                mrWriter.put("from", sTmp.makeStringAndClear());
+            }
+
+            aTemp = xAnimate->getBy();
+            if (aTemp.hasValue())
+            {
+                convertValue(eAttributeName, sTmp, aTemp);
+                mrWriter.put("by", sTmp.makeStringAndClear());
+            }
+
+            aTemp = xAnimate->getTo();
+            if (aTemp.hasValue())
+            {
+                convertValue(eAttributeName, sTmp, aTemp);
+                mrWriter.put("to", sTmp.makeStringAndClear());
+            }
+        }
+
+        if (nNodeType != AnimationNodeType::SET)
+        {
+            const Sequence<double> aKeyTimes(xAnimate->getKeyTimes());
+            if (aKeyTimes.hasElements())
+            {
+                for (const auto& rKeyTime : aKeyTimes)
+                {
+                    if (!sTmp.isEmpty())
+                        sTmp.append(';');
+
+                    sTmp.append(rKeyTime);
+                }
+                mrWriter.put("keyTimes", sTmp.makeStringAndClear());
+            }
+
+            OUString sTemp(xAnimate->getFormula());
+            if (!sTemp.isEmpty())
+            {
+                mrWriter.put("formula", sTemp);
+            }
+
+            if ((nNodeType != AnimationNodeType::TRANSITIONFILTER)
+                && (nNodeType != AnimationNodeType::AUDIO))
+            {
+                // calcMode  = "discrete | linear | paced | spline"
+                nTemp = xAnimate->getCalcMode();
+                if (((nNodeType == AnimationNodeType::ANIMATEMOTION)
+                     && (nTemp != AnimationCalcMode::PACED))
+                    || ((nNodeType != AnimationNodeType::ANIMATEMOTION)
+                        && (nTemp != AnimationCalcMode::LINEAR)))
+                {
+                    convertEnum(sTmp, nTemp, constCalcModeToString);
+                    mrWriter.put("calcMode", sTmp.makeStringAndClear());
+                }
+
+                bTemp = xAnimate->getAccumulate();
+                if (bTemp)
+                {
+                    mrWriter.put("accumulate", "sum");
+                }
+
+                nTemp = xAnimate->getAdditive();
+                if (nTemp != AnimationAdditiveMode::REPLACE)
+                {
+                    convertEnum(sTmp, nTemp, constAdditiveModeToString);
+                    mrWriter.put("additive", sTmp.makeStringAndClear());
+                }
+            }
+
+            const Sequence<TimeFilterPair> aTimeFilter(xAnimate->getTimeFilter());
+            if (aTimeFilter.hasElements())
+            {
+                for (const auto& rPair : aTimeFilter)
+                {
+                    if (!sTmp.isEmpty())
+                        sTmp.append(';');
+
+                    sTmp.append(OString::number(rPair.Time) + ","
+                                + OString::number(rPair.Progress));
+                }
+                mrWriter.put("keySplines", sTmp.makeStringAndClear());
+            }
+        }
+
+        switch (nNodeType)
+        {
+            case AnimationNodeType::ANIMATEMOTION:
+            {
+                Reference<XAnimateMotion> xAnimateMotion(xAnimate, UNO_QUERY_THROW);
+
+                aTemp = xAnimateMotion->getPath();
+                if (aTemp.hasValue())
+                {
+                    convertPath(sTmp, aTemp);
+                    mrWriter.put("path", sTmp.makeStringAndClear());
+                }
+            }
+            break;
+            case AnimationNodeType::ANIMATEPHYSICS:
+            {
+                SAL_WARN(
+                    "sd",
+                    "unomodel: AnimationsExporter::exportAnimate(): AnimatePhysics not supported");
+            }
+            break;
+            case AnimationNodeType::ANIMATECOLOR:
+            {
+                Reference<XAnimateColor> xAnimateColor(xAnimate, UNO_QUERY_THROW);
+
+                nTemp = xAnimateColor->getColorInterpolation();
+                mrWriter.put("colorInterpolation",
+                             (nTemp == AnimationColorSpace::RGB) ? "rgb" : "hsl");
+
+                bTemp = xAnimateColor->getDirection();
+                mrWriter.put("colorInterpolationDirection",
+                             bTemp ? "clockwise" : "counterClockwise");
+            }
+            break;
+            case AnimationNodeType::ANIMATETRANSFORM:
+            {
+                mrWriter.put("attributeName", "transform");
+
+                Reference<XAnimateTransform> xTransform(xAnimate, UNO_QUERY_THROW);
+                nTemp = xTransform->getTransformType();
+                convertEnum(sTmp, nTemp, constTransformTypeToString);
+                mrWriter.put("transformType", sTmp.makeStringAndClear());
+            }
+            break;
+            case AnimationNodeType::TRANSITIONFILTER:
+            {
+                Reference<XTransitionFilter> xTransitionFilter(xAnimate, UNO_QUERY);
+
+                sal_Int16 nTransition = xTransitionFilter->getTransition();
+                convertEnum(sTmp, nTransition, constTransitionTypeToString);
+                mrWriter.put("transitionType", sTmp.makeStringAndClear());
+
+                sal_Int16 nSubtype = xTransitionFilter->getSubtype();
+                if (nSubtype != TransitionSubType::DEFAULT)
+                {
+                    convertEnum(sTmp, nSubtype, constTransitionSubTypeToString);
+                    mrWriter.put("transitionSubType", sTmp.makeStringAndClear());
+                }
+
+                bTemp = xTransitionFilter->getMode();
+                if (!bTemp)
+                    mrWriter.put("transitionMode", "out");
+
+                bTemp = xTransitionFilter->getDirection();
+                if (!bTemp)
+                    mrWriter.put("transitionDirection", "reverse");
+
+                if ((nTransition == TransitionType::FADE)
+                    && ((nSubtype == TransitionSubType::FADETOCOLOR)
+                        || (nSubtype == TransitionSubType::FADEFROMCOLOR)))
+                {
+                    sal_Int32 nColor = xTransitionFilter->getFadeColor();
+                    convertColor(sTmp, nColor);
+                    mrWriter.put("transitionFadeColor", sTmp.makeStringAndClear());
+                }
+            }
+            break;
+            default:
+            {
+                SAL_WARN("sd",
+                         "unomodel: AnimationsExporter::exportAnimate(): not supported node type: "
+                             << nNodeType);
+            }
+        }
+    }
+    catch (const Exception&)
+    {
+        TOOLS_WARN_EXCEPTION("sd", "unomodel: AnimationsExporter");
+    }
+}
+
+} // end anonymous namespace
 
 SdUnoForbiddenCharsTable::SdUnoForbiddenCharsTable( SdrModel* pModel )
 : SvxUnoForbiddenCharsTable( pModel->GetForbiddenCharsTable() ), mpModel( pModel )
@@ -1119,7 +2461,11 @@ SdXImpressDocument::createInstanceWithArguments(
 {
     OUString arg;
     if ((ServiceSpecifier == "com.sun.star.drawing.GraphicObjectShape"
+         || ServiceSpecifier == "com.sun.star.drawing.AppletShape"
+         || ServiceSpecifier == "com.sun.star.drawing.FrameShape"
+         || ServiceSpecifier == "com.sun.star.drawing.OLE2Shape"
          || ServiceSpecifier == "com.sun.star.drawing.MediaShape"
+         || ServiceSpecifier == "com.sun.star.drawing.PluginShape"
          || ServiceSpecifier == "com.sun.star.presentation.MediaShape")
         && Arguments.getLength() == 1 && (Arguments[0] >>= arg))
     {
@@ -1622,25 +2968,33 @@ static void ImplPDFExportComments( const uno::Reference< drawing::XDrawPage >& x
             aNote.maContents = xText->getString();
             aNote.maModificationDate = xAnnotation->getDateTime();
             auto* pAnnotation = dynamic_cast<sd::Annotation*>(xAnnotation.get());
-            if (pAnnotation && pAnnotation->isFreeText())
+
+            if (pAnnotation && pAnnotation->getCreationInfo().meType != sdr::annotation::AnnotationType::None)
             {
-                aNote.meType = vcl::pdf::PDFAnnotationSubType::FreeText;
-            }
-            if (pAnnotation && pAnnotation->hasCustomAnnotationMarker())
-            {
-                aNote.maPolygons = pAnnotation->getCustomAnnotationMarker().maPolygons;
-                aNote.maAnnotationColor = pAnnotation->getCustomAnnotationMarker().maLineColor;
-                aNote.maInteriorColor = pAnnotation->getCustomAnnotationMarker().maFillColor;
-                if (aNote.maPolygons.size() == 1)
+                sdr::annotation::CreationInfo const& rCreation = pAnnotation->getCreationInfo();
+                aNote.maPolygons = rCreation.maPolygons;
+                aNote.maAnnotationColor = rCreation.maColor;
+                aNote.maInteriorColor = rCreation.maFillColor;
+                aNote.mfWidth = rCreation.mnWidth;
+                switch (rCreation.meType)
                 {
-                    auto const& rPolygon = aNote.maPolygons[0];
-                    aNote.meType = rPolygon.isClosed()
-                        ? vcl::pdf::PDFAnnotationSubType::Polygon
-                        : vcl::pdf::PDFAnnotationSubType::Polyline;
-                }
-                else if (aNote.maPolygons.size() > 1)
-                {
-                    aNote.meType = vcl::pdf::PDFAnnotationSubType::Ink;
+                    case sdr::annotation::AnnotationType::Square:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Square; break;
+                    case sdr::annotation::AnnotationType::Circle:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Circle; break;
+                    case sdr::annotation::AnnotationType::Polygon:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Polygon; break;
+                    case sdr::annotation::AnnotationType::Ink:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Ink; break;
+                    case sdr::annotation::AnnotationType::Highlight:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Highlight; break;
+                    case sdr::annotation::AnnotationType::Line:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Line; break;
+                    case sdr::annotation::AnnotationType::FreeText:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::FreeText; break;
+                    default:
+                        aNote.meType = vcl::pdf::PDFAnnotationSubType::Text;
+                        break;
                 }
             }
 
@@ -2359,6 +3713,8 @@ OString SdXImpressDocument::getViewRenderState(SfxViewShell* pViewShell)
         const SdViewOptions& pVOpt = pView->GetViewOptions();
         if (mpDoc->GetOnlineSpell())
             aState.append('S');
+        if (pVOpt.mnDocBackgroundColor == svtools::ColorConfig::GetDefaultColor(svtools::DOCCOLOR, 1))
+            aState.append('D');
         aState.append(';');
 
         OString aThemeName = OUStringToOString(pVOpt.msColorSchemeName, RTL_TEXTENCODING_UTF8);
@@ -2389,22 +3745,27 @@ OUString SdXImpressDocument::getPartInfo(int nPart)
     if (!pViewSh)
         return OUString();
 
-    const SdPage* pSdPage = mpDoc->GetSdPage(nPart, pViewSh->GetPageKind());
-    const bool bIsVisible = pSdPage && !pSdPage->IsExcluded();
-    const bool bIsSelected = pViewSh->IsSelected(nPart);
+    SdPage* pSdPage = mpDoc->GetSdPage(nPart, pViewSh->GetPageKind());
     const sal_Int16 nMasterPageCount= pViewSh->GetDoc()->GetMasterSdPageCount(pViewSh->GetPageKind());
 
-    OUString aPartInfo = "{ \"visible\": \"" +
-        OUString::number(static_cast<unsigned int>(bIsVisible)) +
-        "\", \"selected\": \"" +
-        OUString::number(static_cast<unsigned int>(bIsSelected)) +
-        "\", \"masterPageCount\": \"" +
-        OUString::number(nMasterPageCount) +
-        "\", \"mode\": \"" +
-        OUString::number(getEditMode()) +
-        "\" }";
+    ::tools::JsonWriter jsonWriter;
 
-    return aPartInfo;
+    jsonWriter.put("masterPageCount", nMasterPageCount);
+    jsonWriter.put("mode", getEditMode());
+    jsonWriter.put("gridSnapEnabled", pViewSh->GetDrawView()->IsGridSnap());
+    jsonWriter.put("gridVisible", pViewSh->GetDrawView()->IsGridVisible());
+
+    // Below information is useful when grid snapping is enabled. It let's to calculate the points we can snap to.
+    const Size gridCoarse = pViewSh->GetDrawView()->GetGridCoarse();
+    const Size innerDots = pViewSh->GetDrawView()->GetGridFine();
+    jsonWriter.put("gridCoarseWidth", gridCoarse.getWidth());
+    jsonWriter.put("gridCoarseHeight", gridCoarse.getHeight());
+    jsonWriter.put("innerSpacesX", innerDots.getWidth() ? gridCoarse.getWidth() / innerDots.getWidth() : 0);
+    jsonWriter.put("innerSpacesY", innerDots.getHeight() ? gridCoarse.getHeight() / innerDots.getHeight() : 0);
+
+    pSdPage->GetPageInfo(jsonWriter);
+
+    return OStringToOUString(jsonWriter.finishAndGetAsOString(), RTL_TEXTENCODING_UTF8);
 }
 
 void SdXImpressDocument::setPart( int nPart, bool bAllowChangeFocus )
@@ -2467,7 +3828,7 @@ OUString SdXImpressDocument::getPartHash(int nPart)
         return OUString();
     }
 
-    return OUString::number(pPage->GetHashCode());
+    return OUString::number(pPage->GetUniqueID());
 }
 
 bool SdXImpressDocument::isMasterViewMode()
@@ -2516,6 +3877,8 @@ void SdXImpressDocument::setPartMode( int nPartMode )
         break;
     }
     pViewSh->SetPageKind( aPageKind );
+    //TODO do the same as setEditMode and then can probably remove the TODOs
+    //from doc_setPartMode
 }
 
 int SdXImpressDocument::getEditMode()
@@ -2561,12 +3924,13 @@ Size SdXImpressDocument::getDocumentSize()
 void SdXImpressDocument::getPostIts(::tools::JsonWriter& rJsonWriter)
 {
     auto commentsNode = rJsonWriter.startNode("comments");
+    if (!mpDoc)
+        return;
     // Return annotations on master pages too ?
     const sal_uInt16 nMaxPages = mpDoc->GetPageCount();
-    SdPage* pPage;
     for (sal_uInt16 nPage = 0; nPage < nMaxPages; ++nPage)
     {
-        pPage = static_cast<SdPage*>(mpDoc->GetPage(nPage));
+        SdrPage* pPage = mpDoc->GetPage(nPage);
 
         for (auto const& xAnnotation : pPage->getAnnotations())
         {
@@ -2578,7 +3942,7 @@ void SdXImpressDocument::getPostIts(::tools::JsonWriter& rJsonWriter)
             rJsonWriter.put("dateTime", utl::toISO8601(xAnnotation->getDateTime()));
             uno::Reference<text::XText> xText(xAnnotation->getTextRange());
             rJsonWriter.put("text", xText->getString());
-            rJsonWriter.put("parthash", pPage->GetHashCode());
+            rJsonWriter.put("parthash", pPage->GetUniqueID());
             geometry::RealPoint2D const & rPoint = xAnnotation->getPosition();
             geometry::RealSize2D const & rSize = xAnnotation->getSize();
             ::tools::Rectangle aRectangle(Point(rPoint.X * 100.0, rPoint.Y * 100.0), Size(rSize.Width * 100.0, rSize.Height * 100.0));
@@ -2594,6 +3958,7 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
     SolarMutexGuard aGuard;
 
     OUString sThemeName;
+    OUString sBackgroundThemeName;
 
     if (DrawViewShell* pViewShell = GetViewShell())
     {
@@ -2608,6 +3973,8 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
                 mpDoc->SetOnlineSpell(rValue.Value.get<bool>());
             else if (rValue.Name == ".uno:ChangeTheme" && rValue.Value.has<OUString>())
                 sThemeName = rValue.Value.get<OUString>();
+            else if (rValue.Name == ".uno:InvertBackground" && rValue.Value.has<OUString>())
+                sBackgroundThemeName = rValue.Value.get<OUString>();
         }
 
         // Disable comments if requested
@@ -2658,6 +4025,14 @@ void SdXImpressDocument::initializeForTiledRendering(const css::uno::Sequence<cs
             { "NewTheme", uno::Any(sThemeName) }
         }));
         comphelper::dispatchCommand(".uno:ChangeTheme", aPropertyValues);
+    }
+    if (!sBackgroundThemeName.isEmpty())
+    {
+        css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
+        {
+            { "NewTheme", uno::Any(sBackgroundThemeName) }
+        }));
+        comphelper::dispatchCommand(".uno:InvertBackground", aPropertyValues);
     }
 }
 
@@ -2871,6 +4246,427 @@ void SdXImpressDocument::initializeDocument()
         break;
     }
     }
+}
+
+static
+void getShapeClickAction(const uno::Reference<drawing::XShape> &xShape, ::tools::JsonWriter& rJsonWriter)
+{
+    bool bIsShapeVisible = true;
+    uno::Reference<beans::XPropertySet> xShapeProps(xShape, uno::UNO_QUERY);
+    if (!xShapeProps)
+        return;
+
+    if (!xShapeProps->getPropertySetInfo()->hasPropertyByName( u"Visible"_ustr ))
+        return;
+    xShapeProps->getPropertyValue("Visible") >>= bIsShapeVisible;
+
+    if (!bIsShapeVisible)
+        return;
+
+    if (!xShapeProps->getPropertySetInfo()->hasPropertyByName( u"OnClick"_ustr ))
+        return;
+
+    presentation::ClickAction eClickAction = presentation::ClickAction_NONE;
+    xShapeProps->getPropertyValue(u"OnClick"_ustr) >>= eClickAction;
+
+    if (eClickAction != presentation::ClickAction_NONE)
+    {
+        ::tools::ScopedJsonWriterStruct aShape = rJsonWriter.startStruct();
+
+        sal_Int32 nVerb = 0;
+        OUString sBookmark;
+
+        if (xShapeProps->getPropertySetInfo()->hasPropertyByName( u"Bookmark"_ustr ))
+            xShapeProps->getPropertyValue(u"Bookmark"_ustr) >>= sBookmark;
+
+        {
+            auto* pObject = SdrObject::getSdrObjectFromXShape(xShape);
+            auto const& rRectangle = pObject->GetLogicRect();
+            auto aRectangle = o3tl::convert(rRectangle, o3tl::Length::mm100, o3tl::Length::twip);
+            ::tools::ScopedJsonWriterNode aRect = rJsonWriter.startNode("bounds");
+            rJsonWriter.put("x", aRectangle.Left());
+            rJsonWriter.put("y", aRectangle.Top());
+            rJsonWriter.put("width", aRectangle.GetWidth());
+            rJsonWriter.put("height", aRectangle.GetHeight());
+        }
+
+        {
+            ::tools::ScopedJsonWriterNode aInteraction = rJsonWriter.startNode("clickAction");
+            switch (eClickAction)
+            {
+            case presentation::ClickAction_BOOKMARK:
+                rJsonWriter.put("action", "bookmark");
+                rJsonWriter.put("bookmark", sBookmark);
+                break;
+            case presentation::ClickAction_DOCUMENT:
+                rJsonWriter.put("action", "document");
+                rJsonWriter.put("document", sBookmark);
+                break;
+
+            case presentation::ClickAction_PREVPAGE:
+                rJsonWriter.put("action", "prevpage");
+                break;
+            case presentation::ClickAction_NEXTPAGE:
+                rJsonWriter.put("action", "nextpage");
+                break;
+
+            case presentation::ClickAction_FIRSTPAGE:
+                rJsonWriter.put("action", "firstpage");
+                break;
+            case presentation::ClickAction_LASTPAGE:
+                rJsonWriter.put("action", "lastpage");
+                break;
+
+            case presentation::ClickAction_SOUND:
+                rJsonWriter.put("action", "sound");
+                rJsonWriter.put("sound", sBookmark);
+                break;
+
+            case presentation::ClickAction_VERB:
+                rJsonWriter.put("action", "verb");
+                xShapeProps->getPropertyValue(u"Verb"_ustr) >>= nVerb;
+                rJsonWriter.put("verb", nVerb);
+                break;
+
+            case presentation::ClickAction_PROGRAM:
+                rJsonWriter.put("action", "program");
+                rJsonWriter.put("program", sBookmark);
+                break;
+
+            case presentation::ClickAction_MACRO:
+                rJsonWriter.put("action", "macro");
+                rJsonWriter.put("macro", sBookmark);
+                break;
+
+            case presentation::ClickAction_STOPPRESENTATION:
+                rJsonWriter.put("action", "stoppresentation");
+                break;
+
+            default:
+                break;
+            }
+        }
+    }
+}
+
+OString SdXImpressDocument::getPresentationInfo() const
+{
+    ::tools::JsonWriter aJsonWriter;
+
+    try
+    {
+        uno::Reference<drawing::XDrawPages> xDrawPages = const_cast<SdXImpressDocument*>(this)->getDrawPages();
+        uno::Reference<container::XIndexAccess> xSlides(xDrawPages, uno::UNO_QUERY_THROW);
+        if (xSlides.is())
+        {
+            // size in twips
+            Size aDocSize = const_cast<SdXImpressDocument*>(this)->getDocumentSize();
+            aJsonWriter.put("docWidth", aDocSize.getWidth());
+            aJsonWriter.put("docHeight", aDocSize.getHeight());
+
+            sd::PresentationSettings const& rSettings = mpDoc->getPresentationSettings();
+
+            const bool bIsEndless = rSettings.mbEndless;
+            aJsonWriter.put("isEndless", bIsEndless);
+
+            if (bIsEndless) {
+                const sal_Int32 nPauseTimeout = rSettings.mnPauseTimeout;
+                aJsonWriter.put("loopAndRepeatDuration", nPauseTimeout);
+            }
+
+            ::tools::ScopedJsonWriterArray aSlideList = aJsonWriter.startArray("slides");
+            sal_Int32 nSlideCount = xSlides->getCount();
+            for (sal_Int32 i = 0; i < nSlideCount; ++i)
+            {
+                uno::Reference<drawing::XDrawPage> xSlide(xSlides->getByIndex(i), uno::UNO_QUERY_THROW);
+                if (xSlide.is())
+                {
+                    uno::Reference<XPropertySet> xPropSet(xSlide, uno::UNO_QUERY);
+                    if (xPropSet.is())
+                    {
+                        bool bIsVisible = true; // default visible
+                        xPropSet->getPropertyValue("Visible") >>= bIsVisible;
+                        if (!bIsVisible)
+                        {
+                            ::tools::ScopedJsonWriterStruct aSlideNode = aJsonWriter.startStruct();
+                            std::string sSlideHash = GetInterfaceHash(xSlide);
+                            aJsonWriter.put("hash", sSlideHash);
+                            aJsonWriter.put("index", i);
+                            aJsonWriter.put("hidden", true);
+                        }
+                        else
+                        {
+                            SdPage* pPage = SdPage::getImplementation(xSlide);
+
+                            ::tools::ScopedJsonWriterStruct aSlideNode = aJsonWriter.startStruct();
+                            std::string sSlideHash = GetInterfaceHash(xSlide);
+                            aJsonWriter.put("hash", sSlideHash);
+                            aJsonWriter.put("index", i);
+
+                            if (pPage)
+                            {
+                                auto aName = SdDrawPage::getPageApiNameFromUiName(pPage->GetName());
+                                aJsonWriter.put("name", aName);
+                            }
+
+                            // Notes
+                            SdPage* pNotesPage = mpDoc->GetSdPage((pPage->GetPageNum() - 1) >> 1, PageKind::Notes);
+                            if (pNotesPage)
+                            {
+                                SdrObject* pNotes = pNotesPage->GetPresObj(PresObjKind::Notes);
+                                if (pNotes)
+                                {
+                                    OUStringBuffer strNotes;
+                                    OutlinerParaObject* pPara = pNotes->GetOutlinerParaObject();
+                                    if (pPara)
+                                    {
+                                        const EditTextObject& rText = pPara->GetTextObject();
+                                        for (sal_Int32 nNote = 0; nNote < rText.GetParagraphCount(); nNote++)
+                                        {
+                                            strNotes.append(rText.GetText(nNote));
+                                        }
+                                        aJsonWriter.put("notes", strNotes.makeStringAndClear());
+                                    }
+                                }
+                            }
+
+                            uno::Reference<drawing::XShapes> xSlideShapes(xSlide, uno::UNO_QUERY_THROW);
+                            bool bIsDrawPageEmpty = true;
+                            if (xSlideShapes.is()) {
+                                bIsDrawPageEmpty = xSlideShapes->getCount() == 0;
+                            }
+                            aJsonWriter.put("empty", bIsDrawPageEmpty);
+
+                            uno::Reference<drawing::XDrawPage> xMasterPage;
+                            uno::Reference<drawing::XMasterPageTarget> xMasterPageTarget(xSlide, uno::UNO_QUERY);
+                            if (xMasterPageTarget.is())
+                            {
+                                xMasterPage = xMasterPageTarget->getMasterPage();
+                                if (xMasterPage.is())
+                                {
+                                    std::string sMPHash = GetInterfaceHash(xMasterPage);
+                                    aJsonWriter.put("masterPage", sMPHash);
+
+                                    bool bBackgroundObjectsVisibility = true; // default visible
+                                    xPropSet->getPropertyValue("IsBackgroundObjectsVisible") >>= bBackgroundObjectsVisibility;
+                                    aJsonWriter.put("masterPageObjectsVisibility", bBackgroundObjectsVisibility);
+                                }
+                            }
+
+                            bool bBackgroundVisibility = true; // default visible
+                            xPropSet->getPropertyValue("IsBackgroundVisible")  >>= bBackgroundVisibility;
+                            if (bBackgroundVisibility)
+                            {
+                                SlideBackgroundInfo aSlideBackgroundInfo(xSlide, xMasterPage);
+                                if (aSlideBackgroundInfo.hasBackground())
+                                {
+                                    ::tools::ScopedJsonWriterNode aBackgroundNode = aJsonWriter.startNode("background");
+                                    aJsonWriter.put("isCustom", aSlideBackgroundInfo.slideHasOwnBackground());
+                                    if (aSlideBackgroundInfo.isSolidColor())
+                                    {
+                                        aJsonWriter.put("fillColor", aSlideBackgroundInfo.getFillColorAsRGBA());
+                                    }
+                                }
+                            }
+
+                            {
+                                ::tools::ScopedJsonWriterArray aVideoList = aJsonWriter.startArray("videos");
+                                SdrObjListIter aIterator(pPage, SdrIterMode::DeepWithGroups);
+                                while (aIterator.IsMore())
+                                {
+                                    auto* pObject = aIterator.Next();
+                                    if (pObject->GetObjIdentifier() == SdrObjKind::Media)
+                                    {
+                                        ::tools::ScopedJsonWriterStruct aVideosNode = aJsonWriter.startStruct();
+                                        auto* pMediaObject = static_cast<SdrMediaObj*>(pObject);
+                                        auto const& rRectangle = pMediaObject->GetLogicRect();
+                                        auto aRectangle = o3tl::convert(rRectangle, o3tl::Length::mm100, o3tl::Length::twip);
+                                        aJsonWriter.put("id", reinterpret_cast<sal_uInt64>(pMediaObject));
+                                        aJsonWriter.put("url", pMediaObject->getTempURL());
+                                        aJsonWriter.put("x", aRectangle.Left());
+                                        aJsonWriter.put("y", aRectangle.Top());
+                                        aJsonWriter.put("width", aRectangle.GetWidth());
+                                        aJsonWriter.put("height", aRectangle.GetHeight());
+                                    }
+                                }
+                            }
+
+                            uno::Reference<drawing::XShapes> const xShapes(xSlide, uno::UNO_QUERY_THROW);
+                            if (xShapes.is())
+                            {
+                                ::tools::ScopedJsonWriterArray aInteractions = aJsonWriter.startArray("interactions");
+                                auto count = xShapes->getCount();
+                                for (auto j = 0; j < count; j++)
+                                {
+                                    auto xObject = xShapes->getByIndex(j);
+                                    uno::Reference<drawing::XShape> xShape(xObject, uno::UNO_QUERY);
+                                    if (!xShape.is())
+                                    {
+                                        continue;
+                                    }
+
+                                    getShapeClickAction(xShape, aJsonWriter);
+                                }
+                            }
+
+                            sal_Int32 nTransitionType = 0;
+                            xPropSet->getPropertyValue("TransitionType") >>= nTransitionType;
+
+                            if (nTransitionType != 0)
+                            {
+                                auto iterator = constTransitionTypeToString.find(nTransitionType);
+
+                                if (iterator != constTransitionTypeToString.end())
+                                {
+                                    aJsonWriter.put("transitionType", iterator->second);
+
+                                    sal_Int32 nTransitionSubtype = 0;
+                                    xPropSet->getPropertyValue("TransitionSubtype") >>= nTransitionSubtype;
+
+                                    auto iteratorSubType = constTransitionSubTypeToString.find(nTransitionSubtype);
+                                    if (iteratorSubType != constTransitionSubTypeToString.end())
+                                    {
+                                        aJsonWriter.put("transitionSubtype", iteratorSubType->second);
+                                    }
+                                    else
+                                    {
+                                        SAL_WARN("sd", "Transition sub-type unknown: " << nTransitionSubtype);
+                                    }
+
+                                    bool nTransitionDirection = false;
+                                    xPropSet->getPropertyValue("TransitionDirection") >>= nTransitionDirection;
+                                    aJsonWriter.put("transitionDirection", nTransitionDirection);
+
+                                    // fade color
+                                    if ((nTransitionType == TransitionType::FADE)
+                                        && ((nTransitionSubtype == TransitionSubType::FADETOCOLOR)
+                                            || (nTransitionSubtype == TransitionSubType::FADEFROMCOLOR)
+                                            || (nTransitionSubtype == TransitionSubType::FADEOVERCOLOR)))
+                                    {
+                                        sal_Int32 nFadeColor = 0;
+                                        xPropSet->getPropertyValue("TransitionFadeColor") >>= nFadeColor;
+                                        OUStringBuffer sTmpBuf;
+                                        ::sax::Converter::convertColor(sTmpBuf, nFadeColor);
+                                        aJsonWriter.put("transitionFadeColor", sTmpBuf.makeStringAndClear());
+                                    }
+                                }
+
+                                double nTransitionDuration(0.0);
+                                if( xPropSet->getPropertySetInfo()->hasPropertyByName( "TransitionDuration" ) &&
+                                    (xPropSet->getPropertyValue( "TransitionDuration" ) >>= nTransitionDuration ) && nTransitionDuration != 0.0 )
+                                {
+                                    // convert transitionDuration time to ms
+                                    aJsonWriter.put("transitionDuration", nTransitionDuration * 1000);
+                                }
+                            }
+
+                            sal_Int32 nChange(0);
+                            if( xPropSet->getPropertySetInfo()->hasPropertyByName( "Change" ) &&
+                                (xPropSet->getPropertyValue( "Change" ) >>= nChange ) && nChange == 1 )
+                            {
+                                double fSlideDuration(0);
+                                if( xPropSet->getPropertySetInfo()->hasPropertyByName( "HighResDuration" ) &&
+                                    (xPropSet->getPropertyValue( "HighResDuration" ) >>= fSlideDuration) )
+                                {
+                                    // convert slide duration time to ms
+                                    aJsonWriter.put("nextSlideDuration", fSlideDuration * 1000);
+                                }
+                            }
+
+
+                            AnimationsExporter aAnimationExporter(aJsonWriter, xSlide);
+                            if (aAnimationExporter.hasEffects())
+                            {
+                                {
+                                    ::tools::ScopedJsonWriterNode aAnimationsNode
+                                        = aJsonWriter.startNode("animations");
+                                    aAnimationExporter.exportAnimations();
+                                }
+                                aAnimationExporter.exportTriggers();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch (uno::Exception& )
+    {
+        TOOLS_WARN_EXCEPTION("sd", "SdXImpressDocument::getSlideShowInfo ... maybe some property can't be retrieved");
+    }
+    return aJsonWriter.finishAndGetAsOString();
+}
+
+namespace
+{
+bool isRequestedSlideValid(SdDrawDocument* mpDoc, sal_Int32 nSlideNumber, const std::string& slideHash)
+{
+    try
+    {
+        uno::Reference<drawing::XDrawPagesSupplier> xDrawPages(mpDoc->getUnoModel(), uno::UNO_QUERY_THROW);
+        uno::Reference<container::XIndexAccess> xSlides(xDrawPages->getDrawPages(), uno::UNO_QUERY_THROW);
+        uno::Reference<drawing::XDrawPage> xSlide(xSlides->getByIndex(nSlideNumber), uno::UNO_QUERY_THROW);
+        if (xSlide.is())
+        {
+            return slideHash == GetInterfaceHash(xSlide);
+        }
+    }
+    catch (uno::Exception&)
+    {
+        TOOLS_WARN_EXCEPTION( "sd", "SdXImpressDocument::createLOKSlideRenderer: failed" );
+    }
+    return false;
+}
+}
+
+bool SdXImpressDocument::createSlideRenderer(
+    const OString& rSlideHash,
+    sal_Int32 nSlideNumber, sal_Int32& nViewWidth, sal_Int32& nViewHeight,
+    bool /*bRenderBackground*/, bool /*bRenderMasterPage*/)
+{
+    std::string sSlideHash(rSlideHash);
+    if (!isRequestedSlideValid(mpDoc, nSlideNumber, sSlideHash))
+        return false;
+
+    SdPage* pPage = mpDoc->GetSdPage(sal_uInt16(nSlideNumber), PageKind::Standard);
+    if (!pPage)
+        return false;
+
+    mpSlideshowLayerRenderer.reset(new SlideshowLayerRenderer(*pPage));
+    Size aDesiredSize(nViewWidth, nViewHeight);
+    Size aCalculatedSize = mpSlideshowLayerRenderer->calculateAndSetSizePixel(aDesiredSize);
+    nViewWidth = aCalculatedSize.Width();
+    nViewHeight = aCalculatedSize.Height();
+    return true;
+}
+
+void SdXImpressDocument::postSlideshowCleanup()
+{
+    DrawViewShell* pViewSh = GetViewShell();
+    if (!pViewSh)
+        return;
+
+    pViewSh->destroyXSlideShowInstance();
+}
+
+bool SdXImpressDocument::renderNextSlideLayer(unsigned char* pBuffer, bool& bIsBitmapLayer, OUString& rJsonMsg)
+{
+    bool bDone = true;
+
+    if (!mpSlideshowLayerRenderer)
+        return bDone;
+
+    OString sMsg;
+    bool bOK = mpSlideshowLayerRenderer->render(pBuffer, sMsg);
+
+    if (bOK)
+    {
+        rJsonMsg = OUString::fromUtf8(sMsg);
+        bIsBitmapLayer = true;
+        bDone = false;
+    }
+
+    return bDone;
 }
 
 SdrModel& SdXImpressDocument::getSdrModelFromUnoModel() const

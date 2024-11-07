@@ -319,7 +319,6 @@ interface XSlideShow : ::com::sun::star::uno::XInterface
     void setShapeCursor(
         [in] ::com::sun::star::drawing::XShape xShape,
         [in] short nPointerShape );
-
 };
 
 }; }; }; };

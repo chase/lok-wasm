@@ -38,6 +38,8 @@
 #include <basegfx/polygon/b2dpolygon.hxx>
 #include <basegfx/polygon/b2dpolygontools.hxx>
 #include <basegfx/utils/canvastools.hxx>
+#include <basegfx/matrix/b2dhommatrix.hxx>
+#include <basegfx/matrix/b2dhommatrixtools.hxx>
 
 #include <sal/log.hxx>
 
@@ -77,6 +79,7 @@
 #include <slideview.hxx>
 #include <tools.hxx>
 #include <unoview.hxx>
+#include <vcl/virdev.hxx>
 #include "rehearsetimingsactivity.hxx"
 #include "waitsymbol.hxx"
 #include "effectrewinder.hxx"

@@ -505,13 +505,15 @@ void ScModelObj::RepaintRange( const ScRangeList& rRange )
 static OString getTabViewRenderState(ScTabViewShell& rTabViewShell)
 {
     OStringBuffer aState;
+    const ScViewRenderingOptions& rViewRenderingOptions = rTabViewShell.GetViewRenderingData();
 
     if (rTabViewShell.IsAutoSpell())
         aState.append('S');
+    if (rViewRenderingOptions.GetDocColor() == svtools::ColorConfig::GetDefaultColor(svtools::DOCCOLOR, 1))
+        aState.append('D');
 
     aState.append(';');
 
-    const ScViewRenderingOptions& rViewRenderingOptions = rTabViewShell.GetViewRenderingData();
     OString aThemeName = OUStringToOString(rViewRenderingOptions.GetColorSchemeName(), RTL_TEXTENCODING_UTF8);
     aState.append(aThemeName);
 
@@ -646,16 +648,25 @@ OUString ScModelObj::getPartInfo( int nPart )
     const bool bIsSelected = false; //pViewData->GetDocument()->IsSelected(nPart);
     const bool bIsRTLLayout = pViewData->GetDocument().IsLayoutRTL(nPart);
 
-    OUString aPartInfo = "{ \"visible\": \"" +
-        OUString::number(static_cast<unsigned int>(bIsVisible)) +
-        "\", \"selected\": \"" +
-        OUString::number(static_cast<unsigned int>(bIsSelected)) +
-        "\", \"rtllayout\": \"" +
-        OUString::number(static_cast<unsigned int>(bIsRTLLayout)) +
-        "\", \"protected\": \"" +
-        OUString::number(static_cast<unsigned int>(bIsProtected)) +
-        "\" }";
-    return aPartInfo;
+    ::tools::JsonWriter jsonWriter;
+    jsonWriter.put("visible", static_cast<unsigned int>(bIsVisible));
+    jsonWriter.put("rtllayout", static_cast<unsigned int>(bIsRTLLayout));
+    jsonWriter.put("protected", static_cast<unsigned int>(bIsProtected));
+    jsonWriter.put("selected", static_cast<unsigned int>(bIsSelected));
+
+    OUString tabName;
+    pViewData->GetDocument().GetName(nPart, tabName);
+    jsonWriter.put("name", tabName);
+
+    sal_Int64 hashCode;
+    pViewData->GetDocument().GetHashCode(nPart, hashCode);
+    jsonWriter.put("hash", hashCode);
+
+    Size lastColRow = getDataArea(nPart);
+    jsonWriter.put("lastcolumn", lastColRow.getWidth());
+    jsonWriter.put("lastrow", lastColRow.getHeight());
+
+    return OStringToOUString(jsonWriter.finishAndGetAsOString(), RTL_TEXTENCODING_UTF8);
 }
 
 OUString ScModelObj::getPartName( int nPart )
@@ -865,7 +876,7 @@ void ScModelObj::setTextSelection(int nType, int nX, int nY)
 
         Point aPoint(convertTwipToMm100(nX), convertTwipToMm100(nY));
 
-        if (pTableView->GetOutputArea().Contains(aPoint))
+        if (pTableView && pTableView->GetOutputArea().Contains(aPoint))
         {
             switch (nType)
             {
@@ -1314,6 +1325,7 @@ void ScModelObj::initializeForTiledRendering(const css::uno::Sequence<css::beans
     SC_MOD()->SetAppOptions(aAppOptions);
 
     OUString sThemeName;
+    OUString sBackgroundThemeName;
 
     for (const beans::PropertyValue& rValue : rArguments)
     {
@@ -1325,6 +1337,8 @@ void ScModelObj::initializeForTiledRendering(const css::uno::Sequence<css::beans
         }
         else if (rValue.Name == ".uno:ChangeTheme" && rValue.Value.has<OUString>())
             sThemeName = rValue.Value.get<OUString>();
+        else if (rValue.Name == ".uno:InvertBackground" && rValue.Value.has<OUString>())
+            sBackgroundThemeName = rValue.Value.get<OUString>();
     }
 
     // show us the text exactly
@@ -1332,7 +1346,8 @@ void ScModelObj::initializeForTiledRendering(const css::uno::Sequence<css::beans
     aInputOptions.SetTextWysiwyg(true);
     aInputOptions.SetReplaceCellsWarn(false);
     SC_MOD()->SetInputOptions(aInputOptions);
-    pDocShell->CalcOutputFactor();
+    if (pDocShell)
+        pDocShell->CalcOutputFactor();
 
     // when the "This document may contain formatting or content that cannot
     // be saved..." dialog appears, it is auto-cancelled with tiled rendering,
@@ -1350,6 +1365,14 @@ void ScModelObj::initializeForTiledRendering(const css::uno::Sequence<css::beans
             { "NewTheme", uno::Any(sThemeName) }
         }));
         comphelper::dispatchCommand(".uno:ChangeTheme", aPropertyValues);
+    }
+    if (!sBackgroundThemeName.isEmpty())
+    {
+        css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
+        {
+            { "NewTheme", uno::Any(sBackgroundThemeName) }
+        }));
+        comphelper::dispatchCommand(".uno:InvertBackground", aPropertyValues);
     }
 }
 
@@ -2178,7 +2201,7 @@ static void lcl_SetMediaScreen(const uno::Reference<drawing::XShape>& xMediaShap
         pPDF->SetScreenURL(nScreenId, sMediaURL);
 }
 
-static void lcl_PDFExportMediaShapeScreen(const OutputDevice* pDev, const ScPrintState& rState,
+static void lcl_PDFExportMediaShapeScreen(const OutputDevice* pDev, const std::unique_ptr<ScPrintState>& rState,
                                           ScDocument& rDoc, SCTAB nTab, tools::Long nStartPage,
                                           bool bSinglePageSheets)
 {
@@ -2228,12 +2251,12 @@ static void lcl_PDFExportMediaShapeScreen(const OutputDevice* pDev, const ScPrin
                         if (bTopDown) // top-bottom page order
                         {
                             nX1 = 0;
-                            for (size_t i = 0; i < rState.nPagesX; ++i)
+                            for (size_t i = 0; i < rState->nPagesX; ++i)
                             {
-                                nX2 = (*rState.xPageEndX)[i];
-                                for (size_t j = 0; j < rState.nPagesY; ++j)
+                                nX2 = (*rState->xPageEndX)[i];
+                                for (size_t j = 0; j < rState->nPagesY; ++j)
                                 {
-                                    auto& rPageRow = (*rState.xPageRows)[j];
+                                    auto& rPageRow = (*rState->xPageRows)[j];
                                     nY1 = rPageRow.GetStartRow();
                                     nY2 = rPageRow.GetEndRow();
 
@@ -2253,15 +2276,15 @@ static void lcl_PDFExportMediaShapeScreen(const OutputDevice* pDev, const ScPrin
                         }
                         else // left to right page order
                         {
-                            for (size_t i = 0; i < rState.nPagesY; ++i)
+                            for (size_t i = 0; i < rState->nPagesY; ++i)
                             {
-                                auto& rPageRow = (*rState.xPageRows)[i];
+                                auto& rPageRow = (*rState->xPageRows)[i];
                                 nY1 = rPageRow.GetStartRow();
                                 nY2 = rPageRow.GetEndRow();
                                 nX1 = 0;
-                                for (size_t j = 0; j < rState.nPagesX; ++j)
+                                for (size_t j = 0; j < rState->nPagesX; ++j)
                                 {
-                                    nX2 = (*rState.xPageEndX)[j];
+                                    nX2 = (*rState->xPageEndX)[j];
 
                                     tools::Rectangle aPageRect(rDoc.GetMMRect(nX1, nY1, nX2, nY2, nTab));
                                     tools::Rectangle aTmpRect(aPageRect.GetIntersection(pObj->GetCurrentBoundRect()));
@@ -2375,7 +2398,7 @@ void SAL_CALL ScModelObj::render( sal_Int32 nSelRenderer, const uno::Any& aSelec
     tools::Long nTabStart = pPrintFuncCache->GetTabStart(nTab);
 
     if (nRenderer == nTabStart)
-        lcl_PDFExportMediaShapeScreen(pDev, *m_pPrintState, rDoc, nTab, nTabStart, bSinglePageSheets);
+        lcl_PDFExportMediaShapeScreen(pDev, m_pPrintState, rDoc, nTab, nTabStart, bSinglePageSheets);
 
     ScRange aRange;
     const ScRange* pSelRange = nullptr;

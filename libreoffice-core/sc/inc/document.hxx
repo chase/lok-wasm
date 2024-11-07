@@ -212,6 +212,33 @@ struct ScSheetLimits;
 struct ScDataAreaExtras;
 enum class ScConditionMode;
 
+struct ScConditionEasyDialogData
+{
+    ScConditionMode* Mode = nullptr;
+    bool IsManaged : 1 = false;
+    sal_Int32 FormatKey = -1;
+    sal_Int32 EntryIndex = -1;
+    OUString Formula;
+
+    ScConditionEasyDialogData(ScConditionMode* mode, bool isManaged, const OUString& formula = "")
+        : Mode(mode)
+        , IsManaged(isManaged)
+        , Formula(formula)
+    {
+    }
+
+    ScConditionEasyDialogData(ScConditionMode* mode, bool isManaged, sal_Int32 formatKey,
+                              sal_Int32 entryIndex, const OUString& formula = "")
+        : Mode(mode)
+        , IsManaged(isManaged)
+        , FormatKey(formatKey)
+        , EntryIndex(entryIndex)
+        , Formula(formula)
+    {
+    }
+
+    ScConditionEasyDialogData() {}
+};
 
 namespace sc {
 
@@ -426,7 +453,7 @@ private:
     std::unique_ptr<ScExtDocOptions> pExtDocOptions;    // for import etc.
     std::unique_ptr<ScClipOptions> mpClipOptions;       // clipboard options
     std::unique_ptr<ScConsolidateParam> pConsolidateDlgData;
-    std::unique_ptr<ScConditionMode> pConditionalFormatDialogMode;
+    ScConditionEasyDialogData pConditionalFormatDialogData;
 
     std::unique_ptr<ScAutoNameCache> pAutoNameCache;    // for automatic name lookup during CompileXML
 
@@ -654,8 +681,11 @@ public:
 
     void                        SetConsolidateDlgData( std::unique_ptr<ScConsolidateParam> pData );
     const ScConsolidateParam*   GetConsolidateDlgData() const { return pConsolidateDlgData.get(); }
-    void                        SetEasyConditionalFormatDialogData(std::unique_ptr<ScConditionMode> pMode);
-    const ScConditionMode*      GetEasyConditionalFormatDialogData() const { return pConditionalFormatDialogMode.get(); }
+    void SetEasyConditionalFormatDialogData(const ScConditionEasyDialogData& data);
+    ScConditionEasyDialogData GetEasyConditionalFormatDialogData() const
+    {
+        return pConditionalFormatDialogData;
+    }
 
     void                        Clear( bool bFromDestructor = false );
 
@@ -2185,7 +2215,7 @@ public:
                                             ScFilterEntries& rFilterEntries );
 
     void              GetDataEntries( SCCOL nCol, SCROW nRow, SCTAB nTab,
-                                      std::vector<ScTypedStrData>& rStrings, bool bValidation = false );
+                                      ScTypedCaseStrSet& rStrings, bool bValidation = false );
     void              GetFormulaEntries( ScTypedCaseStrSet& rStrings );
 
     bool               HasAutoFilter( SCCOL nCol, SCROW nRow, SCTAB nTab );

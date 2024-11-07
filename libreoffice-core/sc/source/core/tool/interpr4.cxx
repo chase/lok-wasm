@@ -2193,6 +2193,15 @@ double ScInterpreter::GetDoubleWithDefault(double nDefault)
     return nResultVal;
 }
 
+bool ScInterpreter::GetBoolWithDefault(bool bDefault)
+{
+    bool bMissing = IsMissing();
+    bool bResultVal = (GetDouble() != 0.0);
+    if (bMissing)
+        bResultVal = bDefault;
+    return bResultVal;
+}
+
 sal_Int32 ScInterpreter::double_to_int32(double fVal)
 {
     if (!std::isfinite(fVal))
@@ -4145,11 +4154,13 @@ StackVar ScInterpreter::Interpret()
                     case ocPercentSign      : ScPercentSign();              break;
                     case ocPi               : ScPi();                       break;
                     case ocRandom           : ScRandom();                   break;
+                    case ocRandArray        : ScRandArray();                break;
                     case ocRandomNV         : ScRandom();                   break;
                     case ocRandbetweenNV    : ScRandbetween();              break;
                     case ocFilter           : ScFilter();                   break;
                     case ocSort             : ScSort();                     break;
                     case ocSortBy           : ScSortBy();                   break;
+                    case ocUnique           : ScUnique();                   break;
                     case ocTrue             : ScTrue();                     break;
                     case ocFalse            : ScFalse();                    break;
                     case ocGetActDate       : ScGetActDate();               break;
@@ -4381,6 +4392,7 @@ StackVar ScInterpreter::Interpret()
                     case ocMatDet           : ScMatDet();                   break;
                     case ocMatInv           : ScMatInv();                   break;
                     case ocMatMult          : ScMatMult();                  break;
+                    case ocMatSequence      : ScMatSequence();              break;
                     case ocMatTrans         : ScMatTrans();                 break;
                     case ocMatRef           : ScMatRef();                   break;
                     case ocB                : ScB();                        break;

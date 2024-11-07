@@ -1175,7 +1175,24 @@ namespace svgio::svgreader
             drawinglayer::primitive2d::Primitive2DContainer&& rSource,
             const std::optional<basegfx::B2DHomMatrix>& pTransform) const
         {
-            const double fOpacity(getOpacity().solve(mrOwner));
+            // default is 1
+            double fOpacity(1.0);
+
+            if(maOpacity.isSet())
+            {
+                fOpacity = maOpacity.solve(mrOwner);
+            }
+            else
+            {
+                // if opacity is not set, check the css style
+                if (const SvgStyleAttributes* pSvgStyleAttributes = getCssStyleParent())
+                {
+                    if (pSvgStyleAttributes->maOpacity.isSet())
+                    {
+                        fOpacity =  pSvgStyleAttributes->maOpacity.solve(mrOwner);
+                    }
+                }
+            }
 
             if(basegfx::fTools::equalZero(fOpacity))
             {
@@ -1297,7 +1314,7 @@ namespace svgio::svgreader
             maBaselineShift(BaselineShift::Baseline),
             maBaselineShiftNumber(0),
             maDominantBaseline(DominantBaseline::Auto),
-            maResolvingParent(34, 0),
+            maResolvingParent(35, 0),
             mbStrokeDasharraySet(false),
             mbContextFill(false),
             mbContextStroke(false),
@@ -1325,6 +1342,10 @@ namespace svgio::svgreader
                     if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"context-fill"))
                     {
                         mbContextFill = true;
+                    }
+                    else if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"context-stroke"))
+                    {
+                        mbContextStroke = true;
                     }
                     else if(readSvgPaint(aContent, aSvgPaint, aURL, aOpacity))
                     {
@@ -1374,6 +1395,10 @@ namespace svgio::svgreader
                     if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"context-stroke"))
                     {
                         mbContextStroke = true;
+                    }
+                    else if(o3tl::equalsIgnoreAsciiCase(o3tl::trim(aContent), u"context-fill"))
+                    {
+                        mbContextFill = true;
                     }
                     else if(readSvgPaint(aContent, aSvgPaint, aURL, aOpacity))
                     {
@@ -2124,6 +2149,10 @@ namespace svgio::svgreader
             {
                 return getContextFill();
             }
+            else if (mbContextStroke)
+            {
+                return getContextStroke();
+            }
             else if (maNodeFillURL.isEmpty())
             {
                 const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
@@ -2168,6 +2197,10 @@ namespace svgio::svgreader
                 {
                     return &maStroke.getBColor();
                 }
+            }
+            else if (mbContextFill)
+            {
+                return getContextFill();
             }
             else if (mbContextStroke)
             {
@@ -2389,16 +2422,14 @@ namespace svgio::svgreader
                 return maOpacity;
             }
 
-            // This is called from add_postProcess so only check the parent style
-            // if it has a local css style, because it's the first in the stack
-            if(mrOwner.hasLocalCssStyle())
-            {
-                const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
+            const SvgStyleAttributes* pSvgStyleAttributes = getParentStyle();
 
-                if (pSvgStyleAttributes && pSvgStyleAttributes->maOpacity.isSet())
-                {
-                    return pSvgStyleAttributes->maOpacity;
-                }
+            if (pSvgStyleAttributes && maResolvingParent[34] < nStyleDepthLimit)
+            {
+                ++maResolvingParent[34];
+                auto ret = pSvgStyleAttributes->getOpacity();
+                --maResolvingParent[34];
+                return ret;
             }
 
             // default is 1

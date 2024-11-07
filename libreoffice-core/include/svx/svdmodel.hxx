@@ -42,11 +42,7 @@
 
 #include <rtl/ref.hxx>
 #include <deque>
-
-#ifdef DBG_UTIL
-// SdrObjectLifetimeWatchDog
 #include <unordered_set>
-#endif
 
 class OutputDevice;
 class SdrOutliner;
@@ -153,8 +149,9 @@ struct SdrModelImpl;
 
 class SVXCORE_DLLPUBLIC SdrModel : public SfxBroadcaster, public tools::WeakBase
 {
-#ifdef DBG_UTIL
-    // SdrObjectLifetimeWatchDog:
+    // We need to keep track of all the SdrObjects linked to this SdrModel so that we can
+    // shut them down cleanly, otherwise we end up with use-after-free issues.
+    //
     // Use maAllIncarnatedObjects to keep track of all SdrObjects incarnated using this SdrModel
     // (what is now possible after the paradigm change that a SdrObject stays at a single SdrModel
     // for it's whole lifetime).
@@ -174,7 +171,6 @@ class SVXCORE_DLLPUBLIC SdrModel : public SfxBroadcaster, public tools::WeakBase
     friend void impAddIncarnatedSdrObjectToSdrModel(SdrObject& rSdrObject, SdrModel& rSdrModel);
     friend void impRemoveIncarnatedSdrObjectToSdrModel(SdrObject& rSdrObject, SdrModel& rSdrModel);
     std::unordered_set< SdrObject* >  maAllIncarnatedObjects;
-#endif
 protected:
     std::vector<rtl::Reference<SdrPage>> maMasterPages;
     std::vector<rtl::Reference<SdrPage>> maPages;
@@ -203,12 +199,12 @@ protected:
     std::deque<std::unique_ptr<SfxUndoAction>> m_aRedoStack;
     std::unique_ptr<SdrUndoGroup> m_pCurrentUndoGroup;  // For multi-level
     sal_uInt16          m_nUndoLevel;                   // undo nesting
+    sal_uInt16          m_nPageNumsDirtyFrom = SAL_MAX_UINT16;
+    sal_uInt16          m_nMasterPageNumsDirtyFrom = SAL_MAX_UINT16;
     bool                m_bIsWriter:1;        // to clean up pMyPool from 303a
     bool                m_bThemedControls:1;  // If false UnoControls should not use theme colors
     bool                mbUndoEnabled:1;  // If false no undo is recorded or we are during the execution of an undo action
     bool                mbChanged:1;
-    bool                m_bPagNumsDirty:1;
-    bool                m_bMPgNumsDirty:1;
     bool                m_bTransportContainer:1;  // doc is temporary object container, no display (e.g. clipboard)
     bool                m_bReadOnly:1;
     bool                m_bTransparentTextFrames:1;
@@ -217,6 +213,7 @@ protected:
     bool                m_bStarDrawPreviewMode:1;
     bool                mbDisableTextEditUsesCommonUndoManager:1;
     bool                mbVOCInvalidationIsReliable:1; // does the app reliably invalidate the VOC, or do we need to rebuild the primitives on every render?
+    bool m_bIsPDFDocument:1;
     sal_uInt16          m_nDefaultTabulator;
     sal_uInt32          m_nMaxUndoCount;
 
@@ -272,12 +269,15 @@ private:
 
     // used to disable unique name checking during page move
     bool mbMakePageObjectsNamesUnique = true;
+    bool m_bIsImpress = false;
 
 public:
     SVX_DLLPRIVATE virtual bool IsCreatingDataObj() const { return false; }
     bool     IsTransportContainer() const { return m_bTransportContainer; }
     bool     AreControlsThemed() { return m_bThemedControls; }
     bool     IsPasteResize() const        { return m_bPasteResize; }
+    bool     IsImpress() const { return m_bIsImpress; }
+    void     SetImpress(bool bIsImpress) { m_bIsImpress = bIsImpress; };
     void     SetPasteResize(bool bOn) { m_bPasteResize=bOn; }
     // If a custom Pool is put here, the class will call methods
     // on it (Put(), Remove()). On disposal of SdrModel the pool
@@ -397,8 +397,8 @@ public:
     static OUString  GetPercentString(const Fraction& rVal);
 
     // RecalcPageNums is ordinarily only called by the Page.
-    bool             IsPagNumsDirty() const                     { return m_bPagNumsDirty; };
-    bool             IsMPgNumsDirty() const                     { return m_bMPgNumsDirty; };
+    bool             IsPagNumsDirty() const                     { return m_nPageNumsDirtyFrom != SAL_MAX_UINT16; }
+    bool             IsMPgNumsDirty() const                     { return m_nMasterPageNumsDirtyFrom != SAL_MAX_UINT16; }
     void             RecalcPageNums(bool bMaster);
     // After the Insert the Page belongs to the SdrModel.
     virtual void     InsertPage(SdrPage* pPage, sal_uInt16 nPos=0xFFFF);
@@ -584,6 +584,12 @@ public:
     void disposeOutliner( std::unique_ptr<SdrOutliner> pOutliner );
 
     bool IsWriter() const { return m_bIsWriter; }
+
+    bool IsPDFDocument() const { return m_bIsPDFDocument; }
+    void setPDFDocument(bool bIsPDFDocument)
+    {
+        m_bIsPDFDocument = bIsPDFDocument;
+    }
 
     // Used as a fallback in *::ReadUserDataSequence() to process common properties
     void ReadUserDataSequenceValue(const css::beans::PropertyValue *pValue);

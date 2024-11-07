@@ -208,6 +208,8 @@ class SAL_DLLPUBLIC_RTTI SwPostItMgr final : public SfxListener
         void DeleteCommentThreads(std::vector<sal_uInt32>& nPostItId); // MACRO-2313: WASM Writer extensions
         void ToggleResolved(sal_uInt32 nPostItId);
         void ToggleResolvedForThread(sal_uInt32 nPostItId);
+        void PromoteToRoot(sal_uInt32 nPostItId);
+        void MoveSubthreadToRoot(const sw::annotation::SwAnnotationWin* pNewRoot);
 
         void ExecuteFormatAllDialog(SwView& rView);
         void FormatAll(const SfxItemSet &rNewAttr);
@@ -259,9 +261,9 @@ class SAL_DLLPUBLIC_RTTI SwPostItMgr final : public SfxListener
         static Color           GetColorLight(std::size_t aAuthorIndex);
         static Color           GetColorAnchor(std::size_t aAuthorIndex);
 
-        void                RegisterAnswer(const OutlinerParaObject* pAnswer) { if (pAnswer) mpAnswer =* pAnswer; else mpAnswer.reset(); }
+        void                RegisterAnswer(const OutlinerParaObject& rAnswer) { mpAnswer = rAnswer; }
         OutlinerParaObject* IsAnswer() { return mpAnswer ? &*mpAnswer : nullptr; }
-        void                RegisterAnswerText(const OUString& aAnswerText) { maAnswerText = aAnswerText; }
+        void                RegisterAnswerText(const OUString& rAnswerText) { maAnswerText = rAnswerText; }
         const OUString&     GetAnswerText() const { return maAnswerText; }
         void CheckMetaText();
 

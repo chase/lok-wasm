@@ -1014,7 +1014,6 @@ void ScGridWindow::LaunchAutoFilterMenu(SCCOL nCol, SCROW nRow)
     if (!pDBData)
         return;
 
-    pDBData->ExtendBackColorArea(rDoc);
     pData->mpData = pDBData;
     mpAutoFilterPopup->setExtendedData(std::move(pData));
 
@@ -1535,7 +1534,7 @@ void ScGridWindow::LaunchDataSelectMenu(const SCCOL nCol, const SCROW nRow)
     const ScValidationData* pData = nIndex ? rDoc.GetValidationEntry(nIndex) : nullptr;
 
     bool bEmpty = false;
-    std::vector<ScTypedStrData> aStrings; // case sensitive
+    ScTypedCaseStrSet aStrings; // case sensitive
     // Fill List
     rDoc.GetDataEntries(nCol, nRow, nTab, aStrings, true /* bValidation */);
 
@@ -2592,7 +2591,8 @@ void ScGridWindow::MouseButtonUp( const MouseEvent& rMEvt )
         //  Only execute on ButtonUp, if ButtonDown also was done on a URL
 
         OUString aName, aUrl, aTarget;
-        if ( GetEditUrl( rMEvt.GetPosPixel(), &aName, &aUrl, &aTarget ) )
+        SCCOL nUrlCellX;
+        if (GetEditUrl(rMEvt.GetPosPixel(), &aName, &aUrl, &aTarget, &nUrlCellX))
         {
             nMouseStatus = SC_GM_NONE;              // Ignore double-click
             bool isTiledRendering = comphelper::LibreOfficeKit::isActive();
@@ -2612,10 +2612,13 @@ void ScGridWindow::MouseButtonUp( const MouseEvent& rMEvt )
                 {
                     aPos = rMEvt.GetPosPixel();
                     mrViewData.GetPosFromPixel( aPos.X(), aPos.Y(), eWhich, nPosX, nPosY );
-                    OString aCursor = pViewShell->GetViewData().describeCellCursorAt(nPosX, nPosY);
+                    OString aCursor
+                        = pViewShell->GetViewData().describeCellCursorAt(nUrlCellX, nPosY);
                     double fPPTX = pViewShell->GetViewData().GetPPTX();
                     int mouseX = aPos.X() / fPPTX;
-                    OString aMsg(aUrl.toUtf8() + " coordinates: " + aCursor + ", " + OString::number(mouseX));
+                    int mouseY = aPos.Y() / fPPTX;
+                    OString aMsg(aUrl.toUtf8() + " coordinates: " + aCursor + ", "
+                                 + OString::number(mouseX) + ", " + OString::number(mouseY));
                     pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED, aMsg);
                 } else
                     ScGlobal::OpenURL(aUrl, aTarget);
@@ -2738,11 +2741,12 @@ void ScGridWindow::MouseButtonUp( const MouseEvent& rMEvt )
         OUString aName, aUrl, aTarget;
         ScTabViewShell* pViewShell = mrViewData.GetViewShell();
         if (pViewShell && nPosX == m_nDownPosX && nPosY == m_nDownPosY
-            && GetEditUrl(aPos, &aName, &aUrl, &aTarget))
+            && GetEditUrl(aPos, &aName, &aUrl, &aTarget, &nPosX))
         {
-            OString aMsg(aUrl.toUtf8() + " coordinates: " +
-                         pViewShell->GetViewData().describeCellCursorAt(nPosX, nPosY) + ", " +
-                         OString::number(aPos.X() / pViewShell->GetViewData().GetPPTX()));
+            OString aMsg(aUrl.toUtf8() + " coordinates: "
+                         + pViewShell->GetViewData().describeCellCursorAt(nPosX, nPosY) + ", "
+                         + OString::number(aPos.X() / pViewShell->GetViewData().GetPPTX()) + ", "
+                         + OString::number(aPos.Y() / pViewShell->GetViewData().GetPPTY()));
             pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_HYPERLINK_CLICKED, aMsg);
         }
     }
@@ -5797,8 +5801,8 @@ bool extractURLInfo( const SvxFieldItem* pFieldItem, OUString* pName, OUString* 
 
 }
 
-bool ScGridWindow::GetEditUrl( const Point& rPos,
-                               OUString* pName, OUString* pUrl, OUString* pTarget )
+bool ScGridWindow::GetEditUrl(const Point& rPos, OUString* pName, OUString* pUrl, OUString* pTarget,
+                              SCCOL* pnRow)
 {
     ScTabViewShell* pViewSh = mrViewData.GetViewShell();
     ScInputHandler* pInputHdl = nullptr;
@@ -5821,6 +5825,8 @@ bool ScGridWindow::GetEditUrl( const Point& rPos,
     bool bFound = lcl_GetHyperlinkCell(rDoc, nPosX, nPosY, nTab, aCell, sURL);
     if( !bFound )
         return false;
+    if (pnRow)
+        *pnRow = nPosX;
 
     const ScPatternAttr* pPattern = rDoc.GetPattern( nPosX, nPosY, nTab );
     // bForceToTop = sal_False, use the cell's real position

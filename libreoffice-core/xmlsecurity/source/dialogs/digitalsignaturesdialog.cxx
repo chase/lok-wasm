@@ -67,6 +67,7 @@
 #include <vcl/weld.hxx>
 #include <vcl/svapp.hxx>
 #include <unotools/configitem.hxx>
+#include <sfx2/viewsh.hxx>
 
 #ifdef _WIN32
 #include <o3tl/char16_t2wchar_t.hxx>
@@ -235,12 +236,14 @@ bool IsThereCertificateMgr()
 DigitalSignaturesDialog::DigitalSignaturesDialog(
     weld::Window* pParent,
     const uno::Reference< uno::XComponentContext >& rxCtx, DocumentSignatureMode eMode,
-    bool bReadOnly, OUString sODFVersion, bool bHasDocumentSignature)
+    bool bReadOnly, OUString sODFVersion, bool bHasDocumentSignature,
+    SfxViewShell* pViewShell)
     : GenericDialogController(pParent, "xmlsec/ui/digitalsignaturesdialog.ui", "DigitalSignaturesDialog")
     , maSignatureManager(rxCtx, eMode)
     , m_sODFVersion (std::move(sODFVersion))
     , m_bHasDocumentSignature(bHasDocumentSignature)
     , m_bWarningShowSignMacro(false)
+    , m_pViewShell(pViewShell)
     , m_xHintDocFT(m_xBuilder->weld_label("dochint"))
     , m_xHintBasicFT(m_xBuilder->weld_label("macrohint"))
     , m_xHintPackageFT(m_xBuilder->weld_label("packagehint"))
@@ -306,8 +309,11 @@ DigitalSignaturesDialog::DigitalSignaturesDialog(
 
     if (comphelper::LibreOfficeKit::isActive())
     {
-        m_xAddBtn->hide();
-        m_xRemoveBtn->hide();
+        // If the view has a signing certificate, then allow adding a signature.
+        if (!pViewShell || !pViewShell->GetSigningCertificate().is())
+        {
+            m_xAddBtn->hide();
+        }
         m_xStartCertMgrBtn->hide();
     }
 
@@ -354,12 +360,32 @@ void DigitalSignaturesDialog::SetStorage( const css::uno::Reference < css::embed
                     || !DocumentSignatureHelper::isODFPre_1_2(m_sODFVersion);
 
     maSignatureManager.setStore(rxStore);
-    maSignatureManager.getSignatureHelper().SetStorage( maSignatureManager.getStore(), m_sODFVersion);
+    maSignatureManager.getSignatureHelper().SetStorage( maSignatureManager.getStore(), m_sODFVersion, {});
 }
 
 void DigitalSignaturesDialog::SetSignatureStream( const css::uno::Reference < css::io::XStream >& rxStream )
 {
     maSignatureManager.setSignatureStream(rxStream);
+}
+
+void DigitalSignaturesDialog::SetScriptingSignatureStream( const css::uno::Reference < css::io::XStream >& rxStream )
+{
+    if (!rxStream.is())
+    {
+        return;
+    }
+
+    uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+    moScriptSignatureManager.emplace(xContext, DocumentSignatureMode::Macros);
+    if (!moScriptSignatureManager->init())
+    {
+        return;
+    }
+    moScriptSignatureManager->setStore(maSignatureManager.getStore());
+    // This is the storage used by UriBindingHelper::getUriBinding().
+    moScriptSignatureManager->getSignatureHelper().SetStorage(maSignatureManager.getStore(), m_sODFVersion);
+    maSignatureManager.getSignatureHelper().SetStorage(maSignatureManager.getStore(), m_sODFVersion, rxStream);
+    moScriptSignatureManager->setSignatureStream(rxStream);
 }
 
 bool DigitalSignaturesDialog::canAddRemove()
@@ -419,20 +445,25 @@ bool DigitalSignaturesDialog::canAddRemove()
 
 bool DigitalSignaturesDialog::canAdd() { return canAddRemove(); }
 
-bool DigitalSignaturesDialog::canRemove()
+void DigitalSignaturesDialog::canRemove(const std::function<void(bool)>& rCallback)
 {
+    auto onFinished = [this, rCallback](bool bRet) {
+        rCallback(bRet && canAddRemove());
+    };
     bool bRet = true;
 
     if ( maSignatureManager.getSignatureMode() == DocumentSignatureMode::Content )
     {
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_xDialog.get(),
+        std::shared_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_xDialog.get(),
                                                   VclMessageType::Question, VclButtonsType::YesNo,
                                                   XsResId(STR_XMLSECDLG_QUERY_REALLYREMOVE)));
-        short nDlgRet = xBox->run();
-        bRet = ( nDlgRet == RET_YES );
+        xBox->runAsync(xBox, [onFinished](sal_Int32 nDlgRet) {
+                onFinished(nDlgRet == RET_YES);
+        });
+        return;
     }
 
-    return (bRet && canAddRemove());
+    onFinished(bRet);
 }
 
 void DigitalSignaturesDialog::beforeRun()
@@ -499,22 +530,44 @@ IMPL_LINK_NOARG(DigitalSignaturesDialog, AddButtonHdl, weld::Button&, void)
 {
     if( ! canAdd())
         return;
-    try
+    std::vector<uno::Reference<xml::crypto::XXMLSecurityContext>> xSecContexts
     {
-        std::vector<uno::Reference<xml::crypto::XXMLSecurityContext>> xSecContexts
-        {
-            maSignatureManager.getSecurityContext()
-        };
-        // Gpg signing is only possible with ODF >= 1.2 documents
-        if (DocumentSignatureHelper::CanSignWithGPG(maSignatureManager.getStore(), m_sODFVersion))
-            xSecContexts.push_back(maSignatureManager.getGpgSecurityContext());
+        maSignatureManager.getSecurityContext()
+    };
+    // Gpg signing is only possible with ODF >= 1.2 documents
+    if (DocumentSignatureHelper::CanSignWithGPG(maSignatureManager.getStore(), m_sODFVersion))
+        xSecContexts.push_back(maSignatureManager.getGpgSecurityContext());
 
-        std::unique_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(m_xDialog.get(), std::move(xSecContexts), UserAction::Sign);
-        if (aChooser->run() == RET_OK)
+    std::shared_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(m_xDialog.get(), m_pViewShell, std::move(xSecContexts), UserAction::Sign);
+    aChooser->BeforeRun();
+    weld::DialogController::runAsync(aChooser, [this, aChooser](sal_Int32 nRet) {
+        if (nRet != RET_OK)
+        {
+            return;
+        }
+
+        try
         {
             sal_Int32 nSecurityId;
+
+            if (moScriptSignatureManager)
+            {
+                if (!moScriptSignatureManager->add(aChooser->GetSelectedCertificates()[0],
+                            aChooser->GetSelectedSecurityContext(),
+                            aChooser->GetDescription(), nSecurityId,
+                            m_bAdESCompliant))
+                {
+                    return;
+                }
+
+                moScriptSignatureManager->read(/*bUseTempStream=*/true, /*bCacheLastSignature=*/false);
+                moScriptSignatureManager->write(m_bAdESCompliant);
+
+                maSignatureManager.setScriptingSignatureStream(moScriptSignatureManager->getSignatureStream());
+            }
+
             if (!maSignatureManager.add(aChooser->GetSelectedCertificates()[0], aChooser->GetSelectedSecurityContext(),
-                                        aChooser->GetDescription(), nSecurityId, m_bAdESCompliant))
+                        aChooser->GetDescription(), nSecurityId, m_bAdESCompliant))
                 return;
             mbSignaturesChanged = true;
 
@@ -537,44 +590,47 @@ IMPL_LINK_NOARG(DigitalSignaturesDialog, AddButtonHdl, weld::Button&, void)
                 ImplFillSignaturesBox();
             }
         }
-    }
-    catch ( uno::Exception& )
-    {
-        TOOLS_WARN_EXCEPTION( "xmlsecurity.dialogs", "adding a signature!" );
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_xDialog.get(),
-                                                  VclMessageType::Error, VclButtonsType::Ok,
-                                                  XsResId(STR_XMLSECDLG_SIGNING_FAILED)));
-        xBox->run();
-        // Don't keep invalid entries...
-        ImplGetSignatureInformations(/*bUseTempStream=*/true, /*bCacheLastSignature=*/false);
-        ImplFillSignaturesBox();
-    }
+        catch ( uno::Exception& )
+        {
+            TOOLS_WARN_EXCEPTION( "xmlsecurity.dialogs", "adding a signature!" );
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(m_xDialog.get(),
+                        VclMessageType::Error, VclButtonsType::Ok,
+                        XsResId(STR_XMLSECDLG_SIGNING_FAILED)));
+            xBox->run();
+            // Don't keep invalid entries...
+            ImplGetSignatureInformations(/*bUseTempStream=*/true, /*bCacheLastSignature=*/false);
+            ImplFillSignaturesBox();
+        }
+    });
 }
 
 IMPL_LINK_NOARG(DigitalSignaturesDialog, RemoveButtonHdl, weld::Button&, void)
 {
-    if (!canRemove())
-        return;
-    int nEntry = m_xSignaturesLB->get_selected_index();
-    if (nEntry == -1)
-        return;
+    canRemove([this](bool bRet) {
+        if (!bRet)
+            return;
 
-    try
-    {
-        sal_uInt16 nSelected = m_xSignaturesLB->get_id(nEntry).toUInt32();
-        maSignatureManager.remove(nSelected);
+        int nEntry = m_xSignaturesLB->get_selected_index();
+        if (nEntry == -1)
+            return;
 
-        mbSignaturesChanged = true;
+        try
+        {
+            sal_uInt16 nSelected = m_xSignaturesLB->get_id(nEntry).toUInt32();
+            maSignatureManager.remove(nSelected);
 
-        ImplFillSignaturesBox();
-    }
-    catch ( uno::Exception& )
-    {
-        TOOLS_WARN_EXCEPTION( "xmlsecurity.dialogs", "Exception while removing a signature!" );
-        // Don't keep invalid entries...
-        ImplGetSignatureInformations(/*bUseTempStream=*/true, /*bCacheLastSignature=*/true);
-        ImplFillSignaturesBox();
-    }
+            mbSignaturesChanged = true;
+
+            ImplFillSignaturesBox();
+        }
+        catch ( uno::Exception& )
+        {
+            TOOLS_WARN_EXCEPTION( "xmlsecurity.dialogs", "Exception while removing a signature!" );
+            // Don't keep invalid entries...
+            ImplGetSignatureInformations(/*bUseTempStream=*/true, /*bCacheLastSignature=*/true);
+            ImplFillSignaturesBox();
+        }
+    });
 }
 
 

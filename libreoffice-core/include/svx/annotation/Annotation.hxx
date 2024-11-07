@@ -22,6 +22,8 @@
 #include <cppuhelper/basemutex.hxx>
 #include <svx/annotation/Annotation.hxx>
 #include <svx/annotation/TextAPI.hxx>
+#include <svx/UniqueID.hxx>
+#include <vcl/bitmapex.hxx>
 
 class SdrUndoAction;
 class SfxViewShell;
@@ -31,6 +33,7 @@ namespace sdr::annotation
 {
 class Annotation;
 
+/** Type of the annotation / comment change. */
 enum class CommentNotificationType
 {
     Add,
@@ -38,10 +41,47 @@ enum class CommentNotificationType
     Remove
 };
 
+/** LOKit notify for a view */
 SVXCORE_DLLPUBLIC void LOKCommentNotify(CommentNotificationType nType,
                                         const SfxViewShell* pViewShell, Annotation& rAnnotation);
+
+/** LOKit notify for all views */
 SVXCORE_DLLPUBLIC void LOKCommentNotifyAll(CommentNotificationType nType, Annotation& rAnnotation);
 
+/** Type of the annotation (that is supported) */
+enum class AnnotationType
+{
+    None,
+    Square,
+    Polygon,
+    Circle,
+    Ink,
+    Highlight,
+    Line,
+    FreeText,
+    Stamp
+};
+
+/** Annotation data that is used at annotation creation */
+struct CreationInfo
+{
+    AnnotationType meType = AnnotationType::None;
+
+    std::vector<basegfx::B2DPolygon> maPolygons;
+    basegfx::B2DRectangle maRectangle;
+
+    float mnWidth = 0.0f;
+
+    bool mbFillColor = false;
+    Color maFillColor = COL_TRANSPARENT;
+
+    bool mbColor = false;
+    Color maColor = COL_TRANSPARENT;
+
+    BitmapEx maBitmapEx;
+};
+
+/** Data of an annotation */
 struct SVXCORE_DLLPUBLIC AnnotationData
 {
     css::geometry::RealPoint2D m_Position;
@@ -55,18 +95,19 @@ struct SVXCORE_DLLPUBLIC AnnotationData
     void set(Annotation& rAnnotation);
 };
 
+/** Annotation object, responsible for handling of the annotation.
+ *
+ * Implements the XAnnotation UNO API, handles undo/redo and notifications ()
+ *
+ **/
 class SVXCORE_DLLPUBLIC Annotation
     : protected ::cppu::BaseMutex,
       public ::cppu::WeakComponentImplHelper<css::office::XAnnotation>,
       public ::cppu::PropertySetMixin<css::office::XAnnotation>
 {
-private:
-    static sal_uInt32 m_nLastId;
-    static sal_uInt32 nextID() { return m_nLastId++; }
-
 protected:
     SdrPage* mpPage;
-    sal_uInt32 m_nId;
+    UniqueID maUniqueID;
 
     css::geometry::RealPoint2D m_Position;
     css::geometry::RealSize2D m_Size;
@@ -75,7 +116,7 @@ protected:
     css::util::DateTime m_DateTime;
     rtl::Reference<sdr::annotation::TextApiObject> m_TextRange;
 
-    bool m_bIsFreeText = false;
+    CreationInfo maCreationInfo;
 
     std::unique_ptr<SdrUndoAction> createUndoAnnotation();
 
@@ -95,6 +136,7 @@ public:
         ::cppu::WeakComponentImplHelper<css::office::XAnnotation>::release();
     }
 
+    // Changes without triggering notification broadcast
     css::geometry::RealPoint2D GetPosition() const { return m_Position; }
     void SetPosition(const css::geometry::RealPoint2D& rValue) { m_Position = rValue; }
 
@@ -122,18 +164,24 @@ public:
 
     OUString GetText();
     void SetText(OUString const& rText);
+    rtl::Reference<sdr::annotation::TextApiObject> getTextApiObject() { return m_TextRange; }
 
     SdrModel* GetModel() const;
     SdrPage const* getPage() const { return mpPage; }
     SdrPage* getPage() { return mpPage; }
 
-    sal_uInt32 GetId() const { return m_nId; }
+    // Unique ID of the annotation
+    sal_uInt64 GetId() const { return maUniqueID.getID(); }
 
-    void setIsFreeText(bool value) { m_bIsFreeText = value; }
+    CreationInfo const& getCreationInfo() { return maCreationInfo; }
+    void setCreationInfo(CreationInfo const& rCreationInfo) { maCreationInfo = rCreationInfo; }
 
-    bool isFreeText() const { return m_bIsFreeText; }
+    SdrObject* findAnnotationObject();
+
+    virtual rtl::Reference<Annotation> clone(SdrPage* pTargetPage) = 0;
 };
 
+/** Vector of annotations */
 typedef std::vector<rtl::Reference<Annotation>> AnnotationVector;
 
 } // namespace sdr::annotation

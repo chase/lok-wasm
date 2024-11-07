@@ -8,6 +8,7 @@
  */
 
 #include <svx/annotation/Annotation.hxx>
+#include <svx/annotation/ObjectAnnotationData.hxx>
 #include <svx/svdpage.hxx>
 #include <tools/json_writer.hxx>
 #include <sfx2/viewsh.hxx>
@@ -43,8 +44,7 @@ OString lcl_LOKGetCommentPayload(CommentNotificationType nType, Annotation& rAnn
             aJsonWriter.put("dateTime", utl::toISO8601(rAnnotation.GetDateTime()));
             aJsonWriter.put("text", rAnnotation.GetText());
             SdrPage const* pPage = rAnnotation.getPage();
-            sal_Int64 nHash = sal::static_int_cast<sal_Int64>(reinterpret_cast<sal_IntPtr>(pPage));
-            aJsonWriter.put("parthash", pPage ? OString::number(nHash) : OString());
+            aJsonWriter.put("parthash", pPage ? OString::number(pPage->GetUniqueID()) : OString());
             geometry::RealPoint2D const& rPoint = rAnnotation.GetPosition();
             geometry::RealSize2D const& rSize = rAnnotation.GetSize();
             tools::Rectangle aRectangle(
@@ -58,6 +58,7 @@ OString lcl_LOKGetCommentPayload(CommentNotificationType nType, Annotation& rAnn
     return aJsonWriter.finishAndGetAsOString();
 }
 
+/** Undo/redo a modification of an annotation - change of annotation data */
 class UndoAnnotation : public SdrUndoAction
 {
 public:
@@ -143,11 +144,8 @@ Annotation::Annotation(const css::uno::Reference<css::uno::XComponentContext>& r
     , cppu::PropertySetMixin<office::XAnnotation>(rxContext, IMPLEMENTS_PROPERTY_SET,
                                                   uno::Sequence<OUString>())
     , mpPage(pPage)
-    , m_nId(nextID())
 {
 }
-
-sal_uInt32 Annotation::m_nLastId = 1;
 
 SdrModel* Annotation::GetModel() const
 {
@@ -197,6 +195,23 @@ void SAL_CALL Annotation::disposing()
         m_TextRange->dispose();
         m_TextRange.clear();
     }
+}
+
+SdrObject* Annotation::findAnnotationObject()
+{
+    SdrPage const* pPage = getPage();
+
+    if (!pPage)
+        return nullptr;
+
+    for (size_t i = 0; i < pPage->GetObjCount(); ++i)
+    {
+        SdrObject* pObject = pPage->GetObj(i);
+        if (pObject->isAnnotationObject()
+            && pObject->getAnnotationData()->mxAnnotation.get() == this)
+            return pObject;
+    }
+    return nullptr;
 }
 
 } // namespace sdr::annotation

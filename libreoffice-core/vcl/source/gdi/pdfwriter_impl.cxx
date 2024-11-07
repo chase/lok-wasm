@@ -775,11 +775,13 @@ bool PDFPage::emit(sal_Int32 nParentObject )
             aLine.append( ((i+1)%15) ? " " : "\n" );
         }
         aLine.append( "]\n" );
-        if (PDFWriter::PDFVersion::PDF_1_5 <= m_pWriter->m_aContext.Version)
-        {
-            // ISO 14289-1:2014, Clause: 7.18.3
-            aLine.append( "/Tabs/S\n" );
-        }
+    }
+    if (PDFWriter::PDFVersion::PDF_1_5 <= m_pWriter->m_aContext.Version)
+    {
+        // ISO 14289-1:2014, Clause: 7.18.3 requires it if there are annotations
+        // but Adobe Acrobat Pro complains if it is ever missing so just
+        // write it always.
+        aLine.append( "/Tabs/S\n" );
     }
     if( !m_aMCIDParents.empty() )
     {
@@ -9750,7 +9752,7 @@ void PDFWriterImpl::createEmbeddedFile(const Graphic& rGraphic, ReferenceXObject
     }
 
     rEmit.m_nFormObject = createObject();
-    rEmit.m_aPixelSize = rGraphic.GetPrefSize();
+    rEmit.m_aPixelSize = rGraphic.GetSizePixel();
 }
 
 void PDFWriterImpl::drawJPGBitmap( SvStream& rDCTData, bool bIsTrueColor, const Size& rSizePixel, const tools::Rectangle& rTargetArea, const AlphaMask& rAlphaMask, const Graphic& rGraphic )

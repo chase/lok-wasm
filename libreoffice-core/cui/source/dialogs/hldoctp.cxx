@@ -207,6 +207,9 @@ IMPL_LINK_NOARG(SvxHyperlinkDocTp, ClickTargetHdl_Impl, weld::Button&, void)
 {
     ShowMarkWnd();
 
+    if (!mxMarkWnd)
+        return;
+
     if ( GetPathType ( maStrURL ) == EPathType::ExistsFile  ||
          maStrURL.isEmpty() ||
          maStrURL.equalsIgnoreAsciiCase( INET_FILE_SCHEME ) ||
@@ -253,10 +256,13 @@ IMPL_LINK_NOARG(SvxHyperlinkDocTp, TimeoutHdl_Impl, Timer *, void)
     {
         weld::WaitObject aWait(mpDialog->getDialog());
 
-        if ( maStrURL.equalsIgnoreAsciiCase( INET_FILE_SCHEME ) )
-            mxMarkWnd->RefreshTree ( "" );
-        else
-            mxMarkWnd->RefreshTree ( maStrURL );
+        if (mxMarkWnd)
+        {
+            if ( maStrURL.equalsIgnoreAsciiCase( INET_FILE_SCHEME ) )
+                mxMarkWnd->RefreshTree ( "" );
+            else
+                mxMarkWnd->RefreshTree ( maStrURL );
+        }
     }
 }
 

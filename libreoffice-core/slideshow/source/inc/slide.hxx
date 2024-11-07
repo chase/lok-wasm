@@ -44,6 +44,8 @@ namespace basegfx
     class B2IVector;
 }
 
+class Size;
+
 /* Definition of Slide interface */
 
 namespace slideshow::internal

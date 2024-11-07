@@ -3218,6 +3218,12 @@ void SwXTextDocument::setClipboard(const uno::Reference<datatransfer::clipboard:
 {
     SolarMutexGuard aGuard;
 
+    if (!IsValid())
+    {
+        SAL_WARN("sw.uno", "no DocShell when attempting to setClipboard");
+        return;
+    }
+
     SwView* pView = m_pDocShell->GetView();
     if (pView)
         pView->GetEditWin().SetClipboard(xClipboard);
@@ -3403,7 +3409,8 @@ void SwXTextDocument::getPostIts(tools::JsonWriter& rJsonWriter)
         rJsonWriter.put("id", pField->GetPostItId());
         rJsonWriter.put("parentId", pField->GetParentPostItId());
         rJsonWriter.put("author", pField->GetPar1());
-        rJsonWriter.put("text", pField->GetPar2());
+        // Note, for just plain text we could use "text" populated by pField->GetPar2()
+        rJsonWriter.put("html", pWin->GetSimpleHtml());
         rJsonWriter.put("resolved", pField->GetResolved() ? "true" : "false");
         rJsonWriter.put("dateTime", utl::toISO8601(pField->GetDateTime().GetUNODateTime()));
         rJsonWriter.put("anchorPos", aSVRect.toString());
@@ -3464,6 +3471,9 @@ SwXTextDocument::getSearchResultRectangles(const char* pPayload)
 
 OString SwXTextDocument::getViewRenderState(SfxViewShell* pViewShell)
 {
+    if (!m_pDocShell)
+        return OString();
+
     OStringBuffer aState;
     SwView* pView = pViewShell ? dynamic_cast<SwView*>(pViewShell) : m_pDocShell->GetView();
     if (pView && pView->GetWrtShellPtr())
@@ -3475,6 +3485,9 @@ OString SwXTextDocument::getViewRenderState(SfxViewShell* pViewShell)
                 aState.append('P');
             if (pVOpt->IsOnlineSpell())
                 aState.append('S');
+            if (pVOpt->GetDocColor() == svtools::ColorConfig::GetDefaultColor(svtools::DOCCOLOR, 1))
+                aState.append('D');
+
             aState.append(';');
 
             OString aThemeName = OUStringToOString(pVOpt->GetThemeName(), RTL_TEXTENCODING_UTF8);
@@ -3649,11 +3662,17 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
 {
     SolarMutexGuard aGuard;
 
-    SwViewShell* pViewShell = m_pDocShell->GetWrtShell();
+    if (!IsValid())
+    {
+        SAL_WARN("sw.uno", "no DocShell when attempting to initialize for tiled rendering");
+        return;
+    }
 
     SwView* pView = m_pDocShell->GetView();
     if (!pView)
         return;
+
+    SwViewShell* pViewShell = m_pDocShell->GetWrtShell();
 
     pView->SetViewLayout(1/*nColumns*/, false/*bBookMode*/, true);
 
@@ -3669,6 +3688,7 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
     aViewOption.SetUseHeaderFooterMenu(false);
 
     OUString sThemeName;
+    OUString sBackgroundThemeName;
     OUString sOrigAuthor = SW_MOD()->GetRedlineAuthor(SW_MOD()->GetRedlineAuthor());
     OUString sAuthor;
 
@@ -3692,6 +3712,8 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
             aViewOption.SetOnlineSpell(rValue.Value.get<bool>());
         else if (rValue.Name == ".uno:ChangeTheme" && rValue.Value.has<OUString>())
             sThemeName = rValue.Value.get<OUString>();
+        else if (rValue.Name == ".uno:InvertBackground" && rValue.Value.has<OUString>())
+            sBackgroundThemeName = rValue.Value.get<OUString>();
     }
 
     if (!sAuthor.isEmpty() && sAuthor != sOrigAuthor)
@@ -3701,8 +3723,7 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
         {
             if (SwEditShell* pShell = &pFirstView->GetWrtShell())
             {
-                pShell->SwViewShell::UpdateFields(true);
-                pShell->ResetModified();
+                pShell->SwViewShell::UpdateFields(true, /*bSetModified=*/false);
             }
         }
     }
@@ -3749,6 +3770,14 @@ void SwXTextDocument::initializeForTiledRendering(const css::uno::Sequence<css::
             { "NewTheme", uno::Any(sThemeName) }
         }));
         comphelper::dispatchCommand(".uno:ChangeTheme", aPropertyValues);
+    }
+    if (!sBackgroundThemeName.isEmpty())
+    {
+        css::uno::Sequence<css::beans::PropertyValue> aPropertyValues(comphelper::InitPropertySequence(
+        {
+            { "NewTheme", uno::Any(sBackgroundThemeName) }
+        }));
+        comphelper::dispatchCommand(".uno:InvertBackground", aPropertyValues);
     }
 }
 

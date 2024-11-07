@@ -151,6 +151,15 @@ struct _LibreOfficeKitClass
 
     /// @see lok::Office::setForkedChild
     void (*setForkedChild)(LibreOfficeKit* pThis, bool bIsChild);
+
+    /** @see lok::Office::extractDocumentStructureRequest.
+     */
+    char* (*extractDocumentStructureRequest)(LibreOfficeKit* pThis, const char* pFilePath,
+                                             const char* pFilter);
+
+    /// @see lok::Office::registerAnyInputCallback()
+    void (*registerAnyInputCallback)(LibreOfficeKit* pThis,
+                                     LibreOfficeKitAnyInputCallback pCallback, void* pData);
 };
 
 #define LIBREOFFICEKIT_DOCUMENT_HAS(pDoc,member) LIBREOFFICEKIT_HAS_MEMBER(LibreOfficeKitDocumentClass,member,(pDoc)->pClass->nSize)
@@ -534,6 +543,23 @@ struct _LibreOfficeKitDocumentClass
 
     /// @see lok::Document::setAllowChangeComments().
     void (*setAllowChangeComments) (LibreOfficeKitDocument* pThis, int nId, const bool allow);
+
+    /// @see lok::Document::getPresentationInfo
+    char* (*getPresentationInfo) (LibreOfficeKitDocument* pThis);
+
+    /// @see lok::Document::createSlideRenderer
+    bool (*createSlideRenderer) (
+        LibreOfficeKitDocument* pThis,
+        const char* pSlideHash,
+        int nSlideNumber, unsigned* nViewWidth, unsigned* nViewHeight,
+        bool bRenderBackground, bool bRenderMasterPage);
+
+    /// @see lok::Document::postSlideshowCleanup
+    void (*postSlideshowCleanup)(LibreOfficeKitDocument* pThis);
+
+    /// @see lok::Document::renderNextSlideLayer
+    bool (*renderNextSlideLayer)(
+        LibreOfficeKitDocument* pThis, unsigned char* pBuffer, bool* bIsBitmapLayer, char** pJsonMessage);
 
 #endif // defined LOK_USE_UNSTABLE_API || defined LIBO_INTERNAL_ONLY
 };

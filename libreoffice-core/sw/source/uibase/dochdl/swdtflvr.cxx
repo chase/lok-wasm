@@ -2145,6 +2145,39 @@ SotExchangeDest SwTransferable::GetSotDestination( const SwWrtShell& rSh )
     return nRet;
 }
 
+namespace
+{
+bool CanSkipInvalidateNumRules(const SwPosition& rInsertPosition)
+{
+    SwTextNode* pTextNode = rInsertPosition.GetNode().GetTextNode();
+    if (!pTextNode)
+    {
+        return false;
+    }
+
+    const SwNodeNum* pNum = pTextNode->GetNum();
+    if (pNum)
+    {
+        SwNumRule* pNumRule = pNum->GetNumRule();
+        if (pNumRule)
+        {
+            const SvxNumberType rType = pNumRule->Get(pTextNode->GetActualListLevel());
+            if (rType.GetNumberingType() == SVX_NUM_CHAR_SPECIAL)
+            {
+                // Bullet list, skip invalidation.
+                return true;
+            }
+        }
+
+        // Numbered list, invalidate.
+        return false;
+    }
+
+    // Not a list, skip invalidation.
+    return true;
+}
+}
+
 bool SwTransferable::PasteFileContent( const TransferableDataHelper& rData,
                                     SwWrtShell& rSh, SotClipboardFormatId nFormat, bool bMsg, bool bIgnoreComments )
 {
@@ -2157,11 +2190,21 @@ bool SwTransferable::PasteFileContent( const TransferableDataHelper& rData,
     SvStream* pStream = nullptr;
     Reader* pRead = nullptr;
     OUString sData;
+    bool bSkipInvalidateNumRules = false;
     switch( nFormat )
     {
     case SotClipboardFormatId::STRING:
         {
             pRead = ReadAscii;
+
+            const SwPosition& rInsertPosition = *rSh.GetCursor()->Start();
+            if (CanSkipInvalidateNumRules(rInsertPosition))
+            {
+                // Insertion point is not a numbering and we paste plain text: then no need to
+                // invalidate all numberings.
+                bSkipInvalidateNumRules = true;
+            }
+
             if( rData.GetString( nFormat, sData ) )
             {
                 pStream = new SvMemoryStream( const_cast<sal_Unicode *>(sData.getStr()),
@@ -2221,6 +2264,10 @@ bool SwTransferable::PasteFileContent( const TransferableDataHelper& rData,
 
         if (bIgnoreComments)
             pRead->SetIgnoreHTMLComments(true);
+        if (bSkipInvalidateNumRules)
+        {
+            aReader.SetSkipInvalidateNumRules(bSkipInvalidateNumRules);
+        }
 
         if( aReader.Read( *pRead ).IsError() )
             pResId = STR_ERROR_CLPBRD_READ;
@@ -2316,6 +2363,7 @@ bool SwTransferable::PasteOLE( TransferableDataHelper& rData, SwWrtShell& rSh,
     {
         SwPaM &rPAM = *rSh.GetCursor();
         SwReader aReader(xStore, OUString(), rPAM);
+        aReader.SetInPaste(true);
         if( ! aReader.Read( *pRead ).IsError() )
             bRet = true;
         else if( bMsg )
