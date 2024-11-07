@@ -15,6 +15,16 @@
 #include <globstr.hrc>
 #include <scresid.hxx>
 #include <conditio.hxx>
+#include <stlpool.hxx>
+#include <svl/lstner.hxx>
+#include <svl/stritem.hxx>
+#include <svl/intitem.hxx>
+#include <sfx2/dispatch.hxx>
+#include <sfx2/frame.hxx>
+#include <tabvwsh.hxx>
+#include <svx/fntctrl.hxx>
+#include <compiler.hxx>
+#include <globstr.hrc>
 
 namespace {
 
@@ -128,66 +138,65 @@ OUString getDateString(sal_Int32 nIndex)
 
 }
 
-OUString ScCondFormatHelper::GetExpression(const ScConditionalFormat& rFormat, const ScAddress& rPos)
+OUString ScCondFormatHelper::GetExpression(const ScFormatEntry* rEntry, const ScAddress& rPos)
 {
     OUStringBuffer aBuffer;
-    if(!rFormat.IsEmpty())
+    switch (rEntry->GetType())
     {
-        switch(rFormat.GetEntry(0)->GetType())
+        case ScFormatEntry::Type::Condition:
+        case ScFormatEntry::Type::ExtCondition:
         {
-            case ScFormatEntry::Type::Condition:
-            case ScFormatEntry::Type::ExtCondition:
+            const ScConditionEntry* pEntry = static_cast<const ScConditionEntry*>(rEntry);
+            ScConditionMode eMode = pEntry->GetOperation();
+            if (eMode == ScConditionMode::Direct)
+            {
+                aBuffer.append(getTextForType(FORMULA) + " " + pEntry->GetExpression(rPos, 0));
+            }
+            else
+            {
+                aBuffer.append(getTextForType(CONDITION) + " "
+                               + getExpression(static_cast<sal_Int32>(eMode)) + " ");
+                if (eMode == ScConditionMode::Between || eMode == ScConditionMode::NotBetween)
                 {
-                    const ScConditionEntry* pEntry = static_cast<const ScConditionEntry*>(rFormat.GetEntry(0));
-                    ScConditionMode eMode = pEntry->GetOperation();
-                    if(eMode == ScConditionMode::Direct)
-                    {
-                        aBuffer.append(getTextForType(FORMULA)
-                            + " "
-                            + pEntry->GetExpression(rPos, 0));
-                    }
-                    else
-                    {
-                        aBuffer.append(getTextForType(CONDITION)
-                            + " "
-                            + getExpression(static_cast<sal_Int32>(eMode))
-                            + " ");
-                        if(eMode == ScConditionMode::Between || eMode == ScConditionMode::NotBetween)
-                        {
-                            aBuffer.append(pEntry->GetExpression(rPos, 0)
-                                + " "
-                                + ScResId(STR_COND_AND)
-                                + " "
-                                + pEntry->GetExpression(rPos, 1));
-                        }
-                        else if(eMode <= ScConditionMode::NotEqual || eMode >= ScConditionMode::BeginsWith)
-                        {
-                            aBuffer.append(pEntry->GetExpression(rPos, 0));
-                        }
-                    }
+                    aBuffer.append(pEntry->GetExpression(rPos, 0) + " " + ScResId(STR_COND_AND)
+                                   + " " + pEntry->GetExpression(rPos, 1));
                 }
-
-                break;
-            case ScFormatEntry::Type::Databar:
-                aBuffer.append(getTextForType(DATABAR));
-                break;
-            case ScFormatEntry::Type::Colorscale:
-                aBuffer.append(getTextForType(COLORSCALE));
-                break;
-            case ScFormatEntry::Type::Iconset:
-                aBuffer.append(getTextForType(ICONSET));
-                break;
-            case ScFormatEntry::Type::Date:
+                else if (eMode <= ScConditionMode::NotEqual || eMode >= ScConditionMode::BeginsWith)
                 {
-                    sal_Int32 nDateEntry = static_cast<sal_Int32>(static_cast<const ScCondDateFormatEntry*>(rFormat.GetEntry(0))->GetDateType());
-                    aBuffer.append(getTextForType(DATE)
-                        + " "
-                        + getDateString(nDateEntry));
+                    aBuffer.append(pEntry->GetExpression(rPos, 0));
                 }
-                break;
+            }
         }
+
+        break;
+        case ScFormatEntry::Type::Databar:
+            aBuffer.append(getTextForType(DATABAR));
+            break;
+        case ScFormatEntry::Type::Colorscale:
+            aBuffer.append(getTextForType(COLORSCALE));
+            break;
+        case ScFormatEntry::Type::Iconset:
+            aBuffer.append(getTextForType(ICONSET));
+            break;
+        case ScFormatEntry::Type::Date:
+        {
+            sal_Int32 nDateEntry = static_cast<sal_Int32>(
+                static_cast<const ScCondDateFormatEntry*>(rEntry)->GetDateType());
+            aBuffer.append(getTextForType(DATE) + " " + getDateString(nDateEntry));
+        }
+        break;
     }
     return aBuffer.makeStringAndClear();
+}
+
+OUString ScCondFormatHelper::GetExpression(const ScConditionalFormat& rFormat,
+                                           const ScAddress& rPos)
+{
+    if (!rFormat.IsEmpty())
+    {
+        return ScCondFormatHelper::GetExpression(rFormat.GetEntry(0), rPos);
+    }
+    return "";
 }
 
 OUString ScCondFormatHelper::GetExpression( ScCondFormatEntryType eType, sal_Int32 nIndex,
@@ -220,6 +229,146 @@ OUString ScCondFormatHelper::GetExpression( ScCondFormatEntryType eType, sal_Int
     }
 
     return aBuffer.makeStringAndClear();
+}
+
+void ScCondFormatHelper::StyleSelect(weld::Window* pDialogParent, weld::ComboBox& rLbStyle,
+                                     const ScDocument* pDoc, SvxFontPrevWindow& rWdPreview)
+{
+    if (rLbStyle.get_active() == 0)
+    {
+        // call new style dialog
+        SfxUInt16Item aFamilyItem(SID_STYLE_FAMILY, sal_uInt16(SfxStyleFamily::Para));
+        SfxStringItem aRefItem(SID_STYLE_REFERENCE, ScResId(STR_STYLENAME_STANDARD));
+        css::uno::Any aAny(pDialogParent->GetXWindow());
+        SfxUnoAnyItem aDialogParent(SID_DIALOG_PARENT, aAny);
+
+        // unlock the dispatcher so SID_STYLE_NEW can be executed
+        // (SetDispatcherLock would affect all Calc documents)
+        if (ScTabViewShell* pViewShell = ScTabViewShell::GetActiveViewShell())
+        {
+            if (SfxDispatcher* pDisp = pViewShell->GetDispatcher())
+            {
+                bool bLocked = pDisp->IsLocked();
+                if (bLocked)
+                    pDisp->Lock(false);
+
+                // Execute the "new style" slot, complete with undo and all necessary updates.
+                // The return value (SfxUInt16Item) is ignored, look for new styles instead.
+                pDisp->ExecuteList(SID_STYLE_NEW, SfxCallMode::SYNCHRON | SfxCallMode::RECORD,
+                                   { &aFamilyItem, &aRefItem }, { &aDialogParent });
+
+                if (bLocked)
+                    pDisp->Lock(true);
+
+                // Find the new style and add it into the style list boxes
+                SfxStyleSheetIterator aStyleIter(pDoc->GetStyleSheetPool(), SfxStyleFamily::Para);
+                bool bFound = false;
+                for (SfxStyleSheetBase* pStyle = aStyleIter.First(); pStyle && !bFound;
+                     pStyle = aStyleIter.Next())
+                {
+                    const OUString& aName = pStyle->GetName();
+                    if (rLbStyle.find_text(aName) == -1) // all lists contain the same entries
+                    {
+                        for (sal_Int32 i = 1, n = rLbStyle.get_count(); i <= n && !bFound; ++i)
+                        {
+                            OUString aStyleName
+                                = ScGlobal::getCharClass().uppercase(rLbStyle.get_text(i));
+                            if (i == n)
+                            {
+                                rLbStyle.append_text(aName);
+                                rLbStyle.set_active_text(aName);
+                                bFound = true;
+                            }
+                            else if (aStyleName > ScGlobal::getCharClass().uppercase(aName))
+                            {
+                                rLbStyle.insert_text(i, aName);
+                                rLbStyle.set_active_text(aName);
+                                bFound = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    OUString aStyleName = rLbStyle.get_active_text();
+    SfxStyleSheetBase* pStyleSheet
+        = pDoc->GetStyleSheetPool()->Find(aStyleName, SfxStyleFamily::Para);
+    if (pStyleSheet)
+    {
+        const SfxItemSet& rSet = pStyleSheet->GetItemSet();
+        rWdPreview.SetFromItemSet(rSet, false);
+    }
+}
+
+void ScCondFormatHelper::FillStyleListBox(const ScDocument* pDocument, weld::ComboBox& rCombo)
+{
+    std::set<OUString> aStyleNames;
+    SfxStyleSheetIterator aStyleIter(pDocument->GetStyleSheetPool(), SfxStyleFamily::Para);
+    for (SfxStyleSheetBase* pStyle = aStyleIter.First(); pStyle; pStyle = aStyleIter.Next())
+    {
+        aStyleNames.insert(pStyle->GetName());
+    }
+    for (const auto& rStyleName : aStyleNames)
+    {
+        rCombo.append_text(rStyleName);
+    }
+}
+
+void ScCondFormatHelper::UpdateStyleList(weld::ComboBox& rLbStyle, const ScDocument* pDoc)
+{
+    OUString aSelectedStyle = rLbStyle.get_active_text();
+    for (sal_Int32 i = rLbStyle.get_count(); i > 1; --i)
+        rLbStyle.remove(i - 1);
+    ScCondFormatHelper::FillStyleListBox(pDoc, rLbStyle);
+    rLbStyle.set_active_text(aSelectedStyle);
+}
+
+void ScCondFormatHelper::ValidateInputField(weld::Entry& rEntry, weld::Label& rLabel, ScDocument* pDoc, ScAddress& rPos)
+{
+    OUString aFormula = rEntry.get_text();
+
+    if( aFormula.isEmpty() )
+    {
+        rLabel.set_label(ScResId(STR_ENTER_VALUE));
+        return;
+    }
+
+    ScCompiler aComp( *pDoc, rPos, pDoc->GetGrammar() );
+    aComp.SetExtendedErrorDetection( ScCompiler::ExtendedErrorDetection::EXTENDED_ERROR_DETECTION_NAME_BREAK);
+    std::unique_ptr<ScTokenArray> ta(aComp.CompileString(aFormula));
+
+    // Error, warn the user if it is not an unknown name.
+    if (ta->GetCodeError() != FormulaError::NoName && (ta->GetCodeError() != FormulaError::NONE || ta->GetLen() == 0))
+    {
+        rEntry.set_message_type(weld::EntryMessageType::Error);
+        rLabel.set_label(ScResId(STR_VALID_DEFERROR));
+        return;
+    }
+
+    // Unrecognized name, warn the user; i.e. happens when starting to type and
+    // will go away once a valid name is completed.
+    if (ta->GetCodeError() == FormulaError::NoName)
+    {
+        rEntry.set_message_type(weld::EntryMessageType::Warning);
+        rLabel.set_label(ScResId(STR_UNQUOTED_STRING));
+        return;
+    }
+
+    // Generate RPN to detect further errors.
+    if (ta->GetLen() > 0)
+        aComp.CompileTokenArray();
+    // Error, warn the user.
+    if (ta->GetCodeError() != FormulaError::NONE || (ta->GetCodeLen() == 0))
+    {
+        rEntry.set_message_type(weld::EntryMessageType::Error);
+        rLabel.set_label(ScResId(STR_VALID_DEFERROR));
+        return;
+    }
+
+    rEntry.set_message_type(weld::EntryMessageType::Normal);
+    rLabel.set_label("");
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

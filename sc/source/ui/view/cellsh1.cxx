@@ -35,6 +35,7 @@
 #include <sfx2/dispatch.hxx>
 #include <sfx2/request.hxx>
 #include <vcl/commandinfoprovider.hxx>
+#include <vcl/unohelp2.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/weld.hxx>
 #include <svx/svxdlg.hxx>
@@ -45,6 +46,7 @@
 #include <svx/hlnkitem.hxx>
 #include <basic/sbxcore.hxx>
 #include <editeng/editview.hxx>
+#include <editeng/urlfieldhelper.hxx>
 #include <svtools/cliplistener.hxx>
 
 #include <cellsh.hxx>
@@ -2916,7 +2918,7 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                 if (pDlgItem)
                     pDlg->SetModified();
 
-                pDlg->StartExecuteAsync([this, pDlg, &rData, pTabViewShell, pDlgItem, aPos](sal_Int32 nRet){
+                pDlg->StartExecuteAsync([pDlg, &rData, pTabViewShell, pDlgItem, aPos](sal_Int32 nRet){
                     std::unique_ptr<ScConditionalFormatList> pCondFormatList = pDlg->GetConditionalFormatList();
                     if(nRet == RET_OK && pDlg->CondFormatsChanged())
                     {
@@ -2924,24 +2926,11 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     }
                     else if(nRet == DLG_RET_ADD)
                     {
-                        // Put the xml string parameter to initialize the
-                        // Conditional Format Dialog. ( add new )
-                        pTabViewShell->GetPool().DirectPutItemInPool(ScCondFormatDlgItem(
-                                    std::shared_ptr<ScConditionalFormatList>(pCondFormatList.release()), -1, true));
-                        // Queue message to open Conditional Format Dialog
-                        GetViewData().GetDispatcher().Execute( SID_OPENDLG_CONDFRMT, SfxCallMode::ASYNCHRON );
+                        pDlg->ShowEasyConditionalDialog();
                     }
                     else if (nRet == DLG_RET_EDIT)
                     {
-                        ScConditionalFormat* pFormat = pDlg->GetCondFormatSelected();
-                        sal_Int32 nIndex = pFormat ? pFormat->GetKey() : -1;
-                        // Put the xml string parameter to initialize the
-                        // Conditional Format Dialog. ( edit selected conditional format )
-                        pTabViewShell->GetPool().DirectPutItemInPool(ScCondFormatDlgItem(
-                                    std::shared_ptr<ScConditionalFormatList>(pCondFormatList.release()), nIndex, true));
-
-                        // Queue message to open Conditional Format Dialog
-                        GetViewData().GetDispatcher().Execute( SID_OPENDLG_CONDFRMT, SfxCallMode::ASYNCHRON );
+                        pDlg->ShowEasyConditionalDialog(true);
                     }
                     else
                         pCondFormatList.reset();
@@ -3197,6 +3186,78 @@ void ScCellShell::ExecuteEdit( SfxRequest& rReq )
                     SC_MOD()->SetReference( aRef, rData.GetDocument(), &rData.GetMarkData() );
 
                     pInputHdl->UpdateLokReferenceMarks();
+                }
+            }
+            break;
+
+        case SID_COPY_HYPERLINK_LOCATION:
+            {
+                ScViewData& rData = GetViewData();
+                ScGridWindow* pWindow = rData.GetActiveWin();
+                const SfxInt32Item* pPosX = rReq.GetArg<SfxInt32Item>(FN_PARAM_1);
+                const SfxInt32Item* pPosY = rReq.GetArg<SfxInt32Item>(FN_PARAM_2);
+                if (pWindow && pPosX && pPosY)
+                {
+                    const Point aPoint(pPosX->GetValue() * rData.GetPPTX(),
+                                       pPosY->GetValue() * rData.GetPPTY());
+                    OUString aUrl;
+                    if (pWindow->GetEditUrl(aPoint, nullptr, &aUrl))
+                    {
+                        uno::Reference<datatransfer::clipboard::XClipboard> xClipboard
+                            = pWindow->GetClipboard();
+                        vcl::unohelper::TextDataObject::CopyStringTo(aUrl, xClipboard,
+                                                                     rData.GetViewShell());
+                        rReq.Done();
+                    }
+                }
+            }
+            break;
+
+        case SID_EDIT_HYPERLINK:
+        case SID_REMOVE_HYPERLINK:
+            {
+                ScViewData& rData = GetViewData();
+                ScGridWindow* pWindow = rData.GetActiveWin();
+                const SfxInt32Item* pPosX = rReq.GetArg<SfxInt32Item>(FN_PARAM_1);
+                const SfxInt32Item* pPosY = rReq.GetArg<SfxInt32Item>(FN_PARAM_2);
+                if (pWindow && pPosX && pPosY)
+                {
+                    const Point aPoint(pPosX->GetValue() * rData.GetPPTX(),
+                                       pPosY->GetValue() * rData.GetPPTY());
+                    SCCOL nPosX;
+                    SCROW nPosY;
+                    ScSplitPos eWhich = rData.GetActivePart();
+                    rData.GetPosFromPixel(aPoint.X(), aPoint.Y(), eWhich, nPosX, nPosY);
+                    if (pWindow->GetEditUrl(aPoint, nullptr, nullptr, nullptr, &nPosX))
+                    {
+                        pTabViewShell->SetCursor(nPosX, nPosY);
+                        pTabViewShell->UpdateInputHandler();
+                        pScMod->SetInputMode(SC_INPUT_TABLE);
+                        ScInputHandler* pHdl = pScMod->GetInputHdl(pTabViewShell);
+                        if (rData.HasEditView(eWhich) && pHdl)
+                        {
+                            // Set text cursor where clicked
+                            EditView* pEditView = rData.GetEditView(eWhich);
+                            MouseEvent aEditEvt(aPoint, 1, MouseEventModifiers::SYNTHETIC,
+                                                MOUSE_LEFT, 0);
+                            pEditView->MouseButtonDown(aEditEvt);
+                            pEditView->MouseButtonUp(aEditEvt);
+                            if (nSlot == SID_REMOVE_HYPERLINK)
+                            {
+                                pHdl->DataChanging();
+                                URLFieldHelper::RemoveURLField(*pEditView);
+                                pHdl->DataChanged();
+                                pHdl->EnterHandler();
+                            }
+                            else
+                            {
+                                pEditView->SelectFieldAtCursor();
+                                rData.GetViewShell()->GetViewFrame().GetDispatcher()->Execute(
+                                    SID_HYPERLINK_DIALOG);
+                            }
+                            rReq.Done();
+                        }
+                    }
                 }
             }
             break;

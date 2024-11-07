@@ -727,7 +727,7 @@ private:
     EditPaM             ReadXML( SvStream& rInput, EditSelection aSel );
     EditPaM             ReadHTML( SvStream& rInput, const OUString& rBaseURL, EditSelection aSel, SvKeyValueIterator* pHTTPHeaderAttrs );
     ErrCode             WriteText( SvStream& rOutput, EditSelection aSel );
-    ErrCode             WriteRTF( SvStream& rOutput, EditSelection aSel );
+    ErrCode             WriteRTF( SvStream& rOutput, EditSelection aSel, bool bClipboard );
     void                WriteXML(SvStream& rOutput, const EditSelection& rSel);
 
     void                WriteItemAsRTF( const SfxPoolItem& rItem, SvStream& rOutput, sal_Int32 nPara, sal_Int32 nPos,
@@ -929,6 +929,7 @@ public:
 
     EditPaM         Read(SvStream& rInput, const OUString& rBaseURL, EETextFormat eFormat, const EditSelection& rSel, SvKeyValueIterator* pHTTPHeaderAttrs = nullptr);
     void            Write(SvStream& rOutput, EETextFormat eFormat, const EditSelection& rSel);
+    OString         GetSimpleHtml() const;
 
     std::unique_ptr<EditTextObject> CreateTextObject();
     std::unique_ptr<EditTextObject> CreateTextObject(const EditSelection& rSel);

@@ -45,6 +45,8 @@ private:
 
     bool                    bInPara:1;
     bool                    bWasInPara:1; // Remember bInPara before HeadingStart, because afterwards it will be gone.
+    bool                    mbBreakForDivs:1; // Create newlines on encountering divs
+    bool                    mbNewBlockNeeded:1;
     bool                    bFieldsInserted:1;
     bool                    bInTitle:1;
 
@@ -53,6 +55,7 @@ private:
     sal_uInt8               nDefListLevel;
 
     void                    StartPara( bool bReal );
+    void                    Newline();
     void                    EndPara();
     void                    AnchorStart();
     void                    AnchorEnd();
@@ -67,6 +70,7 @@ private:
     void                    ImpSetAttribs( const SfxItemSet& rItems );
     void                    ImpSetStyleSheet( sal_uInt16 nHeadingLevel );
 
+    void                    SetBreakForDivs(SvKeyValueIterator& rHTTPHeader);
 protected:
     virtual void            NextToken( HtmlTokenId nToken ) override;
 

@@ -2370,6 +2370,13 @@
           </info>
           <value>true</value>
         </prop>
+        <prop oor:name="ImplicitScriptSign" oor:type="xs:boolean" oor:nillable="false">
+          <info>
+            <desc>Specifies whether to implicitly sign macros when adding the first signature
+            to an ODF document with macros.</desc>
+          </info>
+          <value>false</value>
+        </prop>
         <prop oor:name="CertDir" oor:type="xs:string">
           <info>
             <desc>Contains the path to the users NSS certificate directory.</desc>
@@ -4670,7 +4677,7 @@
               <desc>Specifies whether form fields are exported as widgets or
               only their fixed print representation is exported.</desc>
             </info>
-            <value>true</value>
+            <value>false</value>
           </prop>
           <prop oor:name="FormsType" oor:type="xs:int" oor:nillable="false">
             <info>
@@ -5303,6 +5310,12 @@
         <!-- UIHints: Tools - Options - General -->
         <info>
           <desc>Determines whether the default file extension check is performed on startup.</desc>
+        </info>
+        <value>false</value>
+      </prop>
+      <prop oor:name="ShowDonation" oor:type="xs:boolean" oor:nillable="false">
+        <info>
+          <desc>Determines whether to show a donation button in the start center or extension.</desc>
         </info>
         <value>false</value>
       </prop>

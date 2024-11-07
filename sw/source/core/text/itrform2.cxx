@@ -62,6 +62,7 @@
 #include <docsh.hxx>
 #include <unocrsrhelper.hxx>
 #include <textcontentcontrol.hxx>
+#include <EnhancedPDFExportHelper.hxx>
 #include <com/sun/star/rdf/Statement.hpp>
 #include <com/sun/star/rdf/URI.hpp>
 #include <com/sun/star/rdf/URIs.hpp>
@@ -1040,12 +1041,23 @@ bool SwContentControlPortion::DescribePDFControl(const SwTextPaintInfo& rInf) co
             auto pListWidget = static_cast<vcl::PDFWriter::ListBoxWidget*>(pDescriptor.get());
             pListWidget->DropDown = true;
             sal_Int32 nIndex = 0;
+            bool bTextFound = false;
             for (const auto& rItem : pContentControl->GetListItems())
             {
                 pListWidget->Entries.push_back(rItem.m_aDisplayText);
                 if (rItem.m_aDisplayText == aText)
+                {
                     pListWidget->SelectedEntries.push_back(nIndex);
+                    bTextFound = true;
+                }
                 ++nIndex;
+            }
+            if (!aText.isEmpty() && !bTextFound)
+            {
+                // The selected entry has to be an index, if there is no index for it, insert one at
+                // the start.
+                pListWidget->Entries.insert(pListWidget->Entries.begin(), aText);
+                pListWidget->SelectedEntries.push_back(0);
             }
             break;
         }
@@ -1079,10 +1091,23 @@ bool SwContentControlPortion::DescribePDFControl(const SwTextPaintInfo& rInf) co
         return false;
     }
 
+    bool bShrinkPageForPostIts = pPDFExtOutDevData->GetIsExportNotesInMargin()
+                                 && sw_GetPostIts(rDoc.getIDocumentFieldsAccess(), nullptr);
     const SwFont* pFont = rInf.GetFont();
     if (pFont)
     {
         pDescriptor->TextFont = pFont->GetActualFont();
+        if (bShrinkPageForPostIts)
+        {
+            // Page area is scaled down so we have space for comments. Scale down the font height
+            // for the content of the widgets, too.
+            double fScale = SwEnhancedPDFExportHelper::GetSwRectToPDFRectScale();
+            pDescriptor->TextFont.SetFontHeight(pDescriptor->TextFont.GetFontHeight() * fScale);
+        }
+
+        // Need to transport the color explicitly, so it's applied to both already filled in and
+        // future content.
+        pDescriptor->TextColor = pFont->GetColor();
     }
 
     // Description for accessibility purposes.
@@ -1114,7 +1139,25 @@ bool SwContentControlPortion::DescribePDFControl(const SwTextPaintInfo& rInf) co
 
     aLocation = aStartRect;
     aLocation.Union(aEndRect);
-    pDescriptor->Location = aLocation.SVRect();
+
+    // PDF spec 12.5.2 Annotation Dictionaries says the default border with is 1pt wide, increase
+    // the rectangle to compensate for that, otherwise the text will be cut off at the end.
+    aLocation.AddTop(-20);
+    aLocation.AddBottom(20);
+    aLocation.AddLeft(-20);
+    aLocation.AddRight(20);
+
+    tools::Rectangle aRect = aLocation.SVRect();
+    if (bShrinkPageForPostIts)
+    {
+        // Map the rectangle of the form widget, similar to how it's done for e.g. hyperlinks.
+        const SwPageFrame* pPageFrame = pTextFrame->FindPageFrame();
+        if (pPageFrame)
+        {
+            aRect = SwEnhancedPDFExportHelper::MapSwRectToPDFRect(pPageFrame, aRect);
+        }
+    }
+    pDescriptor->Location = aRect;
 
     pPDFExtOutDevData->WrapBeginStructureElement(vcl::PDFWriter::Form);
     pPDFExtOutDevData->CreateControl(*pDescriptor);
@@ -2048,6 +2091,7 @@ TextFrameIndex SwTextFormatter::FormatLine(TextFrameIndex const nStartPos)
 
                 m_pCurr->SetLen(TextFrameIndex(0));
                 m_pCurr->Width(0);
+                m_pCurr->ExtraShrunkWidth(0);
                 m_pCurr->Truncate();
             }
         }

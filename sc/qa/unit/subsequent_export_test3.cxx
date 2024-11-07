@@ -14,9 +14,11 @@
 #include "helper/qahelper.hxx"
 #include "helper/shared_test_impl.hxx"
 
+#include <attrib.hxx>
 #include <userdat.hxx>
 #include <tokenstringcontext.hxx>
 #include <chgtrack.hxx>
+#include <scitems.hxx>
 #include <scmod.hxx>
 
 #include <svx/svdpage.hxx>
@@ -30,6 +32,7 @@
 #include <unotools/useroptions.hxx>
 #include <sfx2/docfile.hxx>
 #include <tools/datetime.hxx>
+#include <tools/UnitConversion.hxx>
 
 #include <com/sun/star/drawing/XDrawPageSupplier.hpp>
 #include <com/sun/star/awt/XBitmap.hpp>
@@ -933,7 +936,7 @@ CPPUNIT_TEST_FIXTURE(ScExportTest3, testCustomXml)
     // Load document and export it to a temporary file
     createScDoc("xlsx/customxml.xlsx");
 
-    save("Calc Office Open XML");
+    saveAndReload(u"Calc Office Open XML"_ustr);
     xmlDocUniquePtr pXmlDoc = parseExport("customXml/item1.xml");
     CPPUNIT_ASSERT(pXmlDoc);
     xmlDocUniquePtr pRelsDoc = parseExport("customXml/_rels/item1.xml.rels");
@@ -946,6 +949,10 @@ CPPUNIT_TEST_FIXTURE(ScExportTest3, testCustomXml)
 
     std::unique_ptr<SvStream> pStream = parseExportStream(maTempFile.GetURL(), "ddp/ddpfile.xen");
     CPPUNIT_ASSERT(pStream);
+
+    // tdf#161453: ensure E1's wrap text attribute was round-tripped
+    ScDocument* pDoc = getScDoc();
+    CPPUNIT_ASSERT(pDoc->GetAttr(4, 0, 0, ATTR_LINEBREAK)->GetValue());
 }
 
 #ifdef _WIN32
@@ -1433,6 +1440,14 @@ CPPUNIT_TEST_FIXTURE(ScExportTest3, testPreserveTextWhitespace2XLSX)
     CPPUNIT_ASSERT(pDoc);
     assertXPath(pDoc, "/x:sst/x:si[1]/x:t"_ostr, "space"_ostr, "preserve");
     assertXPath(pDoc, "/x:sst/x:si[2]/x:t"_ostr, "space"_ostr, "preserve");
+
+    // tdf#158460: ensure B1 is NOT set to wrap text, so Excel keeps displaying as single line
+    SCTAB nTab = 0;
+    SCROW nRow = 0;
+    CPPUNIT_ASSERT(!getScDoc()->GetAttr(1, nRow, nTab, ATTR_LINEBREAK)->GetValue());
+    // Without the fix, this wrapped to two lines high (841). It should be 1 line high (529).
+    int nHeight = convertTwipToMm100(getScDoc()->GetRowHeight(nRow, nTab, false));
+    CPPUNIT_ASSERT_LESS(600, nHeight);
 }
 
 CPPUNIT_TEST_FIXTURE(ScExportTest3, testHiddenShapeXLS)

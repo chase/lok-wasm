@@ -19,10 +19,13 @@
 
 
 #include <osl/diagnose.hxx>
+#include <canvas/canvastools.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <cppcanvas/basegfxfactory.hxx>
+#include <cppcanvas/vclfactory.hxx>
 
 #include <basegfx/matrix/b2dhommatrix.hxx>
+#include <basegfx/matrix/b2dhommatrixtools.hxx>
 #include <basegfx/point/b2dpoint.hxx>
 
 #include <com/sun/star/awt/SystemPointer.hpp>
@@ -47,9 +50,12 @@
 #include "userpaintoverlay.hxx"
 #include "targetpropertiescreator.hxx"
 #include <tools.hxx>
+#include <tools/helpers.hxx>
+#include <tools/json_writer.hxx>
 #include <box2dtools.hxx>
 #include <utility>
 #include <vcl/graphicfilter.hxx>
+#include <vcl/virdev.hxx>
 #include <svx/svdograf.hxx>
 
 using namespace ::com::sun::star;
@@ -57,6 +63,7 @@ using namespace ::com::sun::star;
 
 namespace slideshow::internal
 {
+
 namespace
 {
 
@@ -85,7 +92,7 @@ public:
                double                                            dUserPaintStrokeWidth,
                bool                                              bUserPaintEnabled,
                bool                                              bIntrinsicAnimationsAllowed,
-               bool                                              bDisableAnimationZOrder );
+               bool                                              bDisableAnimationZOrder);
 
     virtual ~SlideImpl() override;
 
@@ -110,7 +117,6 @@ public:
     // TODO(F2): Rework SlideBitmap to no longer be based on XBitmap,
     // but on canvas-independent basegfx bitmaps
     virtual SlideBitmapSharedPtr getCurrentSlideBitmap( const UnoViewSharedPtr& rView ) const override;
-
 
 private:
     // ViewEventHandler
@@ -306,7 +312,7 @@ SlideImpl::SlideImpl( const uno::Reference< drawing::XDrawPage >&           xDra
                       double                                                dUserPaintStrokeWidth,
                       bool                                                  bUserPaintEnabled,
                       bool                                                  bIntrinsicAnimationsAllowed,
-                      bool                                                  bDisableAnimationZOrder ) :
+                      bool                                                  bDisableAnimationZOrder) :
     mxDrawPage( xDrawPage ),
     mxDrawPagesSupplier(std::move( xDrawPages )),
     mxRootNode(std::move( xRootNode )),
@@ -1082,7 +1088,7 @@ basegfx::B2ISize SlideImpl::getSlideSizeImpl() const
     return basegfx::B2ISize( nDocWidth, nDocHeight );
 }
 
-} // namespace
+} // anonymous namespace
 
 
 SlideSharedPtr createSlide( const uno::Reference< drawing::XDrawPage >&         xDrawPage,

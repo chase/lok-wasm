@@ -35,6 +35,7 @@
 #include <optional>
 #include <vector>
 #include <deque>
+#include <svx/UniqueID.hxx>
 
 // predefines
 namespace model { class Theme; }
@@ -93,6 +94,7 @@ public:
     virtual SdrObject* getSdrObjectFromSdrObjList() const;
 
     void CopyObjects(const SdrObjList& rSrcList);
+    static OString GetObjectRectangles(const SdrObjList& rSrcList);
 
     // tdf#116879 clean up everything (without Undo), plus broadcasting
     // changes. Split to this call and a private one (impClearSdrObjList)
@@ -433,6 +435,7 @@ private:
     sal_Int32 mnBorderUpper; // top page margin
     sal_Int32 mnBorderRight; // right page margin
     sal_Int32 mnBorderLower; // bottom page margin
+    UniqueID maUniqueID;
     bool mbBackgroundFullSize = false; ///< Background object to represent the whole page.
 
     std::unique_ptr<SdrLayerAdmin> mpLayerAdmin;
@@ -504,6 +507,7 @@ public:
     sal_Int32 GetUpperBorder() const;
     sal_Int32 GetRightBorder() const;
     sal_Int32 GetLowerBorder() const;
+    sal_uInt64 GetUniqueID() const { return maUniqueID.getID(); }
     void    SetBackgroundFullSize(bool bIn);
     bool    IsBackgroundFullSize() const;
 
@@ -557,6 +561,7 @@ public:
 
     void dumpAsXml(xmlTextWriterPtr pWriter) const override;
 
+    // Annotations
     virtual rtl::Reference<sdr::annotation::Annotation> createAnnotation();
     virtual void addAnnotation(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1);
     virtual void addAnnotationNoNotify(rtl::Reference<sdr::annotation::Annotation> const& xAnnotation, int nIndex = -1);

@@ -1567,14 +1567,13 @@ void SwTextFormatInfo::CtorInitTextFormatInfo( OutputDevice* pRenderContext, SwT
     m_nLineNetHeight = 0;
     SetLineStart(TextFrameIndex(0));
 
-    SvtCTLOptions::TextNumerals const nTextNumerals(
-            SvtCTLOptions::GetCTLTextNumerals());
+    SvtCTLOptions::TextNumerals const nTextNumerals(SW_MOD()->GetCTLTextNumerals());
     // cannot cache for NUMERALS_CONTEXT because we need to know the string
     // for the whole paragraph now
     if (nTextNumerals != SvtCTLOptions::NUMERALS_CONTEXT)
     {
         // set digit mode to what will be used later to get same results
-        SwDigitModeModifier const m(*m_pRef, LANGUAGE_NONE /*dummy*/);
+        SwDigitModeModifier const m(*m_pRef, LANGUAGE_NONE /*dummy*/, nTextNumerals);
         assert(m_pRef->GetDigitLanguage() != LANGUAGE_NONE);
         SetCachedVclData(OutputDevice::CreateTextLayoutCache(*m_pText));
     }
@@ -1941,6 +1940,11 @@ SwTwips SwTextFormatInfo::GetLineWidth()
         // right, center, decimal can back-fill all the available space - same as TabOverMargin
         if (pLastTab->GetWhichPor() == PortionType::TabLeft)
             nLineWidth = nTextFrameWidth - pLastTab->GetTabPos();
+    }
+    else
+    {   // tdf#158658 Put content after tab into margin like Word.
+        // Try to limit the paragraph to 55.87cm, it's max tab pos in Word UI.
+        nLineWidth = o3tl::toTwips(558, o3tl::Length::mm) - X();
     }
     return nLineWidth;
 }

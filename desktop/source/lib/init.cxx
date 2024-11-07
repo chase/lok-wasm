@@ -111,6 +111,7 @@
 #include <com/sun/star/lang/XComponent.hpp>
 #include <com/sun/star/lang/XMultiServiceFactory.hpp>
 #include <com/sun/star/style/XStyleFamiliesSupplier.hpp>
+#include <com/sun/star/util/thePathSettings.hpp>
 #include <com/sun/star/util/URLTransformer.hpp>
 #include <com/sun/star/util/XFlushable.hpp>
 #include <com/sun/star/configuration/theDefaultProvider.hpp>
@@ -380,6 +381,11 @@ constexpr ExtensionMap aImpressExtensionMap[] =
     { "svg",   u"impress_svg_Export"_ustr },
     { "xhtml", u"XHTML Impress File"_ustr },
     { "png",   u"impress_png_Export"_ustr },
+    { "swf",   u"impress_flash_Export"_ustr },
+    { "bmp",   u"impress_bmp_Export"_ustr },
+    { "gif",   u"impress_gif_Export"_ustr },
+    { "tif",   u"impress_tif_Export"_ustr },
+    { "tiff",  u"impress_tif_Export"_ustr }, // tif and tiff are the same format: see https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types#tiff_tagged_image_file_format
 };
 
 constexpr ExtensionMap aDrawExtensionMap[] =
@@ -811,49 +817,12 @@ static int lcl_getViewId(std::string_view payload)
     return 0;
 }
 
+// Wonder global state ...
+static uno::Reference<css::uno::XComponentContext> xContext;
+static uno::Reference<css::lang::XMultiServiceFactory> xSFactory;
+static uno::Reference<css::lang::XMultiComponentFactory> xFactory;
+
 namespace {
-
-std::string extractCertificate(const std::string & certificate)
-{
-    static constexpr std::string_view header("-----BEGIN CERTIFICATE-----");
-    static constexpr std::string_view footer("-----END CERTIFICATE-----");
-
-    std::string result;
-
-    size_t pos1 = certificate.find(header);
-    if (pos1 == std::string::npos)
-        return result;
-
-    size_t pos2 = certificate.find(footer, pos1 + 1);
-    if (pos2 == std::string::npos)
-        return result;
-
-    pos1 = pos1 + header.length();
-    pos2 = pos2 - pos1;
-
-    return certificate.substr(pos1, pos2);
-}
-
-std::string extractPrivateKey(const std::string & privateKey)
-{
-    static constexpr std::string_view header("-----BEGIN PRIVATE KEY-----");
-    static constexpr std::string_view footer("-----END PRIVATE KEY-----");
-
-    std::string result;
-
-    size_t pos1 = privateKey.find(header);
-    if (pos1 == std::string::npos)
-        return result;
-
-    size_t pos2 = privateKey.find(footer, pos1 + 1);
-    if (pos2 == std::string::npos)
-        return result;
-
-    pos1 = pos1 + header.length();
-    pos2 = pos2 - pos1;
-
-    return privateKey.substr(pos1, pos2);
-}
 
 OUString lcl_getCurrentDocumentMimeType(const LibLODocument_Impl* pDocument)
 {
@@ -1022,6 +991,86 @@ void hideSidebar()
         pViewFrame->SetChildWindow(SID_SIDEBAR, false , false );
     else
         SetLastExceptionMsg(u"No view shell or sidebar"_ustr);
+}
+
+css::uno::Sequence<css::lang::Locale> setLanguageToolConfig()
+{
+    css::uno::Sequence<css::lang::Locale> aLTLocales;
+
+    const char* pEnabled = ::getenv("LANGUAGETOOL_ENABLED");
+    const char* pBaseUrlString = ::getenv("LANGUAGETOOL_BASEURL");
+
+    if (pEnabled && pBaseUrlString)
+    {
+        const char* pUsername = ::getenv("LANGUAGETOOL_USERNAME");
+        const char* pApikey = ::getenv("LANGUAGETOOL_APIKEY");
+        const char* pSSLVerification = ::getenv("LANGUAGETOOL_SSL_VERIFICATION");
+        const char* pRestProtocol = ::getenv("LANGUAGETOOL_RESTPROTOCOL");
+
+        OUString aEnabled = OStringToOUString(pEnabled, RTL_TEXTENCODING_UTF8);
+        if (aEnabled != "true")
+            return aLTLocales;
+        OUString aBaseUrl = OStringToOUString(pBaseUrlString, RTL_TEXTENCODING_UTF8);
+        try
+        {
+            using LanguageToolCfg = officecfg::Office::Linguistic::GrammarChecking::LanguageTool;
+            auto batch(comphelper::ConfigurationChanges::create());
+
+            LanguageToolCfg::BaseURL::set(aBaseUrl, batch);
+            LanguageToolCfg::IsEnabled::set(true, batch);
+            if (pSSLVerification)
+            {
+                OUString aSSLVerification = OStringToOUString(pSSLVerification, RTL_TEXTENCODING_UTF8);
+                LanguageToolCfg::SSLCertVerify::set(aSSLVerification == "true", batch);
+            }
+            if (pRestProtocol)
+            {
+                OUString aRestProtocol = OStringToOUString(pRestProtocol, RTL_TEXTENCODING_UTF8);
+                LanguageToolCfg::RestProtocol::set(aRestProtocol, batch);
+            }
+            if (pUsername && pApikey)
+            {
+                OUString aUsername = OStringToOUString(pUsername, RTL_TEXTENCODING_UTF8);
+                OUString aApiKey = OStringToOUString(pApikey, RTL_TEXTENCODING_UTF8);
+                LanguageToolCfg::Username::set(aUsername, batch);
+                LanguageToolCfg::ApiKey::set(aApiKey, batch);
+            }
+            batch->commit();
+
+            uno::Reference<linguistic2::XProofreader> xGC(
+                xContext->getServiceManager()->createInstanceWithContext(u"org.openoffice.lingu.LanguageToolGrammarChecker"_ustr, xContext),
+                uno::UNO_QUERY_THROW);
+            uno::Reference<linguistic2::XSupportedLocales> xSuppLoc(xGC, uno::UNO_QUERY_THROW);
+
+            css::uno::Reference<css::linguistic2::XLinguServiceManager2> xLangSrv =
+                css::linguistic2::LinguServiceManager::create(xContext);
+            if (xLangSrv.is())
+            {
+                css::uno::Reference<css::linguistic2::XSpellChecker> xSpell = xLangSrv->getSpellChecker();
+                if (xSpell.is())
+                {
+                    Sequence<OUString> aEmpty;
+                    Sequence<css::lang::Locale> aLocales = xSpell->getLocales();
+
+                    for (int itLocale = 0; itLocale < aLocales.getLength(); itLocale++)
+                    {
+                        // turn off spell checker if LanguageTool supports the locale already
+                        if (xSuppLoc->hasLocale(aLocales[itLocale]))
+                            xLangSrv->setConfiguredServices(
+                                SN_SPELLCHECKER, aLocales[itLocale], aEmpty);
+                    }
+                }
+            }
+
+            aLTLocales = xSuppLoc->getLocales();
+        }
+        catch(uno::Exception const& rException)
+        {
+            SAL_WARN("lok", "Failed to set LanguageTool API settings: " << rException.Message);
+        }
+    }
+
+    return aLTLocales;
 }
 
 }  // end anonymous namespace
@@ -1285,6 +1334,20 @@ static void doc_setAccessibilityState(LibreOfficeKitDocument* pThis, int nId, bo
 static char* doc_getA11yFocusedParagraph(LibreOfficeKitDocument* pThis);
 
 static int doc_getA11yCaretPosition(LibreOfficeKitDocument* pThis);
+
+static char* doc_getPresentationInfo(LibreOfficeKitDocument* pThis);
+
+static bool doc_createSlideRenderer(
+    LibreOfficeKitDocument* pThis,
+    const char* pSlideHash,
+    int nSlideNumber, unsigned* nViewWidth, unsigned* nViewHeight,
+    bool bRenderBackground, bool bRenderMasterPage);
+
+static void doc_postSlideshowCleanup(LibreOfficeKitDocument* pThis);
+
+static bool doc_renderNextSlideLayer(
+    LibreOfficeKitDocument* pThis, unsigned char* pBuffer, bool* bIsBitmapLayer, char** pJsonMsg);
+
 } // extern "C"
 
 namespace {
@@ -1481,6 +1544,11 @@ LibLODocument_Impl::LibLODocument_Impl(uno::Reference <css::lang::XComponent> xC
         m_pDocumentClass->setViewReadOnly = doc_setViewReadOnly;
 
         m_pDocumentClass->setAllowChangeComments = doc_setAllowChangeComments;
+
+        m_pDocumentClass->getPresentationInfo = doc_getPresentationInfo;
+        m_pDocumentClass->createSlideRenderer = doc_createSlideRenderer;
+        m_pDocumentClass->postSlideshowCleanup = doc_postSlideshowCleanup;
+        m_pDocumentClass->renderNextSlideLayer = doc_renderNextSlideLayer;
 
         gDocumentClass = m_pDocumentClass;
     }
@@ -2611,6 +2679,10 @@ static void lo_runLoop(LibreOfficeKit* pThis,
                        LibreOfficeKitWakeCallback pWakeCallback,
                        void* pData);
 
+static void lo_registerAnyInputCallback(LibreOfficeKit* pThis,
+                       LibreOfficeKitAnyInputCallback pAnyInputCallback,
+                       void* pData);
+
 static void lo_sendDialogEvent(LibreOfficeKit* pThis,
                                unsigned long long int nLOKWindowId,
                                const char* pArguments);
@@ -2618,6 +2690,9 @@ static void lo_sendDialogEvent(LibreOfficeKit* pThis,
 static void lo_setOption(LibreOfficeKit* pThis, const char* pOption, const char* pValue);
 
 static void lo_dumpState(LibreOfficeKit* pThis, const char* pOptions, char** pState);
+
+static char* lo_extractDocumentStructureRequest(LibreOfficeKit* pThis, const char* pFilePath,
+                                                const char* pFilter);
 
 LibLibreOffice_Impl::LibLibreOffice_Impl()
     : m_pOfficeClass( gOfficeClass.lock() )
@@ -2653,6 +2728,8 @@ LibLibreOffice_Impl::LibLibreOffice_Impl()
         m_pOfficeClass->joinThreads = lo_joinThreads;
         m_pOfficeClass->startThreads = lo_startThreads;
         m_pOfficeClass->setForkedChild = lo_setForkedChild;
+        m_pOfficeClass->extractDocumentStructureRequest = lo_extractDocumentStructureRequest;
+        m_pOfficeClass->registerAnyInputCallback = lo_registerAnyInputCallback;
 
         gOfficeClass = m_pOfficeClass;
     }
@@ -2685,11 +2762,6 @@ void setFormatSpecificFilterData(std::u16string_view sFormat, comphelper::Sequen
 }
 
 } // anonymous namespace
-
-// Wonder global state ...
-static uno::Reference<css::uno::XComponentContext> xContext;
-static uno::Reference<css::lang::XMultiServiceFactory> xSFactory;
-static uno::Reference<css::lang::XMultiComponentFactory> xFactory;
 
 static LibreOfficeKitDocument* lo_documentLoad(LibreOfficeKit* pThis, const char* pURL)
 {
@@ -2842,6 +2914,9 @@ static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* pThis,
         */
 
         OutputDevice::StartTrackingFontMappingUse();
+
+        if (const char* pExemptVerifyHost = ::getenv("LOK_EXEMPT_VERIFY_HOST"))
+            HostFilter::setExemptVerifyHost(OUString(pExemptVerifyHost, strlen(pExemptVerifyHost), RTL_TEXTENCODING_UTF8));
 
         const int nThisDocumentId = nDocumentIdCounter++;
         SfxViewShell::SetCurrentDocId(ViewShellDocId(nThisDocumentId));
@@ -3076,47 +3151,9 @@ static bool lo_signDocument(LibreOfficeKit* /*pThis*/,
     if (!xContext.is())
         return false;
 
-    uno::Sequence<sal_Int8> aCertificateSequence;
-
     std::string aCertificateString(reinterpret_cast<const char*>(pCertificateBinary), nCertificateBinarySize);
-    std::string aCertificateBase64String = extractCertificate(aCertificateString);
-    if (!aCertificateBase64String.empty())
-    {
-        OUString aBase64OUString = OUString::createFromAscii(aCertificateBase64String);
-        comphelper::Base64::decode(aCertificateSequence, aBase64OUString);
-    }
-    else
-    {
-        aCertificateSequence.realloc(nCertificateBinarySize);
-        std::copy(pCertificateBinary, pCertificateBinary + nCertificateBinarySize, aCertificateSequence.getArray());
-    }
-
-    uno::Sequence<sal_Int8> aPrivateKeySequence;
     std::string aPrivateKeyString(reinterpret_cast<const char*>(pPrivateKeyBinary), nPrivateKeyBinarySize);
-    std::string aPrivateKeyBase64String = extractPrivateKey(aPrivateKeyString);
-    if (!aPrivateKeyBase64String.empty())
-    {
-        OUString aBase64OUString = OUString::createFromAscii(aPrivateKeyBase64String);
-        comphelper::Base64::decode(aPrivateKeySequence, aBase64OUString);
-    }
-    else
-    {
-        aPrivateKeySequence.realloc(nPrivateKeyBinarySize);
-        std::copy(pPrivateKeyBinary, pPrivateKeyBinary + nPrivateKeyBinarySize, aPrivateKeySequence.getArray());
-    }
-
-    uno::Reference<xml::crypto::XSEInitializer> xSEInitializer = xml::crypto::SEInitializer::create(xContext);
-    uno::Reference<xml::crypto::XXMLSecurityContext> xSecurityContext = xSEInitializer->createSecurityContext(OUString());
-    if (!xSecurityContext.is())
-        return false;
-
-    uno::Reference<xml::crypto::XSecurityEnvironment> xSecurityEnvironment = xSecurityContext->getSecurityEnvironment();
-    uno::Reference<xml::crypto::XCertificateCreator> xCertificateCreator(xSecurityEnvironment, uno::UNO_QUERY);
-
-    if (!xCertificateCreator.is())
-        return false;
-
-    uno::Reference<security::XCertificate> xCertificate = xCertificateCreator->createDERCertificateWithPrivateKey(aCertificateSequence, aPrivateKeySequence);
+    uno::Reference<security::XCertificate> xCertificate = SfxLokHelper::getSigningCertificate(aCertificateString, aPrivateKeyString);
 
     if (!xCertificate.is())
         return false;
@@ -3169,6 +3206,71 @@ static char* lo_extractRequest(LibreOfficeKit* /*pThis*/, const char* pFilePath)
                     }
                     return convertOString(aJson.finishAndGetAsOString());
                 }
+                xComp->dispose();
+            }
+        }
+    }
+    return strdup("{ }");
+}
+
+static char* lo_extractDocumentStructureRequest(LibreOfficeKit* /*pThis*/, const char* pFilePath,
+                                                const char* pFilter)
+{
+    uno::Reference<frame::XDesktop2> xComponentLoader = frame::Desktop::create(xContext);
+    uno::Reference< css::lang::XComponent > xComp;
+    OUString aURL(getAbsoluteURL(pFilePath));
+    if (!aURL.isEmpty())
+    {
+        if (xComponentLoader.is())
+        {
+            try
+            {
+                uno::Sequence<css::beans::PropertyValue> aFilterOptions(comphelper::InitPropertySequence(
+                {
+                    {u"Hidden"_ustr, css::uno::Any(true)},
+                    {u"ReadOnly"_ustr, css::uno::Any(true)}
+                }));
+                xComp = xComponentLoader->loadComponentFromURL( aURL, u"_blank"_ustr, 0, aFilterOptions );
+            }
+            catch ( const lang::IllegalArgumentException& ex )
+            {
+                SAL_WARN("lok", "lo_extractDocumentStructureRequest: IllegalArgumentException: " << ex.Message);
+            }
+            catch (...)
+            {
+                SAL_WARN("lok", "lo_extractDocumentStructureRequest: Exception on loadComponentFromURL, url= " << aURL);
+            }
+
+            if (xComp.is())
+            {
+                ITiledRenderable* pDoc = dynamic_cast<ITiledRenderable*>(xComp.get());
+
+                auto pBaseModel = dynamic_cast<SfxBaseModel*>(xComp.get());
+                if (!pBaseModel)
+                    return nullptr;
+
+                SfxObjectShell* pObjectShell = pBaseModel->GetObjectShell();
+                if (!pObjectShell)
+                    return nullptr;
+
+                //if it is a writer document..
+                uno::Reference<lang::XServiceInfo> xDocument(xComp, uno::UNO_QUERY_THROW);
+                if (xDocument->supportsService(u"com.sun.star.text.TextDocument"_ustr) || xDocument->supportsService(u"com.sun.star.text.WebDocument"_ustr))
+                {
+                    tools::JsonWriter aJson;
+                    {
+                        OString aCommand = ".uno:ExtractDocumentStructure"_ostr;
+                        if (pFilter && pFilter[0])
+                        {
+                            aCommand
+                                = OString::Concat(aCommand) + "?filter="_ostr + pFilter;
+                        }
+
+                        pDoc->getCommandValues(aJson, aCommand);
+                    }
+                    return convertOString(aJson.finishAndGetAsOString());
+                }
+
                 xComp->dispose();
             }
         }
@@ -3389,7 +3491,8 @@ static void lo_stopURP(LibreOfficeKit* /* pThis */,
 static int lo_joinThreads(LibreOfficeKit* /* pThis */)
 {
     comphelper::ThreadPool &pool = comphelper::ThreadPool::getSharedOptimalPool();
-    pool.joinThreadsIfIdle();
+    if (!pool.joinThreadsIfIdle())
+        return 0;
 
     // Grammar checker thread
     css::uno::Reference<css::linguistic2::XLinguServiceManager2> xLangSrv =
@@ -3764,6 +3867,7 @@ static void doc_iniUnoCommands ()
         u".uno:ReplyComment"_ustr,
         u".uno:ResolveComment"_ustr,
         u".uno:ResolveCommentThread"_ustr,
+        u".uno:PromoteComment"_ustr,
         u".uno:InsertRowsBefore"_ustr,
         u".uno:InsertRowsAfter"_ustr,
         u".uno:InsertColumnsBefore"_ustr,
@@ -3926,6 +4030,7 @@ static void doc_iniUnoCommands ()
         u".uno:Protect"_ustr,
         u".uno:UnsetCellsReadOnly"_ustr,
         u".uno:ContentControlProperties"_ustr,
+        u".uno:DeleteContentControl"_ustr,
         u".uno:InsertCheckboxContentControl"_ustr,
         u".uno:InsertContentControl"_ustr,
         u".uno:InsertDateContentControl"_ustr,
@@ -3937,6 +4042,17 @@ static void doc_iniUnoCommands ()
         u".uno:MoveKeepInsertMode"_ustr,
         u".uno:ToggleSheetGrid"_ustr,
         u".uno:ChangeBezier"_ustr,
+        u".uno:DistributeHorzCenter"_ustr,
+        u".uno:DistributeHorzDistance"_ustr,
+        u".uno:DistributeHorzLeft"_ustr,
+        u".uno:DistributeHorzRight"_ustr,
+        u".uno:DistributeVertBottom"_ustr,
+        u".uno:DistributeVertCenter"_ustr,
+        u".uno:DistributeVertDistance"_ustr,
+        u".uno:DistributeVertTop"_ustr,
+        u".uno:AnimationEffects"_ustr,
+        u".uno:ExecuteAnimationEffect"_ustr,
+        u".uno:EditDoc"_ustr,
     };
 
     util::URL aCommandURL;
@@ -4220,6 +4336,7 @@ static void doc_setPartMode(LibreOfficeKitDocument* pThis,
     // TODO: we could be clever and e.g. set to 0 when we change to/from
     // embedded object mode, and not when changing between slide/notes/combined
     // modes?
+    // TODO: Also now see ViewShellBase::setEditMode for a similar case
     if ( nCurrentPart < pDoc->getParts() )
     {
         pDoc->setPart( nCurrentPart );
@@ -4623,8 +4740,37 @@ static void doc_initializeForRendering(LibreOfficeKitDocument* pThis,
     if (pDoc)
     {
         doc_iniUnoCommands();
-        pDoc->initializeForTiledRendering(
-                comphelper::containerToSequence(jsonToPropertyValuesVector(pArguments)));
+        std::vector<beans::PropertyValue> aArgs = jsonToPropertyValuesVector(pArguments);
+        std::string aSignatureCert;
+        std::string aSignatureKey;
+        for (const auto& rArg : aArgs)
+        {
+            if (rArg.Name == ".uno:SignatureCert" && rArg.Value.has<OUString>())
+            {
+                aSignatureCert = rArg.Value.get<OUString>().toUtf8();
+            }
+            else if (rArg.Name == ".uno:SignatureKey" && rArg.Value.has<OUString>())
+            {
+                aSignatureKey = rArg.Value.get<OUString>().toUtf8();
+            }
+            else if (rArg.Name == ".uno:SignatureCa" && rArg.Value.has<OUString>())
+            {
+                std::string aSignatureCa;
+                aSignatureCa = rArg.Value.get<OUString>().toUtf8();
+                std::vector<std::string> aCerts = SfxLokHelper::extractCertificates(aSignatureCa);
+                SfxLokHelper::addCertificates(aCerts);
+            }
+        }
+        if (!aSignatureCert.empty() && !aSignatureKey.empty())
+        {
+            uno::Reference<security::XCertificate> xCertificate = SfxLokHelper::getSigningCertificate(aSignatureCert, aSignatureKey);
+            if (SfxViewShell* pViewShell = SfxViewShell::Current())
+            {
+                pViewShell->SetSigningCertificate(xCertificate);
+            }
+        }
+
+        pDoc->initializeForTiledRendering(comphelper::containerToSequence(aArgs));
     }
 }
 
@@ -5081,6 +5227,8 @@ static void lcl_sendDialogEvent(unsigned long long int nWindowId, const char* pA
             sWindowId = sCurrentShellId + "notebookbar";
         if (nWindowId == static_cast<unsigned long long int>(-3))
             sWindowId = sCurrentShellId + "formulabar";
+        if (nWindowId == static_cast<unsigned long long int>(-4))
+            sWindowId = sCurrentShellId + "addressinputfield";
 
         // dialogs send own id but notebookbar and sidebar controls are remembered by SfxViewShell id
         if (jsdialog::ExecuteAction(sWindowId, sControlId, aMap))
@@ -5091,6 +5239,8 @@ static void lcl_sendDialogEvent(unsigned long long int nWindowId, const char* pA
         if (jsdialog::ExecuteAction(sCurrentShellId + "notebookbar", sControlId, aMap))
             return;
         if (jsdialog::ExecuteAction(sCurrentShellId + "formulabar", sControlId, aMap))
+            return;
+        if (jsdialog::ExecuteAction(sCurrentShellId + "addressinputfield", sControlId, aMap))
             return;
         // this is needed for dialogs shown before document is loaded: MacroWarning dialog, etc...
         // these dialogs are created with WindowId "0"
@@ -5159,10 +5309,11 @@ static void lo_setOption(LibreOfficeKit* /*pThis*/, const char *pOption, const c
 
         OUString sMagicFileName = "file:///:FD:/" + OUString::number(fd);
 
+        SolarMutexGuard aGuard;
         OutputDevice *pDevice = Application::GetDefaultDevice();
-        OutputDevice::ImplClearAllFontData(false);
+        OutputDevice::ImplClearAllFontData(true);
         pDevice->AddTempDevFont(sMagicFileName, "");
-        OutputDevice::ImplRefreshAllFontData(false);
+        OutputDevice::ImplRefreshAllFontData(true);
     }
 #endif
 }
@@ -5237,6 +5388,9 @@ static void doc_postUnoCommand(LibreOfficeKitDocument* pThis, const char* pComma
     OUString aCommand(pCommand, strlen(pCommand), RTL_TEXTENCODING_UTF8);
 
     if (!isCommandAllowed(aCommand))
+        return;
+
+    if (gImpl && aCommand == ".uno:None")
         return;
 
     LibLODocument_Impl* pDocument = static_cast<LibLODocument_Impl*>(pThis);
@@ -5577,6 +5731,88 @@ static void doc_setWindowTextSelection(LibreOfficeKitDocument* /*pThis*/, unsign
     MouseEvent aCursorEvent(aCursorPos, 1, MouseEventModifiers::SIMPLECLICK, 0, nModifier);
     Application::PostMouseEvent(VclEventId::WindowMouseButtonDown, pWindow, &aCursorEvent);
     Application::PostMouseEvent(VclEventId::WindowMouseButtonUp, pWindow, &aCursorEvent);
+}
+
+static char* doc_getPresentationInfo(LibreOfficeKitDocument* pThis)
+{
+    SolarMutexGuard aGuard;
+    SetLastExceptionMsg();
+
+    ITiledRenderable* pDoc = getTiledRenderable(pThis);
+    if (!pDoc)
+    {
+        SetLastExceptionMsg(u"Document doesn't support tiled rendering"_ustr);
+        return nullptr;
+    }
+
+    return convertOString(pDoc->getPresentationInfo());
+}
+
+static bool doc_createSlideRenderer(
+    LibreOfficeKitDocument* pThis,
+    const char* pSlideHash,
+    int nSlideNumber, unsigned* pViewWidth, unsigned* pViewHeight,
+    bool bRenderBackground, bool bRenderMasterPage)
+{
+    SolarMutexGuard aGuard;
+    SetLastExceptionMsg();
+
+    ITiledRenderable* pDoc = getTiledRenderable(pThis);
+    if (!pDoc)
+    {
+        SetLastExceptionMsg(u"Document doesn't support tiled rendering"_ustr);
+        return false;
+    }
+
+    OString sSlideHash(pSlideHash);
+    sal_Int32 nViewWidth = *pViewWidth;
+    sal_Int32 nViewHeight = *pViewHeight;
+    bool bReturn = pDoc->createSlideRenderer(
+                    sSlideHash,
+                    nSlideNumber, nViewWidth, nViewHeight,
+                    bRenderBackground, bRenderMasterPage);
+
+    *pViewWidth = nViewWidth;
+    *pViewHeight = nViewHeight;
+
+    return bReturn;
+}
+
+static void doc_postSlideshowCleanup(LibreOfficeKitDocument* pThis)
+{
+    SolarMutexGuard aGuard;
+    SetLastExceptionMsg();
+
+    ITiledRenderable* pDoc = getTiledRenderable(pThis);
+    if (!pDoc)
+    {
+        SetLastExceptionMsg(u"Document doesn't support tiled rendering"_ustr);
+        return;
+    }
+    pDoc->postSlideshowCleanup();
+}
+
+static bool doc_renderNextSlideLayer(
+    LibreOfficeKitDocument* pThis, unsigned char* pBuffer, bool* pIsBitmapLayer, char** pJsonMessage)
+{
+    SolarMutexGuard aGuard;
+    SetLastExceptionMsg();
+
+    ITiledRenderable* pDoc = getTiledRenderable(pThis);
+    if (!pDoc)
+    {
+        SetLastExceptionMsg(u"Document doesn't support tiled rendering"_ustr);
+        return true;
+    }
+    OUString sJsonMesssage;
+    bool bIsBitmapLayer = false;
+    bool bDone = pDoc->renderNextSlideLayer(pBuffer, bIsBitmapLayer, sJsonMesssage);
+
+    if (pJsonMessage)
+        *pJsonMessage = convertOUString(sJsonMesssage);
+    *pIsBitmapLayer = bIsBitmapLayer;
+
+    return bDone;
 }
 
 static bool getFromTransferable(
@@ -6223,6 +6459,10 @@ static char* getStyles(LibreOfficeKitDocument* pThis, const char* pCommand)
     aTree.put("commandName", pCommand);
     uno::Reference<css::style::XStyleFamiliesSupplier> xStyleFamiliesSupplier(pDocument->mxComponent, uno::UNO_QUERY);
     const uno::Reference<container::XNameAccess> xStyleFamilies = xStyleFamiliesSupplier->getStyleFamilies();
+    if (!xStyleFamilies.is())
+    {
+        return nullptr;
+    }
     const uno::Sequence<OUString> aStyleFamilies = xStyleFamilies->getElementNames();
 
     static constexpr OUString aWriterStyles[] =
@@ -6635,7 +6875,7 @@ static char* doc_getCommandValues(LibreOfficeKitDocument* pThis, const char* pCo
     }
     else
     {
-        SetLastExceptionMsg(u"Unknown command, no values returned"_ustr);
+        SetLastExceptionMsg(OUString::fromUtf8(aCommand) + u" : Unknown command, no values returned"_ustr);
         return nullptr;
     }
 }
@@ -7061,48 +7301,9 @@ static bool doc_insertCertificate(LibreOfficeKitDocument* pThis,
     if (!pObjectShell)
         return false;
 
-    uno::Reference<xml::crypto::XSEInitializer> xSEInitializer = xml::crypto::SEInitializer::create(xContext);
-    uno::Reference<xml::crypto::XXMLSecurityContext> xSecurityContext = xSEInitializer->createSecurityContext(OUString());
-    if (!xSecurityContext.is())
-        return false;
-
-    uno::Reference<xml::crypto::XSecurityEnvironment> xSecurityEnvironment = xSecurityContext->getSecurityEnvironment();
-    uno::Reference<xml::crypto::XCertificateCreator> xCertificateCreator(xSecurityEnvironment, uno::UNO_QUERY);
-
-    if (!xCertificateCreator.is())
-        return false;
-
-    uno::Sequence<sal_Int8> aCertificateSequence;
-
     std::string aCertificateString(reinterpret_cast<const char*>(pCertificateBinary), nCertificateBinarySize);
-    std::string aCertificateBase64String = extractCertificate(aCertificateString);
-    if (!aCertificateBase64String.empty())
-    {
-        OUString aBase64OUString = OUString::createFromAscii(aCertificateBase64String);
-        comphelper::Base64::decode(aCertificateSequence, aBase64OUString);
-    }
-    else
-    {
-        aCertificateSequence.realloc(nCertificateBinarySize);
-        std::copy(pCertificateBinary, pCertificateBinary + nCertificateBinarySize, aCertificateSequence.getArray());
-    }
-
-    uno::Sequence<sal_Int8> aPrivateKeySequence;
     std::string aPrivateKeyString(reinterpret_cast<const char*>(pPrivateKeyBinary), nPrivateKeySize);
-    std::string aPrivateKeyBase64String = extractPrivateKey(aPrivateKeyString);
-    if (!aPrivateKeyBase64String.empty())
-    {
-        OUString aBase64OUString = OUString::createFromAscii(aPrivateKeyBase64String);
-        comphelper::Base64::decode(aPrivateKeySequence, aBase64OUString);
-    }
-    else
-    {
-        aPrivateKeySequence.realloc(nPrivateKeySize);
-        std::copy(pPrivateKeyBinary, pPrivateKeyBinary + nPrivateKeySize, aPrivateKeySequence.getArray());
-    }
-
-    uno::Reference<security::XCertificate> xCertificate = xCertificateCreator->createDERCertificateWithPrivateKey(aCertificateSequence, aPrivateKeySequence);
-
+    uno::Reference<security::XCertificate> xCertificate = SfxLokHelper::getSigningCertificate(aCertificateString, aPrivateKeyString);
     if (!xCertificate.is())
         return false;
 
@@ -7147,7 +7348,7 @@ static bool doc_addCertificate(LibreOfficeKitDocument* pThis,
     uno::Sequence<sal_Int8> aCertificateSequence;
 
     std::string aCertificateString(reinterpret_cast<const char*>(pCertificateBinary), nCertificateBinarySize);
-    std::string aCertificateBase64String = extractCertificate(aCertificateString);
+    std::string aCertificateBase64String = SfxLokHelper::extractCertificate(aCertificateString);
     if (!aCertificateBase64String.empty())
     {
         OUString aBase64OUString = OUString::createFromAscii(aCertificateBase64String);
@@ -7159,7 +7360,7 @@ static bool doc_addCertificate(LibreOfficeKitDocument* pThis,
         std::copy(pCertificateBinary, pCertificateBinary + nCertificateBinarySize, aCertificateSequence.getArray());
     }
 
-    uno::Reference<security::XCertificate> xCertificate = xCertificateCreator->addDERCertificateToTheDatabase(aCertificateSequence, u"TCu,Cu,Tu"_ustr);
+    uno::Reference<security::XCertificate> xCertificate = SfxLokHelper::addCertificate(xCertificateCreator, aCertificateSequence);
 
     if (!xCertificate.is())
         return false;
@@ -7570,6 +7771,14 @@ static void lo_runLoop(LibreOfficeKit* /*pThis*/,
 #endif
 }
 
+static void lo_registerAnyInputCallback(LibreOfficeKit* /*pThis*/,
+                       LibreOfficeKitAnyInputCallback pAnyInputCallback,
+                       void* pData)
+{
+    SolarMutexGuard aGuard;
+    comphelper::LibreOfficeKit::setAnyInputCallback(pAnyInputCallback, pData);
+}
+
 static bool bInitialized = false;
 
 static void lo_status_indicator_callback(void *data, comphelper::LibreOfficeKit::statusIndicatorCallbackType type, int percent, const char* pText)
@@ -7629,8 +7838,6 @@ static void preLoadShortCutAccelerators()
     batch->commit();
 }
 
-void setLanguageToolConfig();
-
 /// Used only by LibreOfficeKit when used by Online to pre-initialize
 static void preloadData()
 {
@@ -7659,7 +7866,14 @@ static void preloadData()
     std::cerr << "\n";
 
     // setup LanguageTool config before spell checking init
-    setLanguageToolConfig();
+    css::uno::Sequence<css::lang::Locale> aLTLocales = setLanguageToolConfig();
+    if (aLTLocales.getLength())
+    {
+        std::cerr << "Remote linguistic service languages: ";
+        for (auto &it : std::as_const(aLTLocales))
+            std::cerr << LanguageTag::convertToBcp47(it) << " ";
+        std::cerr << "\n";
+    }
 
     // preload all available dictionaries
     linguistic2::DictionaryList::create(comphelper::getProcessComponentContext());
@@ -7667,7 +7881,7 @@ static void preloadData()
         css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
     css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
 
-    std::cerr << "Preloading dictionaries: ";
+    std::cerr << "Preloading local dictionaries: ";
     css::uno::Reference<linguistic2::XSupportedLocales> xSpellLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
     uno::Sequence< css::lang::Locale > aLocales = xSpellLocales->getLocales();
     for (auto &it : std::as_const(aLocales))
@@ -7688,9 +7902,9 @@ static void preloadData()
 
     // preload all available thesauri
     css::uno::Reference<linguistic2::XThesaurus> xThesaurus(xLngSvcMgr->getThesaurus());
-    css::uno::Reference<linguistic2::XSupportedLocales> xThesLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
+    css::uno::Reference<linguistic2::XSupportedLocales> xThesLocales(xThesaurus, css::uno::UNO_QUERY_THROW);
     aLocales = xThesLocales->getLocales();
-    std::cerr << "Preloading thesauri: ";
+    std::cerr << "Preloading local thesauri: ";
     for (auto &it : std::as_const(aLocales))
     {
         std::cerr << LanguageTag::convertToBcp47(it) << " ";
@@ -7798,6 +8012,9 @@ static void preloadData()
 
     // Set user profile's path back to the original one
     rtl::Bootstrap::set(u"UserInstallation"_ustr, sUserPath);
+
+    // Note that unotools::Bootstrap has initialized from the temp UserInstallation at this point
+    // see Bootstrap::reloadData for when it gets resynced
 }
 
 namespace {
@@ -7888,80 +8105,6 @@ void setDeeplConfig()
         catch(uno::Exception const& rException)
         {
             SAL_WARN("lok", "Failed to set Deepl API settings: " << rException.Message);
-        }
-    }
-}
-
-void setLanguageToolConfig()
-{
-    const char* pEnabled = ::getenv("LANGUAGETOOL_ENABLED");
-    const char* pBaseUrlString = ::getenv("LANGUAGETOOL_BASEURL");
-
-    if (pEnabled && pBaseUrlString)
-    {
-        const char* pUsername = ::getenv("LANGUAGETOOL_USERNAME");
-        const char* pApikey = ::getenv("LANGUAGETOOL_APIKEY");
-        const char* pSSLVerification = ::getenv("LANGUAGETOOL_SSL_VERIFICATION");
-        const char* pRestProtocol = ::getenv("LANGUAGETOOL_RESTPROTOCOL");
-
-        OUString aEnabled = OStringToOUString(pEnabled, RTL_TEXTENCODING_UTF8);
-        if (aEnabled != "true")
-            return;
-        OUString aBaseUrl = OStringToOUString(pBaseUrlString, RTL_TEXTENCODING_UTF8);
-        try
-        {
-            using LanguageToolCfg = officecfg::Office::Linguistic::GrammarChecking::LanguageTool;
-            auto batch(comphelper::ConfigurationChanges::create());
-
-            LanguageToolCfg::BaseURL::set(aBaseUrl, batch);
-            LanguageToolCfg::IsEnabled::set(true, batch);
-            if (pSSLVerification)
-            {
-                OUString aSSLVerification = OStringToOUString(pSSLVerification, RTL_TEXTENCODING_UTF8);
-                LanguageToolCfg::SSLCertVerify::set(aSSLVerification == "true", batch);
-            }
-            if (pRestProtocol)
-            {
-                OUString aRestProtocol = OStringToOUString(pRestProtocol, RTL_TEXTENCODING_UTF8);
-                LanguageToolCfg::RestProtocol::set(aRestProtocol, batch);
-            }
-            if (pUsername && pApikey)
-            {
-                OUString aUsername = OStringToOUString(pUsername, RTL_TEXTENCODING_UTF8);
-                OUString aApiKey = OStringToOUString(pApikey, RTL_TEXTENCODING_UTF8);
-                LanguageToolCfg::Username::set(aUsername, batch);
-                LanguageToolCfg::ApiKey::set(aApiKey, batch);
-            }
-            batch->commit();
-
-            css::uno::Reference<css::linguistic2::XLinguServiceManager2> xLangSrv =
-                css::linguistic2::LinguServiceManager::create(xContext);
-            if (xLangSrv.is())
-            {
-                css::uno::Reference<css::linguistic2::XSpellChecker> xSpell = xLangSrv->getSpellChecker();
-                if (xSpell.is())
-                {
-                    Sequence<OUString> aEmpty;
-                    Sequence<css::lang::Locale> aLocales = xSpell->getLocales();
-
-                    uno::Reference<linguistic2::XProofreader> xGC(
-                        xContext->getServiceManager()->createInstanceWithContext(u"org.openoffice.lingu.LanguageToolGrammarChecker"_ustr, xContext),
-                        uno::UNO_QUERY_THROW);
-                    uno::Reference<linguistic2::XSupportedLocales> xSuppLoc(xGC, uno::UNO_QUERY_THROW);
-
-                    for (int itLocale = 0; itLocale < aLocales.getLength(); itLocale++)
-                    {
-                        // turn off spell checker if LanguageTool supports the locale already
-                        if (xSuppLoc->hasLocale(aLocales[itLocale]))
-                            xLangSrv->setConfiguredServices(
-                                SN_SPELLCHECKER, aLocales[itLocale], aEmpty);
-                    }
-                }
-            }
-        }
-        catch(uno::Exception const& rException)
-        {
-            SAL_WARN("lok", "Failed to set LanguageTool API settings: " << rException.Message);
         }
     }
 }
@@ -8072,29 +8215,6 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     if (eStage != PRE_INIT)
         comphelper::LibreOfficeKit::setStatusIndicatorCallback(lo_status_indicator_callback, pLib);
 
-    if (pUserProfileUrl && eStage != PRE_INIT)
-    {
-        OUString url(
-            pUserProfileUrl, strlen(pUserProfileUrl), RTL_TEXTENCODING_UTF8);
-        OUString path;
-        if (url.startsWithIgnoreAsciiCase("vnd.sun.star.pathname:", &path))
-        {
-            OUString url2;
-            osl::FileBase::RC e = osl::FileBase::getFileURLFromSystemPath(
-                path, url2);
-            if (e == osl::FileBase::E_None)
-                url = url2;
-            else
-                SAL_WARN("lok", "resolving <" << url << "> failed with " << +e);
-        }
-        rtl::Bootstrap::set(u"UserInstallation"_ustr, url);
-        if (eStage == SECOND_INIT)
-        {
-            comphelper::rng::reseed();
-            utl::Bootstrap::reloadData();
-        }
-    }
-
     OUString aAppPath;
     if (pAppPath)
     {
@@ -8125,6 +8245,40 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     OUString aAppURL;
     if (osl::FileBase::getFileURLFromSystemPath(aAppPath, aAppURL) != osl::FileBase::E_None)
         return 0;
+
+    if (pUserProfileUrl && eStage != PRE_INIT)
+    {
+        OUString url(
+            pUserProfileUrl, strlen(pUserProfileUrl), RTL_TEXTENCODING_UTF8);
+        OUString path;
+        if (url.startsWithIgnoreAsciiCase("vnd.sun.star.pathname:", &path))
+        {
+            OUString url2;
+            osl::FileBase::RC e = osl::FileBase::getFileURLFromSystemPath(
+                path, url2);
+            if (e == osl::FileBase::E_None)
+                url = url2;
+            else
+                SAL_WARN("lok", "resolving <" << url << "> failed with " << +e);
+        }
+
+        rtl::Bootstrap::set(u"UserInstallation"_ustr, url);
+        rtl::Bootstrap::set(u"BRAND_BASE_DIR"_ustr, aAppURL + "/..");
+        if (eStage == SECOND_INIT)
+        {
+            comphelper::rng::reseed();
+
+            utl::Bootstrap::reloadData();
+
+            // Now that bootstrap User/Shared installation paths have been (re)set to the final
+            // location, reinitialize the PathSettings so $(userurl)/$(instdir) path variables
+            // will be expanded using these newly set paths and not the paths detected during
+            // preinit which used unorthodox throwaway temp locations
+            uno::Reference<css::util::XPathSettings> xPathSettings = util::thePathSettings::get(xContext);
+            uno::Reference<lang::XInitialization> xReInit(xPathSettings, uno::UNO_QUERY_THROW);
+            xReInit->initialize({});
+        }
+    }
 
 #ifdef IOS
     // A LibreOffice-using iOS app should have the ICU data file in the app bundle. Initialize ICU

@@ -28,33 +28,14 @@
 
 class PDFiumLibraryTest : public test::BootstrapFixtureBase
 {
+protected:
     OUString getFullUrl(std::u16string_view sFileName)
     {
         return m_directories.getURLFromSrc(u"/vcl/qa/cppunit/data/") + sFileName;
     }
-
-    void testDocument();
-    void testPages();
-    void testPageObjects();
-    void testAnnotationsMadeInEvince();
-    void testAnnotationsMadeInAcrobat();
-    void testAnnotationsDifferentTypes();
-    void testTools();
-    void testFormFields();
-
-    CPPUNIT_TEST_SUITE(PDFiumLibraryTest);
-    CPPUNIT_TEST(testDocument);
-    CPPUNIT_TEST(testPages);
-    CPPUNIT_TEST(testPageObjects);
-    CPPUNIT_TEST(testAnnotationsMadeInEvince);
-    CPPUNIT_TEST(testAnnotationsMadeInAcrobat);
-    CPPUNIT_TEST(testAnnotationsDifferentTypes);
-    CPPUNIT_TEST(testTools);
-    CPPUNIT_TEST(testFormFields);
-    CPPUNIT_TEST_SUITE_END();
 };
 
-void PDFiumLibraryTest::testDocument()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testDocument)
 {
     OUString aURL = getFullUrl(u"Pangram.pdf");
     SvFileStream aStream(aURL, StreamMode::READ);
@@ -81,7 +62,7 @@ void PDFiumLibraryTest::testDocument()
     CPPUNIT_ASSERT_EQUAL(792.0, aSize.getHeight());
 }
 
-void PDFiumLibraryTest::testPages()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testPages)
 {
     OUString aURL = getFullUrl(u"Pangram.pdf");
     SvFileStream aStream(aURL, StreamMode::READ);
@@ -106,7 +87,7 @@ void PDFiumLibraryTest::testPages()
     CPPUNIT_ASSERT(pPage);
 }
 
-void PDFiumLibraryTest::testPageObjects()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testPageObjects)
 {
     OUString aURL = getFullUrl(u"Pangram.pdf");
     SvFileStream aStream(aURL, StreamMode::READ);
@@ -159,7 +140,7 @@ void PDFiumLibraryTest::testPageObjects()
     CPPUNIT_ASSERT_DOUBLES_EQUAL(732.54, pPageObject->getBounds().getMaxY(), 1E-2);
 }
 
-void PDFiumLibraryTest::testAnnotationsMadeInEvince()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testAnnotationsMadeInEvince)
 {
     OUString aURL = getFullUrl(u"PangramWithAnnotations.pdf");
     SvFileStream aStream(aURL, StreamMode::READ);
@@ -215,7 +196,7 @@ void PDFiumLibraryTest::testAnnotationsMadeInEvince()
     }
 }
 
-void PDFiumLibraryTest::testAnnotationsMadeInAcrobat()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testAnnotationsMadeInAcrobat)
 {
     OUString aURL = getFullUrl(u"PangramAcrobatAnnotations.pdf");
     SvFileStream aStream(aURL, StreamMode::READ);
@@ -292,7 +273,7 @@ void PDFiumLibraryTest::testAnnotationsMadeInAcrobat()
     }
 }
 
-void PDFiumLibraryTest::testFormFields()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testFormFields)
 {
     // Given a document with a form field that looks like plain text:
     OUString aURL = getFullUrl(u"form-fields.pdf");
@@ -327,7 +308,7 @@ void PDFiumLibraryTest::testFormFields()
     CPPUNIT_ASSERT_GREATER(static_cast<size_t>(1), aColors.size());
 }
 
-void PDFiumLibraryTest::testAnnotationsDifferentTypes()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testAnnotationsDifferentTypes)
 {
     OUString aURL = getFullUrl(u"PangramWithMultipleTypeOfAnnotations.pdf");
     SvFileStream aStream(aURL, StreamMode::READ);
@@ -431,7 +412,65 @@ void PDFiumLibraryTest::testAnnotationsDifferentTypes()
     }
 }
 
-void PDFiumLibraryTest::testTools()
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testAnnotationsFreeText)
+{
+    OUString aURL = getFullUrl(u"Annotations_Adobe_FreeText.pdf");
+    SvFileStream aStream(aURL, StreamMode::READ);
+
+    std::vector<vcl::PDFGraphicResult> aResults;
+    CPPUNIT_ASSERT_EQUAL(size_t(1), vcl::ImportPDFUnloaded(aURL, aResults));
+
+    vcl::PDFGraphicResult& rResult = aResults[0];
+
+    Graphic aGraphic = rResult.GetGraphic();
+    aGraphic.makeAvailable();
+
+    OUString aDefaultStyle;
+    OUString aRichContent;
+
+    {
+        auto pVectorGraphicData = aGraphic.getVectorGraphicData();
+        CPPUNIT_ASSERT(pVectorGraphicData);
+        CPPUNIT_ASSERT_EQUAL(VectorGraphicDataType::Pdf, pVectorGraphicData->getType());
+
+        auto& rDataContainer = pVectorGraphicData->getBinaryDataContainer();
+
+        auto pPdfium = vcl::pdf::PDFiumLibrary::get();
+        auto pDocument
+            = pPdfium->openDocument(rDataContainer.getData(), rDataContainer.getSize(), OString());
+        CPPUNIT_ASSERT(pDocument);
+
+        CPPUNIT_ASSERT_EQUAL(1, pDocument->getPageCount());
+
+        auto pPage = pDocument->openPage(0);
+        CPPUNIT_ASSERT(pPage);
+
+        CPPUNIT_ASSERT_EQUAL(1, pPage->getAnnotationCount());
+
+        auto pAnnotation = pPage->getAnnotation(0);
+        CPPUNIT_ASSERT(pAnnotation);
+        CPPUNIT_ASSERT_EQUAL(vcl::pdf::PDFAnnotationSubType::FreeText, pAnnotation->getSubType());
+
+        aDefaultStyle = pAnnotation->getString(vcl::pdf::constDictionaryKey_DefaultStyle);
+        CPPUNIT_ASSERT_EQUAL(false, aDefaultStyle.isEmpty());
+
+        aRichContent = pAnnotation->getString(vcl::pdf::constDictionaryKey_RichContent);
+        CPPUNIT_ASSERT_EQUAL(false, aRichContent.isEmpty());
+    }
+
+    auto const& rAnnotations = rResult.GetAnnotations();
+    CPPUNIT_ASSERT_EQUAL(size_t(1), rAnnotations.size());
+
+    CPPUNIT_ASSERT_EQUAL(vcl::pdf::PDFAnnotationSubType::FreeText, rAnnotations[0].meSubType);
+
+    auto* pMarker
+        = static_cast<vcl::pdf::PDFAnnotationMarkerFreeText*>(rAnnotations[0].mpMarker.get());
+
+    CPPUNIT_ASSERT_EQUAL(aDefaultStyle, pMarker->maDefaultStyle);
+    CPPUNIT_ASSERT_EQUAL(aRichContent, pMarker->maRichContent);
+}
+
+CPPUNIT_TEST_FIXTURE(PDFiumLibraryTest, testTools)
 {
     OUString sConverted = vcl::pdf::convertPdfDateToISO8601(u"D:20200612201322+02'00");
 
@@ -446,8 +485,6 @@ void PDFiumLibraryTest::testTools()
     CPPUNIT_ASSERT_EQUAL(sal_uInt32(0), aDateTime.NanoSeconds);
     CPPUNIT_ASSERT_EQUAL(false, bool(aDateTime.IsUTC));
 }
-
-CPPUNIT_TEST_SUITE_REGISTRATION(PDFiumLibraryTest);
 
 CPPUNIT_PLUGIN_IMPLEMENT();
 

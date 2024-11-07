@@ -30,6 +30,7 @@
 #include <string.h>
 
 #include <tools/debug.hxx>
+#include <tools/json_writer.hxx>
 #include <comphelper/diagnose_ex.hxx>
 #include <comphelper/lok.hxx>
 
@@ -52,11 +53,13 @@
 #include <svx/sdr/contact/viewobjectcontact.hxx>
 #include <svx/sdr/contact/displayinfo.hxx>
 #include <svx/annotation/Annotation.hxx>
+#include <svx/annotation/ObjectAnnotationData.hxx>
 #include <algorithm>
 #include <clonelist.hxx>
 #include <svl/hint.hxx>
 #include <rtl/strbuf.hxx>
 #include <libxml/xmlwriter.h>
+#include <rtl/random.h>
 #include <docmodel/theme/Theme.hxx>
 
 #include <com/sun/star/lang/IllegalArgumentException.hpp>
@@ -132,6 +135,30 @@ SdrObject* SdrObjList::getSdrObjectFromSdrObjList() const
     return nullptr;
 }
 
+OString SdrObjList::GetObjectRectangles(const SdrObjList& rSrcList)
+{
+    tools::JsonWriter jsWriter;
+
+    {
+        auto array = jsWriter.startAnonArray();
+
+        for (const rtl::Reference<SdrObject>& item: rSrcList)
+        {
+            if (item->IsPrintable() && item->IsVisible())
+            {
+                tools::Rectangle rectangle = item->GetCurrentBoundRect();
+                OString value(std::to_string(item->GetOrdNum()));
+                value = rectangle.toString() + ", "_ostr + value;
+
+                auto subArray = jsWriter.startAnonArray();
+                jsWriter.putRaw(value);
+            }
+        }
+    }
+
+    return jsWriter.finishAndGetAsOString();
+}
+
 void SdrObjList::CopyObjects(const SdrObjList& rSrcList)
 {
     CloneList aCloneList;
@@ -155,14 +182,24 @@ void SdrObjList::CopyObjects(const SdrObjList& rSrcList)
         ? getSdrPageFromSdrObjList()->getSdrModelFromSdrPage()
         : getSdrObjectFromSdrObjList()->getSdrModelFromSdrObject());
 
-    for (const rtl::Reference<SdrObject>& pSO : rSrcList)
+    for (const rtl::Reference<SdrObject>& pSourceObject : rSrcList)
     {
-        rtl::Reference<SdrObject> pDO(pSO->CloneSdrObject(rTargetSdrModel));
+        rtl::Reference<SdrObject> pTargetObject(pSourceObject->CloneSdrObject(rTargetSdrModel));
 
-        if(pDO)
+        if (pTargetObject)
         {
-            NbcInsertObject(pDO.get(), SAL_MAX_SIZE);
-            aCloneList.AddPair(pSO.get(), pDO.get());
+            NbcInsertObject(pTargetObject.get(), SAL_MAX_SIZE);
+            aCloneList.AddPair(pSourceObject.get(), pTargetObject.get());
+            if (pSourceObject->isAnnotationObject())
+            {
+                pTargetObject->setAsAnnotationObject(true);
+                pTargetObject->SetPrintable(false);
+                rtl::Reference<sdr::annotation::Annotation> xNewAnnotation;
+                SdrPage* pPage = pTargetObject->getSdrPageFromSdrObject();
+                xNewAnnotation = pSourceObject->getAnnotationData()->mxAnnotation->clone(pPage);
+                pTargetObject->getAnnotationData()->mxAnnotation = xNewAnnotation;
+                pPage->addAnnotationNoNotify(xNewAnnotation, -1);
+            }
         }
 #ifdef DBG_UTIL
         else
@@ -1792,7 +1829,23 @@ Color SdrPage::GetPageBackgroundColor( SdrPageView const * pView, bool bScreenDi
     {
         if(drawing::FillStyle_NONE == pBackgroundFill->Get(XATTR_FILLSTYLE).GetValue())
         {
-            pBackgroundFill = &TRG_GetMasterPage().getSdrPageProperties().GetItemSet();
+            // See unomodel.cxx: "It is guaranteed, that after a standard page the corresponding notes page follows."
+            bool notesPage = GetPageNum() % 2 == 0;
+
+            if (!comphelper::LibreOfficeKit::isActive() || !notesPage || !getSdrModelFromSdrPage().IsImpress())
+                pBackgroundFill = &TRG_GetMasterPage().getSdrPageProperties().GetItemSet();
+            else
+            {
+                /*
+                    See sdrmasterpagedescriptor.cxx: e.g. the Notes MasterPage has no StyleSheet set (and there maybe others).
+                */
+
+                // This is a notes page. Try to get itemset from standart page's master.
+                if (getSdrModelFromSdrPage().GetPage(GetPageNum() - 1))
+                    pBackgroundFill = &getSdrModelFromSdrPage().GetPage(GetPageNum() - 1)->TRG_GetMasterPage().getSdrPageProperties().GetItemSet();
+                else
+                    pBackgroundFill = &TRG_GetMasterPage().getSdrPageProperties().GetItemSet();
+            }
         }
     }
 

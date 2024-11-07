@@ -384,6 +384,31 @@ public:
      * @param pViewShell the view to get the options from, if nullptr the current view shell is used
      */
     virtual OString getViewRenderState(SfxViewShell* = nullptr) { return rtl::OString(); }
+
+    /** Return JSON structure filled with the information about the presentation (Impress only function) */
+    virtual OString getPresentationInfo() const
+    {
+        return {};
+    }
+    /** Creates a slide show renderer (Impress only function) */
+    virtual bool createSlideRenderer(
+        const OString& /*rSlideHash*/,
+        sal_Int32 /*nSlideNumber*/, sal_Int32& /*nViewWidth*/, sal_Int32& /*nViewHeight*/,
+        bool /*bRenderBackground*/, bool /*bRenderMasterPage*/)
+   {
+        return false;
+   }
+
+    /** Clean-up slideshow */
+    virtual void postSlideshowCleanup()
+    {
+    }
+
+    /** render slideshow layer*/
+    virtual bool renderNextSlideLayer(unsigned char* /*pBuffer*/, bool& /*bIsBitmapLayer*/, OUString& /*rJsonMsg*/)
+    {
+        return true;
+    }
 };
 } // namespace vcl
 

@@ -32,6 +32,7 @@
 #include <comphelper/scopeguard.hxx>
 #include <formula/grammar.hxx>
 #include <tools/fldunit.hxx>
+#include <tools/UnitConversion.hxx>
 #include <svl/numformat.hxx>
 #include <svl/zformat.hxx>
 #include <svx/svdocapt.hxx>
@@ -198,7 +199,7 @@ CPPUNIT_TEST_FIXTURE(ScExportTest4, testTdf151484)
         const ScValidationData* pData = pDoc->GetValidationEntry(1);
         CPPUNIT_ASSERT(pData);
 
-        std::vector<ScTypedStrData> aList;
+        ScTypedCaseStrSet aList;
         pData->FillSelectionList(aList, ScAddress(0, 1, 0));
 
         // Without the fix in place, this test would have failed with
@@ -206,9 +207,9 @@ CPPUNIT_TEST_FIXTURE(ScExportTest4, testTdf151484)
         // - Actual  : 1
         // - Failed on filter: MS Excel 97
         CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), size_t(4), aList.size());
-        for (size_t j = 0; j < 4; ++j)
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), double(j + 1),
-                                         aList[j].GetValue());
+        auto it = aList.begin();
+        for (size_t j = 0; j < 4; ++j, ++it)
+            CPPUNIT_ASSERT_EQUAL_MESSAGE(sFailedMessage.getStr(), double(j + 1), it->GetValue());
     }
 }
 
@@ -1799,6 +1800,15 @@ CPPUNIT_TEST_FIXTURE(ScExportTest4, testTdf152980)
     CPPUNIT_ASSERT_EQUAL(OUString("a\tb"), pDoc->GetString(0, 5, 0));
     CPPUNIT_ASSERT_EQUAL(OUString("a\nb"), pDoc->GetString(0, 6, 0));
     CPPUNIT_ASSERT_EQUAL(OUString("a\n\nb"), pDoc->GetString(0, 7, 0));
+
+    // LO doesn't require "wrap text" to display multiline content. Excel does.
+    // tdf#161453: ensure A8 was set to wrap text, so Excel doesn't display as single line
+    SCTAB nTab = 0;
+    SCROW nRow = 7;
+    CPPUNIT_ASSERT(pDoc->GetAttr(0, nRow, nTab, ATTR_LINEBREAK)->GetValue());
+    // Without the fix, this was a single line high (446). It should be 3 lines high (1236).
+    int nHeight = convertTwipToMm100(pDoc->GetRowHeight(nRow, nTab, false));
+    CPPUNIT_ASSERT_GREATER(1000, nHeight);
 }
 
 CPPUNIT_TEST_FIXTURE(ScExportTest4, testTdf100034)

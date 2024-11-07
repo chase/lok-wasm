@@ -70,6 +70,7 @@ sal_uInt16 SwLineInfo::NumberOfTabStops() const
 SwTabPortion *SwTextFormatter::NewTabPortion( SwTextFormatInfo &rInf, bool bAuto ) const
 {
     IDocumentSettingAccess const& rIDSA(rInf.GetTextFrame()->GetDoc().getIDocumentSettingAccess());
+    const bool bTabOverMargin = rIDSA.get(DocumentSettingId::TAB_OVER_MARGIN);
     const bool bTabOverSpacing = rIDSA.get(DocumentSettingId::TAB_OVER_SPACING);
     const bool bTabsRelativeToIndent = rIDSA.get(DocumentSettingId::TABS_RELATIVE_TO_INDENT);
 
@@ -145,7 +146,7 @@ SwTabPortion *SwTextFormatter::NewTabPortion( SwTextFormatInfo &rInf, bool bAuto
         // default tab stop.
         const SwTwips nOldRight = nMyRight;
         // Accept left-tabstops beyond the paragraph margin for bTabOverSpacing
-        if (bTabOverSpacing)
+        if (bTabOverSpacing || bTabOverMargin)
             nMyRight = 0;
         const SvxTabStop* pTabStop = m_aLineInf.GetTabStop( nSearchPos, nMyRight );
         if (!nMyRight)
@@ -174,7 +175,12 @@ SwTabPortion *SwTextFormatter::NewTabPortion( SwTextFormatInfo &rInf, bool bAuto
                 // since up till now these were just treated as automatic tabstops.
                 eAdj = SvxTabAdjust::Right;
                 bAbsoluteNextPos = true;
-                nNextPos = rInf.Width();
+                // TODO: unclear if old Word has an upper limit for center/right
+                // tabs, UI allows setting 55.87cm max which is still one line
+                if (!bTabOverMargin || o3tl::toTwips(558, o3tl::Length::mm) < nNextPos)
+                {
+                    nNextPos = rInf.Width();
+                }
             }
             bAutoTabStop = false;
         }
@@ -344,7 +350,7 @@ bool SwTabPortion::Format( SwTextFormatInfo &rInf )
         return PostFormat( rInf );
     if( pLastTab )
         pLastTab->PostFormat( rInf );
-    return PreFormat( rInf );
+    return PreFormat(rInf, pLastTab);
 }
 
 void SwTabPortion::FormatEOL( SwTextFormatInfo &rInf )
@@ -353,7 +359,7 @@ void SwTabPortion::FormatEOL( SwTextFormatInfo &rInf )
         PostFormat( rInf );
 }
 
-bool SwTabPortion::PreFormat( SwTextFormatInfo &rInf )
+bool SwTabPortion::PreFormat(SwTextFormatInfo &rInf, SwTabPortion const*const pLastTab)
 {
     OSL_ENSURE( rInf.X() <= GetTabPos(), "SwTabPortion::PreFormat: rush hour" );
 
@@ -395,7 +401,8 @@ bool SwTabPortion::PreFormat( SwTextFormatInfo &rInf )
     // 1. Minimal width does not fit to line anymore.
     // 2. An underflow event was called for the tab portion.
     bool bFull = ( bTabCompat && rInf.IsUnderflow() ) ||
-                     ( rInf.Width() <= rInf.X() + PrtWidth() && rInf.X() <= rInf.Width() ) ;
+             (rInf.Width() <= rInf.X() + PrtWidth() && rInf.X() <= rInf.Width()
+              && (!bTabOverMargin || !pLastTab));
 
     // #95477# Rotated tab stops get the width of one blank
     const Degree10 nDir = rInf.GetFont()->GetOrientation( rInf.GetTextFrame()->IsVertical() );
@@ -419,7 +426,7 @@ bool SwTabPortion::PreFormat( SwTextFormatInfo &rInf )
             {
                 // handle this case in PostFormat
                 if ((bTabOverMargin || bTabOverSpacing) && GetTabPos() > rInf.Width()
-                    && (!m_bAutoTabStop || (!bTabOverMargin && rInf.X() > rInf.Width())))
+                    && (!m_bAutoTabStop || rInf.Width() <= rInf.X()))
                 {
                     if (bTabOverMargin || GetTabPos() < nTextFrameWidth)
                     {

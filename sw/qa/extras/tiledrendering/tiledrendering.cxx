@@ -35,6 +35,7 @@
 #include <vcl/virdev.hxx>
 #include <vcl/filter/PngImageWriter.hxx>
 #include <editeng/editview.hxx>
+#include <editeng/fontitem.hxx>
 #include <editeng/outliner.hxx>
 #include <editeng/wghtitem.hxx>
 #include <svl/srchitem.hxx>
@@ -77,6 +78,7 @@
 #include <textcontentcontrol.hxx>
 #include <swmodule.hxx>
 #include <swdll.hxx>
+#include <pagefrm.hxx>
 
 static std::ostream& operator<<(std::ostream& os, ViewShellId id)
 {
@@ -768,10 +770,13 @@ namespace {
         OString m_aViewSelection;
         OString m_aViewRenderState;
         bool m_bTilesInvalidated;
+        tools::Rectangle m_aInvalidations;
+        bool m_bFullInvalidateSeen = false;
         bool m_bViewCursorVisible;
         bool m_bGraphicViewSelection;
         bool m_bGraphicSelection;
         bool m_bViewLock;
+        OString m_aDocColor;
         /// Set if any callback was invoked.
         bool m_bCalled;
         /// Redline table size changed payload
@@ -828,6 +833,20 @@ namespace {
                 case LOK_CALLBACK_INVALIDATE_TILES:
                     {
                         m_bTilesInvalidated = true;
+                        if (std::string_view("EMPTY") == pPayload)
+                        {
+                            m_bFullInvalidateSeen = true;
+                            return;
+                        }
+                        uno::Sequence<OUString> aSeq
+                            = comphelper::string::convertCommaSeparated(OUString::fromUtf8(pPayload));
+                        CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(4), aSeq.getLength());
+                        tools::Rectangle aInvalidation;
+                        aInvalidation.SetLeft(aSeq[0].toInt32());
+                        aInvalidation.SetTop(aSeq[1].toInt32());
+                        aInvalidation.setWidth(aSeq[2].toInt32());
+                        aInvalidation.setHeight(aSeq[3].toInt32());
+                        m_aInvalidations.Union(aInvalidation);
                     }
                     break;
                 case LOK_CALLBACK_INVALIDATE_VISIBLE_CURSOR:
@@ -947,6 +966,11 @@ namespace {
                 case LOK_CALLBACK_STATE_CHANGED:
                     {
                         m_aStateChanges.push_back(pPayload);
+                        break;
+                    }
+                case LOK_CALLBACK_DOCUMENT_BACKGROUND_COLOR:
+                    {
+                        m_aDocColor = aPayload;
                         break;
                     }
             }
@@ -1772,12 +1796,12 @@ static Bitmap getTile(SwXTextDocument* pXTextDocument)
 }
 
 // Helper function to get a tile to a bitmap and check the pixel color
-static void assertTilePixelColor(SwXTextDocument* pXTextDocument, int nPixelX, int nPixelY, Color aColor)
+static Color getTilePixelColor(SwXTextDocument* pXTextDocument, int nPixelX, int nPixelY)
 {
     Bitmap aBitmap = getTile(pXTextDocument);
     BitmapScopedReadAccess pAccess(aBitmap);
     Color aActualColor(pAccess->GetPixel(nPixelX, nPixelY));
-    CPPUNIT_ASSERT_EQUAL(aColor, aActualColor);
+    return aActualColor;
 }
 
 static void addDarkLightThemes(const Color& rDarkColor, const Color& rLightColor)
@@ -1823,7 +1847,7 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeViewSeparation)
         comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
     }
     // First view is in light scheme
-    assertTilePixelColor(pXTextDocument, 255, 255, COL_WHITE);
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
     // Create second view
     SfxLokHelper::createView();
     int nSecondViewId = SfxLokHelper::getView();
@@ -1840,13 +1864,13 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeViewSeparation)
         );
         comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
     }
-    assertTilePixelColor(pXTextDocument, 255, 255, aDarkColor);
+    CPPUNIT_ASSERT_EQUAL(aDarkColor, getTilePixelColor(pXTextDocument, 255, 255));
     // First view still in light scheme
     SfxLokHelper::setView(nFirstViewId);
-    assertTilePixelColor(pXTextDocument, 255, 255, COL_WHITE);
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
     // Second view still in dark scheme
     SfxLokHelper::setView(nSecondViewId);
-    assertTilePixelColor(pXTextDocument, 255, 255, aDarkColor);
+    CPPUNIT_ASSERT_EQUAL(aDarkColor, getTilePixelColor(pXTextDocument, 255, 255));
     // Switch second view back to light scheme
     {
         SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
@@ -1860,7 +1884,140 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeViewSeparation)
         comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
     }
     // Now in light scheme
-    assertTilePixelColor(pXTextDocument, 255, 255, COL_WHITE);
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
+}
+
+// Test that changing the theme in one view doesn't change it in the other view
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testInvertBackgroundViewSeparation)
+{
+    Color aDarkColor(0x1c, 0x1c, 0x1c);
+    addDarkLightThemes(aDarkColor, COL_WHITE);
+    SwXTextDocument* pXTextDocument = createDoc();
+    int nFirstViewId = SfxLokHelper::getView();
+    ViewCallback aView1;
+    // Set view to dark scheme
+    {
+        SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+        SwView* pView = pDoc->GetDocShell()->GetView();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Dark")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
+    }
+    // First view is in dark scheme
+    CPPUNIT_ASSERT_EQUAL(aDarkColor, getTilePixelColor(pXTextDocument, 255, 255));
+    // Create second view
+    SfxLokHelper::createView();
+    int nSecondViewId = SfxLokHelper::getView();
+    ViewCallback aView2;
+    // Set second view to dark scheme
+    {
+        SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+        SwView* pView = pDoc->GetDocShell()->GetView();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Dark")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
+    }
+    CPPUNIT_ASSERT_EQUAL(aDarkColor, getTilePixelColor(pXTextDocument, 255, 255));
+
+    // Set view 1 to invert document background
+    SfxLokHelper::setView(nFirstViewId);
+    {
+        SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+        SwView* pView = pDoc->GetDocShell()->GetView();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Light")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:InvertBackground", xFrame, aPropertyValues);
+    }
+    // First view has inverted background
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
+
+    SfxLokHelper::setView(nSecondViewId);
+    // Second view still has regular background
+    CPPUNIT_ASSERT_EQUAL(aDarkColor, getTilePixelColor(pXTextDocument, 255, 255));
+
+    // Set view 2 to invert document background
+    {
+        SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+        SwView* pView = pDoc->GetDocShell()->GetView();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Light")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:InvertBackground", xFrame, aPropertyValues);
+    }
+    // Second view has inverted background
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
+
+    SfxLokHelper::setView(nFirstViewId);
+    // First view still has inverted background
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
+
+    SfxLokHelper::setView(nSecondViewId);
+    // Set view 2 to regular document background
+    {
+        SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+        SwView* pView = pDoc->GetDocShell()->GetView();
+        uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Dark")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:InvertBackground", xFrame, aPropertyValues);
+    }
+    // Second view has regular background
+    CPPUNIT_ASSERT_EQUAL(aDarkColor, getTilePixelColor(pXTextDocument, 255, 255));
+
+    SfxLokHelper::setView(nFirstViewId);
+    // First view still has inverted background
+    CPPUNIT_ASSERT_EQUAL(COL_WHITE, getTilePixelColor(pXTextDocument, 255, 255));
+}
+
+// Test that changing the theme sends the document background color as LOK_CALLBACK_DOCUMENT_BACKGROUND_COLOR
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testThemeChangeBackgroundCallback)
+{
+    Color aDarkColor(0x1c, 0x1c, 0x1c);
+    addDarkLightThemes(aDarkColor, COL_WHITE);
+    SwXTextDocument* pXTextDocument = createDoc();
+    ViewCallback aView;
+
+    SwDoc* pDoc = pXTextDocument->GetDocShell()->GetDoc();
+    SwView* pView = pDoc->GetDocShell()->GetView();
+    uno::Reference<frame::XFrame> xFrame = pView->GetViewFrame().GetFrame().GetFrameInterface();
+
+    {
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Dark")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
+    }
+    CPPUNIT_ASSERT_EQUAL("1c1c1c"_ostr, aView.m_aDocColor);
+
+    {
+        uno::Sequence<beans::PropertyValue> aPropertyValues = comphelper::InitPropertySequence(
+            {
+                { "NewTheme", uno::Any(OUString("Light")) },
+            }
+        );
+        comphelper::dispatchCommand(".uno:ChangeTheme", xFrame, aPropertyValues);
+    }
+    CPPUNIT_ASSERT_EQUAL("ffffff"_ostr, aView.m_aDocColor);
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSetViewGraphicSelection)
@@ -2582,6 +2739,21 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAtEndOfParagraph)
 
     // check the content
     CPPUNIT_ASSERT_EQUAL(OUString("bab"), pShellCursor->GetPoint()->GetNode().GetTextNode()->GetText());
+
+    // check the actual weight format of the text
+    SvxWeightItem aBoldWeightItem(WEIGHT_BOLD, RES_CHRATR_WEIGHT);
+    SfxItemSet aSet(pXTextDocument->GetDocShell()->GetDoc()->GetAttrPool(), svl::Items<RES_CHRATR_WEIGHT, RES_CHRATR_WEIGHT>);
+    pShellCursor->GetPoint()->GetNode().GetTextNode()->GetParaAttr(aSet, 0, 1);
+    SfxPoolItem const* pPoolItem = aSet.GetItem(RES_CHRATR_WEIGHT);
+    CPPUNIT_ASSERT(*pPoolItem != aBoldWeightItem); // b not bold
+    aSet.ClearItem();
+    pShellCursor->GetPoint()->GetNode().GetTextNode()->GetParaAttr(aSet, 1, 2);
+    pPoolItem = aSet.GetItem(RES_CHRATR_WEIGHT);
+    CPPUNIT_ASSERT(*pPoolItem == aBoldWeightItem); // a bold
+    aSet.ClearItem();
+    pShellCursor->GetPoint()->GetNode().GetTextNode()->GetParaAttr(aSet, 2, 3);
+    pPoolItem = aSet.GetItem(RES_CHRATR_WEIGHT);
+    CPPUNIT_ASSERT(*pPoolItem != aBoldWeightItem); // b not bold
 }
 
 CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testIMEFormattingAfterHeader)
@@ -4324,6 +4496,208 @@ CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testTdf159626_blackPatternFill)
     // The document should be entirely black (except for text margin markings).
     CPPUNIT_ASSERT(nEdgePlusWhitePlusAntialiasPixels > 0);
     CPPUNIT_ASSERT(nPureBlackPixels / 10 > nEdgePlusWhitePlusAntialiasPixels);
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPasteInvalidateNumRules)
+{
+    // Given a document with 3 pages: first page is ~empty, then page break, then pages 2 & 3 have
+    // bullets:
+    SwXTextDocument* pXTextDocument = createDoc("numrules.odt");
+    CPPUNIT_ASSERT(pXTextDocument);
+    ViewCallback aView;
+    SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    pWrtShell->Down(/*bSelect=*/false);
+    pWrtShell->Insert(u"test"_ustr);
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/true, 4, /*bBasicCall=*/false);
+    dispatchCommand(mxComponent, u".uno:Cut"_ustr, {});
+    aView.m_aInvalidations = tools::Rectangle();
+    aView.m_bFullInvalidateSeen = false;
+
+    // When pasting at the end of page 1:
+    dispatchCommand(mxComponent, u".uno:PasteUnformatted"_ustr, {});
+
+    // Then make sure we only invalidate page 1, not page 2 or page 3:
+    CPPUNIT_ASSERT(!aView.m_bFullInvalidateSeen);
+    SwRootFrame* pLayout = pWrtShell->GetLayout();
+    SwFrame* pPage1 = pLayout->GetLower();
+    CPPUNIT_ASSERT(aView.m_aInvalidations.Overlaps(pPage1->getFrameArea().SVRect()));
+    SwFrame* pPage2 = pPage1->GetNext();
+    // Without the accompanying fix in place, this test would have failed, we invalidated page 2 and
+    // page 3 as well.
+    CPPUNIT_ASSERT(!aView.m_aInvalidations.Overlaps(pPage2->getFrameArea().SVRect()));
+    SwFrame* pPage3 = pPage2->GetNext();
+    CPPUNIT_ASSERT(!aView.m_aInvalidations.Overlaps(pPage3->getFrameArea().SVRect()));
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testPasteInvalidateNumRulesBullet)
+{
+    // Given a document with 3 pages: first page is ~empty, then page break, then pages 2 & 3 have
+    // bullets:
+    SwXTextDocument* pXTextDocument = createDoc("numrules.odt");
+    CPPUNIT_ASSERT(pXTextDocument);
+    ViewCallback aView;
+    SwWrtShell* pWrtShell = pXTextDocument->GetDocShell()->GetWrtShell();
+    pWrtShell->SttEndDoc(/*bStt=*/true);
+    pWrtShell->Down(/*bSelect=*/false);
+    pWrtShell->Insert(u"test"_ustr);
+    pWrtShell->Left(SwCursorSkipMode::Chars, /*bSelect=*/true, 4, /*bBasicCall=*/false);
+    dispatchCommand(mxComponent, u".uno:Cut"_ustr, {});
+    dispatchCommand(mxComponent, u".uno:DefaultBullet"_ustr, {});
+    aView.m_aInvalidations = tools::Rectangle();
+    aView.m_bFullInvalidateSeen = false;
+
+    // When pasting at the end of page 1, in a paragraph that is a bullet (a list, but not a
+    // numbering):
+    dispatchCommand(mxComponent, u".uno:PasteUnformatted"_ustr, {});
+
+    // Then make sure we only invalidate page 1, not page 2 or page 3:
+    CPPUNIT_ASSERT(!aView.m_bFullInvalidateSeen);
+    SwRootFrame* pLayout = pWrtShell->GetLayout();
+    SwFrame* pPage1 = pLayout->GetLower();
+    CPPUNIT_ASSERT(aView.m_aInvalidations.Overlaps(pPage1->getFrameArea().SVRect()));
+    SwFrame* pPage2 = pPage1->GetNext();
+    // Without the accompanying fix in place, this test would have failed, we invalidated page 2 and
+    // page 3 as well.
+    CPPUNIT_ASSERT(!aView.m_aInvalidations.Overlaps(pPage2->getFrameArea().SVRect()));
+    SwFrame* pPage3 = pPage2->GetNext();
+    CPPUNIT_ASSERT(!aView.m_aInvalidations.Overlaps(pPage3->getFrameArea().SVRect()));
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testAsyncLayout)
+{
+    // Given a document with 3 pages, the first page is visible:
+    SwXTextDocument* pXTextDocument = createDoc();
+    CPPUNIT_ASSERT(pXTextDocument);
+    ViewCallback aView;
+    SwDocShell* pDocShell = getSwDocShell();
+    SwWrtShell* pWrtShell = pDocShell->GetWrtShell();
+    pWrtShell->InsertPageBreak();
+    pWrtShell->InsertPageBreak();
+    SwRootFrame* pLayout = pWrtShell->GetLayout();
+    SwPageFrame* pPage1 = pLayout->GetLower()->DynCastPageFrame();
+    pWrtShell->setLOKVisibleArea(pPage1->getFrameArea().SVRect());
+
+    // When all pages get invalidated:
+    pWrtShell->StartAllAction();
+    pPage1->InvalidateContent();
+    SwPageFrame* pPage2 = pPage1->GetNext()->DynCastPageFrame();
+    pPage2->InvalidateContent();
+    SwPageFrame* pPage3 = pPage2->GetNext()->DynCastPageFrame();
+    pPage3->InvalidateContent();
+    pWrtShell->EndAllAction();
+
+    // Then make sure only the first page gets a synchronous layout:
+    CPPUNIT_ASSERT(!pPage1->IsInvalidContent());
+    CPPUNIT_ASSERT(pPage2->IsInvalidContent());
+    CPPUNIT_ASSERT(pPage3->IsInvalidContent());
+
+    // And then processing all idle events:
+    Scheduler::ProcessEventsToIdle();
+
+    // Then make sure all pages get an async layout:
+    CPPUNIT_ASSERT(!pPage1->IsInvalidContent());
+    CPPUNIT_ASSERT(!pPage2->IsInvalidContent());
+    CPPUNIT_ASSERT(!pPage3->IsInvalidContent());
+}
+
+namespace
+{
+/// Test callback that works with comphelper::LibreOfficeKit::setAnyInputCallback().
+class AnyInputCallback final
+{
+public:
+    static bool callback(void* /*pData*/) { return true; }
+
+    AnyInputCallback() { comphelper::LibreOfficeKit::setAnyInputCallback(&callback, this); }
+
+    ~AnyInputCallback() { comphelper::LibreOfficeKit::setAnyInputCallback(nullptr, nullptr); }
+};
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testAnyInput)
+{
+    // Given a document with 3 pages, the first page is visible:f
+    SwXTextDocument* pXTextDocument = createDoc();
+    CPPUNIT_ASSERT(pXTextDocument);
+    ViewCallback aView;
+    SwDocShell* pDocShell = getSwDocShell();
+    SwWrtShell* pWrtShell = pDocShell->GetWrtShell();
+    pWrtShell->InsertPageBreak();
+    pWrtShell->InsertPageBreak();
+    SwRootFrame* pLayout = pWrtShell->GetLayout();
+    SwPageFrame* pPage1 = pLayout->GetLower()->DynCastPageFrame();
+    pWrtShell->setLOKVisibleArea(pPage1->getFrameArea().SVRect());
+
+    // When all pages get invalidated:
+    pWrtShell->StartAllAction();
+    pPage1->InvalidateContent();
+    SwPageFrame* pPage2 = pPage1->GetNext()->DynCastPageFrame();
+    pPage2->InvalidateContent();
+    SwPageFrame* pPage3 = pPage2->GetNext()->DynCastPageFrame();
+    pPage3->InvalidateContent();
+    pWrtShell->EndAllAction();
+
+    // Then make sure sync layout calculates page 1:
+    CPPUNIT_ASSERT(!pPage1->IsInvalidContent());
+    CPPUNIT_ASSERT(pPage2->IsInvalidContent());
+    CPPUNIT_ASSERT(pPage3->IsInvalidContent());
+
+    // And when doing one idle layout:
+    AnyInputCallback aAnyInput;
+    pWrtShell->LayoutIdle();
+
+    // Then make sure async layout calculates page 2:
+    CPPUNIT_ASSERT(!pPage1->IsInvalidContent());
+    CPPUNIT_ASSERT(!pPage2->IsInvalidContent());
+    // Without the fix in place, async layout calculated all pages, even if there were pending input
+    // events.
+    CPPUNIT_ASSERT(pPage3->IsInvalidContent());
+    Scheduler::ProcessEventsToIdle();
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testSignatureState)
+{
+    // Given a document with a signature where the digest matches:
+    SwXTextDocument* pXTextDocument = createDoc("signed-doc.odt");
+    CPPUNIT_ASSERT(pXTextDocument);
+
+    // When initializing tiled rendering with an author name:
+    uno::Sequence<beans::PropertyValue> aPropertyValues
+        = { comphelper::makePropertyValue(".uno:Author", uno::Any(u"A"_ustr)) };
+    pXTextDocument->initializeForTiledRendering(aPropertyValues);
+    SignatureState eState = getSwDocShell()->GetDocumentSignatureState();
+
+    // Then make sure the signature state is unchanged:
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 4 (NOTVALIDATED)
+    // - Actual  : 3 (INVALID)
+    // i.e. the doc was modified by the time the signature state was calculated.
+    CPPUNIT_ASSERT_EQUAL(SignatureState::NOTVALIDATED, eState);
+}
+
+CPPUNIT_TEST_FIXTURE(SwTiledRenderingTest, testFormatInsertStartList)
+{
+    // Given a document containing a list where the text has a changed font
+    SwXTextDocument* pXTextDocument = createDoc("format-insert-list.docx");
+    CPPUNIT_ASSERT(pXTextDocument);
+    VclPtr<vcl::Window> pDocWindow = pXTextDocument->getDocWindow();
+    SwView* pView = dynamic_cast<SwView*>(SfxViewShell::Current());
+    assert(pView);
+
+    // Insert a string at the begining of a list item
+    pDocWindow->PostExtTextInputEvent(VclEventId::ExtTextInput, "a");
+    pDocWindow->PostExtTextInputEvent(VclEventId::EndExtTextInput, "");
+    Scheduler::ProcessEventsToIdle();
+
+    // The inserted text should have the same font as the rest
+    std::unique_ptr<SvxFontItem> pFontItem;
+    pView->GetViewFrame().GetBindings().QueryState(SID_ATTR_CHAR_FONT, pFontItem);
+    CPPUNIT_ASSERT(pFontItem);
+    CPPUNIT_ASSERT_EQUAL(u"Calibri"_ustr, pFontItem->GetFamilyName());
+    // Without the accompanying fix in place, this test fails with:
+    // - Expected: Calibri
+    // - Actual  : MS Sans Serif
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

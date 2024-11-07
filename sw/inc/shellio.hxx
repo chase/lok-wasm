@@ -154,6 +154,8 @@ class SW_DLLPUBLIC SwReader: public SwDocFac
     OUString maFileName;
     OUString msBaseURL;
     bool mbSkipImages;
+    bool mbSkipInvalidateNumRules = false;
+    bool mbIsInPaste = false;
 
 public:
 
@@ -174,6 +176,13 @@ public:
     // Ask for glossaries.
     bool HasGlossaries( const Reader& );
     bool ReadGlossaries( const Reader&, SwTextBlocks&, bool bSaveRelFiles );
+
+    void SetSkipInvalidateNumRules(bool bSkipInvalidateNumRules)
+    {
+        mbSkipInvalidateNumRules = bSkipInvalidateNumRules;
+    }
+    void SetInPaste(bool val) { mbIsInPaste = val; }
+    bool IsInPaste() const { return mbIsInPaste; }
 
 protected:
     void                SetBaseURL( const OUString& rURL ) { msBaseURL = rURL; }
@@ -226,6 +235,7 @@ protected:
     bool m_bHasAskTemplateName : 1;
     bool m_bIgnoreHTMLComments : 1;
     bool m_bSkipImages : 1;
+    bool m_bIsInPaste : 1 = false;
 
     virtual OUString GetTemplateName(SwDoc& rDoc) const;
 
@@ -262,6 +272,9 @@ public:
     void SetOrganizerMode( bool bSet ) { m_bOrganizerMode = bSet; }
 
     void SetIgnoreHTMLComments( bool bSet ) { m_bIgnoreHTMLComments = bSet; }
+
+    bool IsInPaste() const { return m_bIsInPaste; }
+    void SetInPaste(bool bSet) { m_bIsInPaste = bSet; }
 
     virtual bool HasGlossaries() const;
     virtual bool ReadGlossaries( SwTextBlocks&, bool bSaveRelFiles ) const;

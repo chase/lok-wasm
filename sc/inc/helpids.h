@@ -338,6 +338,7 @@ inline constexpr OUString HID_FUNC_KGV = u"SC_HID_FUNC_KGV"_ustr;
 inline constexpr OUString HID_FUNC_UMRECHNEN = u"SC_HID_FUNC_UMRECHNEN"_ustr;
 inline constexpr OUString HID_FUNC_EUROCONVERT = u"SC_HID_FUNC_EUROCONVERT"_ustr;
 
+inline constexpr OUString HID_FUNC_MSEQUENCE_MS = u"SC_HID_FUNC_MSEQUENCE_MS"_ustr;
 inline constexpr OUString HID_FUNC_MTRANS = u"SC_HID_FUNC_MTRANS"_ustr;
 inline constexpr OUString HID_FUNC_MMULT = u"SC_HID_FUNC_MMULT"_ustr;
 inline constexpr OUString HID_FUNC_MDET = u"SC_HID_FUNC_MDET"_ustr;
@@ -593,10 +594,12 @@ inline constexpr OUString HID_FUNC_REGEX = u"SC_HID_FUNC_REGEX"_ustr;
 inline constexpr OUString HID_FUNC_FOURIER = u"SC_HID_FUNC_FOURIER"_ustr;
 inline constexpr OUString HID_FUNC_RAND_NV = u"SC_HID_FUNC_RAND_NV"_ustr;
 inline constexpr OUString HID_FUNC_RANDBETWEEN_NV = u"SC_HID_FUNC_RANDBETWEEN_NV"_ustr;
+inline constexpr OUString HID_FUNC_RANDARRAY_MS = u"SC_HID_FUNC_RANDARRAY_MS"_ustr;
 inline constexpr OUString HID_FUNC_XLOOKUP_MS = u"SC_HID_FUNC_XLOOKUP_MS"_ustr;
 inline constexpr OUString HID_FUNC_XMATCH_MS = u"SC_HID_FUNC_XMATCH_MS"_ustr;
 inline constexpr OUString HID_FUNC_FILTER_MS = u"SC_HID_FUNC_FILTER_MS"_ustr;
 inline constexpr OUString HID_FUNC_SORT_MS = u"SC_HID_FUNC_SORT_MS"_ustr;
 inline constexpr OUString HID_FUNC_SORTBY_MS = u"SC_HID_FUNC_SORTBY_MS"_ustr;
+inline constexpr OUString HID_FUNC_UNIQUE_MS = u"SC_HID_FUNC_UNIQUE_MS"_ustr;
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

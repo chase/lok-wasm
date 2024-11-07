@@ -56,6 +56,7 @@ class SvxItemPropertySet;
 namespace sd {
 class DrawDocShell;
 class DrawViewShell;
+class SlideshowLayerRenderer;
 }
 
 extern OUString getPageApiName( SdPage const * pPage );
@@ -86,6 +87,8 @@ private:
     ::sd::DrawDocShell* mpDocShell;
     SdDrawDocument* mpDoc;
     bool mbDisposed;
+
+    std::unique_ptr<sd::SlideshowLayerRenderer> mpSlideshowLayerRenderer;
 
     css::uno::Reference<css::uno::XInterface> create(
         OUString const & aServiceSpecifier, OUString const & referer);
@@ -283,9 +286,20 @@ public:
     }
     /// @see vcl::ITiledRenderable::setPaintTextEdit().
     virtual void setPaintTextEdit(bool bPaint) override { mbPaintTextEdit = bPaint; }
-
     /// @see vcl::ITiledRenderable::getViewRenderState().
     OString getViewRenderState(SfxViewShell* pViewShell = nullptr) override;
+
+    /// @see vcl::ITiledRenderable::getPresentationInfo().
+    OString getPresentationInfo() const override;
+    /// @see vcl::ITiledRenderable::createSlideRenderer().
+    bool createSlideRenderer(
+        const OString& rSlideHash,
+        sal_Int32 nSlideNumber, sal_Int32& nViewWidth, sal_Int32& nViewHeight,
+        bool bRenderBackground, bool bRenderMasterPage) override;
+    /// @see vcl::ITiledRenderable::postSlideshowCleanup().
+    void postSlideshowCleanup() override;
+    /// @see vcl::ITiledRenderable::renderNextSlideLayer().
+    bool renderNextSlideLayer(unsigned char* pBuffer, bool& bIsBitmapLayer, OUString& rJsonMsg) override;
 
     // XComponent
 

@@ -32,6 +32,7 @@
 #include <vcl/uitest/eventdescription.hxx>
 
 #include <svl/undo.hxx>
+#include <svtools/svparser.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/syslocale.hxx>
 #include <svl/languageoptions.hxx>
@@ -81,6 +82,22 @@ void collectUIInformation( const OUString& aevent , const OUString& aID )
     aDescription.aParent = "MainWindow";
     aDescription.aKeyWord = "SwEditWinUIObject";
     UITestLogger::getInstance().logEvent(aDescription);
+}
+
+}
+
+namespace SwPostItHelper {
+
+void ImportHTML(Outliner& rOutliner, const OUString& rHtml)
+{
+    OString sHtmlContent(rHtml.toUtf8());
+    SvMemoryStream aHTMLStream(const_cast<char*>(sHtmlContent.getStr()),
+                               sHtmlContent.getLength(), StreamMode::READ);
+    SvKeyValueIteratorRef xValues(new SvKeyValueIterator);
+    // Insert newlines for divs, not normally done, so to keep things simple
+    // only enable that for this case.
+    xValues->Append(SvKeyValue("newline-on-div", "true"));
+    rOutliner.Read(aHTMLStream, "", EETextFormat::Html, xValues.get());
 }
 
 }
@@ -307,6 +324,24 @@ bool SwAnnotationWin::IsThreadResolved()
     }
 }
 
+bool SwAnnotationWin::IsRootNote() const
+{
+    return static_cast<SwPostItField*>(mpFormatField->GetField())->GetParentPostItId() == 0;
+}
+
+void SwAnnotationWin::SetAsRoot()
+{
+    if (!IsRootNote())
+    {
+        SwPostItField* pPostIt = static_cast<SwPostItField*>(mpFormatField->GetField());
+        pPostIt->SetParentId(0);
+        pPostIt->SetParentPostItId(0);
+        pPostIt->SetParentName("");
+        mrMgr.MoveSubthreadToRoot(this);
+        mpFormatField->Broadcast(SwFormatFieldHint(nullptr, SwFormatFieldHintWhich::CHANGED));
+    }
+}
+
 void SwAnnotationWin::UpdateData()
 {
     if ( mpOutliner->IsModified() || mbResolvedStateUpdated )
@@ -464,6 +499,18 @@ void SwAnnotationWin::UpdateText(const OUString& aText)
     mpOutliner->Clear();
     GetOutlinerView()->InsertText(aText);
     UpdateData();
+}
+
+void SwAnnotationWin::UpdateHTML(const OUString& rHtml)
+{
+    mpOutliner->Clear();
+    SwPostItHelper::ImportHTML(*mpOutliner, rHtml);
+    UpdateData();
+}
+
+OString SwAnnotationWin::GetSimpleHtml() const
+{
+    return GetOutlinerView()->GetEditView().GetSimpleHtml();
 }
 
 bool SwAnnotationWin::IsReadOnlyOrProtected() const

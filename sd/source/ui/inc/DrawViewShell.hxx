@@ -33,6 +33,7 @@
 namespace svx::sidebar { class SelectionChangeHandler; }
 namespace com::sun::star::lang { class XEventListener; }
 namespace com::sun::star::scanner { class XScannerManager2; }
+namespace com::sun::star::presentation { class XSlideShow; }
 
 class Outliner;
 class SdPage;
@@ -65,7 +66,7 @@ class ViewOverlayManager;
     overview over several slides or a textual
     overview over the text in an Impress document (OutlineViewShell).
 */
-class SAL_DLLPUBLIC_RTTI DrawViewShell
+class SD_DLLPUBLIC DrawViewShell
     : public ViewShell,
       public SfxListener,
       public utl::ConfigurationListener
@@ -222,10 +223,12 @@ public:
     void            ExecGoToLastPage (SfxRequest& rReq);
     void            GetStateGoToLastPage (SfxItemSet& rSet);
 
-    SD_DLLPUBLIC void ExecChar(SfxRequest& rReq);
+    void ExecChar(SfxRequest& rReq);
 
     void            ExecuteAnnotation (SfxRequest const & rRequest);
     void            GetAnnotationState (SfxItemSet& rItemSet);
+
+    AnnotationManager* getAnnotationManagerPtr() { return mpAnnotationManager.get(); }
 
     void            StartRulerDrag (const Ruler& rRuler, const MouseEvent& rMEvt);
 
@@ -243,7 +246,7 @@ public:
 
     void            ResetActualPage();
     void            ResetActualLayer();
-    bool            SwitchPage(sal_uInt16 nPage, bool bAllowChangeFocus = true);
+    bool SwitchPage(sal_uInt16 nPage, bool bAllowChangeFocus = true);
     bool            IsSwitchPageAllowed() const;
 
     /**
@@ -344,7 +347,7 @@ public:
 
     /** Return a pointer to the tab control for layers.
     */
-    SD_DLLPUBLIC LayerTabBar* GetLayerTabControl(); // export for unit test
+    LayerTabBar* GetLayerTabControl();
 
     /** Renames the given slide using an SvxNameDialog
 
@@ -376,6 +379,10 @@ public:
     const SdViewOptions& GetViewOptions() const { return maViewOptions; }
     //move this method to ViewShell.
     //void  NotifyAccUpdate();
+
+    css::uno::Reference<css::presentation::XSlideShow> getXSlideShowInstance();
+    void destroyXSlideShowInstance();
+
 protected:
                     DECL_DLLPRIVATE_LINK( ClipboardChanged, TransferableDataHelper*, void );
                     DECL_DLLPRIVATE_LINK( TabSplitHdl, TabBar *, void );
@@ -495,6 +502,8 @@ private:
     ::std::unique_ptr< ViewOverlayManager > mpViewOverlayManager;
     std::vector<std::unique_ptr<SdrExternalToolEdit>> m_ExternalEdits;
     SdViewOptions maViewOptions;
+
+    css::uno::Reference<com::sun::star::presentation::XSlideShow> mxSlideShow;
 };
 
     /// Merge the background properties together and deposit the result in rMergeAttr

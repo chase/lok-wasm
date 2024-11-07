@@ -145,6 +145,7 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
 
         // Enable only for new documents, since pasting from clipboard can influence existing doc
         m_pImpl->SetDocumentSettingsProperty("NoNumberingShowFollowBy", uno::Any(true));
+        m_pImpl->SetDocumentSettingsProperty("EmptyDbFieldHidesPara",uno::Any(false));
     }
 
     // Initialize RDF metadata, to be able to add statements during the import.
@@ -422,6 +423,14 @@ void DomainMapper::lcl_attribute(Id nName, Value & val)
             if (m_pImpl->GetTopContext())
             {
                 m_pImpl->GetTopContext()->Insert(PROP_CHAR_FONT_NAME, uno::Any( sStringValue ));
+
+                // Set the matching font family if we have one.
+                FontEntry::Pointer_t pFontEntry = m_pImpl->GetFontTable()->getFontEntryByName(sStringValue);
+                if (pFontEntry)
+                {
+                    m_pImpl->GetTopContext()->Insert(PROP_CHAR_FONT_FAMILY,
+                                                     uno::Any(pFontEntry->m_nFontFamily));
+                }
             }
             break;
         case NS_ooxml::LN_CT_Fonts_asciiTheme:
@@ -539,19 +548,22 @@ void DomainMapper::lcl_attribute(Id nName, Value & val)
                     // exactly, atLeast, auto
                     if( sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_LineSpacingRule_auto)
                     {
-                        m_pImpl->appendGrabBag(m_pImpl->m_aSubInteropGrabBag, "lineRule", "auto");
-                        if (aSpacing.Height >= 0)
+                        if (aSpacing.Mode != style::LineSpacingMode::PROP)
                         {
-                            aSpacing.Mode = style::LineSpacingMode::PROP;
-                            //reinterpret the already set value
-                            aSpacing.Height = sal_Int16( aSpacing.Height * 100 /  ConversionHelper::convertTwipToMM100( nSingleLineSpacing ));
-                        }
-                        else
-                        {
-                            // Negative value still means a positive height,
-                            // just the mode is "exact".
-                            aSpacing.Mode = style::LineSpacingMode::FIX;
-                            aSpacing.Height *= -1;
+                            m_pImpl->appendGrabBag(m_pImpl->m_aSubInteropGrabBag, "lineRule", "auto");
+                            if (aSpacing.Height >= 0)
+                            {
+                                aSpacing.Mode = style::LineSpacingMode::PROP;
+                                //reinterpret the already set value
+                                aSpacing.Height = sal_Int16( aSpacing.Height * 100 /  ConversionHelper::convertTwipToMM100( nSingleLineSpacing ));
+                            }
+                            else
+                            {
+                                // Negative value still means a positive height,
+                                // just the mode is "exact".
+                                aSpacing.Mode = style::LineSpacingMode::FIX;
+                                aSpacing.Height *= -1;
+                            }
                         }
                     }
                     else if( sal::static_int_cast<Id>(nIntValue) == NS_ooxml::LN_Value_doc_ST_LineSpacingRule_atLeast)
@@ -2702,7 +2714,39 @@ void DomainMapper::sprmWithProps( Sprm& rSprm, const PropertyMapPtr& rContext )
         const OUString sConvertedStyleName = pStyleTable->ConvertStyleNameExt(sStringValue);
         m_pImpl->SetCurrentParaStyleName( sConvertedStyleName );
         if (m_pImpl->GetTopContext() && m_pImpl->GetTopContextType() != CONTEXT_SECTION)
+        {
             m_pImpl->GetTopContext()->Insert( PROP_PARA_STYLE_NAME, uno::Any( sConvertedStyleName ));
+
+            if (!m_pImpl->IsNewDoc())
+            {
+                // Mark the paragraph style & its parent / follow as used.
+                pStyleTable->MarkParagraphStyleAsUsed(sConvertedStyleName);
+
+                auto pStyle = pStyleTable->FindStyleSheetByConvertedStyleName(sConvertedStyleName);
+                if (pStyle)
+                {
+                    if (!pStyle->m_sBaseStyleIdentifier.isEmpty())
+                    {
+                        StyleSheetEntryPtr pParent = pStyleTable->FindStyleSheetByISTD(pStyle->m_sBaseStyleIdentifier);
+                        if (pParent)
+                        {
+                            OUString sParent = StyleSheetTable::ConvertStyleName(pParent->m_sStyleName).first;
+                            pStyleTable->MarkParagraphStyleAsUsed(sParent);
+                        }
+                    }
+
+                    if (!pStyle->m_sNextStyleIdentifier.isEmpty())
+                    {
+                        StyleSheetEntryPtr pFollow = pStyleTable->FindStyleSheetByISTD(pStyle->m_sNextStyleIdentifier);
+                        if (pFollow)
+                        {
+                            OUString sFollow = StyleSheetTable::ConvertStyleName(pFollow->m_sStyleName).first;
+                            pStyleTable->MarkParagraphStyleAsUsed(sFollow);
+                        }
+                    }
+                }
+            }
+        }
     }
     break;
     case NS_ooxml::LN_EG_RPrBase_rStyle:
@@ -5087,6 +5131,11 @@ css::uno::Reference<css::container::XNameContainer> const & DomainMapper::GetCha
 OUString DomainMapper::GetUnusedCharacterStyleName()
 {
     return m_pImpl->GetUnusedCharacterStyleName();
+}
+
+bool DomainMapper::IsNewDoc() const
+{
+    return m_pImpl->IsNewDoc();
 }
 
 } //namespace writerfilter

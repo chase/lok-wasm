@@ -55,6 +55,7 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"cui/ui/linestyletabpage.ui"
         || rUIFile == u"cui/ui/linetabpage.ui"
         || rUIFile == u"cui/ui/macroselectordialog.ui"
+        || rUIFile == u"cui/ui/namedialog.ui"
         || rUIFile == u"cui/ui/numberingformatpage.ui"
         || rUIFile == u"cui/ui/numberingoptionspage.ui"
         || rUIFile == u"cui/ui/numberingpositionpage.ui"
@@ -121,8 +122,10 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"modules/scalc/ui/groupdialog.ui"
         || rUIFile == u"modules/scalc/ui/headerfootercontent.ui"
         || rUIFile == u"modules/scalc/ui/headerfooterdialog.ui"
+        || rUIFile == u"modules/scalc/ui/imoptdialog.ui"
         || rUIFile == u"modules/scalc/ui/insertcells.ui"
         || rUIFile == u"modules/scalc/ui/managenamesdialog.ui"
+        || rUIFile == u"modules/scalc/ui/movecopysheet.ui"
         || rUIFile == u"modules/scalc/ui/movingaveragedialog.ui"
         || rUIFile == u"modules/scalc/ui/optimalcolwidthdialog.ui"
         || rUIFile == u"modules/scalc/ui/optimalrowheightdialog.ui"
@@ -152,6 +155,8 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"modules/scalc/ui/validationhelptabpage.ui"
         || rUIFile == u"modules/scalc/ui/warnautocorrect.ui"
         || rUIFile == u"modules/scalc/ui/ztestdialog.ui"
+        || rUIFile == u"modules/scalc/ui/definedatabaserangedialog.ui"
+        || rUIFile == u"modules/scalc/ui/selectrange.ui"
         // schart
         || rUIFile == u"modules/schart/ui/attributedialog.ui"
         || rUIFile == u"modules/schart/ui/charttypedialog.ui"
@@ -176,6 +181,8 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"modules/simpress/ui/customanimationtimingtab.ui"
         || rUIFile == u"modules/simpress/ui/headerfooterdialog.ui"
         || rUIFile == u"modules/simpress/ui/headerfootertab.ui"
+        || rUIFile == u"modules/simpress/ui/interactiondialog.ui"
+        || rUIFile == u"modules/simpress/ui/interactionpage.ui"
         // swriter
         || rUIFile == u"modules/swriter/ui/bulletsandnumbering.ui"
         || rUIFile == u"modules/swriter/ui/captionoptions.ui"
@@ -243,6 +250,7 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"svx/ui/headfootformatpage.ui"
         || rUIFile == u"sfx/ui/linefragment.ui"
         || rUIFile == u"sfx/ui/managestylepage.ui"
+        || rUIFile == u"sfx/ui/newstyle.ui"
         || rUIFile == u"sfx/ui/password.ui"
         // svx
         || rUIFile == u"svx/ui/acceptrejectchangesdialog.ui"
@@ -258,6 +266,7 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"svx/ui/themecoloreditdialog.ui"
         || rUIFile == u"svx/ui/themedialog.ui"
         // uui
+        || rUIFile == u"uui/ui/logindialog.ui"
         || rUIFile == u"uui/ui/macrowarnmedium.ui"
         // vcl
         || rUIFile == u"vcl/ui/wizard.ui"
@@ -272,10 +281,12 @@ bool isBuilderEnabled(std::u16string_view rUIFile, bool bMobile)
         || rUIFile == u"filter/ui/warnpdfdialog.ui"
         // writerperfect
         || rUIFile == u"writerperfect/ui/exportepub.ui"
+        || rUIFile == u"writerperfect/ui/wpftencodingdialog.ui"
         // xmlsec
         || rUIFile == u"xmlsec/ui/certgeneral.ui"
         || rUIFile == u"xmlsec/ui/certpage.ui"
         || rUIFile == u"xmlsec/ui/digitalsignaturesdialog.ui"
+        || rUIFile == u"xmlsec/ui/selectcertificatedialog.ui"
         || rUIFile == u"xmlsec/ui/viewcertdialog.ui"
         )
     {
@@ -399,6 +410,20 @@ bool isInterimBuilderEnabledForNotebookbar(std::u16string_view rUIFile)
         return true;
     }
 
+    return false;
+}
+
+bool isBuilderEnabledForAddressInput(std::u16string_view rUIFile)
+{
+    if (rUIFile == u"modules/scalc/ui/posbox.ui")
+        return true;
+    return false;
+}
+
+bool isBuilderEnabledForFormulabar(std::u16string_view rUIFile)
+{
+    if (rUIFile == u"modules/scalc/ui/inputbar.ui")
+        return true;
     return false;
 }
 }

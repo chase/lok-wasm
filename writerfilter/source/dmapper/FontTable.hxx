@@ -23,6 +23,7 @@
 #include <vector>
 #include "LoggedResources.hxx"
 #include <com/sun/star/io/XInputStream.hpp>
+#include <com/sun/star/awt/FontFamily.hpp>
 
 namespace writerfilter::dmapper
 {
@@ -33,6 +34,7 @@ struct FontEntry : public virtual SvRefBase
     typedef tools::SvRef<FontEntry> Pointer_t;
 
     OUString        sFontName;
+    sal_Int16 m_nFontFamily = css::awt::FontFamily::DONTKNOW;
     sal_Int32       nTextEncoding;
     FontEntry() :
         nTextEncoding( RTL_TEXTENCODING_DONTKNOW )
@@ -45,15 +47,18 @@ class FontTable : public LoggedProperties, public LoggedTable
     std::unique_ptr<FontTable_Impl> m_pImpl;
 
  public:
-    FontTable();
+    FontTable(bool bReadOnly);
     virtual ~FontTable() override;
 
     sal_uInt32          size();
     FontEntry::Pointer_t  getFontEntry(sal_uInt32 nIndex);
+    FontEntry::Pointer_t  getFontEntryByName(std::u16string_view rName);
 
     void addEmbeddedFont(const css::uno::Reference<css::io::XInputStream>& stream,
                          const OUString& fontName, std::u16string_view extra,
-                         std::vector<unsigned char> const & key);
+                         std::vector<unsigned char> const & key,
+                         bool bSubsetted);
+    bool IsReadOnly() const;
 
  private:
     // Properties
@@ -98,6 +103,7 @@ private:
     std::u16string_view m_style;
     OUString m_fontKey;
     css::uno::Reference<css::io::XInputStream> m_inputStream;
+    bool m_bSubsetted = false;
 };
 
 

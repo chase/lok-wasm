@@ -6,30 +6,43 @@
 #include <scresid.hxx>
 #include <svl/style.hxx>
 #include <strings.hrc>
+#include <condformathelper.hxx>
 
 namespace
 {
-void FillStyleListBox(const ScDocument* pDocument, weld::ComboBox& rCombo)
+condformat::ScCondFormatDateType GetScCondFormatDateType(ScConditionMode mode)
 {
-    std::set<OUString> aStyleNames;
-    SfxStyleSheetIterator aStyleIter(pDocument->GetStyleSheetPool(), SfxStyleFamily::Para);
-    for (SfxStyleSheetBase* pStyle = aStyleIter.First(); pStyle; pStyle = aStyleIter.Next())
+    switch (mode)
     {
-        aStyleNames.insert(pStyle->GetName());
+        case ScConditionMode::Today:
+            return condformat::ScCondFormatDateType::TODAY;
+        case ScConditionMode::Yesterday:
+            return condformat::ScCondFormatDateType::YESTERDAY;
+        case ScConditionMode::Tomorrow:
+            return condformat::ScCondFormatDateType::TOMORROW;
+        case ScConditionMode::Last7days:
+            return condformat::ScCondFormatDateType::LAST7DAYS;
+        case ScConditionMode::ThisWeek:
+            return condformat::ScCondFormatDateType::THISWEEK;
+        case ScConditionMode::LastWeek:
+            return condformat::ScCondFormatDateType::LASTWEEK;
+        case ScConditionMode::NextWeek:
+            return condformat::ScCondFormatDateType::NEXTWEEK;
+        case ScConditionMode::ThisMonth:
+            return condformat::ScCondFormatDateType::THISMONTH;
+        case ScConditionMode::LastMonth:
+            return condformat::ScCondFormatDateType::LASTMONTH;
+        case ScConditionMode::NextMonth:
+            return condformat::ScCondFormatDateType::NEXTMONTH;
+        case ScConditionMode::ThisYear:
+            return condformat::ScCondFormatDateType::THISYEAR;
+        case ScConditionMode::LastYear:
+            return condformat::ScCondFormatDateType::LASTYEAR;
+        case ScConditionMode::NextYear:
+            return condformat::ScCondFormatDateType::NEXTYEAR;
+        default:
+            return condformat::ScCondFormatDateType::TODAY;
     }
-    for (const auto& rStyleName : aStyleNames)
-    {
-        rCombo.append_text(rStyleName);
-    }
-}
-
-void UpdateStyleList(const ScDocument* pDocument, weld::ComboBox& rCombo)
-{
-    OUString sSelectedStyle = rCombo.get_active_text();
-    for (sal_Int32 i = rCombo.get_count(); i > 1; --i)
-        rCombo.remove(i - 1);
-    FillStyleListBox(pDocument, rCombo);
-    rCombo.set_active_text(sSelectedStyle);
 }
 }
 
@@ -46,22 +59,29 @@ ConditionalFormatEasyDialog::ConditionalFormatEasyDialog(SfxBindings* pBindings,
                                                          ScViewData* pViewData)
     : ScAnyRefDlgController(pBindings, pChildWindow, pParent,
                             "modules/scalc/ui/conditionaleasydialog.ui", "CondFormatEasyDlg")
+    , mpParent(pParent)
     , mpViewData(pViewData)
     , mpDocument(&mpViewData->GetDocument())
+    , mbIsManaged(false)
+    , mnFormatKey(0)
+    , mnEntryIndex(0)
     , mxNumberEntry(m_xBuilder->weld_entry("entryNumber"))
     , mxNumberEntry2(m_xBuilder->weld_entry("entryNumber2"))
     , mxAllInputs(m_xBuilder->weld_container("allInputs"))
+    , mxWarningLabel(m_xBuilder->weld_label("warning"))
     , mxRangeEntry(new formula::RefEdit(m_xBuilder->weld_entry("entryRange")))
     , mxButtonRangeEdit(new formula::RefButton(m_xBuilder->weld_button("rbassign")))
     , mxStyles(m_xBuilder->weld_combo_box("themeCombo"))
+    , mxWdPreviewWin(m_xBuilder->weld_widget("previewwin"))
+    , mxWdPreview(new weld::CustomWeld(*m_xBuilder, "preview", maWdPreview))
     , mxDescription(m_xBuilder->weld_label("description"))
     , mxButtonOk(m_xBuilder->weld_button("ok"))
     , mxButtonCancel(m_xBuilder->weld_button("cancel"))
 {
     mxButtonRangeEdit->SetReferences(this, mxRangeEntry.get());
-    const ScConditionMode* pCurrentMode
+    const ScConditionEasyDialogData CurrentData
         = pViewData->GetDocument().GetEasyConditionalFormatDialogData();
-    if (!pCurrentMode)
+    if (!CurrentData.Mode)
     {
         SAL_WARN(
             "sc",
@@ -70,7 +90,11 @@ ConditionalFormatEasyDialog::ConditionalFormatEasyDialog(SfxBindings* pBindings,
     }
     else
     {
-        meMode = *pCurrentMode;
+        meMode = *CurrentData.Mode;
+        mbIsManaged = CurrentData.IsManaged;
+        msFormula = CurrentData.Formula;
+        mnFormatKey = CurrentData.FormatKey;
+        mnEntryIndex = CurrentData.EntryIndex;
     }
     mxNumberEntry2->hide();
     switch (meMode)
@@ -159,6 +183,62 @@ ConditionalFormatEasyDialog::ConditionalFormatEasyDialog(SfxBindings* pBindings,
         case ScConditionMode::NotContainsText:
             SetDescription(ScResId(STR_CONDITION_NOT_CONTAINS_TEXT));
             break;
+        case ScConditionMode::Formula:
+            SetDescription(ScResId(STR_CONDITION_FORMULA));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::Today:
+            SetDescription(ScResId(STR_CONDITION_TODAY));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::Yesterday:
+            SetDescription(ScResId(STR_CONDITION_YESTERDAY));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::Tomorrow:
+            SetDescription(ScResId(STR_CONDITION_TOMORROW));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::Last7days:
+            SetDescription(ScResId(STR_CONDITION_LAST7DAYS));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::ThisWeek:
+            SetDescription(ScResId(STR_CONDITION_THISWEEK));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::LastWeek:
+            SetDescription(ScResId(STR_CONDITION_LASTWEEK));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::NextWeek:
+            SetDescription(ScResId(STR_CONDITION_NEXTWEEK));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::ThisMonth:
+            SetDescription(ScResId(STR_CONDITION_THISMONTH));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::LastMonth:
+            SetDescription(ScResId(STR_CONDITION_LASTMONTH));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::NextMonth:
+            SetDescription(ScResId(STR_CONDITION_NEXTMONTH));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::ThisYear:
+            SetDescription(ScResId(STR_CONDITION_THISYEAR));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::LastYear:
+            SetDescription(ScResId(STR_CONDITION_LASTYEAR));
+            mxAllInputs->hide();
+            break;
+        case ScConditionMode::NextYear:
+            SetDescription(ScResId(STR_CONDITION_NEXTYEAR));
+            mxAllInputs->hide();
+            break;
         default:
             SAL_WARN("sc",
                      "ConditionalFormatEasyDialog::ConditionalFormatEasyDialog: invalid format");
@@ -167,32 +247,77 @@ ConditionalFormatEasyDialog::ConditionalFormatEasyDialog(SfxBindings* pBindings,
 
     mxButtonOk->connect_clicked(LINK(this, ConditionalFormatEasyDialog, ButtonPressed));
     mxButtonCancel->connect_clicked(LINK(this, ConditionalFormatEasyDialog, ButtonPressed));
+    mxStyles->connect_changed(LINK(this, ConditionalFormatEasyDialog, StyleSelectHdl));
+    mxNumberEntry->connect_changed(LINK(this, ConditionalFormatEasyDialog, OnEdChanged));
+    mxNumberEntry2->connect_changed(LINK(this, ConditionalFormatEasyDialog, OnEdChanged));
 
     ScRangeList aRange;
     mpViewData->GetMarkData().FillRangeListWithMarks(&aRange, false);
-    if (aRange.empty())
+    ScConditionalFormat* format
+        = mpDocument->GetCondFormList(mpViewData->GetTabNo())->GetFormat(mnFormatKey);
+    if (aRange.empty() && mnFormatKey != -1 && mnEntryIndex != -1)
+    {
+        aRange = format->GetRangeList();
+    }
+    else if (aRange.empty())
     {
         ScAddress aPosition(mpViewData->GetCurX(), mpViewData->GetCurY(), mpViewData->GetTabNo());
         aRange.push_back(ScRange(aPosition));
     }
     maPosition = aRange.GetTopLeftCorner();
+    // FIX me: Tab is always 0 in some cases
+    // Refer to test tdf100793
+    maPosition.SetTab(mpViewData->GetTabNo());
 
     OUString sRangeString;
     aRange.Format(sRangeString, ScRefFlags::VALID, *mpDocument, mpDocument->GetAddressConvention());
     mxRangeEntry->SetText(sRangeString);
 
-    StartListening(*mpDocument->GetStyleSheetPool(), DuplicateHandling::Prevent);
-    FillStyleListBox(mpDocument, *mxStyles);
+    OUString sStyleName;
+    if (format)
+    {
+        const ScFormatEntry* entry = format->GetEntry(mnEntryIndex);
+        if (!entry)
+            return;
+        ScFormatEntry::Type type = entry->GetType();
+        if (type == ScFormatEntry::Type::Condition)
+        {
+            const ScCondFormatEntry* condEntry = static_cast<const ScCondFormatEntry*>(entry);
+            sStyleName = condEntry->GetStyle();
+            if (mxNumberEntry->get_visible())
+                mxNumberEntry->set_text(condEntry->GetExpression(aRange.GetTopLeftCorner(), 0));
+            if (mxNumberEntry2->get_visible())
+                mxNumberEntry2->set_text(condEntry->GetExpression(aRange.GetTopLeftCorner(), 1));
+        }
+        else if (type == ScFormatEntry::Type::Date)
+        {
+            const ScCondDateFormatEntry* dateEntry
+                = static_cast<const ScCondDateFormatEntry*>(entry);
+            sStyleName = dateEntry->GetStyleName();
+        }
+    }
 
-    mxStyles->set_active(1);
+    StartListening(*mpDocument->GetStyleSheetPool(), DuplicateHandling::Prevent);
+    ScCondFormatHelper::FillStyleListBox(mpDocument, *mxStyles);
+
+    mxStyles->set_active_text(sStyleName);
+    StyleSelectHdl(*mxStyles);
+    mxWdPreviewWin->show();
 }
 
-ConditionalFormatEasyDialog::~ConditionalFormatEasyDialog() {}
+ConditionalFormatEasyDialog::~ConditionalFormatEasyDialog()
+{
+    if (mbIsManaged)
+    {
+        GetBindings().GetDispatcher()->Execute(SID_OPENDLG_CONDFRMT_MANAGER,
+                                               SfxCallMode::ASYNCHRON);
+    }
+}
 
 void ConditionalFormatEasyDialog::Notify(SfxBroadcaster&, const SfxHint& rHint)
 {
     if (rHint.GetId() == SfxHintId::StyleSheetModified)
-        UpdateStyleList(mpDocument, *mxStyles);
+        ScCondFormatHelper::UpdateStyleList(*mxStyles, mpDocument);
 }
 
 void ConditionalFormatEasyDialog::SetReference(const ScRange& rRange, ScDocument&)
@@ -224,16 +349,19 @@ IMPL_LINK(ConditionalFormatEasyDialog, ButtonPressed, weld::Button&, rButton, vo
 {
     if (&rButton == mxButtonOk.get())
     {
+        if (mnEntryIndex != -1 && mnFormatKey != -1) // isEdit
+            mpDocument->GetCondFormList(maPosition.Tab())
+                ->GetFormat(mnFormatKey)
+                ->RemoveEntry(mnEntryIndex);
+
         std::unique_ptr<ScConditionalFormat> pFormat(new ScConditionalFormat(0, mpDocument));
 
-        OUString sExpression1
-            = (mxNumberEntry->get_visible() == true && mxAllInputs->get_visible() == true
-                   ? mxNumberEntry->get_text()
-                   : "");
-        OUString sExpression2
-            = (mxNumberEntry2->get_visible() == true && mxAllInputs->get_visible() == true
-                   ? mxNumberEntry2->get_text()
-                   : "");
+        OUString sExpression1 = (mxNumberEntry->get_visible() && mxAllInputs->get_visible()
+                                     ? mxNumberEntry->get_text()
+                                     : "");
+        OUString sExpression2 = (mxNumberEntry2->get_visible() && mxAllInputs->get_visible()
+                                     ? mxNumberEntry2->get_text()
+                                     : "");
 
         switch (meMode)
         {
@@ -248,9 +376,29 @@ IMPL_LINK(ConditionalFormatEasyDialog, ButtonPressed, weld::Button&, rButton, vo
                 break;
         }
 
-        ScFormatEntry* pEntry
-            = new ScCondFormatEntry(meMode, sExpression1, sExpression2, *mpDocument, maPosition,
-                                    mxStyles->get_active_text());
+        ScFormatEntry* pEntry;
+        if (meMode < ScConditionMode::Formula)
+        {
+            pEntry = new ScCondFormatEntry(meMode, sExpression1, sExpression2, *mpDocument,
+                                           maPosition, mxStyles->get_active_text());
+        }
+        else if (meMode >= ScConditionMode::Today && meMode < ScConditionMode::NONE)
+        {
+            ScCondDateFormatEntry entry(mpDocument);
+            entry.SetDateType(GetScCondFormatDateType(meMode));
+            entry.SetStyleName(mxStyles->get_active_text());
+            pEntry = new ScCondDateFormatEntry(mpDocument, entry);
+        }
+        else if (meMode == ScConditionMode::Formula)
+        {
+            pEntry = new ScCondFormatEntry(ScConditionMode::Direct, msFormula, OUString(),
+                                           *mpDocument, maPosition, mxStyles->get_active_text());
+        }
+        else
+        {
+            DBG_ASSERT(false, "Invalid conidtion type selected.");
+            return;
+        }
 
         ScRangeList aRange;
         ScRefFlags nFlags
@@ -268,6 +416,21 @@ IMPL_LINK(ConditionalFormatEasyDialog, ButtonPressed, weld::Button&, rButton, vo
     }
     else if (&rButton == mxButtonCancel.get())
         m_xDialog->response(RET_CANCEL);
+}
+
+IMPL_LINK_NOARG(ConditionalFormatEasyDialog, StyleSelectHdl, weld::ComboBox&, void)
+{
+    ScCondFormatHelper::StyleSelect(mpParent, *mxStyles, &(mpViewData->GetDocument()), maWdPreview);
+}
+
+IMPL_LINK(ConditionalFormatEasyDialog, OnEdChanged, weld::Entry&, rEntry, void)
+{
+    ScCondFormatHelper::ValidateInputField(rEntry, *mxWarningLabel, mpDocument, maPosition);
+
+    if (!mxWarningLabel->get_label().isEmpty())
+        mxWarningLabel->show();
+    else
+        mxWarningLabel->hide();
 }
 
 } // namespace sc

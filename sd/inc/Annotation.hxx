@@ -44,7 +44,8 @@ class SfxViewShell;
 namespace sd
 {
 
-void createAnnotation(rtl::Reference<sdr::annotation::Annotation>& xAnnotation, SdPage* pPage);
+rtl::Reference<sdr::annotation::Annotation> createAnnotation(SdPage* pPage);
+rtl::Reference<sdr::annotation::Annotation> createAnnotationAndAddToPage(SdPage* pPage);
 
 std::unique_ptr<SdrUndoAction> CreateUndoInsertOrRemoveAnnotation(rtl::Reference<sdr::annotation::Annotation>& xAnnotation, bool bInsert);
 
@@ -59,7 +60,7 @@ struct SD_DLLPUBLIC CustomAnnotationMarker
 class SD_DLLPUBLIC Annotation final : public sdr::annotation::Annotation
 {
 public:
-    explicit Annotation( const css::uno::Reference<css::uno::XComponentContext>& context, SdPage* pPage );
+    explicit Annotation(const css::uno::Reference<css::uno::XComponentContext>& context, SdrPage* pPage);
     Annotation(const Annotation&) = delete;
     Annotation& operator=(const Annotation&) = delete;
 
@@ -87,23 +88,7 @@ public:
 
     void createChangeUndo();
 
-    void createCustomAnnotationMarker()
-    {
-        m_pCustomAnnotationMarker = std::make_unique<CustomAnnotationMarker>();
-    }
-
-    CustomAnnotationMarker& getCustomAnnotationMarker()
-    {
-        return *m_pCustomAnnotationMarker;
-    }
-
-    bool hasCustomAnnotationMarker() const
-    {
-        return bool(m_pCustomAnnotationMarker);
-    }
-
-private:
-    std::unique_ptr<CustomAnnotationMarker> m_pCustomAnnotationMarker;
+    rtl::Reference<sdr::annotation::Annotation> clone(SdrPage* pTargetPage) override;
 };
 
 }

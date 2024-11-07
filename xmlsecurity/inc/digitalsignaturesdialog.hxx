@@ -38,11 +38,13 @@ namespace com::sun::star {
 
 class HeaderBar;
 class CertificateViewer;
+class SfxViewShell;
 
 class DigitalSignaturesDialog final : public weld::GenericDialogController
 {
 private:
     DocumentSignatureManager maSignatureManager;
+    std::optional<DocumentSignatureManager> moScriptSignatureManager;
     bool                    mbVerifySignatures;
     bool                    mbSignaturesChanged;
 
@@ -53,6 +55,8 @@ private:
     bool m_bWarningShowSignMacro;
 
     bool m_bAdESCompliant = true;
+
+    SfxViewShell* m_pViewShell;
 
     std::unique_ptr<weld::Label>       m_xHintDocFT;
     std::unique_ptr<weld::Label>       m_xHintBasicFT;
@@ -96,14 +100,15 @@ private:
     //See the spec at specs/www/appwide/security/Electronic_Signatures_and_Security.sxw
     //(6.6.2)Behaviour with regard to ODF 1.2
     bool canAdd();
-    bool canRemove();
+    void canRemove(const std::function<void(bool)>& rCallback);
 
     bool canAddRemove();
 
 public:
     DigitalSignaturesDialog(weld::Window* pParent, const css::uno::Reference<
         css::uno::XComponentContext >& rxCtx, DocumentSignatureMode eMode,
-        bool bReadOnly, OUString sODFVersion, bool bHasDocumentSignature);
+        bool bReadOnly, OUString sODFVersion, bool bHasDocumentSignature,
+        SfxViewShell* pViewShell);
     virtual ~DigitalSignaturesDialog() override;
 
     // Initialize the dialog and the security environment, returns TRUE on success
@@ -112,6 +117,7 @@ public:
             // Set the storage which should be signed or verified
     void    SetStorage( const css::uno::Reference < css::embed::XStorage >& rxStore );
     void    SetSignatureStream( const css::uno::Reference < css::io::XStream >& rxStream );
+    void    SetScriptingSignatureStream( const css::uno::Reference < css::io::XStream >& rxStream );
 
     // Execute the dialog...
     void    beforeRun();

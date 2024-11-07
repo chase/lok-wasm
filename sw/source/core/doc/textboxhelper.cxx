@@ -8,6 +8,7 @@
  */
 
 #include <textboxhelper.hxx>
+#include <dcontact.hxx>
 #include <fmtcntnt.hxx>
 #include <fmtanchr.hxx>
 #include <fmtcnct.hxx>
@@ -64,6 +65,7 @@ void SwTextBoxHelper::create(SwFrameFormat* pShape, SdrObject* pObject, bool bCo
 {
     assert(pShape);
     assert(pObject);
+    assert(pShape == ::FindFrameFormat(pObject));
 
     // If TextBox wasn't enabled previously
     if (pShape->GetOtherTextBoxFormats() && pShape->GetOtherTextBoxFormats()->GetTextBox(pObject))
@@ -88,11 +90,35 @@ void SwTextBoxHelper::create(SwFrameFormat* pShape, SdrObject* pObject, bool bCo
     uno::Reference<text::XTextContent> xTextFrame(
         SwXServiceProvider::MakeInstance(SwServiceType::TypeTextFrame, *pShape->GetDoc()),
         uno::UNO_QUERY);
-    uno::Reference<text::XTextDocument> xTextDocument(
-        pShape->GetDoc()->GetDocShell()->GetBaseModel(), uno::UNO_QUERY);
-    uno::Reference<text::XTextContentAppend> xTextContentAppend(xTextDocument->getText(),
-                                                                uno::UNO_QUERY);
-    xTextContentAppend->appendTextContent(xTextFrame, uno::Sequence<beans::PropertyValue>());
+
+    uno::Reference<text::XTextRange> xAnchor;
+    uno::Reference<text::XTextContent> xAnchorProvider(pObject->getWeakUnoShape().get(),
+                                                       uno::UNO_QUERY);
+    assert(xAnchorProvider.is());
+    if (xAnchorProvider.is())
+        xAnchor = xAnchorProvider->getAnchor();
+
+    uno::Reference<text::XTextContentAppend> xTextContentAppend;
+    if (xAnchor)
+        xTextContentAppend.set(xAnchor->getText(), uno::UNO_QUERY);
+
+    if (!xTextContentAppend)
+    {
+        uno::Reference<text::XTextDocument> xTextDocument(
+            pShape->GetDoc()->GetDocShell()->GetBaseModel(), uno::UNO_QUERY_THROW);
+        xTextContentAppend.set(xTextDocument->getText(), uno::UNO_QUERY_THROW);
+    }
+
+    if (xAnchor)
+    {
+        // insertTextContentWithProperties would fail if xAnchor is in a different XText
+        assert(xAnchor->getText() == xTextContentAppend);
+        xTextContentAppend->insertTextContentWithProperties(xTextFrame, {}, xAnchor);
+    }
+    else
+    {
+        xTextContentAppend->appendTextContent(xTextFrame, uno::Sequence<beans::PropertyValue>());
+    }
 
     // Link FLY and DRAW formats, so it becomes a text box (needed for syncProperty calls).
     uno::Reference<text::XTextFrame> xRealTextFrame(xTextFrame, uno::UNO_QUERY);
@@ -1513,61 +1539,48 @@ bool SwTextBoxHelper::DoTextBoxZOrderCorrection(SwFrameFormat* pShape, const Sdr
 
     pShpObj = pShape->FindRealSdrObject();
 
-    if (pShpObj)
+    if (!pShpObj)
     {
-        auto pTextBox = getOtherTextBoxFormat(pShape, RES_DRAWFRMFMT, pObj);
-        if (!pTextBox)
-            return false;
-        SdrObject* pFrmObj = pTextBox->FindRealSdrObject();
-        if (!pFrmObj)
-        {
-            // During loading there is no ready SdrObj for z-ordering, so create and cache it here
-            pFrmObj
-                = SwXTextFrame::GetOrCreateSdrObject(*dynamic_cast<SwFlyFrameFormat*>(pTextBox));
-        }
-        if (pFrmObj)
-        {
-            // Get the draw model from the doc
-            SwDrawModel* pDrawModel
-                = pShape->GetDoc()->getIDocumentDrawModelAccess().GetDrawModel();
-            if (pDrawModel)
-            {
-                // Not really sure this will work on all pages, but it seems it will.
-                auto pPage = pDrawModel->GetPage(0);
-                // Recalc all Z-orders
-                pPage->RecalcObjOrdNums();
-                // Here is a counter avoiding running to in infinity:
-                sal_uInt16 nIterator = 0;
-                // If the shape is behind the frame, is good, but if there are some objects
-                // between of them that is wrong so put the frame exactly one level higher
-                // than the shape.
-                if (pFrmObj->GetOrdNum() > pShpObj->GetOrdNum())
-                    pPage->SetObjectOrdNum(pFrmObj->GetOrdNum(), pShpObj->GetOrdNum() + 1);
-                else
-                    // Else, if the frame is behind the shape, bring to the front of it.
-                    while (pFrmObj->GetOrdNum() <= pShpObj->GetOrdNum())
-                    {
-                        pPage->SetObjectOrdNum(pFrmObj->GetOrdNum(), pFrmObj->GetOrdNum() + 1);
-                        // If there is any problem with the indexes, do not run over the infinity
-                        if (pPage->GetObjCount() == pFrmObj->GetOrdNum())
-                            break;
-                        ++nIterator;
-                        if (nIterator > 300)
-                            break; // Do not run to infinity
-                    }
-                pPage->RecalcObjOrdNums();
-                return true; // Success
-            }
-            SAL_WARN("sw.core", "SwTextBoxHelper::DoTextBoxZOrderCorrection(): "
-                                "No Valid Draw model for SdrObject for the shape!");
-        }
+        SAL_WARN("sw.core", "SwTextBoxHelper::DoTextBoxZOrderCorrection(): "
+                            "No Valid SdrObject for the shape!");
+        return false;
+    }
+
+    auto pTextBox = getOtherTextBoxFormat(pShape, RES_DRAWFRMFMT, pObj);
+    if (!pTextBox)
+        return false;
+    SdrObject* pFrmObj = pTextBox->FindRealSdrObject();
+    if (!pFrmObj)
+    {
+        // During loading there is no ready SdrObj for z-ordering, so create and cache it here
+        pFrmObj = SwXTextFrame::GetOrCreateSdrObject(*dynamic_cast<SwFlyFrameFormat*>(pTextBox));
+    }
+    if (!pFrmObj)
+    {
         SAL_WARN("sw.core", "SwTextBoxHelper::DoTextBoxZOrderCorrection(): "
                             "No Valid SdrObject for the frame!");
+        return false;
     }
-    SAL_WARN("sw.core", "SwTextBoxHelper::DoTextBoxZOrderCorrection(): "
-                        "No Valid SdrObject for the shape!");
-
-    return false;
+    // Get the draw model from the doc
+    SwDrawModel* pDrawModel = pShape->GetDoc()->getIDocumentDrawModelAccess().GetDrawModel();
+    if (!pDrawModel)
+    {
+        SAL_WARN("sw.core", "SwTextBoxHelper::DoTextBoxZOrderCorrection(): "
+                            "No Valid Draw model for SdrObject for the shape!");
+        return false;
+    }
+    if (!pFrmObj->getParentSdrObjListFromSdrObject())
+    {
+        SAL_WARN("sw.core", "SwTextBoxHelper::DoTextBoxZOrderCorrection(): "
+                            "Frame object is not inserted into any parent");
+        return false;
+    }
+    // Not really sure this will work on all pages, but it seems it will.
+    // If the shape is behind the frame, is good, but if there are some objects
+    // between of them that is wrong so put the frame exactly one level higher
+    // than the shape.
+    pFrmObj->ensureSortedImmediatelyAfter(*pShpObj);
+    return true; // Success
 }
 
 void SwTextBoxHelper::synchronizeGroupTextBoxProperty(bool pFunc(SwFrameFormat*, SdrObject*),

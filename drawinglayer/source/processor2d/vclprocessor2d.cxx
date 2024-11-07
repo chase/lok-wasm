@@ -328,8 +328,6 @@ void VclProcessor2D::RenderTextSimpleOrDecoratedPortionPrimitive2D(
                 mpOutputDevice->SetLayoutMode(nRTLLayoutMode);
             }
 
-            mpOutputDevice->SetTextColor(Color(aRGBFontColor));
-
             OUString aText(rTextCandidate.getText());
             sal_Int32 nPos = rTextCandidate.getTextPosition();
             sal_Int32 nLen = rTextCandidate.getTextLength();
@@ -426,13 +424,14 @@ void VclProcessor2D::RenderTextSimpleOrDecoratedPortionPrimitive2D(
                         MapMode aMapMode = mpOutputDevice->GetMapMode();
                         aMapMode.SetScaleX(aMapMode.GetScaleX() * nFontScalingFixX);
                         aMapMode.SetScaleY(aMapMode.GetScaleY() * nFontScalingFixY);
+                        Point origin = aMapMode.GetOrigin();
 
                         mpOutputDevice->Push(vcl::PushFlags::MAPMODE);
                         mpOutputDevice->SetRelativeMapMode(aMapMode);
                         bChangeMapMode = true;
 
-                        aPointX /= nFontScalingFixX;
-                        aPointY /= nFontScalingFixY;
+                        aPointX = (aPointX + origin.X()) / nFontScalingFixX - origin.X();
+                        aPointY = (aPointY + origin.Y()) / nFontScalingFixY - origin.Y();
                     }
                 }
 
@@ -442,6 +441,7 @@ void VclProcessor2D::RenderTextSimpleOrDecoratedPortionPrimitive2D(
             // tdf#152990 set the font after the MapMode is (potentially) set so canvas uses the desired
             // font size
             mpOutputDevice->SetFont(aFont);
+            mpOutputDevice->SetTextColor(Color(aRGBFontColor));
 
             if (!aDXArray.empty())
             {

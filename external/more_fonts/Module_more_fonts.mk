@@ -22,6 +22,7 @@ $(eval $(call gb_Module_add_targets,more_fonts,\
 	ExternalPackage_liberation_narrow \
 	ExternalPackage_libertineg \
 	ExternalPackage_libre_hebrew \
+	ExternalPackage_sourcesans \
 	ExternalPackage_noto_kufi_arabic \
 	ExternalPackage_noto_naskh_arabic \
 	ExternalPackage_noto_sans \
@@ -40,6 +41,13 @@ $(eval $(call gb_Module_add_targets,more_fonts,\
 	ExternalPackage_scheherazade \
 	ExternalPackage_opendyslexic \
 	ExternalPackage_opensans \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_agdasima,) \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_bacasime_antique,) \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_belanosima,) \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_caprasimo,) \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_lugrasimo,) \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_lumanosimo,) \
+	$(if $(WITH_DOCREPAIR_FONTS),ExternalPackage_lunasima,) \
 	UnpackedTarball_alef \
 	UnpackedTarball_amiri \
 	UnpackedTarball_caladea \
@@ -52,6 +60,7 @@ $(eval $(call gb_Module_add_targets,more_fonts,\
 	UnpackedTarball_liberation_narrow \
 	UnpackedTarball_libertineg \
 	UnpackedTarball_libre_hebrew \
+	UnpackedTarball_sourcesans \
 	UnpackedTarball_noto_kufi_arabic \
 	UnpackedTarball_noto_naskh_arabic \
 	UnpackedTarball_noto_sans \
@@ -70,6 +79,13 @@ $(eval $(call gb_Module_add_targets,more_fonts,\
 	UnpackedTarball_scheherazade \
 	UnpackedTarball_opendyslexic \
 	UnpackedTarball_opensans \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_agdasima,) \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_bacasime_antique,) \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_belanosima,) \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_caprasimo,) \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_lugrasimo,) \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_lumanosimo,) \
+	$(if $(WITH_DOCREPAIR_FONTS),UnpackedTarball_lunasima,) \
 ))
 
 # vim: set noet sw=4 ts=4:

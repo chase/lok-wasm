@@ -207,6 +207,7 @@ public:
     tools::Rectangle       GetEditCursor() const;
     void            ShowCursor( bool bGotoCursor = true, bool bForceVisCursor = true, bool bActivate = false );
     void            HideCursor( bool bDeactivate = false );
+    bool IsCursorVisible() const;
 
     void            SetSelectionMode( EESelectionMode eMode );
 
@@ -278,6 +279,7 @@ public:
     void                RemoveAttribsKeepLanguages( bool bRemoveParaAttribs );
 
     ErrCode             Read( SvStream& rInput, EETextFormat eFormat, SvKeyValueIterator* pHTTPHeaderAttrs );
+    OString             GetSimpleHtml() const;
 
     void            SetBackgroundColor( const Color& rColor );
     Color const &   GetBackgroundColor() const;

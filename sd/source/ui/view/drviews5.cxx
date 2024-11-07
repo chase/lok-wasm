@@ -114,7 +114,9 @@ void DrawViewShell::ArrangeGUIElements()
     if ( pIPClient && pIPClient->IsObjectInPlaceActive() )
         bClientActive = true;
 
-    bool bInPlaceActive = GetViewFrame()->GetFrame().IsInPlace();
+    bool bInPlaceActive = false;
+    if (SfxViewFrame* pViewFrame = GetViewFrame())
+        bInPlaceActive = pViewFrame->GetFrame().IsInPlace();
 
     if ( mbZoomOnPage && !bInPlaceActive && !bClientActive )
     {
@@ -315,15 +317,7 @@ void DrawViewShell::WriteFrameViewData()
     mpFrameView->SetGridCoarse( mpDrawView->GetGridCoarse() );
     mpFrameView->SetGridFine( mpDrawView->GetGridFine() );
     mpFrameView->SetSnapGridWidth(mpDrawView->GetSnapGridWidthX(), mpDrawView->GetSnapGridWidthY());
-
-    // In LOK, Grid isn't implemented, and it appears in the slide thumbnails
-    // Remove this when Grid is implemented and/or thumbnails are fixed to no longer
-    // show the grid.
-    if (comphelper::LibreOfficeKit::isActive())
-        mpFrameView->SetGridVisible( false );
-    else
-        mpFrameView->SetGridVisible( mpDrawView->IsGridVisible() );
-
+    mpFrameView->SetGridVisible( mpDrawView->IsGridVisible() );
     mpFrameView->SetGridFront( mpDrawView->IsGridFront() );
     mpFrameView->SetSnapAngle( mpDrawView->GetSnapAngle() );
     mpFrameView->SetGridSnap( mpDrawView->IsGridSnap() );

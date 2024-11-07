@@ -741,8 +741,14 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testMultiPagePDF)
         SvMemoryStream& rObjectStream = pStream->GetMemory();
         rObjectStream.Seek(STREAM_SEEK_TO_BEGIN);
 
+        SvMemoryStream aUncompressed;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        aZCodec.Decompress(rObjectStream, aUncompressed);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+
         // Just check that the size of the page stream is what is expected.
-        CPPUNIT_ASSERT_EQUAL(sal_uInt64(230), rObjectStream.remainingSize());
+        CPPUNIT_ASSERT_EQUAL(sal_uInt64(1236), aUncompressed.Tell());
     }
 
     { // embedded PDF page 2
@@ -770,8 +776,14 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testMultiPagePDF)
         SvMemoryStream& rObjectStream = pStream->GetMemory();
         rObjectStream.Seek(STREAM_SEEK_TO_BEGIN);
 
-        // Just check that the size of the page stream is what is expected
-        CPPUNIT_ASSERT_EQUAL(sal_uInt64(309), rObjectStream.remainingSize());
+        SvMemoryStream aUncompressed;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        aZCodec.Decompress(rObjectStream, aUncompressed);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+
+        // Just check that the size of the page stream is what is expected.
+        CPPUNIT_ASSERT_EQUAL(sal_uInt64(3911), aUncompressed.Tell());
     }
 
     { // embedded PDF page 3
@@ -799,8 +811,14 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testMultiPagePDF)
         SvMemoryStream& rObjectStream = pStream->GetMemory();
         rObjectStream.Seek(STREAM_SEEK_TO_BEGIN);
 
-        // Just check that the size of the page stream is what is expected
-        CPPUNIT_ASSERT_EQUAL(sal_uInt64(193), rObjectStream.remainingSize());
+        SvMemoryStream aUncompressed;
+        ZCodec aZCodec;
+        aZCodec.BeginCompression();
+        aZCodec.Decompress(rObjectStream, aUncompressed);
+        CPPUNIT_ASSERT(aZCodec.EndCompression());
+
+        // Just check that the size of the page stream is what is expected.
+        CPPUNIT_ASSERT_EQUAL(sal_uInt64(373), aUncompressed.Tell());
     }
 #endif
 }
@@ -809,6 +827,10 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testFormFontName)
 {
     // Import the bugdoc and export as PDF.
     aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    uno::Sequence<beans::PropertyValue> aFilterData(comphelper::InitPropertySequence({
+        { "ExportFormFields", uno::Any(true) },
+    }));
+    aMediaDescriptor[u"FilterData"_ustr] <<= aFilterData;
     saveAsPDF(u"form-font-name.odt");
 
     // Parse the export result with pdfium.
@@ -2789,8 +2811,10 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testTdf157397)
     aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
 
     // Enable PDF/UA
-    uno::Sequence<beans::PropertyValue> aFilterData(
-        comphelper::InitPropertySequence({ { "PDFUACompliance", uno::Any(true) } }));
+    uno::Sequence<beans::PropertyValue> aFilterData(comphelper::InitPropertySequence({
+        { "PDFUACompliance", uno::Any(true) },
+        { "ExportFormFields", uno::Any(true) },
+    }));
     aMediaDescriptor["FilterData"] <<= aFilterData;
     saveAsPDF(u"PDF_export_with_formcontrol.fodt");
 
@@ -3743,8 +3767,10 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testFormControlAnnot)
     aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
 
     // Enable PDF/UA
-    uno::Sequence<beans::PropertyValue> aFilterData(
-        comphelper::InitPropertySequence({ { "PDFUACompliance", uno::Any(true) } }));
+    uno::Sequence<beans::PropertyValue> aFilterData(comphelper::InitPropertySequence({
+        { "PDFUACompliance", uno::Any(true) },
+        { "ExportFormFields", uno::Any(true) },
+    }));
     aMediaDescriptor["FilterData"] <<= aFilterData;
 
     saveAsPDF(u"formcontrol.fodt");
@@ -4645,6 +4671,10 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testTdf152246)
 {
     // Import the bugdoc and export as PDF.
     aMediaDescriptor["FilterName"] <<= OUString("writer_pdf_Export");
+    uno::Sequence<beans::PropertyValue> aFilterData(comphelper::InitPropertySequence({
+        { "ExportFormFields", uno::Any(true) },
+    }));
+    aMediaDescriptor[u"FilterData"_ustr] <<= aFilterData;
     saveAsPDF(u"content-control-rtl.docx");
 
     // Parse the export result.
@@ -4657,11 +4687,11 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testTdf152246)
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(1), aPages.size());
 
     // Position array
-    constexpr double aPos[5][4] = { { 56.699, 707.701, 131.401, 721.499 },
-                                    { 198.499, 707.701, 273.201, 721.499 },
-                                    { 303.349, 680.101, 378.051, 693.899 },
-                                    { 480.599, 680.101, 555.301, 693.899 },
-                                    { 56.699, 652.501, 131.401, 666.299 } };
+    constexpr double aPos[5][4] = { { 55.699, 706.701, 132.401, 722.499 },
+                                    { 197.499, 706.701, 274.201, 722.499 },
+                                    { 302.349, 679.101, 379.051, 694.899 },
+                                    { 479.599, 679.101, 556.301, 694.899 },
+                                    { 55.699, 651.501, 132.401, 667.299 } };
 
     // Get page annotations.
     auto pAnnots = dynamic_cast<vcl::filter::PDFArrayElement*>(aPages[0]->Lookup("Annots"_ostr));
@@ -4909,6 +4939,72 @@ CPPUNIT_TEST_FIXTURE(PdfExportTest2, testTdf159817)
     CPPUNIT_ASSERT_EQUAL(basegfx::B2DPoint(28.3, 623.7), roundPoint(35));
     CPPUNIT_ASSERT_EQUAL(basegfx::B2DPoint(28.3, 623.8), roundPoint(36));
     CPPUNIT_ASSERT_EQUAL(basegfx::B2DPoint(138.6, 623.7), roundPoint(37));
+}
+
+// tdf#162161 reexport appears to have blank image
+CPPUNIT_TEST_FIXTURE(PdfExportTest2, testRexportXnViewColorspace)
+{
+    // We need to enable PDFium import (and make sure to disable after the test)
+    bool bResetEnvVar = false;
+    if (getenv("LO_IMPORT_USE_PDFIUM") == nullptr)
+    {
+        bResetEnvVar = true;
+        osl_setEnvironment(u"LO_IMPORT_USE_PDFIUM"_ustr.pData, u"1"_ustr.pData);
+    }
+    comphelper::ScopeGuard aPDFiumEnvVarGuard([&]() {
+        if (bResetEnvVar)
+            osl_clearEnvironment(u"LO_IMPORT_USE_PDFIUM"_ustr.pData);
+    });
+
+    // Load the PDF and save as PDF
+    vcl::filter::PDFDocument aDocument;
+    load(u"xnview-colorspace.pdf", aDocument);
+
+    std::vector<vcl::filter::PDFObjectElement*> aPages = aDocument.GetPages();
+    CPPUNIT_ASSERT_EQUAL(size_t(1), aPages.size());
+
+    // Get access to the only image on the only page.
+    vcl::filter::PDFObjectElement* pResources = aPages[0]->LookupObject("Resources"_ostr);
+    CPPUNIT_ASSERT(pResources);
+
+    auto pXObjects
+        = dynamic_cast<vcl::filter::PDFDictionaryElement*>(pResources->Lookup("XObject"_ostr));
+    CPPUNIT_ASSERT(pXObjects);
+    CPPUNIT_ASSERT_EQUAL(size_t(1), pXObjects->GetItems().size());
+    vcl::filter::PDFObjectElement* pXObject
+        = pXObjects->LookupObject(pXObjects->GetItems().begin()->first);
+    CPPUNIT_ASSERT(pXObject);
+
+    auto pSubResources
+        = dynamic_cast<vcl::filter::PDFDictionaryElement*>(pXObject->Lookup("Resources"_ostr));
+    CPPUNIT_ASSERT(pSubResources);
+    pXObjects = dynamic_cast<vcl::filter::PDFDictionaryElement*>(
+        pSubResources->LookupElement("XObject"_ostr));
+    CPPUNIT_ASSERT(pXObjects);
+    CPPUNIT_ASSERT_EQUAL(size_t(1), pXObjects->GetItems().size());
+    pXObject = pXObjects->LookupObject(pXObjects->GetItems().begin()->first);
+    CPPUNIT_ASSERT(pXObject);
+
+    pSubResources
+        = dynamic_cast<vcl::filter::PDFDictionaryElement*>(pXObject->Lookup("Resources"_ostr));
+    CPPUNIT_ASSERT(pSubResources);
+    pXObjects = dynamic_cast<vcl::filter::PDFDictionaryElement*>(
+        pSubResources->LookupElement("XObject"_ostr));
+    CPPUNIT_ASSERT(pXObjects);
+    CPPUNIT_ASSERT_EQUAL(size_t(1), pXObjects->GetItems().size());
+    pXObject = pXObjects->LookupObject(pXObjects->GetItems().begin()->first);
+    CPPUNIT_ASSERT(pXObject);
+
+    // Dig all the way down to this element which is originally
+    // 8 0 obj
+    // /DeviceRGB
+    // endobj
+    // and appeared blank when we lost the /DeviceRGB line
+    auto pColorspace = pXObject->LookupObject("ColorSpace"_ostr);
+    CPPUNIT_ASSERT(pColorspace);
+    auto pColorSpaceElement = pColorspace->GetNameElement();
+    CPPUNIT_ASSERT(pColorSpaceElement);
+    CPPUNIT_ASSERT_EQUAL("DeviceRGB"_ostr, pColorSpaceElement->GetValue());
 }
 
 } // end anonymous namespace

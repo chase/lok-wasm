@@ -195,7 +195,7 @@ SvxShape::~SvxShape() noexcept
 
     if ( mxSdrObject )
     {
-        EndListening(mxSdrObject->getSdrModelFromSdrObject());
+        mxSdrObject->RemoveListener(*this);
         mxSdrObject->setUnoShape(nullptr);
         mxSdrObject.clear();
     }
@@ -208,7 +208,7 @@ void SvxShape::InvalidateSdrObject()
 {
     if(mxSdrObject)
     {
-        EndListening(mxSdrObject->getSdrModelFromSdrObject());
+        mxSdrObject->RemoveListener(*this);
         mxSdrObject.clear();
     }
 };
@@ -288,7 +288,7 @@ void SvxShape::impl_construct()
 {
     if ( HasSdrObject() )
     {
-        StartListening(GetSdrObject()->getSdrModelFromSdrObject());
+        GetSdrObject()->AddListener(*this);
         impl_initFromSdrObject();
     }
 }
@@ -358,14 +358,14 @@ void SvxShape::Create( SdrObject* pNewObj, SvxDrawPage* /*pNewPage*/ )
 
     if( HasSdrObject() )
     {
-        EndListening( GetSdrObject()->getSdrModelFromSdrObject() );
+        GetSdrObject()->RemoveListener( *this );
     }
 
     mxSdrObject = pNewObj;
 
     if( HasSdrObject() )
     {
-        StartListening( GetSdrObject()->getSdrModelFromSdrObject() );
+        GetSdrObject()->AddListener( *this );
     }
 
     OSL_ENSURE( !mbIsMultiPropertyCall, "SvxShape::Create: hmm?" );
@@ -933,8 +933,7 @@ void SvxShape::Notify( SfxBroadcaster&, const SfxHint& rHint ) noexcept
         return;
     const SdrHint* pSdrHint = static_cast<const SdrHint*>(&rHint);
     // #i55919# SdrHintKind::ObjectChange is only interesting if it's for this object
-    if ((pSdrHint->GetKind() != SdrHintKind::ModelCleared) &&
-         (pSdrHint->GetKind() != SdrHintKind::ObjectChange || pSdrHint->GetObject() != mxSdrObject.get() ))
+    if (pSdrHint->GetKind() != SdrHintKind::ObjectChange || pSdrHint->GetObject() != mxSdrObject.get())
         return;
 
     // prevent object being deleted from under us
@@ -942,24 +941,12 @@ void SvxShape::Notify( SfxBroadcaster&, const SfxHint& rHint ) noexcept
     uno::Reference< uno::XInterface > xSelf( mxSdrObject->getWeakUnoShape() );
     if( !xSelf.is() )
     {
-        EndListening(mxSdrObject->getSdrModelFromSdrObject());
+        mxSdrObject->RemoveListener(*this);
         mxSdrObject.clear();
         return;
     }
 
-    if (pSdrHint->GetKind() == SdrHintKind::ObjectChange)
-    {
-        updateShapeKind();
-    }
-    else // (pSdrHint->GetKind() == SdrHintKind::ModelCleared)
-    {
-        EndListening(mxSdrObject->getSdrModelFromSdrObject());
-        mxSdrObject->setUnoShape(nullptr);
-        mxSdrObject.clear();
-
-        if(!mpImpl->mbDisposing)
-            dispose();
-    }
+    updateShapeKind();
 }
 
 // XShape
@@ -1194,7 +1181,7 @@ void SAL_CALL SvxShape::dispose()
     if (!pObject)
         return;
 
-    EndListening( pObject->getSdrModelFromSdrObject() );
+    pObject->RemoveListener( *this );
 
     if ( pObject->IsInserted() && pObject->getSdrPageFromSdrObject() )
     {
@@ -3186,6 +3173,7 @@ constexpr OUString sUNO_service_drawing_PolyLineShape     = u"com.sun.star.drawi
 constexpr OUString sUNO_service_drawing_OpenBezierShape   = u"com.sun.star.drawing.OpenBezierShape"_ustr;
 constexpr OUString sUNO_service_drawing_ClosedBezierShape = u"com.sun.star.drawing.ClosedBezierShape"_ustr;
 constexpr OUString sUNO_service_drawing_TextShape         = u"com.sun.star.drawing.TextShape"_ustr;
+constexpr OUString sUNO_service_drawing_AnnotationShape   = u"com.sun.star.drawing.AnnotationShape"_ustr;
 constexpr OUString sUNO_service_drawing_GraphicObjectShape = u"com.sun.star.drawing.GraphicObjectShape"_ustr;
 constexpr OUString sUNO_service_drawing_OLE2Shape         = u"com.sun.star.drawing.OLE2Shape"_ustr;
 constexpr OUString sUNO_service_drawing_PageShape         = u"com.sun.star.drawing.PageShape"_ustr;
@@ -3443,6 +3431,29 @@ uno::Sequence< OUString > SvxShape::_getSupportedServiceNames()
                             sUNO_service_drawing_ShadowProperties,
                             sUNO_service_drawing_RotationDescriptor };
                 return aSvxShape_TextServices;
+            }
+        case SdrObjKind::Annotation:
+            {
+                static const uno::Sequence<OUString> aSvxShape_AnnotationServices = {
+                            sUNO_service_drawing_AnnotationShape,
+
+                            sUNO_service_drawing_Shape,
+                            sUNO_service_drawing_FillProperties,
+                            sUNO_service_drawing_LineProperties,
+
+                            sUNO_service_drawing_Text,
+                            sUNO_service_drawing_TextProperties,
+                            sUNO_service_style_ParagraphProperties,
+                            sUNO_service_style_ParagraphPropertiesComplex,
+                            sUNO_service_style_ParagraphPropertiesAsian,
+                            sUNO_service_style_CharacterProperties,
+                            sUNO_service_style_CharacterPropertiesComplex,
+                            sUNO_service_style_CharacterPropertiesAsian,
+
+                            sUNO_service_drawing_ShadowProperties,
+                            sUNO_service_drawing_RotationDescriptor
+                };
+                return aSvxShape_AnnotationServices;
             }
 
         case SdrObjKind::Graphic:

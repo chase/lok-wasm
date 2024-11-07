@@ -2720,35 +2720,49 @@ void ScColumn::GetFilterEntries(
 
 void ScColumn::GetBackColorFilterEntries(SCROW nRow1, SCROW nRow2, ScFilterEntries& rFilterEntries)
 {
-    Color aBackColor;
-    bool bCondBackColor = false;
-    ScAddress aCell(GetCol(), 0, GetTab());
-    ScConditionalFormat* pCondFormat = nullptr;
-
-    const SfxItemSet* pCondSet = nullptr;
-    const SvxBrushItem* pBrush = nullptr;
-    const ScPatternAttr* pPattern = nullptr;
-    const ScColorScaleFormat* pColFormat = nullptr;
-
     if (!GetDoc().ValidRow(nRow1) || !GetDoc().ValidRow(nRow2))
         return;
 
+    ScAddress aCell(GetCol(), 0, GetTab());
+    ScDocument& rDoc = GetDoc();
+    // cache the output of GetCondResult
+    const ScPatternAttr* pPrevPattern = nullptr;
+    ScRefCellValue aPrevCellValue;
+    Color aPrevPatternColor;
     while (nRow1 <= nRow2)
     {
         aCell.SetRow(nRow1);
-        pPattern = GetDoc().GetPattern(aCell.Col(), aCell.Row(), aCell.Tab());
+
+        Color aBackColor;
+        bool bCondBackColor = false;
+        const ScPatternAttr* pPattern = rDoc.GetPattern(aCell.Col(), aCell.Row(), aCell.Tab());
+        ScConditionalFormat* pCondFormat = rDoc.GetCondFormat(aCell.Col(), aCell.Row(), aCell.Tab());
+
         if (pPattern)
         {
             if (!pPattern->GetItem(ATTR_CONDITIONAL).GetCondFormatData().empty())
             {
-                pCondSet = GetDoc().GetCondResult(GetCol(), nRow1, GetTab());
-                pBrush = &pPattern->GetItem(ATTR_BACKGROUND, pCondSet);
-                aBackColor = pBrush->GetColor();
-                bCondBackColor = true;
+                // Speed up processing when dealing with runs of identical cells. This avoids
+                // an expensive GetCondResult call.
+                ScRefCellValue aCellValue = GetCellValue(nRow1);
+                if (pPrevPattern == pPattern && aCellValue == aPrevCellValue)
+                {
+                    aBackColor = aPrevPatternColor;
+                    bCondBackColor = true;
+                }
+                else
+                {
+                    const SfxItemSet* pCondSet = rDoc.GetCondResult(GetCol(), nRow1, GetTab());
+                    const SvxBrushItem* pBrush = &pPattern->GetItem(ATTR_BACKGROUND, pCondSet);
+                    aBackColor = pBrush->GetColor();
+                    bCondBackColor = true;
+                    aPrevCellValue = aCellValue;
+                    pPrevPattern = pPattern;
+                    aPrevPatternColor = aBackColor;
+                }
             }
         }
 
-        pCondFormat = GetDoc().GetCondFormat(aCell.Col(), aCell.Row(), aCell.Tab());
         if (pCondFormat)
         {
             for (size_t nFormat = 0; nFormat < pCondFormat->size(); nFormat++)
@@ -2756,7 +2770,7 @@ void ScColumn::GetBackColorFilterEntries(SCROW nRow1, SCROW nRow2, ScFilterEntri
                 auto aEntry = pCondFormat->GetEntry(nFormat);
                 if (aEntry->GetType() == ScFormatEntry::Type::Colorscale)
                 {
-                    pColFormat = static_cast<const ScColorScaleFormat*>(aEntry);
+                    const ScColorScaleFormat* pColFormat = static_cast<const ScColorScaleFormat*>(aEntry);
                     std::optional<Color> oColor = pColFormat->GetColor(aCell);
                     if (oColor)
                     {
@@ -2769,7 +2783,7 @@ void ScColumn::GetBackColorFilterEntries(SCROW nRow1, SCROW nRow2, ScFilterEntri
 
         if (!bCondBackColor)
         {
-            pBrush = GetDoc().GetAttr(aCell, ATTR_BACKGROUND);
+            const SvxBrushItem* pBrush = rDoc.GetAttr(aCell, ATTR_BACKGROUND);
             aBackColor = pBrush->GetColor();
         }
 
@@ -2905,7 +2919,7 @@ public:
 
 // GetDataEntries - Strings from continuous Section around nRow
 bool ScColumn::GetDataEntries(
-    SCROW nStartRow, std::set<ScTypedStrData>& rStrings) const
+    SCROW nStartRow, ScTypedCaseStrSet& rStrings) const
 {
     // Start at the specified row position, and collect all string values
     // going upward and downward directions in parallel. The start position
@@ -3281,6 +3295,19 @@ SCSIZE ScColumn::GetCellCount() const
     CellCounter aFunc;
     aFunc = std::for_each(maCells.begin(), maCells.end(), aFunc);
     return aFunc.getCount();
+}
+
+bool ScColumn::IsCellCountZero() const
+{
+    auto it = maCells.begin();
+    auto itEnd = maCells.end();
+    for (; it != itEnd; ++it)
+    {
+        const sc::CellStoreType::value_type& node = *it;
+        if (node.size != 0)
+            return false;
+    }
+    return true;
 }
 
 FormulaError ScColumn::GetErrCode( SCROW nRow ) const

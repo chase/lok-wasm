@@ -37,14 +37,18 @@ struct FontTable_Impl
     std::unique_ptr<EmbeddedFontsHelper, o3tl::default_delete<EmbeddedFontsHelper>> xEmbeddedFontHelper;
     std::vector< FontEntry::Pointer_t > aFontEntries;
     FontEntry::Pointer_t pCurrentEntry;
-    FontTable_Impl() {}
+    bool m_bReadOnly;
+    FontTable_Impl(bool bReadOnly)
+        : m_bReadOnly(bReadOnly)
+    {
+    }
 };
 
-FontTable::FontTable()
+FontTable::FontTable(bool bReadOnly)
 : LoggedProperties("FontTable")
 , LoggedTable("FontTable")
 , LoggedStream("FontTable")
-, m_pImpl( new FontTable_Impl )
+, m_pImpl( new FontTable_Impl(bReadOnly) )
 {
 }
 
@@ -132,7 +136,21 @@ void FontTable::lcl_sprm(Sprm& rSprm)
         case NS_ooxml::LN_CT_Font_panose1:
             break;
         case NS_ooxml::LN_CT_Font_family:
+        {
+            Value::Pointer_t pValue = rSprm.getValue();
+            sal_Int32 nIntValue = pValue ? pValue->getInt() : 0;
+            // Map OOXML's ST_FontFamily to UNO's awt::FontFamily.
+            switch (nIntValue)
+            {
+                case NS_ooxml::LN_Value_ST_FontFamily_roman:
+                    m_pImpl->pCurrentEntry->m_nFontFamily = awt::FontFamily::ROMAN;
+                    break;
+                case NS_ooxml::LN_Value_ST_FontFamily_swiss:
+                    m_pImpl->pCurrentEntry->m_nFontFamily = awt::FontFamily::SWISS;
+                    break;
+            }
             break;
+        }
         case NS_ooxml::LN_CT_Font_sig:
             break;
         case NS_ooxml::LN_CT_Font_notTrueType:
@@ -225,13 +243,33 @@ sal_uInt32 FontTable::size()
     return m_pImpl->aFontEntries.size();
 }
 
+FontEntry::Pointer_t FontTable::getFontEntryByName(std::u16string_view rName)
+{
+    for (const auto& pEntry : m_pImpl->aFontEntries)
+    {
+        if (pEntry->sFontName == rName)
+        {
+            return pEntry;
+        }
+    }
+
+    return nullptr;
+}
+
+bool FontTable::IsReadOnly() const
+{
+    return m_pImpl->m_bReadOnly;
+}
+
 void FontTable::addEmbeddedFont(const css::uno::Reference<css::io::XInputStream>& stream,
                                 const OUString& fontName, std::u16string_view extra,
-                                std::vector<unsigned char> const & key)
+                                std::vector<unsigned char> const & key,
+                                bool bSubsetted)
 {
     if (!m_pImpl->xEmbeddedFontHelper)
         m_pImpl->xEmbeddedFontHelper.reset(new EmbeddedFontsHelper);
-    m_pImpl->xEmbeddedFontHelper->addEmbeddedFont(stream, fontName, extra, key);
+    m_pImpl->xEmbeddedFontHelper->addEmbeddedFont(stream, fontName, extra, key,
+            /*eot=*/false, bSubsetted);
 }
 
 EmbeddedFontHandler::EmbeddedFontHandler(FontTable& rFontTable, OUString _fontName, std::u16string_view style )
@@ -246,6 +284,7 @@ EmbeddedFontHandler::~EmbeddedFontHandler()
 {
     if( !m_inputStream.is())
         return;
+
     std::vector< unsigned char > key( 32 );
     if( !m_fontKey.isEmpty())
     {   // key for unobfuscating
@@ -265,7 +304,9 @@ EmbeddedFontHandler::~EmbeddedFontHandler()
             key[ i + 16 ] = val;
         }
     }
-    m_fontTable.addEmbeddedFont( m_inputStream, m_fontName, m_style, key );
+    // Ignore the "subsetted" flag if we're not editing anyway.
+    bool bSubsetted = m_bSubsetted && !m_fontTable.IsReadOnly();
+    m_fontTable.addEmbeddedFont( m_inputStream, m_fontName, m_style, key, bSubsetted );
     m_inputStream->closeInput();
 }
 
@@ -280,8 +321,8 @@ void EmbeddedFontHandler::lcl_attribute( Id name, Value& val )
         case NS_ooxml::LN_CT_Rel_id:
             break;
         case NS_ooxml::LN_CT_FontRel_subsetted:
-            break; // TODO? Let's just ignore this for now and hope
-                   // it doesn't break anything.
+            m_bSubsetted = static_cast<bool>(val.getInt());
+            break;
         case NS_ooxml::LN_inputstream: // the actual font data as stream
             val.getAny() >>= m_inputStream;
             break;

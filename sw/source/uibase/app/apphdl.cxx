@@ -1000,7 +1000,7 @@ void SwModule::ConfigurationChanged(utl::ConfigurationBroadcaster* pBrdCst, Conf
                         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_APPLICATION_BACKGROUND_COLOR,
                             aViewColors.m_aAppBackgroundColor.AsRGBHexString().toUtf8());
                         pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_DOCUMENT_BACKGROUND_COLOR,
-                            aViewColors.m_aAppBackgroundColor.AsRGBHexString().toUtf8());
+                            aViewColors.m_aDocColor.AsRGBHexString().toUtf8());
                     }
 
                     // if nothing changed, and the hint was OnlyCurrentDocumentColorScheme we can skip invalidate
@@ -1047,6 +1047,7 @@ void SwModule::ConfigurationChanged(utl::ConfigurationBroadcaster* pBrdCst, Conf
 #endif
     else if( pBrdCst == m_pCTLOptions.get() )
     {
+        m_eCTLTextNumerals = SvtCTLOptions::GetCTLTextNumerals();
         const SfxObjectShell* pObjSh = SfxObjectShell::GetFirst();
         while( pObjSh )
         {
@@ -1060,7 +1061,6 @@ void SwModule::ConfigurationChanged(utl::ConfigurationBroadcaster* pBrdCst, Conf
             pObjSh = SfxObjectShell::GetNext(*pObjSh);
         }
     }
-
 }
 
 SwDBConfig* SwModule::GetDBConfig()

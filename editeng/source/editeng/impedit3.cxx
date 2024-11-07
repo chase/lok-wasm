@@ -3029,6 +3029,10 @@ void ImpEditEngine::SeekCursor( ContentNode* pNode, sal_Int32 nPos, SvxFont& rFo
     if ( (rFont.GetKerning() != FontKerning::NONE) && IsKernAsianPunctuation() && ( nScriptTypeI18N == i18n::ScriptType::ASIAN ) )
         rFont.SetKerning( rFont.GetKerning() | FontKerning::Asian );
 
+    // tdf#160401/#i78474# small caps do not exist in CTL fonts, so turn that off here where we know the script type
+    if (nScriptTypeI18N == i18n::ScriptType::COMPLEX && rFont.IsCapital())
+        rFont.SetCaseMap(SvxCaseMap::NotMapped);
+
     if (maStatus.DoNotUseColors())
     {
         rFont.SetColor( /* rColorItem.GetValue() */ COL_BLACK );
@@ -4712,11 +4716,13 @@ Color ImpEditEngine::GetAutoColor() const
 {
     Color aColor;
 
-    if (comphelper::LibreOfficeKit::isActive() && SfxViewShell::Current())
+    const SfxViewShell* pKitSh = comphelper::LibreOfficeKit::isActive() ? SfxViewShell::Current() : nullptr;
+    if (pKitSh)
     {
-        // Get document background color from current view instead
-        aColor = SfxViewShell::Current()->GetColorConfigColor(svtools::DOCCOLOR);
-        if (aColor.IsDark())
+        Color aBackgroundColor = GetBackgroundColor();
+        if (aBackgroundColor == COL_AUTO)
+            aBackgroundColor = pKitSh->GetColorConfigColor(svtools::DOCCOLOR);
+        if (aBackgroundColor.IsDark())
             aColor = COL_WHITE;
         else
             aColor = COL_BLACK;

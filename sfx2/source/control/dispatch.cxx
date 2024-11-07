@@ -1532,6 +1532,7 @@ bool SfxDispatcher::IsCommandAllowedInLokReadOnlyViewMode (OUString commandName)
         u".uno:DeleteComment"_ustr,
         u".uno:DeleteAnnotation"_ustr,
         u".uno:EditAnnotation"_ustr,
+        u".uno:PromoteComment"_ustr,
     };
 
     if (std::find(std::begin(allowedList), std::end(allowedList), commandName) != std::end(allowedList))
@@ -1634,7 +1635,7 @@ bool SfxDispatcher::FindServer_(sal_uInt16 nSlot, SfxSlotServer& rServer)
 
         // This check can be true only if Lokit is active and view is readonly.
         if (pSlot && bCheckForCommentCommands)
-            bReadOnly = IsCommandAllowedInLokReadOnlyViewMode(pSlot->GetCommand());
+            bReadOnly = !IsCommandAllowedInLokReadOnlyViewMode(pSlot->GetCommand());
 
         if ( pSlot && pSlot->nDisableFlags != SfxDisableFlags::NONE &&
              ( static_cast<int>(pSlot->nDisableFlags) & static_cast<int>(pObjShell->GetDisableFlags()) ) != 0 )

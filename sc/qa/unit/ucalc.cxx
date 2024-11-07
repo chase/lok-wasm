@@ -227,6 +227,80 @@ CPPUNIT_TEST_FIXTURE(Test, testSharedStringPool)
     m_pDoc->DeleteTab(0);
 }
 
+CPPUNIT_TEST_FIXTURE(Test, testBackgroundColorDeleteColumn)
+{
+    m_pDoc->InsertTab(0, u"Table1"_ustr);
+
+    ScMarkData aMark(m_pDoc->GetSheetLimits());
+
+    // Set Values to B1, C2, D5
+    m_pDoc->SetValue(ScAddress(1, 0, 0), 1.0); // B1
+    m_pDoc->SetValue(ScAddress(2, 1, 0), 2.0); // C2
+    m_pDoc->SetValue(ScAddress(3, 4, 0), 3.0); // D5
+
+    // Add patterns
+    ScPatternAttr aCellBlueColor(m_pDoc->GetPool());
+    aCellBlueColor.GetItemSet().Put(SvxBrushItem(COL_BLUE, ATTR_BACKGROUND));
+    m_pDoc->ApplyPatternAreaTab(3, 0, 3, m_pDoc->MaxRow(), 0, aCellBlueColor);
+
+    // Delete column 10
+    m_pDoc->DeleteCol(ScRange(9,0,0,9,m_pDoc->MaxRow(),0));
+
+    // Check patterns
+    const SfxPoolItem* pItem = nullptr;
+    m_pDoc->GetPattern(ScAddress(3, 1000, 0))->GetItemSet().HasItem(ATTR_BACKGROUND, &pItem);
+    CPPUNIT_ASSERT(pItem);
+    CPPUNIT_ASSERT_EQUAL(COL_BLUE, static_cast<const SvxBrushItem*>(pItem)->GetColor());
+
+    // Delete column 2
+    m_pDoc->DeleteCol(ScRange(1,0,0,1,m_pDoc->MaxRow(),0));
+
+    // Check patterns
+    pItem = nullptr;
+    m_pDoc->GetPattern(ScAddress(2, 1000, 0))->GetItemSet().HasItem(ATTR_BACKGROUND, &pItem);
+    CPPUNIT_ASSERT(pItem);
+    CPPUNIT_ASSERT_EQUAL(COL_BLUE, static_cast<const SvxBrushItem*>(pItem)->GetColor());
+
+    m_pDoc->DeleteTab(0);
+}
+
+CPPUNIT_TEST_FIXTURE(Test, testBackgroundColorDeleteRow)
+{
+    m_pDoc->InsertTab(0, u"Table1"_ustr);
+
+    ScMarkData aMark(m_pDoc->GetSheetLimits());
+
+    // Set Values to B1, C2, D5
+    m_pDoc->SetValue(ScAddress(1, 0, 0), 1.0); // B1
+    m_pDoc->SetValue(ScAddress(2, 1, 0), 2.0); // C2
+    m_pDoc->SetValue(ScAddress(3, 4, 0), 3.0); // D5
+
+    // Add patterns
+    ScPatternAttr aCellBlueColor(m_pDoc->GetPool());
+    aCellBlueColor.GetItemSet().Put(SvxBrushItem(COL_BLUE, ATTR_BACKGROUND));
+    m_pDoc->ApplyPatternAreaTab(0, 3, m_pDoc->MaxCol(), 3, 0, aCellBlueColor);
+
+    // Delete row 10
+    m_pDoc->DeleteRow(ScRange(0,9,0,m_pDoc->MaxCol(),9,0));
+
+    // Check patterns
+    const SfxPoolItem* pItem = nullptr;
+    m_pDoc->GetPattern(ScAddress(1000, 3, 0))->GetItemSet().HasItem(ATTR_BACKGROUND, &pItem);
+    CPPUNIT_ASSERT(pItem);
+    CPPUNIT_ASSERT_EQUAL(COL_BLUE, static_cast<const SvxBrushItem*>(pItem)->GetColor());
+
+    // Delete row 2
+    m_pDoc->DeleteRow(ScRange(0,1,0,m_pDoc->MaxCol(),1,0));
+
+    // Check patterns
+    pItem = nullptr;
+    m_pDoc->GetPattern(ScAddress(1000, 2, 0))->GetItemSet().HasItem(ATTR_BACKGROUND, &pItem);
+    CPPUNIT_ASSERT(pItem);
+    CPPUNIT_ASSERT_EQUAL(COL_BLUE, static_cast<const SvxBrushItem*>(pItem)->GetColor());
+
+    m_pDoc->DeleteTab(0);
+}
+
 CPPUNIT_TEST_FIXTURE(Test, testSharedStringPoolUndoDoc)
 {
     struct
@@ -657,12 +731,12 @@ CPPUNIT_TEST_FIXTURE(Test, testDataEntries)
     m_pDoc->SetString(ScAddress(0,7,0), "Charlie");
     m_pDoc->SetString(ScAddress(0,10,0), "Andy");
 
-    std::vector<ScTypedStrData> aEntries;
+    ScTypedCaseStrSet aEntries;
     m_pDoc->GetDataEntries(0, 0, 0, aEntries); // Try at the very top.
 
     // Entries are supposed to be sorted in ascending order, and are all unique.
     CPPUNIT_ASSERT_EQUAL(static_cast<size_t>(3), aEntries.size());
-    std::vector<ScTypedStrData>::const_iterator it = aEntries.begin();
+    auto it = aEntries.begin();
     CPPUNIT_ASSERT_EQUAL(OUString("Andy"), it->GetString());
     ++it;
     CPPUNIT_ASSERT_EQUAL(OUString("Bruce"), it->GetString());
@@ -2703,6 +2777,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFunctionLists)
         "RADIANS",
         "RAND",
         "RAND.NV",
+        "RANDARRAY",
         "RANDBETWEEN.NV",
         "RAWSUBTRACT",
         "ROUND",
@@ -2736,6 +2811,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFunctionLists)
         "MINVERSE",
         "MMULT",
         "MUNIT",
+        "SEQUENCE",
         "SUMPRODUCT",
         "SUMX2MY2",
         "SUMX2PY2",
@@ -2925,6 +3001,7 @@ CPPUNIT_TEST_FIXTURE(Test, testFunctionLists)
         "SORT",
         "SORTBY",
         "STYLE",
+        "UNIQUE",
         "VLOOKUP",
         "XLOOKUP",
         "XMATCH",

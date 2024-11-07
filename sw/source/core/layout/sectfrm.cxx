@@ -39,6 +39,7 @@
 #include <colfrm.hxx>
 #include <tabfrm.hxx>
 #include <ftnfrm.hxx>
+#include "layhelp.hxx"
 #include <layouter.hxx>
 #include <dbg_lay.hxx>
 #include <viewopt.hxx>
@@ -2251,7 +2252,8 @@ bool SwSectionFrame::Growable() const
 
 SwTwips SwSectionFrame::Grow_( SwTwips nDist, bool bTst )
 {
-    if (GetSection()->CalcHiddenFlag())
+    SwSection* pSection = GetSection();
+    if (pSection && pSection->CalcHiddenFlag())
     {
         return 0;
     }
@@ -2271,7 +2273,6 @@ SwTwips SwSectionFrame::Grow_( SwTwips nDist, bool bTst )
         bool bGrow = !Lower() || !Lower()->IsColumnFrame() || !Lower()->GetNext();
         if (!bGrow)
         {
-            SwSection* pSection = GetSection();
             bGrow = pSection && pSection->GetFormat()->GetBalancedColumns().GetValue();
         }
         if( !bGrow )
@@ -2670,6 +2671,24 @@ void SwSectionFrame::CalcEndAtEndFlag()
     }
 }
 
+static void InvalidateFramesInSection(SwFrame * pFrame)
+{
+    while (pFrame)
+    {
+        pFrame->InvalidateAll();
+        pFrame->InvalidateObjs(false);
+        if (pFrame->IsLayoutFrame())
+        {
+            InvalidateFramesInSection(pFrame->GetLower());
+        }
+        else if (pFrame->IsTextFrame())
+        {
+            pFrame->Prepare(PrepareHint::Clear, nullptr, false);
+        }
+        pFrame = pFrame->GetNext();
+    }
+}
+
 void SwSectionFrame::Notify(SfxHint const& rHint)
 {
     SwSectionFormat *const pFormat(GetSection()->GetFormat());
@@ -2731,10 +2750,88 @@ void SwSectionFrame::SwClientNotify(const SwModify& rMod, const SfxHint& rHint)
             SwRectFnSet(this).SetHeight(area, HUGE_POSITIVE);
         }
 
-        for (SwFrame* pLowerFrame = Lower(); pLowerFrame; pLowerFrame = pLowerFrame->GetNext())
+        InvalidateFramesInSection(Lower());
+        Lower()->HideAndShowObjects(); // recursive
+        // Check if any page-breaks have been unhidden, create the new pages.
+        // Call IsHiddenNow() because a parent section could still hide.
+        if (!IsFollow() && IsInDocBody() && !IsInTab() && !IsHiddenNow())
         {
-            pLowerFrame->InvalidateAll();
-            pLowerFrame->InvalidateObjs(false);
+#if !ENABLE_WASM_STRIP_ACCESSIBILITY
+            SwViewShell *const pViewShell(getRootFrame()->GetCurrShell());
+            // no notification if SwViewShell is in construction
+            if (pViewShell && !pViewShell->IsInConstructor()
+                && pViewShell->GetLayout()
+                && pViewShell->GetLayout()->IsAnyShellAccessible())
+            {
+                auto pNext = FindNextCnt(true);
+                auto pPrev = FindPrevCnt();
+                pViewShell->InvalidateAccessibleParaFlowRelation(
+                    pNext ? pNext->DynCastTextFrame() : nullptr,
+                    pPrev ? pPrev->DynCastTextFrame() : nullptr );
+            }
+#endif
+            SwSectionFrame * pFollow{this};
+            SwPageFrame * pPage{FindPageFrame()};
+            SwLayoutFrame * pLay{nullptr};
+            bool isBreakAfter{false};
+            SwFrame * pFirstOnPage{pPage->FindFirstBodyContent()};
+            while (pFirstOnPage->GetUpper()->IsInTab())
+            {
+                pFirstOnPage = pFirstOnPage->GetUpper();
+            }
+            assert(pFirstOnPage->IsContentFrame() || pFirstOnPage->IsTabFrame());
+            SwColumnFrame * pColumn{Lower()->IsColumnFrame()
+                    ? static_cast<SwColumnFrame*>(Lower()) : nullptr};
+            auto IterateLower = [&pColumn](SwFrame *const pLowerFrame) -> SwFrame*
+            {
+                if (pLowerFrame->GetNext())
+                {
+                    return pLowerFrame->GetNext();
+                }
+                if (pColumn)
+                {
+                    pColumn = static_cast<SwColumnFrame*>(pColumn->GetNext());
+                    if (pColumn)
+                    {
+                        return static_cast<SwLayoutFrame*>(pColumn->Lower())->Lower();
+                    }
+                }
+                return nullptr;
+            };
+            for (SwFrame* pLowerFrame = pColumn
+                        ? static_cast<SwLayoutFrame*>(pColumn->Lower())->Lower()
+                        : Lower();
+                 pLowerFrame;
+                 pLowerFrame = IterateLower(pLowerFrame))
+            {
+                if (pLowerFrame == pFirstOnPage)
+                {
+                    continue;
+                }
+                assert(pLowerFrame->IsContentFrame() || pLowerFrame->IsTabFrame());
+                if (SwLayHelper::CheckInsertPage(pPage, pLay, pLowerFrame, isBreakAfter, false))
+                {
+                    if (pLowerFrame == Lower())
+                    {   // move the whole section
+                        assert(pFollow == this);
+                        MoveSubTree(pLay, nullptr);
+                    }
+                    else
+                    {
+                        if (GetNext())
+                        {
+                            assert(GetNext()->IsFlowFrame());
+                            SwFlowFrame::CastFlowFrame(GetNext())->MoveSubTree(pLay, nullptr);
+                        }
+                        pFollow = new SwSectionFrame(*pFollow, false);
+                        SimpleFormat();
+                        pFollow->InsertBehind(pLay, nullptr);
+                        pFollow->Init();
+                        SwFlowFrame::CastFlowFrame(pLowerFrame)->MoveSubTree(pFollow, nullptr);
+                    }
+                }
+            }
+            CheckPageDescs(FindPageFrame());
         }
     }
     else

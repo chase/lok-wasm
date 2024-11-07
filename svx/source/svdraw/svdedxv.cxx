@@ -359,8 +359,8 @@ void SdrObjEditView::ModelHasChanged()
             for (size_t nOV = 0; nOV < nOutlViewCnt; nOV++)
             {
                 OutlinerView* pOLV = mpTextEditOutliner->GetView(nOV);
+                vcl::Window* pWin = pOLV->GetWindow();
                 { // invalidate old OutlinerView area
-                    vcl::Window* pWin = pOLV->GetWindow();
                     tools::Rectangle aTmpRect(aOldArea);
                     sal_uInt16 nPixSiz = pOLV->GetInvalidateMore() + 1;
                     Size aMore(pWin->PixelToLogic(Size(nPixSiz, nPixSiz)));
@@ -375,9 +375,15 @@ void SdrObjEditView::ModelHasChanged()
                 if (bColorChg)
                     pOLV->SetBackgroundColor(aNewColor);
 
+                bool bWasCoursorVisible = pOLV->IsCursorVisible();
+                vcl::Cursor* pOldCursor = pWin->GetCursor();
                 pOLV->SetOutputArea(
                     aTextEditArea); // because otherwise, we're not re-anchoring correctly
                 ImpInvalidateOutlinerView(*pOLV);
+                // Undo SetOutputArea setting and showing the cursor
+                if (!bWasCoursorVisible)
+                    pOLV->HideCursor();
+                pWin->SetCursor(pOldCursor);
             }
             mpTextEditOutlinerView->ShowCursor();
         }
@@ -1496,6 +1502,8 @@ bool SdrObjEditView::SdrBeginTextEdit(SdrObject* pObj_, SdrPageView* pPV, vcl::W
 
             SdrHint aHint(SdrHintKind::BeginEdit, *pTextObj);
             GetModel().Broadcast(aHint);
+            if (auto pBroadcaster = pTextObj->GetBroadcaster())
+                pBroadcaster->Broadcast(aHint);
 
             mpTextEditOutliner->setVisualizedPage(nullptr);
 
@@ -1631,6 +1639,8 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
     {
         SdrHint aHint(SdrHintKind::EndEdit, *pTextEditObj);
         GetModel().Broadcast(aHint);
+        if (auto pBroadcaster = pTextEditObj->GetBroadcaster())
+            pBroadcaster->Broadcast(aHint);
     }
 
     // if new mechanism was used, clean it up. At cleanup no need to check
@@ -1762,6 +1772,10 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
             // to call AdjustMarkHdl() always.
             AdjustMarkHdl();
         }
+        if (pTEWin != nullptr)
+        {
+            pTEWin->SetCursor(pTECursorBuffer);
+        }
         // delete all OutlinerViews
         for (size_t i = pTEOutliner->GetViewCount(); i > 0;)
         {
@@ -1793,10 +1807,6 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
             delete pTEOutliner;
         else
             pTEOutliner->Clear();
-        if (pTEWin != nullptr)
-        {
-            pTEWin->SetCursor(pTECursorBuffer);
-        }
         maHdlList.SetMoveOutside(false);
         if (eRet != SdrEndTextEditKind::Unchanged)
         {
@@ -1808,7 +1818,7 @@ SdrEndTextEditKind SdrObjEditView::SdrEndTextEdit(bool bDontDeleteReally)
     if (pTEObj && !pTEObj->getSdrModelFromSdrObject().isLocked() && pTEObj->GetBroadcaster())
     {
         SdrHint aHint(SdrHintKind::EndEdit, *pTEObj);
-        const_cast<SfxBroadcaster*>(pTEObj->GetBroadcaster())->Broadcast(aHint);
+        pTEObj->GetBroadcaster()->Broadcast(aHint);
     }
 
     if (pUndoEditUndoManager)

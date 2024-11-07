@@ -1052,10 +1052,10 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
             const bool bReply = nSlot == FN_REPLY;
             // if this note is empty, it will be deleted once losing the focus, so no reply, but only a new note
             // will be created
-            if (!mpOutliner->GetEditEngine().GetText().isEmpty())
+            if (!mrMgr.IsAnswer() && !mpOutliner->GetEditEngine().GetText().isEmpty())
             {
                 OutlinerParaObject aPara(GetOutlinerView()->GetEditView().CreateTextObject());
-                mrMgr.RegisterAnswer(&aPara);
+                mrMgr.RegisterAnswer(aPara);
             }
             if (mrMgr.HasActiveSidebarWin())
                 mrMgr.SetActiveSidebarWin(nullptr);
@@ -1072,10 +1072,10 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
             {
                 // Get newly created SwPostItField and set its paraIdParent
                 auto pPostItField = mrMgr.GetLatestPostItField();
-                pPostItField->SetParentId(GetTopReplyNote()->GetParaId());
-                pPostItField->SetParentPostItId(GetTopReplyNote()->GetPostItField()->GetPostItId());
+                pPostItField->SetParentId(GetParaId());
+                pPostItField->SetParentPostItId(GetPostItField()->GetPostItId());
                 this->GeneratePostItName();
-                pPostItField->SetParentName(GetTopReplyNote()->GetPostItField()->GetName());
+                pPostItField->SetParentName(GetPostItField()->GetName());
 
                 // In this case, force generating the associated window
                 // synchronously so we can bundle its use of the registered
@@ -1125,6 +1125,12 @@ void SwAnnotationWin::ExecuteCommand(sal_uInt16 nSlot)
             aItems[1] = nullptr;
             mrView.GetViewFrame().GetBindings().Execute( nSlot, aItems, SfxCallMode::ASYNCHRON );
         }
+            break;
+        case FN_PROMOTE_COMMENT:
+            SetAsRoot();
+            DoResize();
+            Invalidate();
+            mrMgr.LayoutPostIts();
             break;
         default:
             mrView.GetViewFrame().GetBindings().Execute( nSlot );

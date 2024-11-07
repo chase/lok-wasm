@@ -11,15 +11,29 @@
 
 #include <svx/svxdllapi.h>
 #include <svx/annotation/Annotation.hxx>
+#include <svx/annotation/IAnnotationPopup.hxx>
 
 namespace sdr::annotation
 {
-/** Contains the annotation data for a SdrObject */
+/** Contains the annotation data specific for a SdrObject (which represents an annotation) */
 class ObjectAnnotationData
 {
 public:
+    /// Does the (sdr) object represent an annotation
     bool mbIsAnnotation : 1 = false;
+
+    /// The annotation
     rtl::Reference<sdr::annotation::Annotation> mxAnnotation;
+
+    /// Object handling the pop-up window
+    std::unique_ptr<sdr::annotation::IAnnotationPopup> mpAnnotationPopup;
+
+    /// Open popup for the annotation
+    void openPopup()
+    {
+        if (mbIsAnnotation && mpAnnotationPopup)
+            mpAnnotationPopup->openPopup();
+    }
 };
 }
 

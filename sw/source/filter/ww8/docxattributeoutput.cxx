@@ -2719,11 +2719,24 @@ void DocxAttributeOutput::WriteContentControlStart()
         }
         for (const auto& rItem : m_pContentControl->GetListItems())
         {
+            if (rItem.m_aDisplayText.isEmpty() && rItem.m_aValue.isEmpty())
+            {
+                // Empty display text & value would be invalid DOCX, skip the item.
+                continue;
+            }
+
             rtl::Reference<FastAttributeList> xAttributes = FastSerializerHelper::createAttrList();
             if (!rItem.m_aDisplayText.isEmpty())
             {
                 // If there is no display text, need to omit the attribute, not write an empty one.
                 xAttributes->add(FSNS(XML_w, XML_displayText), rItem.m_aDisplayText);
+            }
+
+            OUString aValue = rItem.m_aValue;
+            if (aValue.isEmpty())
+            {
+                // Empty value would be invalid DOCX, default to the display text.
+                aValue = rItem.m_aDisplayText;
             }
             xAttributes->add(FSNS(XML_w, XML_value), rItem.m_aValue);
             m_pSerializer->singleElementNS(XML_w, XML_listItem, xAttributes);
@@ -6759,7 +6772,7 @@ void DocxAttributeOutput::StartStyle( const OUString& rName, StyleType eType,
                 FSNS( XML_w, XML_val ), m_rExport.m_pStyles->GetStyleId(nBase) );
     }
 
-    if ( nNext != nSlot && eType != STYLE_TYPE_LIST)
+    if (nNext != nSlot && nNext != 0x0FFF && eType != STYLE_TYPE_LIST)
     {
         m_pSerializer->singleElementNS( XML_w, XML_next,
                 FSNS( XML_w, XML_val ), m_rExport.m_pStyles->GetStyleId(nNext) );
@@ -8359,14 +8372,17 @@ DocxAttributeOutput::hasProperties DocxAttributeOutput::WritePostitFields()
     hasProperties eResult = hasProperties::no;
     for (auto& [f1, data1] : m_postitFields)
     {
-        if (f1->GetParentId() != 0)
+        if (f1->GetParentId() != 0 || f1->GetParentPostItId() != 0)
         {
             for (size_t i = 0; i < m_postitFields.size(); i++)
             {
                 auto& [f2, data2] = m_postitFields[i];
-                if (f2->GetParaId() == f1->GetParentId())
+                if ((f1->GetParentId() != 0 && f2->GetParaId() == f1->GetParentId())
+                    || (f1->GetParentPostItId() != 0
+                        && f2->GetPostItId() == f1->GetParentPostItId()))
                 {
-                    data2.parentStatus = ParentStatus::IsParent;
+                    if (data2.parentStatus == ParentStatus::None)
+                        data2.parentStatus = ParentStatus::IsParent;
                     data1.parentStatus = ParentStatus::HasParent;
                     data1.parentIndex = i;
                     break;
@@ -8435,7 +8451,7 @@ void DocxAttributeOutput::WritePostItFieldsResolved()
             continue;
         OUString idstr = NumberToHexBinary(data.lastParaId);
         std::optional<OUString> sDone, sParentId;
-        if (f->GetParentId() != 0)
+        if (f->GetParentId() != 0 || f->GetParentPostItId() != 0)
         {
             if (data.parentStatus == ParentStatus::HasParent)
             {

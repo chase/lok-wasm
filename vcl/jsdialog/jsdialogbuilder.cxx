@@ -11,7 +11,9 @@
 #include <sal/log.hxx>
 #include <comphelper/base64.hxx>
 #include <comphelper/lok.hxx>
+#include <iconview.hxx>
 #include <utility>
+#include <vcl/svapp.hxx>
 #include <vcl/tabpage.hxx>
 #include <vcl/toolbox.hxx>
 #include <vcl/toolkit/button.hxx>
@@ -487,8 +489,10 @@ void JSDropTarget::fire_dragEnter(const css::datatransfer::dnd::DropTargetDragEn
 OUString JSInstanceBuilder::getMapIdFromWindowId() const
 {
     if (m_sTypeOfJSON == "sidebar" || m_sTypeOfJSON == "notebookbar"
-        || m_sTypeOfJSON == "formulabar")
+        || m_sTypeOfJSON == "formulabar" || m_sTypeOfJSON == "addressinputfield")
+    {
         return OUString::number(m_nWindowId) + m_sTypeOfJSON;
+    }
     else
         return OUString::number(m_nWindowId);
 }
@@ -602,14 +606,15 @@ JSInstanceBuilder::JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRo
     initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
 }
 
-// used for formulabar
+// used for formulabar and addressinputfield
 JSInstanceBuilder::JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRoot,
-                                     const OUString& rUIFile, sal_uInt64 nLOKWindowId)
+                                     const OUString& rUIFile, sal_uInt64 nLOKWindowId,
+                                     const OUString& sTypeOfJSON)
     : SalInstanceBuilder(pParent, rUIRoot, rUIFile)
     , m_nWindowId(nLOKWindowId)
     , m_aParentDialog(nullptr)
     , m_aContentWindow(nullptr)
-    , m_sTypeOfJSON("formulabar")
+    , m_sTypeOfJSON(sTypeOfJSON)
     , m_bHasTopLevelDialog(false)
     , m_bIsNotebookbar(false)
     , m_bSentInitialUpdate(false)
@@ -660,7 +665,16 @@ std::unique_ptr<JSInstanceBuilder>
 JSInstanceBuilder::CreateFormulabarBuilder(vcl::Window* pParent, const OUString& rUIRoot,
                                            const OUString& rUIFile, sal_uInt64 nLOKWindowId)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, nLOKWindowId);
+    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, nLOKWindowId,
+                                               "formulabar");
+}
+
+std::unique_ptr<JSInstanceBuilder>
+JSInstanceBuilder::CreateAddressInputBuilder(vcl::Window* pParent, const OUString& rUIRoot,
+                                             const OUString& rUIFile, sal_uInt64 nLOKWindowId)
+{
+    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, nLOKWindowId,
+                                               "addressinputfield");
 }
 
 JSInstanceBuilder::~JSInstanceBuilder()
@@ -831,6 +845,9 @@ std::unique_ptr<weld::Dialog> JSInstanceBuilder::weld_dialog(const OUString& id)
 
     if (pDialog)
     {
+        if (!pDialog->GetLOKNotifier())
+            pDialog->SetLOKNotifier(GetpApp());
+
         m_nWindowId = pDialog->GetLOKWindowId();
         pDialog->SetLOKTunnelingState(false);
 
@@ -1710,7 +1727,7 @@ void JSComboBox::render_entry(int pos, int dpix, int dpiy)
         ::comphelper::Base64::encode(aBuffer, aSeq);
 
         std::unique_ptr<jsdialog::ActionDataMap> pMap = std::make_unique<jsdialog::ActionDataMap>();
-        (*pMap)[ACTION_TYPE ""_ostr] = "rendered_combobox_entry";
+        (*pMap)[ACTION_TYPE ""_ostr] = "rendered_entry";
         (*pMap)["pos"_ostr] = OUString::number(pos);
         (*pMap)["image"_ostr] = aBuffer;
         sendAction(std::move(pMap));
@@ -2055,6 +2072,26 @@ void JSTreeView::set_toggle(const weld::TreeIter& rIter, TriState bOn, int col)
     sendUpdate();
 }
 
+void JSTreeView::set_sensitive(int pos, bool bSensitive, int col)
+{
+    SvTreeListEntry* pEntry = m_xTreeView->GetEntry(nullptr, 0);
+
+    while (pEntry && pos--)
+        pEntry = m_xTreeView->Next(pEntry);
+
+    if (pEntry)
+    {
+        SalInstanceTreeView::set_sensitive(pEntry, bSensitive, col);
+        sendUpdate();
+    }
+}
+
+void JSTreeView::set_sensitive(const weld::TreeIter& rIter, bool bSensitive, int col)
+{
+    SalInstanceTreeView::set_sensitive(rIter, bSensitive, col);
+    sendUpdate();
+}
+
 void JSTreeView::select(int pos)
 {
     assert(m_xTreeView->IsUpdateMode() && "don't select when frozen");
@@ -2251,6 +2288,19 @@ void JSIconView::unselect(int pos)
 {
     SalInstanceIconView::unselect(pos);
     sendUpdate();
+}
+
+void JSIconView::render_entry(int pos, int dpix, int dpiy)
+{
+    OUString sImage = m_xIconView->renderEntry(pos, dpix, dpiy);
+    if (sImage.isEmpty())
+        return;
+
+    std::unique_ptr<jsdialog::ActionDataMap> pMap = std::make_unique<jsdialog::ActionDataMap>();
+    (*pMap)[ACTION_TYPE ""_ostr] = "rendered_entry";
+    (*pMap)["pos"_ostr] = OUString::number(pos);
+    (*pMap)["image"_ostr] = sImage;
+    sendAction(std::move(pMap));
 }
 
 JSRadioButton::JSRadioButton(JSDialogSender* pSender, ::RadioButton* pRadioButton,

@@ -50,14 +50,9 @@ ViewObjectContactOfSdrObj::~ViewObjectContactOfSdrObj()
 {
 }
 
-bool ViewObjectContactOfSdrObj::isObjectVisibleOnAnyLayer(const SdrObject& rSdrObject, const SdrLayerIDSet& rLayers)
+bool ViewObjectContactOfSdrObj::isPrimitiveVisibleOnAnyLayer(const SdrLayerIDSet& aLayers) const
 {
-    return rLayers.IsSet(rSdrObject.GetLayer());
-}
-
-bool ViewObjectContactOfSdrObj::isPrimitiveVisibleOnAnyLayer(const SdrLayerIDSet& rLayers) const
-{
-    return ViewObjectContactOfSdrObj::isObjectVisibleOnAnyLayer(getSdrObject(), rLayers);
+    return aLayers.IsSet(getSdrObject().GetLayer());
 }
 
 bool ViewObjectContactOfSdrObj::isPrimitiveVisible(const DisplayInfo& rDisplayInfo) const
@@ -88,6 +83,9 @@ bool ViewObjectContactOfSdrObj::isPrimitiveVisible(const DisplayInfo& rDisplayIn
     {
         return false;
     }
+
+    if (GetObjectContact().isOutputToPDFFile() && rObject.isAnnotationObject())
+        return false;
 
     // Test for Calc object hiding (for OLE and Graphic it's extra, see there)
     const SdrPageView* pSdrPageView = GetObjectContact().TryToGetSdrPageView();

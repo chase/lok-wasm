@@ -566,6 +566,8 @@ void EditView::HideCursor(bool bDeactivate)
     }
 }
 
+bool EditView::IsCursorVisible() const { return pImpEditView->GetCursor()->IsVisible(); }
+
 Pair EditView::Scroll( tools::Long ndX, tools::Long ndY, ScrollRangeCheck nRangeCheck )
 {
     return pImpEditView->Scroll( ndX, ndY, nRangeCheck );
@@ -662,6 +664,11 @@ ErrCode EditView::Read( SvStream& rInput, EETextFormat eFormat, SvKeyValueIterat
     ShowCursor( bGotoCursor );
 
     return rInput.GetError();
+}
+
+OString EditView::GetSimpleHtml() const
+{
+    return pImpEditView->pEditEngine->pImpEditEngine->GetSimpleHtml();
 }
 
 void EditView::Cut()

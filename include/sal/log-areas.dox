@@ -228,6 +228,7 @@ certain functionality.
 
 @li @c filter.config
 @li @c filter.eps
+@li @c filter.flash
 @li @c filter.hwp - Hangul word processor import
 @li @c filter.icgm
 @li @c filter.ms - escher import/export
@@ -558,6 +559,7 @@ certain functionality.
 @li @c sw.qa
 @li @c sw.rtf - .rtf export filter
 @li @c sw.tiled
+@li @c sw.transform - Transform documents API
 @li @c sw.ui
 @li @c sw.uno - Writer UNO interfaces
 @li @c sw.vba - Writer VBA

@@ -53,9 +53,9 @@ class ConditionalFormatDlgTest(UITestCase):
                 # and still only 2 conditional formats in the document
                 xList = xCondFormatMgr.getChild("CONTAINER")
                 list_state = get_state_as_dict(xList)
-                self.assertEqual(list_state['Children'], '2')
+                self.assertEqual(list_state['Children'], '3')
 
-                self.assertEqual(conditional_format_list.getLength(), 2)
+                self.assertEqual(conditional_format_list.getLength(), 3)
 
                 # close the conditional format manager
                 xCancelBtn = xCondFormatMgr.getChild("cancel")

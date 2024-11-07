@@ -18,6 +18,7 @@
 #include <comphelper/propertysequence.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/string.hxx>
+#include <comphelper/hash.hxx>
 #include <editeng/eeitem.hxx>
 #include <editeng/editids.hrc>
 #include <editeng/editobj.hxx>
@@ -32,6 +33,7 @@
 #include <svl/stritem.hxx>
 #include <svl/intitem.hxx>
 #include <comphelper/lok.hxx>
+#include <svx/unoapi.hxx>
 #include <svx/svdotable.hxx>
 #include <svx/svdoutl.hxx>
 #include <unotools/datetime.hxx>
@@ -40,11 +42,13 @@
 #include <DrawDocShell.hxx>
 #include <ViewShellBase.hxx>
 #include <ViewShell.hxx>
+#include <SlideshowLayerRenderer.hxx>
 #include <sdpage.hxx>
 #include <unomodel.hxx>
 #include <drawdoc.hxx>
 #include <undo/undomanager.hxx>
 #include <sfx2/request.hxx>
+
 #include <svx/svxids.hrc>
 #include <pres.hxx>
 #include <navigatr.hxx>
@@ -55,6 +59,8 @@
 #include <vcl/virdev.hxx>
 #include <o3tl/string_view.hxx>
 #include <sfx2/sidebar/Sidebar.hxx>
+#include <vcl/BitmapTools.hxx>
+#include <vcl/filter/PngImageWriter.hxx>
 
 #include <chrono>
 #include <cstdlib>
@@ -1678,6 +1684,32 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testTdf105502)
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(0), aLastCell.mnRow);
 }
 
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testShowAndUseGridCallbacks)
+{
+    /*
+        Showing and hiding grid is done via one command. Command toggles the grid state.
+        Also "snapping the objects to grid" feature is toggled via one command.
+        Here we switch on and off these 2 features and check the callbacks.
+    */
+
+    SdXImpressDocument* pXImpressDocument = createDoc("dummy.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+
+    ViewCallback aView;
+
+    dispatchCommand(mxComponent, ".uno:GridVisible", uno::Sequence<beans::PropertyValue>());
+    CPPUNIT_ASSERT(std::find(aView.m_aStateChanged.begin(), aView.m_aStateChanged.end(), ".uno:GridVisible=true") != aView.m_aStateChanged.end());
+
+    dispatchCommand(mxComponent, ".uno:GridVisible", uno::Sequence<beans::PropertyValue>());
+    CPPUNIT_ASSERT(std::find(aView.m_aStateChanged.begin(), aView.m_aStateChanged.end(), ".uno:GridVisible=false") != aView.m_aStateChanged.end());
+
+    dispatchCommand(mxComponent, ".uno:GridUse", uno::Sequence<beans::PropertyValue>());
+    CPPUNIT_ASSERT(std::find(aView.m_aStateChanged.begin(), aView.m_aStateChanged.end(), ".uno:GridUse=false") != aView.m_aStateChanged.end());
+
+    dispatchCommand(mxComponent, ".uno:GridUse", uno::Sequence<beans::PropertyValue>());
+    CPPUNIT_ASSERT(std::find(aView.m_aStateChanged.begin(), aView.m_aStateChanged.end(), ".uno:GridUse=true") != aView.m_aStateChanged.end());
+}
+
 CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentCallbacks)
 {
     // Load the document.
@@ -1782,6 +1814,24 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentCallbacks)
 
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
+namespace
+{
+
+OUString extractRectangleX(std::string const& rString)
+{
+    auto rOUString = OUString::createFromAscii(rString);
+    auto aRectangleStrings = comphelper::string::convertCommaSeparated(rOUString);
+    return aRectangleStrings[0];
+}
+
+OUString extractRectangleY(std::string const& rString)
+{
+    auto aOUString = OUString::createFromAscii(rString);
+    auto aRectangleStrings = comphelper::string::convertCommaSeparated(aOUString);
+    return aRectangleStrings[1];
+}
+
+}
 
 CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeImpress)
 {
@@ -1811,7 +1861,10 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeImpress)
 
     CPPUNIT_ASSERT(!aView1.m_aCommentCallbackResult.get<std::string>("parthash").empty());
     CPPUNIT_ASSERT_EQUAL(std::string("Comment"), aView1.m_aCommentCallbackResult.get<std::string>("text"));
-    CPPUNIT_ASSERT_EQUAL(std::string("0, 0, 0, 0"), aView1.m_aCommentCallbackResult.get<std::string>("rectangle"));
+
+    auto aRectStringBefore = aView1.m_aCommentCallbackResult.get<std::string>("rectangle");
+    CPPUNIT_ASSERT_EQUAL(u"0"_ustr, extractRectangleX(aRectStringBefore));
+    CPPUNIT_ASSERT_EQUAL(u"0"_ustr, extractRectangleY(aRectStringBefore));
 
     // Edit this annotation now
     aArgs = comphelper::InitPropertySequence(
@@ -1824,7 +1877,10 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeImpress)
 
     CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
     CPPUNIT_ASSERT_EQUAL(std::string("Comment"), aView1.m_aCommentCallbackResult.get<std::string>("text"));
-    CPPUNIT_ASSERT_EQUAL(std::string("10, 20, 0, 0"), aView1.m_aCommentCallbackResult.get<std::string>("rectangle"));
+
+    auto aRectStringAfter = aView1.m_aCommentCallbackResult.get<std::string>("rectangle");
+    CPPUNIT_ASSERT_EQUAL(u"10"_ustr, extractRectangleX(aRectStringAfter));
+    CPPUNIT_ASSERT_EQUAL(u"20"_ustr, extractRectangleY(aRectStringAfter));
 
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
@@ -1857,7 +1913,10 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeDraw)
 
     CPPUNIT_ASSERT(!aView1.m_aCommentCallbackResult.get<std::string>("parthash").empty());
     CPPUNIT_ASSERT_EQUAL(std::string("Comment"), aView1.m_aCommentCallbackResult.get<std::string>("text"));
-    CPPUNIT_ASSERT_EQUAL(std::string("0, 0, 0, 0"), aView1.m_aCommentCallbackResult.get<std::string>("rectangle"));
+
+    auto aRectStringBefore = aView1.m_aCommentCallbackResult.get<std::string>("rectangle");
+    CPPUNIT_ASSERT_EQUAL(u"0"_ustr, extractRectangleX(aRectStringBefore));
+    CPPUNIT_ASSERT_EQUAL(u"0"_ustr, extractRectangleY(aRectStringBefore));
 
     // Edit this annotation now
     aArgs = comphelper::InitPropertySequence(
@@ -1870,7 +1929,10 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testCommentChangeDraw)
 
     CPPUNIT_ASSERT_EQUAL(std::string("Modify"), aView1.m_aCommentCallbackResult.get<std::string>("action"));
     CPPUNIT_ASSERT_EQUAL(std::string("Comment"), aView1.m_aCommentCallbackResult.get<std::string>("text"));
-    CPPUNIT_ASSERT_EQUAL(std::string("10, 20, 0, 0"), aView1.m_aCommentCallbackResult.get<std::string>("rectangle"));
+
+    auto aRectStringAfter = aView1.m_aCommentCallbackResult.get<std::string>("rectangle");
+    CPPUNIT_ASSERT_EQUAL(u"10"_ustr, extractRectangleX(aRectStringAfter));
+    CPPUNIT_ASSERT_EQUAL(u"20"_ustr, extractRectangleY(aRectStringAfter));
 
     comphelper::LibreOfficeKit::setTiledAnnotations(true);
 }
@@ -2663,6 +2725,9 @@ void lcl_extractHandleParameters(std::string_view selection, sal_uInt32& id, sal
     id = handle0.get_child("id").get_value<int>();
     x = handle0.get_child("point").get_child("x").get_value<int>();
     y = handle0.get_child("point").get_child("y").get_value<int>();
+
+    CPPUNIT_ASSERT(aTree.get_child("OrdNum").get_value<int>() >= 0);
+    CPPUNIT_ASSERT(aTree.get_child("ObjectRectangles").size() >= 1);
 }
 
 }
@@ -3023,6 +3088,1415 @@ CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSidebarSwitchDeck)
     CPPUNIT_ASSERT_EQUAL(std::string("false"), aTree.get_child("state").get_value<std::string>());
     it = aView.m_aStateChanges.find(".uno:MasterSlidesPanel");
     CPPUNIT_ASSERT(it != aView.m_aStateChanges.end());
+}
+
+namespace
+{
+
+void debugWriteImageToFile(unsigned step, const std::vector<sal_uInt8>& pBuffer,
+    unsigned nViewWidth, unsigned nViewHeight, const char* sJSON)
+{
+    (void)step;
+    (void)pBuffer;
+    (void)nViewWidth;
+    (void)nViewHeight;
+    (void)sJSON;
+
+#if false
+    printf ("%u %s\n\n", step, sJSON);
+
+    BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+
+    OUString sFileName = "/tmp/slideshow_" + OUString::number(step) + ".png";
+    SvFileStream aStream(sFileName, StreamMode::WRITE | StreamMode::TRUNC);
+    vcl::PngImageWriter aPNGWriter(aStream);
+    aPNGWriter.write(aBitmapEx);
+#endif
+}
+
+template <typename T>
+bool is_unique(std::vector<T> vec)
+{
+    std::sort(vec.begin(), vec.end());
+    return std::unique(vec.begin(), vec.end()) == vec.end();
+}
+
+boost::property_tree::ptree const& child_at(boost::property_tree::ptree const& rTree, std::string_view aName, size_t nIndex)
+{
+    return std::next(rTree.get_child(std::string(aName)).find(""), nIndex)->second;
+}
+
+bool has_child(boost::property_tree::ptree const& rTree, std::string_view aName)
+{
+    return rTree.count(std::string(aName)) > 0;
+}
+
+void readJSON(boost::property_tree::ptree& rTree, OUString const& rJson)
+{
+    std::stringstream aStream((std::string(rJson.toUtf8())));
+    boost::property_tree::read_json(aStream, rTree);
+}
+
+} // end anonymous ns
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testPresentationInfo)
+{
+    SdXImpressDocument* pXImpressDocument = createDoc("PresentationInfoTest.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+
+    Scheduler::ProcessEventsToIdle();
+
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+
+    OString aString = pXImpressDocument->getPresentationInfo();
+
+    boost::property_tree::ptree aTree;
+    std::stringstream aStream((std::string(aString)));
+    boost::property_tree::read_json(aStream, aTree);
+
+    CPPUNIT_ASSERT_EQUAL(15875, aTree.get_child("docWidth").get_value<int>());
+    CPPUNIT_ASSERT_EQUAL(8930,  aTree.get_child("docHeight").get_value<int>());
+
+    CPPUNIT_ASSERT_EQUAL(size_t(5),  aTree.get_child("slides").size());
+
+    // Slide Index 0
+    {
+        const boost::property_tree::ptree& rChild = child_at(aTree, "slides", 0);
+        CPPUNIT_ASSERT_EQUAL(0, rChild.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(false, rChild.get_child("empty").get_value<bool>());
+        // Check only that these exist
+        CPPUNIT_ASSERT(has_child(rChild, "hash"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPage"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPageObjectsVisibility"));
+
+        // Transitions
+        CPPUNIT_ASSERT_EQUAL(std::string("BarWipe"), rChild.get_child("transitionType").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("TopToBottom"), rChild.get_child("transitionSubtype").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(false, rChild.get_child("transitionDirection").get_value<bool>());
+    }
+
+    // Slide Index 1
+    {
+        const boost::property_tree::ptree& rChild = child_at(aTree, "slides", 1);
+        CPPUNIT_ASSERT_EQUAL(1, rChild.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(false, rChild.get_child("empty").get_value<bool>());
+        // Check only that these exist
+        CPPUNIT_ASSERT(has_child(rChild, "hash"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPage"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPageObjectsVisibility"));
+
+        // Transitions
+        CPPUNIT_ASSERT_EQUAL(std::string("FanWipe"), rChild.get_child("transitionType").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("CenterTop"), rChild.get_child("transitionSubtype").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, rChild.get_child("transitionDirection").get_value<bool>());
+
+    }
+
+    // Slide Index 2
+    {
+        const boost::property_tree::ptree& rChild = child_at(aTree, "slides", 2);
+        CPPUNIT_ASSERT_EQUAL(2, rChild.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(false, rChild.get_child("empty").get_value<bool>());
+        // Check only that these exist
+        CPPUNIT_ASSERT(has_child(rChild, "hash"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPage"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPageObjectsVisibility"));
+
+        // Transitions
+        CPPUNIT_ASSERT_EQUAL(std::string("BlindWipe"), rChild.get_child("transitionType").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("Vertical"), rChild.get_child("transitionSubtype").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, rChild.get_child("transitionDirection").get_value<bool>());
+    }
+
+    // Slide Index 3 - Hidden
+    {
+        const boost::property_tree::ptree& rChild = child_at(aTree, "slides", 3);
+        CPPUNIT_ASSERT_EQUAL(3, rChild.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(true, rChild.get_child("hidden").get_value<bool>());
+    }
+
+    // Slide Index 4
+    {
+        const boost::property_tree::ptree& rChild = child_at(aTree, "slides", 4);
+        CPPUNIT_ASSERT_EQUAL(4, rChild.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(false, rChild.get_child("empty").get_value<bool>());
+        // Check only that these exist
+        CPPUNIT_ASSERT(has_child(rChild, "hash"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPage"));
+        CPPUNIT_ASSERT(has_child(rChild, "masterPageObjectsVisibility"));
+
+        // Transitions
+        CPPUNIT_ASSERT_EQUAL(std::string("Fade"), rChild.get_child("transitionType").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("FadeOverColor"), rChild.get_child("transitionSubtype").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, rChild.get_child("transitionDirection").get_value<bool>());
+    }
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering)
+{
+    // Check rendering of slideshow layers (as in the document):
+    // - master slide layer
+    // - main slide layer
+
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    const Color aTransparentColor(ColorAlpha, 0x00000000);
+    const tools::Long nLeft = 20;
+    const tools::Long nRight = nViewWidth - 20;
+    const tools::Long nTop = 20;
+    const tools::Long nBottom = nViewHeight - 20;
+
+    // Background Layer - TODO
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(0, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        // TODO - check JSON content
+
+        BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        // top-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nTop));
+
+        // bottom-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nBottom));
+
+        // bottom-right corner
+        CPPUNIT_ASSERT_EQUAL(Color(0xff, 0xd0, 0x40), aBitmapEx.GetPixelColor(nRight, nBottom));
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        // TODO - check JSON content
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+
+        // top-left corner
+        CPPUNIT_ASSERT_EQUAL(Color(0x00, 0x50, 0x90), aBitmapEx.GetPixelColor(nLeft, nTop));
+
+        // bottom-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nBottom));
+
+        // bottom-right corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nRight, nBottom));
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_WithFields)
+{
+    // Check rendering of fields - each in own layer
+
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest_WithFields.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+
+    CPPUNIT_ASSERT(pPage);
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    const Color aTransparentColor(ColorAlpha, 0x00000000);
+    const tools::Long nLeft = 20;
+    const tools::Long nRight = nViewWidth - 20;
+    const tools::Long nTop = 20;
+    const tools::Long nBottom = nViewHeight - 20;
+    const tools::Long nCenterX = nViewWidth / 2;
+
+    // Background Layer
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        debugWriteImageToFile(0, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+
+        // top-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nTop));
+
+        // bottom-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nBottom));
+
+        // bottom-right corner
+        CPPUNIT_ASSERT_EQUAL(Color(0xff, 0xd0, 0x40), aBitmapEx.GetPixelColor(nRight, nBottom));
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        // TODO - check JSON content
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+
+        // top-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nTop));
+
+        // bottom-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nBottom));
+
+        // bottom-right corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nRight, nBottom));
+
+        // bottom-center
+        CPPUNIT_ASSERT_EQUAL(Color(0x20, 0xaa, 0x00), aBitmapEx.GetPixelColor(nCenterX, nBottom));
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+
+        // top-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nTop));
+
+        // bottom-left corner
+        CPPUNIT_ASSERT_EQUAL(Color(0x90, 0x80, 0xff), aBitmapEx.GetPixelColor(nLeft, nBottom));
+
+        // bottom-right corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nRight, nBottom));
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(2, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(4, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        BitmapEx aBitmapEx = vcl::bitmap::CreateFromData(pBuffer.data(), nViewWidth, nViewHeight, nViewWidth * 4, /*nBitsPerPixel*/32, true, true);
+
+        // top-left corner
+        CPPUNIT_ASSERT_EQUAL(Color(0x00, 0x50, 0x90), aBitmapEx.GetPixelColor(nLeft, nTop));
+
+        // bottom-left corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nLeft, nBottom));
+
+        // bottom-right corner
+        CPPUNIT_ASSERT_EQUAL(aTransparentColor, aBitmapEx.GetPixelColor(nRight, nBottom));
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_SlideNumber_Header_DateTime)
+{
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest_SlideNumber_Header_DateTime.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+
+    CPPUNIT_ASSERT(pPage);
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    // Background Layer
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        debugWriteImageToFile(0, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("placeholder"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        {
+            auto aContentChild = aTree.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("DateTime"), aContentChild.get_child("type").get_value<std::string>());
+        }
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("placeholder"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        {
+            auto aContentChild = aTree.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("Footer"), aContentChild.get_child("type").get_value<std::string>());
+        }
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(2, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("placeholder"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        {
+            auto aContentChild = aTree.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("SlideNumber"), aContentChild.get_child("type").get_value<std::string>());
+        }
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(4, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(5, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("TextFields"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        {
+            auto aContentChild = aTree.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("DateTime"), aContentChild.get_child("type").get_value<std::string>());
+            CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+            auto aContentChildChild = aContentChild.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+            CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+        }
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(6, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("TextFields"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        {
+            auto aContentChild = aTree.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("Footer"), aContentChild.get_child("type").get_value<std::string>());
+            CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+            auto aContentChildChild = aContentChild.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+            CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+        }
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(6, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("TextFields"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(2, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        {
+            auto aContentChild = aTree.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("SlideNumber"), aContentChild.get_child("type").get_value<std::string>());
+            CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+            auto aContentChildChild = aContentChild.get_child("content");
+            CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+            CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+        }
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_Animations)
+{
+    // Check rendering of animated objects - each in own layer
+
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest_Animations.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        debugWriteImageToFile(0, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("true"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+        debugWriteImageToFile(4, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_Animations2)
+{
+    SdXImpressDocument* pXImpressDocument = createDoc("anim.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(0, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("MasterPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(4, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(5, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(2, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("true"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(6, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(3, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "initVisible"));
+        CPPUNIT_ASSERT_EQUAL(false, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(bIsBitmapLayer);
+
+        debugWriteImageToFile(7, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(4, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_Animation_TextBox)
+{
+    // Check rendering of animated paragraphs in a text box
+
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest_TextBox.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(0, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(21, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(2, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(4, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(3, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    // Check we are done
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_Animation_TextBox_SecondParagraphMultipleEffects)
+{
+    // Check rendering of animated paragraphs in a text box when there are multiple effects for one paragraph
+
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest_Animations_SecondParagraphMultipleEffects.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1125, nViewHeight);
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    // Check we are done
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
+}
+
+CPPUNIT_TEST_FIXTURE(SdTiledRenderingTest, testSlideshowLayeredRendering_Animation_DifferentKindOfTextBox)
+{
+    SdXImpressDocument* pXImpressDocument = createDoc("SlideRenderingTest_Animations_DifferentKindOfTextBox.odp");
+    pXImpressDocument->initializeForTiledRendering(uno::Sequence<beans::PropertyValue>());
+    sd::ViewShell* pViewShell = pXImpressDocument->GetDocShell()->GetViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    SdPage* pPage = pViewShell->GetActualPage();
+    CPPUNIT_ASSERT(pPage);
+    sal_Int32 nViewWidth = 2000;
+    sal_Int32 nViewHeight = 2000;
+
+    std::string sHash = GetInterfaceHash(GetXDrawPageForSdrPage(pPage));
+    CPPUNIT_ASSERT(pXImpressDocument->createSlideRenderer(sHash.c_str(), 0, nViewWidth, nViewHeight, true, true));
+    CPPUNIT_ASSERT_EQUAL(2000, nViewWidth);
+    CPPUNIT_ASSERT_EQUAL(1500, nViewHeight);
+
+    std::vector<std::string> aBufferHashes;
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        // Remember the hash of the buffer for uniqueness check
+        auto aBufferHash = comphelper::Hash::calculateHash(pBuffer.data(), pBuffer.size(), comphelper::HashType::SHA1);
+        aBufferHashes.push_back(comphelper::hashToString(aBufferHash));
+
+        debugWriteImageToFile(1, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("Background"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        // Remember the hash of the buffer for uniqueness check
+        auto aBufferHash = comphelper::Hash::calculateHash(pBuffer.data(), pBuffer.size(), comphelper::HashType::SHA1);
+        aBufferHashes.push_back(comphelper::hashToString(aBufferHash));
+
+        debugWriteImageToFile(2, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(0, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChild.get_child("checksum").get_value<std::string>());
+    }
+
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(!pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+
+        // Remember the hash of the buffer for uniqueness check
+        auto aBufferHash = comphelper::Hash::calculateHash(pBuffer.data(), pBuffer.size(), comphelper::HashType::SHA1);
+        aBufferHashes.push_back(comphelper::hashToString(aBufferHash));
+
+        debugWriteImageToFile(3, pBuffer, nViewWidth, nViewHeight, aJson.toUtf8().getStr());
+
+        boost::property_tree::ptree aTree;
+        readJSON(aTree, aJson);
+
+        CPPUNIT_ASSERT_EQUAL(std::string("DrawPage"), aTree.get_child("group").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(1, aTree.get_child("index").get_value<int>());
+        CPPUNIT_ASSERT_EQUAL(std::string("animated"), aTree.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "slideHash"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aTree, "content"));
+        auto aContentChild = aTree.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "hash"));
+        CPPUNIT_ASSERT_EQUAL(std::string("false"), aContentChild.get_child("initVisible").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("bitmap"), aContentChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "bounds"));
+
+        CPPUNIT_ASSERT_EQUAL(true, has_child(aContentChild, "content"));
+        auto aContentChildChild = aContentChild.get_child("content");
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGETYPE%"), aContentChildChild.get_child("type").get_value<std::string>());
+        CPPUNIT_ASSERT_EQUAL(std::string("%IMAGECHECKSUM%"), aContentChildChild.get_child("checksum").get_value<std::string>());
+    }
+
+    // check if all hashes are unique
+    CPPUNIT_ASSERT(is_unique(aBufferHashes));
+
+    // Check we are done
+    {
+        std::vector<sal_uInt8> pBuffer(nViewWidth * nViewHeight * 4);
+        bool bIsBitmapLayer = false;
+        OUString aJson;
+        CPPUNIT_ASSERT(pXImpressDocument->renderNextSlideLayer(pBuffer.data(), bIsBitmapLayer, aJson));
+        CPPUNIT_ASSERT(aJson.isEmpty());
+    }
+
+    pXImpressDocument->postSlideshowCleanup();
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

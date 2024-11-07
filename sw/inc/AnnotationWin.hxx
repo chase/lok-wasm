@@ -71,11 +71,15 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
         void    Delete();
         void    GotoPos();
         const SwPostItField* GetPostItField() const { return mpField; }
-        void UpdateText(const OUString& aText);
+        void UpdateText(const OUString& rText);
+        void UpdateHTML(const OUString& rHtml);
+
+        static void ImportHtml(Outliner& rOutliner, const OUString& rHtml);
 
         OUString GetAuthor() const;
         Date     GetDate() const;
         tools::Time GetTime() const;
+        OString GetSimpleHtml() const;
         void GeneratePostItName();
 
         sal_uInt32 MoveCaret();
@@ -104,6 +108,7 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
         SwSidebarItem& GetSidebarItem() { return mrSidebarItem; }
 
         OutlinerView* GetOutlinerView() { return mpOutlinerView.get();}
+        const OutlinerView* GetOutlinerView() const { return mpOutlinerView.get();}
         Outliner* GetOutliner() { return mpOutliner.get();}
         bool HasScrollbar() const;
         bool IsScrollbarVisible() const;
@@ -205,6 +210,9 @@ class SAL_DLLPUBLIC_RTTI SwAnnotationWin final : public InterimItemWindow
         SwAnnotationWin*   GetTopReplyNote();
 
         virtual FactoryFunction GetUITestFactory() const override;
+
+        bool IsRootNote() const;
+        void SetAsRoot();
 
     private:
 

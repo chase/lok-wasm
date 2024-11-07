@@ -297,7 +297,7 @@ public:
     /** Test if there is a draw object at that position and if it should be selected.
      The 'should' is aimed at Writer text fly frames which may be in front of
      the draw object. */
-    bool ShouldObjectBeSelected(const Point& rPt);
+    bool ShouldObjectBeSelected(const Point& rPt, bool *pSelectFrameInsteadOfCroppedImage = nullptr);
 
     bool MoveAnchor( SwMove nDir );
 
@@ -734,6 +734,7 @@ public:
     /// Set table style of the current table.
     void SetTableStyle(const OUString& rStyleName);
     bool SetTableStyle(const SwTableAutoFormat& rNew);
+    bool ResetTableStyle();
 
     /// Update the direct formatting according to the current table style.
     /// @param pTableNode Table node to update.  When nullptr, current cursor position is used.

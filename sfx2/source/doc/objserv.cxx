@@ -90,6 +90,7 @@
 #include <sfx2/infobar.hxx>
 #include <sfx2/sfxuno.hxx>
 #include <sfx2/sfxsids.hrc>
+#include <sfx2/lokhelper.hxx>
 #include <SfxRedactionHelper.hxx>
 
 #include <com/sun/star/util/XCloseable.hpp>
@@ -332,14 +333,17 @@ void SfxObjectShell::CheckOut( )
         xCmisDoc->checkOut( );
 
         // Remove the info bar
-        SfxViewFrame* pViewFrame = GetFrame();
-        pViewFrame->RemoveInfoBar( u"checkout" );
+        if (SfxViewFrame* pViewFrame = GetFrame())
+            pViewFrame->RemoveInfoBar( u"checkout" );
     }
     catch ( const uno::RuntimeException& e )
     {
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrame()->GetFrameWeld(),
-                                                  VclMessageType::Warning, VclButtonsType::Ok, e.Message));
-        xBox->run();
+        if (SfxViewFrame* pFrame = GetFrame())
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pFrame->GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, e.Message));
+            xBox->run();
+        }
     }
 }
 
@@ -356,9 +360,12 @@ void SfxObjectShell::CancelCheckOut( )
     }
     catch ( const uno::RuntimeException& e )
     {
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrame()->GetFrameWeld(),
-                                                  VclMessageType::Warning, VclButtonsType::Ok, e.Message));
-        xBox->run();
+        if (SfxViewFrame* pFrame = GetFrame())
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pFrame->GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, e.Message));
+            xBox->run();
+        }
     }
 }
 
@@ -368,20 +375,26 @@ void SfxObjectShell::CheckIn( )
     {
         uno::Reference< document::XCmisDocument > xCmisDoc( GetModel(), uno::UNO_QUERY_THROW );
         // Pop up dialog to ask for comment and major
-        SfxCheckinDialog checkinDlg(GetFrame()->GetFrameWeld());
-        if (checkinDlg.run() == RET_OK)
+        if (SfxViewFrame* pFrame = GetFrame())
         {
-            xCmisDoc->checkIn(checkinDlg.IsMajor(), checkinDlg.GetComment());
-            uno::Reference< util::XModifiable > xModifiable( GetModel( ), uno::UNO_QUERY );
-            if ( xModifiable.is( ) )
-                xModifiable->setModified( false );
+            SfxCheckinDialog checkinDlg(pFrame->GetFrameWeld());
+            if (checkinDlg.run() == RET_OK)
+            {
+                xCmisDoc->checkIn(checkinDlg.IsMajor(), checkinDlg.GetComment());
+                uno::Reference< util::XModifiable > xModifiable( GetModel( ), uno::UNO_QUERY );
+                if ( xModifiable.is( ) )
+                    xModifiable->setModified( false );
+            }
         }
     }
     catch ( const uno::RuntimeException& e )
     {
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrame()->GetFrameWeld(),
-                                                  VclMessageType::Warning, VclButtonsType::Ok, e.Message));
-        xBox->run();
+        if (SfxViewFrame* pFrame = GetFrame())
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pFrame->GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, e.Message));
+            xBox->run();
+        }
     }
 }
 
@@ -394,9 +407,12 @@ uno::Sequence< document::CmisVersion > SfxObjectShell::GetCmisVersions( ) const
     }
     catch ( const uno::RuntimeException& e )
     {
-        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(GetFrame()->GetFrameWeld(),
-                                                  VclMessageType::Warning, VclButtonsType::Ok, e.Message));
-        xBox->run();
+        if (SfxViewFrame* pFrame = GetFrame())
+        {
+            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(pFrame->GetFrameWeld(),
+                                                      VclMessageType::Warning, VclButtonsType::Ok, e.Message));
+            xBox->run();
+        }
     }
     return uno::Sequence< document::CmisVersion > ( );
 }
@@ -522,6 +538,31 @@ void SetDocProperties(const uno::Reference<document::XDocumentProperties>& xDP,
 }
 }
 
+void SfxObjectShell::AfterSignContent(bool bHaveWeSigned, weld::Window* pDialogParent)
+{
+    if (comphelper::LibreOfficeKit::isActive())
+    {
+        // LOK signing certificates are per-view, don't store them in the model.
+        return;
+    }
+
+    if ( bHaveWeSigned && HasValidSignatures() )
+    {
+        std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog( pDialogParent,
+                    VclMessageType::Question, VclButtonsType::YesNo, SfxResId(STR_QUERY_REMEMBERSIGNATURE)));
+        if (xBox->run() == RET_YES)
+        {
+            rSignatureInfosRemembered = GetDocumentSignatureInformation(false);
+            bRememberSignature = true;
+        }
+        else
+        {
+            rSignatureInfosRemembered = uno::Sequence< security::DocumentSignatureInformation >();
+            bRememberSignature = false;
+        }
+    }
+}
+
 void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
 {
     weld::Window* pDialogParent = rReq.GetFrameWeld();
@@ -553,8 +594,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 // Reload to show how the PDF actually looks like after signing. This also
                 // changes "finish signing" on the infobar back to "sign document" as a side
                 // effect.
-                SfxViewFrame* pFrame = GetFrame();
-                if (pFrame)
+                if (SfxViewFrame* pFrame = GetFrame())
                 {
                     // Store current page before reload.
                     SfxAllItemSet aSet(SfxGetpApp()->GetPool());
@@ -575,29 +615,49 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             }
             else
             {
-                bHaveWeSigned |= SignDocumentContent(pDialogParent);
+                // See if a signing cert is passed as a parameter: if so, parse that.
+                std::string aSignatureCert;
+                std::string aSignatureKey;
+                const SfxStringItem* pSignatureCert = rReq.GetArg<SfxStringItem>(FN_PARAM_1);
+                if (pSignatureCert)
+                {
+                    aSignatureCert = pSignatureCert->GetValue().toUtf8();
+                }
+                const SfxStringItem* pSignatureKey = rReq.GetArg<SfxStringItem>(FN_PARAM_2);
+                if (pSignatureKey)
+                {
+                    aSignatureKey = pSignatureKey->GetValue().toUtf8();
+                }
+                SfxViewFrame* pFrame = GetFrame();
+                SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+                if (pViewShell)
+                {
+                    uno::Reference<security::XCertificate> xSigningCertificate;
+                    if (!aSignatureCert.empty() && !aSignatureKey.empty())
+                    {
+                        xSigningCertificate = SfxLokHelper::getSigningCertificate(aSignatureCert, aSignatureKey);
+                    }
+                    // Always set the signing certificate, to clear data from a previous dispatch.
+                    pViewShell->SetSigningCertificate(xSigningCertificate);
+                }
+
+                // Async, all code before return has to go into the callback.
+                SignDocumentContent(pDialogParent, [this, pDialogParent] (bool bSigned) {
+                    AfterSignContent(bSigned, pDialogParent);
+                });
+                return;
             }
         }
         else
         {
-            bHaveWeSigned |= SignScriptingContent(pDialogParent);
+            // Async, all code before return has to go into the callback.
+            SignScriptingContent(pDialogParent, [this, pDialogParent] (bool bSigned) {
+                AfterSignContent(bSigned, pDialogParent);
+            });
+            return;
         }
 
-        if ( bHaveWeSigned && HasValidSignatures() )
-        {
-            std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog( pDialogParent,
-                                                      VclMessageType::Question, VclButtonsType::YesNo, SfxResId(STR_QUERY_REMEMBERSIGNATURE)));
-            if (xBox->run() == RET_YES)
-            {
-                rSignatureInfosRemembered = GetDocumentSignatureInformation(false);
-                bRememberSignature = true;
-            }
-            else
-            {
-                rSignatureInfosRemembered = uno::Sequence< security::DocumentSignatureInformation >();
-                bRememberSignature = false;
-            }
-        }
+        AfterSignContent(bHaveWeSigned, pDialogParent);
 
         return;
     }
@@ -1245,8 +1305,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 const SfxBoolItem* saveTo = rReq.GetArg<SfxBoolItem>(SID_SAVETO);
                 if (saveTo == nullptr || !saveTo->GetValue())
                 {
-                    SfxViewFrame *pFrame = GetFrame();
-                    if (pFrame)
+                    if (SfxViewFrame* pFrame = GetFrame())
                         pFrame->RemoveInfoBar(u"readonly");
                     SetReadOnlyUI(false);
                 }
@@ -1357,8 +1416,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 CancelCheckOut( );
 
                 // Reload the document as we may still have local changes
-                SfxViewFrame *pFrame = GetFrame();
-                if ( pFrame )
+                if (SfxViewFrame* pFrame = GetFrame())
                     pFrame->GetDispatcher()->Execute(SID_RELOAD);
             }
             break;
@@ -1898,6 +1956,16 @@ SignatureState SfxObjectShell::ImplGetSignatureState( bool bScriptingContent )
 
         uno::Sequence< security::DocumentSignatureInformation > aInfos = GetDocumentSignatureInformation( bScriptingContent );
         *pState = DocumentSignatures::getSignatureState(aInfos);
+
+        // repaired package cannot be trusted
+        if (*pState != SignatureState::NOSIGNATURES)
+        {
+            SfxBoolItem const*const pRepairItem{GetMedium()->GetItemSet().GetItem(SID_REPAIRPACKAGE, false)};
+            if (pRepairItem && pRepairItem->GetValue())
+            {
+                *pState = SignatureState::BROKEN;
+            }
+        }
     }
 
     if ( *pState == SignatureState::OK || *pState == SignatureState::NOTVALIDATED
@@ -2030,8 +2098,7 @@ void SfxObjectShell::AfterSigning(bool bSignSuccess, bool bSignScriptingContent)
 
 bool SfxObjectShell::CheckIsReadonly(bool bSignScriptingContent, weld::Window* pDialogParent)
 {
-    // in LOK case we support only viewer / readonly mode so far
-    if (GetMedium()->IsOriginallyReadOnly() || comphelper::LibreOfficeKit::isActive())
+    if (GetMedium()->IsOriginallyReadOnly())
     {
         // If the file is physically read-only, we just show the existing signatures
         try
@@ -2097,19 +2164,28 @@ SignatureState SfxObjectShell::GetDocumentSignatureState()
     return ImplGetSignatureState();
 }
 
-bool SfxObjectShell::SignDocumentContent(weld::Window* pDialogParent)
+void SfxObjectShell::SignDocumentContent(weld::Window* pDialogParent, const std::function<void(bool)>& rCallback)
 {
     if (!PrepareForSigning(pDialogParent))
-        return false;
+    {
+        rCallback(false);
+        return;
+    }
 
     if (CheckIsReadonly(false, pDialogParent))
-        return false;
+    {
+        rCallback(false);
+        return;
+    }
 
-    bool bSignSuccess = GetMedium()->SignContents_Impl(pDialogParent, false, HasValidSignatures());
+    SfxViewFrame* pFrame = GetFrame();
+    SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+    // Async, all code before the end has to go into the callback.
+    GetMedium()->SignContents_Impl(pDialogParent, false, HasValidSignatures(), pViewShell, [this, rCallback](bool bSignSuccess) {
+            AfterSigning(bSignSuccess, false);
 
-    AfterSigning(bSignSuccess, false);
-
-    return bSignSuccess;
+            rCallback(bSignSuccess);
+    });
 }
 
 bool SfxObjectShell::ResignDocument(uno::Sequence< security::DocumentSignatureInformation >& rSignaturesInfo)
@@ -2220,16 +2296,17 @@ void SfxObjectShell::SignSignatureLine(weld::Window* pDialogParent,
     if (CheckIsReadonly(false, pDialogParent))
         return;
 
-    bool bSignSuccess = GetMedium()->SignContents_Impl(pDialogParent,
-        false, HasValidSignatures(), aSignatureLineId, xCert, xValidGraphic, xInvalidGraphic, aComment);
+    SfxViewFrame* pFrame = GetFrame();
+    SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+    GetMedium()->SignContents_Impl(pDialogParent,
+        false, HasValidSignatures(), pViewShell, [this, pFrame](bool bSignSuccess) {
+        AfterSigning(bSignSuccess, false);
 
-    AfterSigning(bSignSuccess, false);
-
-    // Reload the document to get the updated graphic
-    // FIXME: Update just the signature line graphic instead of reloading the document
-    SfxViewFrame *pFrame = GetFrame();
-    if (pFrame)
-        pFrame->GetDispatcher()->Execute(SID_RELOAD);
+        // Reload the document to get the updated graphic
+        // FIXME: Update just the signature line graphic instead of reloading the document
+        if (pFrame)
+            pFrame->GetDispatcher()->Execute(SID_RELOAD);
+    }, aSignatureLineId, xCert, xValidGraphic, xInvalidGraphic, aComment);
 }
 
 SignatureState SfxObjectShell::GetScriptingSignatureState()
@@ -2237,19 +2314,27 @@ SignatureState SfxObjectShell::GetScriptingSignatureState()
     return ImplGetSignatureState( true );
 }
 
-bool SfxObjectShell::SignScriptingContent(weld::Window* pDialogParent)
+void SfxObjectShell::SignScriptingContent(weld::Window* pDialogParent, const std::function<void(bool)>& rCallback)
 {
     if (!PrepareForSigning(pDialogParent))
-        return false;
+    {
+        rCallback(false);
+        return;
+    }
 
     if (CheckIsReadonly(true, pDialogParent))
-        return false;
+    {
+        rCallback(false);
+        return;
+    }
 
-    bool bSignSuccess = GetMedium()->SignContents_Impl(pDialogParent, true, HasValidSignatures());
+    SfxViewFrame* pFrame = GetFrame();
+    SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+    GetMedium()->SignContents_Impl(pDialogParent, true, HasValidSignatures(), pViewShell, [this, rCallback](bool bSignSuccess) {
+        AfterSigning(bSignSuccess, true);
 
-    AfterSigning(bSignSuccess, true);
-
-    return bSignSuccess;
+        rCallback(bSignSuccess);
+    });
 }
 
 const uno::Sequence<sal_Int8>& SfxObjectShell::getUnoTunnelId()

@@ -300,6 +300,7 @@ static bool IsFieldNestingAllowed(const FieldContextPtr& pOuter, const FieldCont
             switch (*pInner->GetFieldId())
             {
                 case FIELD_DOCVARIABLE:
+                case FIELD_DOCPROPERTY:
                 case FIELD_FORMTEXT:
                 case FIELD_FORMULA:
                 case FIELD_IF:
@@ -312,6 +313,7 @@ static bool IsFieldNestingAllowed(const FieldContextPtr& pOuter, const FieldCont
                     return false;
                 }
                 default:
+                    // TODO: tdf#125038 suggests everything probably needs to return false
                     break;
             }
             break;
@@ -370,7 +372,6 @@ DomainMapper_Impl::DomainMapper_Impl(
         m_bIsParaMarkerChange( false ),
         m_bIsParaMarkerMove( false ),
         m_bRedlineImageInPreviousRun( false ),
-        m_bDummyParaAddedForTableInSection( false ),
         m_bTextFrameInserted(false),
         m_bIsLastSectionGroup( false ),
         m_bUsingEnhancedFields( false ),
@@ -384,6 +385,7 @@ DomainMapper_Impl::DomainMapper_Impl(
         m_bIsInTextBox(false),
         m_bIsNewDoc(!rMediaDesc.getUnpackedValueOrDefault("InsertMode", false)),
         m_bIsAltChunk(rMediaDesc.getUnpackedValueOrDefault("AltChunkMode", false)),
+        m_bReadOnly(rMediaDesc.getUnpackedValueOrDefault("ReadOnly", false)),
         m_bIsReadGlossaries(rMediaDesc.getUnpackedValueOrDefault("ReadGlossaries", false)),
         m_nTableCellDepth(0),
         m_bHasFtn(false),
@@ -442,6 +444,10 @@ DomainMapper_Impl::~DomainMapper_Impl()
     {
         RemoveLastParagraph();
         suppress_fun_call_w_exception(GetStyleSheetTable()->ApplyClonedTOCStyles());
+    }
+    else if (m_pStyleSheetTable)
+    {
+        m_pStyleSheetTable->RemoveUnusedParagraphStyles();
     }
     if (hasTableManager())
     {
@@ -962,9 +968,8 @@ void DomainMapper_Impl::SetIsFirstParagraphInShape(bool bIsFirst)
 
 void DomainMapper_Impl::SetIsDummyParaAddedForTableInSection( bool bIsAdded )
 {
-    m_bDummyParaAddedForTableInSection = bIsAdded;
+    m_StreamStateStack.top().bDummyParaAddedForTableInSection = bIsAdded;
 }
-
 
 void DomainMapper_Impl::SetIsTextFrameInserted( bool bIsInserted )
 {
@@ -3798,24 +3803,15 @@ bool isContentEmpty(uno::Reference<text::XText> const& xText)
     if (!xText.is())
         return true; // no XText means it's empty
 
-    uno::Reference<css::lang::XServiceInfo> xTextServiceInfo(xText, uno::UNO_QUERY);
-    if (xTextServiceInfo && xTextServiceInfo->getImplementationName() == "SwXHeadFootText")
-        return false;
-
-    uno::Reference<container::XEnumerationAccess> xEnumAccess(xText->getText(), uno::UNO_QUERY);
-    uno::Reference<container::XEnumeration> xEnum = xEnumAccess->createEnumeration();
-    while (xEnum->hasMoreElements())
+    uno::Reference<beans::XPropertySet> xTextProperties(xText, uno::UNO_QUERY);
+    if (!xTextProperties.is())
     {
-        auto xObject = xEnum->nextElement();
-        uno::Reference<text::XTextTable> const xTextTable(xObject, uno::UNO_QUERY);
-        if (xTextTable.is())
-            return false;
-
-        uno::Reference<text::XTextRange> const xParagraph(xObject, uno::UNO_QUERY);
-        if (xParagraph.is() && !xParagraph->getString().isEmpty())
-            return false;
+        return true;
     }
-    return true;
+
+    bool bContentEmpty{};
+    xTextProperties->getPropertyValue("IsContentEmpty") >>= bContentEmpty;
+    return bContentEmpty;
 }
 
 } // end anonymous namespace
@@ -3849,13 +3845,25 @@ void DomainMapper_Impl::PushPageHeaderFooter(PagePartType ePagePartType, PageTyp
 
     try
     {
+        // Note that the header property calls are very expensive, hence the need to check if the property needs
+        // setting before calling setPropertyValue.
+
         // Turn on the headers
-        xPageStyle->setPropertyValue(getPropertyName(ePropIsOn), uno::Any(true));
+        bool bPropIsOn = false;
+        xPageStyle->getPropertyValue(getPropertyName(ePropIsOn)) >>= bPropIsOn;
+        if (!bPropIsOn)
+            xPageStyle->setPropertyValue(getPropertyName(ePropIsOn), uno::Any(true));
 
         // Set both sharing left and first to off so we can import the content regardless tha what value
         // the "titlePage" or "evenAndOdd" flags are set (which decide what the sharing is set to in the document).
-        xPageStyle->setPropertyValue(getPropertyName(ePropShared), uno::Any(false));
-        xPageStyle->setPropertyValue(getPropertyName(PROP_FIRST_IS_SHARED), uno::Any(false));
+        bool bPropShared = false;
+        xPageStyle->getPropertyValue(getPropertyName(ePropShared)) >>= bPropShared;
+        if (bPropShared)
+            xPageStyle->setPropertyValue(getPropertyName(ePropShared), uno::Any(false));
+        bool bFirstShared = false;
+        xPageStyle->getPropertyValue(getPropertyName(PROP_FIRST_IS_SHARED)) >>= bFirstShared;
+        if (bFirstShared)
+            xPageStyle->setPropertyValue(getPropertyName(PROP_FIRST_IS_SHARED), uno::Any(false));
 
         if (eType == PageType::LEFT)
         {
@@ -6762,7 +6770,8 @@ void DomainMapper_Impl::handleAuthor
 }
 
 static uno::Sequence< beans::PropertyValues > lcl_createTOXLevelHyperlinks( bool bHyperlinks, const OUString& sChapterNoSeparator,
-                                   const uno::Sequence< beans::PropertyValues >& aLevel, const std::optional<style::TabStop> numtab)
+                                   const uno::Sequence< beans::PropertyValues >& aLevel, const std::optional<style::TabStop> numtab,
+                                   bool bSkipPageNumberAndTab)
 {
     //create a copy of the level and add new entries
 
@@ -6772,8 +6781,8 @@ static uno::Sequence< beans::PropertyValues > lcl_createTOXLevelHyperlinks( bool
     static constexpr OUString tokType(u"TokenType"_ustr);
     static constexpr OUString tokHStart(u"TokenHyperlinkStart"_ustr);
     static constexpr OUString tokHEnd(u"TokenHyperlinkEnd"_ustr);
-    static constexpr OUStringLiteral tokPNum(u"TokenPageNumber");
-    static constexpr OUStringLiteral tokENum(u"TokenEntryNumber");
+    static constexpr OUString tokPNum(u"TokenPageNumber"_ustr);
+    static constexpr OUString tokENum(u"TokenEntryNumber"_ustr);
 
     if (bHyperlinks)
         aNewLevel.push_back({ comphelper::makePropertyValue(tokType, tokHStart) });
@@ -6799,7 +6808,23 @@ static uno::Sequence< beans::PropertyValues > lcl_createTOXLevelHyperlinks( bool
                                   comphelper::makePropertyValue("Text", sChapterNoSeparator) });
         }
 
-        aNewLevel.push_back(item);
+        if (bSkipPageNumberAndTab && tokenType == tokPNum)
+        {
+            // also skip the preceding tabstop
+            if (aNewLevel.size())
+            {
+                OUString aPrevTokenType;
+                const auto& rPrevLevel = aNewLevel.back();
+                auto it = std::find_if(rPrevLevel.begin(), rPrevLevel.end(),
+                              [](const auto& p) { return p.Name == tokType; });
+                if (it != rPrevLevel.end())
+                    it->Value >>= aPrevTokenType;
+                if (aPrevTokenType == u"TokenTabStop"_ustr)
+                    aNewLevel.pop_back();
+            }
+        }
+        else
+            aNewLevel.push_back(item);
 
         if (numtab && tokenType == tokENum)
         {
@@ -6934,7 +6959,12 @@ OUString DomainMapper_Impl::ConvertTOCStyleName(OUString const& rTOCStyleName)
         {   // practical case: Word wrote i18n name to TOC field, but it doesn't
             // exist in styles.xml; tdf#153083 clone it for best roundtrip
             assert(convertedStyleName == pStyle->m_sConvertedStyleName);
-            return GetStyleSheetTable()->CloneTOCStyle(GetFontTable(), pStyle, rTOCStyleName);
+            if (rTOCStyleName != pStyle->m_sStyleName)
+            {
+                // rTOCStyleName is localized, pStyle->m_sStyleName is not. They don't match, so
+                // make sense to clone the style.
+                return GetStyleSheetTable()->CloneTOCStyle(GetFontTable(), pStyle, rTOCStyleName);
+            }
         }
     }
     // theoretical case: what OOXML says
@@ -6956,6 +6986,10 @@ void DomainMapper_Impl::handleToc
     bool bIsTabEntry = false ;
     bool bNewLine = false ;
     bool bParagraphOutlineLevel = false;
+    // some levels (optionally specified via a single range) might not display the page number
+    sal_uInt8 nStartNoPageNumber = 0;
+    sal_uInt8 nEndNoPageNumber = 0;
+
 
     sal_Int16 nMaxLevel = 10;
     OUString sTemplate;
@@ -7005,10 +7039,32 @@ void DomainMapper_Impl::handleToc
                             //todo: entries can only be included completely
 //                    }
 //                  \n Builds a table of contents or a range of entries, such as 1-9 in a table of contents without page numbers
-//                    if( lcl_FindInCommand( pContext->GetCommand(), 'n', sValue ))
-//                    {
-                        //todo: what does the description mean?
-//                    }
+    if (lcl_FindInCommand(pContext->GetCommand(), 'n', sValue))
+    {
+        // skip the tabstop and page-number on the specified levels
+        sValue = sValue.replaceAll("\"", "").trim();
+        if (sValue.isEmpty())
+        {
+            nStartNoPageNumber = 1;
+            nEndNoPageNumber = WW_OUTLINE_MAX;
+        }
+        else
+        {
+            // valid command format is fairly strict, requiring # <dash> #: TOC \n "2-3"
+            sal_Int32 nIndex = 0;
+            o3tl::getToken(sValue, 0, '-', nIndex);
+            if (nIndex > 1)
+            {
+                const sal_Int32 nStartLevel = o3tl::toInt32(sValue.subView(0, nIndex - 1));
+                const sal_Int32 nEndLevel = o3tl::toInt32(sValue.subView(nIndex));
+                if (nStartLevel > 0 && nStartLevel <= nEndLevel && nEndLevel <= WW_OUTLINE_MAX)
+                {
+                    nStartNoPageNumber = static_cast<sal_uInt8>(nStartLevel);
+                    nEndNoPageNumber = static_cast<sal_uInt8>(nEndLevel);
+                }
+            }
+        }
+    }
 //                  \o  Builds a table of contents by using outline levels instead of TC entries
     if( lcl_FindInCommand( pContext->GetCommand(), 'o', sValue ))
     {
@@ -7131,6 +7187,11 @@ void DomainMapper_Impl::handleToc
                 nLevel = o3tl::toInt32(o3tl::getToken(sTemplate, 0, tsep, nPosition ));
                 if( !nLevel )
                     nLevel = 1;
+
+                // The separator can be ',' or ', ': make sure the leading space doesn't end up in
+                // the style name.
+                sStyleName = sStyleName.trim();
+
                 if( !sStyleName.isEmpty() )
                     aMap.emplace(nLevel, sStyleName);
             }
@@ -7230,10 +7291,10 @@ void DomainMapper_Impl::handleToc
                     }
                 }
             }
-
+            bool bSkipPageNumberAndTab = nLevel >= nStartNoPageNumber && nLevel <= nEndNoPageNumber;
             uno::Sequence< beans::PropertyValues > aNewLevel = lcl_createTOXLevelHyperlinks(
                                                 bHyperlinks, sChapterNoSeparator,
-                                                aLevel, numTab);
+                                                aLevel, numTab, bSkipPageNumberAndTab);
             xLevelFormats->replaceByIndex( nLevel, uno::Any( aNewLevel ) );
         }
     }
@@ -7258,7 +7319,7 @@ void DomainMapper_Impl::handleToc
 
             uno::Sequence< beans::PropertyValues > aNewLevel = lcl_createTOXLevelHyperlinks(
                                                 bHyperlinks, sChapterNoSeparator,
-                                                aLevel, {});
+                                                aLevel, {}, /*SkipPageNumberAndTab=*/false);
             xLevelFormats->replaceByIndex( 1, uno::Any( aNewLevel ) );
         }
     }
@@ -7678,8 +7739,11 @@ void DomainMapper_Impl::CloseFieldCommand()
                 }
                 break;
                 case FIELD_DOCPROPERTY :
-                    handleDocProperty(pContext, sFirstParam,
-                            xFieldInterface);
+                {
+                    FieldContextPtr pOuter = GetParentFieldContext(m_aFieldStack);
+                    if (!pOuter || IsFieldNestingAllowed(pOuter, m_aFieldStack.back()))
+                        handleDocProperty(pContext, sFirstParam, xFieldInterface);
+                }
                 break;
                 case FIELD_DOCVARIABLE  :
                 {
@@ -8008,11 +8072,29 @@ void DomainMapper_Impl::CloseFieldCommand()
                                 getPropertyName(PROP_REFERENCE_FIELD_SOURCE),
                                 uno::Any(sal_Int16(text::ReferenceFieldSource::STYLE)));
 
-                            uno::Any aStyleDisplayName;
-                            aStyleDisplayName <<= ConvertTOCStyleName(sFirstParam);
+                            OUString styleName(sFirstParam);
+                            if (styleName.isEmpty())
+                            {
+                                for (auto const& rSwitch : vSwitches)
+                                {
+                                    // undocumented Word feature: \1 = "Heading 1" etc.
+                                    if (rSwitch.getLength() == 2 && rSwitch[0] == '\\'
+                                        && '1' <= rSwitch[1] && rSwitch[1] <= '9')
+                                    {
+                                        styleName = OUString(rSwitch[1]);
+                                        break;
+                                    }
+                                }
+                            }
 
-                            xFieldProperties->setPropertyValue(
-                                getPropertyName(PROP_SOURCE_NAME), aStyleDisplayName);
+                            if (!styleName.isEmpty())
+                            {
+                                uno::Any aStyleDisplayName;
+                                aStyleDisplayName <<= ConvertTOCStyleName(styleName);
+
+                                xFieldProperties->setPropertyValue(
+                                    getPropertyName(PROP_SOURCE_NAME), aStyleDisplayName);
+                            }
 
                             sal_uInt16 nFlags = 0;
                             OUString sValue;
@@ -8852,19 +8934,6 @@ void DomainMapper_Impl::SetBookmarkName( const OUString& rBookmarkName )
     BookmarkMap_t::iterator aBookmarkIter = m_aBookmarkMap.find( m_sCurrentBkmkId );
     if( aBookmarkIter != m_aBookmarkMap.end() )
     {
-        // fields are internal bookmarks: consume redundant "normal" bookmark
-        if ( IsOpenField() )
-        {
-            FFDataHandler::Pointer_t  pFFDataHandler(GetTopFieldContext()->getFFDataHandler());
-            if (pFFDataHandler && pFFDataHandler->getName() == rBookmarkName)
-            {
-                // HACK: At the END marker, StartOrEndBookmark will START
-                // a bookmark which will eventually be abandoned, not created.
-                m_aBookmarkMap.erase(aBookmarkIter);
-                return;
-            }
-        }
-
         if ((m_sCurrentBkmkPrefix == "__RefMoveFrom__"
              || m_sCurrentBkmkPrefix == "__RefMoveTo__")
             && std::find(m_aRedlineMoveIDs.begin(), m_aRedlineMoveIDs.end(), rBookmarkName)

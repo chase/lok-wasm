@@ -20,10 +20,18 @@
 #ifndef INCLUDED_ANIMATIONS_ANIMATIONNODEHELPER_HXX
 #define INCLUDED_ANIMATIONS_ANIMATIONNODEHELPER_HXX
 
+#include <o3tl/any.hxx>
+#include <rtl/strbuf.hxx>
+#include <sal/log.hxx>
+#include <tools/helpers.hxx>
+
+#include <com/sun/star/uno/Any.hxx>
 #include <com/sun/star/uno/Reference.hxx>
+#include <com/sun/star/animations/XAnimate.hpp>
 #include <com/sun/star/animations/XAnimationNode.hpp>
 #include <com/sun/star/container/XEnumerationAccess.hpp>
 #include <com/sun/star/container/XEnumeration.hpp>
+#include <com/sun/star/presentation/ParagraphTarget.hpp>
 
 #include <vector>
 
@@ -69,6 +77,81 @@ namespace anim
         }
         catch( css::uno::Exception& )
         {
+        }
+    }
+
+    inline bool getVisibilityPropertyForAny(css::uno::Any const& rAny)
+    {
+        bool bVisible = false;
+        css::uno::Any aAny(rAny);
+
+        // try to extract bool value
+        if (!(aAny >>= bVisible))
+        {
+            // try to extract string
+            OUString aString;
+            if (aAny >>= aString)
+            {
+                // we also take the strings "true" and "false",
+                // as well as "on" and "off" here
+                if (aString.equalsIgnoreAsciiCase("true") ||
+                    aString.equalsIgnoreAsciiCase("on"))
+                {
+                    bVisible = true;
+                }
+                if (aString.equalsIgnoreAsciiCase("false") ||
+                    aString.equalsIgnoreAsciiCase("off"))
+                {
+                    bVisible = false;
+                }
+            }
+        }
+        return bVisible;
+    }
+
+    inline bool getVisibilityProperty(
+        const css::uno::Reference< css::animations::XAnimate >& xAnimateNode, bool& bReturn)
+    {
+        if (xAnimateNode->getAttributeName().equalsIgnoreAsciiCase("visibility"))
+        {
+            css::uno::Any aAny(xAnimateNode->getTo());
+            bReturn = getVisibilityPropertyForAny(aAny);
+            return true;
+        }
+
+        return false;
+    }
+
+    inline void convertTarget(OStringBuffer& aStringBuffer, const css::uno::Any& rTarget)
+    {
+        if (!rTarget.hasValue())
+            return;
+
+        css::uno::Reference<css::uno::XInterface> xRef;
+        if (auto xParagraphTarget = o3tl::tryAccess<css::presentation::ParagraphTarget>(rTarget))
+        {
+            if (xParagraphTarget->Shape.is())
+            {
+                const std::string& rIdentifier(GetInterfaceHash(xParagraphTarget->Shape));
+                if (!rIdentifier.empty())
+                {
+                    sal_Int32 nParagraph(xParagraphTarget->Paragraph);
+                    aStringBuffer.append(rIdentifier);
+                    aStringBuffer.append("_");
+                    aStringBuffer.append(nParagraph);
+                }
+            }
+        }
+        else
+        {
+            rTarget >>= xRef;
+            SAL_WARN_IF(!xRef.is(), "animations", "convertTarget(), invalid target type!");
+            if (xRef.is())
+            {
+                const std::string& rIdentifier(GetInterfaceHash(xRef));
+                if (!rIdentifier.empty())
+                    aStringBuffer.append(rIdentifier);
+            }
         }
     }
 }

@@ -41,10 +41,13 @@ using namespace css;
 
 namespace com::sun::star::uno { class XComponentContext; }
 
-namespace sd {
+namespace sd
+{
 
-namespace {
+namespace
+{
 
+/** Undo/redo insertion or removal of an annotation to/from the document */
 class UndoInsertOrRemoveAnnotation : public SdrUndoAction
 {
 public:
@@ -61,13 +64,21 @@ protected:
 
 }
 
-void createAnnotation(rtl::Reference<sdr::annotation::Annotation>& xAnnotation, SdPage* pPage)
+/** Creates an annotation */
+rtl::Reference<sdr::annotation::Annotation> createAnnotation(SdPage* pPage)
 {
-    xAnnotation.set(new Annotation(comphelper::getProcessComponentContext(), pPage));
-    pPage->addAnnotation(xAnnotation, -1);
+    return rtl::Reference<Annotation>(new Annotation(comphelper::getProcessComponentContext(), pPage));
 }
 
-Annotation::Annotation(const uno::Reference<uno::XComponentContext>& context, SdPage* pPage)
+/** Creates an annotation and adds it to the page */
+rtl::Reference<sdr::annotation::Annotation> createAnnotationAndAddToPage(SdPage* pPage)
+{
+    rtl::Reference<sdr::annotation::Annotation> xAnnotation = createAnnotation(pPage);
+    pPage->addAnnotation(xAnnotation, -1);
+    return xAnnotation;
+}
+
+Annotation::Annotation(const uno::Reference<uno::XComponentContext>& context, SdrPage* pPage)
     : sdr::annotation::Annotation(context, pPage)
 {
 }
@@ -219,6 +230,25 @@ void Annotation::createChangeUndo()
     }
 }
 
+rtl::Reference<sdr::annotation::Annotation> Annotation::clone(SdrPage* pTargetPage)
+{
+    rtl::Reference<sdr::annotation::Annotation> aNewAnnotation;
+    aNewAnnotation = new sd::Annotation(comphelper::getProcessComponentContext(), pTargetPage);
+    aNewAnnotation->setPosition(getPosition());
+    aNewAnnotation->setSize(getSize());
+    aNewAnnotation->setAuthor(getAuthor());
+    aNewAnnotation->setInitials(getInitials());
+    aNewAnnotation->setDateTime(getDateTime());
+    aNewAnnotation->setCreationInfo(getCreationInfo());
+
+    uno::Reference<css::text::XTextCopy> xSourceRange (getTextRange(), uno::UNO_QUERY);
+    uno::Reference<css::text::XTextCopy> xRange (aNewAnnotation->getTextRange(), uno::UNO_QUERY);
+    if (xSourceRange.is() && xRange.is())
+        xRange->copyText(xSourceRange);
+
+    return aNewAnnotation;
+}
+
 std::unique_ptr<SdrUndoAction> CreateUndoInsertOrRemoveAnnotation(rtl::Reference<sdr::annotation::Annotation>& xAnnotation, bool bInsert)
 {
     if (xAnnotation)
@@ -254,7 +284,7 @@ void UndoInsertOrRemoveAnnotation::Undo()
 
     if (mbInsert)
     {
-        pPage->removeAnnotation(mxAnnotation);
+        pPage->removeAnnotationNoNotify(mxAnnotation);
     }
     else
     {
@@ -272,12 +302,12 @@ void UndoInsertOrRemoveAnnotation::Redo()
 
     if (mbInsert)
     {
-        pPage->addAnnotation(mxAnnotation, mnIndex);
+        pPage->addAnnotationNoNotify(mxAnnotation, mnIndex);
         LOKCommentNotifyAll(sdr::annotation::CommentNotificationType::Add, *mxAnnotation);
     }
     else
     {
-        pPage->removeAnnotation(mxAnnotation);
+        pPage->removeAnnotationNoNotify(mxAnnotation);
     }
 }
 

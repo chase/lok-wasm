@@ -13,6 +13,7 @@
 #include <com/sun/star/text/WrapTextMode.hpp>
 #include <com/sun/star/text/XTextSectionsSupplier.hpp>
 #include <vcl/event.hxx>
+#include <vcl/metaact.hxx>
 #include <vcl/scheduler.hxx>
 #include <editeng/fontitem.hxx>
 #include <editeng/fhgtitem.hxx>
@@ -190,6 +191,23 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf128966)
     xmlXPathFreeObject(pXmlObj);
 }
 
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf161718)
+{
+    createSwDoc("tdf161718.docx");
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // everything on one page
+    assertXPath(pXmlDoc, "/root/page/header"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page/header/txt/anchored"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page/footer"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page/ftncont/ftn"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page/ftncont/ftn/txt"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page/body/txt"_ostr, 27);
+    assertXPath(pXmlDoc, "/root/page/body/txt/anchored"_ostr, 1);
+    assertXPath(pXmlDoc, "/root/page"_ostr, 1);
+}
+
 CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf119908)
 {
     createSwDoc("tdf130088.docx");
@@ -321,6 +339,91 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf158419)
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(156), aPosition.GetContentIndex());
 }
 
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf162109)
+{
+    createSwDoc("tdf162109.fodt");
+    // Ensure that all text portions are calculated before testing.
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwViewShell* pViewShell
+        = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    pViewShell->Reformat();
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    // There was no SwGluePortion, because of missing justification of the last paragraph line,
+    // despite it is a full line with shrunk spaces
+    assertXPath(pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout[1]/SwGluePortion"_ostr);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf162220)
+{
+    createSwDoc("tdf162220.fodt");
+    // Ensure that all text portions are calculated before testing.
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwViewShell* pViewShell
+        = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    pViewShell->Reformat();
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    // There was no SwGluePortion, because of missing justification of the last paragraph line,
+    // despite it is a full line with shrunk spaces
+    assertXPath(pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout[1]/SwGluePortion"_ostr);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf162725)
+{
+    createSwDoc("tdf162725.fodt");
+    // Ensure that all text portions are calculated before testing.
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwViewShell* pViewShell
+        = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    pViewShell->Reformat();
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+    // There was no SwGluePortion, because of missing justification of the last paragraph line,
+    // despite it is a full line with shrunk spaces
+    assertXPath(pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout[1]/SwGluePortion"_ostr);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf161810)
+{
+    createSwDoc("tdf161810.fodt");
+    // Ensure that all text portions are calculated before testing.
+    SwDoc* pDoc = getSwDoc();
+    SwDocShell* pShell = pDoc->GetDocShell();
+
+    // Dump the rendering of the first page as an XML file.
+    std::shared_ptr<GDIMetaFile> xMetaFile = pShell->GetPreviewMetaFile();
+    MetafileXmlDump dumper;
+
+    xmlDocUniquePtr pXmlDoc = dumpAndParse(dumper, *xMetaFile);
+    CPPUNIT_ASSERT(pXmlDoc);
+
+    // Find the first text array action
+    for (size_t nAction = 0; nAction < xMetaFile->GetActionSize(); nAction++)
+    {
+        auto pAction = xMetaFile->GetAction(nAction);
+        if (pAction->GetType() == MetaActionType::TEXTARRAY)
+        {
+            auto pTextArrayAction = static_cast<MetaTextArrayAction*>(pAction);
+            auto pDXArray = pTextArrayAction->GetDXArray();
+
+            // There should be 73 chars on the first line
+            CPPUNIT_ASSERT_EQUAL(size_t(73), pDXArray.size());
+
+            // Assert we are using the expected position for the last char
+            // This was 9369, now 9165, according to the fixed space shrinking
+            CPPUNIT_ASSERT_LESS(sal_Int32(9300), pDXArray[72]);
+            break;
+        }
+    }
+}
+
 CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf106234)
 {
     createSwDoc("tdf106234.fodt");
@@ -397,16 +500,85 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf120287b)
     assertXPath(
         pXmlDoc,
         "/root/page/body/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabRight']"_ostr,
-        "width"_ostr, "18");
+        "width"_ostr, "1");
 }
 
 CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf120287c)
 {
     createSwDoc("tdf120287c.fodt");
     xmlDocUniquePtr pXmlDoc = parseLayoutDump();
-    // This was 2, the second line was not broken into a 2nd and a 3rd one,
-    // rendering text outside the paragraph frame.
-    assertXPath(pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout"_ostr, 3);
+    // This was 3, the second line was broken into a 2nd and a 3rd one,
+    // not rendering text outside the paragraph frame like Word 2013 does.
+    assertXPath(pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout"_ostr, 2);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf158658a)
+{
+    createSwDoc("tdf158658a.rtf");
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // Word 2013 puts all tabs into one line, the last 8 of them are off the page
+    assertXPath(pXmlDoc, "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout"_ostr, 1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabCenter']"_ostr,
+        1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabRight']"_ostr,
+        1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabLeft']"_ostr,
+        9);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf158658b)
+{
+    createSwDoc("tdf158658b.rtf");
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // Word 2013 puts all tabs and the field following into one line
+    // and also puts the field off the page
+    assertXPath(pXmlDoc, "/root/page[1]/footer/txt[1]/SwParaPortion/SwLineLayout"_ostr, 1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/footer/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabCenter']"_ostr,
+        1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/footer/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabRight']"_ostr,
+        1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/footer/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabRight']"_ostr,
+        "width"_ostr, u"4446"_ustr); // was very small: 24
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/footer/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabLeft']"_ostr,
+        0);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf158658c)
+{
+    createSwDoc("tdf158658c.rtf");
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // Word 2013 puts all tabs into one line, the last 17 of them are off the page
+    assertXPath(pXmlDoc, "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout"_ostr, 1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabCenter']"_ostr,
+        1);
+    // the right tab is exactly at the margin of the paragraph
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabRight']"_ostr,
+        1);
+    assertXPath(
+        pXmlDoc,
+        "/root/page[1]/header/txt[1]/SwParaPortion/SwLineLayout/child::*[@type='PortionType::TabLeft']"_ostr,
+        20);
 }
 
 CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf155177)
@@ -1515,6 +1687,193 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf156724)
     assertXPath(pXmlDoc, "/root/page"_ostr, 2);
 }
 
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testSectionUnhide)
+{
+    createSwDoc("hiddensection.fodt");
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "/root/page/body/section/txt/infos/bounds[@height='0']"_ostr, 0);
+        discardDumpedLayout();
+    }
+
+    // Hide the section
+    auto xTextSectionsSupplier = mxComponent.queryThrow<css::text::XTextSectionsSupplier>();
+    auto xSections = xTextSectionsSupplier->getTextSections();
+    CPPUNIT_ASSERT(xSections);
+    auto xSection = xSections->getByName(u"Section1"_ustr).queryThrow<css::beans::XPropertySet>();
+    xSection->setPropertyValue(u"IsVisible"_ustr, css::uno::Any(false));
+    calcLayout();
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "/root/page/body/section/txt/infos/bounds[@height='0']"_ostr, 4);
+        discardDumpedLayout();
+    }
+
+    xSection->setPropertyValue(u"IsVisible"_ustr, css::uno::Any(true));
+    calcLayout();
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        // the problem was that 3 of the text frames had 0 height because Format was skipped
+        assertXPath(pXmlDoc, "/root/page/body/section/txt/infos/bounds[@height='0']"_ostr, 0);
+        discardDumpedLayout();
+    }
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testHiddenSectionFlys)
+{
+    createSwDoc("U-min.fodt");
+
+    //NO! field update job masks if the visibility was created wrong when loading.
+    //Scheduler::ProcessEventsToIdle();
+
+    SwDoc* pDoc = getSwDoc();
+    IDocumentDrawModelAccess const& rIDMA{ pDoc->getIDocumentDrawModelAccess() };
+    SdrPage const* pDrawPage{ rIDMA.GetDrawModel()->GetPage(0) };
+    int invisibleHeaven{ rIDMA.GetInvisibleHeavenId().get() };
+    int visibleHeaven{ rIDMA.GetHeavenId().get() };
+
+    // these are hidden by moving to invisible layer, they're still in layout
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "//anchored/fly"_ostr, 6);
+        discardDumpedLayout();
+
+        CPPUNIT_ASSERT_EQUAL(size_t(6), pDrawPage->GetObjCount());
+        for (int i = 0; i < 6; ++i)
+        {
+            CPPUNIT_ASSERT_EQUAL(invisibleHeaven, int(pDrawPage->GetObj(i)->GetLayer().get()));
+        }
+    }
+
+    // Show the section
+    auto xTextSectionsSupplier = mxComponent.queryThrow<css::text::XTextSectionsSupplier>();
+    auto xSections = xTextSectionsSupplier->getTextSections();
+    CPPUNIT_ASSERT(xSections);
+    auto xSection = xSections->getByName(u"Anlage"_ustr).queryThrow<css::beans::XPropertySet>();
+    xSection->setPropertyValue(u"IsVisible"_ustr, css::uno::Any(true));
+    calcLayout();
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "//anchored/fly"_ostr, 6);
+        discardDumpedLayout();
+
+        CPPUNIT_ASSERT_EQUAL(size_t(6), pDrawPage->GetObjCount());
+        for (int i = 0; i < 6; ++i)
+        {
+            CPPUNIT_ASSERT_EQUAL(visibleHeaven, int(pDrawPage->GetObj(i)->GetLayer().get()));
+        }
+    }
+
+    xSection->setPropertyValue(u"IsVisible"_ustr, css::uno::Any(false));
+    calcLayout();
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "//anchored/fly"_ostr, 6);
+        discardDumpedLayout();
+
+        CPPUNIT_ASSERT_EQUAL(size_t(6), pDrawPage->GetObjCount());
+        for (int i = 0; i < 6; ++i)
+        {
+            CPPUNIT_ASSERT_EQUAL(invisibleHeaven, int(pDrawPage->GetObj(i)->GetLayer().get()));
+        }
+    }
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testHiddenSectionPageDescs)
+{
+    createSwDoc("hidden-sections-with-pagestyles.odt");
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "/root/page"_ostr, 2);
+        assertXPath(pXmlDoc, "/root/page[1]"_ostr, "formatName"_ostr, "Hotti");
+        assertXPath(pXmlDoc, "/root/page[1]/body/section"_ostr, 1);
+        assertXPath(pXmlDoc, "/root/page[1]/body/section[1]"_ostr, "formatName"_ostr,
+                    u"Verfügung"_ustr);
+        assertXPath(pXmlDoc, "/root/page[2]/body/section"_ostr, 2);
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[1]"_ostr, "formatName"_ostr,
+                    u"Verfügung"_ustr);
+        // should be > 0, no idea why it's different on Windows
+#ifdef _WIN32
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[1]/infos/bounds"_ostr, "height"_ostr,
+                    "552");
+#else
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[1]/infos/bounds"_ostr, "height"_ostr,
+                    "532");
+#endif
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[2]"_ostr, "formatName"_ostr,
+                    "Rueckantwort");
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[2]/infos/bounds"_ostr, "height"_ostr, "0");
+        assertXPath(pXmlDoc, "/root/page[2]"_ostr, "formatName"_ostr, "Folgeseite");
+        discardDumpedLayout();
+    }
+
+    // toggle one section hidden and other visible
+    executeMacro(
+        u"vnd.sun.star.script:Standard.Module1.Main?language=Basic&location=document"_ustr);
+    Scheduler::ProcessEventsToIdle();
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "/root/page"_ostr, 3);
+        assertXPath(pXmlDoc, "/root/page[1]"_ostr, "formatName"_ostr, "Hotti");
+        assertXPath(pXmlDoc, "/root/page[1]/body/section"_ostr, 2);
+        assertXPath(pXmlDoc, "/root/page[1]/body/section[1]"_ostr, "formatName"_ostr,
+                    u"Verfügung"_ustr);
+        assertXPath(pXmlDoc, "/root/page[1]/body/section[2]"_ostr, "formatName"_ostr,
+                    "Rueckantwort");
+        assertXPath(pXmlDoc, "/root/page[2]"_ostr, "formatName"_ostr, "Empty Page");
+        assertXPath(pXmlDoc, "/root/page[3]/body/section"_ostr, 1);
+        assertXPath(pXmlDoc, "/root/page[3]/body/section[1]"_ostr, "formatName"_ostr,
+                    "Rueckantwort");
+        // should be > 0, no idea why it's different on Windows
+#ifdef _WIN32
+        assertXPath(pXmlDoc, "/root/page[3]/body/section[1]/infos/bounds"_ostr, "height"_ostr,
+                    "552");
+#else
+        assertXPath(pXmlDoc, "/root/page[3]/body/section[1]/infos/bounds"_ostr, "height"_ostr,
+                    "532");
+#endif
+        assertXPath(pXmlDoc, "/root/page[3]"_ostr, "formatName"_ostr, "RueckantwortRechts");
+        discardDumpedLayout();
+    }
+
+    // toggle one section hidden and other visible
+    executeMacro(
+        u"vnd.sun.star.script:Standard.Module1.Main?language=Basic&location=document"_ustr);
+    Scheduler::ProcessEventsToIdle();
+
+    {
+        xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+        assertXPath(pXmlDoc, "/root/page"_ostr, 2);
+        assertXPath(pXmlDoc, "/root/page[1]"_ostr, "formatName"_ostr, "Hotti");
+        assertXPath(pXmlDoc, "/root/page[1]/body/section"_ostr, 1);
+        assertXPath(pXmlDoc, "/root/page[1]/body/section[1]"_ostr, "formatName"_ostr,
+                    u"Verfügung"_ustr);
+        assertXPath(pXmlDoc, "/root/page[2]/body/section"_ostr, 2);
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[1]"_ostr, "formatName"_ostr,
+                    u"Verfügung"_ustr);
+        // should be > 0, no idea why it's different on Windows
+#ifdef _WIN32
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[1]/infos/bounds"_ostr, "height"_ostr,
+                    "552");
+#else
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[1]/infos/bounds"_ostr, "height"_ostr,
+                    "532");
+#endif
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[2]"_ostr, "formatName"_ostr,
+                    "Rueckantwort");
+        assertXPath(pXmlDoc, "/root/page[2]/body/section[2]/infos/bounds"_ostr, "height"_ostr, "0");
+        assertXPath(pXmlDoc, "/root/page[2]"_ostr, "formatName"_ostr, "Folgeseite");
+        discardDumpedLayout();
+    }
+}
+
 CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf156725)
 {
     createSwDoc("tdf156725.fodt");
@@ -2534,6 +2893,16 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf160958_orphans)
     assertXPath(pExportDump, "//page[2]/body/section/txt[3]/SwParaPortion/SwLineLayout"_ostr, 7);
     assertXPath(pExportDump, "//page[2]/body/txt"_ostr, 1);
     assertXPath(pExportDump, "//page[2]/body/txt[1]/SwParaPortion/SwLineLayout"_ostr, 1);
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, TestTdf161508)
+{
+    // This document must not hang on load.
+    createSwDoc("tdf161508.fodt");
+    auto pExportDump = parseLayoutDump();
+    // The table must move completely to the second page
+    assertXPath(pExportDump, "//page[1]/body/tab"_ostr, 0);
+    assertXPath(pExportDump, "//page[2]/body/tab"_ostr, 1);
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

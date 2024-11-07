@@ -86,6 +86,7 @@ $(eval $(call gb_Library_use_libraries,sd,\
 	sal \
 	salhelper \
 	sax \
+	xo \
 	sb \
 	sfx \
 	sot \
@@ -213,7 +214,7 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/animations/SlideTransitionPane \
 	sd/source/ui/animations/motionpathtag \
 	sd/source/ui/annotations/annotationmanager \
-	sd/source/ui/annotations/annotationtag \
+	sd/source/ui/annotations/AnnotationPopup \
 	sd/source/ui/annotations/annotationwindow \
 	sd/source/ui/app/optsitem \
 	sd/source/ui/app/sddll \
@@ -428,6 +429,7 @@ $(eval $(call gb_Library_add_exception_objects,sd,\
 	sd/source/ui/tools/IdleDetection \
 	sd/source/ui/tools/PreviewRenderer \
 	sd/source/ui/tools/SdGlobalResourceContainer \
+	sd/source/ui/tools/SlideshowLayerRenderer \
 	sd/source/ui/tools/SlotStateListener \
 	sd/source/ui/tools/TimerBasedTaskExecution \
 	sd/source/ui/uitest/uiobject \

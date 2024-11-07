@@ -47,7 +47,6 @@
 #include <sfx2/printer.hxx>
 #include <svl/numformat.hxx>
 #include <svl/zforlist.hxx>
-#include <svx/svxids.hrc>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/charclass.hxx>
 #include <utility>
@@ -1487,7 +1486,20 @@ void ScInputHandler::ShowFuncList( const ::std::vector< OUString > & rFuncStrVec
                             + "\", "
                             "\"description\": \""
                             + escapeJSON(ppFDesc->getDescription())
-                            + "\"}, ");
+                            + "\", \"namedRange\": false }, ");
+                    }
+                    else
+                    {
+                        aPayload.append("{"
+                            "\"index\": "
+                            + OString::number(static_cast<sal_Int64>(nCurIndex))
+                            + ", "
+                                "\"signature\": \""
+                            + escapeJSON(aFuncNameStr)
+                            + "\", "
+                                "\"description\": \""
+                            + escapeJSON(OUString())
+                            + "\", \"namedRange\": true }, ");
                     }
                 }
                 ++nCurIndex;
@@ -1495,8 +1507,15 @@ void ScInputHandler::ShowFuncList( const ::std::vector< OUString > & rFuncStrVec
                     nCurIndex = 0;
             }
             sal_Int32 nLen = aPayload.getLength();
-            aPayload[nLen - 2] = ' ';
-            aPayload[nLen - 1] = ']';
+            if (nLen <= 2)
+            {
+                aPayload[nLen - 1] = ']';
+            }
+            else
+            {
+                aPayload[nLen - 2] = ' ';
+                aPayload[nLen - 1] = ']';
+            }
 
             OString s = aPayload.makeStringAndClear();
             pViewShell->libreOfficeKitViewCallback(LOK_CALLBACK_CALC_FUNCTION_LIST, s);
@@ -2084,11 +2103,8 @@ void ScInputHandler::GetColData()
     else
         pColumnData.reset( new ScTypedCaseStrSet );
 
-    std::vector<ScTypedStrData> aEntries;
     rDoc.GetDataEntries(
-        aCursorPos.Col(), aCursorPos.Row(), aCursorPos.Tab(), aEntries);
-    if (!aEntries.empty())
-        pColumnData->insert(aEntries.begin(), aEntries.end());
+        aCursorPos.Col(), aCursorPos.Row(), aCursorPos.Tab(), *pColumnData);
 
     miAutoPosColumn = pColumnData->end();
 }
@@ -2803,15 +2819,6 @@ void ScInputHandler::DataChanged( bool bFromTopNotify, bool bSetModified )
             // If we will end up updating LoKit at the end, we can skip it here
             pInputWin->SetTextString(aText, !bUpdateKit);
         }
-
-        if (comphelper::LibreOfficeKit::isActive())
-        {
-            if (pActiveViewSh)
-            {
-                // TODO: deprecated?
-                pActiveViewSh->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_FORMULA, aText.toUtf8());
-            }
-        }
     }
 
     // If the cursor is before the end of a paragraph, parts are being pushed to
@@ -2854,8 +2861,10 @@ void ScInputHandler::DataChanged( bool bFromTopNotify, bool bSetModified )
         if (pActiveView)
             aSel = pActiveView->GetSelection();
 
+        OUString aText = ScEditUtil::GetMultilineString(*mpEditEngine);
+        pActiveViewSh->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_FORMULA, aText.toUtf8());
         pActiveViewSh->LOKSendFormulabarUpdate(pActiveView,
-                                               ScEditUtil::GetMultilineString(*mpEditEngine),
+                                               aText,
                                                aSel);
     }
 
@@ -3159,17 +3168,6 @@ void ScInputHandler::EnterHandler( ScEnterMode nBlockMode, bool bBeforeSavingInL
     }
     lcl_RemoveTabs(aString);
     lcl_RemoveTabs(aPreAutoCorrectString);
-
-    if (bModified && aString.indexOf('\n') != -1)
-    {
-        // Cell contains line breaks, enable wrapping
-        ScLineBreakCell aBreakItem(true);
-        pActiveViewSh->ApplyAttr(aBreakItem);
-
-        SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-        if (pViewFrm)
-            pViewFrm->GetBindings().Invalidate(SID_ATTR_ALIGN_LINEBREAK);
-    }
 
     // Test if valid (always with simple string)
     if (bModified && nValidation)
@@ -4364,7 +4362,6 @@ void ScInputHandler::NotifyChange( const ScInputHdlState* pState,
                             aSel.nEndPara = 0;
 
                         pActiveViewSh->LOKSendFormulabarUpdate(pActiveView, aString, aSel);
-                        // TODO: deprecated?
                         pActiveViewSh->libreOfficeKitViewCallback(LOK_CALLBACK_CELL_FORMULA, aString.toUtf8());
                     }
                 }

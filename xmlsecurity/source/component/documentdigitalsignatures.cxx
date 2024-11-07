@@ -78,6 +78,7 @@ class DocumentDigitalSignatures
 private:
     css::uno::Reference<css::uno::XComponentContext> mxCtx;
     css::uno::Reference<css::awt::XWindow> mxParentWindow;
+    uno::Reference<io::XStream> mxScriptingSignStream;
 
     /// will be set by XInitialization. If not we assume true. false means an earlier version (whatever that means,
     /// this is a string, not a boolean).
@@ -89,9 +90,11 @@ private:
     bool m_bHasDocumentSignature;
 
     /// @throws css::uno::RuntimeException
-    bool ImplViewSignatures(const css::uno::Reference<css::embed::XStorage>& rxStorage,
+    void ImplViewSignatures(const css::uno::Reference<css::embed::XStorage>& rxStorage,
                             const css::uno::Reference<css::io::XStream>& xSignStream,
-                            DocumentSignatureMode eMode, bool bReadOnly);
+                            DocumentSignatureMode eMode, bool bReadOnly,
+                            SfxViewShell* pViewShell,
+                            const std::function<void(bool)>& rCallback);
     /// @throws css::uno::RuntimeException
     void ImplViewSignatures(const css::uno::Reference<css::embed::XStorage>& rxStorage,
                             const css::uno::Reference<css::io::XInputStream>& xSignStream,
@@ -217,6 +220,19 @@ public:
                              const css::uno::Reference<css::security::XCertificate>& xCertificate,
                              const css::uno::Reference<css::embed::XStorage>& xStorage,
                              const css::uno::Reference<css::io::XStream>& xStream) override;
+    /// See sfx2::DigitalSignatures::SignDocumentContentAsync().
+    void SignDocumentContentAsync(const css::uno::Reference<css::embed::XStorage>& xStorage,
+                                  const css::uno::Reference<css::io::XStream>& xSignStream,
+                                  SfxViewShell* pViewShell,
+                                  const std::function<void(bool)>& rCallback) override;
+    /// See sfx2::DigitalSignatures::SignScriptingContentAsync().
+    void SignScriptingContentAsync(const css::uno::Reference<css::embed::XStorage>& xStorage,
+                                   const css::uno::Reference<css::io::XStream>& xSignStream,
+                                   const std::function<void(bool)>& rCallback) override;
+
+    /// See sfx2::DigitalSignatures::SetSignScriptingContent().
+    void SetSignScriptingContent(
+        const css::uno::Reference<css::io::XStream>& xScriptingSignStream) override;
 };
 
 }
@@ -278,11 +294,10 @@ DocumentDigitalSignatures::getSupportedServiceNames()
 }
 
 sal_Bool DocumentDigitalSignatures::signDocumentContent(
-    const Reference< css::embed::XStorage >& rxStorage,
-    const Reference< css::io::XStream >& xSignStream)
+    const Reference< css::embed::XStorage >& /*rxStorage*/,
+    const Reference< css::io::XStream >& /*xSignStream*/)
 {
-    OSL_ENSURE(!m_sODFVersion.isEmpty(), "DocumentDigitalSignatures: ODF Version not set, assuming minimum 1.2");
-    return ImplViewSignatures( rxStorage, xSignStream, DocumentSignatureMode::Content, false );
+    for (;;) { std::abort(); } // avoid "must return a value" warnings
 }
 
 sal_Bool DocumentDigitalSignatures::signSignatureLine(
@@ -356,12 +371,10 @@ OUString DocumentDigitalSignatures::getDocumentContentSignatureDefaultStreamName
 }
 
 sal_Bool DocumentDigitalSignatures::signScriptingContent(
-    const Reference< css::embed::XStorage >& rxStorage,
-    const Reference< css::io::XStream >& xSignStream )
+    const Reference< css::embed::XStorage >& /*rxStorage*/,
+    const Reference< css::io::XStream >& /*xSignStream*/ )
 {
-    OSL_ENSURE(!m_sODFVersion.isEmpty(),"DocumentDigitalSignatures: ODF Version not set, assuming minimum 1.2");
-    OSL_ENSURE(m_nArgumentsCount == 2, "DocumentDigitalSignatures: Service was not initialized properly");
-    return ImplViewSignatures( rxStorage, xSignStream, DocumentSignatureMode::Macros, false );
+    for (;;) { std::abort(); } // avoid "must return a value" warnings
 }
 
 Sequence< css::security::DocumentSignatureInformation >
@@ -388,11 +401,10 @@ OUString DocumentDigitalSignatures::getScriptingContentSignatureDefaultStreamNam
 
 
 sal_Bool DocumentDigitalSignatures::signPackage(
-    const Reference< css::embed::XStorage >& rxStorage,
-    const Reference< css::io::XStream >& xSignStream  )
+    const Reference< css::embed::XStorage >& /*rxStorage*/,
+    const Reference< css::io::XStream >& /*xSignStream*/  )
 {
-    OSL_ENSURE(!m_sODFVersion.isEmpty(),"DocumentDigitalSignatures: ODF Version not set, assuming minimum 1.2");
-    return ImplViewSignatures( rxStorage, xSignStream, DocumentSignatureMode::Package, false );
+    for (;;) { std::abort(); } // avoid "must return a value" warnings
 }
 
 Sequence< css::security::DocumentSignatureInformation >
@@ -426,17 +438,17 @@ void DocumentDigitalSignatures::ImplViewSignatures(
     Reference< io::XStream > xStream;
     if ( xSignStream.is() )
         xStream.set( xSignStream, UNO_QUERY );
-    ImplViewSignatures( rxStorage, xStream, eMode, bReadOnly );
+    ImplViewSignatures( rxStorage, xStream, eMode, bReadOnly, nullptr, [](bool /*bSuccess*/){} );
 }
 
-bool DocumentDigitalSignatures::ImplViewSignatures(
+void DocumentDigitalSignatures::ImplViewSignatures(
     const Reference< css::embed::XStorage >& rxStorage, const Reference< css::io::XStream >& xSignStream,
-    DocumentSignatureMode eMode, bool bReadOnly )
+    DocumentSignatureMode eMode, bool bReadOnly, SfxViewShell* pViewShell, const std::function<void(bool)>& rCallback )
 {
     bool bChanges = false;
     auto xSignaturesDialog = std::make_shared<DigitalSignaturesDialog>(
         Application::GetFrameWeld(mxParentWindow), mxCtx, eMode, bReadOnly, m_sODFVersion,
-        m_bHasDocumentSignature);
+        m_bHasDocumentSignature, pViewShell);
     bool bInit = xSignaturesDialog->Init();
     SAL_WARN_IF( !bInit, "xmlsecurity.comp", "Error initializing security context!" );
     if ( bInit )
@@ -444,26 +456,27 @@ bool DocumentDigitalSignatures::ImplViewSignatures(
         xSignaturesDialog->SetStorage(rxStorage);
 
         xSignaturesDialog->SetSignatureStream( xSignStream );
+        xSignaturesDialog->SetScriptingSignatureStream( mxScriptingSignStream );
 
-        if (bReadOnly)
-        {
-            xSignaturesDialog->beforeRun();
-            weld::DialogController::runAsync(xSignaturesDialog, [] (sal_Int32) {});
-            return false;
-        }
-        else if (xSignaturesDialog->run() == RET_OK)
-        {
-            if (xSignaturesDialog->SignaturesChanged())
+        xSignaturesDialog->beforeRun();
+        weld::DialogController::runAsync(xSignaturesDialog, [xSignaturesDialog, rxStorage, xSignStream, rCallback] (sal_Int32 nRet) {
+            if (nRet == RET_OK)
             {
-                bChanges = true;
-                // If we have a storage and no stream, we are responsible for commit
-                if ( rxStorage.is() && !xSignStream.is() )
+                bool bChanged = false;
+                if (xSignaturesDialog->SignaturesChanged())
                 {
-                    uno::Reference< embed::XTransactedObject > xTrans( rxStorage, uno::UNO_QUERY );
-                    xTrans->commit();
+                    bChanged = true;
+                    // If we have a storage and no stream, we are responsible for commit
+                    if ( rxStorage.is() && !xSignStream.is() )
+                    {
+                        uno::Reference< embed::XTransactedObject > xTrans( rxStorage, uno::UNO_QUERY );
+                        xTrans->commit();
+                    }
                 }
+                rCallback(bChanged);
             }
-        }
+        });
+        return;
     }
     else
     {
@@ -473,7 +486,7 @@ bool DocumentDigitalSignatures::ImplViewSignatures(
         xBox->run();
     }
 
-    return bChanges;
+    rCallback(bChanges);
 }
 
 Sequence< css::security::DocumentSignatureInformation >
@@ -709,7 +722,7 @@ DocumentDigitalSignatures::chooseCertificatesImpl(std::map<OUString, OUString>& 
             xSecContexts.push_back(aSignatureManager.getGpgSecurityContext());
     }
 
-    std::unique_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(Application::GetFrameWeld(mxParentWindow), std::move(xSecContexts), eAction);
+    std::shared_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(Application::GetFrameWeld(mxParentWindow), nullptr, std::move(xSecContexts), eAction);
 
     if (aChooser->run() != RET_OK)
         return { Reference< css::security::XCertificate >(nullptr) };
@@ -828,6 +841,30 @@ bool DocumentDigitalSignatures::SignModelWithCertificate(
 {
     return signWithCertificateImpl(xModel, xCertificate, xStorage, xStream,
                                    DocumentSignatureMode::Content);
+}
+
+void DocumentDigitalSignatures::SignDocumentContentAsync(const css::uno::Reference<css::embed::XStorage>& rxStorage,
+                              const css::uno::Reference<css::io::XStream>& xSignStream,
+                              SfxViewShell* pViewShell,
+                              const std::function<void(bool)>& rCallback)
+{
+    OSL_ENSURE(!m_sODFVersion.isEmpty(), "DocumentDigitalSignatures: ODF Version not set, assuming minimum 1.2");
+    ImplViewSignatures( rxStorage, xSignStream, DocumentSignatureMode::Content, false, pViewShell, rCallback );
+}
+
+void DocumentDigitalSignatures::SignScriptingContentAsync(
+    const Reference<css::embed::XStorage>& rxStorage,
+    const Reference<css::io::XStream>& xSignStream, const std::function<void(bool)>& rCallback)
+{
+    OSL_ENSURE(!m_sODFVersion.isEmpty(),"DocumentDigitalSignatures: ODF Version not set, assuming minimum 1.2");
+    OSL_ENSURE(m_nArgumentsCount == 2, "DocumentDigitalSignatures: Service was not initialized properly");
+    ImplViewSignatures( rxStorage, xSignStream, DocumentSignatureMode::Macros, false, nullptr, rCallback );
+}
+
+void DocumentDigitalSignatures::SetSignScriptingContent(
+    const css::uno::Reference<css::io::XStream>& xScriptingSignStream)
+{
+    mxScriptingSignStream = xScriptingSignStream;
 }
 
 sal_Bool DocumentDigitalSignatures::signPackageWithCertificate(

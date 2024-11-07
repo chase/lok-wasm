@@ -20,6 +20,7 @@
 #define INCLUDED_SW_SOURCE_CORE_INC_TXTFRM_HXX
 
 #include <com/sun/star/uno/Sequence.hxx>
+#include <svl/ctloptions.hxx>
 #include "cntfrm.hxx"
 #include "TextFrameIndex.hxx"
 #include <nodeoffset.hxx>
@@ -568,7 +569,7 @@ public:
      * at/as a character of the paragraph, corresponding to the paragraph and
      * paragraph portion visibility.
      */
-    void HideAndShowObjects();
+    void HideAndShowObjects() override;
 
     /// Footnote
     void RemoveFootnote(TextFrameIndex nStart,
@@ -975,7 +976,7 @@ class SwDigitModeModifier
     const OutputDevice& rOut;
     LanguageType nOldLanguageType;
 public:
-    SwDigitModeModifier( const OutputDevice& rOutp, LanguageType eCurLang );
+    SwDigitModeModifier( const OutputDevice& rOutp, LanguageType eCurLang, SvtCTLOptions::TextNumerals eCTlTextNumerals );
     ~SwDigitModeModifier();
 };
 

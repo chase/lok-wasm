@@ -80,7 +80,10 @@ https://docs.oasis-open.org/office/OpenDocument/v1.3/os/part4-formula/OpenDocume
   * FILTER
   * SORT
   * SORTBY
+  * UNIQUE
 * Mathematical Functions
+  * RANDARRAY
+  * SEQUENCE
   * SUMIF
   * SUMIFS
 * Statistical Functions

@@ -58,6 +58,7 @@
 #include <editeng/emphasismarkitem.hxx>
 #include "textconv.hxx"
 #include <rtl/tencinfo.h>
+#include <svtools/htmlout.hxx>
 #include <svtools/rtfout.hxx>
 #include <tools/stream.hxx>
 #include <edtspell.hxx>
@@ -77,6 +78,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <set>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -186,7 +188,7 @@ void ImpEditEngine::Write(SvStream& rOutput, EETextFormat eFormat, const EditSel
     if ( eFormat == EETextFormat::Text )
         WriteText( rOutput, rSel );
     else if ( eFormat == EETextFormat::Rtf )
-        WriteRTF( rOutput, rSel );
+        WriteRTF( rOutput, rSel, /*bClipboard=*/false );
     else if ( eFormat == EETextFormat::Xml )
         WriteXML( rOutput, rSel );
     else if ( eFormat == EETextFormat::Html )
@@ -271,7 +273,7 @@ void ImpEditEngine::WriteXML(SvStream& rOutput, const EditSelection& rSel)
     SvxWriteXML( *GetEditEnginePtr(), rOutput, aESel );
 }
 
-ErrCode ImpEditEngine::WriteRTF( SvStream& rOutput, EditSelection aSel )
+ErrCode ImpEditEngine::WriteRTF( SvStream& rOutput, EditSelection aSel, bool bClipboard )
 {
     assert( IsUpdateLayout() && "WriteRTF for UpdateMode = sal_False!" );
     CheckIdleFormatter();
@@ -432,6 +434,50 @@ ErrCode ImpEditEngine::WriteRTF( SvStream& rOutput, EditSelection aSel )
             nId++;
         }
 
+        // Collect used paragraph styles when copying to the clipboard.
+        std::set<SfxStyleSheetBase*> aUsedParagraphStyles;
+        if (bClipboard)
+        {
+            for (sal_Int32 nNode = nStartNode; nNode <= nEndNode; nNode++)
+            {
+                ContentNode* pNode = maEditDoc.GetObject(nNode);
+                if (!pNode)
+                {
+                    continue;
+                }
+
+                SfxStyleSheet* pParaStyle = pNode->GetStyleSheet();
+                if (!pParaStyle)
+                {
+                    continue;
+                }
+
+                aUsedParagraphStyles.insert(pParaStyle);
+
+                const OUString& rParent = pParaStyle->GetParent();
+                if (!rParent.isEmpty())
+                {
+                    auto pParent = static_cast<SfxStyleSheet*>(
+                        GetStyleSheetPool()->Find(rParent, pParaStyle->GetFamily()));
+                    if (pParent)
+                    {
+                        aUsedParagraphStyles.insert(pParent);
+                    }
+                }
+
+                const OUString& rFollow = pParaStyle->GetFollow();
+                if (!rFollow.isEmpty())
+                {
+                    auto pFollow = static_cast<SfxStyleSheet*>(
+                        GetStyleSheetPool()->Find(rFollow, pParaStyle->GetFamily()));
+                    if (pFollow)
+                    {
+                        aUsedParagraphStyles.insert(pFollow);
+                    }
+                }
+            }
+        }
+
         if ( aSSSIterator->Count() )
         {
 
@@ -441,6 +487,11 @@ ErrCode ImpEditEngine::WriteRTF( SvStream& rOutput, EditSelection aSel )
             for ( SfxStyleSheetBase* pStyle = aSSSIterator->First(); pStyle;
                                      pStyle = aSSSIterator->Next() )
             {
+                if (bClipboard && !aUsedParagraphStyles.contains(pStyle))
+                {
+                    // Don't write unused paragraph styles in the clipboard case.
+                    continue;
+                }
 
                 rOutput << endl;
                 rOutput.WriteChar( '{' ).WriteOString( OOO_STRING_SVTOOLS_RTF_S );
@@ -987,6 +1038,66 @@ void ImpEditEngine::WriteItemAsRTF( const SfxPoolItem& rItem, SvStream& rOutput,
         }
         break;
     }
+}
+
+// Currently not good enough to be used for a ::Write of EETextFormat::Html, it
+// only supports hyperlinks over plain text
+OString ImpEditEngine::GetSimpleHtml() const
+{
+    OStringBuffer aOutput;
+
+    sal_Int32 nStartNode = 0;
+    sal_Int32 nEndNode = maEditDoc.Count()-1;
+
+    // iterate over the paragraphs ...
+    for (sal_Int32 nNode = nStartNode; nNode <= nEndNode; nNode++)
+    {
+        const ContentNode* pNode = maEditDoc.GetObject( nNode );
+
+        const ParaPortion* pParaPortion = FindParaPortion( pNode );
+
+        sal_Int32 nIndex = 0;
+        sal_Int32 nEndPortion = pParaPortion->GetTextPortions().Count() - 1;
+
+        OStringBuffer aPara;
+        for (sal_Int32 n = 0; n <= nEndPortion; n++)
+        {
+            const TextPortion& rTextPortion = pParaPortion->GetTextPortions()[n];
+
+            const SvxURLField* pURLField = nullptr;
+            if ( rTextPortion.GetKind() == PortionKind::FIELD )
+            {
+                const EditCharAttrib* pAttr = pNode->GetCharAttribs().FindFeature(nIndex);
+                const SvxFieldItem* pFieldItem = dynamic_cast<const SvxFieldItem*>(pAttr->GetItem());
+                if( pFieldItem )
+                {
+                    const SvxFieldData* pFieldData = pFieldItem->GetField();
+                    pURLField = dynamic_cast<const SvxURLField*>(pFieldData);
+                }
+            }
+
+            OUString aRTFStr = EditDoc::GetParaAsString(pNode, nIndex, nIndex + rTextPortion.GetLen());
+            if (pURLField)
+                aPara.append("<a href=\"" + HTMLOutFuncs::ConvertStringToHTML(pURLField->GetURL()) + "\">");
+
+            aPara.append(HTMLOutFuncs::ConvertStringToHTML(aRTFStr));
+
+            if (pURLField)
+                aPara.append("</a>");
+
+            nIndex = nIndex + rTextPortion.GetLen();
+        }
+
+        if (aPara.isEmpty())
+        {
+            if (nEndNode == 0) // only one empty blank line
+                break;
+            aPara.append("<br/>");
+        }
+        aOutput.append("<div>" + aPara + "</div>");
+    }
+
+    return aOutput.makeStringAndClear();
 }
 
 std::unique_ptr<EditTextObject> ImpEditEngine::GetEmptyTextObject()

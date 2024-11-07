@@ -456,11 +456,36 @@ void ScCellShell::Execute( SfxRequest& rReq )
                     const SfxPoolItem* pFormat;
                     if (pReqArgs->HasItem( FN_PARAM_1, &pFormat))
                     {
-                        sal_Int16 nFormat = static_cast<const SfxInt16Item*>(pFormat)->GetValue();
+                        ScConditionMode nFormat = static_cast<ScConditionMode>(
+                            static_cast<const SfxInt16Item*>(pFormat)->GetValue());
                         sal_uInt16 nId = sc::ConditionalFormatEasyDialogWrapper::GetChildWindowId();
                         SfxViewFrame& rViewFrame = pTabViewShell->GetViewFrame();
                         SfxChildWindow* pWindow = rViewFrame.GetChildWindow( nId );
-                        GetViewData().GetDocument().SetEasyConditionalFormatDialogData(std::make_unique<ScConditionMode>(static_cast<ScConditionMode>(nFormat)));
+                        const SfxPoolItem* pManaged;
+                        bool bManaged = false;
+                        if (pReqArgs->HasItem(FN_PARAM_2, &pManaged))
+                        {
+                            bManaged = static_cast<const SfxBoolItem*>(pManaged)->GetValue();
+                        }
+
+                        const SfxPoolItem* pFormula;
+                        OUString formula;
+                        if (pReqArgs->HasItem(FN_PARAM_5, &pFormula))
+                        {
+                            formula = static_cast<const SfxStringItem*>(pFormula)->GetValue();
+                        }
+                        const SfxPoolItem *pFormatKey, *pEntryIndex;
+                        sal_Int32 nFormatKey = -1, nEntryIndex = -1;
+                        if (pReqArgs->HasItem(FN_PARAM_3, &pFormatKey)
+                            && pReqArgs->HasItem(FN_PARAM_4, &pEntryIndex))
+                        {
+                            nFormatKey = static_cast<const SfxInt32Item*>(pFormatKey)->GetValue();
+                            nEntryIndex = static_cast<const SfxInt32Item*>(pEntryIndex)->GetValue();
+                        }
+
+                        GetViewData().GetDocument().SetEasyConditionalFormatDialogData(
+                            ScConditionEasyDialogData(&nFormat, bManaged, nFormatKey, nEntryIndex,
+                                                      formula));
 
                         pScMod->SetRefDialog( nId, pWindow == nullptr );
                     }

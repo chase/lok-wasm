@@ -86,38 +86,15 @@ size_t RenderPDFBitmaps(const void* pBuffer, int nSize, std::vector<BitmapEx>& r
         pPdfBitmap->fillRect(0, 0, nPageWidth, nPageHeight, nColor);
         pPdfBitmap->renderPageBitmap(pPdfDocument.get(), pPdfPage.get(), /*nStartX=*/0,
                                      /*nStartY=*/0, nPageWidth, nPageHeight);
-
-        // Save the buffer as a bitmap.
-        Bitmap aBitmap(Size(nPageWidth, nPageHeight), vcl::PixelFormat::N24_BPP);
-        AlphaMask aMask(Size(nPageWidth, nPageHeight));
-        {
-            BitmapScopedWriteAccess pWriteAccess(aBitmap);
-            BitmapScopedWriteAccess pMaskAccess(aMask);
-            ConstScanline pPdfBuffer = pPdfBitmap->getBuffer();
-            const int nStride = pPdfBitmap->getStride();
-            std::vector<sal_uInt8> aScanlineAlpha(nPageWidth);
-            for (int nRow = 0; nRow < nPageHeight; ++nRow)
-            {
-                ConstScanline pPdfLine = pPdfBuffer + (nStride * nRow);
-                // pdfium byte order is BGRA.
-                pWriteAccess->CopyScanline(nRow, pPdfLine, ScanlineFormat::N32BitTcBgra, nStride);
-                for (int nCol = 0; nCol < nPageWidth; ++nCol)
-                {
-                    aScanlineAlpha[nCol] = pPdfLine[3];
-                    pPdfLine += 4;
-                }
-                pMaskAccess->CopyScanline(nRow, aScanlineAlpha.data(), ScanlineFormat::N8BitPal,
-                                          nPageWidth);
-            }
-        }
+        BitmapEx aBitmapEx = pPdfBitmap->createBitmapFromBuffer();
 
         if (bTransparent)
         {
-            rBitmaps.emplace_back(aBitmap, aMask);
+            rBitmaps.emplace_back(std::move(aBitmapEx));
         }
         else
         {
-            rBitmaps.emplace_back(std::move(aBitmap));
+            rBitmaps.emplace_back(aBitmapEx.GetBitmap());
         }
     }
 
@@ -182,7 +159,8 @@ findAnnotations(const std::unique_ptr<vcl::pdf::PDFiumPage>& pPage, basegfx::B2D
                 || eSubtype == vcl::pdf::PDFAnnotationSubType::Square
                 || eSubtype == vcl::pdf::PDFAnnotationSubType::Ink
                 || eSubtype == vcl::pdf::PDFAnnotationSubType::Highlight
-                || eSubtype == vcl::pdf::PDFAnnotationSubType::Line)
+                || eSubtype == vcl::pdf::PDFAnnotationSubType::Line
+                || eSubtype == vcl::pdf::PDFAnnotationSubType::Stamp)
             {
                 OUString sAuthor = pAnnotation->getString(vcl::pdf::constDictionaryKeyTitle);
                 OUString sText = pAnnotation->getString(vcl::pdf::constDictionaryKeyContents);
@@ -323,6 +301,39 @@ findAnnotations(const std::unique_ptr<vcl::pdf::PDFiumPage>& pPage, basegfx::B2D
 
                         float fWidth = pAnnotation->getBorderWidth();
                         pMarker->mnWidth = convertPointToMm100(fWidth);
+                    }
+                }
+                else if (eSubtype == vcl::pdf::PDFAnnotationSubType::FreeText)
+                {
+                    auto pMarker = std::make_shared<vcl::pdf::PDFAnnotationMarkerFreeText>();
+                    rPDFGraphicAnnotation.mpMarker = pMarker;
+                    if (pAnnotation->hasKey(vcl::pdf::constDictionaryKey_DefaultStyle))
+                    {
+                        pMarker->maDefaultStyle
+                            = pAnnotation->getString(vcl::pdf::constDictionaryKey_DefaultStyle);
+                    }
+                    if (pAnnotation->hasKey(vcl::pdf::constDictionaryKey_RichContent))
+                    {
+                        pMarker->maRichContent
+                            = pAnnotation->getString(vcl::pdf::constDictionaryKey_RichContent);
+                    }
+                }
+                else if (eSubtype == vcl::pdf::PDFAnnotationSubType::Stamp)
+                {
+                    auto pMarker = std::make_shared<vcl::pdf::PDFAnnotationMarkerStamp>();
+                    rPDFGraphicAnnotation.mpMarker = pMarker;
+
+                    auto nObjects = pAnnotation->getObjectCount();
+
+                    for (int nIndex = 0; nIndex < nObjects; nIndex++)
+                    {
+                        auto pPageObject = pAnnotation->getObject(nIndex);
+                        if (pPageObject->getType() == vcl::pdf::PDFPageObjectType::Image)
+                        {
+                            std::unique_ptr<vcl::pdf::PDFiumBitmap> pBitmap
+                                = pPageObject->getImageBitmap();
+                            pMarker->maBitmapEx = pBitmap->createBitmapFromBuffer();
+                        }
                     }
                 }
             }

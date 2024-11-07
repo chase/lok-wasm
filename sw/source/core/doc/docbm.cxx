@@ -183,6 +183,8 @@ bool IDocumentMarkAccess::iterator::operator>=(iterator const& rOther) const
     return *m_pIter >= *rOther.m_pIter;
 }
 
+static bool IsAnnotationMark(const sw::mark::MarkBase& rBkmk);
+static bool IsCrossRefBookmark(const sw::mark::MarkBase& rBkmk);
 
 namespace
 {
@@ -231,13 +233,13 @@ namespace
         {   // consistency with SwPosition::operator<
             return pSecondNode != nullptr;
         }
-        auto *const pCRFirst (dynamic_cast<::sw::mark::CrossRefBookmark const*>(pFirst));
-        auto *const pCRSecond(dynamic_cast<::sw::mark::CrossRefBookmark const*>(pSecond));
-        if ((pCRFirst == nullptr) == (pCRSecond == nullptr))
+        bool const bCRFirst (IsCrossRefBookmark(*pFirst));
+        bool const bCRSecond(IsCrossRefBookmark(*pSecond));
+        if (bCRFirst == bCRSecond)
         {
             return false; // equal
         }
-        return pCRFirst != nullptr; // cross-ref sorts *before*
+        return bCRFirst; // cross-ref sorts *before*
     }
 
     bool lcl_MarkOrderingByEnd(const ::sw::mark::MarkBase *const pFirst,
@@ -324,6 +326,13 @@ namespace
         }
     };
 
+    struct CompareIMarkStartsAfterReverse
+    {
+        bool operator()(const sw::mark::IMark* pMark, SwPosition const& rPos)
+        {
+            return pMark->GetMarkStart() > rPos;
+        }
+    };
 
     IMark* lcl_getMarkAfter(const MarkManager::container_t& rMarks, const SwPosition& rPos,
                             bool bLoop)
@@ -378,7 +387,7 @@ namespace
         const bool bChangedOPos,
         MarkBase* io_pMark )
     {
-        if ( IDocumentMarkAccess::GetType(*io_pMark) == IDocumentMarkAccess::MarkType::ANNOTATIONMARK )
+        if ( IsAnnotationMark(*io_pMark) )
         {
             // annotation marks are allowed to span a table cell range.
             // but trigger sorting to be save
@@ -497,6 +506,28 @@ namespace
 #endif
         assert(std::is_sorted(rMarks.begin(), rMarks.end(), lcl_MarkOrderingByStart));
     };
+}
+
+static bool IsNavigatorReminder(const MarkBase& rBkmk)
+{
+    const std::type_info* const pMarkTypeInfo = &typeid(rBkmk);
+    // not using dynamic_cast<> here for performance
+    return (*pMarkTypeInfo == typeid(NavigatorReminder));
+}
+
+static bool IsCrossRefBookmark(const sw::mark::MarkBase& rBkmk)
+{
+    // not using dynamic_cast<> here for performance
+    const std::type_info* const pMarkTypeInfo = &typeid(rBkmk);
+    return (*pMarkTypeInfo == typeid(CrossRefHeadingBookmark))
+        || (*pMarkTypeInfo == typeid(CrossRefNumItemBookmark));
+}
+
+static bool IsAnnotationMark(const sw::mark::MarkBase& rBkmk)
+{
+    // not using dynamic_cast<> here for performance
+    const std::type_info* const pMarkTypeInfo = &typeid(rBkmk);
+    return (*pMarkTypeInfo == typeid(AnnotationMark));
 }
 
 IDocumentMarkAccess::MarkType IDocumentMarkAccess::GetType(const IMark& rBkmk)
@@ -1010,7 +1041,7 @@ namespace sw::mark
         assert(pMark);
         // navigator marks should not be moved
         // TODO: Check if this might make them invalid
-        if (IDocumentMarkAccess::GetType(*pMark) == IDocumentMarkAccess::MarkType::NAVIGATOR_REMINDER)
+        if (IsNavigatorReminder(*pMark))
         {
             return false;
         }
@@ -1475,27 +1506,44 @@ namespace sw::mark
 
     IFieldmark* MarkManager::getInnerFieldmarkFor(const SwPosition& rPos) const
     {
-        auto itFieldmark = find_if(
-            m_vFieldmarks.begin(),
-            m_vFieldmarks.end(),
-            [&rPos] (const ::sw::mark::MarkBase *const pMark) { return pMark->IsCoveringPosition(rPos); } );
-        if (itFieldmark == m_vFieldmarks.end())
+        // find the first mark starting on or before the position in reverse order
+        // (as we are reverse searching, this is the one closest to the position)
+        // m_vFieldmarks should be ordered by mark start, so we can bisect with lower_bound
+        auto itEnd = m_vFieldmarks.rend();
+        auto itStart = lower_bound(
+            m_vFieldmarks.rbegin(),
+            itEnd,
+            rPos,
+            CompareIMarkStartsAfterReverse());
+        // now continue a linear search for the first (still in reverse order) ending behind the position
+        auto itCurrent = find_if(
+            itStart,
+            itEnd,
+            [&rPos](const sw::mark::MarkBase* const pMark) { return rPos < pMark->GetMarkEnd(); });
+        // if we reached the end (in reverse order) there is no match
+        if(itCurrent == itEnd)
             return nullptr;
-        auto pFieldmark(*itFieldmark);
-
-        // See if any fieldmarks after the first hit are closer to rPos.
-        ++itFieldmark;
-        for ( ; itFieldmark != m_vFieldmarks.end()
-                && (**itFieldmark).GetMarkStart() <= rPos; ++itFieldmark)
-        {   // find the innermost fieldmark
-            if (rPos < (**itFieldmark).GetMarkEnd()
-                && (pFieldmark->GetMarkStart() < (**itFieldmark).GetMarkStart()
-                    || (**itFieldmark).GetMarkEnd() < pFieldmark->GetMarkEnd()))
+        // we found our first candidate covering the position ...
+        auto pMark = *itCurrent;
+        const auto aMarkStart = pMark->GetMarkStart();
+        auto aMarkEnd = pMark->GetMarkEnd();
+        // ... however we still need to check if there is a smaller/'more inner' one with the same start position
+        for(++itCurrent; itCurrent != itEnd; ++itCurrent)
+        {
+            if((*itCurrent)->GetMarkStart() < aMarkStart)
+                // any following mark (in reverse order) will have an earlier
+                // start and thus can not be more 'inner' than our previous
+                // match, so we are done.
+                break;
+            auto aCurrentMarkEnd = (*itCurrent)->GetMarkEnd();
+            if(rPos < aCurrentMarkEnd && aCurrentMarkEnd <= aMarkEnd)
             {
-                pFieldmark = *itFieldmark;
+                // both covering the position and more inner/smaller => use this one instead
+                pMark = *itCurrent;
+                aMarkEnd = aCurrentMarkEnd;
             }
         }
-        return dynamic_cast<IFieldmark*>(pFieldmark);
+        return dynamic_cast<IFieldmark*>(pMark);
     }
 
     IMark* MarkManager::getOneInnermostBookmarkFor(const SwPosition& rPos) const
@@ -1845,6 +1893,12 @@ namespace sw::mark
         const_cast< MarkManager* >(this)->sortMarks();
     }
 
+    void MarkManager::sortMarks()
+    {
+        sort(m_vAllMarks.begin(), m_vAllMarks.end(), &lcl_MarkOrderingByStart);
+        sortSubsetMarks();
+    }
+
     void MarkManager::sortSubsetMarks()
     {
         stable_sort(m_vBookmarks.begin(), m_vBookmarks.end(), &lcl_MarkOrderingByStart);
@@ -1852,10 +1906,82 @@ namespace sw::mark
         sort(m_vAnnotationMarks.begin(), m_vAnnotationMarks.end(), &lcl_MarkOrderingByStart);
     }
 
-    void MarkManager::sortMarks()
+    template<class MarkT>
+    static void lcl_assureSortedMarkContainers(typename std::vector<MarkT*>& rContainer,
+                    sal_Int32 nMinIndexModified)
     {
-        sort(m_vAllMarks.begin(), m_vAllMarks.end(), &lcl_MarkOrderingByStart);
-        sortSubsetMarks();
+        // We know that the range nMinIndexModified.. has been modified, now we need to extend that range
+        // to find the total range of elements that need to be sorted.
+        // We know that the marks have been modified in fairly limited ways, see ContentIdxStoreImpl.
+        sal_Int32 nMin = nMinIndexModified;
+        while (nMin != 0)
+        {
+            nMin--;
+            if (rContainer[nMin]->GetMarkStart() < rContainer[nMinIndexModified]->GetMarkStart())
+                break;
+        }
+        sort(rContainer.begin() + nMin, rContainer.end(), &lcl_MarkOrderingByStart);
+    }
+
+    template<class MarkT>
+    static void lcl_assureSortedMarkSubContainers(typename std::vector<MarkT*>& rContainer,
+                    MarkT* pFound)
+    {
+        if (pFound)
+        {
+            auto it = std::find(rContainer.rbegin(), rContainer.rend(), pFound);
+            sal_Int32 nFirstModified = std::distance(rContainer.begin(), (it+1).base());
+            lcl_assureSortedMarkContainers<MarkT>(rContainer, nFirstModified);
+        }
+    }
+
+    /**
+     * called when we need to sort a sub-range of the container, elements starting
+     * at nMinIndexModified were modified. This is used from ContentIdxStoreImpl::RestoreBkmks,
+     * where we are only modifying a small range at the end of the container.
+     */
+    void MarkManager::assureSortedMarkContainers(sal_Int32 nMinIndexModified) const
+    {
+        // check if the modified range contains elements from the other sorted containers
+        Bookmark* pBookmark = nullptr;
+        Fieldmark* pFieldmark = nullptr;
+        AnnotationMark* pAnnotationMark = nullptr;
+        for (auto it = m_vAllMarks.begin() + nMinIndexModified; it != m_vAllMarks.end(); ++it)
+        {
+            switch(IDocumentMarkAccess::GetType(**it))
+            {
+                case IDocumentMarkAccess::MarkType::BOOKMARK:
+                case IDocumentMarkAccess::MarkType::CROSSREF_HEADING_BOOKMARK:
+                case IDocumentMarkAccess::MarkType::CROSSREF_NUMITEM_BOOKMARK:
+                    if (!pBookmark)
+                        pBookmark = static_cast<Bookmark*>(*it);
+                    break;
+                case IDocumentMarkAccess::MarkType::TEXT_FIELDMARK:
+                case IDocumentMarkAccess::MarkType::CHECKBOX_FIELDMARK:
+                case IDocumentMarkAccess::MarkType::DROPDOWN_FIELDMARK:
+                case IDocumentMarkAccess::MarkType::DATE_FIELDMARK:
+                    if (!pFieldmark)
+                        pFieldmark = static_cast<Fieldmark*>(*it);
+                    break;
+
+                case IDocumentMarkAccess::MarkType::ANNOTATIONMARK:
+                    if (!pAnnotationMark)
+                        pAnnotationMark = static_cast<AnnotationMark*>(*it);
+                    break;
+
+                case IDocumentMarkAccess::MarkType::DDE_BOOKMARK:
+                case IDocumentMarkAccess::MarkType::NAVIGATOR_REMINDER:
+                case IDocumentMarkAccess::MarkType::UNO_BOOKMARK:
+                    // no special marks container
+                    break;
+            }
+        }
+
+        auto pThis = const_cast<MarkManager*>(this);
+        lcl_assureSortedMarkContainers<MarkBase>(pThis->m_vAllMarks, nMinIndexModified);
+        lcl_assureSortedMarkSubContainers<MarkBase>(pThis->m_vBookmarks, pBookmark);
+        lcl_assureSortedMarkSubContainers<MarkBase>(pThis->m_vFieldmarks, pFieldmark);
+        lcl_assureSortedMarkSubContainers<MarkBase>(pThis->m_vAnnotationMarks, pAnnotationMark);
     }
 
 void MarkManager::dumpAsXml(xmlTextWriterPtr pWriter) const

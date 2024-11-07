@@ -282,6 +282,7 @@ $(eval $(call gb_Helper_register_plugins_for_install,OOOLIBS,calc, \
 
 $(eval $(call gb_Helper_register_libraries_for_install,OOOLIBS,graphicfilter, \
 	svgfilter \
+	flash \
 	wpftdraw \
 	graphicfilter \
 ))
@@ -1071,7 +1072,15 @@ $(eval $(call gb_Helper_register_packages_for_install,ooo_fonts,\
 		fonts_opendyslexic \
 		fonts_opensans \
 		fonts_reem \
+		fonts_sourcesans \
 		fonts_scheherazade \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_agdasima,) \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_bacasime_antique,) \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_belanosima,) \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_caprasimo,) \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_lugrasimo,) \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_lumanosimo,) \
+		$(if $(WITH_DOCREPAIR_FONTS),fonts_lunasima,) \
 	) \
 	$(call gb_Helper_optional,NOTO_FONT,\
 		fonts_notomore \
