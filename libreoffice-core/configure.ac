@@ -10342,157 +10342,9 @@ dnl ===================================================================
 dnl Check for PostgreSQL stuff
 dnl ===================================================================
 AC_MSG_CHECKING([whether to build the PostgreSQL SDBC driver])
-if test "x$enable_postgresql_sdbc" != "xno"; then
-    AC_MSG_RESULT([yes])
-    SCPDEFS="$SCPDEFS -DWITH_POSTGRESQL_SDBC"
-
-    if test "$with_krb5" = "yes" -a "$enable_openssl" = "no"; then
-        AC_MSG_ERROR([krb5 needs OpenSSL, but --disable-openssl was given.])
-    fi
-    if test "$with_gssapi" = "yes" -a "$enable_openssl" = "no"; then
-        AC_MSG_ERROR([GSSAPI needs OpenSSL, but --disable-openssl was given.])
-    fi
-
-    postgres_interface=""
-    if test "$with_system_postgresql" = "yes"; then
-        postgres_interface="external PostgreSQL"
-        SYSTEM_POSTGRESQL=TRUE
-        if test "$_os" = Darwin; then
-            supp_path=''
-            for d in /Library/PostgreSQL/9.*/bin /sw/opt/postgresql/9.*/bin /opt/local/lib/postgresql9*/bin; do
-                pg_supp_path="$P_SEP$d$pg_supp_path"
-            done
-        fi
-        AC_PATH_PROG(PGCONFIG, pg_config, ,$PATH$pg_supp_path)
-        if test -n "$PGCONFIG"; then
-            POSTGRESQL_INC=-I$(${PGCONFIG} --includedir)
-            POSTGRESQL_LIB="-L$(${PGCONFIG} --libdir)"
-        else
-            PKG_CHECK_MODULES(POSTGRESQL, libpq, [
-              POSTGRESQL_INC=$POSTGRESQL_CFLAGS
-              POSTGRESQL_LIB=$POSTGRESQL_LIBS
-            ],[
-              AC_MSG_ERROR([pg_config or 'pkg-config libpq' needed; set PGCONFIG if not in PATH])
-            ])
-        fi
-        FilterLibs "${POSTGRESQL_LIB}"
-        POSTGRESQL_LIB="${filteredlibs}"
-    else
-        # if/when anything else than PostgreSQL uses Kerberos,
-        # move this out of `test "x$enable_postgresql_sdbc" != "xno"'
-        WITH_KRB5=
-        WITH_GSSAPI=
-        case "$_os" in
-        Darwin)
-            # macOS has system MIT Kerberos 5 since 10.4
-            if test "$with_krb5" != "no"; then
-                WITH_KRB5=TRUE
-                save_LIBS=$LIBS
-                # Not sure whether it makes any sense here to search multiple potential libraries; it is not likely
-                # that the libraries where these functions are located on macOS will change, is it?
-                AC_SEARCH_LIBS(com_err, [com_err 'com_err -lssl -lcrypto' krb5 'krb5 -lcrypto -ldes -lasn1 -lroken'], [],
-                    [AC_MSG_ERROR([could not find function 'com_err' required for Kerberos 5])])
-                KRB5_LIBS=$LIBS
-                LIBS=$save_LIBS
-                AC_SEARCH_LIBS(krb5_sendauth, [krb5 'krb5 -lcrypto -ldes -lasn1 -lroken'], [],
-                    [AC_MSG_ERROR([could not find function 'krb5_sendauth' required for Kerberos 5])])
-                KRB5_LIBS="$KRB5_LIBS $LIBS"
-                LIBS=$save_LIBS
-            fi
-            if test "$with_gssapi" != "no"; then
-                WITH_GSSAPI=TRUE
-                save_LIBS=$LIBS
-                AC_SEARCH_LIBS(gss_init_sec_context, [gssapi_krb5 gss 'gssapi -lkrb5 -lcrypto'], [],
-                    [AC_MSG_ERROR([could not find function 'gss_init_sec_context' required for GSSAPI])])
-                GSSAPI_LIBS=$LIBS
-                LIBS=$save_LIBS
-            fi
-            ;;
-        WINNT)
-            if test "$with_krb5" = "yes" -o "$with_gssapi" = "yes"; then
-                AC_MSG_ERROR([Refusing to enable MIT Kerberos 5 or GSSAPI on Windows.])
-            fi
-            ;;
-        Linux|GNU|*BSD|DragonFly)
-            if test "$with_krb5" != "no"; then
-                WITH_KRB5=TRUE
-                save_LIBS=$LIBS
-                AC_SEARCH_LIBS(com_err, [com_err 'com_err -lssl -lcrypto' krb5 'krb5 -lcrypto -ldes -lasn1 -lroken'], [],
-                    [AC_MSG_ERROR([could not find function 'com_err' required for Kerberos 5])])
-                KRB5_LIBS=$LIBS
-                LIBS=$save_LIBS
-                AC_SEARCH_LIBS(krb5_sendauth, [krb5 'krb5 -lcrypto -ldes -lasn1 -lroken'], [],
-                    [AC_MSG_ERROR([could not find function 'krb5_sendauth' required for Kerberos 5])])
-                KRB5_LIBS="$KRB5_LIBS $LIBS"
-                LIBS=$save_LIBS
-            fi
-            if test "$with_gssapi" != "no"; then
-                WITH_GSSAPI=TRUE
-                save_LIBS=$LIBS
-                AC_SEARCH_LIBS(gss_init_sec_context, [gssapi_krb5 gss 'gssapi -lkrb5 -lcrypto'], [],
-                    [AC_MSG_ERROR([could not find function 'gss_init_sec_context' required for GSSAPI])])
-                GSSAPI_LIBS=$LIBS
-                LIBS=$save_LIBS
-            fi
-            ;;
-        *)
-            if test "$with_krb5" = "yes"; then
-                WITH_KRB5=TRUE
-                save_LIBS=$LIBS
-                AC_SEARCH_LIBS(com_err, [com_err 'com_err -lssl -lcrypto' krb5 'krb5 -lcrypto -ldes -lasn1 -lroken'], [],
-                    [AC_MSG_ERROR([could not find function 'com_err' required for Kerberos 5])])
-                KRB5_LIBS=$LIBS
-                LIBS=$save_LIBS
-                AC_SEARCH_LIBS(krb5_sendauth, [krb5 'krb5 -lcrypto -ldes -lasn1 -lroken'], [],
-                    [AC_MSG_ERROR([could not find function 'krb5_sendauth' required for Kerberos 5])])
-                KRB5_LIBS="$KRB5_LIBS $LIBS"
-                LIBS=$save_LIBS
-            fi
-            if test "$with_gssapi" = "yes"; then
-                WITH_GSSAPI=TRUE
-                save_LIBS=$LIBS
-                AC_SEARCH_LIBS(gss_init_sec_context, [gssapi_krb5 gss 'gssapi -lkrb5 -lcrypto'], [],
-                    [AC_MSG_ERROR([could not find function 'gss_init_sec_context' required for GSSAPI])])
-                LIBS=$save_LIBS
-                GSSAPI_LIBS=$LIBS
-            fi
-        esac
-
-        if test -n "$with_libpq_path"; then
-            SYSTEM_POSTGRESQL=TRUE
-            postgres_interface="external libpq"
-            POSTGRESQL_LIB="-L${with_libpq_path}/lib/"
-            POSTGRESQL_INC=-I"${with_libpq_path}/include/"
-        else
-            SYSTEM_POSTGRESQL=
-            postgres_interface="internal"
-            POSTGRESQL_LIB=""
-            POSTGRESQL_INC="%OVERRIDE_ME%"
-            BUILD_TYPE="$BUILD_TYPE POSTGRESQL"
-        fi
-    fi
-
-    AC_MSG_CHECKING([PostgreSQL C interface])
-    AC_MSG_RESULT([$postgres_interface])
-
-    if test "${SYSTEM_POSTGRESQL}" = "TRUE"; then
-        AC_MSG_NOTICE([checking system PostgreSQL prerequisites])
-        save_CFLAGS=$CFLAGS
-        save_CPPFLAGS=$CPPFLAGS
-        save_LIBS=$LIBS
-        CPPFLAGS="${CPPFLAGS} ${POSTGRESQL_INC}"
-        LIBS="${LIBS} ${POSTGRESQL_LIB}"
-        AC_CHECK_HEADER([libpq-fe.h], [], [AC_MSG_ERROR([libpq-fe.h is needed])], [])
-        AC_CHECK_LIB([pq], [PQconnectdbParams], [:],
-            [AC_MSG_ERROR(libpq not found or too old. Need >= 9.0)], [])
-        CFLAGS=$save_CFLAGS
-        CPPFLAGS=$save_CPPFLAGS
-        LIBS=$save_LIBS
-    fi
-    BUILD_POSTGRESQL_SDBC=TRUE
-else
-    AC_MSG_RESULT([no])
-fi
+dnl MACRO: {
+AC_MSG_RESULT([no])
+dnl MACRO: }
 AC_SUBST(WITH_KRB5)
 AC_SUBST(WITH_GSSAPI)
 AC_SUBST(GSSAPI_LIBS)
@@ -10618,16 +10470,7 @@ dnl Check for system curl
 dnl ===================================================================
 libo_CHECK_SYSTEM_MODULE([curl],[CURL],[libcurl >= 7.68.0],enabled)
 
-if test "$enable_curl" = "yes" -a "$with_system_curl" != "yes" -a "$with_gssapi" != "no"; then
-    if test "$_os" != "WINNT"; then
-        WITH_GSSAPI=TRUE
-        save_LIBS=$LIBS
-        AC_SEARCH_LIBS(gss_init_sec_context, [gssapi_krb5 gss 'gssapi -lkrb5 -lcrypto'], [],
-            [AC_MSG_ERROR([could not find function 'gss_init_sec_context' required for GSSAPI])])
-        GSSAPI_LIBS=$LIBS
-        LIBS=$save_LIBS
-    fi
-fi
+dnl MACRO: BROKEN CONFIGURE
 
 dnl ===================================================================
 dnl Check for system boost
