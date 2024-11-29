@@ -25,6 +25,32 @@
                 </prop>
             </node>
         </node>
+        <!-- MACRO: { -->
+    <node oor:name="Dictionaries">
+        <node oor:name="HunSpellDic_en-US" oor:op="fuse">
+            <prop oor:name="Locations" oor:type="oor:string-list">
+                <value>file:///instdir/share/extensions/dict-en/en_US.aff file:///instdir/share/extensions/dict-en/en_US.dic</value>
+            </prop>
+            <prop oor:name="Format" oor:type="xs:string">
+                <value>DICT_SPELL</value>
+            </prop>
+            <prop oor:name="Locales" oor:type="oor:string-list">
+                <value>en-US</value>
+            </prop>
+        </node>
+        <node oor:name="HyphDic_en-US" oor:op="fuse">
+            <prop oor:name="Locations" oor:type="oor:string-list">
+                <value>file:///instdir/share/extensions/dict-en/hyph_en_US.dic</value>
+            </prop>
+            <prop oor:name="Format" oor:type="xs:string">
+                <value>DICT_HYPH</value>
+            </prop>
+            <prop oor:name="Locales" oor:type="oor:string-list">
+                <value>en-US</value>
+            </prop>
+        </node>
+    </node>
+        <!-- MACRO: } -->
     </node>
 </oor:component-data>
 

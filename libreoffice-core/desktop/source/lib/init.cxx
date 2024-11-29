@@ -8491,35 +8491,46 @@ static void preloadData()
         css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
     css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
 
+    SAL_WARN("lok", "Preload language");
+    // force load language singleton
+    SvtLanguageTable::HasLanguageType(LANGUAGE_SYSTEM);
+    (void)LanguageTag::isValidBcp47(u"foo"_ustr, nullptr);
+
     SAL_WARN("lok.spell", "Preloading local dictionaries: ");
     css::uno::Reference<linguistic2::XSupportedLocales> xSpellLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
     uno::Sequence< css::lang::Locale > aLocales = xSpellLocales->getLocales();
     for (auto &it : std::as_const(aLocales))
     {
-        SAL_WARN("lok.spell", LanguageTag::convertToBcp47(it));
+        SAL_WARN("lok.spell", it.Language);
         css::beans::PropertyValues aNone;
         xSpellChecker->isValid(u"forcefed"_ustr, it, aNone);
     }
+    // MACRO Spell checker does something weird to the locale implementation in emscripten
+    // setLanguageAndLocale(u"en-US"_ustr);
 
+    // MACRO: {
     // Hack to load and cache the module liblocaledata_others.so which is not loaded normally
     // (when loading dictionaries of just non-Asian locales). Creating a XCalendar4 of one Asian locale
     // will cheaply load this missing "others" locale library. Appending an Asian locale in
     // LOK_ALLOWLIST_LANGUAGES env-var also works but at the cost of loading that dictionary.
-    css::uno::Reference< css::i18n::XCalendar4 > xCal = css::i18n::LocaleCalendar2::create(comphelper::getProcessComponentContext());
-    css::lang::Locale aAsianLocale = { u"hi"_ustr, u"IN"_ustr, {} };
-    xCal->loadDefaultCalendar(aAsianLocale);
+    // css::uno::Reference< css::i18n::XCalendar4 > xCal = css::i18n::LocaleCalendar2::create(comphelper::getProcessComponentContext());
+    // css::lang::Locale aAsianLocale = { u"hi"_ustr, u"IN"_ustr, {} };
+    // xCal->loadDefaultCalendar(aAsianLocale);
+    // MACRO: }
 
     // preload all available thesauri
-    css::uno::Reference<linguistic2::XThesaurus> xThesaurus(xLngSvcMgr->getThesaurus());
-    css::uno::Reference<linguistic2::XSupportedLocales> xThesLocales(xThesaurus, css::uno::UNO_QUERY_THROW);
-    aLocales = xThesLocales->getLocales();
-    SAL_WARN("lok.thes", "Preloading local thesauri: ");
-    for (auto &it : std::as_const(aLocales))
-    {
-        SAL_WARN("lok.thes", LanguageTag::convertToBcp47(it));
-        css::beans::PropertyValues aNone;
-        xThesaurus->queryMeanings(u"forcefed"_ustr, it, aNone);
-    }
+    // MACRO: {
+    // css::uno::Reference<linguistic2::XThesaurus> xThesaurus(xLngSvcMgr->getThesaurus());
+    // css::uno::Reference<linguistic2::XSupportedLocales> xThesLocales(xThesaurus, css::uno::UNO_QUERY_THROW);
+    // aLocales = xThesLocales->getLocales();
+    // SAL_WARN("lok.thes", "Preloading local thesauri: ");
+    // for (auto &it : std::as_const(aLocales))
+    // {
+    //     SAL_WARN("lok.thes", LanguageTag::convertToBcp47(it));
+    //     css::beans::PropertyValues aNone;
+    //     xThesaurus->queryMeanings(u"forcefed"_ustr, it, aNone);
+    // }
+    // MACRO: }
 
     SAL_WARN("lok", "Preloading BreakIterator");
     if (aLocales.getLength())
@@ -8540,11 +8551,6 @@ static void preloadData()
     //
     // std::cerr << "Preload short cut accelerators\n";
     preLoadShortCutAccelerators();
-
-    SAL_WARN("lok", "Preload language");
-    // force load language singleton
-    SvtLanguageTable::HasLanguageType(LANGUAGE_SYSTEM);
-    (void)LanguageTag::isValidBcp47(u"en-US"_ustr, nullptr);
 
 
     SAL_WARN("lok", "Preload fonts???");

@@ -228,7 +228,7 @@ bool isAllowlistedLanguage(const OUString& lang)
     if (!isActive())
         return true;
 
-#if defined ANDROID || defined IOS
+#if defined ANDROID || defined IOS || defined __EMSCRIPTEN__
     (void) lang;
     return true;
 #else

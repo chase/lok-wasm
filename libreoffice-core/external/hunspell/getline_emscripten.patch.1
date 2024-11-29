@@ -1,0 +1,58 @@
+Only in hunspell: a.wasm
+Only in hunspell: a.worker.js
+Only in hunspell: build.log
+Only in hunspell: config.h
+Only in hunspell: config.log
+Only in hunspell: config.status
+Only in hunspell: hunspell.pc
+Only in hunspell: libtool
+Only in hunspell: Makefile
+Only in hunspell/man/hu: Makefile
+Only in hunspell/man: Makefile
+Only in hunspell/po: Makefile
+Only in hunspell/po: Makefile.in
+Only in hunspell/po: POTFILES
+Only in hunspell/src/hunspell: affentry.lo
+Only in hunspell/src/hunspell: affentry.o
+Only in hunspell/src/hunspell: affixmgr.lo
+Only in hunspell/src/hunspell: affixmgr.o
+Only in hunspell/src/hunspell: csutil.lo
+Only in hunspell/src/hunspell: csutil.o
+Only in hunspell/src/hunspell: .deps
+diff -ur hunspell.org/src/hunspell/filemgr.cxx hunspell/src/hunspell/filemgr.cxx
+--- hunspell.org/src/hunspell/filemgr.cxx	2024-11-29 10:24:09.557188068 -0500
++++ hunspell/src/hunspell/filemgr.cxx	2024-11-29 10:57:25.918772069 -0500
+@@ -104,7 +104,7 @@
+   bool ret = false;
+   ++linenum;
+   if (fin.is_open()) {
+-    ret = static_cast<bool>(std::getline(fin, dest));
++    ret = static_cast<bool>(std::getline(fin, dest, '\n'));
+   } else if (hin && hin->is_open()) {
+     ret = hin->getline(dest);
+   }
+Only in hunspell/src/hunspell: filemgr.lo
+Only in hunspell/src/hunspell: filemgr.o
+Only in hunspell/src/hunspell: hashmgr.lo
+Only in hunspell/src/hunspell: hashmgr.o
+Only in hunspell/src/hunspell: hunspell.lo
+Only in hunspell/src/hunspell: hunspell.o
+Only in hunspell/src/hunspell: hunzip.lo
+Only in hunspell/src/hunspell: hunzip.o
+Only in hunspell/src/hunspell: libhunspell-1.7.la
+Only in hunspell/src/hunspell: .libs
+Only in hunspell/src/hunspell: Makefile
+Only in hunspell/src/hunspell: phonet.lo
+Only in hunspell/src/hunspell: phonet.o
+Only in hunspell/src/hunspell: replist.lo
+Only in hunspell/src/hunspell: replist.o
+Only in hunspell/src/hunspell: suggestmgr.lo
+Only in hunspell/src/hunspell: suggestmgr.o
+Only in hunspell/src: Makefile
+Only in hunspell/src/parsers: .deps
+Only in hunspell/src/parsers: Makefile
+Only in hunspell/src/tools: .deps
+Only in hunspell/src/tools: Makefile
+Only in hunspell: stamp-h1
+Only in hunspell/tests: Makefile
+Only in hunspell/tests/suggestiontest: Makefile

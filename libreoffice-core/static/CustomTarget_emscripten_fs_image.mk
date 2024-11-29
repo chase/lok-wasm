@@ -1413,6 +1413,19 @@ gb_emscripten_fs_image_files += \
     $(INSTROOT)/$(LIBO_URE_ETC_FOLDER)/$(call gb_Helper_get_rcfile,uno) \
     $(INSTROOT)/$(LIBO_URE_MISC_FOLDER)/services.rdb \
 
+# MACRO: {
+gb_emscripten_fs_image_files += \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/description.xml \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/hyph_en_US.dic \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dictionaries.xcu \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_US.aff \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/META-INF/manifest.xml \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/dialog/en_en_US.properties \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/en_US.dic \
+$(INSTROOT)/$(LIBO_SHARE_FOLDER)/extensions/dict-en/license.txt \
+
+# MACRO: }
+
 ifneq ($(ENABLE_WASM_STRIP_CHART),TRUE)
 gb_emscripten_fs_image_files += \
     $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/soffice.cfg/modules/schart/menubar/menubar.xml \

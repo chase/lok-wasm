@@ -118,15 +118,10 @@ Sequence< Locale > SAL_CALL SpellChecker::getLocales()
         // (or better speaking: the list of dictionaries using the
         // new configuration entries).
         std::vector< SvtLinguConfigDictionaryEntry > aDics;
-        uno::Sequence< OUString > aFormatList;
-        aLinguCfg.GetSupportedDictionaryFormatsFor( "SpellCheckers",
-                "org.openoffice.lingu.MySpellSpellChecker", aFormatList );
-        for (auto const& format : std::as_const(aFormatList))
-        {
-            std::vector< SvtLinguConfigDictionaryEntry > aTmpDic(
-                    aLinguCfg.GetActiveDictionariesByFormat(format) );
-            aDics.insert( aDics.end(), aTmpDic.begin(), aTmpDic.end() );
-        }
+        std::vector< SvtLinguConfigDictionaryEntry > aTmpDic(
+                aLinguCfg.GetActiveDictionariesByFormat(u"DICT_SPELL") );
+        SAL_WARN("DICT_SPELL", aTmpDic.size());
+        aDics.insert( aDics.end(), aTmpDic.begin(), aTmpDic.end() );
 
         //!! for compatibility with old dictionaries (the ones not using extensions
         //!! or new configuration entries, but still using the dictionary.lst file)

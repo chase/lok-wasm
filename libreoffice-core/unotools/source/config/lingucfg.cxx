@@ -348,6 +348,9 @@ uno::Any SvtLinguConfigItem::GetProperty( sal_Int32 nPropertyHandle ) const
         case UPH_IS_HYPH_SPECIAL :          pbVal = &rOpt.bIsHyphSpecial;   break;
         case UPH_IS_SPELL_AUTO :            pbVal = &rOpt.bIsSpellAuto; break;
         case UPH_IS_SPELL_SPECIAL :         pbVal = &rOpt.bIsSpellSpecial;  break;
+        // MACRO: {
+        case UPH_IS_SPELL_CAPITALIZATION : return aRes;
+        // MACRO: }
         case UPH_IS_WRAP_REVERSE :          pbVal = &rOpt.bIsSpellReverse;  break;
         case UPH_DEFAULT_LANGUAGE :         plVal = &rOpt.nDefaultLanguage; break;
         case UPH_IS_SPELL_CLOSED_COMPOUND:  pbVal = &rOpt.bIsSpellClosedCompound;       break;
@@ -444,6 +447,9 @@ bool SvtLinguConfigItem::SetProperty( sal_Int32 nPropertyHandle, const uno::Any 
         case UPH_IS_HYPH_SPECIAL :          pbVal = &rOpt.bIsHyphSpecial;  break;
         case UPH_IS_SPELL_AUTO :            pbVal = &rOpt.bIsSpellAuto;    break;
         case UPH_IS_SPELL_SPECIAL :         pbVal = &rOpt.bIsSpellSpecial; break;
+        // MACRO: {
+        case UPH_IS_SPELL_CAPITALIZATION : return false;
+        // MACRO: }
         case UPH_IS_WRAP_REVERSE :          pbVal = &rOpt.bIsSpellReverse; break;
         case UPH_DEFAULT_LANGUAGE :         plVal = &rOpt.nDefaultLanguage;    break;
         case UPH_IS_SPELL_CLOSED_COMPOUND:  pbVal = &rOpt.bIsSpellClosedCompound;      break;

@@ -1143,7 +1143,7 @@ void LngSvcMgr::GetAvailableThesSvcs_Impl()
 
 void LngSvcMgr::SetCfgServiceLists( SpellCheckerDispatcher &rSpellDsp )
 {
-    SAL_INFO( "linguistic", "linguistic: LngSvcMgr::SetCfgServiceLists - Spell" );
+    SAL_WARN( "linguistic", "linguistic: LngSvcMgr::SetCfgServiceLists - Spell" );
 
     OUString aNode("ServiceManager/SpellCheckerList");
     uno::Sequence< OUString > aNames( /*aCfg.*/GetNodeNames( aNode ) );
@@ -1467,7 +1467,7 @@ void SAL_CALL
             const lang::Locale& rLocale,
             const uno::Sequence< OUString >& rServiceImplNames )
 {
-    SAL_INFO( "linguistic", "linguistic: LngSvcMgr::setConfiguredServices" );
+    SAL_WARN( "linguistic", "linguistic: LngSvcMgr::setConfiguredServices" );
 
     osl::MutexGuard aGuard( GetLinguMutex() );
 
