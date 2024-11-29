@@ -7,13 +7,13 @@ export type SetClipbaordItem = {
 
 export type GetClipbaordItem =
   | {
-      mimeType: 'text/plain' | 'text/html';
-      text: string;
-    }
+    mimeType: 'text/plain' | 'text/html';
+    text: string;
+  }
   | {
-      mimeType: string;
-      data: Uint8Array;
-    };
+    mimeType: string;
+    data: Uint8Array;
+  };
 
 export type DocumentRef = number & {};
 
@@ -22,18 +22,28 @@ export type TileRenderData = {
   readonly tileSize: number;
   /** `_Atomic int32_t` */
   state: Int32Array;
-  /** `uint32_t[4]` */
-  tileTwips: Uint32Array;
-  /** `uint8_t[]` */
-  paintedTile: Uint8Array;
+  /** `uint8_t[MAX_PAINTED_TILES_PER_ITER * TILE_DIM_SIZE]` */
+  paintedTiles: Uint8Array;
+  /** `_Atomic uint32_t` */
+  tileStartIndex: Uint32Array;
+  /** `_Atomic uint32_t` */
+  tileEndIndex: Uint32Array;
   /** `_Atomic int32_t` */
   pendingFullPaint: Int32Array;
+  /** `_Atomic int32_t` */
+  isVisibleAreaPainted: Int32Array;
   /** `_Atomic int32_t` */
   hasInvalidations: Int32Array;
   /** `_Atomic uint32_t[MAX_INVALIDATION_STACK][4]` */
   invalidationStack: Uint32Array;
   /** `_Atomic int32_t` */
   invalidationStackHead: Int32Array;
+  /** `_Atomic uint32_t` */
+  scrollYTwips: Uint32Array;
+  /** `_Atomic uint32_t` */
+  scrollHeightTwips: Uint32Array;
+  /** `_Atomic uint32_t` */
+  widthTileStride: Uint32Array;
   /** `_Atomic uint32_t` */
   docWidthTwips: Uint32Array;
   /** `_Atomic uint32_t` */
@@ -204,6 +214,7 @@ export declare class Document {
   subscribe(viewId: number, type: number): void;
   unsubscribe(viewId: number, type: number): void;
   startTileRenderer(viewId: number, tileSize: number): TileRenderData;
+  paintTiles(viewId: number);
   stopTileRenderer(viewId: number): void;
   setClientVisibleArea(
     viewId: number,
@@ -257,7 +268,6 @@ export declare class Document {
   findAll(text: string, options: FindAllOptions | undefined): ITextRanges;
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
-  setAuthor(author: string): void;
   setAuthor(author: string): void;
   getExpandedPart(path: string): ExpandedPart | null;
   listExpandedParts(): Array<ExpandedPart>;

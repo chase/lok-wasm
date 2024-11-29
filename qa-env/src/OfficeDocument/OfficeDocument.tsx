@@ -193,6 +193,8 @@ export function OfficeDocument(props: Props) {
 
   createEffect(async () => {
     if (didInitialRender.has(props.doc)) return;
+    const pos = scrollPos();
+    if (!pos || !scrollAreaRef) return;
     const width = docSizePx()?.[0];
     const height = canvasHeight();
     const canvas0_ = canvas0();
@@ -213,7 +215,7 @@ export function OfficeDocument(props: Props) {
       canvas1_.transferControlToOffscreen(),
     ];
     didInitialRender.add(props.doc);
-    await props.doc.startRendering(canvases, 256, zoom, dpi);
+    await props.doc.startRendering(canvases, 256, zoom, dpi, width, height, pos.y);
   });
 
   const [focused, setFocused] = getOrCreateFocusedSignal(() => props.doc);

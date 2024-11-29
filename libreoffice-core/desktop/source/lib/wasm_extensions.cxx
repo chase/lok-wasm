@@ -28,12 +28,10 @@
 #include <svx/rulritem.hxx>
 #include <svx/xcolit.hxx>
 #include <svx/xflclit.hxx>
-#include <algorithm>
 #include <cstdlib>
 #include <lib/wasm_extensions.hxx>
 #include <emscripten/bind.h>
 #include <emscripten/threading.h>
-#include <pthread.h>
 #include <rtl/ustring.hxx>
 #include <rtl/string.hxx>
 #include <svx/svxids.hrc>
@@ -44,65 +42,30 @@ using cppu::getCaughtException;
 
 static constexpr int MAX_THREADS_TO_NOTIFY = 2;
 
-static void waitWhileInState(TileRendererData* data, RenderState state)
+static void waitWhileInState(TileRendererData& data, RenderState state)
 {
-    emscripten_futex_wait(&data->state, (uint32_t)state, INFINITY);
+    emscripten_futex_wait(&data.state, (uint32_t)state, INFINITY);
 }
 
-static void changeState(TileRendererData* data, RenderState state)
+static void changeState(TileRendererData& data, RenderState state)
 {
-    __c11_atomic_store(&data->state, state, __ATOMIC_SEQ_CST);
-    emscripten_futex_wake(&data->state, MAX_THREADS_TO_NOTIFY);
+    __c11_atomic_store(&data.state, state, __ATOMIC_SEQ_CST);
+    emscripten_futex_wake(&data.state, MAX_THREADS_TO_NOTIFY);
 }
 
-static void* tileRendererWorker(void* data_)
+// Convert tile index to grid coordinates
+std::array<int, 2> tileIndexToGridCoord(int tileIndex, int widthTileStride)
 {
-    TileRendererData* d = static_cast<TileRendererData*>(data_);
+    const int y = tileIndex / widthTileStride;
+    const int x = tileIndex % widthTileStride;
+    return { x, y };
+}
 
-    while (d->state != RenderState::QUIT)
-    {
-        RenderState state = d->state;
-        switch (state)
-        {
-            case RenderState::IDLE:
-                waitWhileInState(d, RenderState::IDLE); // owned by tile_renderer_worker.ts
-                break;
-            case RenderState::TILE_PAINT:
-            {
-                int nOrigViewId = d->doc->pClass->getView(d->doc);
-                if (nOrigViewId != d->viewId)
-                {
-                    d->doc->pClass->setView(d->doc, d->viewId);
-                }
-                __builtin_memset(d->paintedTile, 0, d->paintedTileAllocSize);
-                d->doc->pClass->paintTile(d->doc, d->paintedTile, d->tileSize, d->tileSize,
-                                          d->tileTwips[0], d->tileTwips[1], d->tileTwips[2],
-                                          d->tileTwips[3]);
-                if (nOrigViewId >= 0 && nOrigViewId != d->viewId)
-                {
-                    d->doc->pClass->setView(d->doc, nOrigViewId);
-                }
-
-                changeState(d, RenderState::IDLE);
-                break;
-            }
-            case RenderState::RENDERING:
-                // Wait for the JS worker to switching from RENDERING to other state
-                waitWhileInState(d, RenderState::RENDERING); // owned by tile_renderer_worker.ts
-                break;
-            case RenderState::RESET:
-            {
-                d->reset();
-                changeState(d, RenderState::IDLE);
-                break;
-            }
-            case RenderState::QUIT:
-                pthread_exit(nullptr);
-                return nullptr;
-        }
-    }
-    pthread_exit(nullptr);
-    return nullptr;
+// Convert tile index to twips rectangle
+std::array<int, 4> tileIndexToTwipsRect(int tileIndex, int widthTileStride, int tileDimTwips)
+{
+    const auto [x, y] = tileIndexToGridCoord(tileIndex, widthTileStride);
+    return { x * tileDimTwips, y * tileDimTwips, tileDimTwips, tileDimTwips };
 }
 
 WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent)
@@ -110,45 +73,54 @@ WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XCom
 {
 }
 
-TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId_, int32_t tileSize_)
+void WasmDocumentExtension::paintTiles()
+{
+    while (tileRendererData_.has_value())
+    {
+        auto& d = tileRendererData_.value();
+        waitWhileInState(d, RenderState::IDLE);
+
+        // this shouldn't happen except for after the tile renderer is stopped
+        if (!d.paintedTiles)
+            return;
+
+        uint32_t endIndex = d.tileEndIndex;
+        uint32_t startIndex = d.tileStartIndex;
+
+        d.doc->pClass->setView(d.doc, d.viewId);
+        // without clearing the painted tiles, any later paints will be composited on top of the existing data
+        __builtin_memset(d.paintedTiles.get(), 0, d.tileAllocSize * (endIndex - startIndex + 1));
+        for (uint32_t i = startIndex; i <= endIndex; ++i)
+        {
+            auto rect = tileIndexToTwipsRect(i, d.widthTileStride, d.tileSize);
+            d.doc->pClass->paintTile(d.doc, &d.paintedTiles[i * d.tileAllocSize], d.tileSize,
+                                     d.tileSize, rect[0], rect[1], rect[2], rect[3]);
+        }
+        changeState(d, RenderState::IDLE);
+    }
+}
+
+TileRendererData& WasmDocumentExtension::startTileRenderer(int32_t viewId, int32_t tileSize)
 {
     long w, h;
     pClass->getDocumentSize(this, &w, &h);
-    pthread_t& thread = tileRendererThreads_.emplace_back();
-    TileRendererData& data = tileRendererData_.emplace_back(this, viewId_, tileSize_, w, h,
-                                                            tileRendererThreads_.size());
-    if (pthread_create(&thread, nullptr, tileRendererWorker, &data))
-    {
-        std::abort();
-    }
-    pthread_detach(thread);
-
+    TileRendererData& data = tileRendererData_.emplace(this, viewId, tileSize, w, h);
+    g_activeTileRenderData = &data;
     return data;
 }
 
-void WasmDocumentExtension::stopTileRenderer(int32_t viewId)
+void WasmDocumentExtension::stopTileRenderer(int32_t /* viewId */)
 {
-    auto it
-        = std::find_if(tileRendererData_.begin(), tileRendererData_.end(),
-                       [viewId](const TileRendererData& data) { return data.viewId == viewId; });
-
-    if (it != tileRendererData_.end())
+    if (tileRendererData_.has_value())
     {
-        TileRendererData* data = &*it;
-        changeState(data, RenderState::QUIT);
+        if (g_activeTileRenderData == &tileRendererData_.value())
+        {
+            g_activeTileRenderData = nullptr;
+        }
 
-        auto threadIt = tileRendererThreads_[data->threadId];
-
-        pthread_join(threadIt, nullptr);
-        // WARN: DO NOT REMOVE THE LOG BELOW
-        // It is necessary for the join to complete because it forces the emscripten runtime
-        // to be invoked and collect the unused pool workers
-        SAL_WARN("tile", "thread joined");
-
-        // Don't erase it, since the position is used as an ID now
-        // tileRendererThreads_.erase(threadIt);
-        delete[] data->paintedTile;
-        delete data;
+        // This probably isn't necessary anymore, but just in case
+        tileRendererData_->paintedTiles.reset();
+        tileRendererData_.reset();
     }
     else
     {
@@ -248,7 +220,7 @@ void ExpandedDocument::addPart(std::string path, std::string content)
 }
 
 _LibreOfficeKitDocument*
-WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* pThis,
+WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* /* pThis */,
                                         desktop::ExpandedDocument expandedDoc, const int documentId,
                                         const bool readOnly)
 {
@@ -420,5 +392,4 @@ std::optional<std::string> WasmDocumentExtension::getCursor(int viewId)
     }
     return {};
 }
-
 }

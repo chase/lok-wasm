@@ -19,7 +19,7 @@ import type {
   ToWorker,
   ViewId,
   WorkerCallback,
-} from './shared';
+} from "./shared";
 import type {
   GetClipbaordItem,
   SetClipbaordItem,
@@ -32,8 +32,8 @@ import type {
   ParagraphStyle,
   RectArray,
   SanitizeOptions,
-} from './soffice';
-import LOK from './soffice';
+} from "./soffice";
+import LOK from "./soffice";
 // NOTE: Disabled until unoembind startup cost is under 1s
 // import { init_unoembind_uno } from './bindings_uno';
 
@@ -50,12 +50,43 @@ const findResultMap: Record<DocumentRef, ITextRanges & EmbindingDisposable> =
 const byRef = (ref: DocumentRef) => docMap[ref];
 const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
 
+interface VisibleArea {
+  topTwips: number | undefined;
+  heightTwips: number | undefined;
+  zoom: number | undefined;
+  widthTwips: number | undefined;
+}
+// used to update the LOK visible area more efficiently
+const visibleAreas: Record<DocumentRef, VisibleArea> = {};
+// FIXME: this is kind of messy, since this is now duplicated tile_renderer_worker.ts and index.ts as well {
+export const TILE_DIM_PX = 256;
+/** 15 = 1440 twips-per-inch / 96 dpi */
+const LOK_INTERNAL_TWIPS_TO_PX = 15;
+function clipToNearest8PxZoom(w: number, s: number) {
+  const scaledWidth = Math.ceil(w * s);
+  const mod = scaledWidth % 8;
+  if (mod === 0)
+    return s;
+  return Math.abs((scaledWidth - mod) / w - s) <
+    Math.abs((scaledWidth + 8 - mod) / w - s)
+    ? (scaledWidth - mod) / w
+    : (scaledWidth + 8 - mod) / w;
+}
+function getScaledTwips(zoom: number) {
+  return clipToNearest8PxZoom(TILE_DIM_PX, 1 / zoom) * LOK_INTERNAL_TWIPS_TO_PX;
+}
+/** CSS pixels are DPI indepdendent */
+export function cssPxToTwips(px: number, zoom: number) {
+  return px * getScaledTwips(zoom);
+}
+// FIXME: }
+
 const lok = await LOK({
   withFcCache: true,
   callbackHandlers: {
     callback: function (ref: DocumentRef, type: number, payload: string): void {
       const message: WorkerCallback = {
-        f: 'c',
+        f: "c",
         d: ref,
         t: type,
         p: payload,
@@ -88,8 +119,12 @@ const globalHandler: GlobalMethod = {
     docMap[ref] = doc;
     return ref;
   },
-  loadFromExpandedParts: function(name: string, data: Array<ExpandedPart>, readOnly: boolean) {
-    const { Document, ExpandedDocument} = lok;
+  loadFromExpandedParts: function (
+    name: string,
+    data: Array<ExpandedPart>,
+    readOnly: boolean,
+  ) {
+    const { Document, ExpandedDocument } = lok;
     const expandedDoc = new ExpandedDocument();
     for (const part of data) {
       expandedDoc.addPart(part.path, part.content);
@@ -145,14 +180,14 @@ const handler: DocumentMethodHandler<Document> = {
   },
 
   documentSize: function (
-    doc: Document
+    doc: Document,
   ): [widthTwips: number, heightTwips: number] {
     return doc.getDocumentSize();
   },
 
   initializeForRendering: function (
     doc: Document,
-    args: InitializeForRenderingOptions = {}
+    args: InitializeForRenderingOptions = {},
   ): number {
     doc.initializeForRendering(
       `{".uno:ShowBorderShadow": {
@@ -169,8 +204,8 @@ const handler: DocumentMethodHandler<Document> = {
         },
         ".uno:Author": {
           "type": "string",
-          "value": "${args.author ?? 'Macro User'}"
-        }}`
+          "value": "${args.author ?? "Macro User"}"
+        }}`,
     );
     return doc.getViewId();
   },
@@ -180,7 +215,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     type: number,
     charCode: number,
-    keyCode: number
+    keyCode: number,
   ): void {
     return doc.postKeyEvent(viewId, type, charCode, keyCode);
   },
@@ -189,7 +224,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     windowId: number,
-    text: string
+    text: string,
   ): void {
     return doc.postTextInputEvent(viewId, windowId, text);
   },
@@ -202,7 +237,7 @@ const handler: DocumentMethodHandler<Document> = {
     y: number,
     count: number,
     buttons: number,
-    modifiers: number
+    modifiers: number,
   ): void {
     return doc.postMouseEvent(viewId, type, x, y, count, buttons, modifiers);
   },
@@ -212,7 +247,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     type: number,
     x: number,
-    y: Number
+    y: Number,
   ): void {
     return doc.setTextSelection(viewId, type, x, y);
   },
@@ -220,7 +255,7 @@ const handler: DocumentMethodHandler<Document> = {
   setClipboard: function (
     doc: Document,
     viewId: ViewId,
-    items: SetClipbaordItem[]
+    items: SetClipbaordItem[],
   ): boolean {
     return doc.setClipboard(viewId, items);
   },
@@ -228,7 +263,7 @@ const handler: DocumentMethodHandler<Document> = {
   getClipboard: function (
     doc: Document,
     viewId: ViewId,
-    mimeTypes: string[]
+    mimeTypes: string[],
   ): GetClipbaordItem[] {
     return doc.getClipboard(viewId, mimeTypes);
   },
@@ -237,7 +272,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     mimeType: string,
-    data: string | ArrayBuffer
+    data: string | ArrayBuffer,
   ): void {
     return doc.paste(viewId, mimeType, data);
   },
@@ -247,7 +282,7 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     type: number,
     x: number,
-    y: number
+    y: number,
   ): void {
     return doc.setGraphicSelection(viewId, type, x, y);
   },
@@ -259,16 +294,16 @@ const handler: DocumentMethodHandler<Document> = {
   getCommandValues: function (
     doc: Document,
     viewId: ViewId,
-    command: string
+    command: string,
   ): any {
     const result = doc.getCommandValues(viewId, command);
-    return result.startsWith('{') ? JSON.parse(result) : result;
+    return result.startsWith("{") ? JSON.parse(result) : result;
   },
 
   subscribe: function (
     doc: Document,
     viewId: ViewId,
-    callbacktype: number
+    callbacktype: number,
   ): void {
     doc.subscribe(viewId, callbacktype);
   },
@@ -276,7 +311,7 @@ const handler: DocumentMethodHandler<Document> = {
   unsubscribe: function (
     doc: Document,
     viewId: ViewId,
-    callbacktype: number
+    callbacktype: number,
   ): void {
     doc.unsubscribe(viewId, callbacktype);
   },
@@ -286,81 +321,109 @@ const handler: DocumentMethodHandler<Document> = {
     viewId: ViewId,
     canvases: OffscreenCanvas[],
     tileSize: TileDim,
-    scale: number,
+    zoom: number,
     dpi: number,
-    yPos: number = 0
+    widthTwips: number,
+    heightPx: number,
+    yPosPx: number,
   ): TileRendererData {
     const ref = doc.ref();
+    const topTwips = cssPxToTwips(yPosPx, zoom);
+    const heightTwips = cssPxToTwips(heightPx, zoom);
+    visibleAreas[ref] = {
+      zoom,
+      topTwips,
+      widthTwips,
+      heightTwips
+    };
+    doc.setClientVisibleArea(viewId, 0, topTwips, widthTwips, heightTwips);
     const result = doc.startTileRenderer(viewId, tileSize);
+    console.time('tileRenderLaunch');
     const worker = new Worker(
-      new URL('./tile_renderer_worker.js', import.meta.url),
-      { type: 'module' }
+      new URL("./tile_renderer_worker.js", import.meta.url),
+      { type: "module" },
     );
+    console.timeEnd('tileRenderLaunch');
     if (!tileRenderer[ref]) {
       tileRenderer[ref] = {};
     }
     tileRenderer[ref][result.viewId] = worker;
 
-    worker.addEventListener('message', ({ data }) => {
+    worker.addEventListener("message", ({ data }) => {
       if (data.idle) {
-        postMessage({ f: 'idle_', d: ref });
+        postMessage({ f: "idle_", d: ref });
       }
       if (data.paint) {
-        postMessage({ f: 'paint_', d: ref });
+        postMessage({ f: "paint_", d: ref });
       }
     });
 
     worker.postMessage(
       {
-        t: 'i',
+        t: "i",
         c: canvases,
         d: result,
-        s: scale,
-        y: yPos,
+        s: zoom,
+        y: yPosPx,
         dpi,
       } as ToTileRenderer,
-      { transfer: [...canvases] }
+      { transfer: [...canvases] },
     );
 
     return {
       docRef: ref,
       viewId: result.viewId,
-      scale,
+      scale: zoom,
     };
   },
+
   resetRendering: function (
     _doc: Document,
     _viewId: ViewId,
-    _canvases: OffscreenCanvas[]
+    _canvases: OffscreenCanvas[],
   ): void {
-    throw new Error('Function not implemented.');
+    throw new Error("Function not implemented.");
   },
+
+  paintTiles: function (doc: Document, viewId: ViewId): void {
+    doc.paintTiles(viewId);
+  },
+
   stopRendering: function (doc: Document, viewId: ViewId): void {
     const ref = doc.ref();
     const worker = tileRenderer[ref]?.[viewId];
     worker?.terminate();
     doc.stopTileRenderer(viewId);
   },
+
   setScrollTop: function (
     doc: Document,
     viewId: ViewId,
-    yPx: number
+    yPx: number,
   ): Promise<number> {
     const ref = doc.ref();
     const worker = tileRenderer[ref]?.[viewId];
     if (!worker) return;
+    const visibleArea = visibleAreas[ref];
+    if (visibleArea && visibleArea.zoom) {
+      const oldY = visibleArea.topTwips;
+      visibleArea.topTwips = cssPxToTwips(yPx, visibleArea.zoom);
+      if (oldY !== visibleArea.topTwips && visibleArea.widthTwips && visibleArea.heightTwips) {
+        doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
+      }
+    }
     const scrollPromise = new Promise<number>((resolve) => {
       const handleMessage = ({ data }: MessageEvent) => {
         if (data.s != null) {
           resolve(data.s);
         }
-        worker.removeEventListener('message', handleMessage);
+        worker.removeEventListener("message", handleMessage);
       };
-      worker.addEventListener('message', handleMessage);
+      worker.addEventListener("message", handleMessage);
     });
 
     worker.postMessage({
-      t: 's',
+      t: "s",
       y: yPx,
     } as ToTileRenderer);
 
@@ -370,35 +433,54 @@ const handler: DocumentMethodHandler<Document> = {
   setVisibleHeight: function (
     doc: Document,
     viewId: ViewId,
-    heightPx: number
+    heightPx: number,
   ): void {
-    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
-      t: 'r',
+    const ref = doc.ref();
+    const visibleArea = visibleAreas[ref];
+    if (visibleArea && visibleArea.zoom) {
+      const oldHeight = visibleArea.heightTwips;
+      visibleArea.heightTwips = cssPxToTwips(heightPx, visibleArea.zoom);
+      if (oldHeight !== visibleArea.heightTwips && visibleArea.widthTwips && visibleArea.topTwips) {
+        doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
+      }
+    }
+    tileRenderer[ref]?.[viewId]?.postMessage({
+      t: "r",
       h: heightPx,
     } as ToTileRenderer);
   },
+
   setDocumentWidth: function (
     doc: Document,
     viewId: ViewId,
-    widthTwips: number
+    widthTwips: number,
   ): void {
-    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
-      t: 'w',
+    const ref = doc.ref();
+    const visibleArea = visibleAreas[ref];
+    if (visibleArea && visibleArea.widthTwips !== widthTwips) {
+      visibleArea.widthTwips = widthTwips;
+      if (visibleArea.heightTwips && visibleArea.topTwips) {
+        doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
+      }
+    }
+    tileRenderer[ref]?.[viewId]?.postMessage({
+      t: "w",
       w: widthTwips,
     } as ToTileRenderer);
   },
+
   dispatchCommand: function (
     doc: Document,
     viewId: ViewId,
     command: string,
     args?: any,
-    notifyWhenFinished?: boolean
+    notifyWhenFinished?: boolean,
   ): void {
     doc.dispatchCommand(
       viewId,
       command,
-      args && typeof args === 'string' ? args : JSON.stringify(args),
-      notifyWhenFinished
+      args && typeof args === "string" ? args : JSON.stringify(args),
+      notifyWhenFinished,
     );
   },
 
@@ -406,13 +488,13 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     charsBefore: number,
-    charsAfter: number
+    charsAfter: number,
   ): void {
     doc.removeText(
       viewId,
       0 /* window id is pretty much always 0 (the default window) */,
       charsBefore,
-      charsAfter
+      charsAfter,
     );
   },
 
@@ -422,7 +504,7 @@ const handler: DocumentMethodHandler<Document> = {
     x: number,
     y: number,
     width: number,
-    height: number
+    height: number,
   ): void {
     doc.setClientVisibleArea(viewId, x, y, width, height);
   },
@@ -430,7 +512,7 @@ const handler: DocumentMethodHandler<Document> = {
   comments: function (
     doc: Document,
     viewId: ViewId,
-    ids: number[] = []
+    ids: number[] = [],
   ): Comment[] {
     doc.setCurrentView(viewId);
     return doc.comments(ids);
@@ -445,7 +527,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     parentId: number,
-    text: string
+    text: string,
   ): void {
     doc.setCurrentView(viewId);
     doc.replyComment(parentId, text);
@@ -454,7 +536,7 @@ const handler: DocumentMethodHandler<Document> = {
   deleteCommentThreads: function (
     doc: Document,
     viewId: ViewId,
-    parentIds: number[]
+    parentIds: number[],
   ): void {
     doc.setCurrentView(viewId);
     doc.deleteCommentThreads(parentIds);
@@ -463,7 +545,7 @@ const handler: DocumentMethodHandler<Document> = {
   deleteComment: function (
     doc: Document,
     viewId: ViewId,
-    commentId: number
+    commentId: number,
   ): void {
     doc.setCurrentView(viewId);
     doc.deleteComment(commentId);
@@ -472,7 +554,7 @@ const handler: DocumentMethodHandler<Document> = {
   resolveCommentThread: function (
     doc: Document,
     viewId: ViewId,
-    parentId: number
+    parentId: number,
   ): void {
     doc.setCurrentView(viewId);
     doc.resolveCommentThread(parentId);
@@ -481,7 +563,7 @@ const handler: DocumentMethodHandler<Document> = {
   resolveComment: function (
     doc: Document,
     viewId: ViewId,
-    commentId: number
+    commentId: number,
   ): void {
     doc.setCurrentView(viewId);
     doc.resolveComment(commentId);
@@ -490,7 +572,7 @@ const handler: DocumentMethodHandler<Document> = {
   sanitize: function (
     doc: Document,
     viewId: ViewId,
-    options: SanitizeOptions
+    options: SanitizeOptions,
   ): void {
     doc.setCurrentView(viewId);
     doc.sanitize(options);
@@ -504,7 +586,7 @@ const handler: DocumentMethodHandler<Document> = {
   getPropertyValue: function (
     doc: Document,
     viewId: ViewId,
-    property: string
+    property: string,
   ): any {
     doc.setCurrentView(viewId);
     return doc.getPropertyValue(property);
@@ -514,7 +596,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     property: string,
-    value: any
+    value: any,
   ): void {
     doc.setCurrentView(viewId);
     doc.setPropertyValue(property, value);
@@ -534,7 +616,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     name: string,
-    properties: T
+    properties: T,
   ): ParagraphStyle<T> {
     doc.setCurrentView(viewId);
     return doc.getParagraphStyle(name, properties) as ParagraphStyle<T>;
@@ -542,7 +624,7 @@ const handler: DocumentMethodHandler<Document> = {
 
   getSelectionText: function (
     doc: Document,
-    viewId: ViewId
+    viewId: ViewId,
   ): string | undefined {
     doc.setCurrentView(viewId);
     return doc.getSelectionText();
@@ -551,7 +633,7 @@ const handler: DocumentMethodHandler<Document> = {
   paragraphStyles: function (
     doc: Document,
     viewId: ViewId,
-    properties: string[]
+    properties: string[],
   ) {
     doc.setCurrentView(viewId);
     return doc.paragraphStyles(properties);
@@ -561,10 +643,10 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     scale: number,
-    dpi: number
+    dpi: number,
   ): Promise<void> {
     tileRenderer[doc.ref()]?.[viewId]?.postMessage({
-      t: 'z',
+      t: "z",
       s: scale,
       d: dpi,
     } as ToTileRenderer);
@@ -595,7 +677,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     id: number,
-    text: string
+    text: string,
   ) {
     doc.setCurrentView(viewId);
     doc.updateComment(id, text);
@@ -645,11 +727,20 @@ const handler: DocumentMethodHandler<Document> = {
     return doc.getCursor(viewId);
   },
 
-  getCustomStringProperty: function (doc: Document, _viewId: ViewId, property: string) {
+  getCustomStringProperty: function (
+    doc: Document,
+    _viewId: ViewId,
+    property: string,
+  ) {
     return doc.getCustomStringProperty(property);
   },
 
-  setCustomStringProperty: function (doc: Document, _viewId: ViewId, property: string, value: string) {
+  setCustomStringProperty: function (
+    doc: Document,
+    _viewId: ViewId,
+    property: string,
+    value: string,
+  ) {
     doc.setCustomStringProperty(property, value);
   },
 };
@@ -663,13 +754,13 @@ const forwarding: ForwardingMethodHandlers<Document> = {
     options?: Partial<{
       caseSensitive: boolean;
       wholeWords: boolean;
-      mode: 'wildcard' | 'regex' | 'similar';
-    }>
+      mode: "wildcard" | "regex" | "similar";
+    }>,
   ): ForwardingId {
     findResultMap[docRef]?.delete();
     findResultMap[docRef] = doc.findAll(text, options) as ITextRanges &
       EmbindingDisposable;
-    return [docRef, viewId, '_find'];
+    return [docRef, viewId, "_find"];
   },
 };
 
@@ -705,13 +796,13 @@ const tranferables: Partial<Record<keyof Message, boolean>> = {
 };
 
 function isTransferable<K extends keyof Message = keyof Message>(
-  fromWorker: FromWorker<K>
+  fromWorker: FromWorker<K>,
 ): fromWorker is TransferableResult<K> {
   return tranferables[fromWorker.f] === true;
 }
 
 function handleForwardedMethod<K extends ForwardedResolver = ForwardedResolver>(
-  data: ToWorker<K>
+  data: ToWorker<K>,
 ): void {
   const { f, a, i } = data;
   const [method, fwd, ...rest] = a as any; // TODO: lazy, not super important, but type here should be "safe"
@@ -744,7 +835,7 @@ function handleForwardingMethod<
   const [ref, viewId, ...rest] = data.a;
   const doc = byRef(ref as DocumentRef);
   if (!doc) {
-    console.error('doc ref missing');
+    console.error("doc ref missing");
     return;
   }
   postMessage({
@@ -761,7 +852,7 @@ async function handleDocumentMethod<
   const [ref, ...rest] = data.a;
   const doc = byRef(ref as DocumentRef);
   if (!doc) {
-    console.error('doc ref missing');
+    console.error("doc ref missing");
     return;
   }
   const r = handler(doc, ...rest);
@@ -787,7 +878,7 @@ globalThis.onmessage = async <K extends keyof Message = keyof Message>({
   if (docHandler != null) {
     return handleDocumentMethod(
       docHandler,
-      data as ToWorker<keyof DocumentMethodHandler<Document>>
+      data as ToWorker<keyof DocumentMethodHandler<Document>>,
     );
   }
   // forwarded methods are methods on classes returned by the Document (such as ITextRanges)
@@ -800,7 +891,7 @@ globalThis.onmessage = async <K extends keyof Message = keyof Message>({
   if (forwardingHandler != null) {
     return handleForwardingMethod(
       forwardingHandler,
-      data as ToWorker<keyof ForwardingMethodHandlers<Document>>
+      data as ToWorker<keyof ForwardingMethodHandlers<Document>>,
     );
   }
 
@@ -808,13 +899,13 @@ globalThis.onmessage = async <K extends keyof Message = keyof Message>({
 };
 
 postMessage({
-  f: '_keys',
+  f: "_keys",
   keys: [...Object.keys(handler), ...Object.keys(forwarding)],
   forwarded: Object.fromEntries(
     Object.entries(forwardedMethods).map(([name, method]) => [
       name,
       Object.keys(method),
-    ])
+    ]),
   ),
 } as KeysMessage);
 for (const message of messageQueue) {

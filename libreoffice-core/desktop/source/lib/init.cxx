@@ -279,7 +279,7 @@ using LanguageToolCfg = officecfg::Office::Linguistic::GrammarChecking::Language
 
 static LibLibreOffice_Impl *gImpl = nullptr;
 static bool lok_preinit_2_called = false;
-static bool gUseCompactFonts = false;
+static bool gUseCompactFonts = true;
 static std::weak_ptr< LibreOfficeKitClass > gOfficeClass;
 static std::weak_ptr< LibreOfficeKitDocumentClass > gDocumentClass;
 
@@ -2612,8 +2612,9 @@ void CallbackFlushHandler::invoke()
         if (type == LOK_CALLBACK_INVALIDATE_TILES)
         {
             LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
-            for (auto& data : pDocument->tileRendererData_)
+            if (pDocument->tileRendererData_)
             {
+                auto& data = pDocument->tileRendererData_.value();
                 if (data.viewId == m_viewId)
                 {
                     auto& update = it2->getRectangleAndPart();
@@ -2644,8 +2645,9 @@ void CallbackFlushHandler::invoke()
         if (type == LOK_CALLBACK_DOCUMENT_SIZE_CHANGED)
         {
             LibLODocument_Impl *pDocument = static_cast<LibLODocument_Impl*>(m_pDocument);
-            for (auto& data : pDocument->tileRendererData_)
+            if (pDocument->tileRendererData_)
             {
+                auto& data = pDocument->tileRendererData_.value();
                 if (data.viewId == m_viewId)
                 {
                     long w, h;
@@ -8356,6 +8358,7 @@ static void lo_runLoop(LibreOfficeKit* /*pThis*/,
                        LibreOfficeKitWakeCallback pWakeCallback,
                        void* pData)
 {
+    // I don't know why this is acquired already?
 #if defined(IOS) || defined(ANDROID) || defined(__EMSCRIPTEN__)
     Application::GetSolarMutex().acquire();
 #endif
@@ -8368,8 +8371,9 @@ static void lo_runLoop(LibreOfficeKit* /*pThis*/,
         soffice_main();
     }
 #if defined(IOS) || defined(ANDROID) || defined(__EMSCRIPTEN__)
-    vcl::lok::unregisterPollCallbacks();
-    Application::ReleaseSolarMutex();
+    SAL_WARN("LOK", "run loop exit");
+    // vcl::lok::unregisterPollCallbacks();
+    // Application::ReleaseSolarMutex();
 #endif
 }
 
@@ -8446,36 +8450,40 @@ static void preloadData()
     comphelper::ProfileZone aZone("preload data");
 
     // Create user profile in the temp directory for loading the dictionaries
-    OUString sUserPath;
-    rtl::Bootstrap::get(u"UserInstallation"_ustr, sUserPath);
-    utl::TempFileNamed aTempDir(nullptr, true);
-    aTempDir.EnableKillingFile();
-    rtl::Bootstrap::set(u"UserInstallation"_ustr, aTempDir.GetURL());
+    // OUString sUserPath;
+    // rtl::Bootstrap::get(u"UserInstallation"_ustr, sUserPath);
+    // utl::TempFileNamed aTempDir(nullptr, true);
+    // aTempDir.EnableKillingFile();
+    // rtl::Bootstrap::set(u"UserInstallation"_ustr, aTempDir.GetURL());
 
+    // MACRO: {
     // Register the bundled extensions
-    desktop::Desktop::SynchronizeExtensionRepositories(true);
-    bool bAbort = desktop::Desktop::CheckExtensionDependencies();
-    if(bAbort)
-        std::cerr << "CheckExtensionDependencies failed" << std::endl;
+    // desktop::Desktop::SynchronizeExtensionRepositories(true);
+    // bool bAbort = desktop::Desktop::CheckExtensionDependencies();
+    // if(bAbort)
+    //     std::cerr << "CheckExtensionDependencies failed" << std::endl;
+    // MACRO: }
 
     // inhibit forced 2nd synchronization from Main
     ::rtl::Bootstrap::set( "DISABLE_EXTENSION_SYNCHRONIZATION", "true");
 
-    std::cerr << "Preload textencodings"; // sal_textenc
+    // std::cerr << "Preload textencodings"; // sal_textenc
     // Use RTL_TEXTENCODING_MS_1250 to trigger Impl_getTextEncodingData
     // to dlopen sal_textenclo
     (void)OUStringToOString(u"arbitrary string", RTL_TEXTENCODING_MS_1250);
-    std::cerr << "\n";
+    // std::cerr << "\n";
 
     // setup LanguageTool config before spell checking init
-    css::uno::Sequence<css::lang::Locale> aLTLocales = setLanguageToolConfig();
-    if (aLTLocales.getLength())
-    {
-        std::cerr << "Remote linguistic service languages: ";
-        for (auto &it : std::as_const(aLTLocales))
-            std::cerr << LanguageTag::convertToBcp47(it) << " ";
-        std::cerr << "\n";
-    }
+    // MACRO: {
+    // css::uno::Sequence<css::lang::Locale> aLTLocales = setLanguageToolConfig();
+    // if (aLTLocales.getLength())
+    // {
+    //     std::cerr << "Remote linguistic service languages: ";
+    //     for (auto &it : std::as_const(aLTLocales))
+    //         std::cerr << LanguageTag::convertToBcp47(it) << " ";
+    //     std::cerr << "\n";
+    // }
+    // MACRO: }
 
     // preload all available dictionaries
     linguistic2::DictionaryList::create(comphelper::getProcessComponentContext());
@@ -8483,16 +8491,15 @@ static void preloadData()
         css::linguistic2::LinguServiceManager::create(comphelper::getProcessComponentContext());
     css::uno::Reference<linguistic2::XSpellChecker> xSpellChecker(xLngSvcMgr->getSpellChecker());
 
-    std::cerr << "Preloading local dictionaries: ";
+    SAL_WARN("lok.spell", "Preloading local dictionaries: ");
     css::uno::Reference<linguistic2::XSupportedLocales> xSpellLocales(xSpellChecker, css::uno::UNO_QUERY_THROW);
     uno::Sequence< css::lang::Locale > aLocales = xSpellLocales->getLocales();
     for (auto &it : std::as_const(aLocales))
     {
-        std::cerr << LanguageTag::convertToBcp47(it) << " ";
+        SAL_WARN("lok.spell", LanguageTag::convertToBcp47(it));
         css::beans::PropertyValues aNone;
         xSpellChecker->isValid(u"forcefed"_ustr, it, aNone);
     }
-    std::cerr << "\n";
 
     // Hack to load and cache the module liblocaledata_others.so which is not loaded normally
     // (when loading dictionaries of just non-Asian locales). Creating a XCalendar4 of one Asian locale
@@ -8506,16 +8513,15 @@ static void preloadData()
     css::uno::Reference<linguistic2::XThesaurus> xThesaurus(xLngSvcMgr->getThesaurus());
     css::uno::Reference<linguistic2::XSupportedLocales> xThesLocales(xThesaurus, css::uno::UNO_QUERY_THROW);
     aLocales = xThesLocales->getLocales();
-    std::cerr << "Preloading local thesauri: ";
+    SAL_WARN("lok.thes", "Preloading local thesauri: ");
     for (auto &it : std::as_const(aLocales))
     {
-        std::cerr << LanguageTag::convertToBcp47(it) << " ";
+        SAL_WARN("lok.thes", LanguageTag::convertToBcp47(it));
         css::beans::PropertyValues aNone;
         xThesaurus->queryMeanings(u"forcefed"_ustr, it, aNone);
     }
-    std::cerr << "\n";
 
-    std::cerr << "Preloading breakiterator\n";
+    SAL_WARN("lok", "Preloading BreakIterator");
     if (aLocales.getLength())
     {
         css::uno::Reference< css::i18n::XBreakIterator > xBreakIterator = css::i18n::BreakIterator::create(xContext);
@@ -8528,21 +8534,20 @@ static void preloadData()
         comphelper::getProcessComponentContext());
     xGlobalCfg->getAllKeyEvents();
 
-    std::cerr << "Preload icons\n";
-    ImageTree &images = ImageTree::get();
-    images.getImageUrl(u"forcefed.png"_ustr, u"style"_ustr, u"FO_oo"_ustr);
-
-    std::cerr << "Preload short cut accelerators\n";
+    // std::cerr << "Preload icons\n";
+    // ImageTree &images = ImageTree::get();
+    // images.getImageUrl(u"forcefed.png"_ustr, u"style"_ustr, u"FO_oo"_ustr);
+    //
+    // std::cerr << "Preload short cut accelerators\n";
     preLoadShortCutAccelerators();
 
-    std::cerr << "Preload languages\n";
-
+    SAL_WARN("lok", "Preload language");
     // force load language singleton
     SvtLanguageTable::HasLanguageType(LANGUAGE_SYSTEM);
-    (void)LanguageTag::isValidBcp47(u"foo"_ustr, nullptr);
+    (void)LanguageTag::isValidBcp47(u"en-US"_ustr, nullptr);
 
-    std::cerr << "Preload fonts\n";
 
+    SAL_WARN("lok", "Preload fonts???");
     // Initialize fonts.
     css::uno::Reference<css::linguistic2::XLinguServiceManager2> xLangSrv = css::linguistic2::LinguServiceManager::create(xContext);
     if (xLangSrv.is())
@@ -8565,7 +8570,7 @@ static void preloadData()
         OutputDevice::GetDefaultFont(DefaultFontType::CTL_SPREADSHEET, nLang, GetDefaultFontFlags::OnlyOne);
     }
 
-    std::cerr << "Preload config\n";
+    SAL_WARN("lok", "Preload config");
 #if defined __GNUC__ || defined __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -8597,9 +8602,9 @@ static void preloadData()
 
     static constexpr OUString preloadComponents[] = {
         u"private:factory/swriter"_ustr,
-        u"private:factory/scalc"_ustr,
-        u"private:factory/simpress"_ustr,
-        u"private:factory/sdraw"_ustr
+        // u"private:factory/scalc"_ustr,
+        // u"private:factory/simpress"_ustr,
+        // u"private:factory/sdraw"_ustr
     };
     // getting the remote LibreOffice service manager
     uno::Reference<frame::XDesktop2> xCompLoader(frame::Desktop::create(xContext));
@@ -8613,7 +8618,7 @@ static void preloadData()
     }
 
     // Set user profile's path back to the original one
-    rtl::Bootstrap::set(u"UserInstallation"_ustr, sUserPath);
+    // rtl::Bootstrap::set(u"UserInstallation"_ustr, sUserPath);
 
     // Note that unotools::Bootstrap has initialized from the temp UserInstallation at this point
     // see Bootstrap::reloadData for when it gets resynced
@@ -8723,35 +8728,9 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
 
     // Did we do a pre-initialize
     static bool bPreInited = false;
-    static bool bUnipoll = false;
+    static bool bUnipoll = true;
     static bool bProfileZones = false;
     static bool bNotebookbar = false;
-
-    { // cf. string lifetime for preinit
-        std::vector<OUString> aOpts;
-
-        // ':' delimited options - avoiding ABI change for new parameters
-        const char *pOptions = getenv("SAL_LOK_OPTIONS");
-        if (pOptions)
-            aOpts = comphelper::string::split(OUString(pOptions, strlen(pOptions), RTL_TEXTENCODING_UTF8), ':');
-        for (const auto &it : aOpts)
-        {
-            if (it == "unipoll")
-                bUnipoll = true;
-            if (it == "compact_fonts")
-                gUseCompactFonts = true;
-            else if (it == "profile_events")
-                bProfileZones = true;
-            else if (it == "sc_no_grid_bg")
-                comphelper::LibreOfficeKit::setCompatFlag(
-                    comphelper::LibreOfficeKit::Compat::scNoGridBackground);
-            else if (it == "sc_print_twips_msgs")
-                comphelper::LibreOfficeKit::setCompatFlag(
-                    comphelper::LibreOfficeKit::Compat::scPrintTwipsMsgs);
-            else if (it == "notebookbar")
-                bNotebookbar = true;
-        }
-    }
 
 #ifdef LINUX
     {
@@ -8925,7 +8904,7 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     {
         if (eStage != SECOND_INIT)
         {
-            SAL_INFO("lok", "Attempting to initialize UNO");
+            SAL_WARN("lok", "Attempting to initialize UNO");
 
             if (!initialize_uno(aAppURL))
                 return false;
@@ -9000,8 +8979,6 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                 // Release Solar Mutex, lo_startmain thread should acquire it.
                 Application::ReleaseSolarMutex();
             }
-
-            setLanguageAndLocale(u"en-US"_ustr);
         }
 
         if (eStage != PRE_INIT)
@@ -9075,10 +9052,17 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
 #endif
 
 
+
+    setLanguageAndLocale(u"en-US"_ustr);
     setHelpRootURL();
     setCertificateDir();
-    setDeeplConfig();
+    // MACRO: {
+    // setDeeplConfig();
     setLanguageToolConfig();
+    if (bUnipoll) {
+        preloadData();
+    }
+    // MACRO: }
 
     if (bNotebookbar)
     {
