@@ -1,8 +1,8 @@
-diff --git a/./upstream/emscripten/tools/file_packager.orig.py b/./upstream/emscripten/tools/file_packager.py
-index 956ab8a..f3df191 100755
---- a/./upstream/emscripten/tools/file_packager.orig.py
+diff --git a/./upstream/emscripten/tools/file_packager.py.orig b/./upstream/emscripten/tools/file_packager.py
+index 281e636..005353a 100644
+--- a/./upstream/emscripten/tools/file_packager.py.orig
 +++ b/./upstream/emscripten/tools/file_packager.py
-@@ -739,7 +739,7 @@ def generate_js(data_target, data_files, metadata):
+@@ -740,7 +740,7 @@ def generate_js(data_target, data_files, metadata):
              DataRequest.prototype.requests[files[i].filename].onload();
            }'''
        use_data += ("          Module['removeRunDependency']('datafile_%s');\n"
@@ -20,21 +20,22 @@ index 956ab8a..f3df191 100755
  
      package_name = data_target
      remote_package_size = os.path.getsize(package_name)
-@@ -772,7 +772,7 @@ def generate_js(data_target, data_files, metadata):
-         Module['locateFile'] = Module['locateFilePackage'];
-         err('warning: you defined Module.locateFilePackage, that has been renamed to Module.locateFile (using your locateFilePackage for now)');
+@@ -767,8 +767,7 @@ def generate_js(data_target, data_files, metadata):
+         PACKAGE_PATH = encodeURIComponent(location.pathname.substring(0, location.pathname.lastIndexOf('/')) + '/');
        }
+       var PACKAGE_NAME = '%s';
+-      var REMOTE_PACKAGE_BASE = '%s';
 -      var REMOTE_PACKAGE_NAME = Module['locateFile'] ? Module['locateFile'](REMOTE_PACKAGE_BASE, '') : REMOTE_PACKAGE_BASE;\n''' % (js_manipulation.escape_for_js_string(data_target), js_manipulation.escape_for_js_string(remote_package_name))
-+      var REMOTE_PACKAGE_NAME = Module['locateFile'] ? Module['locateFile'](REMOTE_PACKAGE_BASE, '') : REMOTE_PACKAGE_BASE;\n''' % (js_manipulation.escape_for_js_string(remote_package_name), js_manipulation.escape_for_js_string(remote_package_name))
++      var REMOTE_PACKAGE_NAME = new URL('./%s', import.meta.url).href;\n''' % (js_manipulation.escape_for_js_string(remote_package_name), js_manipulation.escape_for_js_string(remote_package_name))
      metadata['remote_package_size'] = remote_package_size
      ret += '''var REMOTE_PACKAGE_SIZE = metadata['remote_package_size'];\n'''
  
-@@ -1022,7 +1022,7 @@ def generate_js(data_target, data_files, metadata):
-         var curr;
-         %s
-       };
--      Module['addRunDependency']('datafile_%s');\n''' % (use_data, js_manipulation.escape_for_js_string(data_target))
-+      Module['addRunDependency']('datafile_%s');\n''' % (use_data, js_manipulation.escape_for_js_string(remote_package_name))
-     # use basename because from the browser's point of view,
-     # we need to find the datafile in the same dir as the html file
+@@ -1116,7 +1115,7 @@ def generate_js(data_target, data_files, metadata):
  
+   function runMetaWithFS() {
+     Module['addRunDependency']('%(metadata_file)s');
+-    var metadataUrl = Module['locateFile'] ? Module['locateFile']('%(metadata_file)s', '') : '%(metadata_file)s';
++    var metadataUrl = new URL('./%(metadata_file)s', import.meta.url).href;
+     %(node_support_code)s
+     fetch(metadataUrl)
+       .then((response) => {

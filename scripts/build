@@ -17,9 +17,8 @@ make || exit 1
 if [ "$GITHUB_ACTIONS" = "true" ]; then
   echo "Skipping FcCache generation"
 else
+  # Not really, we can do this once and be done with it really
   echo "Generating FcCache"
-  # shellcheck disable=SC2046
-  $FILE_PACKAGER "$FCCAHCE_OUT" --preload $(cd "$QA_ENV_DIR" && node generate_fccache.mjs) \
-    --js-output="$QA_ENV_DIR/workdir/$FCCACHE_FILE.js" \
-    --separate-metadata && mv "$QA_ENV_DIR/workdir/$FCCACHE_FILE$METADATA_SUFFIX" "$FCCAHCE_OUT$METADATA_SUFFIX"
+  cp "$BASE_DIR/$FCCACHE_FILE" "$FCCAHCE_OUT"
+  cp "$BASE_DIR/$FCCACHE_FILE$METADATA_SUFFIX" "$FCCAHCE_OUT$METADATA_SUFFIX"
 fi
