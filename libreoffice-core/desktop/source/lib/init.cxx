@@ -8371,7 +8371,8 @@ static void lo_runLoop(LibreOfficeKit* /*pThis*/,
         soffice_main();
     }
 #if defined(IOS) || defined(ANDROID) || defined(__EMSCRIPTEN__)
-    SAL_WARN("LOK", "run loop exit");
+    // MACRO: Not really, just that execute is async now
+    // SAL_WARN("LOK", "run loop exit");
     // vcl::lok::unregisterPollCallbacks();
     // Application::ReleaseSolarMutex();
 #endif

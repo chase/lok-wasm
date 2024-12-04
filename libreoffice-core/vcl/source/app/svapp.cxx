@@ -20,6 +20,7 @@
 #include <config_features.h>
 #include <config_version.h>
 
+#include <emscripten/emscripten.h>
 #include <osl/file.hxx>
 #include <osl/thread.hxx>
 #include <osl/module.hxx>
@@ -356,8 +357,15 @@ void Application::notifyInvalidation(tools::Rectangle const* /*pRect*/) const
 {
 }
 
+
+// MACRO: {
 void Application::Execute()
 {
+    // In Chrome, setTimeout in nested calls is debounced to roughly 3-4ms, ideally this should be acceptable latency
+    constexpr int MAIN_LOOP_INTERVAL_MS = 4;
+    // Emscripten uses FPS insteaad of just outright letting you set the number of ms
+    constexpr int MAIN_LOOP_FPS = 1000 / MAIN_LOOP_INTERVAL_MS;
+
     ImplSVData* pSVData = ImplGetSVData();
     pSVData->maAppData.mbInAppExecute = true;
     pSVData->maAppData.mbAppQuit = false;
@@ -370,14 +378,18 @@ void Application::Execute()
             SAL_WARN("vcl.schedule", "Can't omit DoExecute when running on system event loop!");
             std::abort();
         }
-        while (!pSVData->maAppData.mbAppQuit)
-            Application::Yield();
+
+        emscripten_set_main_loop_arg([](void* app) {
+            static_cast<Application*>(app)->Yield();
+        }, GetpApp(), MAIN_LOOP_FPS, false);
     }
-
-    pSVData->maAppData.mbInAppExecute = false;
-
-    GetpApp()->Shutdown();
+    
+    // MACRO: Never reached, because if the loop ends, we don't need anything like teardown on worker exit
+    // pSVData->maAppData.mbInAppExecute = false;
+    //
+    // GetpApp()->Shutdown();
 }
+// MACRO: }
 
 static bool ImplYield(bool i_bWait, bool i_bAllEvents)
 {
@@ -490,6 +502,10 @@ void Application::Quit()
 {
     ImplGetSVData()->maAppData.mbAppQuit = true;
     Application::PostUserEvent( LINK( nullptr, ImplSVAppData, ImplQuitMsg ) );
+
+    // MACRO: {
+    emscripten_cancel_main_loop();
+    // MACRO: }
 }
 
 comphelper::SolarMutex& Application::GetSolarMutex()

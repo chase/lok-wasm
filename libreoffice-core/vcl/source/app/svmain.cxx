@@ -231,30 +231,10 @@ int ImplSVMain()
         pSVData->maAppData.mbInAppMain = false;
     }
 
-    if( pSVData->mxDisplayConnection.is() )
-    {
-        pSVData->mxDisplayConnection->terminate();
-        pSVData->mxDisplayConnection.clear();
-    }
-
-    // This is a hack to work around the problem of the asynchronous nature
-    // of bridging accessibility through Java: on shutdown there might still
-    // be some events in the AWT EventQueue, which need the SolarMutex which
-    // - on the other hand - is destroyed in DeInitVCL(). So empty the queue
-    // here ..
-    if( pSVData->mxAccessBridge.is() )
-    {
-        {
-            SolarMutexReleaser aReleaser;
-            pSVData->mxAccessBridge->dispose();
-        }
-        pSVData->mxAccessBridge.clear();
-    }
-
-    WatchdogThread::stop();
-    DeInitVCL();
-
-    return nReturn;
+    // MACRO: {
+    // Execute is now async, don't "exit"
+    return 0;
+    // MACRO: }
 }
 
 int SVMain()

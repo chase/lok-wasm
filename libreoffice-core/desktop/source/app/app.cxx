@@ -1611,9 +1611,12 @@ int Desktop::Main()
         if (xDesktop.is())
             xDesktop->terminate();
     }
-    // CAUTION: you do not necessarily get here e.g. on the Mac.
-    // please put all deinitialization code into doShutdown
-    return doShutdown();
+    // MACRO: {
+    // Shutdown should never occur since Application::Execute is no longer
+    // blocking
+    // return doShutdown();
+    // MACRO: }
+    return  0;
 }
 
 int Desktop::doShutdown()
