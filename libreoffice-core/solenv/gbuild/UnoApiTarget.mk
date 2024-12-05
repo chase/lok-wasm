@@ -22,9 +22,9 @@
 # MACRO: arm64 segfault workaround {
 ifneq ($(filter arm64 aarch64,$(shell uname -m)),)
 gb_UnoApiTarget_UNOIDLWRITEDEPS :=
-gb_UnoApiTarget_UNOIDLWRITECOMMAND := tar -xzf /libreoffice-core/uno-snapshot.tgz -C $(WORKDIR) && touch $(WORKDIR)/Executable/unoidl-write.run
+gb_UnoApiTarget_UNOIDLWRITECOMMAND := ([ ! -d $(WORKDIR)/UnoApiTarget ] && tar -xzf /libreoffice-core/uno-snapshot.tgz -C $(WORKDIR) UnoApiTarget && touch $(WORKDIR)/Executable/unoidl-write.run) || true
 gb_UnoApiTarget_UNOIDLCHECKDEPS :=
-gb_UnoApiTarget_UNOIDLCHECKCOMMAND := true && touch $(WORKDIR)/Executable/unoidl-check.run
+gb_UnoApiTarget_UNOIDLCHECKCOMMAND := ([ ! -d $(WORKDIR)/UnoApiTarget ] && touch $(WORKDIR)/Executable/unoidl-check.run) || true
 else
 gb_UnoApiTarget_UNOIDLWRITEDEPS := $(call gb_Executable_get_runtime_dependencies,unoidl-write)
 gb_UnoApiTarget_UNOIDLWRITECOMMAND := $(call gb_Executable_get_command,unoidl-write)
@@ -152,6 +152,14 @@ endif
 gb_UnoApiHeadersTarget_CPPUMAKERDEPS := $(call gb_Executable_get_runtime_dependencies,cppumaker)
 gb_UnoApiHeadersTarget_CPPUMAKERCOMMAND := $(call gb_Executable_get_command,cppumaker)
 
+ifneq ($(filter arm64 aarch64,$(shell uname -m)),)
+define gb_UnoApiHeadersTarget__command
+	([ ! -d $(WORKDIR)/UnoApiHeadersTarget ] && \
+	tar -xzf /libreoffice-core/uno-snapshot.tgz -C $(WORKDIR) UnoApiHeadersTarget && touch $(1)) \
+	|| true
+
+endef
+else
 define gb_UnoApiHeadersTarget__command
 	$(gb_UnoApiHeadersTarget_CPPUMAKERCOMMAND) \
 		-Gc $(4) -O$(3) $(call gb_UnoApiTarget_get_target,$(2)) \
@@ -159,6 +167,7 @@ define gb_UnoApiHeadersTarget__command
 	touch $(1)
 
 endef
+endif
 
 $(call gb_UnoApiHeadersTarget_get_real_bootstrap_target,%) : \
 		$(gb_UnoApiHeadersTarget_CPPUMAKERDEPS)
