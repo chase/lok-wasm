@@ -9,7 +9,10 @@ dnl in order to create a configure script.
 # several non-alphanumeric characters, those are split off and used only for the
 # ABOUTBOXPRODUCTVERSIONSUFFIX in openoffice.lst. Why that is necessary, no idea.
 
+dnl MACRO: There's a bug in autoconf where it incorrectly assumes there should be a source check for a file "Macro" {
+m4_define([AC_PACKAGE_WANT_SOURCE_DIR],[])
 AC_INIT([Macro],m4_esyscmd([tail -c +2 ../VERSION | tr -d '\n']),[],[],[https://macro.com/])
+dnl MACRO: }
 
 dnl libnumbertext needs autoconf 2.68, but that can pick up autoconf268 just fine if it is installed
 dnl whereas aclocal (as run by autogen.sh) insists on using autoconf and fails hard

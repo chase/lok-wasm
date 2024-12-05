@@ -1,0 +1,16 @@
+#!/bin/sh
+docker build -q -t lok-wasm:3.1.73 .
+docker run \
+  --rm \
+  -it \
+  -v $(pwd)/libreoffice-core:/libreoffice-core \
+  -v $(pwd)/scripts:/scripts \
+  -v $(pwd)/VERSION:/VERSION \
+  -v $(pwd)/soffice_fccache.data:/soffice_fccache.data \
+  -v $(pwd)/soffice_fccache.data.js.metadata:/soffice_fccache.data.js.metadata \
+  -v $(pwd)/.cache:/.cache:rw \
+  -v $(pwd)/.npm:/.npm:rw \
+  -u $(id -u):$(id -g) \
+  -w / \
+  lok-wasm:3.1.73 \
+  bash

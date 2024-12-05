@@ -6,6 +6,8 @@ libreoffice-core/diag.json
 libreoffice-core/vs-code-template.code-workspace
 libreoffice-core/.cache
 libreoffice-core/a.worker.js
+.cache
+.npm
 
 .DS_Store
 libreoffice-core/debug

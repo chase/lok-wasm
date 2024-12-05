@@ -8,9 +8,18 @@ This project is not a part of the official LibreOffice project, nor endorsed by 
 
 # Prerequisites
 
-You must use Linux on x64, otherwise the build will not work.
+## macOS
 
-On Ubuntu/Debian/Pop_OS!, you should install these packages:
+Install [OrbStack](https://orbstack.dev/download)
+
+Clone the repo and enter the dev environment:
+
+```bash
+git clone https://github.com/coparse-inc/lok-wasm
+./macos-docker
+```
+
+## Ubuntu/Debian/Pop_OS!
 
 ```bash
 apt-get install -y --no-install-recommends \

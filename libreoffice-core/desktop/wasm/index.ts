@@ -407,7 +407,7 @@ export async function loadDocumentFromArrayBuffer<
   T extends DocumentClient = DocumentClient,
 >(
   name: string,
-  arrayBuffer: ArrayBufferLike,
+  arrayBuffer: BlobPart,
   type: string = 'application/octet-stream'
 ): Promise<DocumentClient | null> {
   // TODO: this might be slower than transfering the ArrayBuffer to the worker and setting it there?

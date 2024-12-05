@@ -170,7 +170,7 @@ const handler: DocumentMethodHandler<Document> = {
     // https://github.com/emscripten-core/emscripten/pull/21076/files
     doc.saveAs(`file://${tmpFile}`, format, undefined);
     // only buffer is transferable
-    return lok.readUnlink(tmpFile).buffer;
+    return lok.readUnlink(tmpFile).buffer as ArrayBuffer;
   },
   parts: function (doc: Document): number {
     return doc.getParts();

@@ -739,7 +739,7 @@ function worker() {
 				tileRingIndex,
 				new ImageData(
 					new Uint8ClampedArray(
-						d.paintedTiles,
+						d.paintedTiles as any,
 						d.paintedTiles.byteOffset + byteOffset,
 						d.paintedTiles.byteLength,
 					),
