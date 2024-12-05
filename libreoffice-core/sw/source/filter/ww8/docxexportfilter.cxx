@@ -18,6 +18,7 @@
  */
 
 #include <memory>
+#include <iostream>
 #include "docxexportfilter.hxx"
 #include "docxexport.hxx"
 
@@ -40,6 +41,8 @@ DocxExportFilter::DocxExportFilter( const uno::Reference< uno::XComponentContext
 
 bool DocxExportFilter::exportDocument()
 {
+    std::cout << "DocxExportFilter::exportDocument" << std::endl;
+
     // get SwDoc*
     uno::Reference< uno::XInterface > xIfc( getModel(), uno::UNO_QUERY );
     SwXTextDocument *pTextDoc = dynamic_cast< SwXTextDocument * >( xIfc.get() );
@@ -110,6 +113,9 @@ bool DocxExportFilter::exportDocument()
     // (in a separate block so that it's destructed before the commit)
     {
         DocxExport aExport(*this, *pDoc, pCurPam, aPam, bDocm, isExportTemplate());
+
+        std::cout << "doc export constructed" << std::endl;
+
         aExport.ExportDocument( true ); // FIXME support exporting selection only
     }
 

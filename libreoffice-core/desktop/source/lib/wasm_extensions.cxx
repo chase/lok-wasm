@@ -30,6 +30,7 @@
 #include <svx/xflclit.hxx>
 #include <algorithm>
 #include <cstdlib>
+#include <iostream>
 #include <lib/wasm_extensions.hxx>
 #include <emscripten/bind.h>
 #include <emscripten/threading.h>
@@ -389,7 +390,17 @@ std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
         return {};
     }
 
+    std::cout << "\n\n\nBefore viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);\n\n" << std::endl;
+    comphelper::OStorageHelper::GetExpandedStorageInstance()->printRelationshipMap();
+
+
     viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
+
+    std::cout << "\n\n\nAfter viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);\n\n" << std::endl;
+    comphelper::OStorageHelper::GetExpandedStorageInstance()->printRelationshipMap();
+
+
+
 
     // TODO: @synoet it shouldn't be necessary to commit relationships seperately
     // from the implCommit call from save. But there is some funky behavior going on

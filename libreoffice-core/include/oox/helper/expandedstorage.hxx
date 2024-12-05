@@ -143,6 +143,7 @@ public:
     std::vector<std::pair<const std::string, const std::string>> listParts();
 
     void afterCommit();
+    void printRelationshipMap(bool show = false);
 
     void commitRelationships();
 

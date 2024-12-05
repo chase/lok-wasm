@@ -276,6 +276,7 @@ private:
 private:
     ::std::unique_ptr< XmlFilterBaseImpl > mxImpl;
     sal_Int32 mnRelId;
+    sal_Int32 mnDocumentRelId;
     sal_Int32 mnMaxDocId;
     bool mbMSO2007;
     bool mbMSO;

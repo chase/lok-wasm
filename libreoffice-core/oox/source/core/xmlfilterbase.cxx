@@ -21,6 +21,7 @@
 #include <oox/core/xmlfilterbase.hxx>
 
 #include <cstdio>
+#include <iostream>
 #include <string_view>
 
 #include <com/sun/star/beans/XPropertyAccess.hpp>
@@ -198,6 +199,7 @@ XmlFilterBase::XmlFilterBase( const Reference< XComponentContext >& rxContext ) 
     FilterBase( rxContext ),
     mxImpl( new XmlFilterBaseImpl ),
     mnRelId( 1 ),
+    mnDocumentRelId(1),
     mnMaxDocId( 0 ),
     mbMSO2007(false),
     mbMSO(false),
@@ -537,6 +539,8 @@ OUString lclAddRelation( const Reference< XRelationshipAccess >& rRelations, sal
 
 OUString XmlFilterBase::addRelation( const OUString& rType, std::u16string_view rTarget )
 {
+    std::cout << "XmlFilterBase::addRelation  1 : " << mnRelId + 1 << std::endl;
+
     Reference< XRelationshipAccess > xRelations( getStorage()->getXStorage(), UNO_QUERY );
     if( xRelations.is() )
         return lclAddRelation( xRelations, mnRelId ++, rType, rTarget, false/*bExternal*/ );
@@ -546,13 +550,21 @@ OUString XmlFilterBase::addRelation( const OUString& rType, std::u16string_view 
 
 OUString XmlFilterBase::addRelation( const Reference< XOutputStream >& rOutputStream, const OUString& rType, std::u16string_view rTarget, bool bExternal )
 {
+    std::cout << "XmlFilterBase::addRelation  2" << std::endl;
+
     sal_Int32 nId = 0;
 
     PropertySet aPropSet( rOutputStream );
-    if( aPropSet.is() )
+    if( aPropSet.is() ) {
+        std::cout << "aPropSet.is()" << std::endl;
         aPropSet.getProperty( nId, PROP_RelId );
-    else
+    }
+    else {
         nId = mnRelId++;
+        std::cout << "nId = mnRelId++ : " << nId << std::endl;
+    }
+    // nId = mnDocumentRelId++;
+    // std::cout << "nId = mnDocumentRelId++ : " << nId << std::endl;
 
     Reference< XRelationshipAccess > xRelations( rOutputStream, UNO_QUERY );
     if( xRelations.is() )
@@ -635,6 +647,7 @@ writeCoreProperties( XmlFilterBase& rSelf, const Reference< XDocumentProperties 
     else
         sValue = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 
+    std::cout << "writeCoreProperties" << std::endl;
     rSelf.addRelation( sValue, u"docProps/core.xml" );
     FSHelperPtr pCoreProps = rSelf.openFragmentStreamWithSerializer(
             "docProps/core.xml",
@@ -709,6 +722,8 @@ writeCoreProperties( XmlFilterBase& rSelf, const Reference< XDocumentProperties 
 static void
 writeAppProperties( XmlFilterBase& rSelf, const Reference< XDocumentProperties >& xProperties )
 {
+    std::cout << "writeAppProperties" << std::endl;
+
     rSelf.addRelation(
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
             u"docProps/app.xml" );
@@ -850,7 +865,7 @@ writeCustomProperties( XmlFilterBase& rSelf, const Reference< XDocumentPropertie
         aPropertyValue.Value <<= true;
         aprop.push_back(aPropertyValue);
     }
-
+    std::cout << "writeCustomProperties" << std::endl;
     rSelf.addRelation(
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
             u"docProps/custom.xml" );
@@ -1204,6 +1219,8 @@ void XmlFilterBase::exportCustomFragments()
         const OUString fragmentPath = "customXml/item" + OUString::number(j+1) + ".xml";
         if (customXmlDom.is())
         {
+            std::cout << "customXmlDom.is()" << std::endl;
+
             addRelation(oox::getRelationship(Relationship::CUSTOMXML), Concat2View("../" + fragmentPath));
 
             uno::Reference<xml::sax::XSAXSerializable> serializer(customXmlDom, uno::UNO_QUERY);
@@ -1215,6 +1232,8 @@ void XmlFilterBase::exportCustomFragments()
 
         if (customXmlDomProps.is())
         {
+            std::cout << "customXmlDomProps.is()" << std::endl;
+
             uno::Reference<xml::sax::XSAXSerializable> serializer(customXmlDomProps, uno::UNO_QUERY);
             uno::Reference<xml::sax::XWriter> writer = xml::sax::Writer::create(comphelper::getProcessComponentContext());
             writer->setOutputStream(openFragmentStream("customXml/itemProps"+OUString::number(j+1)+".xml",
@@ -1232,6 +1251,7 @@ void XmlFilterBase::exportCustomFragments()
     // Expect customFragments.getLength() == customFragmentTypes.getLength() == customFragmentTargets.getLength().
     for (sal_Int32 j = 0; j < customFragments.getLength(); j++)
     {
+        std::cout << "customFragments" << std::endl;
         addRelation(customFragmentTypes[j], customFragmentTargets[j]);
         const OUString aFilename = customFragmentTargets[j];
         Reference<XOutputStream> xOutStream = openOutputStream(aFilename);

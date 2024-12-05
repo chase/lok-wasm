@@ -89,6 +89,7 @@
 #include <fmtfsize.hxx>
 #include <formatflysplit.hxx>
 #include "sprmids.hxx"
+#include <iostream>
 
 #include <comphelper/sequenceashashmap.hxx>
 #include <comphelper/processfactory.hxx>
@@ -3409,6 +3410,7 @@ namespace
 
 ErrCode MSWordExportBase::ExportDocument( bool bWriteAll )
 {
+    std::cout << "MSWordExportBase::ExportDocument" << std::endl;
     m_nCharFormatStart = DEFAULT_STYLES_COUNT;
     m_nFormatCollStart = m_nCharFormatStart + m_rDoc.GetCharFormats()->size() - 1;
 
@@ -3927,6 +3929,7 @@ ErrCode SwWW8Writer::WriteStorageImpl()
 
 ErrCodeMsg SwWW8Writer::WriteMedium( SfxMedium& )
 {
+    std::cout << "does it even ever go in here???" << std::endl;
     return WriteStorage();
 }
 

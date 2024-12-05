@@ -35,6 +35,7 @@
 #include <cppuhelper/exc_hlp.hxx>
 #include <osl/diagnose.h>
 #include <string_view>
+#include <iostream>
 
 using namespace com::sun::star::uno;
 
@@ -289,6 +290,8 @@ Reference<comphelper::VecStreamSupplier>
 ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpenMode,
                                            PathType pathType, bool readRelInfo)
 {
+    // std::cout << "ExpandedStorage::openStreamElementSupplier Before" << std::endl;
+    // printRelationshipMap();
     std::string path = pathType == PathType::Absolute ? helpers::toString(name)
                                                       : helpers::toString(getFullPath(name));
 
@@ -358,6 +361,9 @@ ExpandedStorage::openStreamElementSupplier(const OUString& name, sal_Int32 nOpen
             streamSupplier->setRelationshipAccess(rel_it->second);
         }
     }
+
+    // std::cout << "ExpandedStorage::openStreamElementSupplier After" << std::endl;
+    // printRelationshipMap();
 
     return streamSupplier;
 }
@@ -573,6 +579,8 @@ void SAL_CALL ExpandedStorage::removeVetoableChangeListener(
 css::uno::Reference<css::embed::XExtendedStorageStream> SAL_CALL
 ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath, sal_Int32 openMode)
 {
+    std::cout << "\n\nExpandedStorage::openStreamElementByHierarchicalName Before" << std::endl;
+    // printRelationshipMap();
     css::uno::Reference<comphelper::VecStreamSupplier> xStream
         = openStreamElementSupplier(streamPath, openMode, PathType::Absolute, true);
 
@@ -580,6 +588,9 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
         new comphelper::VecStreamContainer(xStream));
 
     std::string path = getRelInfoPath(helpers::toString(streamPath));
+
+    // std::cout << "\n\nExpandedStorage::openStreamElementByHierarchicalName Before" << std::endl;
+    // printRelationshipMap();
 
     auto it = m_allRelAccessMap->find(path);
     if (it == m_allRelAccessMap->end())
@@ -598,6 +609,9 @@ ExpandedStorage::openStreamElementByHierarchicalName(const OUString& streamPath,
     {
         aStreamContainer->setRelationshipAccess(it->second);
     }
+
+    std::cout << "\n\nExpandedStorage::openStreamElementByHierarchicalName After" << std::endl;
+    // printRelationshipMap();
 
     return Reference<embed::XExtendedStorageStream>(aStreamContainer, UNO_QUERY_THROW);
 }
@@ -694,6 +708,7 @@ void ExpandedStorage::implCommit() const
 
 void ExpandedStorage::commitRelationships()
 {
+    std::cout << "ExpandedStorage::commitRelationships" << std::endl;
     auto context = comphelper::getProcessComponentContext();
     for (auto& [path, rels] : *m_allRelAccessMap)
     {
@@ -753,8 +768,59 @@ ExpandedStorage::getRelInfoFromName(const OUString& name)
     return ::comphelper::OFOPXMLHelper::ReadRelationsInfoSequence(relInfoStream, name, m_xContext);
 }
 
+
+void ExpandedStorage::printRelationshipMap(bool show) {
+
+    std::cout << "----------------------------------------\n";
+    std::cout << "RelationshipAccess Map Contents:\n";
+    
+    for (const auto& [path, relAccess] : *m_allRelAccessMap) {
+
+        if (path != "word/_rels/document.xml.rels") continue;
+
+        std::cout << "Path: " << path << "\n";
+        if (!relAccess) {
+            std::cout << "  RelationshipAccessImpl is null\n";
+            continue;
+        }
+
+        // Lock the mutex while accessing relationship data
+        std::lock_guard<std::mutex> lock(relAccess->m_mutex);
+        
+        const auto& relationships = relAccess->m_aRelInfo;
+        
+        if (!show) {
+            std::cout << "Relationships: " << relationships.getLength() << "\n";
+            continue;
+        }
+
+        if (relationships.getLength() == 0) {
+            std::cout << "  No relationships\n";
+            continue;
+        }
+
+        // Print each relationship sequence
+        for (sal_Int32 i = 0; i < relationships.getLength(); ++i) {
+            const auto& relationship = relationships[i];
+            std::cout << "\n  Relationship " << (i + 1) << ":\n";
+            
+            // Print each string pair in the relationship
+            for (sal_Int32 j = 0; j < relationship.getLength(); ++j) {
+                const auto& pair = relationship[j];
+                std::cout << "    " << std::left << std::setw(15) 
+                         << pair.First.toUtf8() << ": " 
+                         << pair.Second.toUtf8() << "\n";
+            }
+        }
+    }
+    std::cout << "----------------------------------------\n\n";
+}
+
+
 void ExpandedStorage::readRelationshipInfo()
 {
+    // std::cout << "ExpandedStorage::readRelationshipInfo()" << std::endl;
+    // printRelationshipMap();
     std::vector<std::string> relFilePaths;
     std::string suffix
         = (m_basePath.has_value() ? helpers::toString(m_basePath.value()) + "/" : "") + "_rels";

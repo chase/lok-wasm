@@ -1,5 +1,6 @@
 #include <comphelper/ofopxmlhelper.hxx>
 #include <vector>
+#include <iostream>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/relationshipaccess.hxx>
 #include <comphelper/vecstream.hxx>
@@ -32,6 +33,19 @@ const beans::StringPair* lcl_findPairByName(const Sequence<beans::StringPair>& r
 void RelationshipAccessImpl::setRelationships(
     css::uno::Sequence<css::uno::Sequence<css::beans::StringPair>> aRelInfo)
 {
+    // std::cout << "\nRelationship Sequence Contents:" << std::endl;
+    
+    // for (sal_Int32 i = 0; i < aRelInfo.getLength(); ++i) {
+    //     const css::uno::Sequence<css::beans::StringPair>& rel = aRelInfo[i];
+    //     std::cout << "\nRelationship " << (i + 1) << ":" << std::endl;
+    //     std::cout << "----------------" << std::endl;
+        
+    //     for (sal_Int32 j = 0; j < rel.getLength(); ++j) {
+    //         const css::beans::StringPair& pair = rel[j];
+    //         std::cout << std::setw(15) << std::left << pair.First << ": " << pair.Second << std::endl;
+    //     }
+    // }
+
     m_aRelInfo = std::move(aRelInfo);
 }
 
@@ -40,6 +54,8 @@ void SAL_CALL RelationshipAccessImpl::clearRelationships() { m_aRelInfo.realloc(
 void SAL_CALL RelationshipAccessImpl::insertRelationships(
     const Sequence<Sequence<beans::StringPair>>& aEntries, sal_Bool bReplace)
 {
+
+    // std::cout << "insertRelationships" << std::endl;
     OUString aIDTag("Id");
     const Sequence<Sequence<beans::StringPair>> aSeq = getAllRelationships();
     std::vector<Sequence<beans::StringPair>> aResultVec;
@@ -102,9 +118,44 @@ void SAL_CALL RelationshipAccessImpl::removeRelationshipByID(const OUString& sID
 
     throw container::NoSuchElementException();
 }
+
+
+
 void SAL_CALL RelationshipAccessImpl::insertRelationshipByID(
     const OUString& sID, const uno::Sequence<beans::StringPair>& aEntry, sal_Bool bReplace)
 {
+    std::cout << "insertRelationshipByID --- 1 --- " << m_path << std::endl;
+
+    for (sal_Int32 i = 0; i < m_aRelInfo.getLength(); ++i)
+    {
+        std::cout << "Relationship #" << (i + 1) << ":\n";
+        const auto& relationship = m_aRelInfo[i];
+        
+        for (sal_Int32 j = 0; j < relationship.getLength(); ++j)
+        {
+            const auto& pair = relationship[j];
+            std::cout << "  " << OUStringToOString(pair.First, RTL_TEXTENCODING_UTF8).getStr()
+                    << ": " << OUStringToOString(pair.Second, RTL_TEXTENCODING_UTF8).getStr()
+                    << std::endl;
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     const beans::StringPair aIDRel("Id", sID);
 
     uno::Sequence<beans::StringPair>* pResult = nullptr;
@@ -135,6 +186,37 @@ void SAL_CALL RelationshipAccessImpl::insertRelationshipByID(
     *pResult = comphelper::containerToSequence(aResult);
 
     m_aRelInfo = aSeq;
+
+
+
+
+
+
+
+
+
+
+
+    std::cout << "insertRelationshipByID --- 2" << std::endl;
+
+    for (sal_Int32 i = 0; i < m_aRelInfo.getLength(); ++i)
+    {
+        std::cout << "Relationship #" << (i + 1) << ":\n";
+        const auto& relationship = m_aRelInfo[i];
+        
+        for (sal_Int32 j = 0; j < relationship.getLength(); ++j)
+        {
+            const auto& pair = relationship[j];
+            std::cout << "  " << OUStringToOString(pair.First, RTL_TEXTENCODING_UTF8).getStr()
+                    << ": " << OUStringToOString(pair.Second, RTL_TEXTENCODING_UTF8).getStr()
+                    << std::endl;
+        }
+    }
+
+
+
+
+
 }
 
 Sequence<Sequence<beans::StringPair>>

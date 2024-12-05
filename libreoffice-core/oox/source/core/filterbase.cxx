@@ -37,6 +37,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <iostream>
 
 #include <oox/core/filterbase.hxx>
 #include <oox/helper/binaryinputstream.hxx>
@@ -463,6 +464,7 @@ void SAL_CALL FilterBase::setSourceDocument( const Reference< XComponent >& rxDo
 
 sal_Bool SAL_CALL FilterBase::filter( const Sequence< PropertyValue >& rMediaDescSeq )
 {
+    std::cout << "FilterBase::filter" << std::endl;
     if( !mxImpl->mxModel.is() || !mxImpl->mxModelFactory.is() || (mxImpl->meDirection == FILTERDIRECTION_UNKNOWN) )
         throw RuntimeException();
 

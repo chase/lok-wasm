@@ -59,6 +59,7 @@
 #include <svx/xflbmtit.hxx>
 
 #include <map>
+#include <iostream>
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
@@ -235,6 +236,8 @@ void DocxExport::ExportGrfBullet(const SwTextNode&)
 
 OString DocxExport::AddRelation( const OUString& rType, std::u16string_view rTarget )
 {
+    std::cout << "DocxExport::AddRelation" << std::endl;
+
     OUString sId = m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
            rType, rTarget, true );
 
@@ -390,6 +393,7 @@ void DocxExport::DoFormText(const SwInputField* pField)
 
 OString DocxExport::OutputChart( uno::Reference< frame::XModel > const & xModel, sal_Int32 nCount, ::sax_fastparser::FSHelperPtr const & m_pSerializer )
 {
+    std::cout << "OutputChart" << std::endl;
     OUString aFileName = "charts/chart" + OUString::number(nCount) + ".xml";
     OUString sId = m_rFilter.addRelation( m_pSerializer->getOutputStream(),
                     oox::getRelationship(Relationship::CHART),
@@ -456,6 +460,7 @@ OString DocxExport::WriteOLEObject(SwOLEObj& rObject, OUString & io_rProgID)
         return OString();
     }
 
+    std::cout << "WriteOLEObject" << std::endl;
     OUString const sId = m_rFilter.addRelation( GetFS()->getOutputStream(),
                 sRelationType, sFileName );
     if (pProgID)
@@ -495,6 +500,7 @@ std::pair<OString, OString> DocxExport::WriteActiveXObject(const uno::Reference<
     const OUString sXMLFileName = "word/activeX/activeX" + OUString::number( m_nActiveXControls ) + ".xml";
     ::sax_fastparser::FSHelperPtr pActiveXFS = m_rFilter.openFragmentStreamWithSerializer(sXMLFileName, "application/vnd.ms-office.activeX+xml" );
 
+    std::cout << "WriteActiveXObject 1" << std::endl;
     const OUString sBinaryId = m_rFilter.addRelation( pActiveXFS->getOutputStream(),
                                                        oox::getRelationship(Relationship::ACTIVEXCONTROLBINARY),
                                                        sBinaryFileName.subView(sBinaryFileName.lastIndexOf("/") + 1) );
@@ -506,6 +512,7 @@ std::pair<OString, OString> DocxExport::WriteActiveXObject(const uno::Reference<
                                 FSNS(XML_ax, XML_persistence), "persistStorage",
                                 FSNS(XML_r, XML_id), sBinaryId);
 
+    std::cout << "WriteActiveXObject 2" << std::endl;
     OString sXMLId = OUStringToOString(m_rFilter.addRelation(m_pDocumentFS->getOutputStream(),
                                                               oox::getRelationship(Relationship::CONTROL),
                                                               sXMLFileName.subView(sBinaryFileName.indexOf("/") + 1)),
@@ -550,9 +557,15 @@ ErrCode DocxExport::ExportDocument_Impl()
 
     WritePostitFields();
 
+// numbering.xml
+
     WriteNumbering();
 
+// fontTable.xml
+
     WriteFonts();
+
+// settings.xml
 
     WriteSettings();
 
@@ -673,6 +686,7 @@ void DocxExport::PrepareNewPageDesc( const SfxItemSet* pSet,
 
 void DocxExport::InitStyles()
 {
+    std::cout << "DocxExport::InitStyles" << std::endl;
     m_pStyles.reset(new MSWordStyles( *this, /*bListStyles =*/ true ));
 
     // setup word/styles.xml and the relations + content type
@@ -683,7 +697,6 @@ void DocxExport::InitStyles()
     ::sax_fastparser::FSHelperPtr pStylesFS =
         m_rFilter.openFragmentStreamWithSerializer( "word/styles.xml",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml" );
-
     // switch the serializer to redirect the output to word/styles.xml
     m_pAttrOutput->SetSerializer( pStylesFS );
 
@@ -701,6 +714,7 @@ void DocxExport::WriteFootnotesEndnotes()
     if ( m_pAttrOutput->HasFootnotes() )
     {
         // setup word/styles.xml and the relations + content type
+        std::cout << "WriteFootnotesEndnotes 1" << std::endl;
         m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
                 oox::getRelationship(Relationship::FOOTNOTES),
                 u"footnotes.xml" );
@@ -730,6 +744,7 @@ void DocxExport::WriteFootnotesEndnotes()
     if ( !m_pAttrOutput->HasEndnotes() )
         return;
 
+    std::cout << "WriteFootnotesEndnotes 2" << std::endl;
     // setup word/styles.xml and the relations + content type
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
             oox::getRelationship(Relationship::ENDNOTES),
@@ -762,6 +777,7 @@ void DocxExport::WritePostitFields()
     if ( !m_pAttrOutput->HasPostitFields() )
         return;
 
+    std::cout << "WritePostitFields 1" << std::endl;
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
             oox::getRelationship(Relationship::COMMENTS),
             u"comments.xml" );
@@ -780,6 +796,7 @@ void DocxExport::WritePostitFields()
     if (eHasProperties != DocxAttributeOutput::hasProperties::yes)
         return;
 
+    std::cout << "WritePostitFields 2" << std::endl;
     m_rFilter.addRelation(m_pDocumentFS->getOutputStream(),
                           oox::getRelationship(Relationship::COMMENTSEXTENDED),
                           u"commentsExtended.xml");
@@ -804,6 +821,7 @@ void DocxExport::WriteNumbering()
     if ( !m_pUsedNumTable )
         return; // no numbering is used
 
+    std::cout << "DocxExport::WriteNumbering" << std::endl;
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
         oox::getRelationship(Relationship::NUMBERING),
         u"numbering.xml" );
@@ -844,6 +862,7 @@ void DocxExport::WriteHeaderFooter( const SwFormat* pFormat, bool bHeader, const
     // setup the xml stream
     OUString aRelId;
     ::sax_fastparser::FSHelperPtr pFS;
+    std::cout << "WriteHeaderFooter" << std::endl;
     if ( bHeader )
     {
         OUString aName( "header" + OUString::number( ++m_nHeaders ) + ".xml" );
@@ -915,6 +934,7 @@ void DocxExport::WriteHeaderFooter( const SwFormat* pFormat, bool bHeader, const
 
 void DocxExport::WriteFonts()
 {
+    std::cout << "WriteFonts" << std::endl;
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
             oox::getRelationship(Relationship::FONTTABLE),
             u"fontTable.xml" );
@@ -1047,6 +1067,7 @@ void DocxExport::WriteSettings()
 
     SwDocShell* pDocShell = m_rDoc.GetDocShell();
 
+    std::cout << "WriteSettings" << std::endl;
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
             oox::getRelationship(Relationship::SETTINGS),
             u"settings.xml" );
@@ -1498,6 +1519,7 @@ void DocxExport::WriteTheme()
     if (!pTheme)
         return;
 
+    std::cout << "WriteTheme" << std::endl;
     m_rFilter.addRelation(m_pDocumentFS->getOutputStream(), oox::getRelationship(Relationship::THEME), u"theme/theme1.xml" );
 
     oox::ThemeExport aThemeExport(&m_rFilter, oox::drawingml::DOCUMENT_DOCX);
@@ -1540,6 +1562,7 @@ void DocxExport::WriteGlossary()
     if ( !glossaryDocDom.is() )
         return;
 
+    std::cout << "WriteGlossary 1" << std::endl;
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
             oox::getRelationship(Relationship::GLOSSARYDOCUMENT),
             u"glossary/document.xml" );
@@ -1587,6 +1610,7 @@ void DocxExport::WriteGlossary()
 
         PropertySet aProps(xOutputStream);
         aProps.setAnyProperty( PROP_RelId, uno::Any( gId.toInt32() ));
+        std::cout << "WriteGlossary 2" << std::endl;
         m_rFilter.addRelation(xOutputStream, gType, gTarget, bExternal);
         if (!xDom)
             continue; // External relation, no stream to write
@@ -1696,6 +1720,7 @@ void DocxExport::WriteCustomXml()
         uno::Reference<xml::dom::XDocument> customXmlDomProps = customXmlDomPropslist[j];
         if (customXmlDom.is())
         {
+            std::cout << "void DocxExport::WriteCustomXml() 1" << std::endl;
             m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
                     oox::getRelationship(Relationship::CUSTOMXML),
                     Concat2View("../customXml/item"+OUString::number(j+1)+".xml" ));
@@ -1761,6 +1786,7 @@ void DocxExport::WriteCustomXml()
             serializer->serialize( uno::Reference< xml::sax::XDocumentHandler >( writer, uno::UNO_QUERY_THROW ),
                 uno::Sequence< beans::StringPair >() );
 
+            std::cout << "void DocxExport::WriteCustomXML() 2" << std::endl;
             // Adding itemprops's relationship entry to item.xml.rels file
             m_rFilter.addRelation( GetFilter().openFragmentStream( "customXml/item"+OUString::number(j+1)+".xml",
                     "application/xml" ) ,
@@ -1799,6 +1825,7 @@ void DocxExport::WriteVBA()
         pOut->WriteStream(*pIn);
 
         // Write the relationship.
+        std::cout << "void DocxExport::WriteVBA() 1" << std::endl;
         m_rFilter.addRelation(m_pDocumentFS->getOutputStream(), oox::getRelationship(Relationship::VBAPROJECT), u"vbaProject.bin");
     }
 
@@ -1826,6 +1853,7 @@ void DocxExport::WriteVBA()
     if (!xProjectStream.is())
         return;
 
+    std::cout << "void DocxExport::WriteVBA() 2" << std::endl;
     m_rFilter.addRelation(xProjectStream, oox::getRelationship(Relationship::WORDVBADATA), u"vbaData.xml");
 }
 
@@ -2149,6 +2177,8 @@ DocxExport::DocxExport(DocxExportFilter& rFilter, SwDoc& rDocument,
     WriteProperties( );
 
     // relations for the document
+
+    std::cout << "DocxExport::DocxExport relations for the document" << std::endl;
     m_rFilter.addRelation( oox::getRelationship(Relationship::OFFICEDOCUMENT),
             u"word/document.xml" );
 
