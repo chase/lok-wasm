@@ -44,6 +44,7 @@ $(if $(UNOAPI_REFERENCE), \
 	&& true)
 endef
 else
+define gb_UnoApiTarget__command
 mkdir -p $(dir $(1)) \
 $(if $(UNOAPI_ENTITIES), \
 	&& RESPONSEFILE=$(call gb_var2file,$(shell $(gb_MKTEMP)),$(UNOAPI_ENTITIES))) \

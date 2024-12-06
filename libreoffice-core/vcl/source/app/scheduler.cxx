@@ -65,16 +65,13 @@ template< typename charT, typename traits >
 std::basic_ostream<charT, traits> & operator <<(
     std::basic_ostream<charT, traits> & stream, const Timer& timer )
 {
-    bool bIsIdle = (dynamic_cast<const Idle*>( &timer ) != nullptr);
-    stream << (bIsIdle ? "Idle " : "Timer")
+    stream
            << " a: " << timer.IsActive() << " p: " << static_cast<int>(timer.GetPriority());
     const char *name = timer.GetDebugName();
     if ( nullptr == name )
         stream << " (nullptr)";
     else
         stream << " " << name;
-    if ( !bIsIdle )
-        stream << " " << timer.GetTimeout() << "ms";
     stream << " (" << &timer << ")";
     return stream;
 }
@@ -252,7 +249,6 @@ void Scheduler::ImplStartTimer(sal_uInt64 nMS, bool bForce, sal_uInt64 nTime)
     // Force instant wakeup on 0ms, if the previous period was not 0ms
     if (bForce || nProposedTimeout < nCurTimeout || (!nMS && rSchedCtx.mnTimerPeriod))
     {
-        SAL_INFO( "vcl.schedule", "  Starting scheduler system timer (" << nMS << "ms)" );
         rSchedCtx.mnTimerStart = nTime;
         rSchedCtx.mnTimerPeriod = nMS;
         rSchedCtx.mpSalTimer->Start( nMS );
@@ -277,7 +273,6 @@ inline void Scheduler::UpdateSystemTimer( ImplSchedulerContext &rSchedCtx,
 {
     if ( InfiniteTimeoutMs == nMinPeriod )
     {
-        SAL_INFO("vcl.schedule", "  Stopping system timer");
         if ( rSchedCtx.mpSalTimer )
             rSchedCtx.mpSalTimer->Stop();
         rSchedCtx.mnTimerPeriod = nMinPeriod;
@@ -370,17 +365,6 @@ void Scheduler::CallbackTaskScheduling()
         while (pSchedulerData)
         {
             ++nTasks;
-            const Timer *timer = dynamic_cast<Timer*>( pSchedulerData->mpTask );
-            if ( timer )
-                SAL_INFO( "vcl.schedule", tools::Time::GetSystemTicks() << " "
-                        << pSchedulerData << " " << *pSchedulerData << " " << *timer );
-            else if ( pSchedulerData->mpTask )
-                SAL_INFO( "vcl.schedule", tools::Time::GetSystemTicks() << " "
-                        << pSchedulerData << " " << *pSchedulerData
-                        << " " << *pSchedulerData->mpTask );
-            else
-                SAL_INFO( "vcl.schedule", tools::Time::GetSystemTicks() << " "
-                        << pSchedulerData << " " << *pSchedulerData << " (to be deleted)" );
 
             // Should the Task be released from scheduling?
             assert(!pSchedulerData->mbInScheduler);
@@ -395,7 +379,7 @@ void Scheduler::CallbackTaskScheduling()
                 continue;
             }
 
-            assert(pSchedulerData->mpTask);
+            SAL_WARN_IF(!pSchedulerData->mpTask, "scheduler", "dead task");
             if (pSchedulerData->mpTask->IsActive())
             {
                 nReadyPeriod = pSchedulerData->mpTask->UpdateMinPeriod( nTime );

@@ -19,6 +19,17 @@ export default defineConfig({
       "@lok": path.resolve(__dirname, "../libreoffice-core/instdir/program"),
     },
   },
+  worker: {
+    format: 'es',
+  },
+  build: {
+    target: 'esnext'
+  },
+  esbuild: {
+    supported: {
+      'top-level-await': true
+    }
+  },
   plugins: [
     tailwindcss(),
     solid({exclude: [/libreoffice-core/]}),

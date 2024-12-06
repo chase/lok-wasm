@@ -1272,14 +1272,7 @@ int Desktop::Main()
     // Detect desktop environment - need to do this as early as possible
     css::uno::setCurrentContext( new DesktopContext( css::uno::getCurrentContext() ) );
 
-    if (officecfg::Office::Common::Misc::PreloadJVM::get() && pExecGlobals)
-    {
-        SAL_INFO("desktop.app", "Preload JVM");
-
-        // pre-load JVM
-        pExecGlobals->xJVMloadThread = new JVMloadThread();
-        pExecGlobals->xJVMloadThread->launch();
-    }
+    // MACRO: Minimize main startup
 
     CommandLineArgs& rCmdLineArgs = GetCommandLineArgs();
 
@@ -1485,58 +1478,7 @@ int Desktop::Main()
     SetSplashScreenProgress(50);
 
     // Backing Component
-    bool bCrashed            = false;
-    bool bExistsRecoveryData = false;
-    bool bExistsSessionData  = false;
-
-    impl_checkRecoveryState(bCrashed, bExistsRecoveryData, bExistsSessionData);
-
-    OUString pidfileName = rCmdLineArgs.GetPidfileName();
-    if ( !pidfileName.isEmpty() )
-    {
-        OUString pidfileURL;
-
-        if ( osl_getFileURLFromSystemPath(pidfileName.pData, &pidfileURL.pData) == osl_File_E_None )
-        {
-            osl::File pidfile( pidfileURL );
-            osl::FileBase::RC rc;
-
-            osl::File::remove( pidfileURL );
-            if ( (rc = pidfile.open( osl_File_OpenFlag_Write | osl_File_OpenFlag_Create ) ) == osl::File::E_None )
-            {
-                OString pid( OString::number( GETPID() ) );
-                sal_uInt64 written = 0;
-                if ( pidfile.write(pid.getStr(), pid.getLength(), written) != osl::File::E_None )
-                {
-                    SAL_WARN("desktop.app", "cannot write pidfile " << pidfile.getURL());
-                }
-                pidfile.close();
-            }
-            else
-            {
-                SAL_WARN("desktop.app", "cannot open pidfile " << pidfile.getURL() << rc);
-            }
-        }
-        else
-        {
-            SAL_WARN("desktop.app", "cannot get pidfile URL from path" << pidfileName);
-        }
-    }
-
-    pExecGlobals->bRestartRequested = xRestartManager->isRestartRequested(true);
-    if ( !pExecGlobals->bRestartRequested )
-    {
-        if ((!rCmdLineArgs.WantsToLoadDocument() && !rCmdLineArgs.IsInvisible() && !rCmdLineArgs.IsHeadless() && !rCmdLineArgs.IsQuickstart()) &&
-            (SvtModuleOptions().IsModuleInstalled(SvtModuleOptions::EModule::STARTMODULE)) &&
-            (!bExistsRecoveryData                                                  ) &&
-            (!bExistsSessionData                                                   ) &&
-            (!Application::AnyInput( VclInputFlags::APPEVENT )                          ))
-        {
-             ShowBackingComponent(this);
-        }
-    }
-
-    SetSplashScreenProgress(55);
+    // MACRO: Not a process, no "crash" recovery
 
     svtools::ApplyFontSubstitutionsToVcl();
 
@@ -1545,77 +1487,34 @@ int Desktop::Main()
     SvtAccessibilityOptions::SetVCLSettings();
     SetSplashScreenProgress(60);
 
-    if ( !pExecGlobals->bRestartRequested )
-    {
-        Application::SetFilterHdl( LINK( this, Desktop, ImplInitFilterHdl ) );
+    Application::SetFilterHdl( LINK( this, Desktop, ImplInitFilterHdl ) );
 
-        // Preload function depends on an initialized sfx application!
-        SetSplashScreenProgress(75);
+    // Preload function depends on an initialized sfx application!
+    SetSplashScreenProgress(75);
 
-        // use system window dialogs
-        Application::SetSystemWindowMode( SystemWindowFlags::DIALOG );
+    // use system window dialogs
+    Application::SetSystemWindowMode( SystemWindowFlags::DIALOG );
 
-        SetSplashScreenProgress(80);
+    SetSplashScreenProgress(80);
 
-        if ( !rCmdLineArgs.IsInvisible() &&
-             !rCmdLineArgs.IsNoQuickstart() )
-            InitializeQuickstartMode( xContext );
+    if ( !rCmdLineArgs.IsInvisible() &&
+            !rCmdLineArgs.IsNoQuickstart() )
+        InitializeQuickstartMode( xContext );
 
-        if ( xDesktop.is() )
-            xDesktop->addTerminateListener( new RequestHandlerController );
-        SetSplashScreenProgress(100);
+    if ( xDesktop.is() )
+        xDesktop->addTerminateListener( new RequestHandlerController );
+    SetSplashScreenProgress(100);
 
-        // FIXME: move this somewhere sensible.
-#if HAVE_FEATURE_OPENCL
-        CheckOpenCLCompute(xDesktop);
-#endif
+// MACRO: Simplify Main, don't execute loop directly {
+    // Post user event to startup first application component window
+    // We have to send this OpenClients message short before execute() to
+    // minimize the risk that this message overtakes type detection construction!!
+    Application::PostUserEvent( LINK( this, Desktop, OpenClients_Impl ) );
 
-#if !defined(EMSCRIPTEN)
-        //Running the VCL graphics rendering tests
-        const char * pDisplay = std::getenv("DISPLAY");
-        if (!pDisplay || pDisplay[0] == ':')
-        {
-            runGraphicsRenderTests();
-        }
-#endif
+    // Post event to enable acceptors
+    Application::PostUserEvent( LINK( this, Desktop, EnableAcceptors_Impl) );
 
-        // Post user event to startup first application component window
-        // We have to send this OpenClients message short before execute() to
-        // minimize the risk that this message overtakes type detection construction!!
-        Application::PostUserEvent( LINK( this, Desktop, OpenClients_Impl ) );
-
-        // Post event to enable acceptors
-        Application::PostUserEvent( LINK( this, Desktop, EnableAcceptors_Impl) );
-
-        // call Application::Execute to process messages in vcl message loop
-#if HAVE_FEATURE_JAVA
-        // The JavaContext contains an interaction handler which is used when
-        // the creation of a Java Virtual Machine fails
-        css::uno::ContextLayer layer2(
-            new svt::JavaContext( css::uno::getCurrentContext() ) );
-#endif
-        // check whether the shutdown is caused by restart just before entering the Execute
-        pExecGlobals->bRestartRequested = pExecGlobals->bRestartRequested ||
-                xRestartManager->isRestartRequested(true);
-
-        if ( !pExecGlobals->bRestartRequested )
-        {
-            // if this run of the office is triggered by restart, some additional actions should be done
-            DoRestartActionsIfNecessary( !rCmdLineArgs.IsInvisible() && !rCmdLineArgs.IsNoQuickstart() );
-
-            Execute();
-        }
-    }
-    else
-    {
-        if (xDesktop.is())
-            xDesktop->terminate();
-    }
-    // MACRO: {
-    // Shutdown should never occur since Application::Execute is no longer
-    // blocking
-    // return doShutdown();
-    // MACRO: }
+// MACRO: }
     return  0;
 }
 
@@ -2455,6 +2354,7 @@ void Desktop::OpenSplashScreen()
 
 void Desktop::SetSplashScreenProgress(sal_Int32 iProgress)
 {
+    SAL_WARN("progress", iProgress);
 #if ENABLE_WASM_STRIP_SPLASH
     (void) iProgress;
 #else

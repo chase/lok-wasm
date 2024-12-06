@@ -7,6 +7,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include "sal/main.h"
+#include "tools/extendapplicationenvironment.hxx"
 #include <sfx2/lokhelper.hxx>
 #include <sal/types.h>
 #include <svx/sdr/contact/viewcontact.hxx>
@@ -825,6 +827,7 @@ static int lcl_getViewId(std::string_view payload)
 static uno::Reference<css::uno::XComponentContext> xContext;
 static uno::Reference<css::lang::XMultiServiceFactory> xSFactory;
 static uno::Reference<css::lang::XMultiComponentFactory> xFactory;
+static std::unique_ptr<desktop::Desktop> g_aDesktop;
 
 namespace {
 
@@ -8358,7 +8361,6 @@ static void lo_runLoop(LibreOfficeKit* /*pThis*/,
                        LibreOfficeKitWakeCallback pWakeCallback,
                        void* pData)
 {
-    // I don't know why this is acquired already?
 #if defined(IOS) || defined(ANDROID) || defined(__EMSCRIPTEN__)
     Application::GetSolarMutex().acquire();
 #endif
@@ -8367,15 +8369,7 @@ static void lo_runLoop(LibreOfficeKit* /*pThis*/,
         SolarMutexGuard aGuard;
 
         vcl::lok::registerPollCallbacks(pPollCallback, pWakeCallback, pData);
-        Application::UpdateMainThread();
-        soffice_main();
     }
-#if defined(IOS) || defined(ANDROID) || defined(__EMSCRIPTEN__)
-    // MACRO: Not really, just that execute is async now
-    // SAL_WARN("LOK", "run loop exit");
-    // vcl::lok::unregisterPollCallbacks();
-    // Application::ReleaseSolarMutex();
-#endif
 }
 
 static void lo_registerAnyInputCallback(LibreOfficeKit* /*pThis*/,
@@ -8617,12 +8611,6 @@ static void preloadData()
         auto xComp = xCompLoader->loadComponentFromURL(component, "_blank", 0, szEmptyArgs);
         xComp->dispose();
     }
-
-    // Set user profile's path back to the original one
-    // rtl::Bootstrap::set(u"UserInstallation"_ustr, sUserPath);
-
-    // Note that unotools::Bootstrap has initialized from the temp UserInstallation at this point
-    // see Bootstrap::reloadData for when it gets resynced
 }
 
 namespace {
@@ -8998,28 +8986,15 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
                 }
             }
             desktop::Desktop::CreateTemporaryDirectory();
+            InitVCL();
 
-            // The RequestHandler is specifically set to be ready when all the other
-            // init in Desktop::Main (run from soffice_main) is done. We can enable
-            // the RequestHandler here (without starting any IPC thread;
-            // shortcutting the invocation in Desktop::Main that would start the IPC
-            // thread), and can then use it to wait until we're definitely ready to
-            // continue.
-
-            SAL_INFO("lok", "Enabling RequestHandler");
-            RequestHandler::Enable(false);
-            SAL_INFO("lok", "Starting soffice_main");
-            RequestHandler::SetReady(false);
-            if (!bUnipoll)
-            {
-                // Start the main thread only in non-unipoll mode (i.e. multithreaded).
-                pLib->maThread = osl_createThread(lo_startmain, nullptr);
-                SAL_INFO("lok", "Waiting for RequestHandler");
-                RequestHandler::WaitForReady();
-                SAL_INFO("lok", "RequestHandler ready -- continuing");
-            }
-            else
-                InitVCL();
+            // MACRO: initialize before yield {
+            sal_detail_initialize(-1, nullptr);
+            tools::extendApplicationEnvironment();
+            g_aDesktop.reset(new desktop::Desktop());
+            Application::SetAppName("soffice");
+            Application::UpdateMainThread();
+            // MACRO: }
         }
 
         if (eStage != SECOND_INIT)
@@ -9052,12 +9027,10 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     }
 #endif
 
-
-
     setLanguageAndLocale(u"en-US"_ustr);
-    setHelpRootURL();
-    setCertificateDir();
     // MACRO: {
+    // setHelpRootURL();
+    // setCertificateDir();
     // setDeeplConfig();
     setLanguageToolConfig();
     if (bUnipoll) {
@@ -9084,6 +9057,9 @@ static int lo_initialize(LibreOfficeKit* pThis, const char* pAppPath, const char
     if (eStage == PRE_INIT)
         rtl_alloc_preInit(false);
 
+    if (g_aDesktop) {
+        g_aDesktop->Execute();
+    }
     return bInitialized;
 }
 

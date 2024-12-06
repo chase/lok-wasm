@@ -330,6 +330,8 @@ export interface Module extends EmscriptenModule {
   callbackHandlers: {
     callback(ref: DocumentRef, type: number, payload: string): void;
   };
+
+  yield(): void;
 }
 declare const LOK: EmscriptenModuleFactory<Module>;
 export default LOK;

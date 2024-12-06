@@ -105,6 +105,19 @@ function rectArrayToRectangleTwips(r: RectArray): RectangleTwips {
   };
 }
 
+let running = false;
+
+function run() {
+  if (running) return;
+  running = true;
+  runLoop();
+}
+
+function runLoop() {
+  lok.yield();
+  requestAnimationFrame(runLoop);
+}
+
 const globalHandler: GlobalMethod = {
   load: function (name: string, blob: Blob): DocumentRef | null {
     const doc = new lok.Document(`file://${lok.mountBlob(name, blob)}`);
@@ -117,6 +130,7 @@ const globalHandler: GlobalMethod = {
     }
 
     docMap[ref] = doc;
+    run();
     return ref;
   },
   loadFromExpandedParts: function (
@@ -139,11 +153,13 @@ const globalHandler: GlobalMethod = {
     }
 
     docMap[ref] = doc;
+    run();
     return ref;
   },
 
   preload: function (): void {
     lok.preload();
+    run();
   },
 
   setIsMacOSForConfig: function (): void {

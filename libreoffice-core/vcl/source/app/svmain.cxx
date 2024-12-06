@@ -25,7 +25,7 @@
 #include <osl/file.hxx>
 #include <osl/signal.h>
 
-#include <desktop/exithelper.h>
+#include <desktop/dllapi.h>
 
 #include <comphelper/accessibleeventnotifier.hxx>
 #include <comphelper/processfactory.hxx>
@@ -231,10 +231,30 @@ int ImplSVMain()
         pSVData->maAppData.mbInAppMain = false;
     }
 
-    // MACRO: {
-    // Execute is now async, don't "exit"
-    return 0;
-    // MACRO: }
+    if( pSVData->mxDisplayConnection.is() )
+    {
+        pSVData->mxDisplayConnection->terminate();
+        pSVData->mxDisplayConnection.clear();
+    }
+
+    // This is a hack to work around the problem of the asynchronous nature
+    // of bridging accessibility through Java: on shutdown there might still
+    // be some events in the AWT EventQueue, which need the SolarMutex which
+    // - on the other hand - is destroyed in DeInitVCL(). So empty the queue
+    // here ..
+    if( pSVData->mxAccessBridge.is() )
+    {
+        {
+            SolarMutexReleaser aReleaser;
+            pSVData->mxAccessBridge->dispose();
+        }
+        pSVData->mxAccessBridge.clear();
+    }
+
+    WatchdogThread::stop();
+    DeInitVCL();
+
+    return nReturn;
 }
 
 int SVMain()
@@ -344,17 +364,7 @@ bool InitVCL()
 
     try
     {
-        //Now that uno has been bootstrapped we can ask the config what the UI language is so that we can
-        //force that in as $LANGUAGE. That way we can get gtk to render widgets RTL
-        //if we have a RTL UI in an otherwise LTR locale and get gettext using externals (e.g. python)
-        //to match their translations to our preferred UI language
-        OUString aLocaleString(SvtSysLocaleOptions().GetRealUILanguageTag().getGlibcLocaleString(u".UTF-8"));
-        if (!aLocaleString.isEmpty())
-        {
-            MsLangId::getSystemUILanguage(); //call this now to pin what the system UI really was
-            OUString envVar("LANGUAGE");
-            osl_setEnvironment(envVar.pData, aLocaleString.pData);
-        }
+        MsLangId::getSystemUILanguage(); //call this now to pin what the system UI really was
     }
     catch (const uno::Exception &)
     {
@@ -387,12 +397,6 @@ bool InitVCL()
 
 #if OSL_DEBUG_LEVEL > 0
     DebugEventInjector::getCreate();
-#endif
-
-#ifndef _WIN32
-    // Clear startup notification details for child processes
-    // See https://bugs.freedesktop.org/show_bug.cgi?id=11375 for discussion
-    unsetenv("DESKTOP_STARTUP_ID");
 #endif
 
     return true;

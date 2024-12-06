@@ -341,9 +341,7 @@ inline char const * unwrapStream(SAL_UNUSED_PARAMETER StreamIgnore const &) {
   See @ref sal_log "basic logging functionality" for details.
 */
 #define SAL_INFO(area, stream) \
-    SAL_DETAIL_LOG_STREAM( \
-        SAL_DETAIL_ENABLE_LOG_INFO, ::SAL_DETAIL_LOG_LEVEL_INFO, area, \
-        SAL_WHERE, stream)
+    ((void)0)
 
 /**
   Produce log entry from stream in the given log area if condition is true.

@@ -358,36 +358,12 @@ void Application::notifyInvalidation(tools::Rectangle const* /*pRect*/) const
 }
 
 
-// MACRO: {
+// MACRO: Yield is called in a loop in JS, execute just preps the app {
 void Application::Execute()
 {
-    // In Chrome, setTimeout in nested calls is debounced to roughly 3-4ms, ideally this should be acceptable latency
-    constexpr int MAIN_LOOP_INTERVAL_MS = 4;
-    // Emscripten uses FPS insteaad of just outright letting you set the number of ms
-    constexpr int MAIN_LOOP_FPS = 1000 / MAIN_LOOP_INTERVAL_MS;
-
     ImplSVData* pSVData = ImplGetSVData();
     pSVData->maAppData.mbInAppExecute = true;
     pSVData->maAppData.mbAppQuit = false;
-
-    int nExitCode = 0;
-    if (!pSVData->mpDefInst->DoExecute(nExitCode))
-    {
-        if (Application::IsOnSystemEventLoop())
-        {
-            SAL_WARN("vcl.schedule", "Can't omit DoExecute when running on system event loop!");
-            std::abort();
-        }
-
-        emscripten_set_main_loop_arg([](void* app) {
-            static_cast<Application*>(app)->Yield();
-        }, GetpApp(), MAIN_LOOP_FPS, false);
-    }
-    
-    // MACRO: Never reached, because if the loop ends, we don't need anything like teardown on worker exit
-    // pSVData->maAppData.mbInAppExecute = false;
-    //
-    // GetpApp()->Shutdown();
 }
 // MACRO: }
 

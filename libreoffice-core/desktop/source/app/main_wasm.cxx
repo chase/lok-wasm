@@ -1,3 +1,4 @@
+#include "vcl/svapp.hxx"
 #include <cstdlib>
 #include <emscripten/html5.h>
 #include <optional>
@@ -53,18 +54,22 @@ using namespace emscripten;
 
 static void wake(void*)
 {
-    // TODO: does this really need to do anything than a no-op?
 }
+
+EM_JS(void, loopPoll, (int timeoutUs), {
+    Module['loopPoll']?.(timeoutUs);
+});
 
 static int poll(void*, int timeoutUs)
 {
-    // SAL_WARN("wasm.poll", timeoutUs);
+    SolarMutexGuard aGuard;
+    loopPoll(timeoutUs);
 
     return 1;
 }
 
 // aka. any input callback
-static bool pauseLayoutOnIdle(void* pData)
+static bool pauseLayoutOnIdle(void*)
 {
     if (!desktop::g_activeTileRenderData)
         return false;
@@ -85,23 +90,15 @@ lok::Office* instance()
             | LOK_FEATURE_RANGE_HEADERS | LOK_FEATURE_VIEWID_IN_VISCURSOR_INVALIDATION_CALLBACK);
         instance_->registerAnyInputCallback(pauseLayoutOnIdle, nullptr);
 
-        // intialize an empty document to preload writer-specific configs, then close it after scope is lost
-        // std::unique_ptr<lok::Document> doc(instance_->documentLoad("private:factory/swriter"));
-
-        // std::thread(
-        //     [&]
-        //     {
         int dummy;
         instance_->runLoop(poll, wake, &dummy);
-        //     std::abort();
-        // })
-        // .detach();
     }
     return instance_;
 }
 
 //static
 void preload() { instance(); }
+void yield() { if (GetpApp()) GetpApp()->Yield(); }
 
 static constexpr std::string_view TEXT_PLAIN = "text/plain";
 
@@ -1106,6 +1103,7 @@ EMSCRIPTEN_BINDINGS(lok)
     register_optional<int>();
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
+    function("yield", &yield);
 
     class_<wasm::ITextRanges>("TextRanges")
         .smart_ptr<std::shared_ptr<wasm::ITextRanges>>("TextRanges")
