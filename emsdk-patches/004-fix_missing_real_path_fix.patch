@@ -1,0 +1,13 @@
+diff --git a/./upstream/emscripten/tools/file_packager.py.orig b/./upstream/emscripten/tools/file_packager.py
+index a7e0b4d..0d860e2 100755
+--- a/./upstream/emscripten/tools/file_packager.py.orig
++++ b/./upstream/emscripten/tools/file_packager.py
+@@ -1020,7 +1020,7 @@ def generate_js(data_target, data_files, metadata):
+         var curr;
+         %s
+       };
+-      Module['addRunDependency']('datafile_%s');\n''' % (use_data, js_manipulation.escape_for_js_string(data_target))
++      Module['addRunDependency']('datafile_%s');\n''' % (use_data, js_manipulation.escape_for_js_string(os.path.basename(data_target)))
+     # use basename because from the browser's point of view,
+     # we need to find the datafile in the same dir as the html file
+ 

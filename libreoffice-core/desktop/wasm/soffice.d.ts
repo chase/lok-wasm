@@ -39,8 +39,6 @@ export type TileRenderData = {
   /** `_Atomic int32_t` */
   invalidationStackHead: Int32Array;
   /** `_Atomic uint32_t` */
-  scrollYTwips: Uint32Array;
-  /** `_Atomic uint32_t` */
   scrollHeightTwips: Uint32Array;
   /** `_Atomic uint32_t` */
   widthTileStride: Uint32Array;
@@ -48,6 +46,8 @@ export type TileRenderData = {
   docWidthTwips: Uint32Array;
   /** `_Atomic uint32_t` */
   docHeightTwips: Uint32Array;
+  /** `_Atomic uint32_t` */
+  tileDimTwips: Uint32Array;
 };
 
 export type RectArray = [x: number, y: number, width: number, height: number];
@@ -214,7 +214,7 @@ export declare class Document {
   subscribe(viewId: number, type: number): void;
   unsubscribe(viewId: number, type: number): void;
   startTileRenderer(viewId: number, tileSize: number): TileRenderData;
-  paintTiles(viewId: number);
+  paintTiles(viewId: number, startIndex: number, endIndex: number);
   stopTileRenderer(viewId: number): void;
   setClientVisibleArea(
     viewId: number,
@@ -332,6 +332,8 @@ export interface Module extends EmscriptenModule {
   };
 
   yield(): void;
+
+  loopPoll(timeoutUs): void;
 }
 declare const LOK: EmscriptenModuleFactory<Module>;
 export default LOK;

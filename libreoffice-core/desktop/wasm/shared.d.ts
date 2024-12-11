@@ -140,7 +140,6 @@ export type DocumentWithViewMethods = {
     /** Non-negative float, 1.0 is unchanged, less than 1.0 is smaller, greater than 1.0 is larger */
     scale: number,
   ): void;
-  paintTiles(): void;
   /** TODO: implement */
   stopRendering(): void;
   // NOTE: Disabled until unoembind startup cost is under 1s
@@ -408,55 +407,6 @@ export type ForwardedFromWorker<
 > = FromWorker<K> & {
   m: keyof ReturnType<ForwardingMethod<K>>;
 };
-
-export type ToTileRenderer =
-  | {
-    /** initialize */
-    t: "i";
-    c: OffscreenCanvas[];
-    d: TileRenderData;
-    /** absolute scale */
-    s: number;
-    /** top position in pixels */
-    y: number;
-    /** dpi */
-    dpi: number;
-  }
-  | {
-    /** scroll */
-    t: "s";
-    /** view height in pixels */
-    y: number;
-  }
-  | {
-    /** resize */
-    t: "r";
-    /** height */
-    h: number;
-  }
-  | {
-    /** zoom */
-    t: "z";
-    /** absolute scale */
-    s: number;
-    /** dpi */
-    d: number;
-    /** scrollTop position in px */
-    y: number;
-  }
-  | {
-    /** width change */
-    t: "w";
-    /** width */
-    w: number;
-  }
-  // these are infrequent events, so long types don't matter
-  | {
-    t: "reset";
-  }
-  | {
-    t: "quit";
-  };
 
 export type Ref<T> = {
   current?: T;

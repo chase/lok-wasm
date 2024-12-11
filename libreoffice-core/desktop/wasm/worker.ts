@@ -15,7 +15,6 @@ import type {
   RectangleTwips,
   TileDim,
   TileRendererData,
-  ToTileRenderer,
   ToWorker,
   ViewId,
   WorkerCallback,
@@ -33,6 +32,7 @@ import type {
   RectArray,
   SanitizeOptions,
 } from "./soffice";
+import { renderer, clipToNearest8PxZoom } from "./tile_renderer";
 import LOK from "./soffice";
 // NOTE: Disabled until unoembind startup cost is under 1s
 // import { init_unoembind_uno } from './bindings_uno';
@@ -48,7 +48,8 @@ const docMap: Record<DocumentRef, Document> = {};
 const findResultMap: Record<DocumentRef, ITextRanges & EmbindingDisposable> =
   {};
 const byRef = (ref: DocumentRef) => docMap[ref];
-const tileRenderer: Record<DocumentRef, Record<ViewId, Worker>> = {};
+const tileRenderer: Record<DocumentRef, Record<ViewId, ReturnType<typeof renderer>>> = {};
+let currentDocumentUnderRender: [DocumentRef, ViewId] | undefined;
 
 interface VisibleArea {
   topTwips: number | undefined;
@@ -58,29 +59,20 @@ interface VisibleArea {
 }
 // used to update the LOK visible area more efficiently
 const visibleAreas: Record<DocumentRef, VisibleArea> = {};
-// FIXME: this is kind of messy, since this is now duplicated tile_renderer_worker.ts and index.ts as well {
-export const TILE_DIM_PX = 256;
+// FIXME: this is kind of messy, since this is now duplicated with index.ts as well {
+const TILE_DIM_PX = 256;
 /** 15 = 1440 twips-per-inch / 96 dpi */
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
-function clipToNearest8PxZoom(w: number, s: number) {
-  const scaledWidth = Math.ceil(w * s);
-  const mod = scaledWidth % 8;
-  if (mod === 0)
-    return s;
-  return Math.abs((scaledWidth - mod) / w - s) <
-    Math.abs((scaledWidth + 8 - mod) / w - s)
-    ? (scaledWidth - mod) / w
-    : (scaledWidth + 8 - mod) / w;
-}
 function getScaledTwips(zoom: number) {
   return clipToNearest8PxZoom(TILE_DIM_PX, 1 / zoom) * LOK_INTERNAL_TWIPS_TO_PX;
 }
 /** CSS pixels are DPI indepdendent */
-export function cssPxToTwips(px: number, zoom: number) {
-  return px * getScaledTwips(zoom);
+function cssPxToTwips(px: number, zoom: number) {
+  return Math.round(px * getScaledTwips(zoom));
 }
 // FIXME: }
 
+console.time('load');
 const lok = await LOK({
   withFcCache: true,
   callbackHandlers: {
@@ -93,8 +85,15 @@ const lok = await LOK({
       };
       postMessage(message);
     },
-  },
+  }
 });
+
+function postIdle(ref: DocumentRef) {
+  postMessage({ f: "idle_", d: ref });
+}
+function postPaint(ref: DocumentRef) {
+  postMessage({ f: "paint_", d: ref });
+}
 
 function rectArrayToRectangleTwips(r: RectArray): RectangleTwips {
   return {
@@ -106,6 +105,7 @@ function rectArrayToRectangleTwips(r: RectArray): RectangleTwips {
 }
 
 let running = false;
+let isAlreadyIdle = false;
 
 function run() {
   if (running) return;
@@ -115,6 +115,16 @@ function run() {
 
 function runLoop() {
   lok.yield();
+  if (currentDocumentUnderRender) {
+    const [ref, viewId] = currentDocumentUnderRender;
+    if (tileRenderer[ref]?.[viewId]?.paintAndRender()) {
+      isAlreadyIdle = false;
+      postPaint(ref);
+    } else if (!isAlreadyIdle) {
+      postIdle(ref);
+      isAlreadyIdle = true;
+    }
+  }
   requestAnimationFrame(runLoop);
 }
 
@@ -160,6 +170,7 @@ const globalHandler: GlobalMethod = {
   preload: function (): void {
     lok.preload();
     run();
+    console.timeEnd('load');
   },
 
   setIsMacOSForConfig: function (): void {
@@ -339,13 +350,14 @@ const handler: DocumentMethodHandler<Document> = {
     tileSize: TileDim,
     zoom: number,
     dpi: number,
-    widthTwips: number,
+    widthPx: number,
     heightPx: number,
     yPosPx: number,
   ): TileRendererData {
     const ref = doc.ref();
     const topTwips = cssPxToTwips(yPosPx, zoom);
     const heightTwips = cssPxToTwips(heightPx, zoom);
+    const widthTwips = cssPxToTwips(widthPx, zoom);
     visibleAreas[ref] = {
       zoom,
       topTwips,
@@ -354,37 +366,22 @@ const handler: DocumentMethodHandler<Document> = {
     };
     doc.setClientVisibleArea(viewId, 0, topTwips, widthTwips, heightTwips);
     const result = doc.startTileRenderer(viewId, tileSize);
-    console.time('tileRenderLaunch');
-    const worker = new Worker(
-      new URL("./tile_renderer_worker.js", import.meta.url),
-      { type: "module" },
-    );
-    console.timeEnd('tileRenderLaunch');
     if (!tileRenderer[ref]) {
       tileRenderer[ref] = {};
     }
-    tileRenderer[ref][result.viewId] = worker;
 
-    worker.addEventListener("message", ({ data }) => {
-      if (data.idle) {
-        postMessage({ f: "idle_", d: ref });
-      }
-      if (data.paint) {
-        postMessage({ f: "paint_", d: ref });
-      }
+    const r = renderer(doc);
+    tileRenderer[ref][result.viewId] = r;
+
+    currentDocumentUnderRender = [ref, result.viewId];
+
+    r.initialize({
+      c: canvases,
+      d: result,
+      s: zoom,
+      y: yPosPx,
+      dpi,
     });
-
-    worker.postMessage(
-      {
-        t: "i",
-        c: canvases,
-        d: result,
-        s: zoom,
-        y: yPosPx,
-        dpi,
-      } as ToTileRenderer,
-      { transfer: [...canvases] },
-    );
 
     return {
       docRef: ref,
@@ -401,14 +398,7 @@ const handler: DocumentMethodHandler<Document> = {
     throw new Error("Function not implemented.");
   },
 
-  paintTiles: function (doc: Document, viewId: ViewId): void {
-    doc.paintTiles(viewId);
-  },
-
   stopRendering: function (doc: Document, viewId: ViewId): void {
-    const ref = doc.ref();
-    const worker = tileRenderer[ref]?.[viewId];
-    worker?.terminate();
     doc.stopTileRenderer(viewId);
   },
 
@@ -418,32 +408,21 @@ const handler: DocumentMethodHandler<Document> = {
     yPx: number,
   ): Promise<number> {
     const ref = doc.ref();
-    const worker = tileRenderer[ref]?.[viewId];
-    if (!worker) return;
+    const r = tileRenderer[ref]?.[viewId];
+    if (!r) return;
     const visibleArea = visibleAreas[ref];
     if (visibleArea && visibleArea.zoom) {
       const oldY = visibleArea.topTwips;
       visibleArea.topTwips = cssPxToTwips(yPx, visibleArea.zoom);
       if (oldY !== visibleArea.topTwips && visibleArea.widthTwips && visibleArea.heightTwips) {
+        console.log(visibleArea);
         doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
       }
     }
-    const scrollPromise = new Promise<number>((resolve) => {
-      const handleMessage = ({ data }: MessageEvent) => {
-        if (data.s != null) {
-          resolve(data.s);
-        }
-        worker.removeEventListener("message", handleMessage);
-      };
-      worker.addEventListener("message", handleMessage);
-    });
 
-    worker.postMessage({
-      t: "s",
-      y: yPx,
-    } as ToTileRenderer);
-
-    return scrollPromise;
+    const res = Promise.resolve(r.scroll(yPx));
+    // r.paintAndRender();
+    return res;
   },
 
   setVisibleHeight: function (
@@ -460,10 +439,7 @@ const handler: DocumentMethodHandler<Document> = {
         doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
       }
     }
-    tileRenderer[ref]?.[viewId]?.postMessage({
-      t: "r",
-      h: heightPx,
-    } as ToTileRenderer);
+    tileRenderer[ref]?.[viewId]?.resizeHeight(heightPx);
   },
 
   setDocumentWidth: function (
@@ -475,14 +451,12 @@ const handler: DocumentMethodHandler<Document> = {
     const visibleArea = visibleAreas[ref];
     if (visibleArea && visibleArea.widthTwips !== widthTwips) {
       visibleArea.widthTwips = widthTwips;
+      console.log({widthTwips});
       if (visibleArea.heightTwips && visibleArea.topTwips) {
         doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
       }
     }
-    tileRenderer[ref]?.[viewId]?.postMessage({
-      t: "w",
-      w: widthTwips,
-    } as ToTileRenderer);
+    tileRenderer[ref]?.[viewId]?.resizeWidth(widthTwips);
   },
 
   dispatchCommand: function (
@@ -661,11 +635,10 @@ const handler: DocumentMethodHandler<Document> = {
     scale: number,
     dpi: number,
   ): Promise<void> {
-    tileRenderer[doc.ref()]?.[viewId]?.postMessage({
-      t: "z",
+    tileRenderer[doc.ref()]?.[viewId]?.zoom({
       s: scale,
       d: dpi,
-    } as ToTileRenderer);
+    })
   },
 
   getOutline: function (doc: Document, viewId: ViewId) {

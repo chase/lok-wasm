@@ -52,22 +52,6 @@ namespace
 {
 using namespace emscripten;
 
-static void wake(void*)
-{
-}
-
-EM_JS(void, loopPoll, (int timeoutUs), {
-    Module['loopPoll']?.(timeoutUs);
-});
-
-static int poll(void*, int timeoutUs)
-{
-    SolarMutexGuard aGuard;
-    loopPoll(timeoutUs);
-
-    return 1;
-}
-
 // aka. any input callback
 static bool pauseLayoutOnIdle(void*)
 {
@@ -88,10 +72,9 @@ lok::Office* instance()
         instance_->setOptionalFeatures(
             LOK_FEATURE_PART_IN_INVALIDATION_CALLBACK | LOK_FEATURE_NO_TILED_ANNOTATIONS
             | LOK_FEATURE_RANGE_HEADERS | LOK_FEATURE_VIEWID_IN_VISCURSOR_INVALIDATION_CALLBACK);
-        instance_->registerAnyInputCallback(pauseLayoutOnIdle, nullptr);
+        // instance_->registerAnyInputCallback(pauseLayoutOnIdle, nullptr);
 
-        int dummy;
-        instance_->runLoop(poll, wake, &dummy);
+        GetpApp()->GetSolarMutex().acquire();
     }
     return instance_;
 }
@@ -676,11 +659,8 @@ public:
         val result = val::object();
         result.set("viewId", data.viewId);
         result.set("tileSize", data.tileSize);
-        result.set("state", typed_memory_view(1, (int32_t*)&data.state));
         result.set("paintedTiles",
                    typed_memory_view(data.scratchTilesAllocSize, data.paintedTiles.get()));
-        result.set("tileStartIndex", typed_memory_view(1, (uint32_t*)&data.tileStartIndex));
-        result.set("tileEndIndex", typed_memory_view(1, (uint32_t*)&data.tileEndIndex));
         result.set("pendingFullPaint", typed_memory_view(1, (int32_t*)&data.pendingFullPaint));
         result.set("hasInvalidations", typed_memory_view(1, (int32_t*)&data.hasInvalidations));
         result.set("isVisibleAreaPainted",
@@ -689,7 +669,7 @@ public:
                                                           (uint32_t*)&data.invalidationStack));
         result.set("invalidationStackHead",
                    typed_memory_view(1, (int32_t*)&data.invalidationStackHead));
-        result.set("scrollYTwips", typed_memory_view(1, (uint32_t*)&data.scrollYTwips));
+        result.set("tileDimTwips", typed_memory_view(1, (uint32_t*)&data.tileDimTwips));
         result.set("scrollHeightTwips", typed_memory_view(1, (uint32_t*)&data.scrollHeightTwips));
         result.set("widthTileStride", typed_memory_view(1, (uint32_t*)&data.widthTileStride));
         result.set("docWidthTwips", typed_memory_view(1, (uint32_t*)&data.docWidthTwips));
@@ -698,10 +678,10 @@ public:
         return result;
     }
 
-    void paintTiles(int viewId)
+    void paintTiles(int viewId, uint32_t startIndex, uint32_t endIndex)
     {
         doc_->setView(viewId);
-        ext()->paintTiles();
+        ext()->paintTiles(startIndex, endIndex);
     }
 
     void stopTileRenderer(int32_t viewId) { ext()->stopTileRenderer(viewId); }
@@ -1044,7 +1024,7 @@ private:
         {
             if (!safePayload.first)
                 safePayload = makeSafeString(payload);
-            MAIN_THREAD_ASYNC_EM_ASM(
+            EM_ASM(
                 {
                     Module.callbackHandlers.callback($0, $1, UTF8ToString($2));
                     Module.freeSafeString($3);
@@ -1084,7 +1064,7 @@ private:
         {
             if (!safePayload.first)
                 safePayload = makeSafeString(payload.getStr());
-            MAIN_THREAD_ASYNC_EM_ASM(
+            EM_ASM(
                 {
                     Module.callbackHandlers.callback($0, $1, UTF8ToString($2));
                     Module.freeSafeString($3);

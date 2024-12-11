@@ -1724,8 +1724,8 @@ void unregisterPollCallbacks()
 
 bool isUnipoll()
 {
-    ImplSVData * pSVData = ImplGetSVData();
-    return pSVData && pSVData->mpPollCallback != nullptr;
+    // MACRO: always true
+    return true;
 }
 
 void numberOfViewsChanged(int count)

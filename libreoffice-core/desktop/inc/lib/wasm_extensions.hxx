@@ -36,10 +36,7 @@ struct TileRendererData
     const int32_t scratchTilesAllocSize;
 
     // individual tile paint
-    _Atomic RenderState state = RenderState::IDLE;
     std::unique_ptr<uint8_t[]> paintedTiles;
-    _Atomic uint32_t tileStartIndex = 0;
-    _Atomic uint32_t tileEndIndex = 0;
 
     // tile invalidations handling using a fixed-size stack that is thread-safe
     _Atomic uint32_t pendingFullPaint = 1; // this is a bool
@@ -49,20 +46,15 @@ struct TileRendererData
 
     // toggled in tile_render_worker.ts, used for any input callback
     _Atomic int32_t isVisibleAreaPainted = 0;
+    _Atomic uint32_t tileDimTwips;
 
-    // changes frequently
-    _Atomic uint32_t scrollYTwips;
-    uint32_t prevScrollYTwips = -1;
     // changes somewhat frequently
     _Atomic uint32_t docHeightTwips;
-    uint32_t prevDocHeightTwips = -1;
     // changes infrequently
     _Atomic uint32_t widthTileStride;
     _Atomic uint32_t docWidthTwips;
-    uint32_t prevDocWidthTwips = -1;
     // changes infrequently
     _Atomic uint32_t scrollHeightTwips;
-    uint32_t prevScrollHeightTwips = -1;
 
     LibreOfficeKitDocument* doc;
 
@@ -116,7 +108,7 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     css::uno::Reference<css::lang::XComponent> mxComponent;
 
     WasmDocumentExtension(css::uno::Reference<css::lang::XComponent> xComponent);
-    void paintTiles();
+    void paintTiles(uint32_t startIndex, uint32_t endIndex);
     TileRendererData& startTileRenderer(int32_t viewId, int32_t tileSize);
     void stopTileRenderer(int32_t viewId);
     bool hasInvalidations();

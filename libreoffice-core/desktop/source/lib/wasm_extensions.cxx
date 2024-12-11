@@ -42,17 +42,6 @@ using cppu::getCaughtException;
 
 static constexpr int MAX_THREADS_TO_NOTIFY = 2;
 
-static void waitWhileInState(TileRendererData& data, RenderState state)
-{
-    emscripten_futex_wait(&data.state, (uint32_t)state, INFINITY);
-}
-
-static void changeState(TileRendererData& data, RenderState state)
-{
-    __c11_atomic_store(&data.state, state, __ATOMIC_SEQ_CST);
-    emscripten_futex_wake(&data.state, MAX_THREADS_TO_NOTIFY);
-}
-
 // Convert tile index to grid coordinates
 std::array<int, 2> tileIndexToGridCoord(int tileIndex, int widthTileStride)
 {
@@ -73,30 +62,24 @@ WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XCom
 {
 }
 
-void WasmDocumentExtension::paintTiles()
+void WasmDocumentExtension::paintTiles(uint32_t startIndex, uint32_t endIndex)
 {
-    while (tileRendererData_.has_value())
+    if (!tileRendererData_.has_value()) return;
+    auto& d = tileRendererData_.value();
+
+    // this shouldn't happen except for after the tile renderer is stopped
+    if (!d.paintedTiles)
+        return;
+
+    d.doc->pClass->setView(d.doc, d.viewId);
+    // without clearing the painted tiles, any later paints will be composited on top of the existing data
+    __builtin_memset(d.paintedTiles.get(), 0, d.tileAllocSize * (endIndex - startIndex + 1));
+    for (uint32_t i = startIndex; i <= endIndex; ++i)
     {
-        auto& d = tileRendererData_.value();
-        waitWhileInState(d, RenderState::IDLE);
-
-        // this shouldn't happen except for after the tile renderer is stopped
-        if (!d.paintedTiles)
-            return;
-
-        uint32_t endIndex = d.tileEndIndex;
-        uint32_t startIndex = d.tileStartIndex;
-
-        d.doc->pClass->setView(d.doc, d.viewId);
-        // without clearing the painted tiles, any later paints will be composited on top of the existing data
-        __builtin_memset(d.paintedTiles.get(), 0, d.tileAllocSize * (endIndex - startIndex + 1));
-        for (uint32_t i = startIndex; i <= endIndex; ++i)
-        {
-            auto rect = tileIndexToTwipsRect(i, d.widthTileStride, d.tileSize);
-            d.doc->pClass->paintTile(d.doc, &d.paintedTiles[i * d.tileAllocSize], d.tileSize,
-                                     d.tileSize, rect[0], rect[1], rect[2], rect[3]);
-        }
-        changeState(d, RenderState::IDLE);
+        uint32_t byteOffset = (i - startIndex) * d.tileAllocSize;
+        auto rect = tileIndexToTwipsRect(i, d.widthTileStride, d.tileDimTwips);
+        d.doc->pClass->paintTile(d.doc, &d.paintedTiles[byteOffset], d.tileSize,
+                                    d.tileSize, rect[0], rect[1], rect[2], rect[3]);
     }
 }
 

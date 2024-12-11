@@ -426,38 +426,7 @@ bool SvpSalInstance::ImplYield(bool bWait, bool bHandleAllCurrentEvents)
 
     SolarMutexReleaser aReleaser;
 
-    if (vcl::lok::isUnipoll())
-    {
-        ImplSVData* pSVData = ImplGetSVData();
-        if (pSVData->mpPollClosure)
-        {
-            int nPollResult = pSVData->mpPollCallback(pSVData->mpPollClosure, nTimeoutMicroS);
-            if (nPollResult < 0)
-                pSVData->maAppData.mbAppQuit = true;
-            bWasEvent = bWasEvent || (nPollResult != 0);
-        }
-    }
-    else if (bMustSleep)
-    {
-        SvpSalYieldMutex *const pMutex(static_cast<SvpSalYieldMutex*>(GetYieldMutex()));
-        std::unique_lock<std::mutex> g(pMutex->m_WakeUpMainMutex);
-        // wait for doRelease() or Wakeup() to set the condition
-        if (nTimeoutMicroS == -1)
-        {
-            pMutex->m_WakeUpMainCond.wait(g,
-                    [pMutex]() { return pMutex->m_wakeUpMain; });
-        }
-        else
-        {
-            int nTimeoutMS = nTimeoutMicroS / 1000;
-            if (nTimeoutMicroS % 1000)
-                nTimeoutMS += 1;
-            pMutex->m_WakeUpMainCond.wait_for(g,
-                    std::chrono::milliseconds(nTimeoutMS),
-                    [pMutex]() { return pMutex->m_wakeUpMain; });
-        }
-        // here no need to check m_Request because Acquire will do it
-    }
+    // MACRO: instead of using the unipoll mechanism, the loop actually yields to JS
 
     return bWasEvent;
 }
