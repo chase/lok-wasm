@@ -113,9 +113,6 @@ export function OfficeDocument(props: Props) {
   >();
   const [rectsTwips, setRectsTwips] = createSignal<RectanglePx[] | undefined>();
   const [canvas0, setCanvas0] = createSignal<HTMLCanvasElement | undefined>();
-  const [canvas1, setCanvas1] = createSignal<HTMLCanvasElement | undefined>();
-  let activeCanvas = 0;
-  let canvasSwitchLock = false;
 
   const cursorType = createDocEventSignal(
     () => props.doc,
@@ -182,7 +179,6 @@ export function OfficeDocument(props: Props) {
     props.doc.afterIdle(() => {
       if (didZoomIn()) {
         canvas0()!.style.objectFit = CANVAS_FIT;
-        canvas1()!.style.objectFit = CANVAS_FIT;
       }
     });
   });
@@ -196,8 +192,7 @@ export function OfficeDocument(props: Props) {
     const width = docSizePx()?.[0];
     const height = canvasHeight();
     const canvas0_ = canvas0();
-    const canvas1_ = canvas1();
-    if (!width || !height || !canvas0_ || !canvas1_ || !props.doc) return;
+    if (!width || !height || !canvas0_ || !props.doc) return;
     const [getZoom] = getOrCreateZoomSignal(() => props.doc);
     const zoom = getZoom();
     const getDpi = getOrCreateDPISignal();
@@ -206,11 +201,8 @@ export function OfficeDocument(props: Props) {
     const scaledHeight = Math.floor(height * dpi);
     canvas0_.width = scaledWidth;
     canvas0_.height = scaledHeight;
-    canvas1_.width = scaledWidth;
-    canvas1_.height = scaledHeight;
     const canvases = [
       canvas0_.transferControlToOffscreen(),
-      canvas1_.transferControlToOffscreen(),
     ];
     didInitialRender.add(props.doc);
     await props.doc.startRendering(canvases, 256, zoom, dpi, width, height, scrollAreaRef.scrollTop);
@@ -252,36 +244,8 @@ export function OfficeDocument(props: Props) {
   );
 
   const handleScroll = async (yPx: number, xPx: number) => {
+    props.doc.setScrollTop(yPx);
     setScrollPos({ x: xPx, y: yPx });
-    const c0 = canvas0();
-    const c1 = canvas1();
-    if (!c0 || !c1) return;
-    const previousCanvas = activeCanvas;
-    const dpi = getOrCreateDPISignal();
-    const scaledTileDim = TILE_DIM_PX / dpi();
-    // because this function is async, scroll events have a race condition that can cause flickering
-    // if switching the canvas isn't explicitly blocked until an ongoing setScrollTop resolves
-    if (canvasSwitchLock) {
-      // during the lock, the old active canvas is still displayed until the previous setScrollTop resolves
-      const c = activeCanvas === 0 ? c1 : c0;
-      c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % scaledTileDim}px, 0)`;
-      return;
-    }
-    canvasSwitchLock = true;
-    activeCanvas = await props.doc.setScrollTop(yPx);
-    canvasSwitchLock = false;
-
-    const c = activeCanvas === 0 ? c0 : c1;
-    // xPx/yPx is technically in css pixels, but it is referring to the position
-    // of the document rendered on the canvas which is in physical pixels
-    // so the offset should be scaled down aswell.
-    c.style.transform = `translate3d(-${xPx}px, -${Math.floor(yPx) % scaledTileDim}px, 0)`;
-    if (previousCanvas !== activeCanvas) {
-      const c = activeCanvas === 0 ? c0 : c1;
-      c.style.display = 'block';
-      const priorC = previousCanvas === 0 ? c0 : c1;
-      priorC.style.display = 'none';
-    }
   };
 
   return (
@@ -303,19 +267,6 @@ export function OfficeDocument(props: Props) {
                 width: `${docSizePx()![0]}px`,
                 height: `${canvasHeight()!}px`,
                 display: 'block',
-              }}
-            />
-            <canvas
-              ref={setCanvas1}
-              class="absolute top-0 pointer-events-none"
-              style={{
-                'object-fit': didZoomIn() ? ZOOM_IN_CANVAS_FIT : CANVAS_FIT,
-                'object-position': 'top center',
-                'image-rendering': 'crisp-edges',
-                'transform-origin': 'top center',
-                width: `${docSizePx()![0]}px`,
-                height: `${canvasHeight()}px`,
-                display: 'none',
               }}
             />
           </>

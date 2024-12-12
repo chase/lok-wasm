@@ -72,7 +72,7 @@ lok::Office* instance()
         instance_->setOptionalFeatures(
             LOK_FEATURE_PART_IN_INVALIDATION_CALLBACK | LOK_FEATURE_NO_TILED_ANNOTATIONS
             | LOK_FEATURE_RANGE_HEADERS | LOK_FEATURE_VIEWID_IN_VISCURSOR_INVALIDATION_CALLBACK);
-        // instance_->registerAnyInputCallback(pauseLayoutOnIdle, nullptr);
+        instance_->registerAnyInputCallback(pauseLayoutOnIdle, nullptr);
 
         GetpApp()->GetSolarMutex().acquire();
     }

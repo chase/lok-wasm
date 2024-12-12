@@ -22,7 +22,7 @@ export function ScrollArea(props_: Props) {
   });
   return (
     <div
-      class={`${local.class} h-full w-full overflow-auto`}
+      class={`${local.class} h-full w-full overflow-auto overscroll-none`}
       {...others}
       ref={(ref) => {
         (local.ref as Extract<(typeof local)['ref'], Function>)?.(ref);

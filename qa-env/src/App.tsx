@@ -57,12 +57,12 @@ async function fileOpen(files: FileList | null) {
   setDoc(doc);
   setLoading(false);
   doc.on(CallbackType.ERROR, console.error);
-  doc.afterIdle(() => {
-    console.log('did idle');
-  });
-  doc.afterPaint(() => {
-    console.log('did paint');
-  });
+  // doc.afterIdle(() => {
+  //   console.log('did idle');
+  // });
+  // doc.afterPaint(() => {
+  //   console.log('did paint');
+  // });
   window.d = doc;
 }
 

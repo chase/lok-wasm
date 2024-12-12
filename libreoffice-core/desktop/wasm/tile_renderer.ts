@@ -1,5 +1,7 @@
 import type { Document, TileRenderData } from "./soffice";
 
+const NOT_CHROMIUM = navigator.userAgent.indexOf('Chrome/') === -1;
+
 type Rect = [
 	/** x */ x: number,
 	/** y */ y: number,
@@ -11,8 +13,7 @@ const MAX_PAINTED_TILES_PER_ITER = 32;
 
 type TileIndexRange = [start: number, endInclusive: number];
 
-const DEBUG = true;
-const START_TIMESTAMP = Date.now();
+const DEBUG = false;
 
 /** 15 = 1440 twips-per-inch / 96 dpi */
 const LOK_INTERNAL_TWIPS_TO_PX = 15;
@@ -24,7 +25,7 @@ export function renderer(doc: Document) {
 	let d: TileRenderData;
 	let activeCanvas: OffscreenCanvas;
 	let ctx: OffscreenCanvasRenderingContext2D;
-	let canvases: OffscreenCanvas[];
+	let canvases: [OffscreenCanvas];
 	let activeCanvasIndex: number = 0;
 	let tileRingIndexToTime: Map<number, number> = new Map();
 
@@ -54,19 +55,15 @@ export function renderer(doc: Document) {
 	let dpi: number = 1;
 	let scheduledWidthPx: number = -1;
 	let scheduledHeightPx: number = -1;
-	let renderedTileTop: number = 0;
 	let didScroll = false;
 	let firstPaint = true;
-	let ignorePostPaint = false;
 
 	const visibleInvalidations: Rect[] = [];
 	const nonVisibleInvalidations: Rect[] = [];
 
 	let zoomResetTimeout: number | undefined;
 
-	let ignorePostPaintTimeout: ReturnType<typeof setTimeout>;
-
-	function scroll(/** scroll top in pixels */ y: number): number {
+	function scroll(/** scroll top in pixels */ y: number) {
 		// scroll
 		if (!activeCanvas) return;
 
@@ -75,26 +72,12 @@ export function renderer(doc: Document) {
 		// it represents the amount we have scrolled through the canvas
 		// document which is rendered in physical pixels
 		scheduledTopTwips = pxToTwips(y);
-		ignorePostPaint = true;
-		if (ignorePostPaintTimeout) clearTimeout(ignorePostPaintTimeout);
-		ignorePostPaintTimeout = setTimeout(() => {
-			ignorePostPaint = false;
-		}, 60);
 
-		// Checks that the tile row has changed since the last scroll
-		const newTop = Math.floor(scheduledTopTwips / tileDimTwips);
-		if (newTop !== renderedTileTop) {
+		if (scheduledTopTwips !== renderedTopTwips) {
 			didScroll = true;
-			const oldCanvas = canvases[activeCanvasIndex];
-			// activeCanvasIndex ^= 1;
 			activeCanvas = canvases[activeCanvasIndex];
-			ctx = getContext(activeCanvas);
-			ctx.drawImage(oldCanvas, 0, newTop - renderedTileTop);
-			Atomics.store(d.scrollHeightTwips, 0, scheduledTopTwips);
 			Atomics.store(d.isVisibleAreaPainted, 0, 0);
 		}
-		console.log({activeCanvasIndex});
-		return activeCanvasIndex;
 	}
 
 	function resizeHeight(/** height */ h: number) {
@@ -102,8 +85,8 @@ export function renderer(doc: Document) {
 		scheduledHeightPx = cssPxToPx(h, dpi);
 		scheduledHeightTwips = pxToTwips(h);
 		Atomics.store(d.scrollHeightTwips, 0, scheduledHeightTwips);
-		const newTop = Math.floor(scheduledTopTwips / tileDimTwips);
-		if (newTop !== renderedTileTop) {
+		const newHeight = Math.floor(scheduledHeightTwips / tileDimTwips);
+		if (newHeight !== renderedHeightTwips) {
 			Atomics.store(d.isVisibleAreaPainted, 0, 0);
 		}
 	}
@@ -128,16 +111,9 @@ export function renderer(doc: Document) {
 		/** dpi */
 		d: number;
 	}) {
-		return;
 		if (!activeCanvas) return;
 		// Clear the previously scheduled zoom reset
 		if (zoomResetTimeout) clearTimeout(zoomResetTimeout);
-
-		ignorePostPaint = true;
-		if (ignorePostPaintTimeout) clearTimeout(ignorePostPaintTimeout);
-		ignorePostPaintTimeout = setTimeout(() => {
-			ignorePostPaint = false;
-		}, 60);
 
 		zoom(data.s, data.d);
 	}
@@ -190,15 +166,12 @@ export function renderer(doc: Document) {
 
 		scheduledWidthPx = twipsToPx(docWidthTwips, in_dpi);
 
-		// Set this as a reference for the new position for the next scroll event
-		renderedTileTop = Math.floor(scheduledTopTwips / tileDimTwips);
-
 		scale = in_scale;
 		dpi = in_dpi;
 	}
 
 	function initialize(data: {
-		c: OffscreenCanvas[];
+		c: [OffscreenCanvas];
 		d: TileRenderData;
 		/** absolute scale */
 		s: number;
@@ -212,8 +185,7 @@ export function renderer(doc: Document) {
 		activeCanvas = data.c[0];
 		ctx = getContext(activeCanvas);
 
-		console.log('initialize?');
-		// ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
+		ctx.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
 
 		scale = data.s;
 		dpi = data.dpi;
@@ -233,11 +205,9 @@ export function renderer(doc: Document) {
 		]);
 		if (renderedHeightTwips !== scheduledHeightTwips) {
 			canvases[0].height = scheduledHeightPx;
-			canvases[1].height = scheduledHeightPx;
 		}
 		if (activeCanvas.width !== scheduledWidthPx) {
 			canvases[0].width = scheduledWidthPx;
-			canvases[1].width = scheduledWidthPx;
 		}
 		renderedHeightTwips = visibleHeight;
 		renderedTopTwips = visibleTop;
@@ -245,8 +215,8 @@ export function renderer(doc: Document) {
 		return rangesToRender;
 	}
 
+  // NOTE: strictly speaking, this should never need to paint anymore, it's just a catch-all
 	// precondition: prepareForRendering must be run prior
-	// FIXME: this is probably necessary due to a logic error somewhere, not cache misses
 	/**
 	 * @returns true if needs render, false otherwise
 	 */
@@ -284,17 +254,15 @@ export function renderer(doc: Document) {
 		const invalidations = removeContainedAdjacentRects(drainInvalidations());
 		let needsRender = hasUpdatedVisibleArea();
 		const rangesToPaint = prepareForRendering();
-		const visibleTop = renderedHeightTwips;
-		const visibleHeight = renderedTopTwips;
+		const visibleTop = renderedTopTwips;
+		const visibleHeight = renderedHeightTwips;
 
 		if (Atomics.load(d.pendingFullPaint, 0) === 1) {
-			console.log('full paint');
 			// clear invalidations, because the whole area will be repainted
 			visibleInvalidations.length = 0;
 			nonVisibleInvalidations.length = 0;
 
 			const newVisibleRingTiles = new Set<number>();
-			visibleRingTiles.clear();
 
 			// all tiles are invalid
 			validTiles.clear();
@@ -307,98 +275,106 @@ export function renderer(doc: Document) {
 
 			visibleRingTiles = newVisibleRingTiles;
 
+			// FIXME: This doesn't work correctly anymore
+			// On Chrome: causes an infinite scroll loop, jumps back to top
+			// On FF/Safari: just clears the whole area
+			//
+			// clearNonVisibleTiles();
+
 			needsRender = true;
-		} else {
-			// // rebalance visible and non-visible
-			// invalidations.push(...visibleInvalidations);
-			// invalidations.push(...nonVisibleInvalidations);
-			// visibleInvalidations.length = 0;
-			// nonVisibleInvalidations.length = 0;
-			//
-			// for (const invalidation of invalidations) {
-			// 	commitVisibleAndNonVisible(invalidation, visibleTop, visibleHeight);
-			// }
-			//
-			// const newVisibleRingTiles = new Set<number>();
-			//
-			// if (visibleInvalidations.length != 0) {
-			// 	const tileRangesToPaint = [];
-			// 	// first do a pass and mark the invalid tiles, to prevent uncessary work by invalidating/painting overlapping areas
-			// 	for (const visibleInvalidation of visibleInvalidations) {
-			// 		const rangesToPaint = rectToTileIndexRanges(visibleInvalidation);
-			// 		markInvalid(rangesToPaint);
-			// 		tileRangesToPaint.push(rangesToPaint);
-			// 	}
-			//
-			// 	for (const rangesToPaint of tileRangesToPaint) {
-			// 		// effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
-			// 		for (
-			// 			let y = 0;
-			// 			y < rangesToPaint.length && !shouldPausePaint();
-			// 			++y
-			// 		) {
-			// 			const [start, endInclusive] = rangesToPaint[y];
-			// 			batchedBlockingPaintTiles(start, endInclusive, visibleRingTiles);
-			// 		}
-			// 	}
-			// }
-			//
-			// const visibleRangesToPaint = rectToTileIndexRanges([
-			// 	0,
-			// 	visibleTop,
-			// 	docWidthTwips,
-			// 	visibleHeight,
-			// ]);
-			//
-			// for (
-			// 	let y = 0;
-			// 	y < visibleRangesToPaint.length && !shouldPausePaint();
-			// 	++y
-			// ) {
-			// 	const [start, endInclusive] = visibleRangesToPaint[y];
-			// 	let runStart: number | null = null;
-			//
-			// 	for (let x = start; x <= endInclusive; ++x) {
-			// 		const ringIndex = tileIndexToTileRingIndex.get(x);
-			// 		const valid =
-			// 			ringIndex != null &&
-			// 			validTiles.has(x) &&
-			// 			tileRingIndexToTileIndex.get(ringIndex) === x;
-			//
-			// 		if (valid) {
-			// 			newVisibleRingTiles.add(ringIndex);
-			//
-			// 			// the range is closed, paint the batch and reset the run
-			// 			if (runStart != null) {
-			// 				runStart = null;
-			// 				needsRender = true;
-			// 				batchedBlockingPaintTiles(runStart, x - 1, newVisibleRingTiles);
-			// 			}
-			// 		} else if (runStart == null) {
-			// 			runStart = x;
-			// 		}
-			// 	}
-			//
-			// 	// close last range if there's one open
-			// 	if (runStart != null) {
-			// 		needsRender = true;
-			// 		batchedBlockingPaintTiles(
-			// 			runStart,
-			// 			endInclusive,
-			// 			newVisibleRingTiles,
-			// 		);
-			// 	}
-			// }
-			//
-			// visibleInvalidations.length = 0;
-			// visibleRingTiles.clear();
-			// visibleRingTiles = newVisibleRingTiles;
+		} else if (invalidations.length != 0 || didScroll) {
+			// rebalance visible and non-visible
+			invalidations.push(...visibleInvalidations);
+			invalidations.push(...nonVisibleInvalidations);
+			visibleInvalidations.length = 0;
+			nonVisibleInvalidations.length = 0;
+
+			for (const invalidation of invalidations) {
+				commitVisibleAndNonVisible(invalidation, visibleTop, visibleHeight);
+			}
+
+			const newVisibleRingTiles = new Set<number>();
+
+			if (visibleInvalidations.length != 0) {
+				const tileRangesToPaint = [];
+				// first do a pass and mark the invalid tiles, to prevent uncessary work by invalidating/painting overlapping areas
+				for (const visibleInvalidation of visibleInvalidations) {
+					const rangesToPaint = rectToTileIndexRanges(visibleInvalidation);
+					markInvalid(rangesToPaint);
+					tileRangesToPaint.push(rangesToPaint);
+				}
+
+				for (const rangesToPaint of tileRangesToPaint) {
+					// effectively paints by rows of tiles, so there isn't any odd-looking tearing if painting is paused
+					for (
+						let y = 0;
+						y < rangesToPaint.length && !shouldPausePaint();
+						++y
+					) {
+						const [start, endInclusive] = rangesToPaint[y];
+						batchedBlockingPaintTiles(start, endInclusive, newVisibleRingTiles);
+						needsRender = true;
+					}
+				}
+			}
+
+			const visibleRangesToPaint = rectToTileIndexRanges([
+				0,
+				visibleTop,
+				docWidthTwips,
+				visibleHeight,
+			]);
+
+			for (
+				let y = 0;
+				y < visibleRangesToPaint.length && !shouldPausePaint();
+				++y
+			) {
+				const [start, endInclusive] = visibleRangesToPaint[y];
+				let runStart: number | null = null;
+
+				for (let x = start; x <= endInclusive; ++x) {
+					const ringIndex = tileIndexToTileRingIndex.get(x);
+					const valid =
+						ringIndex != null &&
+						validTiles.has(x) &&
+						tileRingIndexToTileIndex.get(ringIndex) === x;
+
+					if (valid) {
+						newVisibleRingTiles.add(ringIndex);
+
+						// the range is closed, paint the batch and reset the run
+						if (runStart != null) {
+							runStart = null;
+							needsRender = true;
+							batchedBlockingPaintTiles(runStart, x - 1, newVisibleRingTiles);
+						}
+					} else if (runStart == null) {
+						runStart = x;
+					}
+				}
+
+				// close last range if there's one open
+				if (runStart != null) {
+					needsRender = true;
+					batchedBlockingPaintTiles(
+						runStart,
+						endInclusive,
+						newVisibleRingTiles,
+					);
+				}
+			}
+
+			visibleInvalidations.length = 0;
+			visibleRingTiles.clear();
+			visibleRingTiles = newVisibleRingTiles;
 		}
 
 		needsRender ||= paintMissingVisibleTileRanges(rangesToPaint);
 
-		if (needsRender || hasUpdatedVisibleArea()) {
-			console.log('rendering');
+    // TODO: figure out why Firefox/Safari don't persist frames and
+    // requires a new render every frame?
+		if (NOT_CHROMIUM || needsRender || hasUpdatedVisibleArea()) {
 			render(rangesToPaint);
 		}
 
@@ -414,18 +390,18 @@ export function renderer(doc: Document) {
 
 	// renders the visible GPU textures to the canvas
 	function render(rangesToRender: TileIndexRange[]) {
-		console.log('hello?');
+	  const offset = twipsToPx(renderedTopTwips % tileDimTwips, dpi);
 		for (let y = 0; y < rangesToRender.length && !shouldPausePaint(); ++y) {
 			const [start, endInclusive] = rangesToRender[y];
 			for (let x = start; x <= endInclusive; ++x) {
 				const [xCoord] = tileIndexToGridCoord(x);
 				const img: ImageData = tileRing.get(tileIndexToTileRingIndex.get(x));
 				if (!img) {
-					console.error("still missing tile");
+				  console.error('missing', x, y);
 					continue;
 				}
 				const dstX: number = xCoord * d.tileSize;
-				const dstY: number = y * d.tileSize;
+				const dstY: number = y * d.tileSize - offset;
 				ctx.beginPath();
 				ctx.clearRect(dstX, dstY, d.tileSize, d.tileSize);
 				ctx.putImageData(DEBUG ? addBorder(img) : img, dstX, dstY);
@@ -435,7 +411,7 @@ export function renderer(doc: Document) {
 					ctx.font = "12px Arial";
 					ctx.fillStyle = "blue";
 					ctx.fillText(
-						`${timestamp - START_TIMESTAMP} (${xCoord}, ${y})`,
+						`${timestamp} (${xCoord}, ${y}) ${x}`,
 						dstX + 5,
 						dstY + 15,
 					);
@@ -446,10 +422,7 @@ export function renderer(doc: Document) {
 		Atomics.store(d.isVisibleAreaPainted, 0, 1);
 
 		Atomics.store(d.pendingFullPaint, 0, 0);
-		if (didScroll) {
-			renderedTileTop = Math.floor(renderedTopTwips / tileDimTwips);
-			didScroll = false;
-		}
+		didScroll = false;
 		firstPaint = false;
 	}
 
@@ -533,12 +506,13 @@ export function renderer(doc: Document) {
 	}
 
 	function rectToTileIndexRanges(rect: Rect): TileIndexRange[] {
+		const [x,y,w,h] = rect;
 		const result: TileIndexRange[] = [];
-		const r = rect[0] + rect[2];
-		const x0 = Math.floor(rect[0] / tileDimTwips);
+		const r = x + w;
+		const x0 = Math.floor(x / tileDimTwips);
 		const x1 = Math.floor(r / tileDimTwips);
-		const b = rect[1] + rect[3];
-		const y0 = Math.floor(rect[1] / tileDimTwips);
+		const b = Math.min(y + h, docHeightTwips);
+		const y0 = Math.floor(y / tileDimTwips);
 		const y1 = Math.floor(b / tileDimTwips);
 		for (let y = y0; y <= y1; ++y) {
 			result.push([x0 + widthTileStride * y, x1 + widthTileStride * y]);
@@ -569,6 +543,7 @@ export function renderer(doc: Document) {
 		endTileIndex: number,
 		ringIndexSet: Set<number>,
 	): void {
+	  const startTime = Date.now();
 		const tileAllocSize =
 			(d.paintedTiles.byteLength / MAX_PAINTED_TILES_PER_ITER) | 0;
 
@@ -584,7 +559,7 @@ export function renderer(doc: Document) {
 
 			tileRingIndexToTileIndex.set(tileRingIndex, tileIndex);
 			tileIndexToTileRingIndex.set(tileIndex, tileRingIndex);
-			tileRingIndexToTime.set(tileRingIndex, Date.now());
+			tileRingIndexToTime.set(tileRingIndex, Date.now() - startTime);
 			tileRing.set(
 				tileRingIndex,
 				new ImageData(
@@ -630,9 +605,6 @@ export function renderer(doc: Document) {
 
 	// FIXME: this is clearing visible tiles
 	function clearNonVisibleTiles() {
-		console.log('clearNonVisibleTiles');
-
-		return;
 		const indices = tileRing.keys();
 		for (const tileRingIndex of indices) {
 			// but visible tiles shouldn't be cleared so there is something to paint

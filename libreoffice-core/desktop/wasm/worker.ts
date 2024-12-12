@@ -346,7 +346,7 @@ const handler: DocumentMethodHandler<Document> = {
   startRendering: function (
     doc: Document,
     viewId: ViewId,
-    canvases: OffscreenCanvas[],
+    canvases: [OffscreenCanvas],
     tileSize: TileDim,
     zoom: number,
     dpi: number,
@@ -406,7 +406,7 @@ const handler: DocumentMethodHandler<Document> = {
     doc: Document,
     viewId: ViewId,
     yPx: number,
-  ): Promise<number> {
+  ): void {
     const ref = doc.ref();
     const r = tileRenderer[ref]?.[viewId];
     if (!r) return;
@@ -415,14 +415,11 @@ const handler: DocumentMethodHandler<Document> = {
       const oldY = visibleArea.topTwips;
       visibleArea.topTwips = cssPxToTwips(yPx, visibleArea.zoom);
       if (oldY !== visibleArea.topTwips && visibleArea.widthTwips && visibleArea.heightTwips) {
-        console.log(visibleArea);
         doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
       }
     }
 
-    const res = Promise.resolve(r.scroll(yPx));
-    // r.paintAndRender();
-    return res;
+    r.scroll(yPx);
   },
 
   setVisibleHeight: function (
