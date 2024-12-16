@@ -92,6 +92,7 @@ type CallbackHandlers = {
 const subscribedEvents: { [K: number]: CallbackHandlers } = {};
 const subscribedPaint: Map<number, Set<() => any>> = new Map();
 const subscribedIdle: Map<number, Set<() => any>> = new Map();
+const subscribedUncaughtError: Set<() => any> = new Set();
 
 type IdleMessage = { f: 'idle_'; d: DocumentRef };
 type PaintMesasge = { f: 'paint_'; d: DocumentRef };
@@ -133,6 +134,10 @@ function messageIsKeys<K extends keyof Message = keyof Message>(
   data: AllMessages<K>
 ): data is KeysMessage {
   return data.f === '_keys';
+}
+
+function messageIsUncaughtError(data) {
+  return data.uncaughtError === true;
 }
 
 const clientBase: DocumentClientBase = {
@@ -199,6 +204,12 @@ const clientBase: DocumentClientBase = {
     handlers.add(callback);
     return () => {
       handlers.delete(callback);
+    };
+  },
+  afterUncaughtError: function (callback) {
+    subscribedUncaughtError.add(callback);
+    return () => {
+        subscribedUncaughtError.delete(callback);
     };
   },
 };
@@ -298,6 +309,11 @@ async function handleMessage<K extends keyof Message = keyof Message>({
       for (const cb of callbacks) {
         cb();
       }
+    }
+  } else if (messageIsUncaughtError(data)) {
+    console.log('handling uncaught error');
+    for (const cb of subscribedUncaughtError) {
+      cb();
     }
   } else if (data.i !== UNUSED_ID) {
     callIdToFuture[data.i].resolve(data.r);

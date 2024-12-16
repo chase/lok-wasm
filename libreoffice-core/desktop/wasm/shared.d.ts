@@ -339,6 +339,7 @@ export type DocumentClientBase = {
   /** after painting is idle, calls the callback, returns the method to unregister the callback */
   afterIdle(callback: () => any): () => void;
   /** !!!USE SPARINGLY: Impacts performance!!! Calls the callback, returns the method to unregister the callback */
+  afterUncaughtError(callback: () => any): () => void;
   afterPaint(callback: () => any): () => void;
 };
 
