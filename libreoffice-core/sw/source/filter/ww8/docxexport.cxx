@@ -675,6 +675,16 @@ void DocxExport::InitStyles()
 {
     m_pStyles.reset(new MSWordStyles( *this, /*bListStyles =*/ true ));
 
+    // MACRO: M-1090 Fix docx export {
+    const bool hasWebSettings
+        = m_rFilter.hasRelWithType(m_pDocumentFS->getOutputStream(), u"http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings"_ustr);
+
+    const bool hasStylesWithEffects
+        = m_rFilter.hasRelWithType(m_pDocumentFS->getOutputStream(), u"http://schemas.microsoft.com/office/2007/relationships/stylesWithEffects"_ustr);
+
+    m_rFilter.clearRelations(m_pDocumentFS->getOutputStream());
+
+    // MACRO: M-1090 }
     // setup word/styles.xml and the relations + content type
     m_rFilter.addRelation( m_pDocumentFS->getOutputStream(),
             oox::getRelationship(Relationship::STYLES),
@@ -694,6 +704,20 @@ void DocxExport::InitStyles()
     m_pAttrOutput->SetSerializer( m_pDocumentFS );
 
     pStylesFS->endDocument();
+
+    // MACRO: M-1090 Fix docx export {
+    if (hasStylesWithEffects)
+    {
+        m_rFilter.addRelation(m_pDocumentFS->getOutputStream(),
+                              oox::getRelationship(Relationship::STYLESWITHEFFECTS),
+                              u"stylesWithEffects.xml");
+    }
+    if (hasWebSettings)
+    {
+        m_rFilter.addRelation(m_pDocumentFS->getOutputStream(),
+                              oox::getRelationship(Relationship::WEBSETTINGS), u"webSettings.xml");
+    }
+    // MACRO: M-1090 }
 }
 
 void DocxExport::WriteFootnotesEndnotes()
@@ -1692,6 +1716,10 @@ void DocxExport::WriteCustomXml()
 
     for (sal_Int32 j = 0; j < customXmlDomlist.getLength(); j++)
     {
+    // MACRO: M-1090 Fix docx export {
+        m_rFilter.clearRelations(GetFilter().openFragmentStream(
+            "customXml/item" + OUString::number(j + 1) + ".xml", "application/xml"));
+    // MACRO: M-1090 }
         uno::Reference<xml::dom::XDocument> customXmlDom = customXmlDomlist[j];
         uno::Reference<xml::dom::XDocument> customXmlDomProps = customXmlDomPropslist[j];
         if (customXmlDom.is())

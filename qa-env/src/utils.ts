@@ -17,7 +17,9 @@ export function downloadFile(name: string, buffer: ArrayBuffer, type: string) {
 export async function unzipDocxFile(blob: Blob): Promise<Array<{path: string, content: ArrayBuffer}>> {
   const zip = await JsZip.loadAsync(blob);
 
-  const files = Promise.all(Object.keys(zip.files).map(async (key) => {
+  const files = Promise.all(Object.keys(zip.files)
+  .filter((key) => !zip.files[key].dir)
+  .map(async (key) => {
     const file = zip.files[key];
     return {
       path: key,

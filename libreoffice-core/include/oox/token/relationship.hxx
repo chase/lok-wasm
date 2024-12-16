@@ -65,7 +65,11 @@ enum class Relationship
     AUDIO,
     VMLDRAWING,
     WORDVBADATA,
-    WORKSHEET
+    WORKSHEET,
+// MACRO: Fix docx export {
+    STYLESWITHEFFECTS,
+    WEBSETTINGS,
+// MACRO: }
 };
 
 OUString OOX_DLLPUBLIC getRelationship(Relationship eRelationship);

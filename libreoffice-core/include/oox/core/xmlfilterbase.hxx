@@ -175,6 +175,13 @@ public:
      */
     OUString     addRelation( const css::uno::Reference< css::io::XOutputStream >& rOutputStream, const OUString& rType, std::u16string_view rTarget, bool bExternal = false );
 
+// MACRO: M-1090 Fix custom XML relations {
+    void         clearRelations(const css::uno::Reference<css::io::XOutputStream>& rOutputStream);
+
+    bool         hasRelWithType(const css::uno::Reference<css::io::XOutputStream>& rOutputStream,
+                          const OUString& type);
+// MACRO: }
+
     /** Opens and returns the specified output stream from the base storage with specified media type.
 
         @param rStreamName
