@@ -448,7 +448,6 @@ const handler: DocumentMethodHandler<Document> = {
     const visibleArea = visibleAreas[ref];
     if (visibleArea && visibleArea.widthTwips !== widthTwips) {
       visibleArea.widthTwips = widthTwips;
-      console.log({widthTwips});
       if (visibleArea.heightTwips && visibleArea.topTwips) {
         doc.setClientVisibleArea(viewId, 0, visibleArea.topTwips, visibleArea.widthTwips, visibleArea.heightTwips);
       }
