@@ -23,6 +23,7 @@
 #include <rtl/math.h>
 #include <sal/log.hxx>
 #include <comphelper/processfactory.hxx>
+#include <comphelper/storagehelper.hxx>
 
 #include <cassert>
 #include <optional>
@@ -310,6 +311,10 @@ namespace sax_fastparser {
     {
         assert(mbMarkStackEmpty && maMarkStack.empty());
         maCachedOutputStream.flush();
+        // MACRO: The cached output stream doesn't actually flush, so the string content is not resized {
+        if (comphelper::OStorageHelper::IsExpandedStorage())
+            getOutputStream()->flush();
+        // MACRO: }
     }
 
     void FastSaxSerializer::writeId( ::sal_Int32 nElement )
