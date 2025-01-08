@@ -20,7 +20,8 @@ RUN apt update && apt-get install -y --no-install-recommends \
   locales \
   libnss3 \
   automake \
-  g++-12
+  g++-12 \
+  libpng-dev
 
 COPY emsdk-patches/ /emsdk-patches
 
