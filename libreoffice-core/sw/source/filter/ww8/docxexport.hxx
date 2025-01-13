@@ -317,7 +317,7 @@ public:
             m_aSettings.defaultTabStop = std::min(m_aSettings.defaultTabStop, stop);
         }
 
-        // Alternative solution to prevent   tab stop lengths
+        // Alternative solution to prevent excessive tab stop lengths
         /*
         if (m_aSettings.defaultTabStop != 0) return;
         m_aSettings.defaultTabStop = stop;
