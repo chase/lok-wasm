@@ -307,7 +307,27 @@ public:
     DocxSdrExport& SdrExporter() { return *m_pSdrExport; }
 
     /// Set the document default tab stop.
-    void setDefaultTabStop( int stop ) { m_aSettings.defaultTabStop = stop; }
+    void setDefaultTabStop( int stop ) {
+        // MACRO: M-1345 Fix Indentation Size {
+
+        if (m_aSettings.defaultTabStop == 0) {
+            m_aSettings.defaultTabStop = stop;
+        } else {
+            // Temporary solution to prevent massive tab stop lengths
+            m_aSettings.defaultTabStop = std::min(m_aSettings.defaultTabStop, stop);
+        }
+
+        // Alternative solution to prevent   tab stop lengths
+        /*
+        if (m_aSettings.defaultTabStop != 0) return;
+        m_aSettings.defaultTabStop = stop;
+        */
+
+        // If the tab length is greater then 2 inches, set the tab length to 0.5 inches
+        if (m_aSettings.defaultTabStop > 3000) { m_aSettings.defaultTabStop = 720; }
+
+        // MACRO: }
+    }
 
     const ::sax_fastparser::FSHelperPtr& GetFS() const { return mpFS; }
 
