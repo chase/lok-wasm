@@ -963,10 +963,6 @@ void SfxObjectShell::BreakMacroSign_Impl( bool bBreakMacroSign )
 
 void SfxObjectShell::CheckSecurityOnLoading_Impl()
 {
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        return;
-    }
     if (GetErrorCode() == ERRCODE_IO_BROKENPACKAGE)
     {   // safety first: don't run any macros from broken package.
         pImpl->aMacroMode.disallowMacroExecution();

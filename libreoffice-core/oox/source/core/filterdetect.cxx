@@ -17,12 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <com/sun/star/embed/XStorage.hpp>
-#include <com/sun/star/uno/Reference.h>
-#include <comphelper/storagehelper.hxx>
-#include <oox/helper/storagebase.hxx>
-#include <sot/stg.hxx>
-#include <memory>
 #include <oox/core/filterdetect.hxx>
 
 #include <com/sun/star/io/XStream.hpp>
@@ -419,61 +413,6 @@ Sequence< OUString > SAL_CALL FilterDetect::getSupportedServiceNames()
 
 // com.sun.star.document.XExtendedFilterDetection interface -------------------
 
-void FilterDetect::ZipDetect( MediaDescriptor& aMediaDescriptor, OUString& aFilterName)
-{
-    aMediaDescriptor.addInputStream();
-
-    /*  Get the unencrypted input stream. This may include creation of a
-        temporary file that contains the decrypted package. This temporary
-        file will be stored in the 'ComponentData' property of the media
-        descriptor. */
-    Reference< XInputStream > xInputStream( extractUnencryptedPackage( aMediaDescriptor ), UNO_SET_THROW );
-
-    // stream must be a ZIP package
-    ZipStorage aZipStorage(mxContext, xInputStream,
-                           aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
-    if( aZipStorage.isStorage() )
-    {
-        // create the fast parser, register the XML namespaces, set document handler
-        FastParser aParser;
-        aParser.registerNamespace( NMSP_packageRel );
-        aParser.registerNamespace( NMSP_officeRel );
-        aParser.registerNamespace( NMSP_packageContentTypes );
-
-        OUString aFileName;
-        aMediaDescriptor[utl::MediaDescriptor::PROP_URL] >>= aFileName;
-
-        aParser.setDocumentHandler( new FilterDetectDocHandler( mxContext, aFilterName, aFileName ) );
-
-        /*  Parse '_rels/.rels' to get the target path and '[Content_Types].xml'
-            to determine the content type of the part at the target path. */
-        aParser.parseStream( aZipStorage, "_rels/.rels" );
-        aParser.parseStream( aZipStorage, "[Content_Types].xml" );
-    }
-}
-
-void FilterDetect::ExpandedDetect(utl::MediaDescriptor &aMediaDescriptor, OUString &aFilterName)
-{
-    std::shared_ptr< oox::StorageBase > xStorageBase = comphelper::OStorageHelper::GetExpandedStorageBase();
-
-    // create the fast parser, register the XML namespaces, set document handler
-    FastParser aParser;
-    aParser.registerNamespace( NMSP_packageRel );
-    aParser.registerNamespace( NMSP_officeRel );
-    aParser.registerNamespace( NMSP_packageContentTypes );
-
-    OUString aFileName;
-    aMediaDescriptor[utl::MediaDescriptor::PROP_URL] >>= aFileName;
-
-    aParser.setDocumentHandler( new FilterDetectDocHandler( mxContext, aFilterName, aFileName ) );
-
-
-    /*  Parse '_rels/.rels' to get the target path and '[Content_Types].xml'
-        to determine the content type of the part at the target path. */
-    aParser.parseStream( xStorageBase->openInputStream("_rels/.rels"), "_rels/.rels" );
-    aParser.parseStream( xStorageBase->openInputStream("[Content_Types].xml"), "[Content_Types].xml" );
-}
-
 OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq )
 {
     OUString aFilterName;
@@ -481,13 +420,34 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
 
     try
     {
-        if (comphelper::OStorageHelper::IsExpandedStorage())
+        aMediaDescriptor.addInputStream();
+
+        /*  Get the unencrypted input stream. This may include creation of a
+            temporary file that contains the decrypted package. This temporary
+            file will be stored in the 'ComponentData' property of the media
+            descriptor. */
+        Reference< XInputStream > xInputStream( extractUnencryptedPackage( aMediaDescriptor ), UNO_SET_THROW );
+
+        // stream must be a ZIP package
+        ZipStorage aZipStorage(mxContext, xInputStream,
+                               aMediaDescriptor.getUnpackedValueOrDefault("RepairPackage", false));
+        if( aZipStorage.isStorage() )
         {
-            ExpandedDetect(aMediaDescriptor, aFilterName);
-        }
-        else
-        {
-            ZipDetect(aMediaDescriptor, aFilterName);
+            // create the fast parser, register the XML namespaces, set document handler
+            FastParser aParser;
+            aParser.registerNamespace( NMSP_packageRel );
+            aParser.registerNamespace( NMSP_officeRel );
+            aParser.registerNamespace( NMSP_packageContentTypes );
+
+            OUString aFileName;
+            aMediaDescriptor[utl::MediaDescriptor::PROP_URL] >>= aFileName;
+
+            aParser.setDocumentHandler( new FilterDetectDocHandler( mxContext, aFilterName, aFileName ) );
+
+            /*  Parse '_rels/.rels' to get the target path and '[Content_Types].xml'
+                to determine the content type of the part at the target path. */
+            aParser.parseStream( aZipStorage, "_rels/.rels" );
+            aParser.parseStream( aZipStorage, "[Content_Types].xml" );
         }
     }
     catch( const Exception& )

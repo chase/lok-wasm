@@ -17,8 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/storagehelper.hxx>
-#include <sal/log.hxx>
 #include <oox/helper/storagebase.hxx>
 
 #include <com/sun/star/io/XStream.hpp>
@@ -68,12 +66,6 @@ StorageBase::StorageBase( const Reference< XInputStream >& rxInStream, bool bBas
 {
     OSL_ENSURE( mxInStream.is(), "StorageBase::StorageBase - missing base input stream" );
 }
-
-StorageBase::StorageBase( const Reference< XInputStream >& rxInStream, bool bBaseStreamAccess, bool bReadOnly):
-    mxInStream( rxInStream ),
-    mbBaseStreamAccess( bBaseStreamAccess ),
-    mbReadOnly( bReadOnly )
-{}
 
 StorageBase::StorageBase( const Reference< XStream >& rxOutStream, bool bBaseStreamAccess ) :
     mxOutStream( rxOutStream ),
@@ -152,9 +144,7 @@ Reference< XInputStream > StorageBase::openInputStream( const OUString& rStreamN
         {
             StorageRef xSubStorage = getSubStorage( aElement, false );
             if( xSubStorage )
-            {
                 xInStream = xSubStorage->openInputStream( aRemainder );
-            }
         }
         else
         {
@@ -171,7 +161,6 @@ Reference< XInputStream > StorageBase::openInputStream( const OUString& rStreamN
 Reference< XOutputStream > StorageBase::openOutputStream( const OUString& rStreamName )
 {
     Reference< XOutputStream > xOutStream;
-
     OSL_ENSURE( !mbReadOnly, "StorageBase::openOutputStream - cannot create output stream in read-only mode" );
     if( !mbReadOnly )
     {
@@ -256,10 +245,6 @@ void StorageBase::commit()
 
 StorageRef StorageBase::getSubStorage( const OUString& rElementName, bool bCreateMissing )
 {
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        return implOpenSubStorage(rElementName, bCreateMissing);
-    }
     StorageRef& rxSubStrg = maSubStorages[ rElementName ];
     if( !rxSubStrg )
         rxSubStrg = implOpenSubStorage( rElementName, bCreateMissing );

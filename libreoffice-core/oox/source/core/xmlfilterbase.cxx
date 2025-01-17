@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <oox/helper/expandedstorage.hxx>
 #include <oox/core/xmlfilterbase.hxx>
 
 #include <cstdio>
@@ -561,36 +560,6 @@ OUString XmlFilterBase::addRelation( const Reference< XOutputStream >& rOutputSt
     return OUString();
 }
 
-// MACRO: M-1090 Fix custom XML relations {
-void XmlFilterBase::clearRelations(const Reference<XOutputStream>& rOutputStream)
-{
-    Reference<XRelationshipAccess> xRelations(rOutputStream, UNO_QUERY);
-    if (xRelations.is())
-        xRelations->clearRelationships();
-}
-
-bool XmlFilterBase::hasRelWithType(const css::uno::Reference<css::io::XOutputStream>& rOutputStream,
-                                   const OUString& type)
-{
-    Reference<XRelationshipAccess> xRelations(rOutputStream, UNO_QUERY);
-
-    if (xRelations.is())
-    {
-        try
-        {
-            auto relationships = xRelations->getRelationshipsByType(type);
-            return relationships.getLength() > 0;
-        }
-        catch (const Exception&)
-        {
-            return false;
-        }
-    }
-
-    return false;
-}
-// MACRO: M-1090 Fix custom XML relations }
-
 static void
 writeElement( const FSHelperPtr& pDoc, sal_Int32 nXmlElement, std::u16string_view sValue )
 {
@@ -1044,28 +1013,16 @@ bool XmlFilterBase::implFinalizeExport( MediaDescriptor& rMediaDescriptor )
 }
 
 // private --------------------------------------------------------------------
-//
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XInputStream >& rxInStream ) const
 {
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        return comphelper::OStorageHelper::GetExpandedStorageBase();
-    }
-    else
-    {
-        return std::make_shared<ZipStorage>(
-            getComponentContext(), rxInStream,
-            getMediaDescriptor().getUnpackedValueOrDefault("RepairPackage", false));
-    }
+    return std::make_shared<ZipStorage>(
+        getComponentContext(), rxInStream,
+        getMediaDescriptor().getUnpackedValueOrDefault("RepairPackage", false));
 }
 
 StorageRef XmlFilterBase::implCreateStorage( const Reference< XStream >& rxOutStream ) const
 {
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        return comphelper::OStorageHelper::GetExpandedStorageBase();
-    }
     return std::make_shared<ZipStorage>( getComponentContext(), rxOutStream );
 }
 

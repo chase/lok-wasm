@@ -767,7 +767,7 @@ sal_Bool SAL_CALL SfxFrameLoader_Impl::load( const Sequence< PropertyValue >& rA
 
         bLoadSuccess = true;
     }
-    catch ( Exception& e)
+    catch ( Exception& )
     {
         const Any aError( ::cppu::getCaughtException() );
         if ( !aDescriptor.getOrDefault( "Silent", false ) )

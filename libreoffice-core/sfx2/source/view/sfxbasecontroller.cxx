@@ -17,7 +17,6 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
-#include <comphelper/storagehelper.hxx>
 #include <time.h>
 #include <sfx2/sfxbasecontroller.hxx>
 #include <com/sun/star/awt/XVclWindowPeer.hpp>

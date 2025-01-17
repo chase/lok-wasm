@@ -32,7 +32,6 @@
 #include "OOXMLBinaryObjectReference.hxx"
 #include "OOXMLFastDocumentHandler.hxx"
 #include "OOXMLPropertySet.hxx"
-#include <comphelper/storagehelper.hxx>
 
 #include <sal/log.hxx>
 #include <comphelper/diagnose_ex.hxx>
@@ -83,9 +82,8 @@ void OOXMLDocumentImpl::resolveFastSubStream(Stream & rStreamHandler,
     {
         pStream = OOXMLDocumentFactory::createStream(mpStream, nType);
     }
-    catch (uno::Exception const& e)
+    catch (uno::Exception const&)
     {
-        SAL_WARN("writerfilter.ooxml", "loadFastSubStream: exception while  resolving stream type " << nType << " "  << e);
         TOOLS_INFO_EXCEPTION("writerfilter.ooxml", "resolveFastSubStream: exception while "
                 "resolving stream " << nType);
         return;
@@ -646,18 +644,10 @@ void OOXMLDocumentImpl::resolveGlossaryStream(Stream & /*rStream*/)
         return;
     }
     uno::Reference<embed::XRelationshipAccess> xRelationshipAccess;
-    if (comphelper::OStorageHelper::IsExpandedStorage())
-    {
-        uno::Reference<embed::XRelationshipAccess> relAccess(comphelper::OStorageHelper::GetExpandedStorage(), uno::UNO_QUERY);
-        xRelationshipAccess.set(relAccess);
-    }
-    else
-    {
-
-        xRelationshipAccess.set(dynamic_cast<OOXMLStreamImpl&>(*pStream).accessDocumentStream(), uno::UNO_QUERY);
-    }
+    xRelationshipAccess.set(dynamic_cast<OOXMLStreamImpl&>(*pStream).accessDocumentStream(), uno::UNO_QUERY);
     if (!xRelationshipAccess.is())
         return;
+
 
     const uno::Sequence< uno::Sequence< beans::StringPair > >aSeqs = xRelationshipAccess->getAllRelationships();
     std::vector< uno::Sequence<beans::NamedValue> > aGlossaryDomList;

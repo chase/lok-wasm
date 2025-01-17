@@ -22,8 +22,8 @@
 #include <cassert>
 #include <memory>
 #include <sal/log.hxx>
-#include <com/sun/star/packages/NoEncryptionException.hpp>
 
+#include <com/sun/star/packages/NoEncryptionException.hpp>
 #include <com/sun/star/packages/WrongPasswordException.hpp>
 #include <com/sun/star/uno/XComponentContext.hpp>
 #include <com/sun/star/ucb/SimpleFileAccess.hpp>
@@ -1044,13 +1044,8 @@ uno::Sequence< uno::Sequence< beans::StringPair > > OWriteStream_Impl::GetAllRel
 
     ReadRelInfoIfNecessary();
 
-
     if ( m_nRelInfoStatus == RELINFO_READ )
-    {
-
         return m_aOrigRelInfo;
-
-    }
     else if ( m_nRelInfoStatus == RELINFO_CHANGED_STREAM_READ || m_nRelInfoStatus == RELINFO_CHANGED )
         return m_aNewRelInfo;
     else // m_nRelInfoStatus == RELINFO_CHANGED_BROKEN || m_nRelInfoStatus == RELINFO_BROKEN

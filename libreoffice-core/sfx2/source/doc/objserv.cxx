@@ -1531,12 +1531,16 @@ void SfxObjectShell::GetState_Impl(SfxItemSet &rSet)
                 }
             case SID_SAVEDOC:
                 {
-                    if ( IsReadOnly() || isSaveLocked())
+                    // MACRO: save is never locked, worthless overhead
+                    if ( IsReadOnly() )
                     {
                         rSet.DisableItem(nWhich);
                         break;
                     }
-                    rSet.Put(SfxStringItem(nWhich, SfxResId(STR_SAVEDOC)));
+                    // MACRO: avoid 10ms overhead generating locale where cache regularly misses {
+                    constexpr OUString aSaveDoc(u"~Save"_ustr);
+                    rSet.Put(SfxStringItem(nWhich, aSaveDoc));
+                    // MACRO: }
                 }
                 break;
 
