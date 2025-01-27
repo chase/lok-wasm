@@ -13,6 +13,8 @@
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <LibreOfficeKit/LibreOfficeKitInit.h>
 
+#include <iostream>
+
 /*
  * The reasons this C++ code is not as pretty as it could be are:
  *  a) provide a pure C API - that's useful for some people
@@ -358,6 +360,7 @@ public:
      */
     void postUnoCommand(const char* pCommand, const char* pArguments = NULL, bool bNotifyWhenFinished = false)
     {
+        std::cout << "postUnoCommand 1" << std::endl;
         mpDoc->pClass->postUnoCommand(mpDoc, pCommand, pArguments, bNotifyWhenFinished);
     }
 

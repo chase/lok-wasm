@@ -73,22 +73,37 @@ window.saveAsPDF = async function saveAsPDF(doc: DocumentClient | null) {
 };
 
 async function docxExport(doc: DocumentClient | null) {
-  if (!doc) return;
-  await doc.save();
-  let parts = await doc.listExpandedParts();
-  let newParts = [];
-  for (let part of parts) {
-    let p = await doc.getExpandedPart(part.path);
-    if (!p) continue;
-    let view = new Int8Array(p.content)
+  doc?.dispatchCommand(
+    '.uno:JumpToMark',
+    {
+      Bookmark: {
+        type: 'string',
+        value: 'SHARE_Q_wYE51x5znjPzpm5D'
+      }
+    }
+  );
 
-    newParts.push({
-      path: part.path,
-      content: view.buffer,
-    });
-  }
-  const blob = await zipDocxFile(newParts);
-  downloadFile('docxExport.docx', await blob.arrayBuffer(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  // doc?.dispatchCommand(
+  //   '.uno:DefaultBullet'
+  // );
+
+
+  // if (!doc) return;
+  // await doc.save();
+  // let parts = await doc.listExpandedParts();
+  // let newParts = [];
+  // for (let part of parts) {
+  //   let p = await doc.getExpandedPart(part.path);
+  //   if (!p) continue;
+  //   let view = new Int8Array(p.content)
+
+  //   newParts.push({
+  //     path: part.path,
+  //     content: view.buffer,
+  //   });
+  // }
+  // const blob = await zipDocxFile(newParts);
+  // downloadFile('docxExport.docx', await blob.arrayBuffer(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 };
 
 const MOD = IS_MAC ? 'cmd' : 'ctrl';

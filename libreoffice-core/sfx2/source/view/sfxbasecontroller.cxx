@@ -75,6 +75,7 @@
 #include <sfxbasecontroller_internal.hxx>
 
 #include <unordered_map>
+#include <iostream>
 
 #include <com/sun/star/ui/XSidebarProvider.hpp>
 #include <sidebar/UnoSidebar.hxx>
@@ -1125,6 +1126,7 @@ bool SfxBaseController::HasMouseClickListeners_Impl() const
 
 void SfxBaseController::ConnectSfxFrame_Impl( const ConnectSfxFrame i_eConnect )
 {
+    std::cout << "--- ConnectSfxFrame_Impl - it should be going here tho" << std::endl;
     ENSURE_OR_THROW( m_pData->m_pViewShell, "not to be called without a view shell" );
     SfxViewFrame* pViewFrame = m_pData->m_pViewShell->GetFrame();
     ENSURE_OR_THROW( pViewFrame, "a view shell without a view frame is pretty pathological" );
@@ -1247,6 +1249,7 @@ void SfxBaseController::ConnectSfxFrame_Impl( const ConnectSfxFrame i_eConnect )
                 // Before CWS autorecovery, there was code which postponed jumping to the Mark to a later time
                 // (SfxObjectShell::PositionView_Impl), but it seems this branch was never used, since this method
                 // here is never called before the load process finished. At least not with a non-empty jump mark
+            std::cout << "sfxbasecontroller - checking is jump mark" << std::endl;
             if ( !sJumpMark.isEmpty() )
                 m_pData->m_pViewShell->JumpToMark( sJumpMark );
 

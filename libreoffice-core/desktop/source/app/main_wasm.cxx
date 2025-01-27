@@ -48,6 +48,8 @@
 #include <rtl/ref.hxx>
 #include <tools/json_writer.hxx>
 
+#include <iostream>
+
 namespace
 {
 using namespace emscripten;
@@ -81,7 +83,11 @@ lok::Office* instance()
 
 //static
 void preload() { instance(); }
-void yield() { if (GetpApp()) GetpApp()->Yield(); }
+void yield()
+{
+    if (GetpApp())
+        GetpApp()->Yield();
+}
 
 static constexpr std::string_view TEXT_PLAIN = "text/plain";
 
@@ -480,6 +486,7 @@ public:
     void postUnoCommand(int viewId, std::string command, std::optional<std::string> args,
                         bool notifyWhenFinished)
     {
+        std::cout << "--- postUnoCommand ???" << std::endl;
         doc_->setView(viewId);
         doc_->postUnoCommand(command.c_str(), args.has_value() ? args->c_str() : nullptr,
                              notifyWhenFinished);
@@ -689,6 +696,29 @@ public:
     void dispatchCommand(int viewId, std::string command, std::optional<std::string> arguments,
                          std::optional<bool> notifyWhenFinished)
     {
+        std::cout << "--- dispatch command" << std::endl;
+
+        // Print statements for debugging
+        std::cout << "viewId: " << viewId << std::endl;
+        std::cout << "command: " << command << std::endl;
+        if (arguments.has_value())
+        {
+            std::cout << "arguments: " << arguments.value() << std::endl;
+        }
+        else
+        {
+            std::cout << "arguments: nullopt" << std::endl;
+        }
+        if (notifyWhenFinished.has_value())
+        {
+            std::cout << "notifyWhenFinished: " << (notifyWhenFinished.value() ? "true" : "false")
+                      << std::endl;
+        }
+        else
+        {
+            std::cout << "notifyWhenFinished: nullopt" << std::endl;
+        }
+
         doc_->setView(viewId);
         doc_->postUnoCommand(command.c_str(), arguments.has_value() ? arguments->c_str() : nullptr,
                              notifyWhenFinished.value_or(false));

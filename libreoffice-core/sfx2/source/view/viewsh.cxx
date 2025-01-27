@@ -113,6 +113,7 @@
 #include <toolkit/awt/vclxmenu.hxx>
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>
 
 #define ShellClass_SfxViewShell
 #include <sfxslots.hxx>
@@ -3675,6 +3676,7 @@ void SfxViewShell::MarginChanged()
 
 void SfxViewShell::JumpToMark( const OUString& rMark )
 {
+    std::cout << "within the actual implmentation for jump to mark - " << rMark << std::endl;
     SfxStringItem aMarkItem( SID_JUMPTOMARK, rMark );
     GetViewFrame().GetDispatcher()->ExecuteList(
         SID_JUMPTOMARK,

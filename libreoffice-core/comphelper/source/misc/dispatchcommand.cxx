@@ -18,6 +18,7 @@
  */
 
 #include <comphelper/dispatchcommand.hxx>
+#include <iostream>
 #include <comphelper/processfactory.hxx>
 
 #include <com/sun/star/frame/Desktop.hpp>
@@ -33,6 +34,48 @@ namespace comphelper {
 
 bool dispatchCommand(const OUString& rCommand, const uno::Reference<css::frame::XFrame>& rFrame, const css::uno::Sequence<css::beans::PropertyValue>& rArguments, const uno::Reference<css::frame::XDispatchResultListener>& rListener)
 {
+    std::cout << "-- dispatchCommand 2 " << std::endl;
+
+
+    // Iterate through the sequence
+    const auto& propertyValues = rArguments.getConstArray();
+    sal_Int32 count = rArguments.getLength();
+
+    std::cout << "Number of PropertyValues: " << count << std::endl;
+
+    for (sal_Int32 i = 0; i < count; ++i)
+    {
+        const css::beans::PropertyValue& property = propertyValues[i];
+        std::cout << "Property " << i + 1 << ":" << std::endl;
+        std::cout << "  Name: " << property.Name << std::endl;
+
+        if (property.Value.hasValue())
+        {
+            std::cout << "  Value: ";
+            if (property.Value.getValueTypeClass() == css::uno::TypeClass_STRING)
+            {
+                std::cout << property.Value.get<rtl::OUString>().toUtf8() << std::endl;
+            }
+            else if (property.Value.getValueTypeClass() == css::uno::TypeClass_BOOLEAN)
+            {
+                std::cout << (property.Value.get<bool>() ? "true" : "false") << std::endl;
+            }
+            else if (property.Value.getValueTypeClass() == css::uno::TypeClass_LONG)
+            {
+                std::cout << property.Value.get<sal_Int32>() << std::endl;
+            }
+            else
+            {
+                std::cout << "Unknown or unhandled type" << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "  Value: None" << std::endl;
+        }
+    }
+
+
     uno::Reference<frame::XDispatchProvider> xDispatchProvider(rFrame, uno::UNO_QUERY);
     if (!xDispatchProvider.is())
         return false;
@@ -53,11 +96,13 @@ bool dispatchCommand(const OUString& rCommand, const uno::Reference<css::frame::
         uno::Reference<frame::XNotifyingDispatch> xNotifyingDisp(xDisp, uno::UNO_QUERY);
         if (xNotifyingDisp.is())
         {
+            std::cout << "xNotifyingDisp->dispatchWithNotification" << std::endl;
             xNotifyingDisp->dispatchWithNotification(aCommandURL, rArguments, rListener);
             return true;
         }
     }
 
+    std::cout << "xDisp->dispatch" << std::endl;
     xDisp->dispatch(aCommandURL, rArguments);
 
     return true;
@@ -65,6 +110,8 @@ bool dispatchCommand(const OUString& rCommand, const uno::Reference<css::frame::
 
 bool dispatchCommand(const OUString& rCommand, const css::uno::Sequence<css::beans::PropertyValue>& rArguments, const uno::Reference<css::frame::XDispatchResultListener>& rListener)
 {
+    std::cout << "-- dispatchCommand 1 " << std::endl;
+
     // Target where we will execute the .uno: command
     uno::Reference<uno::XComponentContext> xContext = ::comphelper::getProcessComponentContext();
     uno::Reference<frame::XDesktop2> xDesktop = frame::Desktop::create(xContext);

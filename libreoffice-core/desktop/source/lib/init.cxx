@@ -5685,6 +5685,7 @@ static bool isCommandAllowed(OUString& command) {
 
 static void doc_postUnoCommand(LibreOfficeKitDocument* pThis, const char* pCommand, const char* pArguments, bool bNotifyWhenFinished)
 {
+    std::cout << "--- doc_postUnoCommand" << std::endl;
     comphelper::ProfileZone aZone("doc_postUnoCommand");
 
     SolarMutexGuard aGuard;
@@ -6037,6 +6038,8 @@ static void doc_postUnoCommand(LibreOfficeKitDocument* pThis, const char* pComma
 
     if (aChartHelper.GetWindow() && aCommand != ".uno:Save" )
     {
+
+        std::cout << "--- doc_postUnoCommand if 1" << std::endl;
         util::URL aCommandURL;
         aCommandURL.Path = aCommand.copy(5);
         css::uno::Reference<css::frame::XDispatch>& aChartDispatcher = aChartHelper.GetXDispatcher();
@@ -6046,19 +6049,26 @@ static void doc_postUnoCommand(LibreOfficeKitDocument* pThis, const char* pComma
     if (LokStarMathHelper aMathHelper(SfxViewShell::Current());
         aMathHelper.GetGraphicWindow() && aCommand != ".uno:Save")
     {
+        std::cout << "--- doc_postUnoCommand if 2" << std::endl;
         aMathHelper.Dispatch(aCommand, comphelper::containerToSequence(aPropertyValuesVector));
         return;
     }
     if (bNotifyWhenFinished && pDocument->mpCallbackFlushHandlers.count(nView))
     {
+        std::cout << "--- doc_postUnoCommand if 3" << std::endl;
         bResult = comphelper::dispatchCommand(aCommand, comphelper::containerToSequence(aPropertyValuesVector),
                 new DispatchResultListener(pCommand, pDocument->mpCallbackFlushHandlers[nView]));
     }
-    else
+    else {
+        std::cout << "--- doc_postUnoCommand if 4" << std::endl;
         bResult = comphelper::dispatchCommand(aCommand, comphelper::containerToSequence(aPropertyValuesVector));
+    }
+
+
 
     if (!bResult)
     {
+        std::cout << "bResult was false" << std::endl;
         SetLastExceptionMsg("Failed to dispatch " + aCommand);
     }
 }
