@@ -62,6 +62,14 @@ git clone https://github.com/coparse-inc/lok-wasm
 ./scripts/build
 ```
 
+# QA Env
+
+Make a build first, then:
+
+```bash
+./scripts/launch-qa
+```
+
 # Debugging
 
 Make a debug build:
@@ -75,7 +83,9 @@ Make a debug build:
 ./scripts/build
 ```
 
-Use Chrome with [the C/C++ WASM debugging tools extension](https://goo.gle/wasm-debugging-extension) installed.
+If you're debugging the QA environment with `./scripts/launch-qa`, the included LOK C++ debugging extension should be included.
+
+Otherwise use Chrome with [the C/C++ WASM debugging tools extension](https://goo.gle/wasm-debugging-extension) installed.
 
 Use Ctrl/Cmd+P in the Dev Tools to quickly navigate to the `.cxx` file you need to debug.
 
@@ -89,19 +99,6 @@ if (myCondition == true) {
 
 
 Expand the LOK logs to see the full stack trace, clicking on the `.cxx` file will jump to the source for the file.
-
-# QA Env
-
-Make a build first, then:
-
-```bash
-# change to the qa-env directory
-cd qa-env
-# install the qa-env dependencies
-npm install
-# run the qa-env
-npm run dev
-```
 
 # Docs
 
