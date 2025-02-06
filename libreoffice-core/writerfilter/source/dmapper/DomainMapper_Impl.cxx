@@ -2665,7 +2665,7 @@ void DomainMapper_Impl::finishParagraph( const PropertyMapPtr& pPropertyMap, con
                         return rValue.Name == "NumberingRules";
                     });
 
-                    assert( isNumberingViaRule == (itNumberingRules != aProperties.end()) );
+                    assert(isNumberingViaRule == (itNumberingRules != aProperties.end()) || IsRTFImport());
                     isNumberingViaRule = (itNumberingRules != aProperties.end());
                     if (m_xPreviousParagraph.is() && (isNumberingViaRule || isNumberingViaStyle))
                     {
@@ -8011,7 +8011,7 @@ void DomainMapper_Impl::CloseFieldCommand()
                         }
 
                         //extract quick help text
-                        if (sCommand.getLength() > nIndex + 1)
+                        if (nIndex != -1 && sCommand.getLength() > nIndex + 1)
                         {
                             xFieldProperties->setPropertyValue(
                                 getPropertyName(PROP_HINT),

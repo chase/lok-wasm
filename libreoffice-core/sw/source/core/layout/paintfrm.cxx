@@ -23,6 +23,7 @@
 #include <sfx2/docfile.hxx>
 #include <sfx2/printer.hxx>
 #include <sfx2/progress.hxx>
+#include <sfx2/StylePreviewRenderer.hxx>
 #include <editeng/brushitem.hxx>
 #include <editeng/prntitem.hxx>
 #include <editeng/boxitem.hxx>
@@ -4574,19 +4575,43 @@ void SwTextFrame::PaintParagraphStylesHighlighting() const
     if (!pWrtSh)
         return;
 
+    if (!pWrtSh->GetView().IsSpotlightParaStyles())
+        return;
+
     vcl::RenderContext* pRenderContext = pWrtSh->GetOut();
     if (!pRenderContext)
         return;
 
-    StylesHighlighterColorMap& rParaStylesColorMap
-            = pWrtSh->GetView().GetStylesHighlighterParaColorMap();
+    const SwTextFormatColl* pColl = GetTextNodeFirst()->GetTextColl();
+    OUString sStyleName = pColl->GetName();
 
-    if (rParaStylesColorMap.empty())
-        return;
+    Color nStyleColor;
+    int nStyleNumber;
+
+    bool bSpotlightStyle;
+    if (comphelper::LibreOfficeKit::isActive())
+    {
+        // For simplicity in kit mode, we render in the document "all styles"
+        bSpotlightStyle = true;
+        // Do this so these are stable across views regardless of an individual
+        // user's selection mode in the style panel.
+        nStyleNumber = pWrtSh->GetDoc()->GetTextFormatColls()->GetPos(pColl);
+        nStyleColor = ColorHash(sStyleName);
+    }
+    else
+    {
+        StylesHighlighterColorMap& rParaStylesColorMap
+                = pWrtSh->GetView().GetStylesHighlighterParaColorMap();
+        bSpotlightStyle = rParaStylesColorMap.find(sStyleName) != rParaStylesColorMap.end();
+        if (bSpotlightStyle)
+        {
+            nStyleNumber = rParaStylesColorMap[sStyleName].second;
+            nStyleColor = rParaStylesColorMap[sStyleName].first;
+        }
+    }
 
     //  draw styles highlighter
-    OUString sStyleName = GetTextNodeFirst()->GetTextColl()->GetName();
-    if (rParaStylesColorMap.find(sStyleName) != rParaStylesColorMap.end())
+    if (bSpotlightStyle)
     {
         SwRect aFrameAreaRect(getFrameArea());
 
@@ -4614,15 +4639,15 @@ void SwTextFrame::PaintParagraphStylesHighlighting() const
 
         pRenderContext->Push(vcl::PushFlags::ALL);
 
-        pRenderContext->SetFillColor(rParaStylesColorMap[sStyleName].first);
-        pRenderContext->SetLineColor(rParaStylesColorMap[sStyleName].first);
+        pRenderContext->SetFillColor(nStyleColor);
+        pRenderContext->SetLineColor(nStyleColor);
 
         pRenderContext->DrawRect(rRect);
 
         // draw hatch pattern if paragraph has direct formatting
         if (SwDoc::HasParagraphDirectFormatting(SwPosition(*GetTextNodeForParaProps())))
         {
-            Color aHatchColor(rParaStylesColorMap[sStyleName].first);
+            Color aHatchColor(nStyleColor);
             // make hatch line color 41% darker than the fill color
             aHatchColor.ApplyTintOrShade(-4100);
             Hatch aHatch(HatchStyle::Single, aHatchColor, 50, 450_deg10);
@@ -4631,8 +4656,8 @@ void SwTextFrame::PaintParagraphStylesHighlighting() const
 
         pRenderContext->SetFont(aFont);
         pRenderContext->SetLayoutMode(vcl::text::ComplexTextLayoutFlags::Default);
-        pRenderContext->SetTextFillColor(rParaStylesColorMap[sStyleName].first);
-        pRenderContext->DrawText(rRect, OUString::number(rParaStylesColorMap[sStyleName].second),
+        pRenderContext->SetTextFillColor(nStyleColor);
+        pRenderContext->DrawText(rRect, OUString::number(nStyleNumber),
                                  DrawTextFlags::Center | DrawTextFlags::VCenter);
 
         pRenderContext->Pop();

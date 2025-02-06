@@ -466,10 +466,16 @@ ErrCode GraphicFilter::CanImportGraphic( std::u16string_view rMainUrl, SvStream&
 ErrCode GraphicFilter::ImportGraphic( Graphic& rGraphic, const INetURLObject& rPath,
                                      sal_uInt16 nFormat, sal_uInt16 * pDeterminedFormat, GraphicFilterImportFlags nImportFlags )
 {
-    ErrCode nRetValue = ERRCODE_GRFILTER_FORMATERROR;
     SAL_WARN_IF( rPath.GetProtocol() == INetProtocol::NotValid, "vcl.filter", "GraphicFilter::ImportGraphic() : ProtType == INetProtocol::NotValid" );
 
     OUString    aMainUrl( rPath.GetMainURL( INetURLObject::DecodeMechanism::NONE ) );
+    if (rPath.IsExoticProtocol())
+    {
+        SAL_WARN("vcl.filter", "GraphicFilter::ImportGraphic(), ignore exotic protocol: " << aMainUrl);
+        return ERRCODE_GRFILTER_FORMATERROR;
+    }
+
+    ErrCode nRetValue = ERRCODE_GRFILTER_FORMATERROR;
     std::unique_ptr<SvStream> xStream(::utl::UcbStreamHelper::CreateStream( aMainUrl, StreamMode::READ | StreamMode::SHARE_DENYNONE ));
     if (xStream)
     {
@@ -712,7 +718,7 @@ void GraphicFilter::MakeGraphicsAvailableThreaded(std::vector<Graphic*>& graphic
 }
 
 Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream, sal_uInt64 sizeLimit,
-                                             const Size* pSizeHint)
+                                             const Size* pSizeHint, sal_Int32 nPage)
 {
     Graphic aGraphic;
     sal_uInt16 nFormat = GRFILTER_FORMAT_DONTKNOW;
@@ -901,7 +907,10 @@ Graphic GraphicFilter::ImportUnloadedGraphic(SvStream& rIStream, sal_uInt64 size
                     pSizeHint = &aLogicSize;
                 }
             }
-            aGraphic.SetGfxLink(std::make_shared<GfxLink>(aGraphicContent, eLinkType));
+            if (eLinkType == GfxLinkType::NativePdf && nPage >= 0)
+                aGraphic = Graphic(std::make_shared<GfxLink>(aGraphicContent, eLinkType), nPage);
+            else
+                aGraphic.SetGfxLink(std::make_shared<GfxLink>(aGraphicContent, eLinkType));
             aGraphic.ImplGetImpGraphic()->setPrepared(bAnimated, pSizeHint);
         }
     }
@@ -1109,9 +1118,10 @@ ErrCode GraphicFilter::readEMF(SvStream & rStream, Graphic & rGraphic, GfxLinkTy
     return readWMF_EMF(rStream, rGraphic, rLinkType, VectorGraphicDataType::Emf);
 }
 
-ErrCode GraphicFilter::readPDF(SvStream & rStream, Graphic & rGraphic, GfxLinkType & rLinkType)
+ErrCode GraphicFilter::readPDF(SvStream& rStream, Graphic& rGraphic, GfxLinkType& rLinkType,
+                               sal_Int32 nPageIndex)
 {
-    if (vcl::ImportPDF(rStream, rGraphic))
+    if (vcl::ImportPDF(rStream, rGraphic, nPageIndex))
     {
         rLinkType = GfxLinkType::NativePdf;
         return ERRCODE_NONE;
@@ -1268,8 +1278,10 @@ ErrCode GraphicFilter::readWEBP(SvStream & rStream, Graphic & rGraphic, GfxLinkT
         return ERRCODE_GRFILTER_FILTERERROR;
 }
 
-ErrCode GraphicFilter::ImportGraphic(Graphic& rGraphic, std::u16string_view rPath, SvStream& rIStream,
-                                     sal_uInt16 nFormat, sal_uInt16* pDeterminedFormat, GraphicFilterImportFlags nImportFlags)
+ErrCode GraphicFilter::ImportGraphic(Graphic& rGraphic, std::u16string_view rPath,
+                                     SvStream& rIStream, sal_uInt16 nFormat,
+                                     sal_uInt16* pDeterminedFormat,
+                                     GraphicFilterImportFlags nImportFlags, sal_Int32 nPageIndex)
 {
     OUString aFilterName;
     sal_uInt64 nStreamBegin;
@@ -1369,7 +1381,7 @@ ErrCode GraphicFilter::ImportGraphic(Graphic& rGraphic, std::u16string_view rPat
         }
         else if (aFilterName.equalsIgnoreAsciiCase(IMP_PDF))
         {
-            nStatus = readPDF(rIStream, rGraphic, eLinkType);
+            nStatus = readPDF(rIStream, rGraphic, eLinkType, nPageIndex);
         }
         else if (aFilterName.equalsIgnoreAsciiCase(IMP_TIFF) )
         {

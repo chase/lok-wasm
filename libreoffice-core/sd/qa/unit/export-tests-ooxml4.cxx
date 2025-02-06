@@ -721,6 +721,7 @@ CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testTdf143222_embeddedWorksheet)
 
     pGraphic = pOleObj->GetGraphic();
     CPPUNIT_ASSERT_MESSAGE("no graphic after the export", pGraphic != nullptr);
+    CPPUNIT_ASSERT_MESSAGE("no graphic after the export", !pGraphic->IsNone());
 }
 
 CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testTdf143315)
@@ -1107,15 +1108,12 @@ CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testTdf157740_slideMasters)
     createSdImpressDoc("pptx/tdf157740.pptx");
     saveAndReload("Impress Office Open XML");
 
-    // Test how many slidemaster we have
+    // The original file has 1 slide master and 7 slide layouts in that master
     xmlDocUniquePtr pXmlDocContent = parseExport("ppt/presentation.xml");
-    assertXPath(pXmlDocContent, "/p:presentation/p:sldMasterIdLst/p:sldMasterId"_ostr, 7);
+    assertXPath(pXmlDocContent, "/p:presentation/p:sldMasterIdLst/p:sldMasterId"_ostr, 1);
 
     pXmlDocContent = parseExport("ppt/slideMasters/slideMaster1.xml");
-    assertXPath(pXmlDocContent, "/p:sldMaster/p:sldLayoutIdLst/p:sldLayoutId"_ostr, 1);
-
-    pXmlDocContent = parseExport("ppt/slideMasters/slideMaster7.xml");
-    assertXPath(pXmlDocContent, "/p:sldMaster/p:sldLayoutIdLst/p:sldLayoutId"_ostr, 1);
+    assertXPath(pXmlDocContent, "/p:sldMaster/p:sldLayoutIdLst/p:sldLayoutId"_ostr, 7);
 }
 
 CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testTdf159931_slideLayouts)
@@ -1161,6 +1159,78 @@ CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testTdf159931_slideLayouts)
                          bool(xNameAccess->hasByName("ppt/slideLayouts/" + sSlideLayoutName1)));
     CPPUNIT_ASSERT_EQUAL(true,
                          bool(xNameAccess->hasByName("ppt/slideLayouts/" + sSlideLayoutName2)));
+}
+
+CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testDeduplicateMasters)
+{
+    createSdImpressDoc("pptx/onemaster-twolayouts.pptx");
+    saveAndReload("Impress Office Open XML");
+
+    // Check that the document still has one master and two layouts
+    xmlDocUniquePtr pXmlDocContent = parseExport("ppt/presentation.xml");
+    assertXPath(pXmlDocContent, "/p:presentation/p:sldMasterIdLst/p:sldMasterId"_ostr, 1);
+    pXmlDocContent = parseExport("ppt/slideMasters/slideMaster1.xml");
+    assertXPath(pXmlDocContent, "/p:sldMaster/p:sldLayoutIdLst/p:sldLayoutId"_ostr, 2);
+
+    // Check that both background colors have been preserved
+    uno::Reference<drawing::XMasterPagesSupplier> xDoc(mxComponent, uno::UNO_QUERY);
+    CPPUNIT_ASSERT(xDoc.is());
+    CPPUNIT_ASSERT_EQUAL(sal_Int32(2), xDoc->getMasterPages()->getCount());
+
+    uno::Reference<drawing::XDrawPage> xPage(xDoc->getMasterPages()->getByIndex(0),
+                                             uno::UNO_QUERY_THROW);
+    uno::Reference<beans::XPropertySet> xPropSet(xPage, uno::UNO_QUERY);
+    uno::Any aAny = xPropSet->getPropertyValue("Background");
+    CPPUNIT_ASSERT(aAny.hasValue());
+    uno::Reference<beans::XPropertySet> aXBackgroundPropSet;
+    aAny >>= aXBackgroundPropSet;
+    Color nColor;
+    CPPUNIT_ASSERT(aXBackgroundPropSet->getPropertyValue("FillColor") >>= nColor);
+    CPPUNIT_ASSERT_EQUAL(Color(0x0E2841), nColor);
+
+    uno::Reference<drawing::XDrawPage> xPage1(xDoc->getMasterPages()->getByIndex(1),
+                                              uno::UNO_QUERY_THROW);
+    uno::Reference<beans::XPropertySet> xPropSet1(xPage1, uno::UNO_QUERY);
+    aAny = xPropSet1->getPropertyValue("Background");
+    CPPUNIT_ASSERT(aAny.hasValue());
+    aAny >>= aXBackgroundPropSet;
+    CPPUNIT_ASSERT(aXBackgroundPropSet->getPropertyValue("FillColor") >>= nColor);
+    CPPUNIT_ASSERT_EQUAL(Color(0x000000), nColor);
+}
+
+CPPUNIT_TEST_FIXTURE(SdOOXMLExportTest4, testConvertWithMasterDeduplication)
+{
+    createSdImpressDoc("odp/dupmastermultlayouts.odp");
+    save("Impress Office Open XML");
+
+    uno::Reference<packages::zip::XZipFileAccess2> xNameAccess
+        = packages::zip::ZipFileAccess::createWithURL(comphelper::getComponentContext(m_xSFactory),
+                                                      maTempFile.GetURL());
+
+    // For each slide check that it's layout exists
+    for (int i = 1; i <= 4; ++i)
+    {
+        xmlDocUniquePtr pXmlDocRels
+            = parseExport("ppt/slides/_rels/slide" + OUString::number(i) + ".xml.rels");
+
+        assertXPath(
+            pXmlDocRels,
+            "(/rels:Relationships/rels:Relationship[@Type='http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout'])"_ostr);
+        // the relative target e.g. "../slideLayouts/slideLayout2.xml"
+        OUString sRelativeLayoutPath = getXPathContent(
+            pXmlDocRels,
+            "(/rels:Relationships/rels:Relationship[@Type='http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout'])/@Target"_ostr);
+
+        // Check that the referenced slideLayout files exist
+        // Without the accompanying fix in place, this test would have failed with:
+        // equality assertion failed
+        // - Expected: 1
+        // - Actual  : 0
+        // i.e. the referenced slideLayout file was missing on export.
+        OUString sSlideLayoutName = sRelativeLayoutPath.getToken(2, '/');
+        CPPUNIT_ASSERT_EQUAL(true,
+                             bool(xNameAccess->hasByName("ppt/slideLayouts/" + sSlideLayoutName)));
+    }
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

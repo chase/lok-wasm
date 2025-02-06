@@ -20,6 +20,7 @@
 #include <sal/config.h>
 #include <sal/log.hxx>
 
+#include <bookmark.hxx>
 #include <DocumentContentOperationsManager.hxx>
 #include <hintids.hxx>
 #include <editeng/rsiditem.hxx>
@@ -81,6 +82,7 @@
 
 #include <rdfhelper.hxx>
 #include <hints.hxx>
+#include <unotxdoc.hxx>
 
 #ifdef DBG_UTIL
 #define CHECK           Check(true);
@@ -1098,7 +1100,9 @@ SwTextAttr* MakeTextAttr(
                 // If the annotation mark is also copied, the relation and thus the annotated text range will be reestablished,
                 // when the annotation mark is created and inserted into the document.
                 auto& pField = const_cast<SwPostItField&>(dynamic_cast<const SwPostItField&>(*(pNew->GetFormatField().GetField())));
-                pField.SetName(OUString());
+
+                // We set the name here to make the object referencable.
+                pField.SetName(sw::mark::MarkBase::GenerateNewName(u"__Annotation__"));
                 pField.SetPostItId();
             }
         }
@@ -1284,7 +1288,7 @@ void SwTextNode::DestroyAttr( SwTextAttr* pAttr )
             {
                 static constexpr OUStringLiteral metaNS(u"urn:bails");
                 const css::uno::Reference<css::rdf::XResource> xSubject = pMeta->MakeUnoObject();
-                uno::Reference<frame::XModel> xModel = pDocSh->GetBaseModel();
+                rtl::Reference<SwXTextDocument> xModel = pDocSh->GetXTextDocument();
                 SwRDFHelper::clearStatements(xModel, metaNS, xSubject);
             }
         }

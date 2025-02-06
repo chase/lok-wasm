@@ -140,13 +140,11 @@ ifneq ($(filter $(OS),ANDROID iOS MACOSX WNT),)
 $(eval $(call gb_Library_add_exception_objects,sofficeapp,\
 	desktop/source/lib/init \
 	desktop/source/lib/lokinteractionhandler \
-	$(if $(filter-out $(OS),iOS), \
-		desktop/source/lib/lokclipboard) \
+	desktop/source/lib/lokclipboard \
 	$(if $(filter $(OS),ANDROID), \
 		desktop/source/lib/lokandroid) \
 ))
-$(if $(filter-out $(OS),IOS), \
-    $(eval $(call gb_Library_set_componentfile,sofficeapp,desktop/lokclipboard,services)))
+$(eval $(call gb_Library_set_componentfile,sofficeapp,desktop/lokclipboard,services))
 else
 # MACRO: this is the Emscripten entrance for LOK
 ifneq ($(filter TRUE,$(USING_X11) $(DISABLE_GUI))($filter EMSCRIPTEN,$(OS)),)

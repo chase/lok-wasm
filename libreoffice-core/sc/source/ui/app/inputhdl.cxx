@@ -47,6 +47,7 @@
 #include <sfx2/printer.hxx>
 #include <svl/numformat.hxx>
 #include <svl/zforlist.hxx>
+#include <svtools/langtab.hxx>
 #include <unotools/localedatawrapper.hxx>
 #include <unotools/charclass.hxx>
 #include <utility>
@@ -1879,6 +1880,18 @@ void ScTabViewShell::LOKSendFormulabarUpdate(EditView* pActiveView,
     maSendFormulabarUpdate.m_aText = rText;
     maSendFormulabarUpdate.m_aSelection = aSelection;
     maSendFormulabarUpdate.m_nTimeStamp = now;
+
+    ScViewData& rViewData = this->GetViewData();
+    const ScDocument& rDoc = rViewData.GetDocShell()->GetDocument();
+    const ScPatternAttr* pPattern = rDoc.GetPattern(rViewData.GetCurX(), rViewData.GetCurY(), rViewData.GetRefTabNo());
+
+    if (pPattern)
+    {
+        SvNumberFormatter* pFormatter = rDoc.GetFormatTable();
+        sal_uInt32 nFormat = pPattern->GetNumberFormat( pFormatter );
+        maSendFormulabarUpdate.m_separator = pFormatter->GetFormatDecimalSep(nFormat);
+    }
+
     maSendFormulabarUpdate.Send();
 }
 
@@ -1888,6 +1901,7 @@ void ScTabViewShell::SendFormulabarUpdate::Send()
     (*pData)["action_type"_ostr] = "setText";
     (*pData)["text"_ostr] = m_aText;
     (*pData)["selection"_ostr] = m_aSelection;
+    (*pData)["separator"_ostr] = m_separator;
     OUString sWindowId = OUString::number(m_nShellId) + "formulabar";
     jsdialog::SendAction(sWindowId, "sc_input_window", std::move(pData));
 }
@@ -3138,13 +3152,6 @@ void ScInputHandler::EnterHandler( ScEnterMode nBlockMode, bool bBeforeSavingInL
 
     ImplCreateEditEngine();
 
-    bool bMatrix = ( nBlockMode == ScEnterMode::MATRIX );
-
-    SfxApplication* pSfxApp     = SfxGetpApp();
-    std::unique_ptr<EditTextObject> pObject;
-    std::unique_ptr<ScPatternAttr> pCellAttrs;
-    bool            bForget     = false; // Remove due to validity?
-
     OUString aString = GetEditText(mpEditEngine.get());
     OUString aPreAutoCorrectString(aString);
     EditView* pActiveView = pTopView ? pTopView : pTableView;
@@ -3213,12 +3220,24 @@ void ScInputHandler::EnterHandler( ScEnterMode nBlockMode, bool bBeforeSavingInL
                     return;
                 }
 
-                if (pData->DoError(pActiveViewSh->GetFrameWeld(), aString, aCursorPos))
-                    bForget = true;                 // Do not take over input
-
+                pData->DoError(
+                    pActiveViewSh->GetFrameWeld(), aString, aCursorPos,
+                    [this, nBlockMode, aString, aPreAutoCorrectString](bool bForget)
+                    { EnterHandler2(nBlockMode, bForget, aString, aPreAutoCorrectString); });
+                return;
             }
         }
     }
+    EnterHandler2(nBlockMode, false, aString, aPreAutoCorrectString);
+}
+
+void ScInputHandler::EnterHandler2(ScEnterMode nBlockMode, bool bForget, OUString aString,
+                                   OUString aPreAutoCorrectString)
+{
+    std::unique_ptr<EditTextObject> pObject;
+    std::unique_ptr<ScPatternAttr> pCellAttrs;
+    bool bMatrix = (nBlockMode == ScEnterMode::MATRIX);
+    SfxApplication* pSfxApp = SfxGetpApp();
 
     // Check for input into DataPilot table
     if ( bModified && !bForget )
@@ -3951,7 +3970,7 @@ bool ScInputHandler::KeyInput( const KeyEvent& rKEvt, bool bStartEdit /* = false
         UpdateActiveView();
         bool bNewView = DataChanging( nChar );
 
-        if (bProtected || (pActiveViewSh->GetViewShell() && pActiveViewSh->GetViewShell()->IsLokReadOnlyView())) // Protected cell?
+        if (bProtected || (pActiveViewSh && pActiveViewSh->GetViewShell() && pActiveViewSh->GetViewShell()->IsLokReadOnlyView())) // Protected cell?
             bUsed = true;                           // Don't forward KeyEvent
         else                                        // Changes allowed
         {
@@ -4185,12 +4204,11 @@ void ScInputHandler::InputCommand( const CommandEvent& rCEvt )
         UpdateActiveView();
         bool bNewView = DataChanging( 0, true );
 
-        if (!bProtected && !(pActiveViewSh->GetViewShell() && pActiveViewSh->GetViewShell()->IsLokReadOnlyView())) // changes allowed
+        if (!bProtected && pActiveViewSh && !(pActiveViewSh->GetViewShell() && pActiveViewSh->GetViewShell()->IsLokReadOnlyView())) // changes allowed
         {
             if (bNewView)                           // create new edit view
             {
-                if (pActiveViewSh)
-                    pActiveViewSh->GetViewData().GetDocShell()->PostEditView( mpEditEngine.get(), aCursorPos );
+                pActiveViewSh->GetViewData().GetDocShell()->PostEditView( mpEditEngine.get(), aCursorPos );
                 UpdateActiveView();
                 if (eMode==SC_INPUT_NONE)
                     if (pTableView || pTopView)

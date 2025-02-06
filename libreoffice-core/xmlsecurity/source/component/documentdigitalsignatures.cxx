@@ -60,6 +60,7 @@
 #include <com/sun/star/security/XDocumentDigitalSignatures.hpp>
 #include <com/sun/star/xml/crypto/XXMLSecurityContext.hpp>
 #include <sfx2/digitalsignatures.hxx>
+#include <svl/cryptosign.hxx>
 
 #include <map>
 
@@ -106,12 +107,12 @@ private:
                          DocumentSignatureMode eMode);
 
     css::uno::Sequence<css::uno::Reference<css::security::XCertificate>>
-    chooseCertificatesImpl(std::map<OUString, OUString>& rProperties, const UserAction eAction,
+    chooseCertificatesImpl(SfxViewShell* pViewShell, std::map<OUString, OUString>& rProperties, const UserAction eAction,
                            const CertificateKind certificateKind=CertificateKind_NONE);
 
     bool
     signWithCertificateImpl(const uno::Reference<frame::XModel>& /*xModel*/,
-                            css::uno::Reference<css::security::XCertificate> const& xCertificate,
+                            svl::crypto::SigningContext& rSigningContext,
                             css::uno::Reference<css::embed::XStorage> const& xStorage,
                             css::uno::Reference<css::io::XStream> const& xStream,
                             DocumentSignatureMode eMode);
@@ -217,7 +218,7 @@ public:
     /// See sfx2::DigitalSignatures::SignModelWithCertificate().
     bool
     SignModelWithCertificate(const css::uno::Reference<css::frame::XModel>& xModel,
-                             const css::uno::Reference<css::security::XCertificate>& xCertificate,
+                             svl::crypto::SigningContext& rSigningContext,
                              const css::uno::Reference<css::embed::XStorage>& xStorage,
                              const css::uno::Reference<css::io::XStream>& xStream) override;
     /// See sfx2::DigitalSignatures::SignDocumentContentAsync().
@@ -233,6 +234,12 @@ public:
     /// See sfx2::DigitalSignatures::SetSignScriptingContent().
     void SetSignScriptingContent(
         const css::uno::Reference<css::io::XStream>& xScriptingSignStream) override;
+
+    /// See sfx2::DigitalSignatures::SelectSigningCertificateWithType().
+    css::uno::Reference<css::security::XCertificate>
+    SelectSigningCertificateWithType(SfxViewShell* pViewShell,
+                                     const css::security::CertificateKind certificateKind,
+                                     OUString& rDescription) override;
 };
 
 }
@@ -330,7 +337,9 @@ sal_Bool DocumentDigitalSignatures::signSignatureLine(
         xSecurityContext = aSignatureManager.getSecurityContext();
 
     sal_Int32 nSecurityId;
-    bool bSuccess = aSignatureManager.add(xCertificate, xSecurityContext, aComment, nSecurityId,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    bool bSuccess = aSignatureManager.add(aSigningContext, xSecurityContext, aComment, nSecurityId,
                                           true, aSignatureLineId, xValidGraphic, xInvalidGraphic);
     if (!bSuccess)
         return false;
@@ -708,7 +717,8 @@ sal_Bool DocumentDigitalSignatures::isAuthorTrusted(
 }
 
 uno::Sequence<Reference<css::security::XCertificate>>
-DocumentDigitalSignatures::chooseCertificatesImpl(std::map<OUString, OUString>& rProperties,
+DocumentDigitalSignatures::chooseCertificatesImpl(SfxViewShell* pViewShell,
+                                                  std::map<OUString, OUString>& rProperties,
                                                   const UserAction eAction,
                                                   const CertificateKind certificateKind)
 {
@@ -722,7 +732,7 @@ DocumentDigitalSignatures::chooseCertificatesImpl(std::map<OUString, OUString>& 
             xSecContexts.push_back(aSignatureManager.getGpgSecurityContext());
     }
 
-    std::shared_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(Application::GetFrameWeld(mxParentWindow), nullptr, std::move(xSecContexts), eAction);
+    std::shared_ptr<CertificateChooser> aChooser = CertificateChooser::getInstance(Application::GetFrameWeld(mxParentWindow), pViewShell, std::move(xSecContexts), eAction);
 
     if (aChooser->run() != RET_OK)
         return { Reference< css::security::XCertificate >(nullptr) };
@@ -742,7 +752,7 @@ Reference< css::security::XCertificate > DocumentDigitalSignatures::chooseCertif
 Reference< css::security::XCertificate > DocumentDigitalSignatures::chooseSigningCertificate(OUString& rDescription)
 {
     std::map<OUString, OUString> aProperties;
-    Reference< css::security::XCertificate > xCert = chooseCertificatesImpl( aProperties, UserAction::Sign )[0];
+    Reference< css::security::XCertificate > xCert = chooseCertificatesImpl( nullptr, aProperties, UserAction::Sign )[0];
     rDescription = aProperties["Description"];
     return xCert;
 }
@@ -750,7 +760,7 @@ Reference< css::security::XCertificate > DocumentDigitalSignatures::chooseSignin
 Reference< css::security::XCertificate > DocumentDigitalSignatures::selectSigningCertificate(OUString& rDescription)
 {
     std::map<OUString, OUString> aProperties;
-    Reference< css::security::XCertificate > xCert = chooseCertificatesImpl( aProperties, UserAction::SelectSign )[0];
+    Reference< css::security::XCertificate > xCert = chooseCertificatesImpl( nullptr, aProperties, UserAction::SelectSign )[0];
     rDescription = aProperties["Description"];
     return xCert;
 }
@@ -759,9 +769,15 @@ Reference<css::security::XCertificate>
 DocumentDigitalSignatures::selectSigningCertificateWithType(const CertificateKind certificateKind,
                                                             OUString& rDescription)
 {
+    return SelectSigningCertificateWithType(nullptr, certificateKind, rDescription);
+}
+
+Reference<css::security::XCertificate>
+DocumentDigitalSignatures::SelectSigningCertificateWithType(SfxViewShell* pViewShell, const CertificateKind certificateKind, OUString& rDescription)
+{
     std::map<OUString, OUString> aProperties;
     Reference<css::security::XCertificate> xCert
-        = chooseCertificatesImpl(aProperties, UserAction::SelectSign, certificateKind)[0];
+        = chooseCertificatesImpl(pViewShell, aProperties, UserAction::SelectSign, certificateKind)[0];
     rDescription = aProperties["Description"];
     return xCert;
 }
@@ -770,7 +786,7 @@ css::uno::Sequence< Reference< css::security::XCertificate > > DocumentDigitalSi
 {
     std::map<OUString, OUString> aProperties;
     uno::Sequence< Reference< css::security::XCertificate > > aCerts=
-        chooseCertificatesImpl( aProperties, UserAction::Encrypt );
+        chooseCertificatesImpl( nullptr, aProperties, UserAction::Encrypt );
     if (aCerts.getLength() == 1 && !aCerts[0].is())
         // our error case contract is: empty sequence, so map that!
         return uno::Sequence< Reference< css::security::XCertificate > >();
@@ -781,7 +797,7 @@ css::uno::Sequence< Reference< css::security::XCertificate > > DocumentDigitalSi
 css::uno::Reference< css::security::XCertificate > DocumentDigitalSignatures::chooseCertificateWithProps(Sequence<::com::sun::star::beans::PropertyValue>& rProperties)
 {
     std::map<OUString, OUString> aProperties;
-    auto xCert = chooseCertificatesImpl( aProperties, UserAction::Sign )[0];
+    auto xCert = chooseCertificatesImpl( nullptr, aProperties, UserAction::Sign )[0];
 
     std::vector<css::beans::PropertyValue> vec;
     vec.reserve(aProperties.size());
@@ -829,17 +845,19 @@ sal_Bool DocumentDigitalSignatures::signDocumentWithCertificate(
             css::uno::Reference<css::io::XStream> const & xStream)
 {
     uno::Reference<frame::XModel> xModel;
-    return signWithCertificateImpl(xModel, xCertificate, xStorage, xStream,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    return signWithCertificateImpl(xModel, aSigningContext, xStorage, xStream,
                                    DocumentSignatureMode::Content);
 }
 
 bool DocumentDigitalSignatures::SignModelWithCertificate(
     const uno::Reference<frame::XModel>& xModel,
-    const css::uno::Reference<css::security::XCertificate>& xCertificate,
+    svl::crypto::SigningContext& rSigningContext,
     const css::uno::Reference<css::embed::XStorage>& xStorage,
     const css::uno::Reference<css::io::XStream>& xStream)
 {
-    return signWithCertificateImpl(xModel, xCertificate, xStorage, xStream,
+    return signWithCertificateImpl(xModel, rSigningContext, xStorage, xStream,
                                    DocumentSignatureMode::Content);
 }
 
@@ -873,7 +891,9 @@ sal_Bool DocumentDigitalSignatures::signPackageWithCertificate(
     css::uno::Reference<css::io::XStream> const& xStream)
 {
     uno::Reference<frame::XModel> xModel;
-    return signWithCertificateImpl(xModel, xCertificate, xStorage, xStream,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    return signWithCertificateImpl(xModel, aSigningContext, xStorage, xStream,
                                    DocumentSignatureMode::Package);
 }
 
@@ -883,13 +903,15 @@ sal_Bool DocumentDigitalSignatures::signScriptingContentWithCertificate(
     css::uno::Reference<css::io::XStream> const& xStream)
 {
     uno::Reference<frame::XModel> xModel;
-    return signWithCertificateImpl(xModel, xCertificate, xStorage, xStream,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    return signWithCertificateImpl(xModel, aSigningContext, xStorage, xStream,
                                    DocumentSignatureMode::Macros);
 }
 
 bool DocumentDigitalSignatures::signWithCertificateImpl(
     const uno::Reference<frame::XModel>& xModel,
-    css::uno::Reference<css::security::XCertificate> const& xCertificate,
+    svl::crypto::SigningContext& rSigningContext,
     css::uno::Reference<css::embed::XStorage> const& xStorage,
     css::uno::Reference<css::io::XStream> const& xStream, DocumentSignatureMode eMode)
 {
@@ -907,8 +929,8 @@ bool DocumentDigitalSignatures::signWithCertificateImpl(
     aSignatureManager.setModel(xModel);
 
     Reference<XXMLSecurityContext> xSecurityContext;
-    Reference<XServiceInfo> xServiceInfo(xCertificate, UNO_QUERY);
-    if (xServiceInfo->getImplementationName()
+    Reference<XServiceInfo> xServiceInfo(rSigningContext.m_xCertificate, UNO_QUERY);
+    if (xServiceInfo.is() && xServiceInfo->getImplementationName()
         == "com.sun.star.xml.security.gpg.XCertificate_GpgImpl")
         xSecurityContext = aSignatureManager.getGpgSecurityContext();
     else
@@ -916,7 +938,7 @@ bool DocumentDigitalSignatures::signWithCertificateImpl(
 
     sal_Int32 nSecurityId;
 
-    bool bSuccess = aSignatureManager.add(xCertificate, xSecurityContext, "", nSecurityId, true);
+    bool bSuccess = aSignatureManager.add(rSigningContext, xSecurityContext, "", nSecurityId, true);
     if (!bSuccess)
         return false;
 

@@ -27,6 +27,7 @@
 #include <vcl/canvastools.hxx>
 #include <vcl/mapmod.hxx>
 #include <vcl/gdimtf.hxx>
+#include <vcl/pdf/PDFEncryptionInitialization.hxx>
 #include <rtl/ustring.hxx>
 #include <comphelper/propertyvalue.hxx>
 #include <comphelper/sequence.hxx>
@@ -740,24 +741,32 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
             {
             default:
             case 0:
-                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_1_7;
+                aContext.Version = vcl::PDFWriter::PDFVersion::Default;
                 break;
             case 1:
-                aContext.Version    = vcl::PDFWriter::PDFVersion::PDF_A_1;
+                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_A_1;
                 bUseTaggedPDF = true;           // force the tagged PDF as well
                 mbRemoveTransparencies = true;  // does not allow transparencies
                 bEncrypt = false;               // no encryption
                 xEnc.clear();
                 break;
             case 2:
-                aContext.Version    = vcl::PDFWriter::PDFVersion::PDF_A_2;
+                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_A_2;
                 bUseTaggedPDF = true;           // force the tagged PDF as well
                 mbRemoveTransparencies = false; // does allow transparencies
                 bEncrypt = false;               // no encryption
                 xEnc.clear();
                 break;
             case 3:
-                aContext.Version    = vcl::PDFWriter::PDFVersion::PDF_A_3;
+                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_A_3;
+                bUseTaggedPDF = true;           // force the tagged PDF as well
+                mbRemoveTransparencies = false; // does allow transparencies
+                bEncrypt = false;               // no encryption
+                xEnc.clear();
+                break;
+            case 4:
+                // TODO - determine what is allowed for PDFA/4
+                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_A_4;
                 bUseTaggedPDF = true;           // force the tagged PDF as well
                 mbRemoveTransparencies = false; // does allow transparencies
                 bEncrypt = false;               // no encryption
@@ -771,6 +780,9 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
                 break;
             case 17:
                 aContext.Version = vcl::PDFWriter::PDFVersion::PDF_1_7;
+                break;
+            case 20:
+                aContext.Version = vcl::PDFWriter::PDFVersion::PDF_2_0;
                 break;
             }
 
@@ -909,7 +921,7 @@ bool PDFExport::Export( const OUString& rFile, const Sequence< PropertyValue >& 
                 aContext.Encryption.CanCopyOrExtract                = bCanCopyOrExtract;
                 aContext.Encryption.CanExtractForAccessibility  = bCanExtractForAccessibility;
                 if( bEncrypt && ! xEnc.is() )
-                    xEnc = vcl::PDFWriter::InitEncryption( aPermissionPassword, aOpenPassword );
+                    xEnc = vcl::pdf::initEncryption(aPermissionPassword, aOpenPassword);
                 if( bEncrypt && !aPermissionPassword.isEmpty() && ! aPreparedPermissionPassword.hasElements() )
                     aPreparedPermissionPassword = comphelper::OStorageHelper::CreatePackageEncryptionData( aPermissionPassword );
             }
@@ -1342,7 +1354,7 @@ void PDFExport::ImplWriteWatermark( vcl::PDFWriter& rWriter, const Size& rPageSi
     rWriter.Push();
     // tdf#152235 tag around the reference to the XObject on the page
     sal_Int32 const id = rWriter.EnsureStructureElement();
-    rWriter.InitStructureElement(id, vcl::PDFWriter::NonStructElement, ::std::u16string_view());
+    rWriter.InitStructureElement(id, vcl::pdf::StructElement::NonStructElement, ::std::u16string_view());
     rWriter.BeginStructureElement(id);
     rWriter.SetStructureAttribute(vcl::PDFWriter::Type, vcl::PDFWriter::Pagination);
     rWriter.SetStructureAttribute(vcl::PDFWriter::Subtype, vcl::PDFWriter::Watermark);
@@ -1440,7 +1452,7 @@ void PDFExport::ImplWriteTiledWatermark( vcl::PDFWriter& rWriter, const Size& rP
     rWriter.Push();
     // tdf#152235 tag around the reference to the XObject on the page
     sal_Int32 const id = rWriter.EnsureStructureElement();
-    rWriter.InitStructureElement(id, vcl::PDFWriter::NonStructElement, ::std::u16string_view());
+    rWriter.InitStructureElement(id, vcl::pdf::StructElement::NonStructElement, ::std::u16string_view());
     rWriter.BeginStructureElement(id);
     rWriter.SetStructureAttribute(vcl::PDFWriter::Type, vcl::PDFWriter::Pagination);
     rWriter.SetStructureAttribute(vcl::PDFWriter::Subtype, vcl::PDFWriter::Watermark);

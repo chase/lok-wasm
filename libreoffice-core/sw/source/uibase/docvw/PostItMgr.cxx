@@ -156,6 +156,12 @@ namespace {
         } else {
             aTree.put("id", nPostItId);
         }
+        if (nType == CommentNotificationType::Remove && comphelper::LibreOfficeKit::isActive())
+        {
+            // Redline author is basically the author which has made the modification rather than author of the comments
+            // This is important to know who removed the comment
+            aTree.put("author", SW_MOD()->GetRedlineAuthor(SW_MOD()->GetRedlineAuthor()));
+        }
 
         pView->libreOfficeKitViewCallback(LOK_CALLBACK_COMMENT, aTree.finishAndGetAsOString());
     }

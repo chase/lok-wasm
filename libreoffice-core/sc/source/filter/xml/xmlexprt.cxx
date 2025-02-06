@@ -2736,6 +2736,19 @@ void ScXMLExport::CollectInternalShape( uno::Reference< drawing::XShape > const 
     }
 }
 
+static uno::Reference<sheet::XSheetCellRange> lclGetSheetRange(const uno::Reference <sheet::XSpreadsheet>& xTable, sal_Int32 nCol, sal_Int32 nRow)
+{
+    try
+    {
+        return uno::Reference<sheet::XSheetCellRange>(xTable->getCellRangeByPosition(nCol, nRow, nCol, nRow), uno::UNO_QUERY);
+    }
+    catch (const uno::Exception&)
+    {
+        TOOLS_WARN_EXCEPTION("sc", "Exception in getCellRangeByPosition, col: " << nCol << ", row: " << nRow);
+    }
+    return nullptr;
+}
+
 bool ScXMLExport::GetMerged (const table::CellRangeAddress* pCellAddress,
                             const uno::Reference <sheet::XSpreadsheet>& xTable)
 {
@@ -2747,7 +2760,7 @@ bool ScXMLExport::GetMerged (const table::CellRangeAddress* pCellAddress,
     bool bRowInc(nEndRow > nRow);
     while(!bReady && nRow <= nEndRow && nCol <= nEndCol)
     {
-        uno::Reference<sheet::XSheetCellRange> xSheetCellRange(xTable->getCellRangeByPosition(nCol, nRow, nCol, nRow), uno::UNO_QUERY);
+        uno::Reference<sheet::XSheetCellRange> xSheetCellRange(lclGetSheetRange(xTable, nCol, nRow));
         if (xSheetCellRange.is())
         {
             uno::Reference<sheet::XSheetCellCursor> xCursor(xTable->createCursorByRange(xSheetCellRange));
@@ -3676,7 +3689,18 @@ void ScXMLExport::WriteTableShapes()
                 // GetSnapRect() from associated SdrObject.
                 uno::Reference<beans::XPropertySet> xShapeProp(rxShape, uno::UNO_QUERY);
                 awt::Rectangle aFrameRect;
-                if (xShapeProp.is() && (xShapeProp->getPropertyValue("FrameRect") >>= aFrameRect))
+                if (!xShapeProp.is())
+                {
+                    SAL_WARN("sc", "no shape propertyset");
+                    continue;
+                }
+                uno::Reference<beans::XPropertySetInfo> xPropSetInfo = xShapeProp->getPropertySetInfo();
+                if (!xPropSetInfo->hasPropertyByName(u"FrameRect"_ustr))
+                {
+                    SAL_WARN("sc", "shape doesn't support FrameRect property");
+                    continue;
+                }
+                if (xShapeProp->getPropertyValue(u"FrameRect"_ustr) >>= aFrameRect)
                 {
                     // file format uses shape in LTR mode. newLeft = - oldRight = - (oldLeft + width).
                     // newTranslate = oldTranslate - refPoint, oldTranslate from transformation matrix,

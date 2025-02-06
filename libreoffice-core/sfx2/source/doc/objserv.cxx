@@ -65,6 +65,7 @@
 #include <comphelper/lok.hxx>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <tools/link.hxx>
+#include <svl/cryptosign.hxx>
 
 #include <sfx2/signaturestate.hxx>
 #include <sfx2/sfxresid.hxx>
@@ -91,6 +92,7 @@
 #include <sfx2/sfxuno.hxx>
 #include <sfx2/sfxsids.hrc>
 #include <sfx2/lokhelper.hxx>
+#include <comphelper/dispatchcommand.hxx>
 #include <SfxRedactionHelper.hxx>
 
 #include <com/sun/star/util/XCloseable.hpp>
@@ -108,6 +110,7 @@
 #include <unotools/streamwrap.hxx>
 #include <comphelper/sequenceashashmap.hxx>
 #include <editeng/unoprnms.hxx>
+#include <comphelper/base64.hxx>
 
 #include <autoredactdialog.hxx>
 
@@ -429,41 +432,6 @@ bool SfxObjectShell::IsSignPDF() const
     return false;
 }
 
-uno::Reference<security::XCertificate> SfxObjectShell::GetSignPDFCertificate() const
-{
-    uno::Reference<frame::XModel> xModel = GetBaseModel();
-    if (!xModel.is())
-    {
-        return uno::Reference<security::XCertificate>();
-    }
-
-    uno::Reference<drawing::XShapes> xShapes(xModel->getCurrentSelection(), uno::UNO_QUERY);
-    if (!xShapes.is() || xShapes->getCount() < 1)
-    {
-        return uno::Reference<security::XCertificate>();
-    }
-
-    uno::Reference<beans::XPropertySet> xShapeProps(xShapes->getByIndex(0), uno::UNO_QUERY);
-    if (!xShapeProps.is())
-    {
-        return uno::Reference<security::XCertificate>();
-    }
-
-    if (!xShapeProps->getPropertySetInfo()->hasPropertyByName("InteropGrabBag"))
-    {
-        return uno::Reference<security::XCertificate>();
-    }
-
-    comphelper::SequenceAsHashMap aMap(xShapeProps->getPropertyValue("InteropGrabBag"));
-    auto it = aMap.find("SignatureCertificate");
-    if (it == aMap.end())
-    {
-        return uno::Reference<security::XCertificate>();
-    }
-
-    return uno::Reference<security::XCertificate>(it->second, uno::UNO_QUERY);
-}
-
 static void sendErrorToLOK(ErrCodeMsg error)
 {
     if (error.GetCode().GetClass() == ErrCodeClass::NONE)
@@ -563,54 +531,63 @@ void SfxObjectShell::AfterSignContent(bool bHaveWeSigned, weld::Window* pDialogP
     }
 }
 
-void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
+namespace
+{
+/// Updates the UI so it doesn't try to modify an already finalized signature line shape.
+void ResetSignatureSelection(SfxObjectShell& rObjectShell, SfxViewShell& rViewShell)
+{
+    rViewShell.SetSignPDFCertificate({});
+    comphelper::dispatchCommand(".uno:DeSelect", {});
+    rObjectShell.RecheckSignature(false);
+}
+}
+
+static weld::Window* GetReqDialogParent(SfxRequest &rReq, SfxObjectShell& rShell)
 {
     weld::Window* pDialogParent = rReq.GetFrameWeld();
     if (!pDialogParent)
     {
-        SfxViewFrame* pFrame = GetFrame();
+        SfxViewFrame* pFrame = rShell.GetFrame();
         if (!pFrame)
-            pFrame = SfxViewFrame::GetFirst(this);
+            pFrame = SfxViewFrame::GetFirst(&rShell);
         if (pFrame)
             pDialogParent = pFrame->GetFrameWeld();
     }
+    return pDialogParent;
+}
 
+void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
+{
     sal_uInt16 nId = rReq.GetSlot();
 
     bool bHaveWeSigned = false;
 
     if( SID_SIGNATURE == nId || SID_MACRO_SIGNATURE == nId )
     {
+        weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
+
         QueryHiddenInformation(HiddenWarningFact::WhenSigning);
 
         if (SID_SIGNATURE == nId)
         {
-            uno::Reference<security::XCertificate> xCertificate = GetSignPDFCertificate();
+            SfxViewFrame* pFrame = GetFrame();
+            SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+            uno::Reference<security::XCertificate> xCertificate = pViewShell ? pViewShell->GetSignPDFCertificate().m_xCertificate : nullptr;
             if (xCertificate.is())
             {
 
-                bHaveWeSigned |= SignDocumentContentUsingCertificate(xCertificate);
+                svl::crypto::SigningContext aSigningContext;
+                aSigningContext.m_xCertificate = xCertificate;
+                bHaveWeSigned |= SignDocumentContentUsingCertificate(aSigningContext);
 
-                // Reload to show how the PDF actually looks like after signing. This also
-                // changes "finish signing" on the infobar back to "sign document" as a side
-                // effect.
-                if (SfxViewFrame* pFrame = GetFrame())
+                // Reset the picked certificate for PDF signing, then recheck signatures to show how
+                // the PDF actually looks like after signing.  Also change the "finish signing" on
+                // the infobar back to "sign document".
+                if (pViewShell)
                 {
-                    // Store current page before reload.
-                    SfxAllItemSet aSet(SfxGetpApp()->GetPool());
-                    uno::Reference<drawing::XDrawView> xController(
-                        GetBaseModel()->getCurrentController(), uno::UNO_QUERY);
-                    uno::Reference<beans::XPropertySet> xPage(xController->getCurrentPage(),
-                                                              uno::UNO_QUERY);
-                    sal_Int32 nPage{};
-                    xPage->getPropertyValue("Number") >>= nPage;
-                    if (nPage > 0)
-                    {
-                        // nPage is 1-based.
-                        aSet.Put(SfxInt32Item(SID_PAGE_NUMBER, nPage - 1));
-                    }
-                    SfxRequest aReq(SID_RELOAD, SfxCallMode::SLOT, aSet);
-                    pFrame->ExecReload_Impl(aReq);
+                    ResetSignatureSelection(*this, *pViewShell);
+                    pFrame->RemoveInfoBar(u"readonly");
+                    pFrame->AppendReadOnlyInfobar();
                 }
             }
             else
@@ -628,17 +605,45 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 {
                     aSignatureKey = pSignatureKey->GetValue().toUtf8();
                 }
-                SfxViewFrame* pFrame = GetFrame();
-                SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+
+                // See if an external signature time/value is provided: if so, sign with those
+                // instead of interactive signing via the dialog.
+                svl::crypto::SigningContext aSigningContext;
+                const SfxStringItem* pSignatureTime = rReq.GetArg<SfxStringItem>(FN_PARAM_3);
+                if (pSignatureTime)
+                {
+                    sal_Int64 nSignatureTime = pSignatureTime->GetValue().toInt64();
+                    aSigningContext.m_nSignatureTime = nSignatureTime;
+                }
+                const SfxStringItem* pSignatureValue = rReq.GetArg<SfxStringItem>(FN_PARAM_4);
+                if (pSignatureValue)
+                {
+                    OUString aSignatureValue = pSignatureValue->GetValue();
+                    uno::Sequence<sal_Int8> aBytes;
+                    comphelper::Base64::decode(aBytes, aSignatureValue);
+                    aSigningContext.m_aSignatureValue.assign(
+                        aBytes.getArray(), aBytes.getArray() + aBytes.getLength());
+                }
+                if (!aSigningContext.m_aSignatureValue.empty())
+                {
+                    SignDocumentContentUsingCertificate(aSigningContext);
+                    if (pViewShell)
+                    {
+                        ResetSignatureSelection(*this, *pViewShell);
+                    }
+                    rReq.Done();
+                    return;
+                }
+
                 if (pViewShell)
                 {
-                    uno::Reference<security::XCertificate> xSigningCertificate;
+                    svl::crypto::CertificateOrName aCertificateOrName;
                     if (!aSignatureCert.empty() && !aSignatureKey.empty())
                     {
-                        xSigningCertificate = SfxLokHelper::getSigningCertificate(aSignatureCert, aSignatureKey);
+                        aCertificateOrName.m_xCertificate = SfxLokHelper::getSigningCertificate(aSignatureCert, aSignatureKey);
                     }
                     // Always set the signing certificate, to clear data from a previous dispatch.
-                    pViewShell->SetSigningCertificate(xSigningCertificate);
+                    pViewShell->SetSigningCertificate(aCertificateOrName);
                 }
 
                 // Async, all code before return has to go into the callback.
@@ -688,6 +693,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             if ( !IsOwnStorageFormat( *GetMedium() ) )
                 return;
 
+            weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
             SfxVersionDialog aDlg(pDialogParent, pFrame, IsSaveVersionOnClose());
             aDlg.run();
             SetSaveVersionOnClose(aDlg.IsSaveVersionOnClose());
@@ -796,6 +802,8 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
 
         case SID_AUTOREDACTDOC:
         {
+            weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
+
             // Actual redaction takes place on a newly generated Draw document
             if (!SvtModuleOptions().IsModuleInstalled(SvtModuleOptions::EModule::DRAW))
             {
@@ -835,6 +843,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             // Actual redaction takes place on a newly generated Draw document
             if (!SvtModuleOptions().IsModuleInstalled(SvtModuleOptions::EModule::DRAW))
             {
+                weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
                 std::unique_ptr<weld::MessageDialog> xBox(Application::CreateMessageDialog(
                     pDialogParent, VclMessageType::Warning, VclButtonsType::Ok,
                     SfxResId(STR_REDACTION_NO_DRAW_WARNING)));
@@ -1211,6 +1220,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
                 else if (!(lErr == ERRCODE_IO_GENERAL && bIsPDFExport))
                 {
                     SfxErrorContext aEc(ERRCTX_SFX_SAVEASDOC,GetTitle());
+                    weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
                     ErrorHandler::HandleError(lErr, pDialogParent);
                 }
             }
@@ -1384,7 +1394,10 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
             if (comphelper::LibreOfficeKit::isActive())
                 sendErrorToLOK(lErr);
             else
+            {
+                weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
                 ErrorHandler::HandleError(lErr, pDialogParent);
+            }
 
             rReq.SetReturnValue( SfxBoolItem(0, true) );
             rReq.Done();
@@ -1397,6 +1410,7 @@ void SfxObjectShell::ExecFile_Impl(SfxRequest &rReq)
         case SID_DOCTEMPLATE:
         {
             // save as document templates
+            weld::Window* pDialogParent = GetReqDialogParent(rReq, *this);
             SfxSaveAsTemplateDialog aDlg(pDialogParent, GetModel());
             (void)aDlg.run();
             break;
@@ -2202,14 +2216,16 @@ bool SfxObjectShell::ResignDocument(uno::Sequence< security::DocumentSignatureIn
         auto xCert = rInfo.Signer;
         if (xCert.is())
         {
-            bSignSuccess &= SignDocumentContentUsingCertificate(xCert);
+            svl::crypto::SigningContext aSigningContext;
+            aSigningContext.m_xCertificate = xCert;
+            bSignSuccess &= SignDocumentContentUsingCertificate(aSigningContext);
         }
     }
 
     return bSignSuccess;
 }
 
-bool SfxObjectShell::SignDocumentContentUsingCertificate(const Reference<XCertificate>& xCertificate)
+bool SfxObjectShell::SignDocumentContentUsingCertificate(svl::crypto::SigningContext& rSigningContext)
 {
     // 1. PrepareForSigning
 
@@ -2224,6 +2240,13 @@ bool SfxObjectShell::SignDocumentContentUsingCertificate(const Reference<XCertif
 
     // the document is not new and is not modified
     OUString aODFVersion(comphelper::OStorageHelper::GetODFVersionFromStorage(GetStorage()));
+
+    if (IsModified() && IsSignPDF())
+    {
+        // When signing a PDF, then adding/resizing/moving the signature line would nominally modify
+        // the document, but ignore that for signing.
+        SetModified(false);
+    }
 
     if (IsModified() || !GetMedium() || GetMedium()->GetName().isEmpty()
       || (GetMedium()->GetFilter()->IsOwnFormat() && aODFVersion.compareTo(ODFVER_012_TEXT) < 0 && !bHasSign))
@@ -2279,7 +2302,7 @@ bool SfxObjectShell::SignDocumentContentUsingCertificate(const Reference<XCertif
 
     // 3. Sign
     bool bSignSuccess = GetMedium()->SignDocumentContentUsingCertificate(
-        GetBaseModel(), HasValidSignatures(), xCertificate);
+        GetBaseModel(), HasValidSignatures(), rSigningContext);
 
     // 4. AfterSigning
     AfterSigning(bSignSuccess, false);

@@ -309,11 +309,6 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/gdi/scrptrun \
     vcl/source/gdi/CommonSalLayout \
     vcl/source/gdi/TypeSerializer \
-    vcl/source/pdf/PdfConfig \
-    vcl/source/pdf/ResourceDict \
-    vcl/source/pdf/Matrix3 \
-    vcl/source/pdf/XmpMetadata \
-    vcl/source/pdf/ExternalPDFStreams \
     vcl/source/graphic/BinaryDataContainer \
     vcl/source/graphic/BinaryDataContainerTools \
     vcl/source/graphic/GraphicID \
@@ -499,7 +494,17 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/source/fontsubset/sft \
     vcl/source/fontsubset/ttcr \
     vcl/source/fontsubset/xlat \
+    vcl/source/pdf/COSWriter \
+    vcl/source/pdf/EncryptionHashTransporter \
+    vcl/source/pdf/ExternalPDFStreams \
     vcl/source/pdf/PDFiumTools \
+    vcl/source/pdf/PDFEncryptionInitialization \
+    vcl/source/pdf/PDFEncryptor \
+    vcl/source/pdf/PDFEncryptorR6 \
+    vcl/source/pdf/PdfConfig \
+    vcl/source/pdf/ResourceDict \
+    vcl/source/pdf/Matrix3 \
+    vcl/source/pdf/XmpMetadata \
     vcl/source/uitest/logger \
     vcl/source/uitest/uiobject \
     vcl/source/uitest/uitest \
@@ -522,6 +527,8 @@ $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/backendtest/GraphicsRenderTests \
     vcl/jsdialog/enabled \
     vcl/jsdialog/jsdialogbuilder \
+    vcl/jsdialog/jsdialogregister \
+    vcl/jsdialog/jsdialogsender \
     vcl/jsdialog/executor \
 ))
 
@@ -681,7 +688,6 @@ $(eval $(call gb_Library_add_objcxxobjects,vcl,\
 $(eval $(call gb_Library_add_exception_objects,vcl,\
     vcl/ios/iosinst \
     vcl/ios/dummies \
-    vcl/ios/clipboard \
     vcl/ios/salios \
     vcl/ios/iOSTransferable \
     vcl/ios/DataFlavorMapping \

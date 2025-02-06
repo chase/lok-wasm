@@ -80,8 +80,8 @@ CPPUNIT_TARBALL := cppunit-1.15.1.tar.gz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
-CURL_SHA256SUM := 73a4b0e99596a09fa5924a4fb7e4b995a85fda0d18a2c02ab9cf134bebce04ee
-CURL_TARBALL := curl-8.10.1.tar.xz
+CURL_SHA256SUM := db59cf0d671ca6e7f5c2c5ec177084a33a79e04c97e71cf183a5cdea235054eb
+CURL_TARBALL := curl-8.11.0.tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
@@ -111,8 +111,8 @@ ETONYEK_TARBALL := libetonyek-0.1.$(ETONYEK_VERSION_MICRO).tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
-EXPAT_SHA256SUM := 274db254a6979bde5aad404763a704956940e465843f2a9bd9ed7af22e2c0efc
-EXPAT_TARBALL := expat-2.6.3.tar.xz
+EXPAT_SHA256SUM := a695629dae047055b37d50a0ff4776d1d45d0a4c842cf4ccee158441f55ff7ee
+EXPAT_TARBALL := expat-2.6.4.tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
@@ -646,8 +646,8 @@ LIBTIFF_TARBALL := tiff-4.7.0.tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
-POPPLER_SHA256SUM := 97453fbddf0c9a9eafa0ea45ac710d3d49bcf23a62e864585385d3c0b4403174
-POPPLER_TARBALL := poppler-24.08.0.tar.xz
+POPPLER_SHA256SUM := 7eefc122207bbbd72a303c5e0743f4941e8ae861e24dcf0501e18ce1d1414112
+POPPLER_TARBALL := poppler-25.01.0.tar.xz
 POPPLER_DATA_SHA256SUM := c835b640a40ce357e1b83666aabd95edffa24ddddd49b8daff63adb851cdab74
 POPPLER_DATA_TARBALL := poppler-data-0.4.12.tar.gz
 # three static lines
@@ -658,8 +658,8 @@ POSTGRESQL_TARBALL := postgresql-13.16.tar.bz2
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
-PYTHON_SHA256SUM := 6fb89a7124201c61125c0ab4cf7f6894df339a40c02833bfd28ab4d7691fafb4
-PYTHON_TARBALL := Python-3.8.20.tar.xz
+PYTHON_SHA256SUM := 3126f59592c9b0d798584755f2bf7b081fa1ca35ce7a6fea980108d752a05bb1
+PYTHON_TARBALL := Python-3.9.21.tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
@@ -668,8 +668,8 @@ QXP_TARBALL := libqxp-0.0.2.tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
-RAPTOR_SHA256SUM := ada7f0ba54787b33485d090d3d2680533520cd4426d2f7fb4782dd4a6a1480ed
-RAPTOR_TARBALL := a39f6c07ddb20d7dd2ff1f95fa21e2cd-raptor2-2.0.15.tar.gz
+RAPTOR_SHA256SUM := 089db78d7ac982354bdbf39d973baf09581e6904ac4c92a98c5caadb3de44680
+RAPTOR_TARBALL := raptor2-2.0.16.tar.gz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
@@ -715,8 +715,8 @@ TWAIN_DSM_TARBALL := twaindsm_2.4.1.orig.tar.gz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts
-VISIO_SHA256SUM := 8faf8df870cb27b09a787a1959d6c646faa44d0d8ab151883df408b7166bea4c
-VISIO_TARBALL := libvisio-0.1.7.tar.xz
+VISIO_SHA256SUM := b4098ffbf4dcb9e71213fa0acddbd928f27bed30db2d80234813b15d53d0405b
+VISIO_TARBALL := libvisio-0.1.8.tar.xz
 # three static lines
 # so that git cherry-pick
 # will not run into conflicts

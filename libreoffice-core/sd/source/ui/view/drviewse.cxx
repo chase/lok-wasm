@@ -61,6 +61,7 @@
 #include <sfx2/docfile.hxx>
 #include <sfx2/notebookbar/SfxNotebookBar.hxx>
 #include <osl/diagnose.h>
+#include <svl/cryptosign.hxx>
 
 #include <DrawViewShell.hxx>
 #include <slideshow.hxx>
@@ -96,6 +97,7 @@
 #include <fuzoom.hxx>
 #include <sdmod.hxx>
 #include <basegfx/utils/zoomtools.hxx>
+#include <sfx2/lokhelper.hxx>
 
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::uno;
@@ -226,6 +228,7 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
 
     // for LibreOfficeKit - choosing a shape should construct it directly
     bool bCreateDirectly = false;
+    bool bRectangle = false;
 
     switch ( nSId )
     {
@@ -452,7 +455,48 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_CONNECTOR_LINES_CIRCLES:
         case SID_INSERT_SIGNATURELINE:
         {
+            if (nSId == SID_INSERT_SIGNATURELINE)
+            {
+                // See if a signing cert is passed as a parameter: if so, parse that.
+                std::string aSignatureCert;
+                std::string aSignatureKey;
+                const SfxStringItem* pSignatureCert = rReq.GetArg<SfxStringItem>(FN_PARAM_1);
+                if (pSignatureCert)
+                {
+                    aSignatureCert = pSignatureCert->GetValue().toUtf8();
+                }
+                const SfxStringItem* pSignatureKey = rReq.GetArg<SfxStringItem>(FN_PARAM_2);
+                if (pSignatureKey)
+                {
+                    aSignatureKey = pSignatureKey->GetValue().toUtf8();
+                }
+                bool bExternal = false;
+                const SfxBoolItem* pExternal = rReq.GetArg<SfxBoolItem>(FN_PARAM_3);
+                if (pExternal)
+                {
+                    bExternal = pExternal->GetValue();
+                }
+
+                SfxViewFrame* pFrame = GetFrame();
+                SfxViewShell* pViewShell = pFrame ? pFrame->GetViewShell() : nullptr;
+                if (pViewShell)
+                {
+                    svl::crypto::CertificateOrName aCertificateOrName;
+                    if (!aSignatureCert.empty() && !aSignatureKey.empty())
+                    {
+                        aCertificateOrName.m_xCertificate = SfxLokHelper::getSigningCertificate(aSignatureCert, aSignatureKey);
+                    }
+                    else if (bExternal)
+                    {
+                        aCertificateOrName.m_aName = mpDrawView->GetAuthor();
+                    }
+                    // Always set the signing certificate, to clear data from a previous dispatch.
+                    pViewShell->SetSigningCertificate(aCertificateOrName);
+                }
+            }
+
             bCreateDirectly = comphelper::LibreOfficeKit::isActive();
+            bRectangle = true;
             SetCurrentFunction( FuConstructRectangle::Create( this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent ) );
             rReq.Done();
         }
@@ -466,6 +510,10 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
         case SID_DRAW_BEZIER_FILL:          // BASIC
         case SID_DRAW_BEZIER_NOFILL:        // BASIC
         {
+            // Direct mode means no interactive drawing, just insert the shape with reasonable
+            // defaults -- to be consistent with the line insert case above.
+            bCreateDirectly = comphelper::LibreOfficeKit::isActive();
+
             SetCurrentFunction( FuConstructBezierPolygon::Create(this, GetActiveWindow(), mpDrawView.get(), GetDoc(), rReq, bPermanent) );
             rReq.Done();
         }
@@ -618,6 +666,13 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
     SdOptions* pOptions = SD_MOD()->GetSdOptions(GetDoc()->GetDocumentType());
     sal_uInt32 nDefaultObjectSizeWidth(pOptions->GetDefaultObjectSizeWidth());
     sal_uInt32 nDefaultObjectSizeHeight(pOptions->GetDefaultObjectSizeHeight());
+    if (nSId == SID_INSERT_SIGNATURELINE)
+    {
+        // Half of the default to better match the space available for signatures in many real-world
+        // documents.
+        nDefaultObjectSizeWidth *= 0.5;
+        nDefaultObjectSizeHeight *= 0.5;
+    }
 
     // calc position and size
     ::tools::Rectangle aVisArea = GetActiveWindow()->PixelToLogic(::tools::Rectangle(Point(0,0), GetActiveWindow()->GetOutputSizePixel()));
@@ -666,6 +721,11 @@ void DrawViewShell::FuPermanent(SfxRequest& rReq)
             GetView()->SdrBeginTextEdit(static_cast<SdrTextObj*>(pObjTmp), pPageView);
             break;
         }
+    }
+
+    if (bRectangle && !bPermanent)
+    {
+        GetViewFrame()->GetDispatcher()->Execute(SID_OBJECT_SELECT, SfxCallMode::ASYNCHRON);
     }
 }
 

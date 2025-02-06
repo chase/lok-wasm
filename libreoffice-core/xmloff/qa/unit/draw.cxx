@@ -31,6 +31,8 @@
 #include <docmodel/uno/UnoComplexColor.hxx>
 #include <docmodel/uno/UnoTheme.hxx>
 #include <docmodel/theme/Theme.hxx>
+#include <comphelper/scopeguard.hxx>
+#include <osl/process.h>
 
 using namespace ::com::sun::star;
 
@@ -810,6 +812,50 @@ CPPUNIT_TEST_FIXTURE(XmloffDrawTest, testTdf157018_ThemeImportDraw)
     CPPUNIT_ASSERT_EQUAL(Color(0x0A0A0A), pColorSet->getColor(model::ThemeColorType::Hyperlink));
     CPPUNIT_ASSERT_EQUAL(Color(0x440000), pColorSet->getColor(model::ThemeColorType::Accent1));
 }
+
+CPPUNIT_TEST_FIXTURE(XmloffDrawTest, testPdfExportAsOdg)
+{
+    auto pPdfium = vcl::pdf::PDFiumLibrary::get();
+    if (!pPdfium)
+    {
+        return;
+    }
+
+    // We need to enable PDFium import (and make sure to disable after the test)
+    bool bResetEnvVar = false;
+    if (getenv("LO_IMPORT_USE_PDFIUM") == nullptr)
+    {
+        bResetEnvVar = true;
+        osl_setEnvironment(OUString("LO_IMPORT_USE_PDFIUM").pData, OUString("1").pData);
+    }
+    comphelper::ScopeGuard aPDFiumEnvVarGuard([&]() {
+        if (bResetEnvVar)
+            osl_clearEnvironment(OUString("LO_IMPORT_USE_PDFIUM").pData);
+    });
+
+    loadFromFile(u"two-pages.pdf");
+    // save and reload as odg
+    saveAndReload("draw8");
+
+    // Check that the graphic in the second page of the document is the second page of the pdf
+    uno::Reference<drawing::XDrawPagesSupplier> xDrawPagesSupplier(mxComponent,
+                                                                   uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT(xDrawPagesSupplier.is());
+    uno::Reference<drawing::XDrawPages> xDrawPages(xDrawPagesSupplier->getDrawPages());
+    uno::Reference<drawing::XDrawPage> xDrawPage(xDrawPages->getByIndex(1), uno::UNO_QUERY_THROW);
+    uno::Reference<drawing::XShape> xImage(xDrawPage->getByIndex(0), uno::UNO_QUERY_THROW);
+    CPPUNIT_ASSERT(xImage.is());
+    uno::Reference<beans::XPropertySet> xShapeProps(xImage, uno::UNO_QUERY);
+    uno::Reference<graphic::XGraphic> xGraphic;
+    CPPUNIT_ASSERT(xShapeProps->getPropertyValue("Graphic") >>= xGraphic);
+
+    Graphic aGraphic(xGraphic);
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 1
+    // - Actual  : -1
+    CPPUNIT_ASSERT_EQUAL(1, aGraphic.getPageNumber());
+}
+
 CPPUNIT_PLUGIN_IMPLEMENT();
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

@@ -20,6 +20,7 @@
 #include <vcl/bitmapex.hxx>
 
 #include <pdf/pdfwriter_impl.hxx>
+#include <vcl/pdf/PDFEncryptionInitialization.hxx>
 
 using namespace vcl;
 
@@ -395,7 +396,7 @@ sal_Int32 PDFWriter::EnsureStructureElement()
 }
 
 void PDFWriter::InitStructureElement(sal_Int32 const id,
-        PDFWriter::StructElement const eType, std::u16string_view const rAlias)
+        vcl::pdf::StructElement const eType, std::u16string_view const rAlias)
 {
     return xImplementation->initStructureElement(id, eType, rAlias);
 }
@@ -470,11 +471,9 @@ std::set< PDFWriter::ErrorCode > const & PDFWriter::GetErrors() const
 }
 
 css::uno::Reference< css::beans::XMaterialHolder >
-PDFWriter::InitEncryption( const OUString& i_rOwnerPassword,
-                           const OUString& i_rUserPassword
-                          )
+PDFWriter::InitEncryption(const OUString& i_rOwnerPassword, const OUString& i_rUserPassword)
 {
-    return PDFWriterImpl::initEncryption( i_rOwnerPassword, i_rUserPassword );
+    return vcl::pdf::initEncryption(i_rOwnerPassword, i_rUserPassword);
 }
 
 void PDFWriter::PlayMetafile( const GDIMetaFile& i_rMTF, const vcl::PDFWriter::PlayMetafileContext& i_rPlayContext, PDFExtOutDevData* i_pData )

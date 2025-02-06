@@ -339,6 +339,74 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf158419)
     CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(156), aPosition.GetContentIndex());
 }
 
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf163042)
+{
+    createSwDoc("tdf163042.fodt");
+    SwDoc* pDoc = getSwDoc();
+    SwDocShell* pShell = pDoc->GetDocShell();
+
+    // Ensure that all text portions are calculated before testing.
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwViewShell* pViewShell
+        = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    pViewShell->Reformat();
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // 1-line paragraph
+    SwRootFrame* pLayout = pDoc->getIDocumentLayoutAccess().GetCurrentLayout();
+    SwWrtShell* pWrtShell = pShell->GetWrtShell();
+    SwPosition aPosition(*pWrtShell->GetCursor()->Start());
+    SwTwips nParaLeft
+        = getXPath(pXmlDoc, "/root/page/body/txt[1]/infos/bounds"_ostr, "left"_ostr).toInt32();
+    SwTwips nParaWidth
+        = getXPath(pXmlDoc, "/root/page/body/txt[1]/infos/bounds"_ostr, "width"_ostr).toInt32();
+    SwTwips nParaTop
+        = getXPath(pXmlDoc, "/root/page/body/txt[1]/infos/bounds"_ostr, "top"_ostr).toInt32();
+    SwTwips nParaHeight
+        = getXPath(pXmlDoc, "/root/page/body/txt[1]/infos/bounds"_ostr, "height"_ostr).toInt32();
+    Point aPoint;
+
+    // click before the last but one character of the paragraph
+    // (in a line shrunk by the new space shrinking justification)
+
+    aPoint.setX(nParaLeft + nParaWidth - 2 * nParaWidth / 160);
+    aPoint.setY(nParaTop + nParaHeight * 0.5);
+    SwCursorMoveState aState(CursorMoveState::NONE);
+    pLayout->GetModelPositionForViewPoint(&aPosition, aPoint, &aState);
+    // Without the accompanying fix in place, this test would have failed: character position was 160,
+    // i.e. cursor was at the end of the paragraph instead of the last but one character
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(158), aPosition.GetContentIndex());
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf163060)
+{
+    createSwDoc("tdf163060.fodt");
+
+    // Ensure that all text portions are calculated before testing.
+    SwXTextDocument* pTextDoc = dynamic_cast<SwXTextDocument*>(mxComponent.get());
+    CPPUNIT_ASSERT(pTextDoc);
+    SwViewShell* pViewShell
+        = pTextDoc->GetDocShell()->GetDoc()->getIDocumentLayoutAccess().GetCurrentViewShell();
+    CPPUNIT_ASSERT(pViewShell);
+    pViewShell->Reformat();
+
+    xmlDocUniquePtr pXmlDoc = parseLayoutDump();
+
+    // There is only a single shrunk line 1, without breaking the last word
+    // before the last text portion "i"
+
+    // This ends in "dolorsi" (not "dolors", as before)
+    assertXPath(
+        pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout[1]"_ostr, "portion"_ostr,
+        u"Quis pretium semper. Proin luctus orci a neque venenatis, quis commodo dolorsi"_ustr);
+
+    // no second line (there was a second line with the text portion "i").
+    assertXPath(pXmlDoc, "/root/page/body/txt[1]/SwParaPortion/SwLineLayout"_ostr, 1);
+}
+
 CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf162109)
 {
     createSwDoc("tdf162109.fodt");
@@ -419,6 +487,52 @@ CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf161810)
             // Assert we are using the expected position for the last char
             // This was 9369, now 9165, according to the fixed space shrinking
             CPPUNIT_ASSERT_LESS(sal_Int32(9300), pDXArray[72]);
+            break;
+        }
+    }
+}
+
+CPPUNIT_TEST_FIXTURE(SwLayoutWriter3, testTdf163149)
+{
+    createSwDoc("tdf163149.docx");
+    // Ensure that all text portions are calculated before testing.
+    SwDoc* pDoc = getSwDoc();
+    SwDocShell* pShell = pDoc->GetDocShell();
+
+    // Dump the rendering of the first page as an XML file.
+    std::shared_ptr<GDIMetaFile> xMetaFile = pShell->GetPreviewMetaFile();
+    MetafileXmlDump dumper;
+
+    xmlDocUniquePtr pXmlDoc = dumpAndParse(dumper, *xMetaFile);
+    CPPUNIT_ASSERT(pXmlDoc);
+
+    // Find the text array action for the second non-empty (shrunk) line
+    bool bFirst = true;
+    for (size_t nAction = 0; nAction < xMetaFile->GetActionSize(); nAction++)
+    {
+        auto pAction = xMetaFile->GetAction(nAction);
+        if (pAction->GetType() == MetaActionType::TEXTARRAY)
+        {
+            auto pTextArrayAction = static_cast<MetaTextArrayAction*>(pAction);
+            auto pDXArray = pTextArrayAction->GetDXArray();
+
+            // skip empty paragraphs
+            if (pDXArray.size() <= 1)
+                continue;
+
+            // skip first non-empty line
+            if (bFirst)
+            {
+                bFirst = false;
+                continue;
+            }
+
+            // There should be 46 chars on the second line
+            CPPUNIT_ASSERT_EQUAL(size_t(46), pDXArray.size());
+
+            // Assert we are using the expected position for the last char
+            // This was 4673, now 4163, according to the fixed space shrinking
+            CPPUNIT_ASSERT_LESS(sal_Int32(4200), pDXArray[45]);
             break;
         }
     }

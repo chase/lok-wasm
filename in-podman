@@ -1,0 +1,26 @@
+#!/bin/sh
+arch=$(uname -m)
+emsdk_version=3.1.73
+
+if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
+  podman build -t lok-wasm:$emsdk_version --build-arg ARCH=-arm64 --build-arg VER=$emsdk_version .
+else
+  podman build -t lok-wasm:$emsdk_version --build-arg VER=$emsdk_version .
+fi
+mkdir -p .cache .npm
+
+exec podman run \
+  --rm \
+  -it \
+  --user 1000:100 \
+  --userns=keep-id \
+  -v $(pwd)/libreoffice-core:/home/emscripten/libreoffice-core:Z \
+  -v $(pwd)/scripts:/home/emscripten/scripts:Z \
+  -v $(pwd)/VERSION:/home/emscripten/VERSION:Z \
+  -v $(pwd)/soffice_fccache.data:/home/emscripten/soffice_fccache.data:Z \
+  -v $(pwd)/soffice_fccache.data.js.metadata:/home/emscripten/soffice_fccache.data.js.metadata:Z \
+  -v $(pwd)/.cache:/home/emscripten/.cache:Z \
+  -v $(pwd)/.npm:/home/emscripten/.npm:Z \
+  -w /home/emscripten \
+  lok-wasm:$emsdk_version \
+  bash

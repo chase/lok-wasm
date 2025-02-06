@@ -425,7 +425,7 @@ constexpr auto constTransitionSubTypeToString = mapEnumToString<sal_Int16>({
 constexpr auto constAnimationNodeTypeToString = mapEnumToString<sal_Int16>({
     { AnimationNodeType::ANIMATE, "Animate" },
     { AnimationNodeType::ANIMATECOLOR, "AnimateColor" },
-    { AnimationNodeType::ANIMATEMOTION, "Animate" },
+    { AnimationNodeType::ANIMATEMOTION, "AnimateMotion" },
     { AnimationNodeType::ANIMATEPHYSICS, "Animate" },
     { AnimationNodeType::ANIMATETRANSFORM, "AnimateTransform" },
     { AnimationNodeType::AUDIO, "Audio" },
@@ -722,6 +722,99 @@ bool isValidNode(const Reference<XAnimationNode>& xNode)
     return false;
 }
 
+SdrObject* getObjectForShape(uno::Reference<drawing::XShape> const& xShape)
+{
+    if (!xShape.is())
+        return nullptr;
+    SvxShape* pShape = comphelper::getFromUnoTunnel<SvxShape>(xShape);
+    if (pShape)
+        return pShape->GetSdrObject();
+    return nullptr;
+}
+
+SdrObject* getTargetObject(const uno::Any& aTargetAny)
+{
+    SdrObject* pObject = nullptr;
+    uno::Reference<drawing::XShape> xShape;
+
+    if ((aTargetAny >>= xShape) && xShape.is())
+    {
+        pObject = getObjectForShape(xShape);
+    }
+    else // if target is not a shape - could be paragraph target containing a shape
+    {
+        presentation::ParagraphTarget aParagraphTarget;
+        if ((aTargetAny >>= aParagraphTarget) && aParagraphTarget.Shape.is())
+        {
+            pObject = getObjectForShape(aParagraphTarget.Shape);
+        }
+    }
+
+    return pObject;
+}
+
+bool isNodeTargetInShapeGroup(const Reference<XAnimationNode>& xNode)
+{
+    Reference<XAnimate> xAnimate(xNode, UNO_QUERY);
+    if (xAnimate.is())
+    {
+        SdrObject* pObject = getTargetObject(xAnimate->getTarget());
+        if (pObject)
+            return pObject->getParentSdrObjectFromSdrObject() != nullptr;
+    }
+    return false;
+}
+
+bool isNodeTargetAGroup(const Reference<XAnimationNode>& xNode)
+{
+    Reference<XAnimate> xAnimate(xNode, UNO_QUERY);
+    if (xAnimate.is())
+    {
+        SdrObject* pObject = getTargetObject(xAnimate->getTarget());
+        if (pObject)
+            return pObject->getChildrenOfSdrObject() != nullptr;
+    }
+    return false;
+}
+
+bool isEffectValidForTarget(const Reference<XAnimationNode>& xNode)
+{
+    const Sequence<NamedValue> aUserData(xNode->getUserData());
+    for (const auto& rValue : aUserData)
+    {
+        if (!IsXMLToken(rValue.Name, XML_PRESET_ID))
+            continue;
+
+        OUString aPresetId;
+        if (rValue.Value >>= aPresetId)
+        {
+            if (constNonValidEffectsForGroupSet.find(aPresetId.toUtf8())
+                != constNonValidEffectsForGroupSet.end())
+            {
+                // it's in the list, so we need to check if the effect target is a group or not
+                Reference<XTimeContainer> xContainer(xNode, UNO_QUERY);
+                if (xContainer.is())
+                {
+                    Reference<XEnumerationAccess> xEnumerationAccess(xContainer, UNO_QUERY);
+                    Reference<XEnumeration> xEnumeration = xEnumerationAccess->createEnumeration();
+
+                    // target is the same for all children, check the first one
+                    if (xEnumeration.is() && xEnumeration->hasMoreElements())
+                    {
+                        Reference<XAnimationNode> xChildNode(xEnumeration->nextElement(),
+                                                             UNO_QUERY);
+                        if (isNodeTargetAGroup(xChildNode))
+                            return false;
+                    }
+                }
+            }
+        }
+        // preset id found and checked, we can exit
+        break;
+    }
+    return true;
+}
+
 void AnimationsExporter::exportAnimations()
 {
     if (!mxDrawPage.is() || !mxPageProps.is() || !mxRootNode.is() || !hasEffects())
@@ -733,12 +826,16 @@ void AnimationsExporter::exportAnimations()
         exportNodeImpl(mxRootNode);
     }
 }
+
 void AnimationsExporter::exportNode(const Reference<XAnimationNode>& xNode)
 {
-     if (!isValidNode(xNode))
-         return;
-     ::tools::ScopedJsonWriterStruct aStruct = mrWriter.startStruct();
-     exportNodeImpl(xNode);
+    // afaics, when a shape is part of a group any applied effect is ignored
+    // moreover, some kind of effect, like the ones based on color animations,
+    // is ignored when applied to a group
+    if (!isValidNode(xNode) || isNodeTargetInShapeGroup(xNode) || !isEffectValidForTarget(xNode))
+        return;
+    ::tools::ScopedJsonWriterStruct aStruct = mrWriter.startStruct();
+    exportNodeImpl(xNode);
 }
 
 void AnimationsExporter::exportNodeImpl(const Reference<XAnimationNode>& xNode)
@@ -1532,6 +1629,110 @@ void AnimationsExporter::exportAnimate(const Reference<XAnimate>& xAnimate)
     }
 }
 
+void GetDocStructureSlides(::tools::JsonWriter& rJsonWriter, SdXImpressDocument* pDoc,
+                           const std::map<OUString, OUString>& rArguments)
+{
+    auto it = rArguments.find(u"filter"_ustr);
+    if (it != rArguments.end())
+    {
+        // If filter is present but we are filtering not to slide informations
+        if (!it->second.equals(u"slides"_ustr))
+            return;
+    }
+
+    sal_uInt16 nPageCount = pDoc->GetDoc()->GetSdPageCount(PageKind::Standard);
+    sal_uInt16 nMasterPageCount = pDoc->GetDoc()->GetMasterSdPageCount(PageKind::Standard);
+
+    rJsonWriter.put("SlideCount", nPageCount);
+    rJsonWriter.put("MasterSlideCount", nMasterPageCount);
+
+    // write data of every master slide
+    if (nMasterPageCount > 0)
+    {
+        auto aMasterPagesNode = rJsonWriter.startArray("MasterSlides");
+        for (int nMPId = 0; nMPId < nMasterPageCount; nMPId++)
+        {
+            auto aMasterPageNode = rJsonWriter.startNode("MasterSlide " + std::to_string(nMPId));
+            const OUString& aMName
+                = pDoc->GetDoc()->GetMasterSdPage(nMPId, PageKind::Standard)->GetName();
+            rJsonWriter.put("Name", aMName);
+        }
+    }
+
+    // write data of every slide
+    if (nPageCount > 0)
+    {
+        auto aPagesNode = rJsonWriter.startArray("Slides");
+        for (int nPId = 0; nPId < nPageCount; nPId++)
+        {
+            auto aPageNode = rJsonWriter.startNode("Slide " + std::to_string(nPId));
+            SdPage* pPageStandard = pDoc->GetDoc()->GetSdPage(nPId, PageKind::Standard);
+
+            // Slide Name
+            rJsonWriter.put("SlideName", pPageStandard->GetName());
+
+            // MatserSlide Name
+            const FmFormPage* pMasterPage
+                = dynamic_cast<const FmFormPage*>(&pPageStandard->TRG_GetMasterPage());
+
+            if (pMasterPage)
+            {
+                rJsonWriter.put("MasterSlideName", pMasterPage->GetName());
+            }
+
+            // Layout id, and name.
+            AutoLayout nLayout = pPageStandard->GetAutoLayout();
+            rJsonWriter.put("LayoutId", static_cast<int>(nLayout));
+            rJsonWriter.put("LayoutName", SdPage::autoLayoutToString(nLayout));
+
+            // Every Objects in the page
+            int nObjCount = pPageStandard->GetObjCount();
+            rJsonWriter.put("ObjectCount", nObjCount);
+
+            if (nObjCount > 0)
+            {
+                auto aObjectsNode = rJsonWriter.startArray("Objects");
+                for (int nOId = 0; nOId < nObjCount; nOId++)
+                {
+                    auto aObjectNode = rJsonWriter.startNode("Objects " + std::to_string(nOId));
+                    SdrObject* pSdrObj = pPageStandard->GetObj(nOId);
+                    SdrTextObj* pSdrTxtObj = DynCastSdrTextObj(pSdrObj);
+                    if (pSdrTxtObj && pSdrTxtObj->HasText())
+                    {
+                        sal_Int32 nTextCount = pSdrTxtObj->getTextCount();
+                        rJsonWriter.put("TextCount", nTextCount);
+                        if (nTextCount > 0)
+                        {
+                            auto aTextsNode = rJsonWriter.startArray("Texts");
+                            for (int nTId = 0; nTId < nTextCount; nTId++)
+                            {
+                                auto aTextNode
+                                    = rJsonWriter.startNode("Text " + std::to_string(nTId));
+                                SdrText* pSdrTxt = pSdrTxtObj->getText(nTId);
+                                OutlinerParaObject* pOutlinerParaObject
+                                    = pSdrTxt->GetOutlinerParaObject();
+
+                                sal_Int32 nParaCount
+                                    = pOutlinerParaObject->GetTextObject().GetParagraphCount();
+
+                                rJsonWriter.put("ParaCount", nParaCount);
+                                auto aParasNode = rJsonWriter.startArray("Paragraphs");
+                                for (int nParaId = 0; nParaId < nParaCount; nParaId++)
+                                {
+                                    OUString aParaStr(
+                                        pOutlinerParaObject->GetTextObject().GetText(nParaId));
+
+                                    rJsonWriter.putSimpleValue(aParaStr);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 } // end anonymous namespace
 
 SdUnoForbiddenCharsTable::SdUnoForbiddenCharsTable( SdrModel* pModel )
@@ -1825,6 +2026,20 @@ void SdXImpressDocument::Notify( SfxBroadcaster& rBC, const SfxHint& rHint )
         }
     }
     SfxBaseModel::Notify( rBC, rHint );
+}
+
+void SdXImpressDocument::getCommandValues(::tools::JsonWriter& rJsonWriter, std::string_view rCommand)
+{
+    static constexpr OStringLiteral aExtractDocStructure(".uno:ExtractDocumentStructure");
+
+    std::map<OUString, OUString> aMap
+        = SfxLokHelper::parseCommandParameters(OUString::fromUtf8(rCommand));
+
+    if (o3tl::starts_with(rCommand, aExtractDocStructure))
+    {
+        auto commentsNode = rJsonWriter.startNode("DocStructure");
+        GetDocStructureSlides(rJsonWriter, this, aMap);
+    }
 }
 
 /******************************************************************************
@@ -3763,7 +3978,10 @@ OUString SdXImpressDocument::getPartInfo(int nPart)
     jsonWriter.put("innerSpacesX", innerDots.getWidth() ? gridCoarse.getWidth() / innerDots.getWidth() : 0);
     jsonWriter.put("innerSpacesY", innerDots.getHeight() ? gridCoarse.getHeight() / innerDots.getHeight() : 0);
 
-    pSdPage->GetPageInfo(jsonWriter);
+    if (pSdPage)
+        pSdPage->GetPageInfo(jsonWriter);
+    else
+        SAL_WARN("sd", "getPartInfo request for SdPage " << nPart << " that does not exist!");
 
     return OStringToOUString(jsonWriter.finishAndGetAsOString(), RTL_TEXTENCODING_UTF8);
 }
@@ -4410,7 +4628,7 @@ OString SdXImpressDocument::getPresentationInfo() const
                             }
 
                             // Notes
-                            SdPage* pNotesPage = mpDoc->GetSdPage((pPage->GetPageNum() - 1) >> 1, PageKind::Notes);
+                            SdPage* pNotesPage = pPage ? mpDoc->GetSdPage((pPage->GetPageNum() - 1) >> 1, PageKind::Notes) : nullptr;
                             if (pNotesPage)
                             {
                                 SdrObject* pNotes = pNotesPage->GetPresObj(PresObjKind::Notes);
@@ -4622,7 +4840,7 @@ bool isRequestedSlideValid(SdDrawDocument* mpDoc, sal_Int32 nSlideNumber, const 
 bool SdXImpressDocument::createSlideRenderer(
     const OString& rSlideHash,
     sal_Int32 nSlideNumber, sal_Int32& nViewWidth, sal_Int32& nViewHeight,
-    bool /*bRenderBackground*/, bool /*bRenderMasterPage*/)
+    bool bRenderBackground, bool bRenderMasterPage)
 {
     std::string sSlideHash(rSlideHash);
     if (!isRequestedSlideValid(mpDoc, nSlideNumber, sSlideHash))
@@ -4632,7 +4850,7 @@ bool SdXImpressDocument::createSlideRenderer(
     if (!pPage)
         return false;
 
-    mpSlideshowLayerRenderer.reset(new SlideshowLayerRenderer(*pPage));
+    mpSlideshowLayerRenderer.reset(new SlideshowLayerRenderer(*pPage, bRenderBackground, bRenderMasterPage));
     Size aDesiredSize(nViewWidth, nViewHeight);
     Size aCalculatedSize = mpSlideshowLayerRenderer->calculateAndSetSizePixel(aDesiredSize);
     nViewWidth = aCalculatedSize.Width();
@@ -4649,7 +4867,7 @@ void SdXImpressDocument::postSlideshowCleanup()
     pViewSh->destroyXSlideShowInstance();
 }
 
-bool SdXImpressDocument::renderNextSlideLayer(unsigned char* pBuffer, bool& bIsBitmapLayer, OUString& rJsonMsg)
+bool SdXImpressDocument::renderNextSlideLayer(unsigned char* pBuffer, bool& bIsBitmapLayer, double& rScale, OUString& rJsonMsg)
 {
     bool bDone = true;
 
@@ -4657,12 +4875,11 @@ bool SdXImpressDocument::renderNextSlideLayer(unsigned char* pBuffer, bool& bIsB
         return bDone;
 
     OString sMsg;
-    bool bOK = mpSlideshowLayerRenderer->render(pBuffer, sMsg);
+    bool bOK = mpSlideshowLayerRenderer->render(pBuffer, bIsBitmapLayer, rScale, sMsg);
 
     if (bOK)
     {
         rJsonMsg = OUString::fromUtf8(sMsg);
-        bIsBitmapLayer = true;
         bDone = false;
     }
 

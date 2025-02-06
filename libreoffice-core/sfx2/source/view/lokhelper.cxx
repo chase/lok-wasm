@@ -41,6 +41,8 @@
 #include <comphelper/scopeguard.hxx>
 #include <comphelper/base64.hxx>
 #include <tools/json_writer.hxx>
+#include <svl/cryptosign.hxx>
+#include <tools/urlobj.hxx>
 
 #include <boost/property_tree/json_parser.hpp>
 
@@ -990,9 +992,81 @@ void SfxLokHelper::addCertificates(const std::vector<std::string>& rCerts)
     pObjectShell->RecheckSignature(false);
 }
 
+bool SfxLokHelper::supportsCommand(std::u16string_view rCommand)
+{
+    static const std::initializer_list<std::u16string_view> vSupport = { u"Signature" };
+
+    return std::find(vSupport.begin(), vSupport.end(), rCommand) != vSupport.end();
+}
+
+std::map<OUString, OUString> SfxLokHelper::parseCommandParameters(std::u16string_view rCommand)
+{
+    std::map<OUString, OUString> aMap;
+
+    INetURLObject aParser(rCommand);
+    OUString aArguments = aParser.GetParam();
+    sal_Int32 nParamIndex = 0;
+    do
+    {
+        std::u16string_view aParam = o3tl::getToken(aArguments, 0, '&', nParamIndex);
+        sal_Int32 nIndex = 0;
+        OUString aKey;
+        OUString aValue;
+        do
+        {
+            std::u16string_view aToken = o3tl::getToken(aParam, 0, '=', nIndex);
+            if (aKey.isEmpty())
+                aKey = aToken;
+            else
+                aValue = aToken;
+        } while (nIndex >= 0);
+        OUString aDecodedValue
+            = INetURLObject::decode(aValue, INetURLObject::DecodeMechanism::WithCharset);
+        aMap[aKey] = aDecodedValue;
+    } while (nParamIndex >= 0);
+
+    return aMap;
+}
+
+void SfxLokHelper::getCommandValues(tools::JsonWriter& rJsonWriter, std::string_view rCommand)
+{
+    static constexpr OString aSignature(".uno:Signature"_ostr);
+    if (!o3tl::starts_with(rCommand, aSignature))
+    {
+        return;
+    }
+
+    SfxObjectShell* pObjectShell = SfxObjectShell::Current();
+    if (!pObjectShell)
+    {
+        return;
+    }
+
+    svl::crypto::SigningContext aSigningContext;
+    std::map<OUString, OUString> aMap
+        = SfxLokHelper::parseCommandParameters(OUString::fromUtf8(rCommand));
+    auto it = aMap.find("signatureTime");
+    if (it != aMap.end())
+    {
+        // Signature time is provided: prefer it over the system time.
+        aSigningContext.m_nSignatureTime = it->second.toInt64();
+    }
+    pObjectShell->SignDocumentContentUsingCertificate(aSigningContext);
+    // Set commandName, this is a reply to a request.
+    rJsonWriter.put("commandName", aSignature);
+    auto aCommandValues = rJsonWriter.startNode("commandValues");
+    rJsonWriter.put("signatureTime", aSigningContext.m_nSignatureTime);
+
+    uno::Sequence<sal_Int8> aDigest(reinterpret_cast<sal_Int8*>(aSigningContext.m_aDigest.data()),
+                                    aSigningContext.m_aDigest.size());
+    OUStringBuffer aBuffer;
+    comphelper::Base64::encode(aBuffer, aDigest);
+    rJsonWriter.put("digest", aBuffer.makeStringAndClear());
+}
+
 void SfxLokHelper::notifyUpdate(SfxViewShell const* pThisView, int nType)
 {
-    if (DisableCallbacks::disabled())
+    if (DisableCallbacks::disabled() || !pThisView)
         return;
 
     pThisView->libreOfficeKitViewUpdatedCallback(nType);
@@ -1016,8 +1090,7 @@ void SfxLokHelper::notifyUpdatePerViewId(SfxViewShell const* pTargetShell, SfxVi
 
 void SfxLokHelper::notifyOtherViewsUpdatePerViewId(SfxViewShell const* pThisView, int nType)
 {
-    assert(pThisView != nullptr && "pThisView must be valid");
-    if (DisableCallbacks::disabled())
+    if (DisableCallbacks::disabled() || !pThisView)
         return;
 
     int viewId = SfxLokHelper::getView(pThisView);
@@ -1030,6 +1103,16 @@ void SfxLokHelper::notifyOtherViewsUpdatePerViewId(SfxViewShell const* pThisView
 
         pViewShell = SfxViewShell::GetNext(*pViewShell);
     }
+}
+
+void SfxLokHelper::registerViewCallbacks()
+{
+    comphelper::LibreOfficeKit::setViewSetter([](int nView) {
+        SfxLokHelper::setView(nView);
+    });
+    comphelper::LibreOfficeKit::setViewGetter([]() -> int {
+        return SfxLokHelper::getView();
+    });
 }
 
 namespace
@@ -1080,6 +1163,14 @@ namespace
             for (sal_uInt16 i = 0; i <= nRepeat; ++i)
                 if (!pFocusWindow->isDisposed())
                     pFocusWindow->KeyInput(singlePress);
+
+            if (pLOKEv->maKeyEvent.GetKeyCode().GetCode() == KEY_CONTEXTMENU)
+            {
+                // later do use getCaretPosition probably, or get focused obj position, smt like that
+                Point aPos = pFocusWindow->GetPointerPosPixel();
+                CommandEvent aCEvt( aPos, CommandEventId::ContextMenu);
+                pFocusWindow->Command(aCEvt);
+            }
             break;
         }
         case VclEventId::WindowKeyUp:

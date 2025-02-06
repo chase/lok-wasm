@@ -22,6 +22,7 @@
 #include <officecfg/Office/Common.hxx>
 #include <vcl/errinf.hxx>
 #include <vcl/svapp.hxx>
+#include <vcl/pdf/PDFEncryptionInitialization.hxx>
 #include <vcl/weld.hxx>
 #include <sfx2/passwd.hxx>
 #include <comphelper/diagnose_ex.hxx>
@@ -483,12 +484,11 @@ ImpPDFTabGeneralPage::ImpPDFTabGeneralPage(weld::Container* pPage, weld::DialogC
     , mxNfQuality(m_xBuilder->weld_metric_spin_button("quality", FieldUnit::PERCENT))
     , mxCbReduceImageResolution(m_xBuilder->weld_check_button("reduceresolution"))
     , mxCoReduceImageResolution(m_xBuilder->weld_combo_box("resolution"))
-    , mxCbPDFA(m_xBuilder->weld_check_button("pdfa"))
     , mxCbPDFUA(m_xBuilder->weld_check_button("pdfua"))
-    , mxRbPDFAVersion(m_xBuilder->weld_combo_box("pdfaversion"))
+    , mxRbPDFVersion(m_xBuilder->weld_combo_box("pdf_version"))
     , mxCbTaggedPDF(m_xBuilder->weld_check_button("tagged"))
     , mxCbExportFormFields(m_xBuilder->weld_check_button("forms"))
-    , mxFormsFrame(m_xBuilder->weld_widget("formsframe"))
+    , mxFormsFrame(m_xBuilder->weld_widget("forms_options_grid"))
     , mxLbFormsFormat(m_xBuilder->weld_combo_box("format"))
     , mxCbAllowDuplicateFieldNames(m_xBuilder->weld_check_button("allowdups"))
     , mxCbExportBookmarks(m_xBuilder->weld_check_button("bookmarks"))
@@ -515,6 +515,24 @@ ImpPDFTabGeneralPage::~ImpPDFTabGeneralPage()
 {
     if (mxPasswordUnusedWarnDialog)
         mxPasswordUnusedWarnDialog->response(RET_CANCEL);
+}
+
+bool ImpPDFTabGeneralPage::IsPdfaSelected() const
+{
+    OUString const& rVersion = mxRbPDFVersion->get_active_id();
+
+    return
+        rVersion == u"1"_ustr ||
+        rVersion == u"2"_ustr ||
+        rVersion == u"3"_ustr ||
+        rVersion == u"4"_ustr;
+}
+
+bool ImpPDFTabGeneralPage::IsPDFAVersionSelected(sal_Int32 nVersion) const
+{
+    OUString const& rVersion = mxRbPDFVersion->get_active_id();
+    sal_Int32 nSelectedVersion = rVersion.toInt32();
+    return nSelectedVersion == nVersion;
 }
 
 void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
@@ -564,38 +582,57 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
     mxCbWatermark->connect_toggled( LINK( this, ImpPDFTabGeneralPage, ToggleWatermarkHdl ) );
     mxFtWatermark->set_sensitive(false );
     mxEdWatermark->set_sensitive( false );
-    mxCbPDFA->connect_toggled(LINK(this, ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHandle));
 
-    const bool bIsPDFA = (pParent->mnPDFTypeSelection>=1) && (pParent->mnPDFTypeSelection <= 3);
-    mxCbPDFA->set_active(bIsPDFA);
-    switch( pParent->mnPDFTypeSelection )
+    bool bIsPDFA = false;
+    switch (pParent->mnPDFTypeSelection)
     {
     case 1: // PDF/A-1
-        mxRbPDFAVersion->set_active_id("1");
+        bIsPDFA = true;
+        mxRbPDFVersion->set_active_id("1");
         break;
     case 2: // PDF/A-2
-        mxRbPDFAVersion->set_active_id("2");
+        bIsPDFA = true;
+        mxRbPDFVersion->set_active_id("2");
         break;
     case 3: // PDF/A-3
+        bIsPDFA = true;
+        mxRbPDFVersion->set_active_id("3");
+        break;
+    case 4: // PDF/A-4
+        bIsPDFA = true;
+        mxRbPDFVersion->set_active_id("4");
+        break;
+    case 20: // PDF 2.0
+        mxRbPDFVersion->set_active_id("20");
+        break;
+    case 17:
     default: // PDF 1.x
-        mxRbPDFAVersion->set_active_id("3");
+        mxRbPDFVersion->set_active_id("17");
         break;
     }
 
+    mxRbPDFVersion->connect_changed(LINK(this, ImpPDFTabGeneralPage, SelectPDFVersion));
+
     const bool bIsPDFUA = pParent->mbPDFUACompliance;
     mxCbPDFUA->set_active(bIsPDFUA);
-    mxCbPDFUA->connect_toggled(LINK(this, ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHandle));
+    mxCbPDFUA->connect_toggled(LINK(this, ImpPDFTabGeneralPage, TogglePDFUniversalAccessibilityHandle));
     mxCbPDFUA->set_sensitive(!pParent->maConfigItem.IsReadOnly("PDFUACompliance"));
 
-    // the TogglePDFVersionOrUniversalAccessibilityHandle handler will read or write the *UserSelection based
-    // on the mxCbPDFA (= bIsPDFA) state, so we have to prepare the correct input state.
+    // the thePDFVersionChanged will read or write the *UserSelection based on widget state,
+    // so we have to prepare the correct input state.
     if (bIsPDFA || bIsPDFUA)
         mxCbTaggedPDF->set_active(pParent->mbUseTaggedPDFUserSelection);
     else
         mbUseTaggedPDFUserSelection = pParent->mbUseTaggedPDFUserSelection;
 
     mxCbExportBookmarks->set_active(pParent->mbExportBookmarksUserSelection);
-    TogglePDFVersionOrUniversalAccessibilityHandle(*mxCbPDFA);
+
+    mxCbAddStream->show();
+    mxCbAddStream->set_active(pParent->mbAddStream);
+    mxCbAddStream->connect_toggled(LINK(this, ImpPDFTabGeneralPage, ToggleAddStreamHdl));
+    ToggleAddStreamHdl(*mxCbAddStream); // init addstream dependencies
+
+    thePDFVersionChanged();
 
     mxCbExportFormFields->set_active(pParent->mbExportFormFields);
     mxCbExportFormFields->connect_toggled( LINK( this, ImpPDFTabGeneralPage, ToggleExportFormFieldsHdl ) );
@@ -687,13 +724,6 @@ void ImpPDFTabGeneralPage::SetFilterConfigItem(ImpPDFTabDialog* pParent)
     mxCbExportPlaceholders->set_active(pParent->mbIsExportPlaceholders);
     mxCbExportPlaceholders->set_sensitive(
         mbIsWriter && !pParent->maConfigItem.IsReadOnly("ExportPlaceholders"));
-
-    mxCbAddStream->show();
-    mxCbAddStream->set_active(pParent->mbAddStream);
-    mxCbAddStream->set_sensitive(!pParent->maConfigItem.IsReadOnly("IsAddStream"));
-
-    mxCbAddStream->connect_toggled(LINK(this, ImpPDFTabGeneralPage, ToggleAddStreamHdl));
-    ToggleAddStreamHdl(*mxCbAddStream); // init addstream dependencies
 }
 
 void ImpPDFTabGeneralPage::GetFilterConfigItem( ImpPDFTabDialog* pParent )
@@ -743,23 +773,23 @@ void ImpPDFTabGeneralPage::GetFilterConfigItem( ImpPDFTabDialog* pParent )
     pParent->mnPDFTypeSelection = 0;
     pParent->mbUseTaggedPDF = mxCbTaggedPDF->get_active();
 
-    const bool bIsPDFA = mxCbPDFA->get_active();
+    const bool bIsPDFA = IsPdfaSelected();
     const bool bIsPDFUA = mxCbPDFUA->get_active();
 
-    if (bIsPDFA)
-    {
-        pParent->mnPDFTypeSelection = 3;
-        OUString currentPDFAMode = mxRbPDFAVersion->get_active_id();
-        if( currentPDFAMode == "1" )
-            pParent->mnPDFTypeSelection = 1;
-        else if(currentPDFAMode == "2")
-            pParent->mnPDFTypeSelection = 2;
-    }
+    OUString sCurrentPDFVersion = mxRbPDFVersion->get_active_id();
+    sal_Int32 nValue = sCurrentPDFVersion.toInt32();
+
+    static constexpr const auto constValidValues = std::to_array<sal_Int32>({1, 2, 3, 4, 17, 20});
+    if (std::find(constValidValues.begin(), constValidValues.end(), nValue) != constValidValues.end())
+        pParent->mnPDFTypeSelection = nValue;
+    else
+        pParent->mnPDFTypeSelection = 17;
 
     pParent->mbPDFUACompliance = bIsPDFUA;
 
     if (!bIsPDFA && !bIsPDFUA)
         mbUseTaggedPDFUserSelection = pParent->mbUseTaggedPDF;
+
     if (!bIsPDFUA)
     {
         pParent->mbExportBookmarksUserSelection = pParent->mbExportBookmarks;
@@ -899,9 +929,9 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, ToggleAddStreamHdl, weld::Toggleable&, voi
     }
 }
 
-IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHandle, weld::Toggleable&, void)
+void ImpPDFTabGeneralPage::thePDFVersionChanged()
 {
-    const bool bIsPDFA = mxCbPDFA->get_active();
+    const bool bIsPDFA = IsPdfaSelected();
     const bool bIsPDFUA = mxCbPDFUA->get_active();
 
     // set the security page status (and its controls as well)
@@ -909,16 +939,14 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHa
     if (pSecPage)
         pSecPage->ImplPDFASecurityControl();
 
-    mxCbTaggedPDF->set_sensitive(
-        !bIsPDFA && !bIsPDFUA && !IsReadOnlyProperty("UseTaggedPDF"));
-    mxRbPDFAVersion->set_sensitive(
-        bIsPDFA && !IsReadOnlyProperty("SelectPdfVersion"));
+    mxRbPDFVersion->set_sensitive(!IsReadOnlyProperty("SelectPdfVersion"));
 
     if (bIsPDFA || bIsPDFUA)
     {
         // store the users selection of subordinate controls and set required PDF/A values
         mbUseTaggedPDFUserSelection = mxCbTaggedPDF->get_active();
         mxCbTaggedPDF->set_active(true);
+        mxCbTaggedPDF->set_sensitive(false);
 
         // if a password was set, inform the user that this will not be used
         if (bIsPDFA && pSecPage && pSecPage->hasPassword())
@@ -934,6 +962,24 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHa
     {
         // restore the users values of subordinate controls
         mxCbTaggedPDF->set_active(mbUseTaggedPDFUserSelection);
+        mxCbTaggedPDF->set_sensitive(!IsReadOnlyProperty("UseTaggedPDF"));
+    }
+
+    if (IsPDFAVersionSelected(1) || IsPDFAVersionSelected(2))
+    {
+        if (mxCbAddStream->get_sensitive())
+        {
+            if (mpParent)
+                mpParent->mbAddStream = mxCbAddStream->get_active();
+
+            mxCbAddStream->set_active(false);
+            mxCbAddStream->set_sensitive(false);
+        }
+    }
+    else if (mpParent && !mxCbAddStream->get_sensitive())
+    {
+        mxCbAddStream->set_active(mpParent->mbAddStream);
+        mxCbAddStream->set_sensitive(!mpParent->maConfigItem.IsReadOnly("IsAddStream"));
     }
 
     if (bIsPDFUA)
@@ -960,8 +1006,8 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHa
         mxCbExportBookmarks->set_active(mpParent->mbExportBookmarksUserSelection);
         mxCbUseReferenceXObject->set_active(mpParent->mbUseReferenceXObjectUserSelection);
     }
-    mxCbExportBookmarks->set_sensitive(
-        !bIsPDFUA && !IsReadOnlyProperty("ExportBookmarks"));
+
+    mxCbExportBookmarks->set_sensitive(!bIsPDFUA && !IsReadOnlyProperty("ExportBookmarks"));
     mxCbUseReferenceXObject->set_sensitive(!bIsPDFUA);
 
     ImpPDFTabOpnFtrPage *const pOpenPage(mpParent ? mpParent->getOpenPage() : nullptr);
@@ -974,6 +1020,16 @@ IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFVersionOrUniversalAccessibilityHa
     ImpPDFTabLinksPage* pLinksPage = mpParent ? mpParent->getLinksPage() : nullptr;
     if (pLinksPage)
         pLinksPage->ImplPDFALinkControl(!bIsPDFA);
+}
+
+IMPL_LINK_NOARG(ImpPDFTabGeneralPage, TogglePDFUniversalAccessibilityHandle, weld::Toggleable&, void)
+{
+    thePDFVersionChanged();
+}
+
+IMPL_LINK_NOARG(ImpPDFTabGeneralPage, SelectPDFVersion, weld::ComboBox&, void)
+{
+    thePDFVersionChanged();
 }
 
 /// The option features tab page
@@ -1411,7 +1467,7 @@ IMPL_LINK_NOARG(ImpPDFTabSecurityPage, ClickmaPbSetPwdHdl, weld::Button&, void)
             mbHaveUserPassword = !aUserPW.isEmpty();
             mbHaveOwnerPassword = !aOwnerPW.isEmpty();
 
-            mxPreparedPasswords = vcl::PDFWriter::InitEncryption( aOwnerPW, aUserPW );
+            mxPreparedPasswords = vcl::pdf::initEncryption(aOwnerPW, aUserPW);
             if (!mxPreparedPasswords.is())
             {
                 OUString msg;
@@ -1596,7 +1652,7 @@ void ImpPDFTabLinksPage::SetFilterConfigItem( const  ImpPDFTabDialog* pParent )
 
     ImpPDFTabGeneralPage* pGeneralPage = pParent->getGeneralPage();
     if (pGeneralPage)
-        ImplPDFALinkControl(!pGeneralPage->mxCbPDFA->get_active());
+        ImplPDFALinkControl(!pGeneralPage->IsPdfaSelected());
 }
 
 

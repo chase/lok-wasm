@@ -84,6 +84,7 @@
 
 #include <svdata.hxx>
 #include <vcl/BitmapWriteAccess.hxx>
+#include <pdf/COSWriter.hxx>
 #include <fontsubset.hxx>
 #include <font/EmphasisMark.hxx>
 #include <font/PhysicalFontFace.hxx>
@@ -95,6 +96,8 @@
 #include <pdf/objectcopier.hxx>
 #include <pdf/pdfwriter_impl.hxx>
 #include <pdf/PdfConfig.hxx>
+#include <pdf/PDFEncryptorR6.hxx>
+#include <pdf/PDFEncryptor.hxx>
 #include <o3tl/sorted_vector.hxx>
 #include <frozen/bits/defines.h>
 #include <frozen/bits/elsa_std.h>
@@ -106,6 +109,8 @@ static bool g_bDebugDisableCompression = getenv("VCL_DEBUG_DISABLE_PDFCOMPRESSIO
 
 namespace
 {
+
+constexpr std::string_view constNamespacePDF2("http://iso.org/pdf2/ssn");
 
 constexpr sal_Int32 nLog10Divisor = 3;
 constexpr double fDivisor = 1000.0;
@@ -130,102 +135,6 @@ void appendObjectReference(sal_Int32 nObjectID, OStringBuffer & aLine)
 {
     aLine.append(nObjectID);
     aLine.append(" 0 R ");
-}
-
-void appendHex(sal_Int8 nInt, OStringBuffer& rBuffer)
-{
-    static const char pHexDigits[] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                                           '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-    rBuffer.append( pHexDigits[ (nInt >> 4) & 15 ] );
-    rBuffer.append( pHexDigits[ nInt & 15 ] );
-}
-
-void appendName( std::u16string_view rStr, OStringBuffer& rBuffer )
-{
-// FIXME i59651 add a check for max length of 127 chars? Per PDF spec 1.4, appendix C.1
-// I guess than when reading the #xx sequence it will count for a single character.
-    OString aStr( OUStringToOString( rStr, RTL_TEXTENCODING_UTF8 ) );
-    int nLen = aStr.getLength();
-    for( int i = 0; i < nLen; i++ )
-    {
-        /*  #i16920# PDF recommendation: output UTF8, any byte
-         *  outside the interval [33(=ASCII'!');126(=ASCII'~')]
-         *  should be escaped hexadecimal
-         *  for the sake of ghostscript which also reads PDF
-         *  but has a narrower acceptance rate we only pass
-         *  alphanumerics and '-' literally.
-         */
-        if( (aStr[i] >= 'A' && aStr[i] <= 'Z' ) ||
-            (aStr[i] >= 'a' && aStr[i] <= 'z' ) ||
-            (aStr[i] >= '0' && aStr[i] <= '9' ) ||
-            aStr[i] == '-' )
-        {
-            rBuffer.append( aStr[i] );
-        }
-        else
-        {
-            rBuffer.append( '#' );
-            appendHex( static_cast<sal_Int8>(aStr[i]), rBuffer );
-        }
-    }
-}
-
-void appendName( const char* pStr, OStringBuffer& rBuffer )
-{
-    // FIXME i59651 see above
-    while( pStr && *pStr )
-    {
-        if( (*pStr >= 'A' && *pStr <= 'Z' ) ||
-            (*pStr >= 'a' && *pStr <= 'z' ) ||
-            (*pStr >= '0' && *pStr <= '9' ) ||
-            *pStr == '-' )
-        {
-            rBuffer.append( *pStr );
-        }
-        else
-        {
-            rBuffer.append( '#' );
-            appendHex( static_cast<sal_Int8>(*pStr), rBuffer );
-        }
-        pStr++;
-    }
-}
-
-//used only to emit encoded passwords
-void appendLiteralString( const char* pStr, sal_Int32 nLength, OStringBuffer& rBuffer )
-{
-    while( nLength )
-    {
-        switch( *pStr )
-        {
-        case '\n' :
-            rBuffer.append( "\\n" );
-            break;
-        case '\r' :
-            rBuffer.append( "\\r" );
-            break;
-        case '\t' :
-            rBuffer.append( "\\t" );
-            break;
-        case '\b' :
-            rBuffer.append( "\\b" );
-            break;
-        case '\f' :
-            rBuffer.append( "\\f" );
-            break;
-        case '(' :
-        case ')' :
-        case '\\' :
-            rBuffer.append( "\\" );
-            rBuffer.append( static_cast<char>(*pStr) );
-            break;
-        default:
-            rBuffer.append( static_cast<char>(*pStr) );
-            break;
-        }
-        pStr++;
-        nLength--;
-    }
 }
 
 /*
@@ -269,21 +178,15 @@ void appendDestinationName( const OUString& rString, OStringBuffer& rBuffer )
         {
             sal_Int8 aValueHigh = sal_Int8(aChar >> 8);
             if(aValueHigh > 0)
-                appendHex( aValueHigh, rBuffer );
-            appendHex( static_cast<sal_Int8>(aChar & 255 ), rBuffer );
+                vcl::COSWriter::appendHex(aValueHigh, rBuffer);
+            vcl::COSWriter::appendHex(static_cast<sal_Int8>(aChar & 255 ), rBuffer);
         }
     }
 }
-
 } // end anonymous namespace
 
 namespace vcl
 {
-const sal_uInt8 PDFWriterImpl::s_nPadString[32] =
-{
-    0x28, 0xBF, 0x4E, 0x5E, 0x4E, 0x75, 0x8A, 0x41, 0x64, 0x00, 0x4E, 0x56, 0xFF, 0xFA, 0x01, 0x08,
-    0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80, 0x2F, 0x0C, 0xA9, 0xFE, 0x64, 0x53, 0x69, 0x7A
-};
 
 namespace
 {
@@ -307,19 +210,6 @@ void removePlaceholderSE(std::vector<PDFStructureElement> & rStructure, PDFStruc
 
 } // end anonymous namespace
 
-void PDFWriter::AppendUnicodeTextString(const OUString& rString, OStringBuffer& rBuffer)
-{
-    rBuffer.append( "FEFF" );
-    const sal_Unicode* pStr = rString.getStr();
-    sal_Int32 nLen = rString.getLength();
-    for( int i = 0; i < nLen; i++ )
-    {
-        sal_Unicode aChar = pStr[i];
-        appendHex( static_cast<sal_Int8>(aChar >> 8), rBuffer );
-        appendHex( static_cast<sal_Int8>(aChar & 255 ), rBuffer );
-    }
-}
-
 void PDFWriterImpl::createWidgetFieldName( sal_Int32 i_nWidgetIndex, const PDFWriter::AnyWidget& i_rControl )
 {
     /* #i80258# previously we use appendName here
@@ -342,7 +232,7 @@ void PDFWriterImpl::createWidgetFieldName( sal_Int32 i_nWidgetIndex, const PDFWr
         else
         {
             aBuffer.append( '#' );
-            appendHex( static_cast<sal_Int8>(aStr[i]), aBuffer );
+            COSWriter::appendHex(static_cast<sal_Int8>(aStr[i]), aBuffer);
         }
     }
 
@@ -641,10 +531,113 @@ const char* getPDFVersionStr(PDFWriter::PDFVersion ePDFVersion)
         case PDFWriter::PDFVersion::PDF_A_3:
         case PDFWriter::PDFVersion::PDF_1_7:
             return "1.7";
+        // PDF 2.0
+        case PDFWriter::PDFVersion::PDF_A_4:
+        case PDFWriter::PDFVersion::PDF_2_0:
+            return "2.0";
     }
 }
 
-} // end namespace
+void computeDocumentIdentifier(std::vector<sal_uInt8>& o_rIdentifier,
+                               const vcl::PDFWriter::PDFDocInfo& i_rDocInfo,
+                               const OString& i_rCString1,
+                               const css::util::DateTime& rCreationMetaDate, OString& o_rCString2)
+{
+    o_rIdentifier.clear();
+
+    //build the document id
+    OString aInfoValuesOut;
+    OStringBuffer aID(1024);
+    if (!i_rDocInfo.Title.isEmpty())
+        COSWriter::appendUnicodeTextString(i_rDocInfo.Title, aID);
+    if (!i_rDocInfo.Author.isEmpty())
+        COSWriter::appendUnicodeTextString(i_rDocInfo.Author, aID);
+    if (!i_rDocInfo.Subject.isEmpty())
+        COSWriter::appendUnicodeTextString(i_rDocInfo.Subject, aID);
+    if (!i_rDocInfo.Keywords.isEmpty())
+        COSWriter::appendUnicodeTextString(i_rDocInfo.Keywords, aID);
+    if (!i_rDocInfo.Creator.isEmpty())
+        COSWriter::appendUnicodeTextString(i_rDocInfo.Creator, aID);
+    if (!i_rDocInfo.Producer.isEmpty())
+        COSWriter::appendUnicodeTextString(i_rDocInfo.Producer, aID);
+
+    TimeValue aTVal, aGMT;
+    oslDateTime aDT;
+    aDT.NanoSeconds = rCreationMetaDate.NanoSeconds;
+    aDT.Seconds = rCreationMetaDate.Seconds;
+    aDT.Minutes = rCreationMetaDate.Minutes;
+    aDT.Hours = rCreationMetaDate.Hours;
+    aDT.Day = rCreationMetaDate.Day;
+    aDT.Month = rCreationMetaDate.Month;
+    aDT.Year = rCreationMetaDate.Year;
+
+    osl_getSystemTime(&aGMT);
+    osl_getLocalTimeFromSystemTime(&aGMT, &aTVal);
+    OStringBuffer aCreationMetaDateString(64);
+
+    // i59651: we fill the Metadata date string as well, if PDF/A is requested
+    // according to ISO 19005-1:2005 6.7.3 the date is corrected for
+    // local time zone offset UTC only, whereas Acrobat 8 seems
+    // to use the localtime notation only
+    // according to a recommendation in XMP Specification (Jan 2004, page 75)
+    // the Acrobat way seems the right approach
+    aCreationMetaDateString.append(char('0' + ((aDT.Year / 1000) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Year / 100) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Year / 10) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Year) % 10)));
+    aCreationMetaDateString.append("-");
+    aCreationMetaDateString.append(char('0' + ((aDT.Month / 10) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Month) % 10)));
+    aCreationMetaDateString.append("-");
+    aCreationMetaDateString.append(char('0' + ((aDT.Day / 10) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Day) % 10)));
+    aCreationMetaDateString.append("T");
+    aCreationMetaDateString.append(char('0' + ((aDT.Hours / 10) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Hours) % 10)));
+    aCreationMetaDateString.append(":");
+    aCreationMetaDateString.append(char('0' + ((aDT.Minutes / 10) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Minutes) % 10)));
+    aCreationMetaDateString.append(":");
+    aCreationMetaDateString.append(char('0' + ((aDT.Seconds / 10) % 10)));
+    aCreationMetaDateString.append(char('0' + ((aDT.Seconds) % 10)));
+
+    sal_uInt32 nDelta = 0;
+    if (aGMT.Seconds > aTVal.Seconds)
+    {
+        nDelta = aGMT.Seconds - aTVal.Seconds;
+        aCreationMetaDateString.append("-");
+    }
+    else if (aGMT.Seconds < aTVal.Seconds)
+    {
+        nDelta = aTVal.Seconds - aGMT.Seconds;
+        aCreationMetaDateString.append("+");
+    }
+    else
+    {
+        aCreationMetaDateString.append("Z");
+    }
+    if (nDelta)
+    {
+        aCreationMetaDateString.append(char('0' + ((nDelta / 36000) % 10)));
+        aCreationMetaDateString.append(char('0' + ((nDelta / 3600) % 10)));
+        aCreationMetaDateString.append(":");
+        aCreationMetaDateString.append(char('0' + ((nDelta / 600) % 6)));
+        aCreationMetaDateString.append(char('0' + ((nDelta / 60) % 10)));
+    }
+    aID.append(i_rCString1.getStr(), i_rCString1.getLength());
+
+    aInfoValuesOut = aID.makeStringAndClear();
+    o_rCString2 = aCreationMetaDateString.makeStringAndClear();
+
+    ::comphelper::Hash aDigest(::comphelper::HashType::MD5);
+    aDigest.update(reinterpret_cast<unsigned char const*>(&aGMT), sizeof(aGMT));
+    aDigest.update(reinterpret_cast<unsigned char const*>(aInfoValuesOut.getStr()),
+                   aInfoValuesOut.getLength());
+    //the binary form of the doc id is needed for encryption stuff
+    o_rIdentifier = aDigest.finalize();
+}
+
+} // end anonymous namespace
 
 PDFPage::PDFPage( PDFWriterImpl* pWriter, double nPageWidth, double nPageHeight, PDFWriter::Orientation eOrientation )
         :
@@ -1224,7 +1217,7 @@ double PDFPage::getHeight() const
 }
 
 PDFWriterImpl::PDFWriterImpl( const PDFWriter::PDFWriterContext& rContext,
-                               const css::uno::Reference< css::beans::XMaterialHolder >& xEnc,
+                               const css::uno::Reference< css::beans::XMaterialHolder >& xEncryptionMaterialHolder,
                                PDFWriter& i_rOuterFace)
         : VirtualDevice(Application::GetDefaultDevice(), DeviceFormat::WITHOUT_ALPHA, OUTDEV_PDF),
         m_aMapMode( MapUnit::MapPoint, Point(), Fraction( 1, pointToPixel(1) ), Fraction( 1, pointToPixel(1) ) ),
@@ -1245,15 +1238,6 @@ PDFWriterImpl::PDFWriterImpl( const PDFWriter::PDFWriterContext& rContext,
         m_aFile(m_aContext.URL),
         m_bOpen(false),
         m_DocDigest(::comphelper::HashType::MD5),
-        m_aCipher( nullptr ),
-        m_nKeyLength(0),
-        m_nRC4KeyLength(0),
-        m_bEncryptThisStream( false ),
-        m_nAccessPermissions(0),
-        m_bIsPDF_A1( false ),
-        m_bIsPDF_A2( false ),
-        m_bIsPDF_UA( false ),
-        m_bIsPDF_A3( false ),
         m_rOuterFace( i_rOuterFace )
 {
     m_aStructure.emplace_back( );
@@ -1291,28 +1275,18 @@ PDFWriterImpl::PDFWriterImpl( const PDFWriter::PDFWriterContext& rContext,
     // setup DocInfo
     setupDocInfo();
 
-    /* prepare the cypher engine, can be done in CTOR, free in DTOR */
-    m_aCipher = rtl_cipher_createARCFOUR( rtl_Cipher_ModeStream );
-
-    if( xEnc.is() )
-        prepareEncryption( xEnc );
-
-    if( m_aContext.Encryption.Encrypt() )
+    if (xEncryptionMaterialHolder.is())
     {
-        // sanity check
-        if( m_aContext.Encryption.OValue.size() != ENCRYPTED_PWD_SIZE ||
-            m_aContext.Encryption.UValue.size() != ENCRYPTED_PWD_SIZE ||
-            m_aContext.Encryption.EncryptionKey.size() != MAXIMUM_RC4_KEY_LENGTH
-           )
-        {
-            // the field lengths are invalid ? This was not setup by initEncryption.
-            // do not encrypt after all
-            m_aContext.Encryption.OValue.clear();
-            m_aContext.Encryption.UValue.clear();
-            OSL_ENSURE( false, "encryption data failed sanity check, encryption disabled" );
-        }
-        else // setup key lengths
-            m_nAccessPermissions = computeAccessPermissions( m_aContext.Encryption, m_nKeyLength, m_nRC4KeyLength );
+        if (m_aContext.Version == PDFWriter::PDFVersion::PDF_2_0 || m_aContext.Version == PDFWriter::PDFVersion::PDF_A_4)
+            m_pPDFEncryptor.reset(new PDFEncryptorR6);
+        else
+            m_pPDFEncryptor.reset(new PDFEncryptor);
+        m_pPDFEncryptor->prepareEncryption(xEncryptionMaterialHolder, m_aContext.Encryption);
+    }
+
+    if (m_aContext.Encryption.canEncrypt())
+    {
+        m_pPDFEncryptor->setupKeysAndCheck(m_aContext.Encryption);
     }
 
     // write header
@@ -1331,22 +1305,42 @@ PDFWriterImpl::PDFWriterImpl( const PDFWriter::PDFWriterContext& rContext,
     // insert outline root
     m_aOutline.emplace_back( );
 
-    m_bIsPDF_A1 = (m_aContext.Version == PDFWriter::PDFVersion::PDF_A_1);
-    if( m_bIsPDF_A1 )
-        m_aContext.Version = PDFWriter::PDFVersion::PDF_1_4; //meaning we need PDF 1.4, PDF/A flavour
-
-    m_bIsPDF_A2 = (m_aContext.Version == PDFWriter::PDFVersion::PDF_A_2);
-    if( m_bIsPDF_A2 )
-        m_aContext.Version = PDFWriter::PDFVersion::PDF_1_7;
-
-    m_bIsPDF_A3 = (m_aContext.Version == PDFWriter::PDFVersion::PDF_A_3);
-    if( m_bIsPDF_A3 )
-        m_aContext.Version = PDFWriter::PDFVersion::PDF_1_7;
+    switch (m_aContext.Version)
+    {
+        case PDFWriter::PDFVersion::PDF_A_1:
+            m_nPDFA_Version = 1;
+            m_bIsPDF_A1 = true;
+            m_aContext.Version = PDFWriter::PDFVersion::PDF_1_4; //meaning we need PDF 1.4, PDF/A flavour
+            break;
+        case PDFWriter::PDFVersion::PDF_A_2:
+            m_nPDFA_Version = 2;
+            m_bIsPDF_A2 = true;
+            m_aContext.Version = PDFWriter::PDFVersion::PDF_1_7;
+            break;
+        case PDFWriter::PDFVersion::PDF_A_3:
+            m_nPDFA_Version = 3;
+            m_bIsPDF_A3 = true;
+            m_aContext.Version = PDFWriter::PDFVersion::PDF_1_7;
+            break;
+        case PDFWriter::PDFVersion::PDF_A_4:
+            m_nPDFA_Version = 4;
+            m_bIsPDF_A4 = true;
+            m_aContext.Version = PDFWriter::PDFVersion::PDF_2_0;
+            break;
+        default:
+            break;
+    }
 
     if (m_aContext.UniversalAccessibilityCompliance)
     {
         m_bIsPDF_UA = true;
         m_aContext.Tagged = true;
+    }
+
+    // Add common PDF 2.0 namespace when we are using PDF 2.0
+    if (m_aContext.Version == PDFWriter::PDFVersion::PDF_2_0)
+    {
+        m_aNamespacesMap.emplace(constNamespacePDF2, createObject());
     }
 
     if( m_aContext.DPIx == 0 || m_aContext.DPIy == 0 )
@@ -1365,8 +1359,6 @@ PDFWriterImpl::~PDFWriterImpl()
 
 void PDFWriterImpl::dispose()
 {
-    if( m_aCipher )
-        rtl_cipher_destroyARCFOUR( m_aCipher );
     m_aPages.clear();
     VirtualDevice::dispose();
 }
@@ -1388,18 +1380,32 @@ void PDFWriterImpl::setupDocInfo()
 {
     std::vector< sal_uInt8 > aId;
     m_aCreationDateString = PDFWriter::GetDateTime();
-    computeDocumentIdentifier( aId, m_aContext.DocumentInfo, m_aCreationDateString, m_aContext.DocumentInfo.ModificationDate, m_aCreationMetaDateString );
+    computeDocumentIdentifier(aId, m_aContext.DocumentInfo, m_aCreationDateString, m_aContext.DocumentInfo.ModificationDate, m_aCreationMetaDateString);
     if( m_aContext.Encryption.DocumentIdentifier.empty() )
         m_aContext.Encryption.DocumentIdentifier = aId;
 }
 
-OString PDFWriter::GetDateTime()
+OString PDFWriter::GetDateTime(svl::crypto::SigningContext* pSigningContext)
 {
     OStringBuffer aRet;
 
     TimeValue aTVal, aGMT;
     oslDateTime aDT;
     osl_getSystemTime(&aGMT);
+
+    if (pSigningContext)
+    {
+        // The context unit is milliseconds, TimeValue is seconds + nanoseconds.
+        if (pSigningContext->m_nSignatureTime)
+        {
+            aGMT = std::chrono::milliseconds(pSigningContext->m_nSignatureTime);
+        }
+        else
+        {
+            pSigningContext->m_nSignatureTime = static_cast<sal_Int64>(aGMT.Seconds) * 1000 + aGMT.Nanosec / 1000000;
+        }
+    }
+
     osl_getLocalTimeFromSystemTime(&aGMT, &aTVal);
     osl_getDateTimeFromTimeValue(&aTVal, &aDT);
 
@@ -1410,188 +1416,6 @@ OString PDFWriter::GetDateTime()
     aRet.append("'");
     return aRet.makeStringAndClear();
 }
-
-void PDFWriterImpl::computeDocumentIdentifier( std::vector< sal_uInt8 >& o_rIdentifier,
-                                               const vcl::PDFWriter::PDFDocInfo& i_rDocInfo,
-                                               const OString& i_rCString1,
-                                               const css::util::DateTime& rCreationMetaDate,
-                                               OString& o_rCString2
-                                               )
-{
-    o_rIdentifier.clear();
-
-    //build the document id
-    OString aInfoValuesOut;
-    OStringBuffer aID( 1024 );
-    if( !i_rDocInfo.Title.isEmpty() )
-        PDFWriter::AppendUnicodeTextString(i_rDocInfo.Title, aID);
-    if( !i_rDocInfo.Author.isEmpty() )
-        PDFWriter::AppendUnicodeTextString(i_rDocInfo.Author, aID);
-    if( !i_rDocInfo.Subject.isEmpty() )
-        PDFWriter::AppendUnicodeTextString(i_rDocInfo.Subject, aID);
-    if( !i_rDocInfo.Keywords.isEmpty() )
-        PDFWriter::AppendUnicodeTextString(i_rDocInfo.Keywords, aID);
-    if( !i_rDocInfo.Creator.isEmpty() )
-        PDFWriter::AppendUnicodeTextString(i_rDocInfo.Creator, aID);
-    if( !i_rDocInfo.Producer.isEmpty() )
-        PDFWriter::AppendUnicodeTextString(i_rDocInfo.Producer, aID);
-
-    TimeValue aTVal, aGMT;
-    oslDateTime aDT;
-    aDT.NanoSeconds = rCreationMetaDate.NanoSeconds;
-    aDT.Seconds = rCreationMetaDate.Seconds;
-    aDT.Minutes = rCreationMetaDate.Minutes;
-    aDT.Hours = rCreationMetaDate.Hours;
-    aDT.Day = rCreationMetaDate.Day;
-    aDT.Month = rCreationMetaDate.Month;
-    aDT.Year = rCreationMetaDate.Year;
-
-    osl_getSystemTime( &aGMT );
-    osl_getLocalTimeFromSystemTime( &aGMT, &aTVal );
-    OStringBuffer aCreationMetaDateString(64);
-
-    // i59651: we fill the Metadata date string as well, if PDF/A is requested
-    // according to ISO 19005-1:2005 6.7.3 the date is corrected for
-    // local time zone offset UTC only, whereas Acrobat 8 seems
-    // to use the localtime notation only
-    // according to a recommendation in XMP Specification (Jan 2004, page 75)
-    // the Acrobat way seems the right approach
-    aCreationMetaDateString.append(
-        OStringChar(static_cast<char>('0' + ((aDT.Year/1000)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Year/100)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Year/10)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Year)%10)) )
-        + "-"
-        + OStringChar(static_cast<char>('0' + ((aDT.Month/10)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Month)%10)) )
-        + "-"
-        + OStringChar(static_cast<char>('0' + ((aDT.Day/10)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Day)%10)) )
-        + "T"
-        + OStringChar(static_cast<char>('0' + ((aDT.Hours/10)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Hours)%10)) )
-        + ":"
-        + OStringChar(static_cast<char>('0' + ((aDT.Minutes/10)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Minutes)%10)) )
-        + ":"
-        + OStringChar(static_cast<char>('0' + ((aDT.Seconds/10)%10)) )
-        + OStringChar(static_cast<char>('0' + ((aDT.Seconds)%10)) ));
-
-    sal_uInt32 nDelta = 0;
-    if( aGMT.Seconds > aTVal.Seconds )
-    {
-        nDelta = aGMT.Seconds-aTVal.Seconds;
-        aCreationMetaDateString.append( "-" );
-    }
-    else if( aGMT.Seconds < aTVal.Seconds )
-    {
-        nDelta = aTVal.Seconds-aGMT.Seconds;
-        aCreationMetaDateString.append( "+" );
-    }
-    else
-    {
-        aCreationMetaDateString.append( "Z" );
-
-    }
-    if( nDelta )
-    {
-        aCreationMetaDateString.append(
-            OStringChar(static_cast<char>('0' + ((nDelta/36000)%10)) )
-            + OStringChar(static_cast<char>('0' + ((nDelta/3600)%10)) )
-            + ":"
-            + OStringChar(static_cast<char>('0' + ((nDelta/600)%6)) )
-            + OStringChar(static_cast<char>('0' + ((nDelta/60)%10)) ));
-    }
-    aID.append( i_rCString1.getStr(), i_rCString1.getLength() );
-
-    aInfoValuesOut = aID.makeStringAndClear();
-    o_rCString2 = aCreationMetaDateString.makeStringAndClear();
-
-    ::comphelper::Hash aDigest(::comphelper::HashType::MD5);
-    aDigest.update(reinterpret_cast<unsigned char const*>(&aGMT), sizeof(aGMT));
-    aDigest.update(reinterpret_cast<unsigned char const*>(aInfoValuesOut.getStr()), aInfoValuesOut.getLength());
-    //the binary form of the doc id is needed for encryption stuff
-    o_rIdentifier = aDigest.finalize();
-}
-
-/* i12626 methods */
-/*
-check if the Unicode string must be encrypted or not, perform the requested task,
-append the string as unicode hex, encrypted if needed
- */
-inline void PDFWriterImpl::appendUnicodeTextStringEncrypt( const OUString& rInString, const sal_Int32 nInObjectNumber, OStringBuffer& rOutBuffer )
-{
-    rOutBuffer.append( "<" );
-    if( m_aContext.Encryption.Encrypt() )
-    {
-        const sal_Unicode* pStr = rInString.getStr();
-        sal_Int32 nLen = rInString.getLength();
-        //prepare a unicode string, encrypt it
-        enableStringEncryption( nInObjectNumber );
-        sal_uInt8 *pCopy = m_vEncryptionBuffer.data();
-        sal_Int32 nChars = 2 + (nLen * 2);
-        m_vEncryptionBuffer.resize(nChars);
-        *pCopy++ = 0xFE;
-        *pCopy++ = 0xFF;
-        // we need to prepare a byte stream from the unicode string buffer
-        for( int i = 0; i < nLen; i++ )
-        {
-            sal_Unicode aUnChar = pStr[i];
-            *pCopy++ = static_cast<sal_uInt8>( aUnChar >> 8 );
-            *pCopy++ = static_cast<sal_uInt8>( aUnChar & 255 );
-        }
-        //encrypt in place
-        rtl_cipher_encodeARCFOUR( m_aCipher, m_vEncryptionBuffer.data(), nChars, m_vEncryptionBuffer.data(), nChars );
-        //now append, hexadecimal (appendHex), the encrypted result
-        for(int i = 0; i < nChars; i++)
-            appendHex( m_vEncryptionBuffer[i], rOutBuffer );
-    }
-    else
-        PDFWriter::AppendUnicodeTextString(rInString, rOutBuffer);
-    rOutBuffer.append( ">" );
-}
-
-inline void PDFWriterImpl::appendLiteralStringEncrypt( std::string_view rInString, const sal_Int32 nInObjectNumber, OStringBuffer& rOutBuffer )
-{
-    rOutBuffer.append( "(" );
-    sal_Int32 nChars = rInString.size();
-    //check for encryption, if ok, encrypt the string, then convert with appndLiteralString
-    if( m_aContext.Encryption.Encrypt() )
-    {
-        m_vEncryptionBuffer.resize(nChars);
-        //encrypt the string in a buffer, then append it
-        enableStringEncryption( nInObjectNumber );
-        rtl_cipher_encodeARCFOUR( m_aCipher, rInString.data(), nChars, m_vEncryptionBuffer.data(), nChars );
-        appendLiteralString( reinterpret_cast<char*>(m_vEncryptionBuffer.data()), nChars, rOutBuffer );
-    }
-    else
-        appendLiteralString( rInString.data(), nChars , rOutBuffer );
-    rOutBuffer.append( ")" );
-}
-
-void PDFWriterImpl::appendLiteralStringEncrypt( std::u16string_view rInString, const sal_Int32 nInObjectNumber, OStringBuffer& rOutBuffer, rtl_TextEncoding nEnc )
-{
-    OString aBufferString( OUStringToOString( rInString, nEnc ) );
-    sal_Int32 nLen = aBufferString.getLength();
-    OStringBuffer aBuf( nLen );
-    const char* pT = aBufferString.getStr();
-
-    for( sal_Int32 i = 0; i < nLen; i++, pT++ )
-    {
-        if( (*pT & 0x80) == 0 )
-            aBuf.append( *pT );
-        else
-        {
-            aBuf.append( '<' );
-            appendHex( *pT, aBuf );
-            aBuf.append( '>' );
-        }
-    }
-    aBufferString = aBuf.makeStringAndClear();
-    appendLiteralStringEncrypt( aBufferString, nInObjectNumber, rOutBuffer);
-}
-
-/* end i12626 methods */
 
 void PDFWriterImpl::emitComment( const char* pComment )
 {
@@ -1661,38 +1485,41 @@ bool PDFWriterImpl::writeBufferBytes( const void* pBuffer, sal_uInt64 nBytes )
     }
 
     sal_uInt64 nWritten;
-    if( m_pCodec )
+    sal_uInt64 nActualSize = nBytes;
+
+    // we are compressing the stream
+    if (m_pCodec)
     {
         m_pCodec->Write( *m_pMemStream, static_cast<const sal_uInt8*>(pBuffer), static_cast<sal_uLong>(nBytes) );
         nWritten = nBytes;
     }
     else
     {
-        bool  buffOK = true;
-        if( m_bEncryptThisStream )
+        // is it encrypted?
+        bool bStreamEncryption = m_pPDFEncryptor && m_pPDFEncryptor->isStreamEncryptionEnabled();
+        if (bStreamEncryption)
         {
-            /* implement the encryption part of the PDF spec encryption algorithm 3.1 */
-            m_vEncryptionBuffer.resize(nBytes);
-            if( buffOK )
-                rtl_cipher_encodeARCFOUR( m_aCipher,
-                                          pBuffer, static_cast<sal_Size>(nBytes),
-                                          m_vEncryptionBuffer.data(), static_cast<sal_Size>(nBytes) );
+            nActualSize = m_pPDFEncryptor->calculateSizeIncludingHeader(nActualSize);
+            m_vEncryptionBuffer.resize(nActualSize);
+            m_pPDFEncryptor->encrypt(pBuffer, nBytes, m_vEncryptionBuffer, nActualSize);
         }
 
-        const void* pWriteBuffer = ( m_bEncryptThisStream && buffOK ) ? m_vEncryptionBuffer.data()  : pBuffer;
-        m_DocDigest.update(static_cast<unsigned char const*>(pWriteBuffer), static_cast<sal_uInt32>(nBytes));
+        const void* pWriteBuffer = bStreamEncryption ? m_vEncryptionBuffer.data() : pBuffer;
+        m_DocDigest.update(static_cast<unsigned char const*>(pWriteBuffer), sal_uInt32(nActualSize));
 
-        if (m_aFile.write(pWriteBuffer, nBytes, nWritten) != osl::File::E_None)
+        if (m_aFile.write(pWriteBuffer, nActualSize, nWritten) != osl::File::E_None)
             nWritten = 0;
 
-        if( nWritten != nBytes )
+        if (nWritten != nActualSize)
         {
             m_aFile.close();
             m_bOpen = false;
+            return false;
         }
+        return true;
     }
 
-    return nWritten == nBytes;
+    return nWritten == nActualSize;
 }
 
 void PDFWriterImpl::newPage( double nPageWidth, double nPageHeight, PDFWriter::Orientation eOrientation )
@@ -1843,11 +1670,12 @@ sal_Int32 PDFWriterImpl::emitStructIDTree(sal_Int32 const nObject)
         ids.emplace(GenerateID(n), n);
     }
     OStringBuffer buf;
+    COSWriter aWriter(buf, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
     appendObjectID(nObject, buf);
     buf.append("<</Names [\n");
     for (auto const& it : ids)
     {
-        appendLiteralStringEncrypt(it.first, nObject, buf);
+        aWriter.writeLiteralEncrypt(it.first, nObject);
         buf.append(" ");
         appendObjectReference(it.second, buf);
         buf.append("\n");
@@ -2091,12 +1919,36 @@ OString PDFWriterImpl::emitStructureAttributes( PDFStructureElement& i_rEle )
     return aRet.makeStringAndClear();
 }
 
+// Write the namespace objects to the stream
+void PDFWriterImpl::emitNamespaces()
+{
+    if (m_aContext.Version < PDFWriter::PDFVersion::PDF_2_0)
+        return;
+
+    for (auto&[sNamespace, nObject] : m_aNamespacesMap)
+    {
+        if (!updateObject(nObject))
+            return;
+
+        COSWriter aWriter(m_aContext.Encryption.getParams(), m_pPDFEncryptor);
+        aWriter.startObject(nObject);
+        aWriter.startDict();
+        aWriter.write("/Type", "/Namespace");
+        aWriter.writeKeyAndLiteral("/NS", sNamespace);
+        aWriter.endDict();
+        aWriter.endObject();
+
+        if (!writeBuffer(aWriter.getLine()))
+            m_aNamespacesMap[sNamespace] = 0;
+    }
+}
+
 sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
 {
     assert(rEle.m_nOwnElement == 0 || rEle.m_oType);
     if (rEle.m_nOwnElement != rEle.m_nParentElement // emit the struct tree root
        // do not emit NonStruct and its children
-        && *rEle.m_oType == PDFWriter::NonStructElement)
+        && *rEle.m_oType == vcl::pdf::StructElement::NonStructElement)
     {
         return 0;
     }
@@ -2106,7 +1958,7 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
         if( child > 0 && o3tl::make_unsigned(child) < m_aStructure.size() )
         {
             PDFStructureElement& rChild = m_aStructure[ child ];
-            if (*rChild.m_oType != PDFWriter::NonStructElement)
+            if (*rChild.m_oType != vcl::pdf::StructElement::NonStructElement)
             {
                 if( rChild.m_nParentElement == rEle.m_nOwnElement )
                     emitStructure( rChild );
@@ -2125,6 +1977,7 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
     }
 
     OStringBuffer aLine( 512 );
+    COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
     aLine.append(
         OString::number(rEle.m_nObject)
         + " 0 obj\n"
@@ -2134,11 +1987,22 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
     if( rEle.m_nOwnElement == rEle.m_nParentElement )
     {
         nParentTree = createObject();
-        CHECK_RETURN( nParentTree );
-        aLine.append( "/StructTreeRoot\n"
-            "/ParentTree "
-            + OString::number(nParentTree)
-            + " 0 R\n" );
+        if (!nParentTree)
+            return 0;
+        aLine.append("/StructTreeRoot\n");
+        aWriter.writeKeyAndReference("/ParentTree", nParentTree);
+
+        // Write the reference to the PDF 2.0 namespace
+        if (m_aContext.Version >= PDFWriter::PDFVersion::PDF_2_0)
+        {
+            auto iterator = m_aNamespacesMap.find(constNamespacePDF2);
+            if (iterator != m_aNamespacesMap.end())
+            {
+                aLine.append("/Namespaces [");
+                aWriter.writeReference(iterator->second);
+                aLine.append("]");
+            }
+        }
         if( ! m_aRoleMap.empty() )
         {
             aLine.append( "/RoleMap<<" );
@@ -2158,8 +2022,16 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
     }
     else
     {
-        aLine.append( "/StructElem\n"
-                      "/S/" );
+        aLine.append("/StructElem");
+
+        // Write the reference to the PDF 2.0 namespace
+        if (m_aContext.Version >= PDFWriter::PDFVersion::PDF_2_0)
+        {
+            auto iterator = m_aNamespacesMap.find(constNamespacePDF2);
+            if (iterator != m_aNamespacesMap.end())
+                aWriter.writeKeyAndReference("/NS", iterator->second);
+        }
+        aLine.append("/S/");
         if( !rEle.m_aAlias.isEmpty() )
             aLine.append( rEle.m_aAlias );
         else
@@ -2167,7 +2039,7 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
         if (m_StructElemObjsWithID.find(rEle.m_nObject) != m_StructElemObjsWithID.end())
         {
             aLine.append("\n/ID ");
-            appendLiteralStringEncrypt(GenerateID(rEle.m_nObject), rEle.m_nObject, aLine);
+            aWriter.writeLiteralEncrypt(GenerateID(rEle.m_nObject), rEle.m_nObject);
         }
         aLine.append(
             "\n"
@@ -2180,13 +2052,13 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
         if( !rEle.m_aActualText.isEmpty() )
         {
             aLine.append( "/ActualText" );
-            appendUnicodeTextStringEncrypt( rEle.m_aActualText, rEle.m_nObject, aLine );
+            aWriter.writeUnicodeEncrypt(rEle.m_aActualText, rEle.m_nObject);
             aLine.append( "\n" );
         }
         if( !rEle.m_aAltText.isEmpty() )
         {
             aLine.append( "/Alt" );
-            appendUnicodeTextStringEncrypt( rEle.m_aAltText, rEle.m_nObject, aLine );
+            aWriter.writeUnicodeEncrypt(rEle.m_aAltText, rEle.m_nObject);
             aLine.append( "\n" );
         }
     }
@@ -2218,7 +2090,7 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
                 aLocBuf.append( "-" + aCountry );
             }
             aLine.append( "/Lang" );
-            appendLiteralStringEncrypt( aLocBuf, rEle.m_nObject, aLine );
+            aWriter.writeLiteralEncrypt(aLocBuf.makeStringAndClear(), rEle.m_nObject);
             aLine.append( "\n" );
         }
     }
@@ -2229,7 +2101,7 @@ sal_Int32 PDFWriterImpl::emitStructure( PDFStructureElement& rEle )
             auto const it(m_aLinkPropertyMap.find(id));
             assert(it != m_aLinkPropertyMap.end());
 
-            if (*rEle.m_oType == PDFWriter::Form)
+            if (*rEle.m_oType == vcl::pdf::StructElement::Form)
             {
                 assert(0 <= it->second && o3tl::make_unsigned(it->second) < m_aWidgets.size());
                 AppendAnnotKid(rEle, m_aWidgets[it->second]);
@@ -2374,7 +2246,7 @@ bool PDFWriterImpl::emitTilings()
             aTilingObj.append( "]\n" );
         }
         aTilingObj.append( "/Resources" );
-        tiling.m_aResources.append( aTilingObj, getFontDictObject() );
+        tiling.m_aResources.append(aTilingObj, getFontDictObject(), m_aContext.Version);
         if( bDeflate )
             aTilingObj.append( "/Filter/FlateDecode" );
         aTilingObj.append( "/Length "
@@ -2410,7 +2282,7 @@ sal_Int32 PDFWriterImpl::emitBuildinFont(const pdf::BuildinFontFace* pFD, sal_In
         OString::number(nFontObject)
         + " 0 obj\n"
           "<</Type/Font/Subtype/Type1/BaseFont/" );
-    appendName( rBuildinFont.m_pPSName, aLine );
+    COSWriter::appendName( rBuildinFont.m_pPSName, aLine );
     aLine.append( "\n" );
     if( rBuildinFont.m_eCharSet == RTL_TEXTENCODING_MS_1252 )
          aLine.append( "/Encoding/WinAnsiEncoding\n" );
@@ -2469,7 +2341,7 @@ std::map< sal_Int32, sal_Int32 > PDFWriterImpl::emitSystemFont( const vcl::font:
                 + " 0 obj\n"
                   "<</Type/Font/Subtype/TrueType"
                   "/BaseFont/" );
-            appendName( aInfo.m_aPSName, aLine );
+            COSWriter::appendName( aInfo.m_aPSName, aLine );
             aLine.append( "\n" );
             if (!pFace->IsMicrosoftSymbolEncoded())
                 aLine.append( "/Encoding/WinAnsiEncoding\n" );
@@ -2582,7 +2454,7 @@ bool PDFWriterImpl::emitType3Font(const vcl::font::PhysicalFontFace* pFace,
             OString::number(nFontObject)
             + " 0 obj\n"
               "<</Type/Font/Subtype/Type3/Name/");
-        appendName(aSubsetInfo.m_aPSName, aLine);
+        COSWriter::appendName(aSubsetInfo.m_aPSName, aLine);
 
         aLine.append(
             "\n/FontBBox["
@@ -2695,7 +2567,7 @@ bool PDFWriterImpl::emitType3Font(const vcl::font::PhysicalFontFace* pFace,
                         auto nAlpha = aColor.GetAlpha();
                         OStringBuffer aName(16);
                         aName.append("GS");
-                        appendHex(nAlpha, aName);
+                        COSWriter::appendHex(nAlpha, aName);
 
                         aContents.append("/" + aName + " gs ");
 
@@ -2715,7 +2587,7 @@ bool PDFWriterImpl::emitType3Font(const vcl::font::PhysicalFontFace* pFace,
                 aContents.append(
                     " Tf "
                     "<");
-                appendHex(rLayer.m_nSubsetGlyphID, aContents);
+                COSWriter::appendHex(rLayer.m_nSubsetGlyphID, aContents);
                 aContents.append(
                     ">Tj "
                     "ET "
@@ -2841,7 +2713,7 @@ bool PDFWriterImpl::emitType3Font(const vcl::font::PhysicalFontFace* pFace,
         // write resources dict
         aLine.setLength(0);
         aLine.append(OString::number(nResources) + " 0 obj\n");
-        aResourceDict.append(aLine, nFontDict);
+        aResourceDict.append(aLine, nFontDict, m_aContext.Version);
         aLine.append("endobj\n\n");
         if (!updateObject(nResources))
             return false;
@@ -2897,7 +2769,7 @@ static void appendSubsetName( int nSubsetID, std::u16string_view rPSName, OStrin
         }
         rBuffer.append( '+' );
     }
-    appendName( rPSName, rBuffer );
+    COSWriter::appendName( rPSName, rBuffer );
 }
 
 sal_Int32 PDFWriterImpl::createToUnicodeCMap( sal_uInt8 const * pEncoding,
@@ -2946,14 +2818,14 @@ sal_Int32 PDFWriterImpl::createToUnicodeCMap( sal_uInt8 const * pEncoding,
                     + " beginbfchar\n" );
             }
             aContents.append( '<' );
-            appendHex( static_cast<sal_Int8>(pEncoding[n]), aContents );
+            COSWriter::appendHex(static_cast<sal_Int8>(pEncoding[n]), aContents);
             aContents.append( "> <" );
             // TODO: handle code points>U+FFFF
             sal_Int32 nIndex = pEncToUnicodeIndex[n];
             for( sal_Int32 j = 0; j < pCodeUnitsPerGlyph[n]; j++ )
             {
-                appendHex( static_cast<sal_Int8>(rCodeUnits[nIndex + j] / 256), aContents );
-                appendHex( static_cast<sal_Int8>(rCodeUnits[nIndex + j] & 255), aContents );
+                COSWriter::appendHex( static_cast<sal_Int8>(rCodeUnits[nIndex + j] / 256), aContents );
+                COSWriter::appendHex( static_cast<sal_Int8>(rCodeUnits[nIndex + j] & 255), aContents );
             }
             aContents.append( ">\n" );
             nCount++;
@@ -3340,7 +3212,7 @@ sal_Int32 PDFWriterImpl::emitResources()
     aLine.setLength( 0 );
     aLine.append( OString::number(nResourceDict)
         + " 0 obj\n" );
-    m_aGlobalResourceDict.append( aLine, getFontDictObject() );
+    m_aGlobalResourceDict.append(aLine, getFontDictObject(), m_aContext.Version);
     aLine.append( "endobj\n\n" );
     CHECK_RETURN( writeBuffer( aLine ) );
     return nResourceDict;
@@ -3428,6 +3300,7 @@ sal_Int32 PDFWriterImpl::emitOutline()
     {
         PDFOutlineEntry& rItem = m_aOutline[i];
         OStringBuffer aLine( 1024 );
+        COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
 
         CHECK_RETURN( updateObject( rItem.m_nObject ) );
         aLine.append( OString::number(rItem.m_nObject)
@@ -3451,7 +3324,7 @@ sal_Int32 PDFWriterImpl::emitOutline()
         {
             // Title, Dest, Parent, Prev, Next
             aLine.append( "/Title" );
-            appendUnicodeTextStringEncrypt( rItem.m_aTitle, rItem.m_nObject, aLine );
+            aWriter.writeUnicodeEncrypt(rItem.m_aTitle, rItem.m_nObject);
             aLine.append( "\n" );
             // Dest is not required
             if( rItem.m_nDestID >= 0 && o3tl::make_unsigned(rItem.m_nDestID) < m_aDests.size() )
@@ -3528,6 +3401,9 @@ bool PDFWriterImpl::appendDest( sal_Int32 nDestID, OStringBuffer& rBuffer )
 
 void PDFWriterImpl::addDocumentAttachedFile(OUString const& rFileName, OUString const& rMimeType, OUString const& rDescription, std::unique_ptr<PDFOutputStream> rStream)
 {
+    if (m_nPDFA_Version == 1 || m_nPDFA_Version == 2)
+        return;
+
     sal_Int32 nObjectID = addEmbeddedFile(std::move(rStream), rMimeType);
     auto& rAttachedFile = m_aDocumentAttachedFiles.emplace_back();
     rAttachedFile.maFilename = rFileName;
@@ -3564,6 +3440,7 @@ bool PDFWriterImpl::emitScreenAnnotations()
         const PDFScreen& rScreen = m_aScreens[i];
 
         OStringBuffer aLine;
+        COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
         bool bEmbed = false;
         if (!rScreen.m_aTempFileURL.isEmpty())
         {
@@ -3632,29 +3509,29 @@ bool PDFWriterImpl::emitScreenAnnotations()
         {
             // Linked.
             aLine.append("\n/D << /Type /Filespec /FS /URL /F ");
-            appendLiteralStringEncrypt(rScreen.m_aURL, rScreen.m_nObject, aLine, osl_getThreadTextEncoding());
+            aWriter.writeLiteralEncrypt(rScreen.m_aURL, rScreen.m_nObject, osl_getThreadTextEncoding());
             if (PDFWriter::PDFVersion::PDF_1_7 <= m_aContext.Version)
             {   // ISO 14289-1:2014, Clause: 7.11
                 aLine.append("/UF ");
-                appendUnicodeTextStringEncrypt(rScreen.m_aURL, rScreen.m_nObject, aLine);
+                aWriter.writeUnicodeEncrypt(rScreen.m_aURL, rScreen.m_nObject);
             }
         }
         if (PDFWriter::PDFVersion::PDF_1_6 <= m_aContext.Version
             && !rScreen.m_AltText.isEmpty())
         {   // ISO 14289-1:2014, Clause: 7.11
             aLine.append("/Desc ");
-            appendUnicodeTextStringEncrypt(rScreen.m_AltText, rScreen.m_nObject, aLine);
+            aWriter.writeUnicodeEncrypt(rScreen.m_AltText, rScreen.m_nObject);
         }
         aLine.append(" >>\n"); // end of /D
         // Allow playing the video via a tempfile.
         aLine.append("/P <</TF (TEMPACCESS)>>");
         // ISO 14289-1:2014, Clause: 7.18.6.2
         aLine.append("/CT ");
-        appendLiteralStringEncrypt(rScreen.m_MimeType, rScreen.m_nObject, aLine);
+        aWriter.writeLiteralEncrypt(rScreen.m_MimeType, rScreen.m_nObject);
         // ISO 14289-1:2014, Clause: 7.18.6.2
         // Alt text is a "Multi-language Text Array"
         aLine.append(" /Alt [ () ");
-        appendUnicodeTextStringEncrypt(rScreen.m_AltText, rScreen.m_nObject, aLine);
+        aWriter.writeUnicodeEncrypt(rScreen.m_AltText, rScreen.m_nObject);
         aLine.append(" ] "
                      ">>");
 
@@ -3693,12 +3570,13 @@ bool PDFWriterImpl::emitLinkAnnotations()
             continue;
 
         OStringBuffer aLine( 1024 );
+        COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
         aLine.append( rLink.m_nObject );
         aLine.append( " 0 obj\n" );
 // i59651: key /F set bits Print to 1 rest to 0. We don't set NoZoom NoRotate to 1, since it's a 'should'
 // see PDF 8.4.2 and ISO 19005-1:2005 6.5.3
         aLine.append( "<</Type/Annot" );
-        if( m_bIsPDF_A1 || m_bIsPDF_A2 || m_bIsPDF_A3)
+        if (m_nPDFA_Version > 0)
             aLine.append( "/F 4" );
         aLine.append( "/Subtype/Link/Border[0 0 0]/Rect[" );
 
@@ -3712,7 +3590,7 @@ bool PDFWriterImpl::emitLinkAnnotations()
         aLine.append( "]" );
         // ISO 14289-1:2014, Clause: 7.18.5
         aLine.append("/Contents");
-        appendUnicodeTextStringEncrypt(rLink.m_AltText, rLink.m_nObject, aLine);
+        aWriter.writeUnicodeEncrypt(rLink.m_AltText, rLink.m_nObject);
         if( rLink.m_nDest >= 0 )
         {
             aLine.append( "/Dest" );
@@ -3817,10 +3695,21 @@ we check in the following sequence:
             aLine.append( "/A<</Type/Action/S");
             if( bIsUNCPath ) // handle Win UNC paths
             {
-                aLine.append( "/Launch/Win<</F" );
-                // INetURLObject is not good with UNC paths, use original path
-                appendLiteralStringEncrypt( url, rLink.m_nObject, aLine, osl_getThreadTextEncoding() );
-                aLine.append( ">>" );
+                aLine.append("/Launch");
+                // Entry /Win is deprecated in PDF 2.0
+                if (m_aContext.Version >= PDFWriter::PDFVersion::PDF_2_0)
+                {
+                    // So write /F directly. AFAICS it's up to PDF viewer to resolve this correctly
+                    aWriter.writeKeyAndLiteralEncrypt("/F", url, rLink.m_nObject, osl_getThreadTextEncoding());
+                }
+                else
+                {
+                    aLine.append("/Win");
+                    aWriter.startDict();
+                    // INetURLObject is not good with UNC paths, use original path
+                    aWriter.writeKeyAndLiteralEncrypt("/F", url, rLink.m_nObject, osl_getThreadTextEncoding());
+                    aWriter.endDict();
+                }
             }
             else
             {
@@ -3869,10 +3758,10 @@ we check in the following sequence:
                     OUString aURLNoMark = aTargetURL.GetURLNoMark( INetURLObject::DecodeMechanism::WithCharset );
                     aLine.append("/GoToR");
                     aLine.append("/F");
-                    appendLiteralStringEncrypt( bSetRelative ? INetURLObject::GetRelURL( m_aContext.BaseURL, aURLNoMark,
+                    aWriter.writeLiteralEncrypt(bSetRelative ? INetURLObject::GetRelURL( m_aContext.BaseURL, aURLNoMark,
                                                                                          INetURLObject::EncodeMechanism::WasEncoded,
                                                                                          INetURLObject::DecodeMechanism::WithCharset ) :
-                                                                   aURLNoMark, rLink.m_nObject, aLine, osl_getThreadTextEncoding() );
+                                                                   aURLNoMark, rLink.m_nObject, osl_getThreadTextEncoding());
                     if( !aFragment.isEmpty() )
                     {
                         aLine.append("/D/");
@@ -3894,11 +3783,11 @@ we check in the following sequence:
                     OUString aURL = bUnparsedURI ? url :
                                                    aTargetURL.GetMainURL( bFileSpec ? INetURLObject::DecodeMechanism::WithCharset :
                                                                                       INetURLObject::DecodeMechanism::NONE );
-                    appendLiteralStringEncrypt(bSetRelative ? INetURLObject::GetRelURL( m_aContext.BaseURL, aURL,
+                    aWriter.writeLiteralEncrypt(bSetRelative ? INetURLObject::GetRelURL( m_aContext.BaseURL, aURL,
                                                                                         INetURLObject::EncodeMechanism::WasEncoded,
                                                                                             bFileSpec ? INetURLObject::DecodeMechanism::WithCharset : INetURLObject::DecodeMechanism::NONE
                                                                                             ) :
-                                                                               aURL , rLink.m_nObject, aLine, osl_getThreadTextEncoding() );
+                                                                               aURL , rLink.m_nObject, osl_getThreadTextEncoding() );
                 }
             }
             aLine.append( ">>\n" );
@@ -3975,6 +3864,8 @@ void appendAnnotationBorder(float fBorderWidth, OStringBuffer & aLine)
 
 void PDFWriterImpl::emitTextAnnotationLine(OStringBuffer & aLine, PDFNoteEntry const & rNote)
 {
+    COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
+
     appendObjectID(rNote.m_nObject, aLine);
 
     double fPageHeight = m_aPages[rNote.m_nPage].getHeight();
@@ -4043,7 +3934,7 @@ void PDFWriterImpl::emitTextAnnotationLine(OStringBuffer & aLine, PDFNoteEntry c
 
     // i59651: key /F set bits Print to 1 rest to 0. We don't set NoZoom NoRotate to 1, since it's a 'should'
     // see PDF 8.4.2 and ISO 19005-1:2005 6.5.3
-    if (m_bIsPDF_A1 || m_bIsPDF_A2 || m_bIsPDF_A3)
+    if (m_nPDFA_Version > 0)
         aLine.append("/F 4 ");
 
     aLine.append("/Popup ");
@@ -4057,14 +3948,14 @@ void PDFWriterImpl::emitTextAnnotationLine(OStringBuffer & aLine, PDFNoteEntry c
 
     // contents of the note (type text string)
     aLine.append("/Contents ");
-    appendUnicodeTextStringEncrypt(rNote.m_aContents.maContents, rNote.m_nObject, aLine);
+    aWriter.writeUnicodeEncrypt(rNote.m_aContents.maContents, rNote.m_nObject);
     aLine.append("\n");
 
     // optional title
     if (!rNote.m_aContents.maTitle.isEmpty())
     {
         aLine.append("/T ");
-        appendUnicodeTextStringEncrypt(rNote.m_aContents.maTitle, rNote.m_nObject, aLine);
+        aWriter.writeUnicodeEncrypt(rNote.m_aContents.maTitle, rNote.m_nObject);
         aLine.append("\n");
     }
     aLine.append(">>\n");
@@ -4502,7 +4393,7 @@ void PDFWriterImpl::createDefaultCheckBoxAppearance( PDFWidget& rBox, const PDFW
     aDA.append( " " );
     m_aPages[ m_nCurrentPage ].appendMappedLength( nCharYOffset, aDA );
     aDA.append( " Td <" );
-    appendHex( nMappedGlyph, aDA );
+    COSWriter::appendHex( nMappedGlyph, aDA );
     aDA.append( "> Tj\nET\nQ\nEMC\n" );
     writeBuffer( aDA );
     endRedirect();
@@ -4636,7 +4527,7 @@ bool PDFWriterImpl::emitAppearances( PDFWidget& rWidget, OStringBuffer& rAnnotDi
 
             // PDF/A requires sub-dicts for /FT/Btn objects (clause
             // 6.3.3)
-            if( m_bIsPDF_A1 || m_bIsPDF_A2 || m_bIsPDF_A3)
+            if (m_nPDFA_Version > 0)
             {
                 if( rWidget.m_eType == PDFWriter::RadioButton ||
                     rWidget.m_eType == PDFWriter::CheckBox ||
@@ -4737,7 +4628,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                         SvMemoryStream* pStream = stream_it->second;
                         app_it->second.erase( stream_it );
                         OStringBuffer aBuf( rWidget.m_aOnValue.getLength()*2 );
-                        appendName( rWidget.m_aOnValue, aBuf );
+                        COSWriter::appendName( rWidget.m_aOnValue, aBuf );
                         (app_it->second)[ aBuf.makeStringAndClear() ] = pStream;
                     }
                     else
@@ -4756,7 +4647,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                         SvMemoryStream* pStream = stream_it->second;
                         app_it->second.erase( stream_it );
                         OStringBuffer aBuf( rWidget.m_aOffValue.getLength()*2 );
-                        appendName( rWidget.m_aOffValue, aBuf );
+                        COSWriter::appendName( rWidget.m_aOffValue, aBuf );
                         (app_it->second)[ aBuf.makeStringAndClear() ] = pStream;
                     }
                     else
@@ -4766,7 +4657,9 @@ bool PDFWriterImpl::emitWidgetAnnotations()
         }
 
         OStringBuffer aLine( 1024 );
+        COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
         OStringBuffer aValue( 256 );
+        COSWriter aValueWriter(aValue, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
         aLine.append( rWidget.m_nObject );
         aLine.append( " 0 obj\n"
                       "<<" );
@@ -4824,7 +4717,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                         if( rWidget.m_aValue.isEmpty() )
                             aValue.append( "Off" );
                         else
-                            appendName( rWidget.m_aValue, aValue );
+                            COSWriter::appendName( rWidget.m_aValue, aValue );
                     }
                     [[fallthrough]];
                 case PDFWriter::PushButton:
@@ -4839,7 +4732,9 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                             sal_Int32 nEntry = rWidget.m_aSelectedEntries[i];
                             if( nEntry >= 0
                                 && o3tl::make_unsigned(nEntry) < rWidget.m_aListEntries.size() )
-                                appendUnicodeTextStringEncrypt( rWidget.m_aListEntries[ nEntry ], rWidget.m_nObject, aValue );
+                            {
+                                aValueWriter.writeUnicodeEncrypt(rWidget.m_aListEntries[ nEntry ], rWidget.m_nObject);
+                            }
                         }
                         aValue.append( "]" );
                     }
@@ -4847,19 +4742,19 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                              rWidget.m_aSelectedEntries[0] >= 0 &&
                              o3tl::make_unsigned(rWidget.m_aSelectedEntries[0]) < rWidget.m_aListEntries.size() )
                     {
-                        appendUnicodeTextStringEncrypt( rWidget.m_aListEntries[ rWidget.m_aSelectedEntries[0] ], rWidget.m_nObject, aValue );
+                        aValueWriter.writeUnicodeEncrypt(rWidget.m_aListEntries[ rWidget.m_aSelectedEntries[0] ], rWidget.m_nObject);
                     }
                     else
-                        appendUnicodeTextStringEncrypt( OUString(), rWidget.m_nObject, aValue );
+                        aValueWriter.writeUnicodeEncrypt( OUString(), rWidget.m_nObject);
                     aLine.append( "Ch" );
                     break;
                 case PDFWriter::ComboBox:
-                    appendUnicodeTextStringEncrypt( rWidget.m_aValue, rWidget.m_nObject, aValue );
+                    aValueWriter.writeUnicodeEncrypt( rWidget.m_aValue, rWidget.m_nObject);
                     aLine.append( "Ch" );
                     break;
                 case PDFWriter::Edit:
                     aLine.append( "Tx" );
-                    appendUnicodeTextStringEncrypt( rWidget.m_aValue, rWidget.m_nObject, aValue );
+                    aValueWriter.writeUnicodeEncrypt( rWidget.m_aValue, rWidget.m_nObject);
                     break;
                 case PDFWriter::Signature:
                     aLine.append( "Sig" );
@@ -4893,7 +4788,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
         if( !rWidget.m_aName.isEmpty() )
         {
             aLine.append( "/T" );
-            appendLiteralStringEncrypt( rWidget.m_aName, rWidget.m_nObject, aLine );
+            aWriter.writeLiteralEncrypt(rWidget.m_aName, rWidget.m_nObject);
             aLine.append( "\n" );
         }
         if (!rWidget.m_aDescription.isEmpty())
@@ -4901,7 +4796,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
             // the alternate field name should be unicode able since it is
             // supposed to be used in UI
             aLine.append( "/TU" );
-            appendUnicodeTextStringEncrypt( rWidget.m_aDescription, rWidget.m_nObject, aLine );
+            aWriter.writeUnicodeEncrypt(rWidget.m_aDescription, rWidget.m_nObject);
             aLine.append( "\n" );
         }
 
@@ -4928,7 +4823,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
             sal_Int32 i = 0;
             for (auto const& entry : rWidget.m_aListEntries)
             {
-                appendUnicodeTextStringEncrypt( entry, rWidget.m_nObject, aLine );
+                aWriter.writeUnicodeEncrypt(entry, rWidget.m_nObject);
                 aLine.append( "\n" );
                 if( entry == rWidget.m_aValue )
                     nTI = i;
@@ -5016,7 +4911,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
         }
         if( rWidget.m_eType == PDFWriter::PushButton )
         {
-            if(!m_bIsPDF_A1)
+            if (!m_bIsPDF_A1)
             {
                 OStringBuffer aDest;
                 if( rWidget.m_nDest != -1 && appendDest( m_aDestinationIdTranslation[ rWidget.m_nDest ], aDest ) )
@@ -5037,7 +4932,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                 {
                     // create a submit form action
                     aLine.append( "/AA<</D<</Type/Action/S/SubmitForm/F" );
-                    appendLiteralStringEncrypt( rWidget.m_aListEntries.front(), rWidget.m_nObject, aLine, osl_getThreadTextEncoding() );
+                    aWriter.writeLiteralEncrypt(rWidget.m_aListEntries.front(), rWidget.m_nObject, osl_getThreadTextEncoding());
                     aLine.append( "/Flags " );
 
                     sal_Int32 nFlags = 0;
@@ -5087,7 +4982,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
                 aLine.append( ">>>>\n" );
             }
             aLine.append( "/DA" );
-            appendLiteralStringEncrypt( rWidget.m_aDAString, rWidget.m_nObject, aLine );
+            aWriter.writeLiteralEncrypt(rWidget.m_aDAString, rWidget.m_nObject);
             aLine.append( "\n" );
             if( rWidget.m_nTextStyle & DrawTextFlags::Center )
                 aLine.append( "/Q 1\n" );
@@ -5102,7 +4997,7 @@ bool PDFWriterImpl::emitWidgetAnnotations()
             aLine.append( "/MK<<" );
             aLine.append( rWidget.m_aMKDict );
             //add the CA string, encrypting it
-            appendLiteralStringEncrypt(rWidget.m_aMKDictCAString, rWidget.m_nObject, aLine);
+            aWriter.writeLiteralEncrypt(rWidget.m_aMKDictCAString, rWidget.m_nObject);
             aLine.append( ">>\n" );
         }
 
@@ -5168,32 +5063,34 @@ bool PDFWriterImpl::emitEmbeddedFiles()
         if (!rEmbeddedFile.m_aSubType.isEmpty())
         {
             aLine.append("/Subtype /");
-            appendName(rEmbeddedFile.m_aSubType, aLine);
+            COSWriter::appendName(rEmbeddedFile.m_aSubType, aLine);
         }
         aLine.append(" /Length ");
         appendObjectReference(nSizeObject, aLine);
         aLine.append(" /Params ");
         appendObjectReference(nParamsObject, aLine);
         aLine.append(">>\nstream\n");
-        checkAndEnableStreamEncryption(rEmbeddedFile.m_nObject);
         CHECK_RETURN(writeBuffer(aLine));
-        disableStreamEncryption();
         aLine.setLength(0);
 
         sal_Int64 nSize{};
         if (!rEmbeddedFile.m_aDataContainer.isEmpty())
         {
             nSize = rEmbeddedFile.m_aDataContainer.getSize();
+            checkAndEnableStreamEncryption(rEmbeddedFile.m_nObject);
             CHECK_RETURN(writeBufferBytes(rEmbeddedFile.m_aDataContainer.getData(), rEmbeddedFile.m_aDataContainer.getSize()));
+            disableStreamEncryption();
         }
         else if (rEmbeddedFile.m_pStream)
         {
+            checkAndEnableStreamEncryption(rEmbeddedFile.m_nObject);
             sal_uInt64 nBegin = getCurrentFilePosition();
             css::uno::Reference<css::io::XOutputStream> xStream(new PDFStreamIf(this));
             rEmbeddedFile.m_pStream->write(xStream);
             rEmbeddedFile.m_pStream.reset();
             xStream.clear();
             nSize = sal_Int64(getCurrentFilePosition() - nBegin);
+            disableStreamEncryption();
         }
         aLine.append("\nendstream\nendobj\n\n");
         CHECK_RETURN(writeBuffer(aLine));
@@ -5253,6 +5150,8 @@ bool PDFWriterImpl::emitCatalog()
     // emit metadata
     sal_Int32 nMetadataObject = emitDocumentMetadata();
 
+    emitNamespaces();
+
     sal_Int32 nStructureDict = 0;
     if(m_aStructure.size() > 1)
     {
@@ -5269,6 +5168,7 @@ bool PDFWriterImpl::emitCatalog()
 
     // emit tree node
     OStringBuffer aLine( 2048 );
+    COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
     aLine.append( nTreeNode );
     aLine.append( " 0 obj\n" );
     aLine.append( "<</Type/Pages\n" );
@@ -5304,29 +5204,33 @@ bool PDFWriterImpl::emitCatalog()
     {
         if (!updateObject(rAttachedFile.mnObjectId))
             return false;
-        aLine.setLength( 0 );
+        aLine.setLength(0);
 
-        appendObjectID(rAttachedFile.mnObjectId, aLine);
-        aLine.append("<</Type /Filespec");
-        aLine.append("/F<");
-        PDFWriter::AppendUnicodeTextString(rAttachedFile.maFilename, aLine);
-        aLine.append("> ");
+        aWriter.startObject(rAttachedFile.mnObjectId);
+        aWriter.startDict();
+        aWriter.write("/Type", "/Filespec");
+
+        // Add associated files relationship (since PDF 2.0)
+        if (m_aContext.Version >= PDFWriter::PDFVersion::PDF_2_0 || m_nPDFA_Version == 3)
+        {
+            aWriter.write("/AFRelationship", "/Source");
+        }
+
+        aWriter.writeKeyAndUnicodeEncrypt("/F", rAttachedFile.maFilename, rAttachedFile.mnObjectId);
         if (PDFWriter::PDFVersion::PDF_1_7 <= m_aContext.Version)
         {
-            aLine.append("/UF<");
-            PDFWriter::AppendUnicodeTextString(rAttachedFile.maFilename, aLine);
-            aLine.append("> ");
+            aWriter.writeKeyAndUnicodeEncrypt("/UF", rAttachedFile.maFilename, rAttachedFile.mnObjectId);
         }
         if (!rAttachedFile.maDescription.isEmpty())
         {
-            aLine.append("/Desc <");
-            PDFWriter::AppendUnicodeTextString(rAttachedFile.maDescription, aLine);
-            aLine.append("> ");
+            aWriter.writeKeyAndUnicodeEncrypt("/Desc", rAttachedFile.maDescription, rAttachedFile.mnObjectId);
         }
-        aLine.append("/EF <</F ");
-        appendObjectReference(rAttachedFile.mnEmbeddedFileObjectId, aLine);
-        aLine.append(">>");
-        aLine.append(">>\nendobj\n\n");
+        aLine.append("/EF");
+        aWriter.startDict();
+        aWriter.writeKeyAndReference("/F", rAttachedFile.mnEmbeddedFileObjectId);
+        aWriter.endDict();
+        aWriter.endDict();
+        aWriter.endObject();
         CHECK_RETURN( writeBuffer( aLine ) );
     }
 
@@ -5351,18 +5255,27 @@ bool PDFWriterImpl::emitCatalog()
 
     if (!m_aDocumentAttachedFiles.empty())
     {
-        aLine.append("/Names ");
-        aLine.append("<</EmbeddedFiles <</Names [");
+        // Write the associated files catalog entry (since PDF 2.0)
+        if (m_aContext.Version >= PDFWriter::PDFVersion::PDF_2_0 || m_nPDFA_Version == 3)
+        {
+            aLine.append("/AF");
+            aLine.append("[");
+            for (auto & rAttachedFile : m_aDocumentAttachedFiles)
+                aWriter.writeReference(rAttachedFile.mnObjectId);
+            aLine.append("]");
+        }
+
+        aWriter.startDictWithKey("/Names");
+        aWriter.startDictWithKey("/EmbeddedFiles");
+        aLine.append("/Names [");
         for (auto & rAttachedFile : m_aDocumentAttachedFiles)
         {
-            aLine.append('<');
-            PDFWriter::AppendUnicodeTextString(rAttachedFile.maFilename, aLine);
-            aLine.append('>');
-            aLine.append(' ');
-            appendObjectReference(rAttachedFile.mnObjectId, aLine);
+            aWriter.writeUnicodeEncrypt(rAttachedFile.maFilename, m_nCatalogObject);
+            aWriter.writeReference(rAttachedFile.mnObjectId);
         }
-        aLine.append("]>>>>");
-        aLine.append("\n" );
+        aLine.append("]");
+        aWriter.endDict();
+        aWriter.endDict();
     }
 
     if( m_aContext.PageLayout != PDFWriter::DefaultLayout )
@@ -5444,12 +5357,13 @@ bool PDFWriterImpl::emitCatalog()
     }
 
     // viewer preferences, if we had some, then emit
-    if( m_aContext.HideViewerToolbar ||
+    if (m_aContext.HideViewerToolbar ||
         (!m_aContext.DocumentInfo.Title.isEmpty() && m_aContext.DisplayPDFDocumentTitle) ||
         m_aContext.HideViewerMenubar ||
         m_aContext.HideViewerWindowControls || m_aContext.FitWindow ||
         m_aContext.CenterWindow || (m_aContext.FirstPageLeft  &&  m_aContext.PageLayout == PDFWriter::ContinuousFacing ) ||
-        m_aContext.OpenInFullScreenMode )
+        m_aContext.OpenInFullScreenMode ||
+        m_bIsPDF_UA)
     {
         aLine.append( "/ViewerPreferences<<" );
         if( m_aContext.HideViewerToolbar )
@@ -5462,7 +5376,8 @@ bool PDFWriterImpl::emitCatalog()
             aLine.append( "/FitWindow true\n" );
         if( m_aContext.CenterWindow )
             aLine.append( "/CenterWindow true\n" );
-        if (!m_aContext.DocumentInfo.Title.isEmpty() && m_aContext.DisplayPDFDocumentTitle)
+        // PDF/UA-2 requires /DisplayDocTitle set to true
+        if ((!m_aContext.DocumentInfo.Title.isEmpty() && m_aContext.DisplayPDFDocumentTitle) || m_bIsPDF_UA)
             aLine.append( "/DisplayDocTitle true\n" );
         if( m_aContext.FirstPageLeft &&  m_aContext.PageLayout == PDFWriter::ContinuousFacing )
             aLine.append( "/Direction/R2L\n" );
@@ -5511,7 +5426,7 @@ bool PDFWriterImpl::emitCatalog()
                 aLocBuf.append( aCountry );
             }
             aLine.append( "/Lang" );
-            appendLiteralStringEncrypt( aLocBuf, m_nCatalogObject, aLine );
+            aWriter.writeLiteralEncrypt(aLocBuf, m_nCatalogObject);
             aLine.append( "\n" );
         }
     }
@@ -5519,39 +5434,46 @@ bool PDFWriterImpl::emitCatalog()
     {
         aLine.append( "/MarkInfo<</Marked true>>\n" );
     }
-    if( !m_aWidgets.empty() )
+
+    if (!m_aWidgets.empty() || !m_aCopiedWidgets.empty())
     {
-        aLine.append( "/AcroForm<</Fields[\n" );
-        int nWidgets = m_aWidgets.size();
-        int nOut = 0;
-        for( int j = 0; j < nWidgets; j++ )
+        aLine.append("/AcroForm");
+        aLine.append("<<");
+        aLine.append("/Fields");
+        aLine.append("[ ");
+
+        for (auto const& rWidget : m_aWidgets)
         {
             // output only root fields
-            if( m_aWidgets[j].m_nParent < 1 )
+            if (rWidget.m_nParent < 1)
             {
-                aLine.append( m_aWidgets[j].m_nObject );
-                aLine.append( (nOut++ % 5)==4 ? " 0 R\n" : " 0 R " );
+                appendObjectReference(rWidget.m_nObject, aLine);
             }
         }
-        aLine.append( "\n]" );
+        // Add widgets that were copied from an external PDF
+        for (auto const& rCopiedWidget : m_aCopiedWidgets)
+        {
+            appendObjectReference(rCopiedWidget.m_nObject, aLine);
+        }
+        aLine.append(" ]\n");
 
+        bool bSigned = false;
 #if HAVE_FEATURE_NSS
         if (m_nSignatureObject != -1)
-            aLine.append( "/SigFlags 3");
+        {
+            aLine.append("/SigFlags 3 ");
+            bSigned = true;
+        }
 #endif
+        aLine.append("/DR ");
+        appendObjectReference(getResourceDictObj(), aLine);
 
-        aLine.append( "/DR " );
-        aLine.append( getResourceDictObj() );
-        aLine.append( " 0 R" );
-        // NeedAppearances must not be used if PDF is signed
-        if( m_bIsPDF_A1 || m_bIsPDF_A2 || m_bIsPDF_A3
-#if HAVE_FEATURE_NSS
-            || ( m_nSignatureObject != -1 )
-#endif
-            )
-            aLine.append( ">>\n" );
-        else
-            aLine.append( "/NeedAppearances true>>\n" );
+        // NeedAppearances must not be used if PDF is signed, PDF/A is used or
+        // we have copied widgets (can't guarantee we have appearance streams in this case)
+        if (m_nPDFA_Version == 0 && !bSigned && m_aCopiedWidgets.empty())
+            aLine.append("/NeedAppearances true ");
+
+        aLine.append(">>\n");
     }
 
     //check if there is a Metadata object
@@ -5564,9 +5486,7 @@ bool PDFWriterImpl::emitCatalog()
 
     if( nMetadataObject )
     {
-        aLine.append("/Metadata ");
-        aLine.append( nMetadataObject );
-        aLine.append( " 0 R" );
+        aWriter.writeKeyAndReference("/Metadata", nMetadataObject);
     }
 
     aLine.append( ">>\n"
@@ -5582,6 +5502,7 @@ bool PDFWriterImpl::emitSignature()
         return false;
 
     OStringBuffer aLine( 0x5000 );
+    COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
     aLine.append( m_nSignatureObject );
     aLine.append( " 0 obj\n" );
     aLine.append("<</Contents <" );
@@ -5600,11 +5521,11 @@ bool PDFWriterImpl::emitSignature()
     if( !m_aContext.DocumentInfo.Author.isEmpty() )
     {
         aLine.append( "/Name" );
-        appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Author, m_nSignatureObject, aLine );
+        aWriter.writeUnicodeEncrypt(m_aContext.DocumentInfo.Author, m_nSignatureObject);
     }
 
     aLine.append( " /M ");
-    appendLiteralStringEncrypt( m_aCreationDateString, m_nSignatureObject, aLine );
+    aWriter.writeLiteralEncrypt(m_aCreationDateString, m_nSignatureObject);
 
     aLine.append( " /ByteRange [ 0 ");
     aLine.append( m_nSignatureContentOffset - 1 );
@@ -5626,19 +5547,19 @@ bool PDFWriterImpl::emitSignature()
     if ( !m_aContext.SignReason.isEmpty() )
     {
         aLine.append("/Reason");
-        appendUnicodeTextStringEncrypt( m_aContext.SignReason, m_nSignatureObject, aLine );
+        aWriter.writeUnicodeEncrypt(m_aContext.SignReason, m_nSignatureObject);
     }
 
     if ( !m_aContext.SignLocation.isEmpty() )
     {
         aLine.append("/Location");
-        appendUnicodeTextStringEncrypt( m_aContext.SignLocation, m_nSignatureObject, aLine );
+        aWriter.writeUnicodeEncrypt(m_aContext.SignLocation, m_nSignatureObject);
     }
 
     if ( !m_aContext.SignContact.isEmpty() )
     {
         aLine.append("/ContactInfo");
-        appendUnicodeTextStringEncrypt( m_aContext.SignContact, m_nSignatureObject, aLine );
+        aWriter.writeUnicodeEncrypt(m_aContext.SignContact, m_nSignatureObject);
     }
 
     aLine.append(" >>\nendobj\n\n" );
@@ -5696,7 +5617,9 @@ bool PDFWriterImpl::finalizeSignature()
     }
 
     OStringBuffer aCMSHexBuffer;
-    svl::crypto::Signing aSigning(m_aContext.SignCertificate);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = m_aContext.SignCertificate;
+    svl::crypto::Signing aSigning(aSigningContext);
     aSigning.AddDataRange(buffer1.get(), bytesRead1);
     aSigning.AddDataRange(buffer2.get(), bytesRead2);
     aSigning.SetSignTSA(m_aContext.SignTSA);
@@ -5723,56 +5646,48 @@ sal_Int32 PDFWriterImpl::emitInfoDict( )
 {
     sal_Int32 nObject = createObject();
 
-    if( updateObject( nObject ) )
-    {
-        OStringBuffer aLine( 1024 );
-        aLine.append( nObject );
-        aLine.append( " 0 obj\n"
-                      "<<" );
-        if( !m_aContext.DocumentInfo.Title.isEmpty() )
-        {
-            aLine.append( "/Title" );
-            appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Title, nObject, aLine );
-            aLine.append( "\n" );
-        }
-        if( !m_aContext.DocumentInfo.Author.isEmpty() )
-        {
-            aLine.append( "/Author" );
-            appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Author, nObject, aLine );
-            aLine.append( "\n" );
-        }
-        if( !m_aContext.DocumentInfo.Subject.isEmpty() )
-        {
-            aLine.append( "/Subject" );
-            appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Subject, nObject, aLine );
-            aLine.append( "\n" );
-        }
-        if( !m_aContext.DocumentInfo.Keywords.isEmpty() )
-        {
-            aLine.append( "/Keywords" );
-            appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Keywords, nObject, aLine );
-            aLine.append( "\n" );
-        }
-        if( !m_aContext.DocumentInfo.Creator.isEmpty() )
-        {
-            aLine.append( "/Creator" );
-            appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Creator, nObject, aLine );
-            aLine.append( "\n" );
-        }
-        if( !m_aContext.DocumentInfo.Producer.isEmpty() )
-        {
-            aLine.append( "/Producer" );
-            appendUnicodeTextStringEncrypt( m_aContext.DocumentInfo.Producer, nObject, aLine );
-            aLine.append( "\n" );
-        }
+    if (!updateObject(nObject))
+        return 0;
 
-        aLine.append( "/CreationDate" );
-        appendLiteralStringEncrypt( m_aCreationDateString, nObject, aLine );
-        aLine.append( ">>\nendobj\n\n" );
-        if( ! writeBuffer( aLine ) )
-            nObject = 0;
+    COSWriter aWriter(m_aContext.Encryption.getParams(), m_pPDFEncryptor);
+    aWriter.startObject(nObject);
+    aWriter.startDict();
+
+    // These entries are deprecated in PDF 2.0 (in favor of XMP metadata) and shouldn't be written.
+    // Exception: CreationDate and ModDate (which we don't write)
+    if (m_aContext.Version < PDFWriter::PDFVersion::PDF_2_0)
+    {
+        if (!m_aContext.DocumentInfo.Title.isEmpty())
+        {
+            aWriter.writeKeyAndUnicodeEncrypt("/Title", m_aContext.DocumentInfo.Title, nObject);
+        }
+        if (!m_aContext.DocumentInfo.Author.isEmpty())
+        {
+            aWriter.writeKeyAndUnicodeEncrypt("/Author", m_aContext.DocumentInfo.Author, nObject);
+        }
+        if (!m_aContext.DocumentInfo.Subject.isEmpty())
+        {
+            aWriter.writeKeyAndUnicodeEncrypt("/Subject", m_aContext.DocumentInfo.Subject, nObject);
+        }
+        if (!m_aContext.DocumentInfo.Keywords.isEmpty())
+        {
+            aWriter.writeKeyAndUnicodeEncrypt("/Keywords", m_aContext.DocumentInfo.Keywords, nObject);
+        }
+        if (!m_aContext.DocumentInfo.Creator.isEmpty())
+        {
+            aWriter.writeKeyAndUnicodeEncrypt("/Creator", m_aContext.DocumentInfo.Creator, nObject);
+        }
+        if (!m_aContext.DocumentInfo.Producer.isEmpty())
+        {
+            aWriter.writeKeyAndUnicodeEncrypt("/Producer", m_aContext.DocumentInfo.Producer, nObject);
+        }
     }
-    else
+    // Allowed in PDF 2.0
+    aWriter.writeKeyAndLiteralEncrypt("/CreationDate", m_aCreationDateString, nObject);
+    aWriter.endDict();
+    aWriter.endObject();
+
+    if (!writeBuffer(aWriter.getLine()))
         nObject = 0;
 
     return nObject;
@@ -5856,12 +5771,13 @@ sal_Int32 PDFWriterImpl::emitNamedDestinations()
 // emits the output intent dictionary
 sal_Int32 PDFWriterImpl::emitOutputIntent()
 {
-    if( !m_bIsPDF_A1 && !m_bIsPDF_A2 && !m_bIsPDF_A3 )
+    if (m_nPDFA_Version == 0) // not PDFA
         return 0;
 
     //emit the sRGB standard profile, in ICC format, in a stream, per IEC61966-2.1
 
     OStringBuffer aLine( 1024 );
+    COSWriter aWriter(aLine, m_aContext.Encryption.getParams(), m_pPDFEncryptor);
     sal_Int32 nICCObject = createObject();
     sal_Int32 nStreamLengthObject = createObject();
 
@@ -5922,7 +5838,7 @@ sal_Int32 PDFWriterImpl::emitOutputIntent()
     aLine.append( " 0 obj\n"
                   "<</Type/OutputIntent/S/GTS_PDFA1/OutputConditionIdentifier");
 
-    appendLiteralStringEncrypt( std::string_view("sRGB IEC61966-2.1") ,nOIObject, aLine );
+    aWriter.writeLiteralEncrypt(std::string_view("sRGB IEC61966-2.1"), nOIObject);
     aLine.append("/DestOutputProfile ");
     aLine.append( nICCObject );
     aLine.append( " 0 R>>\nendobj\n\n" );
@@ -5957,60 +5873,140 @@ static void lcl_assignMeta(const css::uno::Sequence<OUString>& rValues, std::vec
 }
 
 // emits the document metadata
+// Since in PDF 1.4
 sal_Int32 PDFWriterImpl::emitDocumentMetadata()
 {
-    if( !m_bIsPDF_A1 && !m_bIsPDF_A2 && !m_bIsPDF_A3 && !m_bIsPDF_UA)
+    if (m_aContext.Version < PDFWriter::PDFVersion::PDF_1_4)
         return 0;
 
     //get the object number for all the destinations
     sal_Int32 nObject = createObject();
 
-    if( updateObject( nObject ) )
+    if (!updateObject(nObject))
+        return 0;
+
+    pdf::XmpMetadata aMetadata;
+
+    if (m_nPDFA_Version > 0)
+        aMetadata.mnPDF_A = m_nPDFA_Version;
+
+    if (m_bIsPDF_UA)
     {
-        pdf::XmpMetadata aMetadata;
+        // If PDF 2.0+ we need to use PDF/UA-2 otherwise PDF/UA-1
+        aMetadata.mnPDF_UA = (m_aContext.Version >= PDFWriter::PDFVersion::PDF_2_0) ? 2 : 1;
+    }
 
-        if (m_bIsPDF_A1)
-            aMetadata.mnPDF_A = 1;
-        else if (m_bIsPDF_A2)
-            aMetadata.mnPDF_A = 2;
-        else if (m_bIsPDF_A3)
-            aMetadata.mnPDF_A = 3;
+    lcl_assignMeta(m_aContext.DocumentInfo.Title, aMetadata.msTitle);
+    lcl_assignMeta(m_aContext.DocumentInfo.Author, aMetadata.msAuthor);
+    lcl_assignMeta(m_aContext.DocumentInfo.Subject, aMetadata.msSubject);
+    lcl_assignMeta(m_aContext.DocumentInfo.Producer, aMetadata.msProducer);
+    aMetadata.msPDFVersion = getPDFVersionStr(m_aContext.Version);
+    if (m_nPDFA_Version == 4)
+    {
+        // if we have embedded files we need to use conformance level "F"
+        aMetadata.msConformance = m_aEmbeddedFiles.empty() ? ""_ostr : "F"_ostr;
+    }
+    else
+    {
+        aMetadata.msConformance = "B"_ostr;
+    }
+    lcl_assignMeta(m_aContext.DocumentInfo.Keywords, aMetadata.msKeywords);
+    lcl_assignMeta(m_aContext.DocumentInfo.Contributor, aMetadata.maContributor);
+    lcl_assignMeta(m_aContext.DocumentInfo.Coverage, aMetadata.msCoverage);
+    lcl_assignMeta(m_aContext.DocumentInfo.Identifier, aMetadata.msIdentifier);
+    lcl_assignMeta(m_aContext.DocumentInfo.Publisher, aMetadata.maPublisher);
+    lcl_assignMeta(m_aContext.DocumentInfo.Relation, aMetadata.maRelation);
+    lcl_assignMeta(m_aContext.DocumentInfo.Rights, aMetadata.msRights);
+    lcl_assignMeta(m_aContext.DocumentInfo.Source, aMetadata.msSource);
+    lcl_assignMeta(m_aContext.DocumentInfo.Type, aMetadata.msType);
+    lcl_assignMeta(m_aContext.DocumentInfo.Creator, aMetadata.m_sCreatorTool);
+    aMetadata.m_sCreateDate = m_aCreationMetaDateString;
 
-        aMetadata.mbPDF_UA = m_bIsPDF_UA;
-
-        lcl_assignMeta(m_aContext.DocumentInfo.Title, aMetadata.msTitle);
-        lcl_assignMeta(m_aContext.DocumentInfo.Author, aMetadata.msAuthor);
-        lcl_assignMeta(m_aContext.DocumentInfo.Subject, aMetadata.msSubject);
-        lcl_assignMeta(m_aContext.DocumentInfo.Producer, aMetadata.msProducer);
-        aMetadata.msPDFVersion = getPDFVersionStr(m_aContext.Version);
-        lcl_assignMeta(m_aContext.DocumentInfo.Keywords, aMetadata.msKeywords);
-        lcl_assignMeta(m_aContext.DocumentInfo.Contributor, aMetadata.maContributor);
-        lcl_assignMeta(m_aContext.DocumentInfo.Coverage, aMetadata.msCoverage);
-        lcl_assignMeta(m_aContext.DocumentInfo.Identifier, aMetadata.msIdentifier);
-        lcl_assignMeta(m_aContext.DocumentInfo.Publisher, aMetadata.maPublisher);
-        lcl_assignMeta(m_aContext.DocumentInfo.Relation, aMetadata.maRelation);
-        lcl_assignMeta(m_aContext.DocumentInfo.Rights, aMetadata.msRights);
-        lcl_assignMeta(m_aContext.DocumentInfo.Source, aMetadata.msSource);
-        lcl_assignMeta(m_aContext.DocumentInfo.Type, aMetadata.msType);
-        lcl_assignMeta(m_aContext.DocumentInfo.Creator, aMetadata.m_sCreatorTool);
-        aMetadata.m_sCreateDate = m_aCreationMetaDateString;
-
-        OStringBuffer aMetadataObj( 1024 );
-
-        aMetadataObj.append( nObject );
-        aMetadataObj.append( " 0 obj\n" );
-
-        aMetadataObj.append( "<</Type/Metadata/Subtype/XML/Length " );
-
-        aMetadataObj.append( sal_Int32(aMetadata.getSize()) );
-        aMetadataObj.append( ">>\nstream\n" );
-        if ( !writeBuffer( aMetadataObj ) )
+    {
+        COSWriter aWriter;
+        aWriter.startObject(nObject);
+        aWriter.startDict();
+        aWriter.write("/Type", "/Metadata");
+        aWriter.write("/Subtype", "/XML");
+        aWriter.write("/Length", sal_Int32(aMetadata.getSize()));
+        aWriter.endDict();
+        aWriter.startStream();
+        if (!writeBuffer(aWriter.getLine()))
             return 0;
-        //emit the stream
-        if ( !writeBufferBytes( aMetadata.getData(), aMetadata.getSize() ) )
-            return 0;
+    }
 
-        if( ! writeBuffer( "\nendstream\nendobj\n\n" ) )
+    //emit the stream
+    bool bEncryptMetadata = m_pPDFEncryptor && m_pPDFEncryptor->isMetadataEncrypted();
+    if (bEncryptMetadata)
+        checkAndEnableStreamEncryption(nObject);
+
+    if (!writeBufferBytes(aMetadata.getData(), aMetadata.getSize()))
+        return 0;
+
+    if (bEncryptMetadata)
+        disableStreamEncryption();
+
+    {
+        COSWriter aWriter;
+        aWriter.endStream();
+        aWriter.endObject();
+        if (!writeBuffer(aWriter.getLine()))
+            return 0;
+    }
+
+    return nObject;
+}
+
+sal_Int32 PDFWriterImpl::emitEncrypt()
+{
+    //emit the security information
+    //must be emitted as indirect dictionary object, since
+    //Acrobat Reader 5 works only with this kind of implementation
+
+    sal_Int32 nObject = createObject();
+
+    if (updateObject(nObject))
+    {
+        PDFEncryptionProperties& rProperties = m_aContext.Encryption;
+        COSWriter aWriter(m_aContext.Encryption.getParams(), m_pPDFEncryptor);
+        aWriter.startObject(nObject);
+        aWriter.startDict();
+        aWriter.write("/Filter", "/Standard");
+        aWriter.write("/V", m_pPDFEncryptor->getVersion());
+        aWriter.write("/Length", m_pPDFEncryptor->getKeyLength() * 8);
+        aWriter.write("/R", m_pPDFEncryptor->getRevision());
+
+        if (m_pPDFEncryptor->getVersion() == 5 && m_pPDFEncryptor->getRevision() == 6)
+        {
+            // emit the owner password, must not be encrypted
+            aWriter.writeHexArray("/U", rProperties.UValue.data(), rProperties.UValue.size());
+            aWriter.writeHexArray("/UE", rProperties.UE.data(), rProperties.UE.size());
+            aWriter.writeHexArray("/O", rProperties.OValue.data(), rProperties.OValue.size());
+            aWriter.writeHexArray("/OE", rProperties.OE.data(), rProperties.OE.size());
+
+            // Encrypted perms
+            std::vector<sal_uInt8> aEncryptedPermissions = m_pPDFEncryptor->getEncryptedAccessPermissions(rProperties.EncryptionKey);
+            aWriter.writeHexArray("/Perms", aEncryptedPermissions.data(), aEncryptedPermissions.size());
+
+            // Write content filter stuff - to select we want AESv3 256bit
+            aWriter.write("/CF", "<</StdCF <</CFM /AESV3 /Length 256>>>>");
+            aWriter.write("/StmF", "/StdCF");
+            aWriter.write("/StrF", "/StdCF");
+            // Encrypt metadata. Default is true. Relevant for Revision 6+
+            if (!m_pPDFEncryptor->isMetadataEncrypted())
+                aWriter.write("/EncryptMetadata", " false ");
+        }
+        else
+        {
+            // emit the owner password, must not be encrypted
+            aWriter.writeHexArray("/U", rProperties.UValue.data(), rProperties.UValue.size());
+            aWriter.writeHexArray("/O", rProperties.OValue.data(), rProperties.OValue.size());
+        }
+        aWriter.write("/P", m_pPDFEncryptor->getAccessPermissions());
+        aWriter.endDict();
+        aWriter.endObject();
+
+        if (!writeBuffer(aWriter.getLine()))
             nObject = 0;
     }
     else
@@ -6022,39 +6018,16 @@ sal_Int32 PDFWriterImpl::emitDocumentMetadata()
 bool PDFWriterImpl::emitTrailer()
 {
     // emit doc info
-    sal_Int32 nDocInfoObject = emitInfoDict( );
+    sal_Int32 nDocInfoObject = 0;
+    // Deprecated in PDF 2.0, but still allowed if /PieceInfo is written (which we don't support)
+    if (m_aContext.Version < PDFWriter::PDFVersion::PDF_2_0)
+        nDocInfoObject = emitInfoDict();
 
     sal_Int32 nSecObject = 0;
 
-    if( m_aContext.Encryption.Encrypt() )
+    if (m_aContext.Encryption.canEncrypt())
     {
-        //emit the security information
-        //must be emitted as indirect dictionary object, since
-        //Acrobat Reader 5 works only with this kind of implementation
-        nSecObject = createObject();
-
-        if( updateObject( nSecObject ) )
-        {
-            OStringBuffer aLineS( 1024 );
-            aLineS.append( nSecObject );
-            aLineS.append( " 0 obj\n"
-                           "<</Filter/Standard/V " );
-            // check the version
-            aLineS.append( "2/Length 128/R 3" );
-
-            // emit the owner password, must not be encrypted
-            aLineS.append( "/O(" );
-            appendLiteralString( reinterpret_cast<char*>(m_aContext.Encryption.OValue.data()), sal_Int32(m_aContext.Encryption.OValue.size()), aLineS );
-            aLineS.append( ")/U(" );
-            appendLiteralString( reinterpret_cast<char*>(m_aContext.Encryption.UValue.data()), sal_Int32(m_aContext.Encryption.UValue.size()), aLineS );
-            aLineS.append( ")/P " );// the permission set
-            aLineS.append( m_nAccessPermissions );
-            aLineS.append( ">>\nendobj\n\n" );
-            if( !writeBuffer( aLineS ) )
-                nSecObject = 0;
-        }
-        else
-            nSecObject = 0;
+        nSecObject = emitEncrypt();
     }
     // emit xref table
     // remember start
@@ -6086,7 +6059,7 @@ bool PDFWriterImpl::emitTrailer()
     OStringBuffer aDocChecksum( 2*RTL_DIGEST_LENGTH_MD5+1 );
     ::std::vector<unsigned char> const nMD5Sum(m_DocDigest.finalize());
     for (sal_uInt8 i : nMD5Sum)
-        appendHex( i, aDocChecksum );
+        COSWriter::appendHex( i, aDocChecksum );
     // document id set in setDocInfo method
     // emit trailer
     aLine.setLength( 0 );
@@ -6113,30 +6086,38 @@ bool PDFWriterImpl::emitTrailer()
         aLine.append( "/ID [ <" );
         for (auto const& item : m_aContext.Encryption.DocumentIdentifier)
         {
-            appendHex( sal_Int8(item), aLine );
+            COSWriter::appendHex( sal_Int8(item), aLine );
         }
         aLine.append( ">\n"
                       "<" );
         for (auto const& item : m_aContext.Encryption.DocumentIdentifier)
         {
-            appendHex( sal_Int8(item), aLine );
+            COSWriter::appendHex( sal_Int8(item), aLine );
         }
         aLine.append( "> ]\n" );
     }
-    if( !aDocChecksum.isEmpty() )
+
+    // Writes the /DocChecksum - hash off the PDF stream
+    // This entry is not defined in the standard, so don't write it if we
+    // are using PDF/UA or PDF/A as the compliance checkers will complain.
+    // Actually we shouldn't write it at all...
+    if (!aDocChecksum.isEmpty() && !m_bIsPDF_UA && m_nPDFA_Version == 0)
     {
         aLine.append( "/DocChecksum /" );
         aLine.append( aDocChecksum );
         aLine.append( "\n" );
     }
 
-    if (!m_aDocumentAttachedFiles.empty())
+    // Writes the /AdditionalStreams - writes the embedded / attached files into the PDF
+    // This entry is not defined in the standard, so don't write it if we
+    // are using PDF/UA or PDF/A as the compliance checkers will complain.
+    if (!m_aDocumentAttachedFiles.empty() && !m_bIsPDF_UA && m_nPDFA_Version == 0)
     {
         aLine.append( "/AdditionalStreams [" );
         for (auto const& rAttachedFile : m_aDocumentAttachedFiles)
         {
             aLine.append( "/" );
-            appendName(rAttachedFile.maMimeType, aLine);
+            COSWriter::appendName(rAttachedFile.maMimeType, aLine);
             aLine.append(" ");
             appendObjectReference(rAttachedFile.mnEmbeddedFileObjectId, aLine);
             aLine.append("\n");
@@ -6612,7 +6593,7 @@ void PDFWriterImpl::drawVerticalGlyphs(
             rLine.append( " Tf" );
         }
         rLine.append( "<" );
-        appendHex( rGlyphs[i].m_nMappedGlyphId, rLine );
+        COSWriter::appendHex( rGlyphs[i].m_nMappedGlyphId, rLine );
         rLine.append( ">Tj\n" );
     }
 }
@@ -6690,14 +6671,14 @@ void PDFWriterImpl::drawHorizontalGlyphs(
         OStringBuffer aKernedLine( 256 ), aUnkernedLine( 256 );
         aKernedLine.append( "[<" );
         aUnkernedLine.append( '<' );
-        appendHex( rGlyphs[nBeginRun].m_nMappedGlyphId, aKernedLine );
-        appendHex( rGlyphs[nBeginRun].m_nMappedGlyphId, aUnkernedLine );
+        COSWriter::appendHex( rGlyphs[nBeginRun].m_nMappedGlyphId, aKernedLine );
+        COSWriter::appendHex( rGlyphs[nBeginRun].m_nMappedGlyphId, aUnkernedLine );
 
         aMat.invert();
         bool bNeedKern = false;
         for( sal_uInt32 nPos = nBeginRun+1; nPos < aRunEnds[nRun]; nPos++ )
         {
-            appendHex( rGlyphs[nPos].m_nMappedGlyphId, aUnkernedLine );
+            COSWriter::appendHex( rGlyphs[nPos].m_nMappedGlyphId, aUnkernedLine );
             // check if default glyph positioning is sufficient
             const basegfx::B2DPoint aThisPos = aMat.transform( rGlyphs[nPos].m_aPos );
             const basegfx::B2DPoint aPrevPos = aMat.transform( rGlyphs[nPos-1].m_aPos );
@@ -6717,7 +6698,7 @@ void PDFWriterImpl::drawHorizontalGlyphs(
                 aKernedLine.append( nAdjustment );
                 aKernedLine.append( "<" );
             }
-            appendHex( rGlyphs[nPos].m_nMappedGlyphId, aKernedLine );
+            COSWriter::appendHex( rGlyphs[nPos].m_nMappedGlyphId, aKernedLine );
         }
         aKernedLine.append( ">]TJ\n" );
         aUnkernedLine.append( ">Tj\n" );
@@ -7001,8 +6982,8 @@ void PDFWriterImpl::drawLayout( SalLayout& rLayout, const OUString& rText, bool 
                 for (int i = 0; i < nCharCount; i++)
                 {
                     sal_Unicode aChar = rText[nCharPos + i];
-                    appendHex(static_cast<sal_Int8>(aChar >> 8), aLine);
-                    appendHex(static_cast<sal_Int8>(aChar & 255), aLine);
+                    COSWriter::appendHex(static_cast<sal_Int8>(aChar >> 8), aLine);
+                    COSWriter::appendHex(static_cast<sal_Int8>(aChar & 255), aLine);
                 }
                 aLine.append( ">>>\nBDC\n" );
             }
@@ -9168,6 +9149,14 @@ void PDFWriterImpl::writeReferenceXObject(const ReferenceXObjectEmit& rEmit)
             return;
         }
 
+        // Get the copied resource map, so we can use that to skip objects we already copied
+        auto& rCopiedResourcesMap = rExternalPDFStream.getCopiedResources();
+
+        // Add page mapping to the copied resources map.
+        // Needed if we reference the current page and we want to prevent copying the page
+        // if it is referenced.
+        rCopiedResourcesMap.emplace(pPage->GetObjectValue(), m_aPages.back().m_nPageObject);
+
         double aOrigin[2] = { 0.0, 0.0 };
 
         // tdf#160714 use crop box for bounds of embedded PDF object
@@ -9214,52 +9203,8 @@ void PDFWriterImpl::writeReferenceXObject(const ReferenceXObjectEmit& rEmit)
             return;
         }
 
-        // Merge link annotations from pPage to our page.
-        std::vector<filter::PDFObjectElement*> aAnnots;
-        if (auto pArray = dynamic_cast<filter::PDFArrayElement*>(pPage->Lookup("Annots"_ostr)))
-        {
-            for (const auto pElement : pArray->GetElements())
-            {
-                auto pReference = dynamic_cast<filter::PDFReferenceElement*>(pElement);
-                if (!pReference)
-                {
-                    continue;
-                }
-
-                filter::PDFObjectElement* pObject = pReference->LookupObject();
-                if (!pObject)
-                {
-                    continue;
-                }
-
-                auto pType = dynamic_cast<filter::PDFNameElement*>(pObject->Lookup("Type"_ostr));
-                if (!pType || pType->GetValue() != "Annot")
-                {
-                    continue;
-                }
-
-                auto pSubtype = dynamic_cast<filter::PDFNameElement*>(pObject->Lookup("Subtype"_ostr));
-                if (!pSubtype || pSubtype->GetValue() != "Link")
-                {
-                    continue;
-                }
-
-                // Reference to a link annotation object, remember it.
-                aAnnots.push_back(pObject);
-            }
-        }
-        if (!aAnnots.empty())
-        {
-            PDFObjectCopier aCopier(*this);
-            SvMemoryStream& rDocBuffer = pPage->GetDocument().GetEditBuffer();
-            std::map<sal_Int32, sal_Int32> aMap;
-            for (const auto& pAnnot : aAnnots)
-            {
-                // Copy over the annotation and refer to its new id.
-                sal_Int32 nNewId = aCopier.copyExternalResource(rDocBuffer, *pAnnot, aMap);
-                m_aPages.back().m_aAnnotations.push_back(nNewId);
-            }
-        }
+        // Merge link and widget annotations from pPage to our page.
+        mergeAnnotationsFromExternalPage(pPage, rCopiedResourcesMap);
 
         nWrappedFormObject = createObject();
         // Write the form XObject wrapped below. This is a separate object from
@@ -9310,8 +9255,7 @@ void PDFWriterImpl::writeReferenceXObject(const ReferenceXObjectEmit& rEmit)
         }
 
         PDFObjectCopier aCopier(*this);
-        auto & rResources = rExternalPDFStream.getCopiedResources();
-        aCopier.copyPageResources(pPage, aLine, rResources);
+        aCopier.copyPageResources(pPage, aLine, rCopiedResourcesMap);
 
         aLine.append(" /BBox [ ");
         aLine.append(aOrigin[0]);
@@ -9463,6 +9407,99 @@ void PDFWriterImpl::writeReferenceXObject(const ReferenceXObjectEmit& rEmit)
     CHECK_RETURN2(writeBuffer(aLine));
 }
 
+namespace
+{
+
+sal_Int32 getRootParent(filter::PDFObjectElement* pObject)
+{
+    auto* pReference = dynamic_cast<filter::PDFReferenceElement*>(pObject->Lookup("Parent"_ostr));
+    if (!pReference)
+        return pObject->GetObjectValue();
+
+    auto* pParent = pReference->LookupObject();
+    return getRootParent(pParent);
+}
+
+} // end anonymous
+
+void PDFWriterImpl::mergeAnnotationsFromExternalPage(filter::PDFObjectElement* pPage,  std::map<sal_Int32, sal_Int32>& rCopiedResourcesMap)
+{
+    auto* pResult = pPage->Lookup("Annots"_ostr);
+    filter::PDFArrayElement* pArray = nullptr;
+    // If the Annots array is a reference - get the array from the referenced object
+    auto pAnnotsReference = dynamic_cast<filter::PDFReferenceElement*>(pResult);
+    if (pAnnotsReference)
+    {
+        filter::PDFObjectElement* pObject = pAnnotsReference->LookupObject();
+        pArray = pObject->GetArray();
+    }
+    else
+    {
+        // Not a reference so is it an array
+        pArray = dynamic_cast<filter::PDFArrayElement*>(pResult);
+    }
+
+    // Have we found our /Annots array?
+    if (!pArray)
+        return;
+
+    std::unordered_set<sal_Int32> aAlreadyCopied;
+    PDFObjectCopier aCopier(*this);
+    SvMemoryStream& rDocBuffer = pPage->GetDocument().GetEditBuffer();
+
+    for (const auto pElement : pArray->GetElements())
+    {
+        auto pReference = dynamic_cast<filter::PDFReferenceElement*>(pElement);
+        if (!pReference)
+            continue;
+
+        filter::PDFObjectElement* pObject = pReference->LookupObject();
+        if (!pObject)
+            continue;
+
+        // Get the /Type and the /Subtype
+        auto pType = dynamic_cast<filter::PDFNameElement*>(pObject->Lookup("Type"_ostr));
+        auto pSubtype = dynamic_cast<filter::PDFNameElement*>(pObject->Lookup("Subtype"_ostr));
+
+        // Is it a /Annot we want to copy?
+        if (pType && pType->GetValue() == "Annot" && pSubtype)
+        {
+            bool bIsLink = pSubtype->GetValue() == "Link";
+            bool bIsWidget = pSubtype->GetValue() == "Widget";
+
+            // is link or widget
+            if (!bIsLink && !bIsWidget)
+                continue;
+
+            // Copy over the annotation and refer to its new id.
+            sal_Int32 nNewId = aCopier.copyExternalResource(rDocBuffer, *pObject, rCopiedResourcesMap);
+            m_aPages.back().m_aAnnotations.push_back(nNewId);
+
+            if (!bIsWidget)
+                continue;
+
+            // Find the root
+            sal_Int32 nRootID = getRootParent(pObject);
+
+            auto aIterator = rCopiedResourcesMap.find(nRootID);
+            if (aIterator == rCopiedResourcesMap.end()) // Can't find the mapped ID ?
+                continue;
+
+            nNewId = aIterator->second;
+
+            // Ignore if we added the ID already
+            if (aAlreadyCopied.find(nNewId) == aAlreadyCopied.end())
+            {
+                // Add new entry into copied widgets vector
+                auto& rCopiedWidget = m_aCopiedWidgets.emplace_back();
+                rCopiedWidget.m_nObject = nNewId;
+                aAlreadyCopied.emplace(nNewId);
+            }
+        }
+    }
+
+}
+
 bool PDFWriterImpl::writeBitmapObject( const BitmapEmit& rObject, bool bMask )
 {
     if (rObject.m_aReferenceXObject.hasExternalPDFData() && !m_aContext.UseReferenceXObject)
@@ -9597,9 +9634,9 @@ bool PDFWriterImpl::writeBitmapObject( const BitmapEmit& rObject, bool bMask )
             aLine.append( "[ /Indexed/DeviceRGB " );
             aLine.append( static_cast<sal_Int32>(pAccess->GetPaletteEntryCount()-1) );
             aLine.append( "\n<" );
-            if( m_aContext.Encryption.Encrypt() )
+            if (m_aContext.Encryption.canEncrypt())
             {
-                enableStringEncryption( rObject.m_nObject );
+                enableStringEncryption(rObject.m_nObject);
                 //check encryption buffer size
                 m_vEncryptionBuffer.resize(pAccess->GetPaletteEntryCount()*3);
                 int nChar = 0;
@@ -9612,24 +9649,19 @@ bool PDFWriterImpl::writeBitmapObject( const BitmapEmit& rObject, bool bMask )
                     m_vEncryptionBuffer[nChar++] = rColor.GetBlue();
                 }
                 //encrypt the colorspace lookup table
-                rtl_cipher_encodeARCFOUR( m_aCipher, m_vEncryptionBuffer.data(), nChar, m_vEncryptionBuffer.data(), nChar );
+                std::vector<sal_uInt8> aOutputBuffer(nChar);
+                m_pPDFEncryptor->encrypt(m_vEncryptionBuffer.data(), nChar, aOutputBuffer, nChar);
                 //now queue the data for output
-                nChar = 0;
-                for( sal_uInt16 i = 0; i < pAccess->GetPaletteEntryCount(); i++ )
-                {
-                    appendHex(m_vEncryptionBuffer[nChar++], aLine );
-                    appendHex(m_vEncryptionBuffer[nChar++], aLine );
-                    appendHex(m_vEncryptionBuffer[nChar++], aLine );
-                }
+                COSWriter::appendHexArray(aOutputBuffer.data(), aOutputBuffer.size(), aLine);
             }
             else //no encryption requested (PDF/A-1a program flow drops here)
             {
                 for( sal_uInt16 i = 0; i < pAccess->GetPaletteEntryCount(); i++ )
                 {
                     const BitmapColor& rColor = pAccess->GetPaletteColor( i );
-                    appendHex( rColor.GetRed(), aLine );
-                    appendHex( rColor.GetGreen(), aLine );
-                    appendHex( rColor.GetBlue(), aLine );
+                    COSWriter::appendHex( rColor.GetRed(), aLine );
+                    COSWriter::appendHex( rColor.GetGreen(), aLine );
+                    COSWriter::appendHex( rColor.GetBlue(), aLine );
                 }
             }
             aLine.append( ">\n]\n" );
@@ -10666,68 +10698,87 @@ void PDFWriterImpl::setOutlineItemDest( sal_Int32 nItem, sal_Int32 nDestID )
     m_aOutline[nItem].m_nDestID = nDestID;
 }
 
-const char* PDFWriterImpl::getStructureTag( PDFWriter::StructElement eType )
+const char* PDFWriterImpl::getStructureTag(vcl::pdf::StructElement eType)
 {
-    static constexpr auto aTagStrings = frozen::make_map<PDFWriter::StructElement, const char*>({
-        { PDFWriter::NonStructElement, "NonStruct" },
-        { PDFWriter::Document, "Document" },
-        { PDFWriter::Part,         "Part" },
-        { PDFWriter::Article,      "Art" },
-        { PDFWriter::Section,     "Sect" },
-        { PDFWriter::Division,    "Div" },
-        { PDFWriter::BlockQuote,  "BlockQuote" },
-        { PDFWriter::Caption,     "Caption" },
-        { PDFWriter::TOC,         "TOC" },
-        { PDFWriter::TOCI,        "TOCI" },
-        { PDFWriter::Index,       "Index" },
-        { PDFWriter::Paragraph,   "P" },
-        { PDFWriter::Heading,     "H" },
-        { PDFWriter::H1,          "H1" },
-        { PDFWriter::H2,          "H2" },
-        { PDFWriter::H3,          "H3" },
-        { PDFWriter::H4,          "H4" },
-        { PDFWriter::H5,          "H5" },
-        { PDFWriter::H6,          "H6" },
-        { PDFWriter::List,        "L" },
-        { PDFWriter::ListItem,    "LI" },
-        { PDFWriter::LILabel,     "Lbl" },
-        { PDFWriter::LIBody,      "LBody" },
-        { PDFWriter::Table,       "Table" },
-        { PDFWriter::TableRow,    "TR" },
-        { PDFWriter::TableHeader, "TH" },
-        { PDFWriter::TableData,   "TD" },
-        { PDFWriter::Span,        "Span" },
-        { PDFWriter::Quote,       "Quote" },
-        { PDFWriter::Note,        "Note" },
-        { PDFWriter::Reference,   "Reference" },
-        { PDFWriter::BibEntry,    "BibEntry" },
-        { PDFWriter::Code,        "Code" },
-        { PDFWriter::Link,        "Link" },
-        { PDFWriter::Annot,       "Annot" },
-        { PDFWriter::Ruby,        "Ruby" },
-        { PDFWriter::RB,          "RB" },
-        { PDFWriter::RT,          "RT" },
-        { PDFWriter::RP,          "RP" },
-        { PDFWriter::Warichu,     "Warichu" },
-        { PDFWriter::WT,          "WT" },
-        { PDFWriter::WP,          "WP" },
-        { PDFWriter::Figure,      "Figure" },
-        { PDFWriter::Formula,     "Formula"},
-        { PDFWriter::Form,        "Form" }
+    using namespace vcl::pdf;
+
+    static constexpr auto aTagStrings = frozen::make_map<StructElement, const char*>({
+        { StructElement::NonStructElement, "NonStruct" },
+        { StructElement::Document, "Document" },
+        { StructElement::Part,         "Part" },
+        { StructElement::Article,      "Art" },
+        { StructElement::Section,     "Sect" },
+        { StructElement::Division,    "Div" },
+        { StructElement::BlockQuote,  "BlockQuote" },
+        { StructElement::Caption,     "Caption" },
+        { StructElement::TOC,         "TOC" },
+        { StructElement::TOCI,        "TOCI" },
+        { StructElement::Index,       "Index" },
+        { StructElement::Paragraph,   "P" },
+        { StructElement::Heading,     "H" },
+        { StructElement::H1,          "H1" },
+        { StructElement::H2,          "H2" },
+        { StructElement::H3,          "H3" },
+        { StructElement::H4,          "H4" },
+        { StructElement::H5,          "H5" },
+        { StructElement::H6,          "H6" },
+        { StructElement::List,        "L" },
+        { StructElement::ListItem,    "LI" },
+        { StructElement::LILabel,     "Lbl" },
+        { StructElement::LIBody,      "LBody" },
+        { StructElement::Table,       "Table" },
+        { StructElement::TableRow,    "TR" },
+        { StructElement::TableHeader, "TH" },
+        { StructElement::TableData,   "TD" },
+        { StructElement::Span,        "Span" },
+        { StructElement::Quote,       "Quote" },
+        { StructElement::Note,        "Note" },
+        { StructElement::Reference,   "Reference" },
+        { StructElement::BibEntry,    "BibEntry" },
+        { StructElement::Code,        "Code" },
+        { StructElement::Link,        "Link" },
+        { StructElement::Annot,       "Annot" },
+        { StructElement::Ruby,        "Ruby" },
+        { StructElement::RB,          "RB" },
+        { StructElement::RT,          "RT" },
+        { StructElement::RP,          "RP" },
+        { StructElement::Warichu,     "Warichu" },
+        { StructElement::WT,          "WT" },
+        { StructElement::WP,          "WP" },
+        { StructElement::Figure,      "Figure" },
+        { StructElement::Formula,     "Formula"},
+        { StructElement::Form,        "Form" },
+        { StructElement::Title,       "Title" },
     });
 
-    if (eType == PDFWriter::Annot
-        && m_aContext.Version < PDFWriter::PDFVersion::PDF_1_5)
+    // First handle fallbacks for elements that were added in a certain PDF version
+
+    // PDF 1.5 fallbacks
+    if (m_aContext.Version < PDFWriter::PDFVersion::PDF_1_5 && eType == StructElement::Annot)
+        eType = StructElement::Figure;
+
+    // PDF 2.0 fallbacks
+    if (m_aContext.Version < PDFWriter::PDFVersion::PDF_2_0)
     {
-        return "Figure"; // fallback
+        switch(eType)
+        {
+            case StructElement::Title:
+                eType = StructElement::Paragraph;
+                break;
+            default:
+                break;
+        }
     }
 
-    auto it = aTagStrings.find( eType );
+    auto it = aTagStrings.find(eType);
 
-    return it != aTagStrings.end() ? it->second : "Div";
+    if (it == aTagStrings.end())
+        return "Div";
+
+    return it->second;
 }
 
-void PDFWriterImpl::addRoleMap(OString aAlias, PDFWriter::StructElement eType)
+void PDFWriterImpl::addRoleMap(OString aAlias, vcl::pdf::StructElement eType)
 {
     OString aTag = getStructureTag(eType);
     // For PDF/UA it's not allowed to map an alias with the same name.
@@ -10744,7 +10795,7 @@ void PDFWriterImpl::beginStructureElementMCSeq()
         // Document = SwPageFrame => this is not *inside* the page content
         // stream so do not emit MCID!
         m_aStructure[m_nCurrentStructElement].m_oType &&
-        *m_aStructure[m_nCurrentStructElement].m_oType != PDFWriter::Document &&
+        *m_aStructure[m_nCurrentStructElement].m_oType != vcl::pdf::StructElement::Document &&
         ! m_aStructure[ m_nCurrentStructElement ].m_bOpenMCSeq // already opened sequence
         )
     {
@@ -10775,7 +10826,7 @@ void PDFWriterImpl::beginStructureElementMCSeq()
     else if( ! m_bEmitStructure && m_aContext.Tagged &&
                m_nCurrentStructElement > 0 &&
                m_aStructure[m_nCurrentStructElement].m_oType &&
-               *m_aStructure[m_nCurrentStructElement].m_oType == PDFWriter::NonStructElement &&
+               *m_aStructure[m_nCurrentStructElement].m_oType == vcl::pdf::StructElement::NonStructElement &&
              ! m_aStructure[ m_nCurrentStructElement ].m_bOpenMCSeq // already opened sequence
              )
     {
@@ -10808,7 +10859,7 @@ void PDFWriterImpl::endStructureElementMCSeq(EndMode const endMode)
         && m_aStructure[m_nCurrentStructElement].m_oType
         && (m_bEmitStructure
             || (endMode != EndMode::OnlyStruct
-                && m_aStructure[m_nCurrentStructElement].m_oType == PDFWriter::NonStructElement))
+                && m_aStructure[m_nCurrentStructElement].m_oType == vcl::pdf::StructElement::NonStructElement))
         && m_aStructure[m_nCurrentStructElement].m_bOpenMCSeq)
     {
         writeBuffer( "EMC\n" );
@@ -10826,7 +10877,7 @@ bool PDFWriterImpl::checkEmitStructure()
         while( nEle > 0 && o3tl::make_unsigned(nEle) < m_aStructure.size() )
         {
             if (m_aStructure[nEle].m_oType
-                && *m_aStructure[nEle].m_oType == PDFWriter::NonStructElement)
+                && *m_aStructure[nEle].m_oType == vcl::pdf::StructElement::NonStructElement)
             {
                 bEmit = false;
                 break;
@@ -10855,13 +10906,13 @@ sal_Int32 PDFWriterImpl::ensureStructureElement()
 }
 
 void PDFWriterImpl::initStructureElement(sal_Int32 const id,
-        PDFWriter::StructElement const eType, std::u16string_view const rAlias)
+        vcl::pdf::StructElement const eType, std::u16string_view const rAlias)
 {
     if( ! m_aContext.Tagged )
         return;
 
     if( m_nCurrentStructElement == 0 &&
-        eType != PDFWriter::Document && eType != PDFWriter::NonStructElement )
+        eType != vcl::pdf::StructElement::Document && eType != vcl::pdf::StructElement::NonStructElement )
     {
         // struct tree root hit, but not beginning document
         // this might happen with setCurrentStructureElement
@@ -10872,7 +10923,7 @@ void PDFWriterImpl::initStructureElement(sal_Int32 const id,
             auto it = std::find_if(rRootChildren.begin(), rRootChildren.end(),
                 [&](sal_Int32 nElement) {
                     return m_aStructure[nElement].m_oType
-                        && *m_aStructure[nElement].m_oType == PDFWriter::Document; });
+                        && *m_aStructure[nElement].m_oType == vcl::pdf::StructElement::Document; });
             if( it != rRootChildren.end() )
             {
                 m_nCurrentStructElement = *it;
@@ -10900,22 +10951,22 @@ void PDFWriterImpl::initStructureElement(sal_Int32 const id,
     m_aStructure[m_nCurrentStructElement].m_aChildren.push_back(id);
 
     // handle alias names
-    if( !rAlias.empty() && eType != PDFWriter::NonStructElement )
+    if( !rAlias.empty() && eType != vcl::pdf::StructElement::NonStructElement )
     {
         OStringBuffer aNameBuf( rAlias.size() );
-        appendName( rAlias, aNameBuf );
+        COSWriter::appendName( rAlias, aNameBuf );
         OString aAliasName( aNameBuf.makeStringAndClear() );
         rEle.m_aAlias = aAliasName;
         addRoleMap(aAliasName, eType);
     }
 
-    if (m_bEmitStructure && eType != PDFWriter::NonStructElement) // don't create nonexistent objects
+    if (m_bEmitStructure && eType != vcl::pdf::StructElement::NonStructElement) // don't create nonexistent objects
     {
         rEle.m_nObject      = createObject();
         // update parent's kids list
         m_aStructure[ rEle.m_nParentElement ].m_aKids.emplace_back(ObjReference{rEle.m_nObject});
         // ISO 14289-1:2014, Clause: 7.9
-        if (*rEle.m_oType == PDFWriter::Note)
+        if (*rEle.m_oType == vcl::pdf::StructElement::Note)
         {
             m_StructElemObjsWithID.insert(rEle.m_nObject);
         }
@@ -11060,7 +11111,7 @@ void removePlaceholderSE(std::vector<PDFStructureElement> & rStructure, PDFStruc
 void PDFWriterImpl::addInternalStructureContainer( PDFStructureElement& rEle )
 {
     if (rEle.m_nOwnElement != rEle.m_nParentElement
-        && *rEle.m_oType == PDFWriter::NonStructElement)
+        && *rEle.m_oType == vcl::pdf::StructElement::NonStructElement)
     {
         return;
     }
@@ -11071,7 +11122,7 @@ void PDFWriterImpl::addInternalStructureContainer( PDFStructureElement& rEle )
         if( child > 0 && o3tl::make_unsigned(child) < m_aStructure.size() )
         {
             PDFStructureElement& rChild = m_aStructure[ child ];
-            if (*rChild.m_oType != PDFWriter::NonStructElement)
+            if (*rChild.m_oType != vcl::pdf::StructElement::NonStructElement)
             {
                 //triggered when a child of the rEle element is found
                 assert(rChild.m_nParentElement == rEle.m_nOwnElement);
@@ -11106,7 +11157,7 @@ void PDFWriterImpl::addInternalStructureContainer( PDFStructureElement& rEle )
 
     // add Div in RoleMap, in case no one else did (TODO: is it needed? Is it dangerous?)
     OString aAliasName("Div"_ostr);
-    addRoleMap(aAliasName, PDFWriter::Division);
+    addRoleMap(aAliasName, vcl::pdf::StructElement::Division);
 
     while( rEle.m_aKids.size() > ncMaxPDFArraySize )
     {
@@ -11115,7 +11166,7 @@ void PDFWriterImpl::addInternalStructureContainer( PDFStructureElement& rEle )
         m_aStructure.emplace_back( );
         PDFStructureElement& rEleNew = m_aStructure.back();
         rEleNew.m_aAlias            = aAliasName;
-        rEleNew.m_oType.emplace(PDFWriter::Division); // a new Div type container
+        rEleNew.m_oType.emplace(vcl::pdf::StructElement::Division); // a new Div type container
         rEleNew.m_nOwnElement       = nNewId;
         rEleNew.m_nParentElement    = nCurrentStructElement;
         //inherit the same page as the first child to be reparented
@@ -11198,9 +11249,9 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             || (m_aContext.Tagged
                 && (0 == m_aStructure[m_nCurrentStructElement].m_nParentElement
                     || !m_aStructure[m_aStructure[m_nCurrentStructElement].m_nParentElement].m_oType
-                    || *m_aStructure[m_aStructure[m_nCurrentStructElement].m_nParentElement].m_oType != PDFWriter::NonStructElement))))
+                    || *m_aStructure[m_aStructure[m_nCurrentStructElement].m_nParentElement].m_oType != vcl::pdf::StructElement::NonStructElement))))
     {
-        PDFWriter::StructElement const eType = *m_aStructure[m_nCurrentStructElement].m_oType;
+        vcl::pdf::StructElement const eType = *m_aStructure[m_nCurrentStructElement].m_oType;
         switch( eAttr )
         {
             case PDFWriter::Placement:
@@ -11225,22 +11276,23 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                     eVal == PDFWriter::End          ||
                     eVal == PDFWriter::Justify )
                 {
-                    if( eType == PDFWriter::Paragraph   ||
-                        eType == PDFWriter::Heading     ||
-                        eType == PDFWriter::H1          ||
-                        eType == PDFWriter::H2          ||
-                        eType == PDFWriter::H3          ||
-                        eType == PDFWriter::H4          ||
-                        eType == PDFWriter::H5          ||
-                        eType == PDFWriter::H6          ||
-                        eType == PDFWriter::List        ||
-                        eType == PDFWriter::ListItem    ||
-                        eType == PDFWriter::LILabel     ||
-                        eType == PDFWriter::LIBody      ||
-                        eType == PDFWriter::Table       ||
-                        eType == PDFWriter::TableRow    ||
-                        eType == PDFWriter::TableHeader ||
-                        eType == PDFWriter::TableData )
+                    if (eType == vcl::pdf::StructElement::Paragraph   ||
+                        eType == vcl::pdf::StructElement::Title ||
+                        eType == vcl::pdf::StructElement::Heading     ||
+                        eType == vcl::pdf::StructElement::H1          ||
+                        eType == vcl::pdf::StructElement::H2          ||
+                        eType == vcl::pdf::StructElement::H3          ||
+                        eType == vcl::pdf::StructElement::H4          ||
+                        eType == vcl::pdf::StructElement::H5          ||
+                        eType == vcl::pdf::StructElement::H6          ||
+                        eType == vcl::pdf::StructElement::List        ||
+                        eType == vcl::pdf::StructElement::ListItem    ||
+                        eType == vcl::pdf::StructElement::LILabel     ||
+                        eType == vcl::pdf::StructElement::LIBody      ||
+                        eType == vcl::pdf::StructElement::Table       ||
+                        eType == vcl::pdf::StructElement::TableRow    ||
+                        eType == vcl::pdf::StructElement::TableHeader ||
+                        eType == vcl::pdf::StructElement::TableData)
                     {
                         bInsert = true;
                     }
@@ -11250,12 +11302,12 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             case PDFWriter::Height:
                 if( eVal == PDFWriter::Auto )
                 {
-                    if( eType == PDFWriter::Figure      ||
-                        eType == PDFWriter::Formula     ||
-                        eType == PDFWriter::Form        ||
-                        eType == PDFWriter::Table       ||
-                        eType == PDFWriter::TableHeader ||
-                        eType == PDFWriter::TableData )
+                    if (eType == vcl::pdf::StructElement::Figure      ||
+                        eType == vcl::pdf::StructElement::Formula     ||
+                        eType == vcl::pdf::StructElement::Form        ||
+                        eType == vcl::pdf::StructElement::Table       ||
+                        eType == vcl::pdf::StructElement::TableHeader ||
+                        eType == vcl::pdf::StructElement::TableData)
                     {
                         bInsert = true;
                     }
@@ -11267,8 +11319,8 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                     eVal == PDFWriter::After        ||
                     eVal == PDFWriter::Justify )
                 {
-                    if( eType == PDFWriter::TableHeader ||
-                        eType == PDFWriter::TableData )
+                    if (eType == vcl::pdf::StructElement::TableHeader ||
+                        eType == vcl::pdf::StructElement::TableData)
                     {
                         bInsert = true;
                     }
@@ -11279,8 +11331,8 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                     eVal == PDFWriter::Center       ||
                     eVal == PDFWriter::End )
                 {
-                    if( eType == PDFWriter::TableHeader ||
-                        eType == PDFWriter::TableData )
+                    if (eType == vcl::pdf::StructElement::TableHeader ||
+                        eType == vcl::pdf::StructElement::TableData)
                     {
                         bInsert = true;
                     }
@@ -11291,29 +11343,30 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                     eVal == PDFWriter::Auto )
                 {
                     // only for ILSE and BLSE
-                    if( eType == PDFWriter::Paragraph   ||
-                        eType == PDFWriter::Heading     ||
-                        eType == PDFWriter::H1          ||
-                        eType == PDFWriter::H2          ||
-                        eType == PDFWriter::H3          ||
-                        eType == PDFWriter::H4          ||
-                        eType == PDFWriter::H5          ||
-                        eType == PDFWriter::H6          ||
-                        eType == PDFWriter::List        ||
-                        eType == PDFWriter::ListItem    ||
-                        eType == PDFWriter::LILabel     ||
-                        eType == PDFWriter::LIBody      ||
-                        eType == PDFWriter::Table       ||
-                        eType == PDFWriter::TableRow    ||
-                        eType == PDFWriter::TableHeader ||
-                        eType == PDFWriter::TableData   ||
-                        eType == PDFWriter::Span        ||
-                        eType == PDFWriter::Quote       ||
-                        eType == PDFWriter::Note        ||
-                        eType == PDFWriter::Reference   ||
-                        eType == PDFWriter::BibEntry    ||
-                        eType == PDFWriter::Code        ||
-                        eType == PDFWriter::Link )
+                    if (eType == vcl::pdf::StructElement::Paragraph   ||
+                        eType == vcl::pdf::StructElement::Title ||
+                        eType == vcl::pdf::StructElement::Heading     ||
+                        eType == vcl::pdf::StructElement::H1          ||
+                        eType == vcl::pdf::StructElement::H2          ||
+                        eType == vcl::pdf::StructElement::H3          ||
+                        eType == vcl::pdf::StructElement::H4          ||
+                        eType == vcl::pdf::StructElement::H5          ||
+                        eType == vcl::pdf::StructElement::H6          ||
+                        eType == vcl::pdf::StructElement::List        ||
+                        eType == vcl::pdf::StructElement::ListItem    ||
+                        eType == vcl::pdf::StructElement::LILabel     ||
+                        eType == vcl::pdf::StructElement::LIBody      ||
+                        eType == vcl::pdf::StructElement::Table       ||
+                        eType == vcl::pdf::StructElement::TableRow    ||
+                        eType == vcl::pdf::StructElement::TableHeader ||
+                        eType == vcl::pdf::StructElement::TableData   ||
+                        eType == vcl::pdf::StructElement::Span        ||
+                        eType == vcl::pdf::StructElement::Quote       ||
+                        eType == vcl::pdf::StructElement::Note        ||
+                        eType == vcl::pdf::StructElement::Reference   ||
+                        eType == vcl::pdf::StructElement::BibEntry    ||
+                        eType == vcl::pdf::StructElement::Code        ||
+                        eType == vcl::pdf::StructElement::Link)
                     {
                         bInsert = true;
                     }
@@ -11326,29 +11379,30 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                     eVal == PDFWriter::LineThrough )
                 {
                     // only for ILSE and BLSE
-                    if( eType == PDFWriter::Paragraph   ||
-                        eType == PDFWriter::Heading     ||
-                        eType == PDFWriter::H1          ||
-                        eType == PDFWriter::H2          ||
-                        eType == PDFWriter::H3          ||
-                        eType == PDFWriter::H4          ||
-                        eType == PDFWriter::H5          ||
-                        eType == PDFWriter::H6          ||
-                        eType == PDFWriter::List        ||
-                        eType == PDFWriter::ListItem    ||
-                        eType == PDFWriter::LILabel     ||
-                        eType == PDFWriter::LIBody      ||
-                        eType == PDFWriter::Table       ||
-                        eType == PDFWriter::TableRow    ||
-                        eType == PDFWriter::TableHeader ||
-                        eType == PDFWriter::TableData   ||
-                        eType == PDFWriter::Span        ||
-                        eType == PDFWriter::Quote       ||
-                        eType == PDFWriter::Note        ||
-                        eType == PDFWriter::Reference   ||
-                        eType == PDFWriter::BibEntry    ||
-                        eType == PDFWriter::Code        ||
-                        eType == PDFWriter::Link )
+                    if (eType == vcl::pdf::StructElement::Paragraph   ||
+                        eType == vcl::pdf::StructElement::Title ||
+                        eType == vcl::pdf::StructElement::Heading     ||
+                        eType == vcl::pdf::StructElement::H1          ||
+                        eType == vcl::pdf::StructElement::H2          ||
+                        eType == vcl::pdf::StructElement::H3          ||
+                        eType == vcl::pdf::StructElement::H4          ||
+                        eType == vcl::pdf::StructElement::H5          ||
+                        eType == vcl::pdf::StructElement::H6          ||
+                        eType == vcl::pdf::StructElement::List        ||
+                        eType == vcl::pdf::StructElement::ListItem    ||
+                        eType == vcl::pdf::StructElement::LILabel     ||
+                        eType == vcl::pdf::StructElement::LIBody      ||
+                        eType == vcl::pdf::StructElement::Table       ||
+                        eType == vcl::pdf::StructElement::TableRow    ||
+                        eType == vcl::pdf::StructElement::TableHeader ||
+                        eType == vcl::pdf::StructElement::TableData   ||
+                        eType == vcl::pdf::StructElement::Span        ||
+                        eType == vcl::pdf::StructElement::Quote       ||
+                        eType == vcl::pdf::StructElement::Note        ||
+                        eType == vcl::pdf::StructElement::Reference   ||
+                        eType == vcl::pdf::StructElement::BibEntry    ||
+                        eType == vcl::pdf::StructElement::Code        ||
+                        eType == vcl::pdf::StructElement::Link)
                     {
                         bInsert = true;
                     }
@@ -11357,7 +11411,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             case PDFWriter::Scope:
                 if (eVal == PDFWriter::Row || eVal == PDFWriter::Column || eVal == PDFWriter::Both)
                 {
-                    if (eType == PDFWriter::TableHeader
+                    if (eType == vcl::pdf::StructElement::TableHeader
                         && PDFWriter::PDFVersion::PDF_1_5 <= m_aContext.Version)
                     {
                         bInsert = true;
@@ -11368,7 +11422,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                 if (eVal == PDFWriter::Pagination || eVal == PDFWriter::Layout || eVal == PDFWriter::Page)
                     // + Background for PDF >= 1.7
                 {
-                    if (eType == PDFWriter::NonStructElement)
+                    if (eType == vcl::pdf::StructElement::NonStructElement)
                     {
                         bInsert = true;
                     }
@@ -11377,7 +11431,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             case PDFWriter::Subtype:
                 if (eVal == PDFWriter::Header || eVal == PDFWriter::Footer || eVal == PDFWriter::Watermark)
                 {
-                    if (eType == PDFWriter::NonStructElement
+                    if (eType == vcl::pdf::StructElement::NonStructElement
                         && PDFWriter::PDFVersion::PDF_1_7 <= m_aContext.Version)
                     {
                         bInsert = true;
@@ -11387,7 +11441,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             case PDFWriter::Role:
                 if (eVal == PDFWriter::Rb || eVal == PDFWriter::Cb || eVal == PDFWriter::Pb || eVal == PDFWriter::Tv)
                 {
-                    if (eType == PDFWriter::Form
+                    if (eType == vcl::pdf::StructElement::Form
                         && PDFWriter::PDFVersion::PDF_1_7 <= m_aContext.Version)
                     {
                         bInsert = true;
@@ -11397,7 +11451,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             case PDFWriter::RubyAlign:
                 if (eVal == PDFWriter::RStart || eVal == PDFWriter::RCenter || eVal == PDFWriter::REnd || eVal == PDFWriter::RJustify || eVal == PDFWriter::RDistribute)
                 {
-                    if (eType == PDFWriter::RT
+                    if (eType == vcl::pdf::StructElement::RT
                         && PDFWriter::PDFVersion::PDF_1_5 <= m_aContext.Version)
                     {
                         bInsert = true;
@@ -11407,7 +11461,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
             case PDFWriter::RubyPosition:
                 if (eVal == PDFWriter::RBefore || eVal == PDFWriter::RAfter || eVal == PDFWriter::RWarichu || eVal == PDFWriter::RInline)
                 {
-                    if (eType == PDFWriter::RT
+                    if (eType == vcl::pdf::StructElement::RT
                         && PDFWriter::PDFVersion::PDF_1_5 <= m_aContext.Version)
                     {
                         bInsert = true;
@@ -11425,7 +11479,7 @@ bool PDFWriterImpl::setStructureAttribute( enum PDFWriter::StructAttribute eAttr
                     eVal == PDFWriter::UpperAlpha   ||
                     eVal == PDFWriter::LowerAlpha )
                 {
-                    if( eType == PDFWriter::List )
+                    if( eType == vcl::pdf::StructElement::List )
                         bInsert = true;
                 }
                 break;
@@ -11461,7 +11515,7 @@ bool PDFWriterImpl::setStructureAttributeNumerical( enum PDFWriter::StructAttrib
             return true;
         }
 
-        PDFWriter::StructElement const eType = *m_aStructure[m_nCurrentStructElement].m_oType;
+        vcl::pdf::StructElement const eType = *m_aStructure[m_nCurrentStructElement].m_oType;
         switch( eAttr )
         {
             case PDFWriter::SpaceBefore:
@@ -11469,52 +11523,54 @@ bool PDFWriterImpl::setStructureAttributeNumerical( enum PDFWriter::StructAttrib
             case PDFWriter::StartIndent:
             case PDFWriter::EndIndent:
                 // just for BLSE
-                if( eType == PDFWriter::Paragraph   ||
-                    eType == PDFWriter::Heading     ||
-                    eType == PDFWriter::H1          ||
-                    eType == PDFWriter::H2          ||
-                    eType == PDFWriter::H3          ||
-                    eType == PDFWriter::H4          ||
-                    eType == PDFWriter::H5          ||
-                    eType == PDFWriter::H6          ||
-                    eType == PDFWriter::List        ||
-                    eType == PDFWriter::ListItem    ||
-                    eType == PDFWriter::LILabel     ||
-                    eType == PDFWriter::LIBody      ||
-                    eType == PDFWriter::Table       ||
-                    eType == PDFWriter::TableRow    ||
-                    eType == PDFWriter::TableHeader ||
-                    eType == PDFWriter::TableData )
+                if (eType == vcl::pdf::StructElement::Paragraph   ||
+                    eType == vcl::pdf::StructElement::Title ||
+                    eType == vcl::pdf::StructElement::Heading     ||
+                    eType == vcl::pdf::StructElement::H1          ||
+                    eType == vcl::pdf::StructElement::H2          ||
+                    eType == vcl::pdf::StructElement::H3          ||
+                    eType == vcl::pdf::StructElement::H4          ||
+                    eType == vcl::pdf::StructElement::H5          ||
+                    eType == vcl::pdf::StructElement::H6          ||
+                    eType == vcl::pdf::StructElement::List        ||
+                    eType == vcl::pdf::StructElement::ListItem    ||
+                    eType == vcl::pdf::StructElement::LILabel     ||
+                    eType == vcl::pdf::StructElement::LIBody      ||
+                    eType == vcl::pdf::StructElement::Table       ||
+                    eType == vcl::pdf::StructElement::TableRow    ||
+                    eType == vcl::pdf::StructElement::TableHeader ||
+                    eType == vcl::pdf::StructElement::TableData)
                 {
                     bInsert = true;
                 }
                 break;
             case PDFWriter::TextIndent:
                 // paragraph like BLSE and additional elements
-                if( eType == PDFWriter::Paragraph   ||
-                    eType == PDFWriter::Heading     ||
-                    eType == PDFWriter::H1          ||
-                    eType == PDFWriter::H2          ||
-                    eType == PDFWriter::H3          ||
-                    eType == PDFWriter::H4          ||
-                    eType == PDFWriter::H5          ||
-                    eType == PDFWriter::H6          ||
-                    eType == PDFWriter::LILabel     ||
-                    eType == PDFWriter::LIBody      ||
-                    eType == PDFWriter::TableHeader ||
-                    eType == PDFWriter::TableData )
+                if (eType == vcl::pdf::StructElement::Paragraph   ||
+                    eType == vcl::pdf::StructElement::Title ||
+                    eType == vcl::pdf::StructElement::Heading     ||
+                    eType == vcl::pdf::StructElement::H1          ||
+                    eType == vcl::pdf::StructElement::H2          ||
+                    eType == vcl::pdf::StructElement::H3          ||
+                    eType == vcl::pdf::StructElement::H4          ||
+                    eType == vcl::pdf::StructElement::H5          ||
+                    eType == vcl::pdf::StructElement::H6          ||
+                    eType == vcl::pdf::StructElement::LILabel     ||
+                    eType == vcl::pdf::StructElement::LIBody      ||
+                    eType == vcl::pdf::StructElement::TableHeader ||
+                    eType == vcl::pdf::StructElement::TableData)
                 {
                     bInsert = true;
                 }
                 break;
             case PDFWriter::Width:
             case PDFWriter::Height:
-                if( eType == PDFWriter::Figure      ||
-                    eType == PDFWriter::Formula     ||
-                    eType == PDFWriter::Form        ||
-                    eType == PDFWriter::Table       ||
-                    eType == PDFWriter::TableHeader ||
-                    eType == PDFWriter::TableData )
+                if (eType == vcl::pdf::StructElement::Figure      ||
+                    eType == vcl::pdf::StructElement::Formula     ||
+                    eType == vcl::pdf::StructElement::Form        ||
+                    eType == vcl::pdf::StructElement::Table       ||
+                    eType == vcl::pdf::StructElement::TableHeader ||
+                    eType == vcl::pdf::StructElement::TableData)
                 {
                     bInsert = true;
                 }
@@ -11522,29 +11578,30 @@ bool PDFWriterImpl::setStructureAttributeNumerical( enum PDFWriter::StructAttrib
             case PDFWriter::LineHeight:
             case PDFWriter::BaselineShift:
                 // only for ILSE and BLSE
-                if( eType == PDFWriter::Paragraph   ||
-                    eType == PDFWriter::Heading     ||
-                    eType == PDFWriter::H1          ||
-                    eType == PDFWriter::H2          ||
-                    eType == PDFWriter::H3          ||
-                    eType == PDFWriter::H4          ||
-                    eType == PDFWriter::H5          ||
-                    eType == PDFWriter::H6          ||
-                    eType == PDFWriter::List        ||
-                    eType == PDFWriter::ListItem    ||
-                    eType == PDFWriter::LILabel     ||
-                    eType == PDFWriter::LIBody      ||
-                    eType == PDFWriter::Table       ||
-                    eType == PDFWriter::TableRow    ||
-                    eType == PDFWriter::TableHeader ||
-                    eType == PDFWriter::TableData   ||
-                    eType == PDFWriter::Span        ||
-                    eType == PDFWriter::Quote       ||
-                    eType == PDFWriter::Note        ||
-                    eType == PDFWriter::Reference   ||
-                    eType == PDFWriter::BibEntry    ||
-                    eType == PDFWriter::Code        ||
-                    eType == PDFWriter::Link )
+                if (eType == vcl::pdf::StructElement::Paragraph   ||
+                    eType == vcl::pdf::StructElement::Title ||
+                    eType == vcl::pdf::StructElement::Heading     ||
+                    eType == vcl::pdf::StructElement::H1          ||
+                    eType == vcl::pdf::StructElement::H2          ||
+                    eType == vcl::pdf::StructElement::H3          ||
+                    eType == vcl::pdf::StructElement::H4          ||
+                    eType == vcl::pdf::StructElement::H5          ||
+                    eType == vcl::pdf::StructElement::H6          ||
+                    eType == vcl::pdf::StructElement::List        ||
+                    eType == vcl::pdf::StructElement::ListItem    ||
+                    eType == vcl::pdf::StructElement::LILabel     ||
+                    eType == vcl::pdf::StructElement::LIBody      ||
+                    eType == vcl::pdf::StructElement::Table       ||
+                    eType == vcl::pdf::StructElement::TableRow    ||
+                    eType == vcl::pdf::StructElement::TableHeader ||
+                    eType == vcl::pdf::StructElement::TableData   ||
+                    eType == vcl::pdf::StructElement::Span        ||
+                    eType == vcl::pdf::StructElement::Quote       ||
+                    eType == vcl::pdf::StructElement::Note        ||
+                    eType == vcl::pdf::StructElement::Reference   ||
+                    eType == vcl::pdf::StructElement::BibEntry    ||
+                    eType == vcl::pdf::StructElement::Code        ||
+                    eType == vcl::pdf::StructElement::Link)
                 {
                         bInsert = true;
                 }
@@ -11552,14 +11609,14 @@ bool PDFWriterImpl::setStructureAttributeNumerical( enum PDFWriter::StructAttrib
             case PDFWriter::RowSpan:
             case PDFWriter::ColSpan:
                 // only for table cells
-                if( eType == PDFWriter::TableHeader ||
-                    eType == PDFWriter::TableData )
+                if (eType == vcl::pdf::StructElement::TableHeader ||
+                    eType == vcl::pdf::StructElement::TableData)
                 {
                     bInsert = true;
                 }
                 break;
             case PDFWriter::LinkAnnotation:
-                if( eType == PDFWriter::Link )
+                if (eType == vcl::pdf::StructElement::Link)
                     bInsert = true;
                 break;
             default: break;
@@ -11589,12 +11646,12 @@ void PDFWriterImpl::setStructureBoundingBox( const tools::Rectangle& rRect )
         return;
 
     assert(m_aStructure[m_nCurrentStructElement].m_oType);
-    PDFWriter::StructElement const eType = *m_aStructure[m_nCurrentStructElement].m_oType;
-    if( eType == PDFWriter::Figure      ||
-        eType == PDFWriter::Formula     ||
-        eType == PDFWriter::Form        ||
-        eType == PDFWriter::Division    ||
-        eType == PDFWriter::Table )
+    vcl::pdf::StructElement const eType = *m_aStructure[m_nCurrentStructElement].m_oType;
+    if (eType == vcl::pdf::StructElement::Figure ||
+        eType == vcl::pdf::StructElement::Formula ||
+        eType == vcl::pdf::StructElement::Form ||
+        eType == vcl::pdf::StructElement::Division ||
+        eType == vcl::pdf::StructElement::Table)
     {
         m_aStructure[ m_nCurrentStructElement ].m_aBBox = rRect;
         // convert to default user space now, since the mapmode may change
@@ -11694,7 +11751,7 @@ void PDFWriterImpl::ensureUniqueRadioOnValues()
                         SvMemoryStream* pStream = stream_it->second;
                         app_it->second.erase( stream_it );
                         OStringBuffer aBuf( rKid.m_aOnValue.getLength()*2 );
-                        appendName( rKid.m_aOnValue, aBuf );
+                        COSWriter::appendName( rKid.m_aOnValue, aBuf );
                         (app_it->second)[ aBuf.makeStringAndClear() ] = pStream;
                     }
                     else
@@ -11713,7 +11770,7 @@ void PDFWriterImpl::ensureUniqueRadioOnValues()
                         SvMemoryStream* pStream = stream_it->second;
                         app_it->second.erase( stream_it );
                         OStringBuffer aBuf( rKid.m_aOffValue.getLength()*2 );
-                        appendName( rKid.m_aOffValue, aBuf );
+                        COSWriter::appendName( rKid.m_aOffValue, aBuf );
                         (app_it->second)[ aBuf.makeStringAndClear() ] = pStream;
                     }
                     else

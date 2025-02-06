@@ -965,9 +965,9 @@ void SfxObjectShell::CheckSecurityOnLoading_Impl()
 {
     // MACRO: Always disable, skip checks {
     pImpl->aMacroMode.disallowMacroExecution();
-    return; 
+    return;
     // MACRO: }
-   
+
     if (GetErrorCode() == ERRCODE_IO_BROKENPACKAGE)
     {   // safety first: don't run any macros from broken package.
         pImpl->aMacroMode.disallowMacroExecution();
@@ -2032,9 +2032,18 @@ bool SfxObjectShell::isEditDocLocked() const
     Reference<XModel3> xModel = GetModel();
     if (!xModel.is())
         return false;
-    if (!officecfg::Office::Common::Misc::AllowEditReadonlyDocs::get())
+    if (officecfg::Office::Common::Misc::ViewerAppMode::get()
+        || !officecfg::Office::Common::Misc::AllowEditReadonlyDocs::get())
         return true;
-    return comphelper::NamedValueCollection::getOrDefault(xModel->getArgs2( { "LockEditDoc" } ), u"LockEditDoc", false);
+    try
+    {
+        return comphelper::NamedValueCollection::getOrDefault(xModel->getArgs2( { "LockEditDoc" } ), u"LockEditDoc", false);
+    }
+    catch (const uno::RuntimeException&)
+    {
+        TOOLS_WARN_EXCEPTION("sfx.appl", "unexpected RuntimeException");
+    }
+    return false;
 }
 
 bool SfxObjectShell::isContentExtractionLocked() const
@@ -2042,7 +2051,15 @@ bool SfxObjectShell::isContentExtractionLocked() const
     Reference<XModel3> xModel = GetModel();
     if (!xModel.is())
         return false;
-    return comphelper::NamedValueCollection::getOrDefault(xModel->getArgs2( { "LockContentExtraction" } ), u"LockContentExtraction", false);
+    try
+    {
+        return comphelper::NamedValueCollection::getOrDefault(xModel->getArgs2( { "LockContentExtraction" } ), u"LockContentExtraction", false);
+    }
+    catch (const uno::RuntimeException&)
+    {
+        TOOLS_WARN_EXCEPTION("sfx.appl", "unexpected RuntimeException");
+    }
+    return false;
 }
 
 bool SfxObjectShell::isExportLocked() const
@@ -2050,7 +2067,15 @@ bool SfxObjectShell::isExportLocked() const
     Reference<XModel3> xModel = GetModel();
     if (!xModel.is())
         return false;
-    return comphelper::NamedValueCollection::getOrDefault(xModel->getArgs2( { "LockExport" } ), u"LockExport", false);
+    try
+    {
+        return comphelper::NamedValueCollection::getOrDefault(xModel->getArgs2( { "LockExport" } ), u"LockExport", false);
+    }
+    catch (const uno::RuntimeException&)
+    {
+        TOOLS_WARN_EXCEPTION("sfx.appl", "unexpected RuntimeException");
+    }
+    return false;
 }
 
 bool SfxObjectShell::isPrintLocked() const

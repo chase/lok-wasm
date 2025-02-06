@@ -7,6 +7,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#pragma once
+
 #include <sal/types.h>
 
 #include <utility>
@@ -39,6 +41,7 @@ class SvStream;
 struct SignatureInformation;
 
 namespace svl::crypto {
+class SigningContext;
 
 /// Converts a hex-encoded string into a byte array.
 SVL_DLLPUBLIC std::vector<unsigned char> DecodeHexString(std::string_view rHex);
@@ -49,8 +52,8 @@ class SVL_DLLPUBLIC Signing
 {
 public:
 
-    Signing(css::uno::Reference<css::security::XCertificate> xCertificate) :
-        m_xCertificate(std::move(xCertificate))
+    Signing(svl::crypto::SigningContext& rSigningContext) :
+        m_rSigningContext(rSigningContext)
     {
     }
 
@@ -81,15 +84,52 @@ public:
                        const bool bNonDetached,
                        const std::vector<unsigned char>& aSignature,
                        SignatureInformation& rInformation);
+    static void appendHex(sal_Int8 nInt, OStringBuffer& rBuffer);
 
 private:
     /// The certificate to use for signing.
-    const css::uno::Reference<css::security::XCertificate> m_xCertificate;
+    [[maybe_unused]] svl::crypto::SigningContext& m_rSigningContext;
 
     /// Data blocks (pointer-size pairs).
     std::vector<std::pair<const void*, sal_Int32>> m_dataBlocks;
     OUString m_aSignTSA;
     OUString m_aSignPassword;
+};
+
+/// Wrapper around a certificate: allows either an actual signing or extracting enough info, so a
+/// 3rd-party can sign our document.
+///
+/// The following states are supported:
+/// - actual signing: set m_xCertificate
+/// - hash extract before external signing: don't set anything, m_nSignatureTime and m_aDigest will
+///   be set
+/// - signature serialization after external signing: set m_nSignatureTime and m_aSignatureValue
+class SVL_DLLPUBLIC SigningContext
+{
+public:
+    /// If set, the certificate used for signing.
+    css::uno::Reference<css::security::XCertificate> m_xCertificate;
+    /// If m_xCertificate is not set, the time that would be used, in milliseconds since the epoch
+    /// (1970-01-01 UTC).
+    sal_Int64 m_nSignatureTime = 0;
+    /// SHA-256 digest of the to-be signed document.
+    std::vector<unsigned char> m_aDigest;
+    /// PKCS#7 data, produced externally.
+    std::vector<unsigned char> m_aSignatureValue;
+};
+
+/// Used for visual signing: an XCertificate or a signer name.
+class SVL_DLLPUBLIC CertificateOrName
+{
+public:
+    /// If set, the certificate used for signing.
+    css::uno::Reference<css::security::XCertificate> m_xCertificate;
+    /// Otherwise we don't have a certificate but have a name to be featured on the visual
+    /// signature.
+    OUString m_aName;
+
+    /// Returns if a certificate or a name is set.
+    bool Is() const;
 };
 
 }

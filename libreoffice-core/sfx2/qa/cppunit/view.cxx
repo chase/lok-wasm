@@ -9,6 +9,8 @@
 
 #include <test/unoapi_test.hxx>
 
+#include <boost/property_tree/json_parser.hpp>
+
 #include <com/sun/star/drawing/XDrawView.hpp>
 #include <com/sun/star/beans/XPropertySet.hpp>
 
@@ -21,6 +23,10 @@
 #include <sfx2/bindings.hxx>
 #include <sfx2/lokhelper.hxx>
 #include <sfx2/sfxbasemodel.hxx>
+#include <tools/json_writer.hxx>
+#include <rtl/ustrbuf.hxx>
+#include <comphelper/base64.hxx>
+#include <comphelper/propertyvalue.hxx>
 
 using namespace com::sun::star;
 
@@ -106,6 +112,111 @@ CPPUNIT_TEST_FIXTURE(Sfx2ViewTest, testLokHelperAddCertifices)
     // - Actual  : 4 (SignatureState::NOTVALIDATED)
     // i.e. the signature status for an opened document was not updated when trusting a CA.
     CPPUNIT_ASSERT_EQUAL(SignatureState::OK, pObjectShell->GetDocumentSignatureState());
+}
+
+CPPUNIT_TEST_FIXTURE(Sfx2ViewTest, testLokHelperCommandValuesSignature)
+{
+    // Given an unsigned PDF file:
+    loadFromFile(u"unsigned.pdf");
+
+    // When extracting hashes:
+    tools::JsonWriter aWriter;
+    SfxLokHelper::getCommandValues(aWriter, ".uno:Signature");
+    OString aJson = aWriter.finishAndGetAsOString();
+
+    // Then make sure that we get a signature time and a hash:
+    CPPUNIT_ASSERT(SfxLokHelper::supportsCommand(u"Signature"));
+    std::stringstream aStream{ std::string(aJson) };
+    boost::property_tree::ptree aTree;
+    boost::property_tree::read_json(aStream, aTree);
+    auto it = aTree.find("commandName");
+    CPPUNIT_ASSERT(it != aTree.not_found());
+    CPPUNIT_ASSERT_EQUAL(std::string(".uno:Signature"), it->second.get_value<std::string>());
+    it = aTree.find("commandValues");
+    CPPUNIT_ASSERT(it != aTree.not_found());
+    aTree = it->second;
+    // Non-zero timestamp:
+    it = aTree.find("signatureTime");
+    CPPUNIT_ASSERT(it != aTree.not_found());
+    auto nSignatureTime = it->second.get_value<sal_Int64>();
+    CPPUNIT_ASSERT(nSignatureTime != 0);
+    // Base64 encoded hash, that has the SHA-256 length:
+    it = aTree.find("digest");
+    CPPUNIT_ASSERT(it != aTree.not_found());
+    auto aDigest = OUString::fromUtf8(it->second.get_value<std::string>());
+    uno::Sequence<sal_Int8> aBytes;
+    comphelper::Base64::decode(aBytes, aDigest);
+    CPPUNIT_ASSERT_EQUAL(static_cast<sal_Int32>(32), aBytes.getLength());
+}
+
+namespace
+{
+OUString GetSignatureHash()
+{
+    tools::JsonWriter aWriter;
+    // Provide the current time, so the system timer is not contacted:
+    SfxLokHelper::getCommandValues(aWriter, ".uno:Signature?signatureTime=1731329053152");
+    OString aJson = aWriter.finishAndGetAsOString();
+    std::stringstream aStream{ std::string(aJson) };
+    boost::property_tree::ptree aTree;
+    boost::property_tree::read_json(aStream, aTree);
+    auto it = aTree.find("commandValues");
+    CPPUNIT_ASSERT(it != aTree.not_found());
+    aTree = it->second;
+    it = aTree.find("digest");
+    CPPUNIT_ASSERT(it != aTree.not_found());
+    return OUString::fromUtf8(it->second.get_value<std::string>());
+}
+}
+
+CPPUNIT_TEST_FIXTURE(Sfx2ViewTest, testLokHelperCommandValuesSignatureHash)
+{
+    // Given an unsigned PDF file:
+    loadFromFile(u"unsigned.pdf");
+
+    // When extracting hashes, two times:
+    OUString aHash1 = GetSignatureHash();
+    OUString aHash2 = GetSignatureHash();
+
+    // Then make sure that we get the same hash, since the same system time is provided:
+    // In case the test was slow enough that there was 1ms system time difference between the two
+    // calls, then this failed.
+    CPPUNIT_ASSERT_EQUAL(aHash1, aHash2);
+}
+
+CPPUNIT_TEST_FIXTURE(Sfx2ViewTest, testSignatureSerialize)
+{
+    // Given an unsigned PDF file:
+    std::shared_ptr<vcl::pdf::PDFium> pPDFium = vcl::pdf::PDFiumLibrary::get();
+    if (!pPDFium)
+        return;
+    createTempCopy(u"unsigned.pdf");
+    load(maTempFile.GetURL());
+
+    // When signing by serializing an externally provided signature based on an earlier extracted
+    // timestamp & document hash:
+    OUString aSigUrl = createFileURL(u"signature.pkcs7");
+    SvFileStream aSigStream(aSigUrl, StreamMode::READ);
+    auto aSigValue
+        = OUString::fromUtf8(read_uInt8s_ToOString(aSigStream, aSigStream.remainingSize()));
+    uno::Sequence<beans::PropertyValue> aArgs = {
+        comphelper::makePropertyValue(u"SignatureTime"_ustr, u"1643201995722"_ustr),
+        comphelper::makePropertyValue(u"SignatureValue"_ustr, aSigValue),
+    };
+    dispatchCommand(mxComponent, u".uno:Signature"_ustr, aArgs);
+
+    // Then make sure the document has a signature:
+    SvMemoryStream aStream;
+    aStream.WriteStream(*maTempFile.GetStream(StreamMode::READ));
+    std::unique_ptr<vcl::pdf::PDFiumDocument> pPdfDocument
+        = pPDFium->openDocument(aStream.GetData(), aStream.GetSize(), OString());
+    CPPUNIT_ASSERT(pPdfDocument);
+    // Without the accompanying fix in place, this test would have failed with:
+    // - Expected: 1
+    // - Actual  : 0
+    // i.e. no signature was added, since we tried to sign interactively instead of based on
+    // provided parameters.
+    CPPUNIT_ASSERT_EQUAL(1, pPdfDocument->getSignatureCount());
 }
 #endif
 

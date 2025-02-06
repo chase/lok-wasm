@@ -33,6 +33,7 @@
 #include <vcl/checksum.hxx>
 #include <svl/cryptosign.hxx>
 #include <vcl/filter/PDFiumLibrary.hxx>
+#include <sfx2/viewsh.hxx>
 
 using namespace ::com::sun::star;
 
@@ -70,21 +71,14 @@ void GetSignatureLineShape(const uno::Reference<frame::XModel>& xModel, sal_Int3
         return;
     }
 
+    SfxViewShell* pViewShell = SfxViewShell::Get(xModel->getCurrentController());
+    if (!pViewShell || !pViewShell->GetSignPDFCertificate().Is())
+    {
+        return;
+    }
+
     uno::Reference<drawing::XShapes> xShapes(xModel->getCurrentSelection(), uno::UNO_QUERY);
     if (!xShapes.is() || xShapes->getCount() < 1)
-    {
-        return;
-    }
-
-    uno::Reference<beans::XPropertySet> xShapeProps(xShapes->getByIndex(0), uno::UNO_QUERY);
-    if (!xShapeProps.is())
-    {
-        return;
-    }
-
-    comphelper::SequenceAsHashMap aMap(xShapeProps->getPropertyValue("InteropGrabBag"));
-    auto it = aMap.find("SignatureCertificate");
-    if (it == aMap.end())
     {
         return;
     }
@@ -536,10 +530,9 @@ PDFSignatureHelper::GetDocumentSignatureInformations(
 
 sal_Int32 PDFSignatureHelper::GetNewSecurityId() const { return m_aSignatureInfos.size(); }
 
-void PDFSignatureHelper::SetX509Certificate(
-    const uno::Reference<security::XCertificate>& xCertificate)
+void PDFSignatureHelper::SetX509Certificate(svl::crypto::SigningContext& rSigningContext)
 {
-    m_xCertificate = xCertificate;
+    m_pSigningContext = &rSigningContext;
 }
 
 void PDFSignatureHelper::SetDescription(const OUString& rDescription)
@@ -571,9 +564,12 @@ bool PDFSignatureHelper::Sign(const uno::Reference<frame::XModel>& xModel,
         aDocument.SetSignatureLine(std::move(aSignatureLineShape));
     }
 
-    if (!aDocument.Sign(m_xCertificate, m_aDescription, bAdES))
+    if (!m_pSigningContext || !aDocument.Sign(*m_pSigningContext, m_aDescription, bAdES))
     {
-        SAL_WARN("xmlsecurity.helper", "failed to sign");
+        if (m_pSigningContext && m_pSigningContext->m_xCertificate.is())
+        {
+            SAL_WARN("xmlsecurity.helper", "failed to sign");
+        }
         return false;
     }
 

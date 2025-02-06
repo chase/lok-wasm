@@ -1213,18 +1213,25 @@ void SectionPropertyMap::HandleMarginsHeaderFooter(DomainMapper_Impl& rDM_Impl)
     {
         uno::Reference<beans::XPropertySet> xDefaultPageStyle(
                     rDM_Impl.GetPageStyles()->getByName("Standard"), uno::UNO_QUERY_THROW);
-        for (const beans::Property& rProp : m_aPageStyle->getPropertySetInfo()->getProperties())
+        if (!m_aPageStyle)
         {
-            if (!rProp.Name.startsWith("Fill")) // only copy XATTR_FILL properties
-                continue;
-            try
+            SAL_WARN( "writerfilter", "No Page Style!" );
+        }
+        else
+        {
+            for (const beans::Property& rProp : m_aPageStyle->getPropertySetInfo()->getProperties())
             {
-                const uno::Any aFillValue = xDefaultPageStyle->getPropertyValue(rProp.Name);
-                m_aPageStyle->setPropertyValue(rProp.Name, aFillValue);
-            }
-            catch (uno::Exception&)
-            {
-                DBG_UNHANDLED_EXCEPTION("writerfilter", "Exception setting page background fill");
+                if (!rProp.Name.startsWith("Fill")) // only copy XATTR_FILL properties
+                    continue;
+                try
+                {
+                    const uno::Any aFillValue = xDefaultPageStyle->getPropertyValue(rProp.Name);
+                    m_aPageStyle->setPropertyValue(rProp.Name, aFillValue);
+                }
+                catch (uno::Exception&)
+                {
+                    DBG_UNHANDLED_EXCEPTION("writerfilter", "Exception setting page background fill");
+                }
             }
         }
     }
@@ -1493,34 +1500,11 @@ void SectionPropertyMap::CreateEvenOddPageStyleCopy(DomainMapper_Impl& rDM_Impl,
     uno::Reference<beans::XPropertySet> evenOddStyle(
         rDM_Impl.GetTextFactory()->createInstance("com.sun.star.style.PageStyle"),
         uno::UNO_QUERY);
-    // Unfortunately using setParent() does not work for page styles, so make a deep copy of the page style.
+    rDM_Impl.GetPageStyles()->insertByName(evenOddStyleName, uno::Any(evenOddStyle));
+
     uno::Reference<beans::XPropertySet> pageProperties(m_aPageStyle);
     uno::Reference<beans::XPropertySetInfo> pagePropertiesInfo(pageProperties->getPropertySetInfo());
     const uno::Sequence<beans::Property> propertyList(pagePropertiesInfo->getProperties());
-
-    // Ignore write-only properties.
-    static const std::unordered_set<OUString> staticDenylist = {
-        "FooterBackGraphicURL", "BackGraphicURL", "HeaderBackGraphicURL",
-        "HeaderIsOn", "FooterIsOn",
-        "HeaderIsShared", "FooterIsShared", "FirstIsShared",
-        "HeaderText", "HeaderTextLeft", "HeaderTextFirst",
-        "FooterText", "FooterTextLeft", "FooterTextFirst" };
-
-    for (const auto& rProperty : propertyList)
-    {
-        if ((rProperty.Attributes & beans::PropertyAttribute::READONLY) == 0)
-        {
-            if (staticDenylist.find(rProperty.Name) == staticDenylist.end())
-            {
-                evenOddStyle->setPropertyValue(
-                    rProperty.Name,
-                    pageProperties->getPropertyValue(rProperty.Name));
-            }
-        }
-    }
-    evenOddStyle->setPropertyValue("FollowStyle", uno::Any(m_sPageStyleName));
-
-    rDM_Impl.GetPageStyles()->insertByName(evenOddStyleName, uno::Any(evenOddStyle));
 
     if (rDM_Impl.IsNewDoc())
     {
@@ -1531,6 +1515,45 @@ void SectionPropertyMap::CreateEvenOddPageStyleCopy(DomainMapper_Impl& rDM_Impl,
             !rDM_Impl.SeenHeaderFooter(PagePartType::Footer, PageType::RIGHT)
                 && (!bEvenAndOdd || !rDM_Impl.SeenHeaderFooter(PagePartType::Footer, PageType::LEFT)));
     }
+
+    // Ignore write-only properties.
+    static const std::unordered_set<OUString> staticDenylist = {
+        "FooterBackGraphicURL", "BackGraphicURL", "HeaderBackGraphicURL",
+        "HeaderIsOn", "FooterIsOn",
+        "HeaderIsShared", "FooterIsShared", "FirstIsShared",
+        "HeaderText", "HeaderTextLeft", "HeaderTextFirst",
+        "FooterText", "FooterTextLeft", "FooterTextFirst" };
+
+    // Unfortunately page styles can't inherit from a parent, so make a deep copy of the page style.
+    bool isMirrorMargins = PageBreakType::Even == eBreakType && rDM_Impl.GetSettingsTable()->GetMirrorMarginSettings();
+    for (const auto& rProperty : propertyList)
+    {
+        if ((rProperty.Attributes & beans::PropertyAttribute::READONLY) == 0)
+        {
+            if (staticDenylist.find(rProperty.Name) == staticDenylist.end())
+            {
+                OUString sSetName = rProperty.Name;
+                if (isMirrorMargins)
+                {
+                    if (rProperty.Name == u"LeftMargin"_ustr)
+                        sSetName = u"RightMargin"_ustr;
+                    else if (rProperty.Name == u"RightMargin"_ustr)
+                        sSetName = u"LeftMargin"_ustr;
+                }
+                try
+                {
+                    evenOddStyle->setPropertyValue(
+                        sSetName,
+                        pageProperties->getPropertyValue(rProperty.Name));
+                }
+                catch (uno::Exception&)
+                {
+                    DBG_UNHANDLED_EXCEPTION("writerfilter", "failed to copy page style property");
+                }
+            }
+        }
+    }
+    evenOddStyle->setPropertyValue("FollowStyle", uno::Any(m_sPageStyleName));
 
     if (eBreakType == PageBreakType::Even)
         evenOddStyle->setPropertyValue(getPropertyName(PROP_PAGE_STYLE_LAYOUT), uno::Any(style::PageStyleLayout_LEFT));

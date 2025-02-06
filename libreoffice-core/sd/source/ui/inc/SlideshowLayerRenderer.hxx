@@ -23,6 +23,12 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <drawinglayer/primitive2d/CommonTypes.hxx>
+
+#include <frozen/bits/defines.h>
+#include <frozen/bits/elsa_std.h>
+#include <frozen/unordered_set.h>
+#include <tools/color.hxx>
 
 class SdrPage;
 class SdrModel;
@@ -41,6 +47,21 @@ class ViewObjectContactRedirector;
 
 namespace sd
 {
+constexpr auto constNonValidEffectsForGroupSet = frozen::make_unordered_set<std::string_view>({
+    "ooo-emphasis-fill-color",
+    "ooo-emphasis-font-color",
+    "ooo-emphasis-line-color",
+    "ooo-emphasis-color-blend",
+    "ooo-emphasis-complementary-color",
+    "ooo-emphasis-complementary-color-2",
+    "ooo-emphasis-contrasting-color",
+    "ooo-emphasis-darken",
+    "ooo-emphasis-desaturate",
+    "ooo-emphasis-flash-bulb",
+    "ooo-emphasis-lighten",
+    "ooo-emphasis-grow-with-color",
+});
+
 class RenderContext;
 
 enum class RenderStage
@@ -77,6 +98,8 @@ struct RenderPass
     bool mbPlaceholder = false;
     OUString maFieldType;
 
+    Color maFontColor = COL_AUTO;
+
     bool isEmpty() { return maObjectsAndParagraphs.empty(); }
 };
 
@@ -91,6 +114,8 @@ struct RenderState
     std::unordered_map<SdrObject*, AnimationRenderInfo> maAnimationRenderInfoList;
 
     std::array<sal_Int32, 4> maIndices = { 0, 0, 0, 0 };
+
+    std::vector<drawinglayer::primitive2d::Primitive2DReference> maPrimitivesToUnhide;
 
     SdrObject* mpCurrentTarget = nullptr;
     sal_Int32 mnCurrentTargetParagraph = -1;
@@ -145,6 +170,8 @@ private:
     SdrModel& mrModel;
     Size maSlideSize;
     RenderState maRenderState;
+    bool mbRenderBackground;
+    bool mbRenderMasterPage;
 
     void createViewAndDraw(RenderContext& rRenderContext,
                            sdr::contact::ViewObjectContactRedirector* pRedirector);
@@ -154,9 +181,10 @@ private:
     void setupAnimations();
     void setupMasterPageFields();
     void resolveEffect(CustomAnimationEffectPtr const& rEffect);
+    void cleanup();
 
 public:
-    SlideshowLayerRenderer(SdrPage& rPage);
+    SlideshowLayerRenderer(SdrPage& rPage, bool bRenderBackground, bool bRenderMasterPage);
 
     /** Calculate and set the slide size depending on input desired size (in pixels)
      *
@@ -173,7 +201,7 @@ public:
      * The properties of the layer are written to the input string in JSON format.
      *
      * @returns false, if nothing was rendered and rendering is done */
-    bool render(unsigned char* pBuffer, OString& rJsonMsg);
+    bool render(unsigned char* pBuffer, bool& bIsBitmapLayer, double& scale, OString& rJsonMsg);
 };
 
 } // end of namespace sd

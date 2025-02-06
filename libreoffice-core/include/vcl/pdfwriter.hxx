@@ -49,6 +49,10 @@ namespace tools {
     class Polygon;
     class PolyPolygon;
 }
+namespace svl::crypto
+{
+class SigningContext;
+}
 class Bitmap;
 class BitmapEx;
 class Gradient;
@@ -69,6 +73,116 @@ class VCL_DLLPUBLIC PDFOutputStream
     virtual ~PDFOutputStream();
     virtual void write( const css::uno::Reference< css::io::XOutputStream >& xStream ) = 0;
 };
+
+/** Parameters that are needed when encrypting */
+struct EncryptionParams
+{
+    bool mbCanEncrypt = false;
+    std::vector<sal_uInt8> maKey;
+};
+
+/* The following structure describes the permissions used in PDF security */
+struct PDFEncryptionProperties
+{
+    //for both 40 and 128 bit security, see 3.5.2 PDF v 1.4 table 3.15, v 1.5 and v 1.6 table 3.20.
+    bool CanPrintTheDocument = false;
+    bool CanModifyTheContent = false;
+    bool CanCopyOrExtract = false;
+    bool CanAddOrModify = false;
+
+    //for revision 3 (bit 128 security) only
+    bool CanFillInteractive = false;
+    bool CanExtractForAccessibility = true;
+    bool CanAssemble = false;
+    bool CanPrintFull = false;
+
+    // encryption will only happen if EncryptionKey is not empty
+    // EncryptionKey is actually a construct out of OValue, UValue and DocumentIdentifier
+    // if these do not match, behavior is undefined, most likely an invalid PDF will be produced
+    // OValue, UValue, EncryptionKey and DocumentIdentifier can be computed from
+    // PDFDocInfo, Owner password and User password used the InitEncryption method which
+    // implements the algorithms described in the PDF reference chapter 3.5: Encryption
+    std::vector<sal_uInt8> OValue;
+    std::vector<sal_uInt8> OE; // needed by R6 algorithm
+
+    std::vector<sal_uInt8> UValue;
+    std::vector<sal_uInt8> UE; // needed by R6 algorithm
+
+    std::vector<sal_uInt8> EncryptionKey;
+    std::vector<sal_uInt8> DocumentIdentifier;
+
+    std::optional<EncryptionParams> moParameters;
+
+    bool canEncrypt() const
+    {
+        return !OValue.empty() && !UValue.empty() && !DocumentIdentifier.empty();
+    }
+
+    void clear()
+    {
+        OValue.clear();
+        OE.clear();
+        UValue.clear();
+        UE.clear();
+        EncryptionKey.clear();
+    }
+
+    sal_Int32 getAccessPermissions() const
+    {
+        sal_Int32 nAccessPermissions = 0xfffff0c0;
+
+        nAccessPermissions |= CanPrintTheDocument ? 1 << 2 : 0;
+        nAccessPermissions |= CanModifyTheContent ? 1 << 3 : 0;
+        nAccessPermissions |= CanCopyOrExtract ? 1 << 4 : 0;
+        nAccessPermissions |= CanAddOrModify ? 1 << 5 : 0;
+        nAccessPermissions |= CanFillInteractive ? 1 << 8 : 0;
+        nAccessPermissions |= CanExtractForAccessibility ? 1 << 9 : 0;
+        nAccessPermissions |= CanAssemble ? 1 << 10 : 0;
+        nAccessPermissions |= CanPrintFull ? 1 << 11 : 0;
+
+        return nAccessPermissions;
+    }
+
+    EncryptionParams const& getParams()
+    {
+        if (!moParameters)
+        {
+            moParameters = EncryptionParams{ canEncrypt(), EncryptionKey };
+        }
+        return *moParameters;
+    }
+};
+
+namespace pdf
+{
+// For a definition of structural element types please refer to
+// PDF Reference, 3rd ed. section 9.7.4.
+//
+// In PDF 2.0 specification (ISO 32000-2) refer to section 14.8.4
+enum class StructElement
+{
+    // Special element to place outside the structure hierarchy
+    NonStructElement,
+
+    // Grouping elements
+    Document, Part, Article, Section, Division, BlockQuote,
+    Caption, TOC, TOCI, Index,
+
+    // Block level elements
+    Paragraph, Heading, H1, H2, H3, H4, H5, H6,
+    List, ListItem, LILabel, LIBody,
+    Table, TableRow, TableHeader, TableData,
+    Title, // PDF 2.0
+
+    // Inline level elements
+    Span, Quote, Note, Reference, BibEntry, Code, Link, Annot,
+    Ruby, RB, RT, RP, Warichu, WT, WP,
+
+    // Illustration elements
+    Figure, Formula, Form
+};
+
+}
 
 class VCL_DLLPUBLIC PDFWriter
 {
@@ -100,34 +214,24 @@ public:
 
     enum class Orientation { Portrait, Inherit };
 
-    // in case the below enum is added PDF_2_0, please add just after PDF_1_7
-    enum class PDFVersion { PDF_1_4, PDF_1_5, PDF_1_6, PDF_1_7, PDF_A_1, PDF_A_2, PDF_A_3 };//i59651, PDF/A-1b & -1a, only -1b implemented for now
+
+    enum class PDFVersion
+    {
+        PDF_1_4,
+        PDF_1_5,
+        PDF_1_6,
+        PDF_1_7,
+        PDF_2_0,
+        PDF_A_1, // PDF/A-1b - Based on PDF 1.4. PDF/A-1a is not implemented.
+        PDF_A_2, // Based on PDF 1.7
+        PDF_A_3, // Based on PDF 1.7 + allows embedded
+        PDF_A_4, // Based on PDF 2.0
+        Default = PDF_1_7
+    };
+
     // for the meaning of DestAreaType please look at PDF Reference Manual
     // version 1.4 section 8.2.1, page 475
     enum class DestAreaType { XYZ, FitRectangle };
-
-    // for a definition of structural element types please refer to
-    // PDF Reference, 3rd ed. section 9.7.4
-    enum StructElement
-    {
-        // special element to place outside the structure hierarchy
-        NonStructElement,
-        // Grouping elements
-        Document, Part, Article, Section, Division, BlockQuote,
-        Caption, TOC, TOCI, Index,
-
-        // block level elements
-        Paragraph, Heading, H1, H2, H3, H4, H5, H6,
-        List, ListItem, LILabel, LIBody,
-        Table, TableRow, TableHeader, TableData,
-
-        // inline level elements
-        Span, Quote, Note, Reference, BibEntry, Code, Link, Annot,
-        Ruby, RB, RT, RP, Warichu, WT, WP,
-
-        // illustration elements
-        Figure, Formula, Form
-    };
 
     enum StructAttribute
     {
@@ -505,51 +609,6 @@ public:
         LaunchAction
     };
 
-/*
-The following structure describes the permissions used in PDF security
- */
-    struct PDFEncryptionProperties
-    {
-
-        //for both 40 and 128 bit security, see 3.5.2 PDF v 1.4 table 3.15, v 1.5 and v 1.6 table 3.20.
-        bool CanPrintTheDocument;
-        bool CanModifyTheContent;
-        bool CanCopyOrExtract;
-        bool CanAddOrModify;
-        //for revision 3 (bit 128 security) only
-        bool CanFillInteractive;
-        bool CanExtractForAccessibility;
-        bool CanAssemble;
-        bool CanPrintFull;
-
-        // encryption will only happen if EncryptionKey is not empty
-        // EncryptionKey is actually a construct out of OValue, UValue and DocumentIdentifier
-        // if these do not match, behavior is undefined, most likely an invalid PDF will be produced
-        // OValue, UValue, EncryptionKey and DocumentIdentifier can be computed from
-        // PDFDocInfo, Owner password and User password used the InitEncryption method which
-        // implements the algorithms described in the PDF reference chapter 3.5: Encryption
-        std::vector<sal_uInt8> OValue;
-        std::vector<sal_uInt8> UValue;
-        std::vector<sal_uInt8> EncryptionKey;
-        std::vector<sal_uInt8> DocumentIdentifier;
-
-        //permission default set for 128 bit, accessibility only
-        PDFEncryptionProperties() :
-            CanPrintTheDocument         ( false ),
-            CanModifyTheContent         ( false ),
-            CanCopyOrExtract            ( false ),
-            CanAddOrModify              ( false ),
-            CanFillInteractive          ( false ),
-            CanExtractForAccessibility  ( true ),
-            CanAssemble                 ( false ),
-            CanPrintFull                ( false )
-            {}
-
-
-        bool Encrypt() const
-        { return ! OValue.empty() && ! UValue.empty() && ! DocumentIdentifier.empty(); }
-    };
-
     struct PDFDocInfo
     {
         OUString          Title;          // document title
@@ -631,7 +690,7 @@ The following structure describes the permissions used in PDF security
         sal_Int32                       InitialPage;
         sal_Int32                       OpenBookmarkLevels; // -1 means all levels
 
-        PDFWriter::PDFEncryptionProperties  Encryption;
+        PDFEncryptionProperties  Encryption;
         PDFWriter::PDFDocInfo           DocumentInfo;
 
         bool                            SignPDF;
@@ -653,7 +712,7 @@ The following structure describes the permissions used in PDF security
                 DefaultLinkAction( PDFWriter::URIAction ),
                 ConvertOOoTargetToPDFTarget( false ),
                 ForcePDFAction( false ),
-                Version(PDFWriter::PDFVersion::PDF_1_7),
+                Version(PDFWriter::PDFVersion::Default),
                 UniversalAccessibilityCompliance( false ),
                 Tagged( false ),
                 SubmitFormat( PDFWriter::FDF ),
@@ -1103,7 +1162,7 @@ The following structure describes the permissions used in PDF security
      */
     void BeginStructureElement(sal_Int32 id);
     sal_Int32 EnsureStructureElement();
-    void InitStructureElement(sal_Int32 id, PDFWriter::StructElement eType, std::u16string_view rAlias);
+    void InitStructureElement(sal_Int32 id, vcl::pdf::StructElement eType, std::u16string_view rAlias);
 
     /** end the current logical structure element
 
@@ -1243,11 +1302,8 @@ The following structure describes the permissions used in PDF security
     */
     void AddAttachedFile(OUString const& rFileName, OUString const& rMimeType, OUString const& rDescription, std::unique_ptr<PDFOutputStream> pStream);
 
-    /// Write rString as a PDF hex string into rBuffer.
-    static void AppendUnicodeTextString(const OUString& rString, OStringBuffer& rBuffer);
-
     /// Get current date/time in PDF D:YYYYMMDDHHMMSS form.
-    static OString GetDateTime();
+    static OString GetDateTime(svl::crypto::SigningContext* pSigningContext = nullptr);
 };
 
 }

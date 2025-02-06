@@ -4465,6 +4465,7 @@ SfxVoidItem ExternalEdit SID_EXTERNAL_EDIT
     AutoUpdate = FALSE,
     FastCall = FALSE,
     ReadOnlyDoc = TRUE,
+    ViewerApp = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4564,7 +4565,7 @@ SfxVoidItem ChangePicture SID_CHANGE_PICTURE
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -4598,7 +4599,7 @@ SfxVoidItem CompressGraphic SID_COMPRESS_GRAPHIC
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -6056,6 +6057,7 @@ SfxBoolItem OpenReadOnly SID_FM_OPEN_READONLY
     AutoUpdate = TRUE,
     FastCall = FALSE,
     ReadOnlyDoc = TRUE,
+    ViewerApp = FALSE,
     Toggle = TRUE,
     Container = FALSE,
     RecordAbsolute = FALSE,
@@ -12362,7 +12364,7 @@ SfxVoidItem AnchorMenu SID_ANCHOR_MENU
 ]
 
 SfxVoidItem InsertSignatureLine SID_INSERT_SIGNATURELINE
-()
+(SfxStringItem SignatureCert FN_PARAM_1, SfxStringItem SignatureKey FN_PARAM_2, SfxBoolItem External FN_PARAM_3)
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
@@ -12515,6 +12517,23 @@ SfxVoidItem SpellCheckIgnoreAll SID_SPELLCHECK_IGNORE_ALL
     GroupId = SfxGroupId::Format;
 ]
 
+SfxVoidItem AddToWordbook SID_ADD_TO_WORDBOOK
+(SfxStringItem Wordbook FN_PARAM_1)
+[
+    AutoUpdate = FALSE,
+    FastCall = TRUE,
+    ReadOnlyDoc = FALSE,
+    Toggle = FALSE,
+    Container = FALSE,
+    RecordAbsolute = FALSE,
+    RecordPerSet;
+
+    AccelConfig = FALSE,
+    MenuConfig = FALSE,
+    ToolBoxConfig = FALSE,
+    GroupId = SfxGroupId::Format;
+]
+
 SfxVoidItem SpellCheckApplySuggestion SID_SPELLCHECK_APPLY_SUGGESTION
 (SfxStringItem ApplyRule FN_PARAM_1)
 [
@@ -12554,7 +12573,7 @@ SfxVoidItem ThemeDialog SID_THEME_DIALOG
 [
     AutoUpdate = FALSE,
     FastCall = FALSE,
-    ReadOnlyDoc = TRUE,
+    ReadOnlyDoc = FALSE,
     Toggle = FALSE,
     Container = FALSE,
     RecordAbsolute = FALSE,

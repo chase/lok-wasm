@@ -1839,7 +1839,8 @@ bool SfxObjectShell::SaveTo_Impl
     aLockUIGuard.Unlock();
     pImpl->bForbidReload = bOldStat;
 
-    if ( bOk )
+    // ucbhelper::Content is unable to do anything useful with a private:stream
+    if (bOk && !rMedium.GetName().equalsIgnoreAsciiCase("private:stream"))
     {
         try
         {
@@ -1975,21 +1976,24 @@ bool SfxObjectShell::ConnectTmpStorage_Impl(
             {
                 pImpl->aBasicManager.setStorage( xTmpStorage );
 
-                // Get rid of this workaround after issue i113914 is fixed
-                try
+                if (pImpl->xBasicLibraries)
                 {
-                    uno::Reference< script::XStorageBasedLibraryContainer > xBasicLibraries( pImpl->xBasicLibraries, uno::UNO_QUERY_THROW );
-                    xBasicLibraries->setRootStorage( xTmpStorage );
+                    try
+                    {
+                        pImpl->xBasicLibraries->setRootStorage( xTmpStorage );
+                    }
+                    catch( uno::Exception& )
+                    {}
                 }
-                catch( uno::Exception& )
-                {}
-                try
+                if (pImpl->xDialogLibraries)
                 {
-                    uno::Reference< script::XStorageBasedLibraryContainer > xDialogLibraries( pImpl->xDialogLibraries, uno::UNO_QUERY_THROW );
-                    xDialogLibraries->setRootStorage( xTmpStorage );
+                    try
+                    {
+                        pImpl->xDialogLibraries->setRootStorage( xTmpStorage );
+                    }
+                    catch( uno::Exception& )
+                    {}
                 }
-                catch( uno::Exception& )
-                {}
             }
         }
         catch( uno::Exception& )
@@ -2139,21 +2143,24 @@ bool SfxObjectShell::DoSaveCompleted( SfxMedium* pNewMed, bool bRegisterRecent )
         // Set storage in document library containers
         pImpl->aBasicManager.setStorage( xStorage );
 
-        // Get rid of this workaround after issue i113914 is fixed
-        try
+        if (pImpl->xBasicLibraries)
         {
-            uno::Reference< script::XStorageBasedLibraryContainer > xBasicLibraries( pImpl->xBasicLibraries, uno::UNO_QUERY_THROW );
-            xBasicLibraries->setRootStorage( xStorage );
+            try
+            {
+                pImpl->xBasicLibraries->setRootStorage( xStorage );
+            }
+            catch( uno::Exception& )
+            {}
         }
-        catch( uno::Exception& )
-        {}
-        try
+        if (pImpl->xDialogLibraries)
         {
-            uno::Reference< script::XStorageBasedLibraryContainer > xDialogLibraries( pImpl->xDialogLibraries, uno::UNO_QUERY_THROW );
-            xDialogLibraries->setRootStorage( xStorage );
+            try
+            {
+                pImpl->xDialogLibraries->setRootStorage( xStorage );
+            }
+            catch( uno::Exception& )
+            {}
         }
-        catch( uno::Exception& )
-        {}
     }
     else
     {

@@ -130,6 +130,8 @@ std::shared_ptr<DeckDescriptor> ResourceManager::ImplGetDeckDescriptor(std::u16s
 {
     for (auto const& deck : maDecks)
     {
+        if (deck->mbHiddenInViewerMode && officecfg::Office::Common::Misc::ViewerAppMode::get())
+            continue;
         if (deck->mbExperimental && !officecfg::Office::Common::Misc::ExperimentalMode::get())
             continue;
         if (deck->msId == rsDeckId)
@@ -169,6 +171,8 @@ const ResourceManager::DeckContextDescriptorContainer& ResourceManager::GetMatch
     std::multimap<sal_Int32,DeckContextDescriptor> aOrderedIds;
     for (auto const& deck : maDecks)
     {
+        if (deck->mbHiddenInViewerMode && officecfg::Office::Common::Misc::ViewerAppMode::get())
+            continue;
         if (deck->mbExperimental && !officecfg::Office::Common::Misc::ExperimentalMode::get())
             continue;
 
@@ -260,7 +264,7 @@ void ResourceManager::ReadDeckList()
         if (comphelper::LibreOfficeKit::isActive())
         {
             // Hide these decks in LOK as they aren't fully functional.
-            if (aDeckName == "GalleryDeck" || aDeckName == "StyleListDeck")
+            if (aDeckName == "GalleryDeck")
                 continue;
         }
 
@@ -281,6 +285,7 @@ void ResourceManager::ReadDeckList()
         rDeckDescriptor.msHelpId = "SIDEBAR_" + rDeckDescriptor.msId.toAsciiUpperCase();
         rDeckDescriptor.mnOrderIndex = getInt32(aDeckNode, "OrderIndex");
         rDeckDescriptor.mbExperimental = getBool(aDeckNode, "IsExperimental");
+        rDeckDescriptor.mbHiddenInViewerMode = getBool(aDeckNode, "HiddenInViewer");
 
         rDeckDescriptor.msNodeName = aDeckName;
 
@@ -513,7 +518,7 @@ void ResourceManager::ReadContextList (
             }
             else
             {
-                OSL_FAIL("expecting three or four values per ContextList entry, separated by comma");
+                SAL_WARN("sfx.sidebar", "expecting three or four values per ContextList entry, separated by comma, entries: " << aValues);
                 continue;
             }
         }
@@ -521,7 +526,7 @@ void ResourceManager::ReadContextList (
         const OUString sContextName(o3tl::trim(o3tl::getToken(sValue, 0, ',', nCharacterIndex)));
         if (nCharacterIndex < 0)
         {
-            OSL_FAIL("expecting three or four values per ContextList entry, separated by comma");
+            SAL_WARN("sfx.sidebar", "expecting three or four values per ContextList entry, separated by comma");
             continue;
         }
 
@@ -612,7 +617,7 @@ void ResourceManager::ReadContextList (
             bIsInitiallyVisible = false;
         else
         {
-            OSL_FAIL("unrecognized state");
+            SAL_WARN("sfx.sidebar", "unrecognized state");
             continue;
         }
 

@@ -18,6 +18,10 @@
 #include <svx/svdpagv.hxx>
 #include <svx/sdr/primitive2d/svx_primitivetypes2d.hxx>
 #include <svx/unoshape.hxx>
+#include <svx/xfillit0.hxx>
+#include <svx/xlineit0.hxx>
+#include <svx/xflclit.hxx>
+#include <svx/xlnclit.hxx>
 
 #include <vcl/virdev.hxx>
 #include <tools/json_writer.hxx>
@@ -27,6 +31,7 @@
 #include <drawdoc.hxx>
 #include <unokywds.hxx>
 #include <comphelper/servicehelper.hxx>
+#include <comphelper/lok.hxx>
 
 #include <com/sun/star/animations/XAnimate.hpp>
 #include <com/sun/star/animations/XAnimationNode.hpp>
@@ -37,8 +42,9 @@
 #include <drawinglayer/primitive2d/Primitive2DContainer.hxx>
 #include <drawinglayer/primitive2d/drawinglayer_primitivetypes2d.hxx>
 #include <drawinglayer/primitive2d/BufferedDecompositionPrimitive2D.hxx>
+#include <drawinglayer/primitive2d/Tools.hxx>
 #include <drawinglayer/primitive2d/texthierarchyprimitive2d.hxx>
-#include <drawinglayer/primitive2d/texthierarchyprimitive2d.hxx>
+#include <drawinglayer/primitive2d/textprimitive2d.hxx>
 
 #include <drawinglayer/tools/primitive2dxmldump.hxx>
 
@@ -54,24 +60,33 @@ private:
     SdrPage& mrPage;
 
     EEControlBits mnSavedControlBits;
+    Color maSavedBackgroundColor;
+    Fraction maScale;
 
 public:
     ScopedVclPtrInstance<VirtualDevice> maVirtualDevice;
 
-    RenderContext(unsigned char* pBuffer, SdrModel& rModel, SdrPage& rPage, Size const& rSlideSize)
+    RenderContext(unsigned char* pBuffer, SdrModel& rModel, SdrPage& rPage, Size const& rSlideSize,
+                  const Fraction& rScale)
         : mrModel(rModel)
         , mrPage(rPage)
+        , maScale(rScale)
         , maVirtualDevice(DeviceFormat::WITHOUT_ALPHA)
     {
-        // Turn off spelling
         SdrOutliner& rOutliner = mrModel.GetDrawOutliner();
+
+        // Set the background color
+        maSavedBackgroundColor = rOutliner.GetBackgroundColor();
+        rOutliner.SetBackgroundColor(mrPage.GetPageBackgroundColor());
+
+        // Turn off spelling
         mnSavedControlBits = rOutliner.GetControlWord();
         rOutliner.SetControlWord(mnSavedControlBits & ~EEControlBits::ONLINESPELLING);
 
         maVirtualDevice->SetBackground(Wallpaper(COL_TRANSPARENT));
 
-        maVirtualDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(rSlideSize, Fraction(1.0),
-                                                                   Point(), pBuffer);
+        maVirtualDevice->SetOutputSizePixelScaleOffsetAndLOKBuffer(rSlideSize, maScale, Point(),
+                                                                   pBuffer);
         Size aPageSize(mrPage.GetSize());
 
         MapMode aMapMode(MapUnit::Map100thMM);
@@ -91,30 +106,69 @@ public:
         // Restore spelling
         SdrOutliner& rOutliner = mrModel.GetDrawOutliner();
         rOutliner.SetControlWord(mnSavedControlBits);
+        rOutliner.SetBackgroundColor(maSavedBackgroundColor);
     }
 };
 
 namespace
 {
-bool hasFields(SdrObject* pObject)
+sal_Int32 getFieldType(SdrObject* pObject)
 {
     auto* pTextObject = dynamic_cast<SdrTextObj*>(pObject);
     if (!pTextObject)
-        return false;
+        return -2;
 
     OutlinerParaObject* pOutlinerParagraphObject = pTextObject->GetOutlinerParaObject();
     if (pOutlinerParagraphObject)
     {
         const EditTextObject& rEditText = pOutlinerParagraphObject->GetTextObject();
-        if (rEditText.IsFieldObject())
-            return true;
+        if (rEditText.IsFieldObject() && rEditText.GetField() && rEditText.GetField()->GetField())
+            return rEditText.GetField()->GetField()->GetClassId();
     }
-    return false;
+    return -2;
 }
 
+bool hasFields(SdrObject* pObject) { return getFieldType(pObject) > -2; }
+
+OUString getFieldName(sal_Int32 nType)
+{
+    switch (nType)
+    {
+        case text::textfield::Type::PAGE:
+            return u"Page"_ustr;
+        case text::textfield::Type::PAGE_NAME:
+            return u"PageName"_ustr;
+        default:
+            return u""_ustr;
+    }
+}
+
+OUString getMasterTextFieldType(SdrObject* pObject)
+{
+    OUString aType;
+
+    uno::Reference<drawing::XShape> xShape = pObject->getUnoShape();
+    if (!xShape.is())
+        return aType;
+
+    OUString sShapeType = xShape->getShapeType();
+
+    if (sShapeType == u"com.sun.star.presentation.SlideNumberShape")
+        aType = u"SlideNumber"_ustr;
+    else if (sShapeType == u"com.sun.star.presentation.FooterShape")
+        aType = u"Footer"_ustr;
+    else if (sShapeType == u"com.sun.star.presentation.DateTimeShape")
+        aType = u"DateTime"_ustr;
+
+    return aType;
+}
+
+bool isGroup(SdrObject* pObject) { return pObject->getChildrenOfSdrObject() != nullptr; }
+
 /// Sets visible for all kinds of polypolys in the container
-void changePolyPolys(drawinglayer::primitive2d::Primitive2DContainer& rContainer,
-                     bool bRenderObject)
+void changePolyPolys(
+    drawinglayer::primitive2d::Primitive2DContainer& rContainer, bool bRenderObject,
+    std::vector<drawinglayer::primitive2d::Primitive2DReference>& rPrimitivesToUnhide)
 {
     for (auto& pBasePrimitive : rContainer)
     {
@@ -122,16 +176,20 @@ void changePolyPolys(drawinglayer::primitive2d::Primitive2DContainer& rContainer
             || pBasePrimitive->getPrimitive2DID() == PRIMITIVE2D_ID_POLYPOLYGONGRADIENTPRIMITIVE2D
             || pBasePrimitive->getPrimitive2DID() == PRIMITIVE2D_ID_POLYPOLYGONGRAPHICPRIMITIVE2D
             || pBasePrimitive->getPrimitive2DID() == PRIMITIVE2D_ID_POLYPOLYGONHATCHPRIMITIVE2D
-            || pBasePrimitive->getPrimitive2DID() == PRIMITIVE2D_ID_POLYPOLYGONHAIRLINEPRIMITIVE2D)
+            || pBasePrimitive->getPrimitive2DID() == PRIMITIVE2D_ID_POLYPOLYGONHAIRLINEPRIMITIVE2D
+            || pBasePrimitive->getPrimitive2DID() == PRIMITIVE2D_ID_UNIFIEDTRANSPARENCEPRIMITIVE2D)
         {
             pBasePrimitive->setVisible(bRenderObject);
+            if (!bRenderObject)
+                rPrimitivesToUnhide.push_back(pBasePrimitive);
         }
     }
 }
 
 /// Searches for rectangle primitive and changes if the background should be rendered
-void changeBackground(drawinglayer::primitive2d::Primitive2DContainer const& rContainer,
-                      bool bRenderObject)
+void changeBackground(
+    drawinglayer::primitive2d::Primitive2DContainer const& rContainer, bool bRenderObject,
+    std::vector<drawinglayer::primitive2d::Primitive2DReference>& rPrimitivesToUnhide)
 {
     for (size_t i = 0; i < rContainer.size(); i++)
     {
@@ -141,7 +199,7 @@ void changeBackground(drawinglayer::primitive2d::Primitive2DContainer const& rCo
             drawinglayer::primitive2d::Primitive2DContainer aPrimitiveContainer;
             pBasePrimitive->get2DDecomposition(aPrimitiveContainer,
                                                drawinglayer::geometry::ViewInformation2D());
-            changePolyPolys(aPrimitiveContainer, bRenderObject);
+            changePolyPolys(aPrimitiveContainer, bRenderObject, rPrimitivesToUnhide);
         }
     }
 }
@@ -186,15 +244,63 @@ findTextBlock(drawinglayer::primitive2d::Primitive2DContainer const& rContainer,
                 if (pTextBlock)
                     return pTextBlock;
             }
+
+            // for text object in edit mode
+            auto* pTextEditPrimitive
+                = dynamic_cast<drawinglayer::primitive2d::TextHierarchyEditPrimitive2D*>(
+                    pBasePrimitive);
+            if (pTextEditPrimitive)
+            {
+                auto* pTextBlock
+                    = findTextBlock(pTextEditPrimitive->getContent(), rViewInformation2D);
+                if (pTextBlock)
+                    return pTextBlock;
+            }
         }
     }
     return nullptr;
 }
 
+/// Retrieve paragraph font color to be used in the json message attached to the animated layer
+Color getParagraphFontColor(
+    const drawinglayer::primitive2d::TextHierarchyParagraphPrimitive2D& pParagraphPrimitive2d)
+{
+    auto& rLinesContainer = const_cast<drawinglayer::primitive2d::Primitive2DContainer&>(
+        pParagraphPrimitive2d.getChildren());
+    for (auto& pLine : rLinesContainer)
+    {
+        if (pLine->getPrimitive2DID() == PRIMITIVE2D_ID_TEXTHIERARCHYLINEPRIMITIVE2D)
+        {
+            auto& rLinePrimitive2d
+                = static_cast<drawinglayer::primitive2d::TextHierarchyLinePrimitive2D&>(*pLine);
+            auto& rPortionsContainer = const_cast<drawinglayer::primitive2d::Primitive2DContainer&>(
+                rLinePrimitive2d.getChildren());
+            for (auto& pPortion : rPortionsContainer)
+            {
+                if (pPortion->getPrimitive2DID() == PRIMITIVE2D_ID_TEXTSIMPLEPORTIONPRIMITIVE2D)
+                {
+                    auto& rPortionPrimitive2d
+                        = static_cast<drawinglayer::primitive2d::TextSimplePortionPrimitive2D&>(
+                            *pPortion);
+                    Color aColor(rPortionPrimitive2d.getFontColor());
+                    SAL_INFO("sd", "SlideshowLayerRenderer: modifyParagraphs: "
+                                   "text: "
+                                       << rPortionPrimitive2d.getText()
+                                       << ", color: " << aColor.AsRGBHEXString());
+                    return aColor;
+                }
+            }
+        }
+    }
+    return COL_AUTO;
+}
+
 /// show/hide paragraphs in the container
-void modifyParagraphs(drawinglayer::primitive2d::Primitive2DContainer& rContainer,
-                      drawinglayer::geometry::ViewInformation2D const& rViewInformation2D,
-                      std::deque<sal_Int32> const& rPreserveIndices, bool bRenderObject)
+void modifyParagraphs(
+    drawinglayer::primitive2d::Primitive2DContainer& rContainer,
+    drawinglayer::geometry::ViewInformation2D const& rViewInformation2D,
+    std::deque<sal_Int32> const& rPreserveIndices, bool bRenderObject, Color& rFontColor,
+    std::vector<drawinglayer::primitive2d::Primitive2DReference>& rPrimitivesToUnhide)
 {
     auto* pTextBlock = findTextBlock(rContainer, rViewInformation2D);
 
@@ -211,6 +317,8 @@ void modifyParagraphs(drawinglayer::primitive2d::Primitive2DContainer& rContaine
                     = static_cast<drawinglayer::primitive2d::TextHierarchyParagraphPrimitive2D&>(
                         *pPrimitive);
 
+                rFontColor = getParagraphFontColor(pParagraphPrimitive2d);
+
                 // find the index
                 auto aIterator
                     = std::find(rPreserveIndices.begin(), rPreserveIndices.end(), nIndex);
@@ -219,11 +327,13 @@ void modifyParagraphs(drawinglayer::primitive2d::Primitive2DContainer& rContaine
                 bool bHideIndex = aIterator == rPreserveIndices.end();
 
                 pParagraphPrimitive2d.setVisible(!bHideIndex);
+                if (bHideIndex)
+                    rPrimitivesToUnhide.push_back(pPrimitive);
             }
             nIndex++;
         }
 
-        changeBackground(rContainer, bRenderObject);
+        changeBackground(rContainer, bRenderObject, rPrimitivesToUnhide);
     }
 }
 
@@ -232,6 +342,7 @@ class AnalyzeRenderingRedirector : public sdr::contact::ViewObjectContactRedirec
 {
 private:
     RenderState& mrRenderState;
+    bool mbRenderMasterPage;
 
     RenderPass* mpCurrentRenderPass;
     RenderStage mePreviousStage = RenderStage::Master;
@@ -252,32 +363,29 @@ private:
         mpCurrentRenderPass = newRenderPass();
     }
 
-    OUString getMasterTextFieldString(SdrObject* pObject)
+    bool isTextFieldVisible(std::u16string_view svType) const
     {
-        OUString aType;
+        return (mrRenderState.mbSlideNumberEnabled && svType == u"SlideNumber")
+               || (mrRenderState.mbFooterEnabled && svType == u"Footer")
+               || (mrRenderState.mbDateTimeEnabled && svType == u"DateTime");
+    }
 
-        uno::Reference<drawing::XShape> xShape = pObject->getUnoShape();
-        if (!xShape.is())
-            return aType;
-
-        OUString sShapeType = xShape->getShapeType();
-
-        if (mrRenderState.mbSlideNumberEnabled
-            && sShapeType == u"com.sun.star.presentation.SlideNumberShape")
-            aType = u"SlideNumber"_ustr;
-        else if (mrRenderState.mbFooterEnabled
-                 && sShapeType == u"com.sun.star.presentation.FooterShape")
-            aType = u"Footer"_ustr;
-        else if (mrRenderState.mbDateTimeEnabled
-                 && sShapeType == u"com.sun.star.presentation.DateTimeShape")
-            aType = u"DateTime"_ustr;
-
-        return aType;
+    SdrObject* getAnimatedAncestor(SdrObject* pObject) const
+    {
+        SdrObject* pAncestor = pObject;
+        while ((pAncestor = pAncestor->getParentSdrObjectFromSdrObject()))
+        {
+            auto aIterator = mrRenderState.maAnimationRenderInfoList.find(pAncestor);
+            if (aIterator != mrRenderState.maAnimationRenderInfoList.end())
+                return pAncestor;
+        }
+        return pAncestor;
     }
 
 public:
-    AnalyzeRenderingRedirector(RenderState& rRenderState)
+    AnalyzeRenderingRedirector(RenderState& rRenderState, bool bRenderMasterPage)
         : mrRenderState(rRenderState)
+        , mbRenderMasterPage(bRenderMasterPage)
         , mpCurrentRenderPass(newRenderPass())
     {
     }
@@ -288,9 +396,13 @@ public:
         if (mrRenderState.maRenderPasses.back().isEmpty())
             mrRenderState.maRenderPasses.pop_back();
 
+        // Merge text field render passes into the main render pass list.
+        // We prepend them, so that they are rendered and sent to the client first.
+        // So, when the client try to draw a master page layer corresponding
+        // to a text field placeholder the content is already available.
         for (auto& rRenderWork : mrRenderState.maTextFields)
         {
-            mrRenderState.maRenderPasses.push_back(rRenderWork);
+            mrRenderState.maRenderPasses.push_front(rRenderWork);
         }
     }
 
@@ -315,18 +427,63 @@ public:
         const bool bVisible
             = pObject->getSdrPageFromSdrObject()->checkVisibility(rOriginal, rDisplayInfo, true);
 
-        if (!bVisible)
-            return;
-
         // Determine the current stage, depending on the page
         RenderStage eCurrentStage
             = pPage->IsMasterPage() ? RenderStage::Master : RenderStage::Slide;
 
+        OUString sTextFieldType = getMasterTextFieldType(pObject);
+        bool isPresentationTextField = !sTextFieldType.isEmpty();
+        if (!isPresentationTextField)
+        {
+            sTextFieldType = getFieldName(getFieldType(pObject));
+        }
+
+        // Check if the object has slide number, footer, date/time
+        if (eCurrentStage == RenderStage::Master && !sTextFieldType.isEmpty())
+        {
+            // it's not possible to set visibility for non-presentation text fields
+            bool bIsTextFieldVisible
+                = !isPresentationTextField || isTextFieldVisible(sTextFieldType);
+
+            // A placeholder always needs to be exported even if the content is hidden
+            // since it could be visible on another slide and master page layers should be cached
+            // on the client
+            if (mbRenderMasterPage)
+            {
+                closeRenderPass();
+
+                mpCurrentRenderPass->maObjectsAndParagraphs.emplace(pObject,
+                                                                    std::deque<sal_Int32>());
+                mpCurrentRenderPass->meStage = eCurrentStage;
+                mpCurrentRenderPass->mbPlaceholder = true;
+                mpCurrentRenderPass->maFieldType = sTextFieldType;
+                mpCurrentRenderPass->mpObject = pObject;
+                closeRenderPass();
+            }
+            // Collect text field content if it's visible
+            // Both checks are needed!
+            if (bVisible && bIsTextFieldVisible)
+            {
+                RenderPass aTextFieldPass;
+                aTextFieldPass.maObjectsAndParagraphs.emplace(pObject, std::deque<sal_Int32>());
+                aTextFieldPass.meStage = RenderStage::TextFields;
+                aTextFieldPass.maFieldType = sTextFieldType;
+                aTextFieldPass.mpObject = pObject;
+
+                mrRenderState.maTextFields.push_back(aTextFieldPass);
+            }
+            return;
+        }
+
+        if (!mbRenderMasterPage && eCurrentStage == RenderStage::Master)
+            return;
+
+        if (!bVisible)
+            return;
+
         // We switched from master objecst to slide objects
         if (eCurrentStage == RenderStage::Slide && mePreviousStage == RenderStage::Master)
             closeRenderPass();
-
-        OUString sTextFieldString = getMasterTextFieldString(pObject);
 
         // check if object is in an animation
         auto aIterator = mrRenderState.maAnimationRenderInfoList.find(pObject);
@@ -383,39 +540,26 @@ public:
                 closeRenderPass();
             }
         }
-        // Check if the object has slide number, footer, date/time
-        else if (eCurrentStage == RenderStage::Master && !sTextFieldString.isEmpty())
+        // check if object is part of an animated group
+        else if (SdrObject* pAncestor = getAnimatedAncestor(pObject))
         {
-            closeRenderPass();
+            // a new animated group is started ?
+            if (mpCurrentRenderPass->mpObject && mpCurrentRenderPass->mpObject != pAncestor)
+                closeRenderPass();
 
+            // Add the animated object
             mpCurrentRenderPass->maObjectsAndParagraphs.emplace(pObject, std::deque<sal_Int32>());
             mpCurrentRenderPass->meStage = eCurrentStage;
-            mpCurrentRenderPass->mbPlaceholder = true;
-            mpCurrentRenderPass->maFieldType = sTextFieldString;
-            mpCurrentRenderPass->mpObject = pObject;
-            closeRenderPass();
-
-            RenderPass aTextFieldPass;
-            aTextFieldPass.maObjectsAndParagraphs.emplace(pObject, std::deque<sal_Int32>());
-            aTextFieldPass.meStage = RenderStage::TextFields;
-            aTextFieldPass.maFieldType = sTextFieldString;
-            aTextFieldPass.mpObject = pObject;
-
-            mrRenderState.maTextFields.push_back(aTextFieldPass);
+            mpCurrentRenderPass->mbAnimation = true;
+            mpCurrentRenderPass->mpObject = pAncestor;
         }
-        // Check if the object has fields
-        else if (eCurrentStage == RenderStage::Master && hasFields(pObject))
-        {
-            closeRenderPass();
-
-            mpCurrentRenderPass->maObjectsAndParagraphs.emplace(pObject, std::deque<sal_Int32>());
-            mpCurrentRenderPass->meStage = eCurrentStage;
-            mpCurrentRenderPass->mpObject = pObject;
-            closeRenderPass();
-        }
-        // No specal handling is needed, just add the object to the current rendering pass
+        // No special handling is needed, just add the object to the current rendering pass
         else
         {
+            // an animated group is complete ?
+            if (mpCurrentRenderPass->mpObject)
+                closeRenderPass();
+
             mpCurrentRenderPass->maObjectsAndParagraphs.emplace(pObject, std::deque<sal_Int32>());
             mpCurrentRenderPass->meStage = eCurrentStage;
         }
@@ -428,10 +572,10 @@ class RenderPassObjectRedirector : public sdr::contact::ViewObjectContactRedirec
 {
 protected:
     RenderState& mrRenderState;
-    RenderPass const& mrRenderPass;
+    RenderPass& mrRenderPass;
 
 public:
-    RenderPassObjectRedirector(RenderState& rRenderState, RenderPass const& rRenderPass)
+    RenderPassObjectRedirector(RenderState& rRenderState, RenderPass& rRenderPass)
         : mrRenderState(rRenderState)
         , mrRenderPass(rRenderPass)
     {
@@ -466,8 +610,10 @@ public:
             auto const& rViewInformation2D = rOriginal.GetObjectContact().getViewInformation2D();
             auto rContainer
                 = static_cast<drawinglayer::primitive2d::Primitive2DContainer&>(rVisitor);
+
             modifyParagraphs(rContainer, rViewInformation2D, rParagraphs,
-                             mrRenderPass.mbRenderObjectBackground);
+                             mrRenderPass.mbRenderObjectBackground, mrRenderPass.maFontColor,
+                             mrRenderState.maPrimitivesToUnhide);
         }
     }
 };
@@ -484,9 +630,12 @@ SdrObject* getObjectForShape(uno::Reference<drawing::XShape> const& xShape)
 
 } // end anonymous namespace
 
-SlideshowLayerRenderer::SlideshowLayerRenderer(SdrPage& rPage)
+SlideshowLayerRenderer::SlideshowLayerRenderer(SdrPage& rPage, bool bRenderBackground,
+                                               bool bRenderMasterPage)
     : mrPage(rPage)
     , mrModel(rPage.getSdrModelFromSdrPage())
+    , mbRenderBackground(bRenderBackground)
+    , mbRenderMasterPage(bRenderMasterPage)
 {
     maRenderState.meStage = RenderStage::Background;
     setupAnimations();
@@ -517,6 +666,20 @@ void SlideshowLayerRenderer::resolveEffect(CustomAnimationEffectPtr const& rEffe
 
     if (!pObject)
         return;
+
+    // afaics, when a shape is part of a group any applied effect is ignored,
+    // so no layer should be created
+    if (pObject->getParentSdrObjectFromSdrObject())
+        return;
+
+    // some kind of effect, like the ones based on color animations,
+    // is ignored when applied to a group
+    if (isGroup(pObject))
+    {
+        if (constNonValidEffectsForGroupSet.find(rEffect->getPresetId().toUtf8())
+            != constNonValidEffectsForGroupSet.end())
+            return;
+    }
 
     AnimationRenderInfo aAnimationInfo;
     auto aIterator = maRenderState.maAnimationRenderInfoList.find(pObject);
@@ -643,14 +806,27 @@ void SlideshowLayerRenderer::createViewAndDraw(
     aView.SetGridVisible(false);
     aView.SetHlplVisible(false);
     aView.SetGlueVisible(false);
-    aView.setHideBackground(!maRenderState.includeBackground());
+    aView.setHideBackground(!(mbRenderBackground && maRenderState.includeBackground()));
     aView.ShowSdrPage(&mrPage);
 
     Size aPageSize(mrPage.GetSize());
     Point aPoint;
 
     vcl::Region aRegion(::tools::Rectangle(aPoint, aPageSize));
-    aView.CompleteRedraw(rRenderContext.maVirtualDevice, aRegion, pRedirector);
+
+    // Rendering of a text shape in edit mode is performed by decomposing the TextHierarchyEditPrimitive2D instance.
+    // Usually such kind of primitive doesn't decompose on primitive processing, so we need to signal through a flag
+    // that a slideshow rendering is going to be performed in order to enable the decomposition.
+    // Using TextHierarchyEditPrimitive2D decomposition in place of TextEditDrawing for rendering a text object
+    // in edit mode allows to animate a single paragraph even when the related text object is in edit mode.
+    comphelper::LibreOfficeKit::setSlideshowRendering(true);
+    // Redraw slide but skip EndCompleteRedraw() which uses TextEditDrawing for rendering text when a text object is
+    // in edit mode. TextEditDrawing was causing to have artifacts displayed while playing the slideshow such as
+    // a tiny rectangle around the edited text shape.
+    SdrPaintWindow* pPaintWindow = aView.BeginCompleteRedraw(rRenderContext.maVirtualDevice);
+    OSL_ENSURE(pPaintWindow, "SlideshowLayerRenderer::createViewAndDraw: No OutDev (!)");
+    aView.DoCompleteRedraw(*pPaintWindow, aRegion, pRedirector);
+    comphelper::LibreOfficeKit::setSlideshowRendering(false);
 }
 
 namespace
@@ -674,7 +850,8 @@ void writeBoundingBox(::tools::JsonWriter& aJsonWriter, SdrObject* pObject)
 }
 
 void writeAnimated(::tools::JsonWriter& aJsonWriter, AnimationLayerInfo const& rLayerInfo,
-                   SdrObject* pObject)
+                   SdrObject* pObject, sal_Int32 nParagraph = -1,
+                   const Color& rFontColor = COL_AUTO)
 {
     aJsonWriter.put("type", "animated");
     {
@@ -688,6 +865,39 @@ void writeAnimated(::tools::JsonWriter& aJsonWriter, AnimationLayerInfo const& r
         aJsonWriter.put("type", "bitmap");
         writeContentNode(aJsonWriter);
         writeBoundingBox(aJsonWriter, pObject);
+
+        // a group of object has no such property
+        if (!isGroup(pObject))
+        {
+            if (nParagraph < 0)
+            {
+                drawing::FillStyle aFillStyle
+                    = pObject->GetProperties().GetItem(XATTR_FILLSTYLE).GetValue();
+                if (aFillStyle == drawing::FillStyle::FillStyle_SOLID)
+                {
+                    auto aFillColor
+                        = pObject->GetProperties().GetItem(XATTR_FILLCOLOR).GetColorValue();
+                    aJsonWriter.put("fillColor", "#" + aFillColor.AsRGBHEXString());
+                }
+                drawing::LineStyle aLineStyle
+                    = pObject->GetProperties().GetItem(XATTR_LINESTYLE).GetValue();
+                if (aLineStyle == drawing::LineStyle::LineStyle_SOLID)
+                {
+                    auto aLineColor
+                        = pObject->GetProperties().GetItem(XATTR_LINECOLOR).GetColorValue();
+                    aJsonWriter.put("lineColor", "#" + aLineColor.AsRGBHEXString());
+                }
+            }
+            else
+            {
+                if (rFontColor == COL_AUTO)
+                {
+                    SAL_WARN("sd", "SlideshowLayerRenderer: on writing JSON info for an animated "
+                                   "paragraph layer: font color is set to auto.");
+                }
+                aJsonWriter.put("fontColor", "#" + rFontColor.AsRGBHEXString());
+            }
+        }
     }
 }
 
@@ -726,7 +936,8 @@ void SlideshowLayerRenderer::writeJSON(OString& rJsonMsg, RenderPass const& rRen
             auto aParagraphInfoIterator = rInfo.maParagraphInfos.find(nParagraph);
             if (aParagraphInfoIterator != rInfo.maParagraphInfos.end())
             {
-                writeAnimated(aJsonWriter, aParagraphInfoIterator->second, pObject);
+                writeAnimated(aJsonWriter, aParagraphInfoIterator->second, pObject, nParagraph,
+                              rRenderPass.maFontColor);
             }
         }
         else if (rInfo.moObjectInfo)
@@ -750,12 +961,16 @@ void SlideshowLayerRenderer::writeJSON(OString& rJsonMsg, RenderPass const& rRen
             {
                 ::tools::ScopedJsonWriterNode aContentNode = aJsonWriter.startNode("content");
                 aJsonWriter.put("type", rRenderPass.maFieldType);
+                std::string sHash = pObject ? std::to_string(pObject->GetUniqueID()) : "";
+                aJsonWriter.put("hash", sHash);
             }
         }
         else if (rRenderPass.meStage == RenderStage::TextFields)
         {
             ::tools::ScopedJsonWriterNode aContentNode = aJsonWriter.startNode("content");
             aJsonWriter.put("type", rRenderPass.maFieldType);
+            std::string sHash = pObject ? std::to_string(pObject->GetUniqueID()) : "";
+            aJsonWriter.put("hash", sHash);
             writeContentNode(aJsonWriter);
         }
         else
@@ -770,33 +985,48 @@ void SlideshowLayerRenderer::writeJSON(OString& rJsonMsg, RenderPass const& rRen
     maRenderState.incrementIndex();
 }
 
-bool SlideshowLayerRenderer::render(unsigned char* pBuffer, OString& rJsonMsg)
+bool SlideshowLayerRenderer::render(unsigned char* pBuffer, bool& bIsBitmapLayer, double& rScale,
+                                    OString& rJsonMsg)
 {
     // We want to render one pass (one iteration through objects)
 
-    RenderContext aRenderContext(pBuffer, mrModel, mrPage, maSlideSize);
+    RenderContext aRenderContext(pBuffer, mrModel, mrPage, maSlideSize, Fraction(rScale));
 
     // Render Background and analyze other passes
     if (maRenderState.meStage == RenderStage::Background)
     {
         // Render no objects, just the background, but analyze and create rendering passes
-        AnalyzeRenderingRedirector aRedirector(maRenderState);
+        AnalyzeRenderingRedirector aRedirector(maRenderState, mbRenderMasterPage);
         createViewAndDraw(aRenderContext, &aRedirector);
         aRedirector.finalizeRenderPasses();
 
-        // Write JSON for the Background layer
-        writeBackgroundJSON(rJsonMsg);
+        if (mbRenderBackground)
+        {
+            bIsBitmapLayer = true;
 
-        maRenderState.meStage = RenderStage::Master;
+            // Write JSON for the Background layer
+            writeBackgroundJSON(rJsonMsg);
+        }
+
+        maRenderState.meStage = mbRenderMasterPage ? RenderStage::Master : RenderStage::Slide;
+
+        // We need to return a valid layer, so if background has to be skipped
+        // render the next layer
+        if (!mbRenderBackground)
+            render(pBuffer, bIsBitmapLayer, rScale, rJsonMsg);
     }
     else
     {
         if (maRenderState.maRenderPasses.empty())
+        {
+            cleanup();
             return false;
-
-        auto const& rRenderPass = maRenderState.maRenderPasses.front();
+        }
+        auto& rRenderPass = maRenderState.maRenderPasses.front();
         maRenderState.meStage = rRenderPass.meStage;
-        if (!rRenderPass.mbPlaceholder) // no need to render if placehodler
+
+        bIsBitmapLayer = !rRenderPass.mbPlaceholder;
+        if (bIsBitmapLayer) // no need to render if placeholder
         {
             RenderPassObjectRedirector aRedirector(maRenderState, rRenderPass);
             createViewAndDraw(aRenderContext, &aRedirector);
@@ -808,6 +1038,14 @@ bool SlideshowLayerRenderer::render(unsigned char* pBuffer, OString& rJsonMsg)
     }
 
     return true;
+}
+
+void SlideshowLayerRenderer::cleanup()
+{
+    for (auto& pPrimitive : maRenderState.maPrimitivesToUnhide)
+    {
+        pPrimitive->setVisible(true);
+    }
 }
 
 } // end of namespace sd

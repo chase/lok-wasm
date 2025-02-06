@@ -289,6 +289,8 @@ public:
     /// @see vcl::ITiledRenderable::getViewRenderState().
     OString getViewRenderState(SfxViewShell* pViewShell = nullptr) override;
 
+    virtual void getCommandValues(tools::JsonWriter& rJsonWriter, std::string_view rCommand) override;
+
     /// @see vcl::ITiledRenderable::getPresentationInfo().
     OString getPresentationInfo() const override;
     /// @see vcl::ITiledRenderable::createSlideRenderer().
@@ -299,7 +301,7 @@ public:
     /// @see vcl::ITiledRenderable::postSlideshowCleanup().
     void postSlideshowCleanup() override;
     /// @see vcl::ITiledRenderable::renderNextSlideLayer().
-    bool renderNextSlideLayer(unsigned char* pBuffer, bool& bIsBitmapLayer, OUString& rJsonMsg) override;
+    bool renderNextSlideLayer(unsigned char* pBuffer, bool& bIsBitmapLayer, double& rScale, OUString& rJsonMsg) override;
 
     // XComponent
 

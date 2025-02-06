@@ -14,6 +14,7 @@
 #include <rtl/digest.h>
 
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace rtl {
@@ -59,6 +60,11 @@ public:
     ~Hash();
 
     void update(const unsigned char* pInput, size_t length);
+
+    void update(std::vector<unsigned char> const& rInput)
+    {
+        update(rInput.data(), rInput.size());
+    }
 
     std::vector<unsigned char> finalize();
 

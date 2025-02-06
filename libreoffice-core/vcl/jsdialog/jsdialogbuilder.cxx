@@ -10,9 +10,9 @@
 #include <jsdialog/jsdialogbuilder.hxx>
 #include <sal/log.hxx>
 #include <comphelper/base64.hxx>
-#include <comphelper/lok.hxx>
 #include <iconview.hxx>
 #include <utility>
+#include <vcl/menu.hxx>
 #include <vcl/svapp.hxx>
 #include <vcl/tabpage.hxx>
 #include <vcl/toolbox.hxx>
@@ -22,28 +22,15 @@
 #include <vcl/toolkit/treelistentry.hxx>
 #include <vcl/toolkit/vclmedit.hxx>
 #include <verticaltabctrl.hxx>
-#include <LibreOfficeKit/LibreOfficeKitEnums.h>
 #include <messagedialog.hxx>
 #include <tools/json_writer.hxx>
 #include <o3tl/deleter.hxx>
 #include <memory>
-#include <boost/property_tree/json_parser.hpp>
 #include <vcl/jsdialog/executor.hxx>
 #include <cppuhelper/supportsservice.hxx>
-
 #include <tools/stream.hxx>
-
 #include <vcl/cvtgrf.hxx>
-
 #include <wizdlg.hxx>
-
-static std::map<OUString, vcl::Window*>& GetLOKPopupsMap()
-{
-    // Map to remember the LOKWindowId <-> vcl popup binding.
-    static std::map<OUString, vcl::Window*> s_aLOKPopupsMap;
-
-    return s_aLOKPopupsMap;
-}
 
 namespace
 {
@@ -67,323 +54,6 @@ void response_help(vcl::Window* pWindow)
 
     pButton->Click();
 }
-}
-
-JSDialogNotifyIdle::JSDialogNotifyIdle(VclPtr<vcl::Window> aNotifierWindow,
-                                       VclPtr<vcl::Window> aContentWindow,
-                                       const OUString& sTypeOfJSON)
-    : Idle("JSDialog notify")
-    , m_aNotifierWindow(std::move(aNotifierWindow))
-    , m_aContentWindow(std::move(aContentWindow))
-    , m_sTypeOfJSON(sTypeOfJSON)
-    , m_bForce(false)
-{
-    SetPriority(TaskPriority::POST_PAINT);
-}
-
-void JSDialogNotifyIdle::forceUpdate() { m_bForce = true; }
-
-void JSDialogNotifyIdle::send(const OString& sMsg)
-{
-    if (!m_aNotifierWindow)
-    {
-        return;
-    }
-
-    const vcl::ILibreOfficeKitNotifier* pNotifier = m_aNotifierWindow->GetLOKNotifier();
-    if (pNotifier)
-    {
-        if (m_bForce || sMsg != m_LastNotificationMessage)
-        {
-            m_bForce = false;
-            m_LastNotificationMessage = sMsg;
-            pNotifier->libreOfficeKitViewCallback(LOK_CALLBACK_JSDIALOG, m_LastNotificationMessage);
-        }
-    }
-}
-
-void JSDialogNotifyIdle::sendMessage(jsdialog::MessageType eType, VclPtr<vcl::Window> pWindow,
-                                     std::unique_ptr<jsdialog::ActionDataMap> pData)
-{
-    std::scoped_lock aGuard(m_aQueueMutex);
-
-    // we want only the latest update of same type
-    // TODO: also if we met full update - previous updates are not valid
-    auto it = m_aMessageQueue.begin();
-
-    while (it != m_aMessageQueue.end())
-    {
-        if (it->m_eType == eType && it->m_pWindow == pWindow)
-        {
-            // actions should be always sent, eg. rendering of custom entries in combobox
-            if (eType == jsdialog::MessageType::Action)
-            {
-                it++;
-                continue;
-            }
-            it = m_aMessageQueue.erase(it);
-        }
-        else
-            it++;
-    }
-
-    JSDialogMessageInfo aMessage(eType, pWindow, std::move(pData));
-    m_aMessageQueue.push_back(aMessage);
-}
-
-OString JSDialogNotifyIdle::generateFullUpdate() const
-{
-    if (!m_aContentWindow || !m_aNotifierWindow)
-        return OString();
-
-    tools::JsonWriter aJsonWriter;
-
-    m_aContentWindow->DumpAsPropertyTree(aJsonWriter);
-    if (m_aNotifierWindow)
-        aJsonWriter.put("id", m_aNotifierWindow->GetLOKWindowId());
-    aJsonWriter.put("jsontype", m_sTypeOfJSON);
-
-    return aJsonWriter.finishAndGetAsOString();
-}
-
-OString JSDialogNotifyIdle::generateWidgetUpdate(VclPtr<vcl::Window> pWindow) const
-{
-    if (!pWindow || !m_aNotifierWindow)
-        return OString();
-
-    tools::JsonWriter aJsonWriter;
-
-    aJsonWriter.put("jsontype", m_sTypeOfJSON);
-    aJsonWriter.put("action", "update");
-    if (m_aNotifierWindow)
-        aJsonWriter.put("id", m_aNotifierWindow->GetLOKWindowId());
-    {
-        auto aEntries = aJsonWriter.startNode("control");
-        pWindow->DumpAsPropertyTree(aJsonWriter);
-    }
-
-    return aJsonWriter.finishAndGetAsOString();
-}
-
-OString JSDialogNotifyIdle::generateCloseMessage() const
-{
-    tools::JsonWriter aJsonWriter;
-    if (m_aNotifierWindow)
-        aJsonWriter.put("id", m_aNotifierWindow->GetLOKWindowId());
-    aJsonWriter.put("jsontype", m_sTypeOfJSON);
-    aJsonWriter.put("action", "close");
-
-    return aJsonWriter.finishAndGetAsOString();
-}
-
-OString
-JSDialogNotifyIdle::generateActionMessage(VclPtr<vcl::Window> pWindow,
-                                          std::unique_ptr<jsdialog::ActionDataMap> pData) const
-{
-    tools::JsonWriter aJsonWriter;
-
-    aJsonWriter.put("jsontype", m_sTypeOfJSON);
-    aJsonWriter.put("action", "action");
-    if (m_aNotifierWindow)
-        aJsonWriter.put("id", m_aNotifierWindow->GetLOKWindowId());
-
-    {
-        auto aDataNode = aJsonWriter.startNode("data");
-        aJsonWriter.put("control_id", pWindow->get_id());
-
-        for (auto it = pData->begin(); it != pData->end(); it++)
-            aJsonWriter.put(it->first, it->second);
-    }
-
-    return aJsonWriter.finishAndGetAsOString();
-}
-
-OString JSDialogNotifyIdle::generatePopupMessage(VclPtr<vcl::Window> pWindow, OUString sParentId,
-                                                 OUString sCloseId) const
-{
-    if (!pWindow || !m_aNotifierWindow)
-        return OString();
-
-    if (!pWindow->GetParentWithLOKNotifier())
-        return OString();
-
-    tools::JsonWriter aJsonWriter;
-
-    {
-        auto aChildren = aJsonWriter.startArray("children");
-        {
-            auto aStruct = aJsonWriter.startStruct();
-            pWindow->DumpAsPropertyTree(aJsonWriter);
-        }
-    }
-
-    // try to get the position eg. for the autofilter
-    {
-        vcl::Window* pVclWindow = pWindow.get();
-        DockingWindow* pDockingWindow = dynamic_cast<DockingWindow*>(pVclWindow);
-        while (pVclWindow && !pDockingWindow)
-        {
-            pVclWindow = pVclWindow->GetParent();
-            pDockingWindow = dynamic_cast<DockingWindow*>(pVclWindow);
-        }
-
-        if (pDockingWindow)
-        {
-            Point aPos = pDockingWindow->GetFloatingPos();
-            aJsonWriter.put("posx", aPos.getX());
-            aJsonWriter.put("posy", aPos.getY());
-            if (!pDockingWindow->IsVisible())
-                aJsonWriter.put("visible", "false");
-        }
-    }
-
-    aJsonWriter.put("jsontype", "dialog");
-    aJsonWriter.put("type", "modalpopup");
-    aJsonWriter.put("cancellable", true);
-    aJsonWriter.put("popupParent", sParentId);
-    aJsonWriter.put("clickToClose", sCloseId);
-    aJsonWriter.put("id", pWindow->GetParentWithLOKNotifier()->GetLOKWindowId());
-
-    return aJsonWriter.finishAndGetAsOString();
-}
-
-OString JSDialogNotifyIdle::generateClosePopupMessage(OUString sWindowId) const
-{
-    if (!m_aNotifierWindow)
-        return OString();
-
-    tools::JsonWriter aJsonWriter;
-
-    aJsonWriter.put("jsontype", "dialog");
-    aJsonWriter.put("type", "modalpopup");
-    aJsonWriter.put("action", "close");
-    aJsonWriter.put("id", sWindowId);
-
-    return aJsonWriter.finishAndGetAsOString();
-}
-
-void JSDialogNotifyIdle::Invoke()
-{
-    std::deque<JSDialogMessageInfo> aMessageQueue;
-    {
-        std::scoped_lock aGuard(m_aQueueMutex);
-
-        std::swap(aMessageQueue, m_aMessageQueue);
-    }
-
-    for (auto& rMessage : aMessageQueue)
-    {
-        jsdialog::MessageType eType = rMessage.m_eType;
-
-        if (m_sTypeOfJSON == "formulabar" && eType != jsdialog::MessageType::Action)
-            continue;
-
-        switch (eType)
-        {
-            case jsdialog::MessageType::FullUpdate:
-                send(generateFullUpdate());
-                break;
-
-            case jsdialog::MessageType::WidgetUpdate:
-                send(generateWidgetUpdate(rMessage.m_pWindow));
-                break;
-
-            case jsdialog::MessageType::Close:
-                send(generateCloseMessage());
-                break;
-
-            case jsdialog::MessageType::Action:
-                send(generateActionMessage(rMessage.m_pWindow, std::move(rMessage.m_pData)));
-                break;
-
-            case jsdialog::MessageType::Popup:
-                send(generatePopupMessage(rMessage.m_pWindow,
-                                          (*rMessage.m_pData)[PARENT_ID ""_ostr],
-                                          (*rMessage.m_pData)[CLOSE_ID ""_ostr]));
-                break;
-
-            case jsdialog::MessageType::PopupClose:
-                send(generateClosePopupMessage((*rMessage.m_pData)[WINDOW_ID ""_ostr]));
-                break;
-        }
-    }
-}
-
-void JSDialogNotifyIdle::clearQueue() { m_aMessageQueue.clear(); }
-
-JSDialogSender::~JSDialogSender() COVERITY_NOEXCEPT_FALSE
-{
-    sendClose();
-
-    if (mpIdleNotify)
-        mpIdleNotify->Stop();
-}
-
-void JSDialogSender::sendFullUpdate(bool bForce)
-{
-    if (!mpIdleNotify)
-        return;
-
-    if (bForce)
-        mpIdleNotify->forceUpdate();
-
-    mpIdleNotify->sendMessage(jsdialog::MessageType::FullUpdate, nullptr);
-    mpIdleNotify->Start();
-}
-
-void JSDialogSender::sendClose()
-{
-    if (!mpIdleNotify || !m_bCanClose)
-        return;
-
-    mpIdleNotify->clearQueue();
-    mpIdleNotify->sendMessage(jsdialog::MessageType::Close, nullptr);
-    flush();
-}
-
-void JSDialogSender::sendUpdate(VclPtr<vcl::Window> pWindow, bool bForce)
-{
-    if (!mpIdleNotify)
-        return;
-
-    if (bForce)
-        mpIdleNotify->forceUpdate();
-
-    mpIdleNotify->sendMessage(jsdialog::MessageType::WidgetUpdate, pWindow);
-    mpIdleNotify->Start();
-}
-
-void JSDialogSender::sendAction(VclPtr<vcl::Window> pWindow,
-                                std::unique_ptr<jsdialog::ActionDataMap> pData)
-{
-    if (!mpIdleNotify)
-        return;
-
-    mpIdleNotify->sendMessage(jsdialog::MessageType::Action, pWindow, std::move(pData));
-    mpIdleNotify->Start();
-}
-
-void JSDialogSender::sendPopup(VclPtr<vcl::Window> pWindow, OUString sParentId, OUString sCloseId)
-{
-    if (!mpIdleNotify)
-        return;
-
-    std::unique_ptr<jsdialog::ActionDataMap> pData = std::make_unique<jsdialog::ActionDataMap>();
-    (*pData)[PARENT_ID ""_ostr] = sParentId;
-    (*pData)[CLOSE_ID ""_ostr] = sCloseId;
-    mpIdleNotify->sendMessage(jsdialog::MessageType::Popup, pWindow, std::move(pData));
-    mpIdleNotify->Start();
-}
-
-void JSDialogSender::sendClosePopup(vcl::LOKWindowId nWindowId)
-{
-    if (!mpIdleNotify)
-        return;
-
-    std::unique_ptr<jsdialog::ActionDataMap> pData = std::make_unique<jsdialog::ActionDataMap>();
-    (*pData)[WINDOW_ID ""_ostr] = OUString::number(nWindowId);
-    mpIdleNotify->sendMessage(jsdialog::MessageType::PopupClose, nullptr, std::move(pData));
-    flush();
 }
 
 namespace
@@ -486,37 +156,9 @@ void JSDropTarget::fire_dragEnter(const css::datatransfer::dnd::DropTargetDragEn
     }
 }
 
-OUString JSInstanceBuilder::getMapIdFromWindowId() const
+void JSInstanceBuilder::initializeDialogSender()
 {
-    if (m_sTypeOfJSON == "sidebar" || m_sTypeOfJSON == "notebookbar"
-        || m_sTypeOfJSON == "formulabar" || m_sTypeOfJSON == "addressinputfield")
-    {
-        return OUString::number(m_nWindowId) + m_sTypeOfJSON;
-    }
-    else
-        return OUString::number(m_nWindowId);
-}
-
-// used for dialogs
-JSInstanceBuilder::JSInstanceBuilder(weld::Widget* pParent, const OUString& rUIRoot,
-                                     const OUString& rUIFile, bool bPopup)
-    : SalInstanceBuilder(extract_sal_widget(pParent), rUIRoot, rUIFile)
-    , m_nWindowId(0)
-    , m_aParentDialog(nullptr)
-    , m_aContentWindow(nullptr)
-    , m_sTypeOfJSON("dialog")
-    , m_bHasTopLevelDialog(false)
-    , m_bIsNotebookbar(false)
-    , m_bSentInitialUpdate(false)
-    , m_bIsNestedBuilder(false)
-    , m_aWindowToRelease(nullptr)
-{
-    // when it is a popup we initialize sender in weld_popover
-    if (bPopup)
-    {
-        m_sTypeOfJSON = "popup";
-        return;
-    }
+    m_sTypeOfJSON = "dialog";
 
     vcl::Window* pRoot = m_xBuilder->get_widget_root();
 
@@ -531,25 +173,23 @@ JSInstanceBuilder::JSInstanceBuilder(weld::Widget* pParent, const OUString& rUIR
     initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
 }
 
-// used for sidebar panels
-JSInstanceBuilder::JSInstanceBuilder(weld::Widget* pParent, const OUString& rUIRoot,
-                                     const OUString& rUIFile, sal_uInt64 nLOKWindowId)
-    : SalInstanceBuilder(extract_sal_widget(pParent), rUIRoot, rUIFile)
-    , m_nWindowId(nLOKWindowId)
-    , m_aParentDialog(nullptr)
-    , m_aContentWindow(nullptr)
-    , m_sTypeOfJSON("sidebar")
-    , m_bHasTopLevelDialog(false)
-    , m_bIsNotebookbar(false)
-    , m_bSentInitialUpdate(false)
-    , m_bIsNestedBuilder(false)
-    , m_aWindowToRelease(nullptr)
+void JSInstanceBuilder::initializePopupSender()
 {
+    // when it is a popup we initialize sender in weld_popover
+    m_sTypeOfJSON = "popup";
+}
+
+void JSInstanceBuilder::initializeSidebarSender(sal_uInt64 nLOKWindowId,
+                                                const std::u16string_view& rUIFile)
+{
+    m_sTypeOfJSON = "sidebar";
+    m_nWindowId = nLOKWindowId;
+
     vcl::Window* pRoot = m_xBuilder->get_widget_root();
 
     m_aParentDialog = pRoot->GetParentWithLOKNotifier();
 
-    if (rUIFile == "sfx/ui/panel.ui")
+    if (rUIFile == u"sfx/ui/panel.ui")
     {
         // builder for Panel, get SidebarDockingWindow as m_aContentWindow
         m_aContentWindow = pRoot;
@@ -559,7 +199,7 @@ JSInstanceBuilder::JSInstanceBuilder(weld::Widget* pParent, const OUString& rUIR
     else
     {
         // embedded fragments cannot send close message for whole sidebar
-        if (rUIFile == "modules/simpress/ui/customanimationfragment.ui")
+        if (rUIFile == u"modules/simpress/ui/customanimationfragment.ui")
             m_bCanClose = false;
 
         // builder for PanelLayout, get SidebarDockingWindow as m_aContentWindow
@@ -573,31 +213,19 @@ JSInstanceBuilder::JSInstanceBuilder(weld::Widget* pParent, const OUString& rUIR
     initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
 }
 
-// used for notebookbar
-JSInstanceBuilder::JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRoot,
-                                     const OUString& rUIFile,
-                                     const css::uno::Reference<css::frame::XFrame>& rFrame,
-                                     sal_uInt64 nWindowId)
-    : SalInstanceBuilder(pParent, rUIRoot, rUIFile, rFrame)
-    , m_nWindowId(0)
-    , m_aParentDialog(nullptr)
-    , m_aContentWindow(nullptr)
-    , m_sTypeOfJSON("notebookbar")
-    , m_bHasTopLevelDialog(false)
-    , m_bIsNotebookbar(false)
-    , m_bSentInitialUpdate(false)
-    , m_bIsNestedBuilder(false)
-    , m_aWindowToRelease(nullptr)
+void JSInstanceBuilder::initializeNotebookbarSender(sal_uInt64 nLOKWindowId)
 {
+    m_sTypeOfJSON = "notebookbar";
+
     vcl::Window* pRoot = m_xBuilder->get_widget_root();
     if (pRoot && pRoot->GetParent())
     {
         m_aParentDialog = pRoot->GetParent()->GetParentWithLOKNotifier();
         if (m_aParentDialog)
             m_nWindowId = m_aParentDialog->GetLOKWindowId();
-        if (!m_nWindowId && nWindowId)
+        if (!m_nWindowId && nLOKWindowId)
         {
-            m_nWindowId = nWindowId;
+            m_nWindowId = nLOKWindowId;
             m_bIsNotebookbar = true;
         }
         InsertWindowToMap(getMapIdFromWindowId());
@@ -606,23 +234,15 @@ JSInstanceBuilder::JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRo
     initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
 }
 
-// used for formulabar and addressinputfield
-JSInstanceBuilder::JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRoot,
-                                     const OUString& rUIFile, sal_uInt64 nLOKWindowId,
-                                     const OUString& sTypeOfJSON)
-    : SalInstanceBuilder(pParent, rUIRoot, rUIFile)
-    , m_nWindowId(nLOKWindowId)
-    , m_aParentDialog(nullptr)
-    , m_aContentWindow(nullptr)
-    , m_sTypeOfJSON(sTypeOfJSON)
-    , m_bHasTopLevelDialog(false)
-    , m_bIsNotebookbar(false)
-    , m_bSentInitialUpdate(false)
-    , m_bIsNestedBuilder(false)
-    , m_aWindowToRelease(nullptr)
+void JSInstanceBuilder::initializeFormulabarSender(sal_uInt64 nLOKWindowId,
+                                                   const std::u16string_view& sTypeOfJSON,
+                                                   vcl::Window* pVclParent)
 {
+    m_sTypeOfJSON = sTypeOfJSON;
+    m_nWindowId = nLOKWindowId;
+
     vcl::Window* pRoot = m_xBuilder->get_widget_root();
-    m_aContentWindow = pParent;
+    m_aContentWindow = pVclParent;
     if (pRoot && pRoot->GetParent())
     {
         m_aParentDialog = pRoot->GetParent()->GetParentWithLOKNotifier();
@@ -632,18 +252,76 @@ JSInstanceBuilder::JSInstanceBuilder(vcl::Window* pParent, const OUString& rUIRo
     initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
 }
 
+void JSInstanceBuilder::initializeMenuSender(weld::Widget* pParent)
+{
+    m_sTypeOfJSON = "menu";
+    m_aParentDialog = extract_sal_widget(pParent)->GetParentWithLOKNotifier();
+    initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
+}
+
+JSInstanceBuilder::JSInstanceBuilder(weld::Widget* pParent, vcl::Window* pVclParent,
+                                     const OUString& rUIRoot, const OUString& rUIFile,
+                                     JSInstanceBuilder::Type eBuilderType, sal_uInt64 nLOKWindowId,
+                                     const std::u16string_view& sTypeOfJSON,
+                                     const css::uno::Reference<css::frame::XFrame>& rFrame)
+    : SalInstanceBuilder(pVclParent ? pVclParent : extract_sal_widget(pParent), rUIRoot, rUIFile,
+                         rFrame)
+    , m_nWindowId(0)
+    , m_aParentDialog(nullptr)
+    , m_aContentWindow(nullptr)
+    , m_sTypeOfJSON("unknown")
+    , m_bHasTopLevelDialog(false)
+    , m_bIsNotebookbar(false)
+    , m_bSentInitialUpdate(false)
+    , m_bIsNestedBuilder(false)
+    , m_aWindowToRelease(nullptr)
+{
+    switch (eBuilderType)
+    {
+        case JSInstanceBuilder::Type::Dialog:
+            initializeDialogSender();
+            break;
+
+        case JSInstanceBuilder::Type::Popup:
+            initializePopupSender();
+            break;
+
+        case JSInstanceBuilder::Type::Sidebar:
+            initializeSidebarSender(nLOKWindowId, rUIFile);
+            break;
+
+        case JSInstanceBuilder::Type::Notebookbar:
+            initializeNotebookbarSender(nLOKWindowId);
+            break;
+
+        case JSInstanceBuilder::Type::Formulabar:
+            initializeFormulabarSender(nLOKWindowId, sTypeOfJSON, pVclParent);
+            break;
+
+        case JSInstanceBuilder::Type::Menu:
+            initializeMenuSender(pParent);
+            break;
+
+        default:
+            assert(false);
+    };
+}
+
 std::unique_ptr<JSInstanceBuilder> JSInstanceBuilder::CreateDialogBuilder(weld::Widget* pParent,
                                                                           const OUString& rUIRoot,
                                                                           const OUString& rUIFile)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile);
+    return std::make_unique<JSInstanceBuilder>(pParent, nullptr, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Dialog);
 }
 
 std::unique_ptr<JSInstanceBuilder> JSInstanceBuilder::CreateNotebookbarBuilder(
     vcl::Window* pParent, const OUString& rUIRoot, const OUString& rUIFile,
     const css::uno::Reference<css::frame::XFrame>& rFrame, sal_uInt64 nWindowId)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, rFrame, nWindowId);
+    return std::make_unique<JSInstanceBuilder>(nullptr, pParent, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Notebookbar, nWindowId, u"",
+                                               rFrame);
 }
 
 std::unique_ptr<JSInstanceBuilder> JSInstanceBuilder::CreateSidebarBuilder(weld::Widget* pParent,
@@ -651,30 +329,42 @@ std::unique_ptr<JSInstanceBuilder> JSInstanceBuilder::CreateSidebarBuilder(weld:
                                                                            const OUString& rUIFile,
                                                                            sal_uInt64 nLOKWindowId)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, nLOKWindowId);
+    return std::make_unique<JSInstanceBuilder>(pParent, nullptr, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Sidebar, nLOKWindowId);
 }
 
 std::unique_ptr<JSInstanceBuilder> JSInstanceBuilder::CreatePopupBuilder(weld::Widget* pParent,
                                                                          const OUString& rUIRoot,
                                                                          const OUString& rUIFile)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, true);
+    return std::make_unique<JSInstanceBuilder>(pParent, nullptr, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Popup);
+}
+
+std::unique_ptr<JSInstanceBuilder> JSInstanceBuilder::CreateMenuBuilder(weld::Widget* pParent,
+                                                                        const OUString& rUIRoot,
+                                                                        const OUString& rUIFile)
+{
+    return std::make_unique<JSInstanceBuilder>(pParent, nullptr, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Menu);
 }
 
 std::unique_ptr<JSInstanceBuilder>
 JSInstanceBuilder::CreateFormulabarBuilder(vcl::Window* pParent, const OUString& rUIRoot,
                                            const OUString& rUIFile, sal_uInt64 nLOKWindowId)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, nLOKWindowId,
-                                               "formulabar");
+    return std::make_unique<JSInstanceBuilder>(nullptr, pParent, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Formulabar, nLOKWindowId,
+                                               u"formulabar");
 }
 
 std::unique_ptr<JSInstanceBuilder>
 JSInstanceBuilder::CreateAddressInputBuilder(vcl::Window* pParent, const OUString& rUIRoot,
                                              const OUString& rUIFile, sal_uInt64 nLOKWindowId)
 {
-    return std::make_unique<JSInstanceBuilder>(pParent, rUIRoot, rUIFile, nLOKWindowId,
-                                               "addressinputfield");
+    return std::make_unique<JSInstanceBuilder>(nullptr, pParent, rUIRoot, rUIFile,
+                                               JSInstanceBuilder::Type::Formulabar, nLOKWindowId,
+                                               u"addressinputfield");
 }
 
 JSInstanceBuilder::~JSInstanceBuilder()
@@ -685,7 +375,7 @@ JSInstanceBuilder::~JSInstanceBuilder()
         jsdialog::SendFullUpdate(OUString::number(m_nWindowId), "__DIALOG__");
     }
 
-    if (m_sTypeOfJSON == "popup")
+    if (m_sTypeOfJSON == "popup" || m_sTypeOfJSON == "menu")
         sendClosePopup(m_nWindowId);
 
     if (m_aWindowToRelease)
@@ -696,131 +386,20 @@ JSInstanceBuilder::~JSInstanceBuilder()
 
     if (m_nWindowId && (m_bHasTopLevelDialog || m_bIsNotebookbar))
     {
-        GetLOKWeldWidgetsMap().erase(getMapIdFromWindowId());
+        JSInstanceBuilder::Widgets().Forget(getMapIdFromWindowId());
     }
     else
     {
-        auto it = GetLOKWeldWidgetsMap().find(getMapIdFromWindowId());
-        if (it != GetLOKWeldWidgetsMap().end())
+        auto aWindowMap = JSInstanceBuilder::Widgets().Find(getMapIdFromWindowId());
+        if (aWindowMap)
         {
             std::for_each(m_aRememberedWidgets.begin(), m_aRememberedWidgets.end(),
-                          [it](const OUString& sId) { it->second.erase(sId); });
+                          [&aWindowMap](const OUString& sId) { aWindowMap->Forget(sId); });
         }
     }
 
-    GetLOKPopupsMap().erase(OUString::number(m_nWindowId));
-}
-
-std::map<OUString, WidgetMap>& JSInstanceBuilder::GetLOKWeldWidgetsMap()
-{
-    // Map to remember the LOKWindowId <-> weld widgets binding.
-    static std::map<OUString, WidgetMap> s_aLOKWeldBuildersMap;
-
-    return s_aLOKWeldBuildersMap;
-}
-
-weld::Widget* JSInstanceBuilder::FindWeldWidgetsMap(const OUString& nWindowId,
-                                                    const OUString& rWidget)
-{
-    const auto it = GetLOKWeldWidgetsMap().find(nWindowId);
-
-    if (it != GetLOKWeldWidgetsMap().end())
-    {
-        auto widgetIt = it->second.find(rWidget);
-        if (widgetIt != it->second.end())
-            return widgetIt->second;
-    }
-
-    return nullptr;
-}
-
-void JSInstanceBuilder::InsertWindowToMap(const OUString& nWindowId)
-{
-    WidgetMap map;
-    auto it = GetLOKWeldWidgetsMap().find(nWindowId);
-    if (it == GetLOKWeldWidgetsMap().end())
-        GetLOKWeldWidgetsMap().insert({ nWindowId, map });
-}
-
-void JSInstanceBuilder::RememberWidget(OUString sId, weld::Widget* pWidget)
-{
-    // do not use the same id for two widgets inside one builder
-    // exception is sidebar where we base our full invalidation on that "Panel" id sharing
-    if (m_sTypeOfJSON != "sidebar")
-    {
-        static std::atomic<unsigned long long int> nNotRepeatIndex = 0;
-        auto aWindowIt = GetLOKWeldWidgetsMap().find(getMapIdFromWindowId());
-        if (aWindowIt != GetLOKWeldWidgetsMap().end())
-        {
-            auto aWidgetIt = aWindowIt->second.find(sId);
-            if (aWidgetIt != aWindowIt->second.end())
-            {
-                unsigned long long int nIndex = nNotRepeatIndex++;
-                // found duplicated it -> add some number to the id and apply to the widget
-                sId = sId + OUString::number(nIndex);
-                SalInstanceWidget* pSalWidget = dynamic_cast<SalInstanceWidget*>(pWidget);
-                assert(pSalWidget && "can only be a SalInstanceWidget");
-                vcl::Window* pVclWidget = pSalWidget->getWidget();
-                pVclWidget->set_id(pVclWidget->get_id() + OUString::number(nIndex));
-            }
-        }
-    }
-
-    RememberWidget(getMapIdFromWindowId(), sId, pWidget);
-    m_aRememberedWidgets.push_back(sId);
-}
-
-void JSInstanceBuilder::RememberWidget(const OUString& nWindowId, const OUString& id,
-                                       weld::Widget* pWidget)
-{
-    auto it = GetLOKWeldWidgetsMap().find(nWindowId);
-    if (it != GetLOKWeldWidgetsMap().end())
-    {
-        it->second.erase(id);
-        it->second.insert(WidgetMap::value_type(id, pWidget));
-    }
-}
-
-void JSInstanceBuilder::AddChildWidget(const OUString& nWindowId, const OUString& id,
-                                       weld::Widget* pWidget)
-{
-    auto it = GetLOKWeldWidgetsMap().find(nWindowId);
-    if (it != GetLOKWeldWidgetsMap().end())
-    {
-        it->second.erase(id);
-        it->second.insert(WidgetMap::value_type(id, pWidget));
-    }
-}
-
-void JSInstanceBuilder::RemoveWindowWidget(const OUString& nWindowId)
-{
-    auto it = JSInstanceBuilder::GetLOKWeldWidgetsMap().find(nWindowId);
-    if (it != JSInstanceBuilder::GetLOKWeldWidgetsMap().end())
-    {
-        JSInstanceBuilder::GetLOKWeldWidgetsMap().erase(it);
-    }
-}
-
-void JSInstanceBuilder::RememberPopup(const OUString& nWindowId, VclPtr<vcl::Window> pWidget)
-{
-    GetLOKPopupsMap()[nWindowId] = pWidget;
-}
-
-void JSInstanceBuilder::ForgetPopup(const OUString& nWindowId)
-{
-    auto it = GetLOKPopupsMap().find(nWindowId);
-    if (it != GetLOKPopupsMap().end())
-        GetLOKPopupsMap().erase(it);
-}
-
-vcl::Window* JSInstanceBuilder::FindPopup(const OUString& nWindowId)
-{
-    const auto it = GetLOKPopupsMap().find(nWindowId);
-
-    if (it != GetLOKPopupsMap().end())
-        return it->second;
-
-    return nullptr;
+    JSInstanceBuilder::Popups().Forget(OUString::number(m_nWindowId));
+    JSInstanceBuilder::Menus().Forget(OUString::number(m_nWindowId));
 }
 
 const OUString& JSInstanceBuilder::GetTypeOfJSON() const { return m_sTypeOfJSON; }
@@ -942,8 +521,13 @@ std::unique_ptr<weld::Container> JSInstanceBuilder::weld_container(const OUStrin
         // use parent builder to send update - avoid multiple calls from many builders
         vcl::Window* pParent = pContainer->GetParent();
         OUString sId = OUString::number(m_nWindowId);
-        while (pParent && !FindWeldWidgetsMap(sId, pParent->get_id()))
+        while (pParent)
+        {
+            auto aWidgetMap = Widgets().Find(sId);
+            if (!aWidgetMap || !aWidgetMap->Find(pParent->get_id()))
+                break;
             pParent = pParent->GetParent();
+        }
 
         if (pParent)
             jsdialog::SendFullUpdate(sId, pParent->get_id());
@@ -1216,6 +800,20 @@ std::unique_ptr<weld::MenuButton> JSInstanceBuilder::weld_menu_button(const OUSt
     return pWeldWidget;
 }
 
+std::unique_ptr<weld::Menu> JSInstanceBuilder::weld_menu(const OUString& id)
+{
+    PopupMenu* pPopupMenu = m_xBuilder->get_menu(id);
+
+    JSMenu* pMenu = pPopupMenu ? new JSMenu(this, pPopupMenu, this, false) : nullptr;
+
+    std::unique_ptr<weld::Menu> pWeldWidget(pMenu);
+
+    if (pWeldWidget)
+        JSInstanceBuilder::Menus().Remember(getMapIdFromWindowId(), pWeldWidget.get());
+
+    return pWeldWidget;
+}
+
 std::unique_ptr<weld::Popover> JSInstanceBuilder::weld_popover(const OUString& id)
 {
     DockingWindow* pDockingWindow = m_xBuilder->get<DockingWindow>(id);
@@ -1237,7 +835,7 @@ std::unique_ptr<weld::Popover> JSInstanceBuilder::weld_popover(const OUString& i
             m_nWindowId = m_aParentDialog->GetLOKWindowId();
 
             pPopover->set_window_id(m_nWindowId);
-            JSInstanceBuilder::RememberPopup(OUString::number(m_nWindowId), pDockingWindow);
+            JSInstanceBuilder::Popups().Remember(OUString::number(m_nWindowId), pDockingWindow);
 
             InsertWindowToMap(getMapIdFromWindowId());
             initializeSender(GetNotifierWindow(), GetContentWindow(), GetTypeOfJSON());
@@ -1432,7 +1030,10 @@ weld::Button* JSDialog::weld_widget_for_response(int nResponse)
 {
     PushButton* pButton
         = dynamic_cast<::PushButton*>(m_xDialog->get_widget_for_response(nResponse));
-    auto pWeldWidget = pButton ? new JSButton(m_pSender, pButton, nullptr, false) : nullptr;
+    if (!pButton)
+        return nullptr;
+
+    JSButton* pWeldWidget = new JSButton(m_pSender, pButton, nullptr, false);
 
     if (pWeldWidget)
     {
@@ -1835,7 +1436,7 @@ JSMessageDialog::JSMessageDialog(::MessageDialog* pDialog, SalInstanceBuilder* p
         = dynamic_cast<::OKButton*>(m_xMessageDialog->get_widget_for_response(RET_OK)))
     {
         m_pOK.reset(new JSButton(m_pSender, pOKBtn, nullptr, false));
-        JSInstanceBuilder::AddChildWidget(m_sWindowId, pOKBtn->get_id(), m_pOK.get());
+        JSInstanceBuilder::RememberWidget(m_sWindowId, pOKBtn->get_id(), m_pOK.get());
         m_pOK->connect_clicked(LINK(this, JSMessageDialog, OKHdl));
     }
 
@@ -1843,7 +1444,7 @@ JSMessageDialog::JSMessageDialog(::MessageDialog* pDialog, SalInstanceBuilder* p
         = dynamic_cast<::CancelButton*>(m_xMessageDialog->get_widget_for_response(RET_CANCEL)))
     {
         m_pCancel.reset(new JSButton(m_pSender, pCancelBtn, nullptr, false));
-        JSInstanceBuilder::AddChildWidget(m_sWindowId, pCancelBtn->get_id(), m_pCancel.get());
+        JSInstanceBuilder::RememberWidget(m_sWindowId, pCancelBtn->get_id(), m_pCancel.get());
         m_pCancel->connect_clicked(LINK(this, JSMessageDialog, CancelHdl));
     }
 }
@@ -1855,7 +1456,7 @@ JSMessageDialog::~JSMessageDialog()
         // For Message Dialogs created from Application::CreateMessageDialog
         // (where there is no builder to take care of this for us) explicitly
         // remove this window id on tear down
-        JSInstanceBuilder::RemoveWindowWidget(m_sWindowId);
+        JSInstanceBuilder::Widgets().Forget(m_sWindowId);
     }
 }
 
@@ -1863,7 +1464,8 @@ void JSMessageDialog::RememberMessageDialog()
 {
     static constexpr OUString sWidgetName = u"__DIALOG__"_ustr;
     OUString sWindowId = OUString::number(m_xMessageDialog->GetLOKWindowId());
-    if (JSInstanceBuilder::FindWeldWidgetsMap(sWindowId, sWidgetName) != nullptr)
+    auto aWidgetMap = JSInstanceBuilder::Widgets().Find(sWindowId);
+    if (aWidgetMap && aWidgetMap->Find(sWidgetName))
         return;
 
     JSInstanceBuilder::InsertWindowToMap(sWindowId);
@@ -1973,6 +1575,15 @@ JSToolbar::JSToolbar(JSDialogSender* pSender, ::ToolBox* pToolbox, SalInstanceBu
 {
 }
 
+void JSToolbar::set_item_active(const OUString& rIdent, bool bActive)
+{
+    bool bWasActive = get_item_active(rIdent);
+    SalInstanceToolbar::set_item_active(rIdent, bActive);
+
+    if (bWasActive != bActive)
+        sendUpdate();
+}
+
 void JSToolbar::set_menu_item_active(const OUString& rIdent, bool bActive)
 {
     bool bWasActive = get_menu_item_active(rIdent);
@@ -1994,13 +1605,13 @@ void JSToolbar::set_menu_item_active(const OUString& rIdent, bool bActive)
     {
         if (bActive)
         {
-            JSInstanceBuilder::RememberPopup(OUString::number(pPopupRoot->GetLOKWindowId()),
-                                             pFloat);
+            JSInstanceBuilder::Popups().Remember(OUString::number(pPopupRoot->GetLOKWindowId()),
+                                                 pFloat);
             sendPopup(pPopupRoot, m_xToolBox->get_id(), rIdent);
         }
         else if (bWasActive)
         {
-            JSInstanceBuilder::ForgetPopup(OUString::number(pPopupRoot->GetLOKWindowId()));
+            JSInstanceBuilder::Popups().Forget(OUString::number(pPopupRoot->GetLOKWindowId()));
             sendClosePopup(pPopupRoot->GetLOKWindowId());
         }
     }
@@ -2362,6 +1973,37 @@ void JSMenuButton::set_active(bool bActive)
     }
 }
 
+JSMenu::JSMenu(JSDialogSender* pSender, PopupMenu* pPopupMenu, SalInstanceBuilder* /*pBuilder*/,
+               bool bTakeOwnership)
+    : SalInstanceMenu(pPopupMenu, bTakeOwnership)
+    , m_pPopupMenu(pPopupMenu)
+    , m_pSender(pSender)
+{
+}
+
+OUString JSMenu::popup_at_rect(weld::Widget* pParent, const tools::Rectangle& rRect,
+                               weld::Placement /*ePlace*/)
+{
+    // Do not block with SalInstanceMenu::popup_at_rect(pParent, rRect, ePlace);
+
+    // we find position based on parent widget id and row text inside TreeView for context menu
+    OUString sCancelId;
+    weld::TreeView* pTree = dynamic_cast<weld::TreeView*>(pParent);
+    if (pTree)
+    {
+        std::unique_ptr<weld::TreeIter> itEntry(pTree->make_iterator());
+        if (pTree->get_dest_row_at_pos(rRect.Center(), itEntry.get(), false, false))
+            sCancelId = pTree->get_text(*itEntry);
+        else
+            SAL_WARN("vcl", "No entry detected in JSMenu::popup_at_rect");
+    }
+
+    m_pSender->sendMenu(m_pPopupMenu, pParent ? pParent->get_buildable_name() : "", sCancelId);
+
+    // Don't return any action - simulate canceled menu
+    return "";
+}
+
 JSPopover::JSPopover(JSDialogSender* pSender, DockingWindow* pDockingWindow,
                      SalInstanceBuilder* pBuilder, bool bTakeOwnership)
     : JSWidget<SalInstancePopover, DockingWindow>(pSender, pDockingWindow, pBuilder, bTakeOwnership)
@@ -2378,7 +2020,7 @@ void JSPopover::popup_at_rect(weld::Widget* pParent, const tools::Rectangle& rRe
 
 void JSPopover::popdown()
 {
-    vcl::Window* pPopup = JSInstanceBuilder::FindPopup(OUString::number(mnWindowId));
+    VclPtr<vcl::Window> pPopup = JSInstanceBuilder::Popups().Find(OUString::number(mnWindowId));
 
     if (pPopup)
     {

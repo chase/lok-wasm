@@ -33,6 +33,8 @@
 #include <unotools/streamwrap.hxx>
 #include <unotools/syslocale.hxx>
 #include <vcl/weld.hxx>
+#include <sfx2/digitalsignatures.hxx>
+#include <sfx2/viewsh.hxx>
 
 using namespace com::sun::star;
 
@@ -57,8 +59,8 @@ OUString getSignatureImage(const OUString& rType)
     return OUString::fromUtf8(svg);
 }
 
-uno::Reference<security::XCertificate> getSignatureCertificate(SfxObjectShell* pShell,
-                                                               weld::Window* pParent)
+uno::Reference<security::XCertificate>
+getSignatureCertificate(SfxObjectShell* pShell, SfxViewShell* pViewShell, weld::Window* pParent)
 {
     if (!pShell)
     {
@@ -91,15 +93,23 @@ uno::Reference<security::XCertificate> getSignatureCertificate(SfxObjectShell* p
     {
         certificateKind = security::CertificateKind_X509;
     }
+    auto xModelSigner = dynamic_cast<sfx2::DigitalSignatures*>(xSigner.get());
+    assert(xModelSigner);
     uno::Reference<security::XCertificate> xSignCertificate
-        = xSigner->selectSigningCertificateWithType(certificateKind, aDescription);
+        = xModelSigner->SelectSigningCertificateWithType(pViewShell, certificateKind, aDescription);
     return xSignCertificate;
 }
 
-OUString getSignerName(const css::uno::Reference<css::security::XCertificate>& xCertificate)
+OUString getSignerName(const svl::crypto::CertificateOrName& rCertificateOrName)
 {
-    return comphelper::xmlsec::GetContentPart(xCertificate->getSubjectName(),
-                                              xCertificate->getCertificateKind());
+    if (rCertificateOrName.m_xCertificate.is())
+    {
+        return comphelper::xmlsec::GetContentPart(
+            rCertificateOrName.m_xCertificate->getSubjectName(),
+            rCertificateOrName.m_xCertificate->getCertificateKind());
+    }
+
+    return rCertificateOrName.m_aName;
 }
 
 OUString getLocalizedDate()
@@ -125,9 +135,10 @@ uno::Reference<graphic::XGraphic> importSVG(std::u16string_view rSVG)
     return xGraphic;
 }
 
-void setShapeCertificate(const SdrView* pView,
-                         const css::uno::Reference<css::security::XCertificate>& xCertificate)
+void setShapeCertificate(SfxViewShell* pViewShell,
+                         const svl::crypto::CertificateOrName& rCertificateOrName)
 {
+    const SdrView* pView = pViewShell->GetDrawView();
     const SdrMarkList& rMarkList = pView->GetMarkedObjectList();
     if (rMarkList.GetMarkCount() < 1)
     {
@@ -144,14 +155,12 @@ void setShapeCertificate(const SdrView* pView,
     // Remember the selected certificate.
     uno::Reference<drawing::XShape> xShape = pSignatureLine->getUnoShape();
     uno::Reference<beans::XPropertySet> xShapeProps(xShape, uno::UNO_QUERY);
-    comphelper::SequenceAsHashMap aMap(xShapeProps->getPropertyValue("InteropGrabBag"));
-    aMap["SignatureCertificate"] <<= xCertificate;
-    xShapeProps->setPropertyValue("InteropGrabBag", uno::Any(aMap.getAsConstPropertyValueList()));
+    pViewShell->SetSignPDFCertificate(rCertificateOrName);
 
     // Read svg and replace placeholder texts.
     OUString aSvgImage(svx::SignatureLineHelper::getSignatureImage("signature-line-draw.svg"));
     aSvgImage = aSvgImage.replaceAll("[SIGNED_BY]", SvxResId(RID_SVXSTR_SIGNATURELINE_DSIGNED_BY));
-    OUString aSignerName = svx::SignatureLineHelper::getSignerName(xCertificate);
+    OUString aSignerName = svx::SignatureLineHelper::getSignerName(rCertificateOrName);
     aSvgImage = aSvgImage.replaceAll("[SIGNER_NAME]", aSignerName);
     OUString aDate = svx::SignatureLineHelper::getLocalizedDate();
     aDate = SvxResId(RID_SVXSTR_SIGNATURELINE_DATE).replaceFirst("%1", aDate);

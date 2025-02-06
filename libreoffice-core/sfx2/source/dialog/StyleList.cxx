@@ -34,6 +34,7 @@
 #include <svl/intitem.hxx>
 #include <svl/style.hxx>
 #include <svl/itemset.hxx>
+#include <comphelper/lok.hxx>
 #include <comphelper/processfactory.hxx>
 #include <officecfg/Office/Common.hxx>
 
@@ -94,8 +95,6 @@ public:
     }
 };
 
-namespace
-{
 Color ColorHash(std::u16string_view rString)
 {
     static std::vector aSaturationArray{ 0.90, 0.75, 0.60 };
@@ -113,6 +112,8 @@ Color ColorHash(std::u16string_view rString)
     return Color(basegfx::utils::hsl2rgb(aHSLColor));
 }
 
+namespace
+{
 // used to disallow the default character style in the styles highlighter character styles color map
 std::optional<OUString> sDefaultCharStyleUIName;
 }
@@ -182,7 +183,7 @@ void StyleList::CreateContextMenu()
         m_bBindingUpdate = false;
     }
     mxMenu.reset();
-    mxMenuBuilder = Application::CreateBuilder(nullptr, "sfx/ui/stylecontextmenu.ui");
+    mxMenuBuilder = Application::CreateBuilder(m_pContainer, "sfx/ui/stylecontextmenu.ui");
     mxMenu = mxMenuBuilder->weld_menu("menu");
     mxMenu->set_sensitive("edit", m_bCanEdit);
     mxMenu->set_sensitive("delete", m_bCanDel);
@@ -614,20 +615,23 @@ class StyleTree_Impl
 private:
     OUString aName;
     OUString aParent;
+    sal_Int32 nSpotlightId;
     StyleTreeArr_Impl pChildren;
 
 public:
     bool HasParent() const { return !aParent.isEmpty(); }
 
-    StyleTree_Impl(OUString _aName, OUString _aParent)
+    StyleTree_Impl(OUString _aName, OUString _aParent, sal_Int32 _nSpotlightId)
         : aName(std::move(_aName))
         , aParent(std::move(_aParent))
+        , nSpotlightId(_nSpotlightId)
         , pChildren(0)
     {
     }
 
     const OUString& getName() const { return aName; }
     const OUString& getParent() const { return aParent; }
+    sal_Int32 getSpotlightId() const { return nSpotlightId; }
     StyleTreeArr_Impl& getChildren() { return pChildren; }
 };
 }
@@ -691,25 +695,30 @@ static bool IsExpanded_Impl(const std::vector<OUString>& rEntries, std::u16strin
     return false;
 }
 
-static void lcl_Insert(weld::TreeView& rTreeView, const OUString& rName, SfxStyleFamily eFam,
+static void lcl_Insert(weld::TreeView& rTreeView, const StyleTree_Impl& rEntry, SfxStyleFamily eFam,
                        const weld::TreeIter* pParent, weld::TreeIter* pRet, SfxViewShell* pViewSh)
 {
+    const OUString& rName = rEntry.getName();
+
     Color aColor(ColorHash(rName));
 
-    int nColor;
-    if (eFam == SfxStyleFamily::Para)
-    {
-        StylesHighlighterColorMap& rParaStylesColorMap
-            = pViewSh->GetStylesHighlighterParaColorMap();
-        nColor = rParaStylesColorMap.size();
-        rParaStylesColorMap[rName] = std::pair(aColor, nColor);
-    }
+    // For kit keep the id used for spotlight/number-image for a style stable
+    // regardless of the selection mode of the style panel, so multiple views
+    // on a document all share the same id for a style.
+    sal_Int32 nSpotlightId;
+    if (comphelper::LibreOfficeKit::isActive())
+        nSpotlightId = rEntry.getSpotlightId();
     else
     {
-        StylesHighlighterColorMap& rCharStylesColorMap
-            = pViewSh->GetStylesHighlighterCharColorMap();
-        nColor = rCharStylesColorMap.size();
-        rCharStylesColorMap[rName] = std::pair(aColor, nColor);
+        StylesHighlighterColorMap& rColorMap = (eFam == SfxStyleFamily::Para)
+                                                   ? pViewSh->GetStylesHighlighterParaColorMap()
+                                                   : pViewSh->GetStylesHighlighterCharColorMap();
+        nSpotlightId = rColorMap.size();
+        rColorMap[rName] = std::pair(aColor, nSpotlightId);
+    }
+
+    if (eFam == SfxStyleFamily::Char)
+    {
         // don't show a color or number for default character style 'No Character Style' entry
         if (rName == sDefaultCharStyleUIName.value() /*"No Character Style"*/)
         {
@@ -726,9 +735,13 @@ static void lcl_Insert(weld::TreeView& rTreeView, const OUString& rName, SfxStyl
     xDevice->SetFillColor(aColor);
     const tools::Rectangle aRect(Point(0, 0), aImageSize);
     xDevice->DrawRect(aRect);
-    xDevice->SetTextColor(COL_BLACK);
-    xDevice->DrawText(aRect, OUString::number(nColor),
-                      DrawTextFlags::Center | DrawTextFlags::VCenter);
+    // In kit mode, unused styles are -1, so we can just skip the number image for those
+    if (nSpotlightId != -1)
+    {
+        xDevice->SetTextColor(COL_BLACK);
+        xDevice->DrawText(aRect, OUString::number(nSpotlightId),
+                          DrawTextFlags::Center | DrawTextFlags::VCenter);
+    }
 
     rTreeView.insert(pParent, -1, &rName, &rName, nullptr, xDevice.get(), false, pRet);
 }
@@ -738,12 +751,14 @@ static void FillBox_Impl(weld::TreeView& rBox, StyleTree_Impl* pEntry,
                          const weld::TreeIter* pParent, bool blcl_insert, SfxViewShell* pViewShell)
 {
     std::unique_ptr<weld::TreeIter> xResult = rBox.make_iterator();
-    const OUString& rName = pEntry->getName();
 
     if (blcl_insert)
-        lcl_Insert(rBox, rName, eStyleFamily, pParent, xResult.get(), pViewShell);
+        lcl_Insert(rBox, *pEntry, eStyleFamily, pParent, xResult.get(), pViewShell);
     else
+    {
+        const OUString& rName = pEntry->getName();
         rBox.insert(pParent, -1, &rName, &rName, nullptr, nullptr, false, xResult.get());
+    }
 
     for (size_t i = 0; i < pEntry->getChildren().size(); ++i)
         FillBox_Impl(rBox, pEntry->getChildren()[i].get(), rEntries, eStyleFamily, xResult.get(),
@@ -1000,6 +1015,54 @@ IMPL_LINK(StyleList, EnableTreeDrag, bool, m_bEnable, void)
     m_bTreeDrag = m_bEnable;
 }
 
+namespace
+{
+class StyleHighlightUpdateGuard
+{
+private:
+    bool m_bOrigMapHasEntries;
+    SfxViewShell* m_pViewShell;
+    StylesHighlighterColorMap* m_pHighlighterColorMap;
+    SfxStyleSheetBasePool& m_rStyleSheetPool;
+
+public:
+    StyleHighlightUpdateGuard(SfxViewShell* pViewShell, bool bModuleHasStylesHighlighterFeature,
+                              SfxStyleSheetBasePool& rStyleSheetPool, SfxStyleFamily eFam)
+        : m_bOrigMapHasEntries(false)
+        , m_pViewShell(pViewShell)
+        , m_pHighlighterColorMap(nullptr)
+        , m_rStyleSheetPool(rStyleSheetPool)
+    {
+        if (pViewShell && bModuleHasStylesHighlighterFeature)
+        {
+            if (eFam == SfxStyleFamily::Para)
+                m_pHighlighterColorMap = &pViewShell->GetStylesHighlighterParaColorMap();
+            else if (eFam == SfxStyleFamily::Char)
+                m_pHighlighterColorMap = &pViewShell->GetStylesHighlighterCharColorMap();
+        }
+
+        if (m_pHighlighterColorMap && !m_pHighlighterColorMap->empty())
+        {
+            m_bOrigMapHasEntries = true;
+            m_pHighlighterColorMap->clear();
+        }
+    }
+
+    ~StyleHighlightUpdateGuard()
+    {
+        if (!m_pViewShell)
+            return;
+        // make view update, but skip notify if before and after are both empty to skip
+        // unnecessary invalidates
+        if (m_pHighlighterColorMap && (!m_pHighlighterColorMap->empty() || m_bOrigMapHasEntries))
+        {
+            static_cast<SfxListener*>(m_pViewShell)
+                ->Notify(m_rStyleSheetPool, SfxHint(SfxHintId::StylesHighlighterModified));
+        }
+    }
+};
+}
+
 // Fill the treeview
 
 void StyleList::FillTreeBox(SfxStyleFamily eFam)
@@ -1019,7 +1082,8 @@ void StyleList::FillTreeBox(SfxStyleFamily eFam)
 
     while (pStyle)
     {
-        StyleTree_Impl* pNew = new StyleTree_Impl(pStyle->GetName(), pStyle->GetParent());
+        StyleTree_Impl* pNew
+            = new StyleTree_Impl(pStyle->GetName(), pStyle->GetParent(), pStyle->GetSpotlightId());
         aArr.emplace_back(pNew);
         pStyle = m_pStyleSheetPool->Next();
     }
@@ -1032,13 +1096,9 @@ void StyleList::FillTreeBox(SfxStyleFamily eFam)
     const sal_uInt16 nCount = aArr.size();
 
     SfxViewShell* pViewShell = m_pCurObjShell->GetViewShell();
-    if (pViewShell && m_bModuleHasStylesHighlighterFeature)
-    {
-        if (eFam == SfxStyleFamily::Para)
-            pViewShell->GetStylesHighlighterParaColorMap().clear();
-        else if (eFam == SfxStyleFamily::Char)
-            pViewShell->GetStylesHighlighterCharColorMap().clear();
-    }
+
+    auto xUpdateGuard = std::make_unique<StyleHighlightUpdateGuard>(
+        pViewShell, m_bModuleHasStylesHighlighterFeature, *m_pStyleSheetPool, eFam);
 
     bool blcl_insert = pViewShell && m_bModuleHasStylesHighlighterFeature
                        && ((eFam == SfxStyleFamily::Para && m_bHighlightParaStyles)
@@ -1058,12 +1118,8 @@ void StyleList::FillTreeBox(SfxStyleFamily eFam)
 
     m_xTreeBox->thaw();
 
-    // hack for x11 to make view update
-    if (pViewShell && m_bModuleHasStylesHighlighterFeature)
-    {
-        SfxViewFrame* pViewFrame = m_pBindings->GetDispatcher_Impl()->GetFrame();
-        pViewFrame->Resize(true);
-    }
+    // make view update
+    xUpdateGuard.reset();
 
     std::unique_ptr<weld::TreeIter> xEntry = m_xTreeBox->make_iterator();
     bool bEntry = m_xTreeBox->get_iter_first(*xEntry);
@@ -1193,7 +1249,7 @@ void StyleList::UpdateStyles(StyleFlags nFlags)
     SfxStyleSheetBase* pStyle = m_pStyleSheetPool->First(eFam, nFilter);
 
     std::unique_ptr<weld::TreeIter> xEntry = m_xFmtLb->make_iterator();
-    std::vector<OUString> aStrings;
+    std::vector<StyleTree_Impl> aStyles;
 
     comphelper::string::NaturalStringSorter aSorter(
         ::comphelper::getProcessComponentContext(),
@@ -1201,7 +1257,7 @@ void StyleList::UpdateStyles(StyleFlags nFlags)
 
     while (pStyle)
     {
-        aStrings.push_back(pStyle->GetName());
+        aStyles.emplace_back(pStyle->GetName(), pStyle->GetParent(), pStyle->GetSpotlightId());
         pStyle = m_pStyleSheetPool->Next();
     }
     OUString aUIName = getDefaultStyleName(eFam);
@@ -1210,9 +1266,14 @@ void StyleList::UpdateStyles(StyleFlags nFlags)
     // sorting twice is faster than sorting once.
     // The first sort has a cheap comparator, and gets the list into mostly-sorted order.
     // Then the second sort needs to call its (much more expensive) comparator less often.
-    std::sort(aStrings.begin(), aStrings.end());
-    std::sort(aStrings.begin(), aStrings.end(),
-              [&aSorter, &aUIName](const OUString& rLHS, const OUString& rRHS) {
+    std::sort(aStyles.begin(), aStyles.end(),
+              [](const StyleTree_Impl& rLHS, const StyleTree_Impl& rRHS) {
+                  return rLHS.getName() < rRHS.getName();
+              });
+    std::sort(aStyles.begin(), aStyles.end(),
+              [&aSorter, &aUIName](const StyleTree_Impl& rLHSS, const StyleTree_Impl& rRHSS) {
+                  const OUString& rLHS = rLHSS.getName();
+                  const OUString& rRHS = rRHSS.getName();
                   if (rRHS == aUIName)
                       return false;
                   if (rLHS == aUIName)
@@ -1225,15 +1286,11 @@ void StyleList::UpdateStyles(StyleFlags nFlags)
     m_xFmtLb->clear();
 
     SfxViewShell* pViewShell = m_pCurObjShell->GetViewShell();
-    if (pViewShell && m_bModuleHasStylesHighlighterFeature)
-    {
-        if (eFam == SfxStyleFamily::Para)
-            pViewShell->GetStylesHighlighterParaColorMap().clear();
-        else if (eFam == SfxStyleFamily::Char)
-            pViewShell->GetStylesHighlighterCharColorMap().clear();
-    }
 
-    size_t nCount = aStrings.size();
+    auto xUpdateGuard = std::make_unique<StyleHighlightUpdateGuard>(
+        pViewShell, m_bModuleHasStylesHighlighterFeature, *m_pStyleSheetPool, eFam);
+
+    size_t nCount = aStyles.size();
     size_t nPos = 0;
 
     if (pViewShell && m_bModuleHasStylesHighlighterFeature
@@ -1241,24 +1298,23 @@ void StyleList::UpdateStyles(StyleFlags nFlags)
             || (eFam == SfxStyleFamily::Char && m_bHighlightCharStyles)))
     {
         for (nPos = 0; nPos < nCount; ++nPos)
-            lcl_Insert(*m_xFmtLb, aStrings[nPos], eFam, nullptr, nullptr, pViewShell);
+            lcl_Insert(*m_xFmtLb, aStyles[nPos], eFam, nullptr, nullptr, pViewShell);
     }
     else
     {
         for (nPos = 0; nPos < nCount; ++nPos)
-            m_xFmtLb->append(aStrings[nPos], aStrings[nPos]);
+        {
+            const OUString& rName = aStyles[nPos].getName();
+            m_xFmtLb->append(rName, rName);
+        }
     }
 
     m_xFmtLb->columns_autosize();
 
     m_xFmtLb->thaw();
 
-    // hack for x11 to make view update
-    if (pViewShell && m_bModuleHasStylesHighlighterFeature)
-    {
-        SfxViewFrame* pViewFrame = m_pBindings->GetDispatcher_Impl()->GetFrame();
-        pViewFrame->Resize(true);
-    }
+    // make view update
+    xUpdateGuard.reset();
 
     // Selects the current style if any
     SfxTemplateItem* pState = m_pFamilyState[m_nActFamily - 1].get();
@@ -1472,13 +1528,14 @@ IMPL_LINK_NOARG(StyleList, Clear, void*, void)
         i.reset();
 }
 
+IMPL_LINK(StyleList, OnPopupEnd, const OUString&, sCommand, void) { MenuSelect(sCommand); }
+
 void StyleList::ShowMenu(const CommandEvent& rCEvt)
 {
     CreateContextMenu();
     weld::TreeView* pTreeView = m_xTreeBox->get_visible() ? m_xTreeBox.get() : m_xFmtLb.get();
-    OUString sCommand(
-        mxMenu->popup_at_rect(pTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1, 1))));
-    MenuSelect(sCommand);
+    mxMenu->connect_activate(LINK(this, StyleList, OnPopupEnd));
+    mxMenu->popup_at_rect(pTreeView, tools::Rectangle(rCEvt.GetMousePosPixel(), Size(1, 1)));
 }
 
 void StyleList::MenuSelect(const OUString& rIdent)
@@ -1612,6 +1669,9 @@ IMPL_LINK_NOARG(StyleList, MenuSelectAsyncHdl, void*, void)
         HideHdl();
     else if (sLastItemIdent == "show")
         ShowHdl();
+
+    mxMenu.reset();
+    mxMenuBuilder.reset();
 }
 
 // Double-click on a style sheet in the ListBox is applied.

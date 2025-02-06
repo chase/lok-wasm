@@ -2904,12 +2904,15 @@ void ScDocument::CopyFromClip(
         overwrite/delete existing cells but to insert the notes into
         these cells. In this case, just delete old notes from the
         destination area. */
-    InsertDeleteFlags nDelFlag = InsertDeleteFlags::NONE;
-    if ( (nInsFlag & (InsertDeleteFlags::CONTENTS | InsertDeleteFlags::ADDNOTES)) == (InsertDeleteFlags::NOTE | InsertDeleteFlags::ADDNOTES) )
-        nDelFlag |= InsertDeleteFlags::NOTE;
-    // tdf#141440 - do not delete notes when pasting contents (see InsertDeleteFlags::CONTENTS)
-    else if ( nInsFlag & (InsertDeleteFlags::CONTENTS & ~InsertDeleteFlags::NOTE) )
-        nDelFlag |= InsertDeleteFlags::CONTENTS & ~InsertDeleteFlags::NOTE;
+    InsertDeleteFlags nDelFlag = nInsFlag;
+    // tdf#163019 - remove formula of the cell to update formula listeners
+    if (nInsFlag & InsertDeleteFlags::CONTENTS)
+        nDelFlag |= InsertDeleteFlags::FORMULA;
+
+    // tdf#161189 - remove the note deletion flag if no notes are included
+    if ((nInsFlag & (InsertDeleteFlags::CONTENTS | InsertDeleteFlags::ADDNOTES))
+        == (InsertDeleteFlags::NOTE | InsertDeleteFlags::ADDNOTES))
+        nDelFlag &= ~InsertDeleteFlags::NOTE;
 
     if (nInsFlag & InsertDeleteFlags::ATTRIB)
         nDelFlag |= InsertDeleteFlags::ATTRIB;
@@ -4230,6 +4233,11 @@ tools::Long ScDocument::GetRowHeight( SCROW nStartRow, SCROW nEndRow, SCTAB nTab
 SCROW ScDocument::GetRowForHeight( SCTAB nTab, tools::Long nHeight ) const
 {
     return maTabs[nTab]->GetRowForHeight(nHeight);
+}
+
+SCROW ScDocument::GetRowForHeightPixels( SCTAB nTab, SCROW nStartRow, tools::Long& rStartRowHeightPx, tools::Long nHeightPx, double fPPTY ) const
+{
+    return maTabs[nTab]->GetRowForHeightPixels(nStartRow, rStartRowHeightPx, nHeightPx, fPPTY);
 }
 
 tools::Long ScDocument::GetScaledRowHeight( SCROW nStartRow, SCROW nEndRow,

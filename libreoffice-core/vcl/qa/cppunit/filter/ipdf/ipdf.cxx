@@ -23,6 +23,7 @@
 #include <sfx2/objsh.hxx>
 #include <vcl/filter/PDFiumLibrary.hxx>
 #include <vcl/filter/pdfdocument.hxx>
+#include <svl/cryptosign.hxx>
 
 using namespace ::com::sun::star;
 
@@ -99,15 +100,19 @@ CPPUNIT_TEST_FIXTURE(VclFilterIpdfTest, testPDFAddVisibleSignatureLastPage)
     {
         return;
     }
-    SdrView* pView = SfxViewShell::Current()->GetDrawView();
-    svx::SignatureLineHelper::setShapeCertificate(pView, xCert);
+    SfxViewShell* pViewShell = SfxViewShell::Current();
+    svl::crypto::CertificateOrName aCertificateOrName;
+    aCertificateOrName.m_xCertificate = xCert;
+    svx::SignatureLineHelper::setShapeCertificate(pViewShell, aCertificateOrName);
 
     // the document is modified now, but Sign function can't show SaveAs dialog
     // in unit test, so just clear the modified
     pObjectShell->SetModified(false);
 
     // When: do the actual signing.
-    pObjectShell->SignDocumentContentUsingCertificate(xCert);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCert;
+    pObjectShell->SignDocumentContentUsingCertificate(aSigningContext);
 
     // Then: count the # of shapes on the signature widget/annotation.
     std::unique_ptr<vcl::pdf::PDFiumDocument> pPdfDocument = parsePDFExport();

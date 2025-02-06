@@ -39,10 +39,21 @@ void SwMasterUsrPref::SetUsrPref(const SwViewOption &rCopy)
     *static_cast<SwViewOption*>(this) = rCopy;
 }
 
+static FieldUnit lclGetFieldUnit()
+{
+    if (utl::ConfigManager::IsFuzzing())
+        return FieldUnit::CM;
+    MeasurementSystem eSystem = SvtSysLocale().GetLocaleData().getMeasurementSystemEnum();
+    return MeasurementSystem::Metric == eSystem ? FieldUnit::CM : FieldUnit::INCH;
+}
+
 SwMasterUsrPref::SwMasterUsrPref(bool bWeb) :
     m_eFieldUpdateFlags(AUTOUPD_OFF),
     m_nLinkUpdateMode(0),
+    m_eUserMetric(lclGetFieldUnit()),
+    m_eHScrollMetric(m_eUserMetric),
     m_bIsHScrollMetricSet(false),
+    m_eVScrollMetric(m_eUserMetric),
     m_bIsVScrollMetricSet(false),
     m_nDefTabInMm100( 2000 ), // 2 cm
     m_bIsSquaredPageMode(false),
@@ -56,23 +67,12 @@ SwMasterUsrPref::SwMasterUsrPref(bool bWeb) :
 {
     if (utl::ConfigManager::IsFuzzing())
     {
-        m_eHScrollMetric = m_eVScrollMetric = m_eUserMetric = FieldUnit::CM;
         // match defaults
         SetCore2Option(true, ViewOptCoreFlags2::CursorInProt);
         SetCore2Option(false, ViewOptCoreFlags2::HiddenPara);
         m_nDefTabInMm100 = 1250;
         return;
     }
-    MeasurementSystem eSystem = SvtSysLocale().GetLocaleData().getMeasurementSystemEnum();
-    m_eUserMetric = MeasurementSystem::Metric == eSystem ? FieldUnit::CM : FieldUnit::INCH;
-    m_eHScrollMetric = m_eVScrollMetric = m_eUserMetric;
-
-    m_aContentConfig.Load();
-    m_aLayoutConfig.Load();
-    m_aGridConfig.Load();
-    m_aCursorConfig.Load();
-    if(m_pWebColorConfig)
-        m_pWebColorConfig->Load();
 }
 
 SwMasterUsrPref::~SwMasterUsrPref()
@@ -287,11 +287,12 @@ Sequence<OUString> SwLayoutViewConfig::GetPropertyNames() const
 }
 
 SwLayoutViewConfig::SwLayoutViewConfig(bool bIsWeb, SwMasterUsrPref& rPar) :
-    ConfigItem(bIsWeb ? OUString("Office.WriterWeb/Layout") :  OUString("Office.Writer/Layout"),
-        ConfigItemMode::ReleaseTree),
+    ConfigItem(bIsWeb ? OUString("Office.WriterWeb/Layout") :  OUString("Office.Writer/Layout")),
     m_rParent(rPar),
     m_bWeb(bIsWeb)
 {
+    Load();
+    EnableNotification(GetPropertyNames());
 }
 
 SwLayoutViewConfig::~SwLayoutViewConfig()
@@ -398,7 +399,10 @@ void SwLayoutViewConfig::Load()
     }
 }
 
-void SwLayoutViewConfig::Notify( const css::uno::Sequence< OUString >& ) {}
+void SwLayoutViewConfig::Notify(const css::uno::Sequence<OUString>&)
+{
+    Load();
+}
 
 Sequence<OUString> SwGridConfig::GetPropertyNames()
 {
@@ -423,10 +427,11 @@ Sequence<OUString> SwGridConfig::GetPropertyNames()
 }
 
 SwGridConfig::SwGridConfig(bool bIsWeb, SwMasterUsrPref& rPar) :
-    ConfigItem(bIsWeb ? OUString("Office.WriterWeb/Grid") :  OUString("Office.Writer/Grid"),
-        ConfigItemMode::ReleaseTree),
+    ConfigItem(bIsWeb ? OUString("Office.WriterWeb/Grid") :  OUString("Office.Writer/Grid")),
     m_rParent(rPar)
 {
+    Load();
+    EnableNotification(GetPropertyNames());
 }
 
 SwGridConfig::~SwGridConfig()
@@ -489,7 +494,10 @@ void SwGridConfig::Load()
     m_rParent.SetSnapSize(aSnap);
 }
 
-void SwGridConfig::Notify( const css::uno::Sequence< OUString >& ) {}
+void SwGridConfig::Notify( const css::uno::Sequence< OUString >& )
+{
+    Load();
+}
 
 Sequence<OUString> SwCursorConfig::GetPropertyNames()
 {
@@ -507,10 +515,12 @@ Sequence<OUString> SwCursorConfig::GetPropertyNames()
     return aNames;
 }
 
-SwCursorConfig::SwCursorConfig(SwMasterUsrPref& rPar) :
-    ConfigItem("Office.Writer/Cursor", ConfigItemMode::ReleaseTree),
-    m_rParent(rPar)
+SwCursorConfig::SwCursorConfig(SwMasterUsrPref& rPar)
+    : ConfigItem("Office.Writer/Cursor")
+    , m_rParent(rPar)
 {
+    Load();
+    EnableNotification(GetPropertyNames());
 }
 
 SwCursorConfig::~SwCursorConfig()
@@ -566,14 +576,19 @@ void SwCursorConfig::Load()
     }
 }
 
-void SwCursorConfig::Notify( const css::uno::Sequence< OUString >& ) {}
+void SwCursorConfig::Notify(const css::uno::Sequence<OUString>& )
+{
+    Load();
+}
 
 SwWebColorConfig::SwWebColorConfig(SwMasterUsrPref& rPar) :
-    ConfigItem("Office.WriterWeb/Background", ConfigItemMode::ReleaseTree),
+    ConfigItem("Office.WriterWeb/Background"),
     m_rParent(rPar),
     m_aPropNames(1)
 {
     m_aPropNames.getArray()[0] = "Color";
+    Load();
+    EnableNotification(m_aPropNames);
 }
 
 SwWebColorConfig::~SwWebColorConfig()
@@ -594,7 +609,10 @@ void SwWebColorConfig::ImplCommit()
     PutProperties(m_aPropNames, aValues);
 }
 
-void SwWebColorConfig::Notify( const css::uno::Sequence< OUString >& ) {}
+void SwWebColorConfig::Notify(const css::uno::Sequence<OUString>&)
+{
+    Load();
+}
 
 void SwWebColorConfig::Load()
 {

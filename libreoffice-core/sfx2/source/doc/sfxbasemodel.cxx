@@ -2435,7 +2435,7 @@ Reference< script::XStorageBasedLibraryContainer > SAL_CALL SfxBaseModel::getBas
 
     Reference< script::XStorageBasedLibraryContainer > xBasicLibraries;
     if ( m_pData->m_pObjectShell.is() )
-        xBasicLibraries.set(m_pData->m_pObjectShell->GetBasicContainer(), UNO_QUERY);
+        xBasicLibraries.set(m_pData->m_pObjectShell->GetBasicContainer());
     return xBasicLibraries;
 }
 
@@ -2445,7 +2445,7 @@ Reference< script::XStorageBasedLibraryContainer > SAL_CALL SfxBaseModel::getDia
 
     Reference< script::XStorageBasedLibraryContainer > xDialogLibraries;
     if ( m_pData->m_pObjectShell.is() )
-        xDialogLibraries.set(m_pData->m_pObjectShell->GetDialogContainer(), UNO_QUERY);
+        xDialogLibraries.set(m_pData->m_pObjectShell->GetDialogContainer());
     return xDialogLibraries;
 }
 
@@ -4037,27 +4037,30 @@ OUString SAL_CALL SfxBaseModel::getTitle()
         SfxMedium* pMedium = m_pData->m_pObjectShell->GetMedium();
         if ( pMedium )
         {
-            try {
-                ::ucbhelper::Content aContent( pMedium->GetName(),
-                    utl::UCBContentHelper::getDefaultCommandEnvironment(),
-                    comphelper::getProcessComponentContext() );
-                const Reference < beans::XPropertySetInfo > xProps
-                     = aContent.getProperties();
-                if ( xProps.is() )
-                {
-                    static constexpr OUString aServerTitle( u"TitleOnServer"_ustr );
-                    if ( xProps->hasPropertyByName( aServerTitle ) )
+            if (!pMedium->GetName().equalsIgnoreAsciiCase("private:stream"))
+            {
+                try {
+                    ::ucbhelper::Content aContent( pMedium->GetName(),
+                        utl::UCBContentHelper::getDefaultCommandEnvironment(),
+                        comphelper::getProcessComponentContext() );
+                    const Reference < beans::XPropertySetInfo > xProps
+                         = aContent.getProperties();
+                    if ( xProps.is() )
                     {
-                        Any aAny = aContent.getPropertyValue( aServerTitle );
-                        aAny >>= aResult;
+                        static constexpr OUString aServerTitle( u"TitleOnServer"_ustr );
+                        if ( xProps->hasPropertyByName( aServerTitle ) )
+                        {
+                            Any aAny = aContent.getPropertyValue( aServerTitle );
+                            aAny >>= aResult;
+                        }
                     }
                 }
-            }
-            catch (const ucb::ContentCreationException &)
-            {
-            }
-            catch (const ucb::CommandAbortedException &)
-            {
+                catch (const ucb::ContentCreationException &)
+                {
+                }
+                catch (const ucb::CommandAbortedException &)
+                {
+                }
             }
             const SfxBoolItem* pRepairedDocItem = pMedium->GetItemSet().GetItem(SID_REPAIRPACKAGE, false);
             if ( pRepairedDocItem && pRepairedDocItem->GetValue() )

@@ -76,6 +76,7 @@ namespace com::sun::star::view { class XRenderable; }
 namespace com::sun::star::security { class XCertificate; }
 namespace tools { class Rectangle; }
 namespace svtools { enum ColorConfigEntry : int; }
+namespace svl::crypto { class CertificateOrName; }
 
 enum class SfxPrinterChangeFlags
 {
@@ -496,8 +497,14 @@ public:
 
     OUString getA11yFocusedParagraph() const;
     int getA11yCaretPosition() const;
-    void SetSigningCertificate(const css::uno::Reference<css::security::XCertificate>& xCertificate);
-    css::uno::Reference<css::security::XCertificate> GetSigningCertificate() const;
+    void SetSigningCertificate(const svl::crypto::CertificateOrName& rCertificateOrName);
+    svl::crypto::CertificateOrName GetSigningCertificate() const;
+
+    // These are used for visual signing: SetSignPDFCertificate() is called when the signature
+    // line is inserted, and GetSignPDFCertificate() is used by the signing code to get the already
+    // selected certificate.
+    void SetSignPDFCertificate(const svl::crypto::CertificateOrName& rCertificateOrName);
+    svl::crypto::CertificateOrName GetSignPDFCertificate() const;
 };
 
 #endif // INCLUDED_SFX2_VIEWSH_HXX

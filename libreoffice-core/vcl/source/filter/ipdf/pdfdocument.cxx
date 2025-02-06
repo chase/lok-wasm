@@ -31,6 +31,7 @@
 #include <o3tl/safeint.hxx>
 
 #include <pdf/objectcopier.hxx>
+#include <pdf/COSWriter.hxx>
 
 using namespace com::sun::star;
 
@@ -122,7 +123,8 @@ sal_uInt32 PDFDocument::GetNextSignature()
     return nRet + 1;
 }
 
-sal_Int32 PDFDocument::WriteSignatureObject(const OUString& rDescription, bool bAdES,
+sal_Int32 PDFDocument::WriteSignatureObject(svl::crypto::SigningContext& rSigningContext,
+                                            const OUString& rDescription, bool bAdES,
                                             sal_uInt64& rLastByteRangeOffset,
                                             sal_Int64& rContentOffset)
 {
@@ -132,6 +134,7 @@ sal_Int32 PDFDocument::WriteSignatureObject(const OUString& rDescription, bool b
     aSignatureEntry.SetOffset(m_aEditBuffer.Tell());
     aSignatureEntry.SetDirty(true);
     m_aXRef[nSignatureId] = aSignatureEntry;
+
     OStringBuffer aSigBuffer(OString::number(nSignatureId)
                              + " 0 obj\n"
                                "<</Contents <");
@@ -146,7 +149,7 @@ sal_Int32 PDFDocument::WriteSignatureObject(const OUString& rDescription, bool b
         aSigBuffer.append("/adbe.pkcs7.detached");
 
     // Time of signing.
-    aSigBuffer.append(" /M (" + vcl::PDFWriter::GetDateTime()
+    aSigBuffer.append(" /M (" + vcl::PDFWriter::GetDateTime(&rSigningContext)
                       + ")"
 
                         // Byte range: we can write offset1-length1 and offset2 right now, will
@@ -166,9 +169,9 @@ sal_Int32 PDFDocument::WriteSignatureObject(const OUString& rDescription, bool b
 
     if (!rDescription.isEmpty())
     {
-        aSigBuffer.append("/Reason<");
-        vcl::PDFWriter::AppendUnicodeTextString(rDescription, aSigBuffer);
-        aSigBuffer.append(">");
+        pdf::COSWriter aWriter;
+        aWriter.writeKeyAndUnicode("/Reason", rDescription);
+        aSigBuffer.append(aWriter.getLine());
     }
 
     aSigBuffer.append(" >>\nendobj\n\n");
@@ -855,16 +858,17 @@ void PDFDocument::WriteXRef(sal_uInt64 nXRefOffset, PDFReferenceElement const* p
     }
 }
 
-bool PDFDocument::Sign(const uno::Reference<security::XCertificate>& xCertificate,
-                       const OUString& rDescription, bool bAdES)
+bool PDFDocument::Sign(svl::crypto::SigningContext& rSigningContext, const OUString& rDescription,
+                       bool bAdES)
 {
     m_aEditBuffer.Seek(STREAM_SEEK_TO_END);
     m_aEditBuffer.WriteOString("\n");
 
     sal_uInt64 nSignatureLastByteRangeOffset = 0;
     sal_Int64 nSignatureContentOffset = 0;
-    sal_Int32 nSignatureId = WriteSignatureObject(
-        rDescription, bAdES, nSignatureLastByteRangeOffset, nSignatureContentOffset);
+    sal_Int32 nSignatureId
+        = WriteSignatureObject(rSigningContext, rDescription, bAdES, nSignatureLastByteRangeOffset,
+                               nSignatureContentOffset);
 
     tools::Rectangle aSignatureRectangle;
     sal_Int32 nAppearanceId = WriteAppearanceObject(aSignatureRectangle);
@@ -922,11 +926,14 @@ bool PDFDocument::Sign(const uno::Reference<security::XCertificate>& xCertificat
     m_aEditBuffer.WriteOString(aByteRangeBuffer);
 
     // Create the PKCS#7 object.
-    css::uno::Sequence<sal_Int8> aDerEncoded = xCertificate->getEncoded();
-    if (!aDerEncoded.hasElements())
+    if (rSigningContext.m_xCertificate)
     {
-        SAL_WARN("vcl.filter", "PDFDocument::Sign: empty certificate");
-        return false;
+        css::uno::Sequence<sal_Int8> aDerEncoded = rSigningContext.m_xCertificate->getEncoded();
+        if (!aDerEncoded.hasElements())
+        {
+            SAL_WARN("vcl.filter", "PDFDocument::Sign: empty certificate");
+            return false;
+        }
     }
 
     m_aEditBuffer.Seek(0);
@@ -940,13 +947,28 @@ bool PDFDocument::Sign(const uno::Reference<security::XCertificate>& xCertificat
     m_aEditBuffer.ReadBytes(aBuffer2.get(), nBufferSize2);
 
     OStringBuffer aCMSHexBuffer;
-    svl::crypto::Signing aSigning(xCertificate);
-    aSigning.AddDataRange(aBuffer1.get(), nBufferSize1);
-    aSigning.AddDataRange(aBuffer2.get(), nBufferSize2);
-    if (!aSigning.Sign(aCMSHexBuffer))
+    if (rSigningContext.m_aSignatureValue.empty())
     {
-        SAL_WARN("vcl.filter", "PDFDocument::Sign: PDFWriter::Sign() failed");
-        return false;
+        svl::crypto::Signing aSigning(rSigningContext);
+        aSigning.AddDataRange(aBuffer1.get(), nBufferSize1);
+        aSigning.AddDataRange(aBuffer2.get(), nBufferSize2);
+        if (!aSigning.Sign(aCMSHexBuffer))
+        {
+            if (rSigningContext.m_xCertificate.is())
+            {
+                SAL_WARN("vcl.filter", "PDFDocument::Sign: PDFWriter::Sign() failed");
+            }
+            return false;
+        }
+    }
+    else
+    {
+        // The signature value provided by the context: use that instead of building a new
+        // signature.
+        for (unsigned char ch : rSigningContext.m_aSignatureValue)
+        {
+            svl::crypto::Signing::appendHex(ch, aCMSHexBuffer);
+        }
     }
 
     assert(aCMSHexBuffer.getLength() <= MAX_SIGNATURE_CONTENT_LENGTH);

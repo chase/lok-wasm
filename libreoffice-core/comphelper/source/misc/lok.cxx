@@ -35,10 +35,15 @@ static bool g_bViewIdForVisCursorInvalidation(false);
 
 static bool g_bLocalRendering(false);
 
+static bool g_bSlideshowRendering(false);
+
 static Compat g_eCompatFlags(Compat::none);
 
 static std::function<bool(void*)> g_pAnyInputCallback;
 static void* g_pAnyInputCallbackData;
+
+static std::function<void(int)> g_pViewSetter;
+static std::function<int()> g_pViewGetter;
 
 namespace
 {
@@ -193,6 +198,16 @@ bool isLocalRendering()
     return g_bLocalRendering;
 }
 
+void setSlideshowRendering(bool bSlideshowRendering)
+{
+    g_bSlideshowRendering = bSlideshowRendering;
+}
+
+bool isSlideshowRendering()
+{
+    return g_bSlideshowRendering;
+}
+
 void setCompatFlag(Compat flag) { g_eCompatFlags = static_cast<Compat>(g_eCompatFlags | flag); }
 
 bool isCompatFlagSet(Compat flag) { return (g_eCompatFlags & flag) == flag; }
@@ -335,6 +350,36 @@ bool anyInput()
     }
 
     return bRet;
+}
+
+void setViewSetter(std::function<void(int)> pViewSetter)
+{
+    g_pViewSetter = pViewSetter;
+}
+
+void setView(int nView)
+{
+    if (!g_pViewSetter)
+    {
+        return;
+    }
+
+    g_pViewSetter(nView);
+}
+
+void setViewGetter(std::function<int()> pViewGetter)
+{
+    g_pViewGetter = pViewGetter;
+}
+
+int getView()
+{
+    if (!g_pViewGetter)
+    {
+        return -1;
+    }
+
+    return g_pViewGetter();
 }
 
 } // namespace

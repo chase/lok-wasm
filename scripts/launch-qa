@@ -1,0 +1,108 @@
+#!/bin/bash
+
+set -e
+
+BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")"/.. &>/dev/null && pwd)
+EXTENSION_PATH="$BASE_DIR/chrome_lok_cxx_debug"
+DEV_PID=""
+CHROME_PID=""
+PROFILE_PATH="$(mktemp -d)"
+
+cleanup() {
+    if [ -n "$CHROME_PID" ]; then
+        kill $CHROME_PID 2>/dev/null
+    fi
+    if [ -n "$DEV_PID" ]; then
+        kill $DEV_PID 2>/dev/null
+    fi
+    rm -rf "$PROFILE_PATH"
+    exit 0
+}
+
+trap cleanup EXIT INT TERM
+
+find_chrome() {
+    local os_type=$(uname -s)
+    
+    if [ "$os_type" = "Darwin" ]; then
+        local chrome_paths=(
+            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
+            "/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"
+            "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            "$HOME/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary"
+            "$HOME/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev"
+            "$HOME/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta"
+            "$HOME/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        )
+    else
+        local chrome_paths=(
+            "/usr/bin/google-chrome-unstable"
+            "/usr/bin/google-chrome-dev"
+            "/usr/bin/google-chrome-beta"
+            "/usr/bin/google-chrome"
+            "/usr/bin/google-chrome-stable"
+            "/usr/bin/chromium"
+            "/usr/bin/chromium-browser"
+            "/snap/bin/chromium"
+            "/snap/bin/google-chrome"
+        )
+    fi
+    
+    for path in "${chrome_paths[@]}"; do
+        if [ -x "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+start_dev_server() {
+    if [ ! -d "node_modules" ]; then
+        if command -v bun >/dev/null 2>&1; then
+            echo "Installing dependencies with bun..."
+            bun install
+        else
+            echo "Installing dependencies with npm..."
+            npm install
+        fi
+    fi
+
+    if command -v bun >/dev/null 2>&1; then
+        bun dev &
+    else
+        npm run dev &
+    fi
+    DEV_PID=$!
+}
+
+CHROME_PATH=$(find_chrome)
+
+if [ -z "$CHROME_PATH" ]; then
+    echo "No Chrome installation found"
+    exit 1
+fi
+
+# Check if port 5173 is in use
+if ! nc -z localhost 5173 2>/dev/null; then
+    echo "Starting development server..."
+    (cd $BASE_DIR/qa-env && start_dev_server)
+    
+    while ! nc -z localhost 5173 2>/dev/null; do
+        sleep 1
+    done
+fi
+
+mkdir -p "$PROFILE_PATH"
+
+"$CHROME_PATH" \
+    --user-data-dir="$PROFILE_PATH" \
+    --load-extension="$EXTENSION_PATH" \
+    --no-first-run \
+    --no-default-browser-check \
+    http://localhost:5173 > /dev/null 2>&1 &
+
+CHROME_PID=$!
+wait $CHROME_PID

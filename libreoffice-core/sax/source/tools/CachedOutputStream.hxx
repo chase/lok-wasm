@@ -11,6 +11,7 @@
 #define INCLUDED_SAX_SOURCE_TOOLS_CACHEDOUTPUTSTREAM_HXX
 
 #include <sal/types.h>
+#include <rtl/byteseq.hxx>
 
 #include <com/sun/star/io/XOutputStream.hpp>
 #include <com/sun/star/uno/Sequence.hxx>
@@ -20,11 +21,13 @@
 
 namespace sax_fastparser {
 
+typedef rtl::ByteSequence Int8Sequence;
+
 class ForMergeBase
 {
 public:
     virtual ~ForMergeBase() {}
-    virtual void append( const css::uno::Sequence<sal_Int8>& rWhat ) = 0;
+    virtual void append( const Int8Sequence& rWhat ) = 0;
 };
 
 class CachedOutputStream
@@ -34,7 +37,7 @@ class CachedOutputStream
 
     /// ForMerge structure is used for sorting elements in Writer
     std::shared_ptr< ForMergeBase > mpForMerge;
-    const css::uno::Sequence<sal_Int8> mpCache;
+    const Int8Sequence maCache;
     /// Output stream, usually writing data into files.
     css::uno::Reference< css::io::XOutputStream > mxOutputStream;
     uno_Sequence *pSeq;
@@ -42,8 +45,8 @@ class CachedOutputStream
     bool mbWriteToOutStream;
 
 public:
-    CachedOutputStream() : mpCache(mnMaximumSize)
-                         , pSeq(mpCache.get())
+    CachedOutputStream() : maCache(mnMaximumSize, rtl::BYTESEQ_NODEFAULT)
+                         , pSeq(maCache.get())
                          , mnCacheWrittenSize(0)
                          , mbWriteToOutStream(true)
     {}
@@ -88,7 +91,7 @@ public:
                 if (mbWriteToOutStream)
                     mxOutputStream->writeBytes( css::uno::Sequence<sal_Int8>(pStr, nLen) );
                 else
-                    mpForMerge->append( css::uno::Sequence<sal_Int8>(pStr, nLen) );
+                    mpForMerge->append( Int8Sequence(pStr, nLen) );
                 return;
             }
         }
@@ -103,9 +106,9 @@ public:
         // resize the Sequence to written size
         pSeq->nElements = mnCacheWrittenSize;
         if (mbWriteToOutStream)
-            mxOutputStream->writeBytes( mpCache );
+            mxOutputStream->writeBytes( css::uno::toUnoSequence(maCache) );
         else
-            mpForMerge->append( mpCache );
+            mpForMerge->append( maCache );
         // and next time write to the beginning
         mnCacheWrittenSize = 0;
     }

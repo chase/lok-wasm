@@ -674,6 +674,8 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
                     xPropertySet->setPropertyValue("InteropGrabBag", uno::Any(aGrabBag));
                 }
 
+                auto xPropertySetInfo = xPropertySet->getPropertySetInfo();
+
                 if (xServiceInfo.is())
                 {
                     // Handle inset attributes for Writer textframes.
@@ -693,79 +695,101 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
                         = { OUString("TextLeftDistance"), OUString("TextUpperDistance"),
                             OUString("TextRightDistance"), OUString("TextLowerDistance") };
                     for (std::size_t i = 0; i < SAL_N_ELEMENTS(aShapeProps); ++i)
-                        if (oInsets[i])
+                    {
+                        if (!oInsets[i])
+                            continue;
+                        if (xPropertySetInfo && xPropertySetInfo->hasPropertyByName(aShapeProps[i]))
                             xPropertySet->setPropertyValue(aShapeProps[i], uno::Any(*oInsets[i]));
+                        else
+                            SAL_WARN("oox", "Property: " << aShapeProps[i] << " not supported");
+                    }
                 }
 
                 // Handle text vertical adjustment inside a text frame
                 if (rAttribs.hasAttribute(XML_anchor))
                 {
-                    drawing::TextVerticalAdjust eAdjust
-                        = drawingml::GetTextVerticalAdjust(rAttribs.getToken(XML_anchor, XML_t));
-                    xPropertySet->setPropertyValue("TextVerticalAdjust", uno::Any(eAdjust));
+                    if (xPropertySetInfo
+                        && xPropertySetInfo->hasPropertyByName(u"TextVerticalAdjust"_ustr))
+                    {
+                        drawing::TextVerticalAdjust eAdjust = drawingml::GetTextVerticalAdjust(
+                            rAttribs.getToken(XML_anchor, XML_t));
+                        xPropertySet->setPropertyValue(u"TextVerticalAdjust"_ustr,
+                                                       uno::Any(eAdjust));
+                    }
+                    else
+                        SAL_WARN("oox", "Property: TextVerticalAdjust not supported");
                 }
 
                 // Apply character color of the shape to the shape's textbox.
                 uno::Reference<text::XText> xText(mxShape, uno::UNO_QUERY);
-                uno::Any xCharColor = xPropertySet->getPropertyValue("CharColor");
-                Color aColor = COL_AUTO;
-                if ((xCharColor >>= aColor) && aColor != COL_AUTO)
+                if (xText)
                 {
-                    // tdf#135923 Apply character color of the shape to the textrun
-                    //            when the character color of the textrun is default.
-                    // tdf#153791 But only if the run has no background color (shd element in OOXML)
-                    if (uno::Reference<container::XEnumerationAccess> paraEnumAccess{
-                            xText, uno::UNO_QUERY })
+                    uno::Any xCharColor = xPropertySet->getPropertyValue("CharColor");
+                    Color aColor = COL_AUTO;
+                    if ((xCharColor >>= aColor) && aColor != COL_AUTO)
                     {
-                        uno::Reference<container::XEnumeration> paraEnum(
-                            paraEnumAccess->createEnumeration());
-
-                        while (paraEnum->hasMoreElements())
+                        // tdf#135923 Apply character color of the shape to the textrun
+                        //            when the character color of the textrun is default.
+                        // tdf#153791 But only if the run has no background color (shd element in OOXML)
+                        if (uno::Reference<container::XEnumerationAccess> paraEnumAccess{
+                                xText, uno::UNO_QUERY })
                         {
-                            uno::Reference<text::XTextRange> xParagraph(paraEnum->nextElement(),
-                                                                        uno::UNO_QUERY);
-                            uno::Reference<container::XEnumerationAccess> runEnumAccess(
-                                xParagraph, uno::UNO_QUERY);
-                            if (!runEnumAccess.is())
-                                continue;
-                            if (uno::Reference<beans::XPropertySet> xParaPropSet{ xParagraph,
-                                                                                  uno::UNO_QUERY })
-                                if ((xParaPropSet->getPropertyValue("ParaBackColor") >>= aColor)
-                                    && aColor != COL_AUTO)
-                                    continue;
+                            uno::Reference<container::XEnumeration> paraEnum(
+                                paraEnumAccess->createEnumeration());
 
-                            uno::Reference<container::XEnumeration> runEnum
-                                = runEnumAccess->createEnumeration();
-
-                            while (runEnum->hasMoreElements())
+                            while (paraEnum->hasMoreElements())
                             {
-                                uno::Reference<text::XTextRange> xRun(runEnum->nextElement(),
-                                                                      uno::UNO_QUERY);
-                                const uno::Reference<beans::XPropertyState> xRunState(
-                                    xRun, uno::UNO_QUERY);
-                                if (!xRunState
-                                    || xRunState->getPropertyState("CharColor")
-                                           == beans::PropertyState_DEFAULT_VALUE)
-                                {
-                                    uno::Reference<beans::XPropertySet> xRunPropSet(xRun,
-                                                                                    uno::UNO_QUERY);
-                                    if (!xRunPropSet)
-                                        continue;
-                                    if ((xRunPropSet->getPropertyValue("CharBackColor") >>= aColor)
+                                uno::Reference<text::XTextRange> xParagraph(paraEnum->nextElement(),
+                                                                            uno::UNO_QUERY);
+                                uno::Reference<container::XEnumerationAccess> runEnumAccess(
+                                    xParagraph, uno::UNO_QUERY);
+                                if (!runEnumAccess.is())
+                                    continue;
+                                if (uno::Reference<beans::XPropertySet> xParaPropSet{
+                                        xParagraph, uno::UNO_QUERY })
+                                    if ((xParaPropSet->getPropertyValue("ParaBackColor") >>= aColor)
                                         && aColor != COL_AUTO)
                                         continue;
-                                    if (!(xRunPropSet->getPropertyValue("CharColor") >>= aColor)
-                                        || aColor == COL_AUTO)
-                                        xRunPropSet->setPropertyValue("CharColor", xCharColor);
+
+                                uno::Reference<container::XEnumeration> runEnum
+                                    = runEnumAccess->createEnumeration();
+
+                                while (runEnum->hasMoreElements())
+                                {
+                                    uno::Reference<text::XTextRange> xRun(runEnum->nextElement(),
+                                                                          uno::UNO_QUERY);
+                                    const uno::Reference<beans::XPropertyState> xRunState(
+                                        xRun, uno::UNO_QUERY);
+                                    if (!xRunState
+                                        || xRunState->getPropertyState("CharColor")
+                                               == beans::PropertyState_DEFAULT_VALUE)
+                                    {
+                                        uno::Reference<beans::XPropertySet> xRunPropSet(
+                                            xRun, uno::UNO_QUERY);
+                                        if (!xRunPropSet)
+                                            continue;
+                                        if ((xRunPropSet->getPropertyValue("CharBackColor")
+                                             >>= aColor)
+                                            && aColor != COL_AUTO)
+                                            continue;
+                                        if (!(xRunPropSet->getPropertyValue("CharColor") >>= aColor)
+                                            || aColor == COL_AUTO)
+                                            xRunPropSet->setPropertyValue("CharColor", xCharColor);
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                auto nWrappingType = rAttribs.getToken(XML_wrap, XML_square);
-                xPropertySet->setPropertyValue("TextWordWrap",
-                                               uno::Any(nWrappingType == XML_square));
+                if (xPropertySetInfo && xPropertySetInfo->hasPropertyByName(u"TextWordWrap"_ustr))
+                {
+                    auto nWrappingType = rAttribs.getToken(XML_wrap, XML_square);
+                    xPropertySet->setPropertyValue(u"TextWordWrap"_ustr,
+                                                   uno::Any(nWrappingType == XML_square));
+                }
+                else
+                    SAL_WARN("oox", "Property: TextWordWrap not supported");
 
                 return this;
             }
@@ -819,9 +843,18 @@ oox::core::ContextHandlerRef WpsContext::onCreateContext(sal_Int32 nElementToken
                         "FrameIsAutomaticHeight",
                         uno::Any(getBaseToken(nElementToken) == XML_spAutoFit));
                 else
-                    xPropertySet->setPropertyValue(
-                        "TextAutoGrowHeight",
-                        uno::Any(getBaseToken(nElementToken) == XML_spAutoFit));
+                {
+                    auto xPropertySetInfo = xPropertySet->getPropertySetInfo();
+                    if (xPropertySetInfo
+                        && xPropertySetInfo->hasPropertyByName(u"TextAutoGrowHeight"_ustr))
+                    {
+                        xPropertySet->setPropertyValue(
+                            u"TextAutoGrowHeight"_ustr,
+                            uno::Any(getBaseToken(nElementToken) == XML_spAutoFit));
+                    }
+                    else
+                        SAL_WARN("oox", "Property: TextAutoGrowHeight not supported");
+                }
             }
         }
         break;

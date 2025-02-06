@@ -644,7 +644,12 @@ void SwTextCursor::GetCharRect_( SwRect* pOrig, TextFrameIndex const nOfst,
                 if ( aInf.GetIdx() + pPor->GetLen() < nOfst + nExtra )
                 {
                     if ( pPor->InSpaceGrp() && nSpaceAdd )
-                        nX += pPor->PrtWidth() +
+                        // tdf#163042 In the case of shrunk lines with a single portion,
+                        // adjust the line width to show the cursor in the correct position
+                        nX += ( ( std::abs( m_pCurr->Width() - pPor->PrtWidth() ) <= 1 &&
+                                        m_pCurr->ExtraShrunkWidth() > 0 )
+                                    ? m_pCurr->ExtraShrunkWidth()
+                                    : pPor->PrtWidth() ) +
                               pPor->CalcSpacing( nSpaceAdd, aInf );
                     else
                     {
@@ -1415,8 +1420,12 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
 
     // nWidth is the width of the line, or the width of
     // the paragraph with the font change, in which nX is situated.
-
-    SwTwips nWidth = pPor->Width();
+    // tdf#16342 In the case of shrunk lines with a single portion,
+    // adjust the line width to move the cursor to the click position
+    SwTwips nWidth =
+        ( std::abs( m_pCurr->Width() - pPor->Width() ) <= 1 && m_pCurr->ExtraShrunkWidth() > 0 )
+            ? m_pCurr->ExtraShrunkWidth()
+            :  pPor->Width();
     if ( m_pCurr->IsSpaceAdd() || pKanaComp )
     {
         if ( pPor->InSpaceGrp() && nSpaceAdd )
@@ -1865,8 +1874,11 @@ TextFrameIndex SwTextCursor::GetModelPositionForViewPoint( SwPosition *pPos, con
                 SwFrame* pLower = pTmp->GetLower();
                 // Allow non-text-frames to get SwGrfNode for as-char anchored images into pPos
                 // instead of the closest SwTextNode, to be consistent with at-char behavior.
-                bool bChgNodeInner = pLower
-                    && (pLower->IsTextFrame() || pLower->IsLayoutFrame() || pLower->IsNoTextFrame());
+                bool bChgNodeInner
+                    = pLower
+                      && (pLower->IsTextFrame() || pLower->IsLayoutFrame()
+                          || (pLower->IsNoTextFrame()
+                              && (!pCMS || pCMS->m_eState != CursorMoveState::SetOnlyText)));
                 Point aTmpPoint( rPoint );
 
                 if ( m_pFrame->IsRightToLeft() )

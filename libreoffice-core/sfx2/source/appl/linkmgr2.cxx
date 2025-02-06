@@ -17,6 +17,9 @@
  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
  */
 
+#include <sal/config.h>
+
+#include <comphelper/lok.hxx>
 #include <comphelper/string.hxx>
 #include <sfx2/linkmgr.hxx>
 #include <sfx2/sfxsids.hrc>
@@ -277,6 +280,12 @@ bool LinkManager::GetDisplayNames( const SvBaseLink * pLink,
     return bRet;
 }
 
+static void disallowAllLinksUpdate(SvBaseLink* pShellProvider)
+{
+    if (SfxObjectShell* pShell = pShellProvider->GetLinkManager()->GetPersist())
+        pShell->getEmbeddedObjectContainer().setUserAllowsLinkUpdate(false);
+}
+
 void LinkManager::UpdateAllLinks(
     bool bAskUpdate,
     bool bUpdateGrfLinks,
@@ -322,6 +331,13 @@ void LinkManager::UpdateAllLinks(
 
         if( bAskUpdate )
         {
+            if (comphelper::LibreOfficeKit::isActive())
+            {
+                // only one document in jail, no update possible
+                disallowAllLinksUpdate(pLink);
+                return;
+            }
+
             OUString aMsg = SfxResId(STR_QUERY_UPDATE_LINKS);
             INetURLObject aURL(pPersist->getDocumentBaseURL());
             aMsg = aMsg.replaceFirst("%{filename}", aURL.GetLastName());
@@ -333,14 +349,7 @@ void LinkManager::UpdateAllLinks(
             int nRet = xQueryBox->run();
             if( RET_YES != nRet )
             {
-                SfxObjectShell* pShell = pLink->GetLinkManager()->GetPersist();
-
-                if(pShell)
-                {
-                    comphelper::EmbeddedObjectContainer& rEmbeddedObjectContainer = pShell->getEmbeddedObjectContainer();
-                    rEmbeddedObjectContainer.setUserAllowsLinkUpdate(false);
-                }
-
+                disallowAllLinksUpdate(pLink);
                 return ;        // nothing should be updated
             }
             bAskUpdate = false;  // once is enough
@@ -534,8 +543,11 @@ bool LinkManager::GetGraphicFromAny(std::u16string_view rMimeType,
             sReferer = sh->GetMedium()->GetName();
 
         OUString sURL = rValue.get<OUString>();
-        if (!SvtSecurityOptions::isUntrustedReferer(sReferer))
+        if (!SvtSecurityOptions::isUntrustedReferer(sReferer) &&
+            !INetURLObject(sURL).IsExoticProtocol())
+        {
             rGraphic = vcl::graphic::loadFromURL(sURL, pParentWin);
+        }
         if (rGraphic.IsNone())
             rGraphic.SetDefaultType();
         rGraphic.setOriginURL(sURL);

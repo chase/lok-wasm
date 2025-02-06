@@ -775,9 +775,10 @@ void SdtBlockHelper::WriteSdtBlock(const ::sax_fastparser::FSHelperPtr& pSeriali
         }
 
         if (m_nSdtPrToken == FSNS(XML_w, XML_date) || m_nSdtPrToken == FSNS(XML_w, XML_docPartObj) || m_nSdtPrToken == FSNS(XML_w, XML_docPartList) || m_nSdtPrToken == FSNS(XML_w14, XML_checkbox)) {
-            const uno::Sequence<xml::FastAttribute> aChildren = m_pTokenChildren->getFastAttributes();
-            for (const auto& rChild : aChildren)
-                pSerializer->singleElement(rChild.Token, FSNS(XML_w, XML_val), rChild.Value);
+            for (auto& it : *m_pTokenChildren)
+            {
+                pSerializer->singleElement(it.getToken(), FSNS(XML_w, XML_val), it.toCString());
+            }
         }
 
         pSerializer->endElement(m_nSdtPrToken);
@@ -2343,8 +2344,12 @@ void DocxAttributeOutput::DoWriteBookmarksEnd(std::vector<OUString>& rEnds)
 // - "permission-for-user:<permission-id>:<permission-user-name>"
 // - "permission-for-group:<permission-id>:<permission-group-name>"
 //
-void DocxAttributeOutput::DoWritePermissionTagStart(std::u16string_view permission)
+void DocxAttributeOutput::DoWritePermissionTagStart(const OUString& permission)
 {
+    if (m_aOpenedPermissions.find(permission) != m_aOpenedPermissions.end())
+        return;
+    m_aOpenedPermissions.insert(permission);
+
     std::u16string_view permissionIdAndName;
 
     if (o3tl::starts_with(permission, u"permission-for-group:", &permissionIdAndName))
@@ -2382,8 +2387,11 @@ void DocxAttributeOutput::DoWritePermissionTagStart(std::u16string_view permissi
 // - "permission-for-user:<permission-id>:<permission-user-name>"
 // - "permission-for-group:<permission-id>:<permission-group-name>"
 //
-void DocxAttributeOutput::DoWritePermissionTagEnd(std::u16string_view permission)
+void DocxAttributeOutput::DoWritePermissionTagEnd(const OUString& permission)
 {
+    if (m_aOpenedPermissions.find(permission) == m_aOpenedPermissions.end())
+        return;
+
     std::u16string_view permissionIdAndName;
 
     auto const ok = o3tl::starts_with(permission, u"permission-for-group:", &permissionIdAndName) ||
@@ -2396,6 +2404,7 @@ void DocxAttributeOutput::DoWritePermissionTagEnd(std::u16string_view permission
 
     m_pSerializer->singleElementNS(XML_w, XML_permEnd,
         FSNS(XML_w, XML_id), GetExport().BookmarkToWord(permissionId));
+    m_aOpenedPermissions.erase(permission);
 }
 
 /// Write the start permissions
@@ -3497,12 +3506,17 @@ void lclProcessRecursiveGrabBag(sal_Int32 aElementId, const css::uno::Sequence<c
 {
     css::uno::Sequence<css::beans::PropertyValue> aAttributes;
     rtl::Reference<FastAttributeList> pAttributes = FastSerializerHelper::createAttrList();
+    sal_Int32 nElements = 0;
 
     for (const auto& rElement : rElements)
     {
         if (rElement.Name == "attributes")
         {
             rElement.Value >>= aAttributes;
+        }
+        else
+        {
+            ++nElements;
         }
     }
 
@@ -3525,21 +3539,28 @@ void lclProcessRecursiveGrabBag(sal_Int32 aElementId, const css::uno::Sequence<c
             pAttributes->add(*aSubElementId, aValue);
     }
 
-    pSerializer->startElement(aElementId, pAttributes);
-
-    for (const auto& rElement : rElements)
+    if (nElements == 0)
     {
-        css::uno::Sequence<css::beans::PropertyValue> aSumElements;
-
-        std::optional<sal_Int32> aSubElementId = lclGetElementIdForName(rElement.Name);
-        if(aSubElementId)
-        {
-            rElement.Value >>= aSumElements;
-            lclProcessRecursiveGrabBag(*aSubElementId, aSumElements, pSerializer);
-        }
+        pSerializer->singleElement(aElementId, pAttributes);
     }
+    else
+    {
+        pSerializer->startElement(aElementId, pAttributes);
 
-    pSerializer->endElement(aElementId);
+        for (const auto& rElement : rElements)
+        {
+            css::uno::Sequence<css::beans::PropertyValue> aSumElements;
+
+            std::optional<sal_Int32> aSubElementId = lclGetElementIdForName(rElement.Name);
+            if(aSubElementId)
+            {
+                rElement.Value >>= aSumElements;
+                lclProcessRecursiveGrabBag(*aSubElementId, aSumElements, pSerializer);
+            }
+        }
+
+        pSerializer->endElement(aElementId);
+    }
 }
 
 }
@@ -9306,6 +9327,17 @@ void DocxAttributeOutput::FormatLRSpace( const SvxLRSpaceItem& rLRSpace )
 
         m_pageMargins.nLeft += sal::static_int_cast<sal_uInt16>(rLRSpace.GetLeft());
         m_pageMargins.nRight += sal::static_int_cast<sal_uInt16>(rLRSpace.GetRight());
+        // if page layout is 'left' then left/right margin need to be exchanged
+        // as it is exported as mirrored layout starting with even page
+        const WW8_SepInfo *pSectionInfo = m_rExport.Sections().CurrentSectionInfo();
+        if (pSectionInfo->pPageDesc &&
+            m_rExport.isMirroredMargin() &&
+            ((pSectionInfo->pPageDesc->ReadUseOn() & UseOnPage::All) == UseOnPage::Left))
+        {
+            sal_uInt16 nLeft = m_pageMargins.nLeft;
+            m_pageMargins.nLeft = m_pageMargins.nRight;
+            m_pageMargins.nRight = nLeft;
+        }
         sal_uInt16 nGutter = rLRSpace.GetGutterMargin();
 
         AddToAttrList( m_pSectionSpacingAttrList,

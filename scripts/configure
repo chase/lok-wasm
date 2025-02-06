@@ -6,7 +6,11 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")" &> /dev/null && pwd)
 
 # Add emscripten toolchain
 export EMSDK_QUIET=1
-source "$SCRIPT_DIR/../emsdk/emsdk_env.sh"
+if [[ "$container" = "podman" ]]; then
+  source "/emsdk/emsdk_env.sh"
+else
+  source "$SCRIPT_DIR/../emsdk/emsdk_env.sh"
+fi
 cd "$SCRIPT_DIR/../libreoffice-core"
 
 # LOK requires GCC 12, which often isn't the default, check for gcc-12 and g++12 if necessary

@@ -66,17 +66,6 @@
 using namespace com::sun::star;
 
 namespace {
-
-#if USE_CRYPTO_ANY
-void appendHex( sal_Int8 nInt, OStringBuffer& rBuffer )
-{
-    static const char pHexDigits[] = { '0', '1', '2', '3', '4', '5', '6', '7',
-                                           '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-    rBuffer.append( pHexDigits[ (nInt >> 4) & 15 ] );
-    rBuffer.append( pHexDigits[ nInt & 15 ] );
-}
-#endif
-
 #if USE_CRYPTO_NSS
 char *PDFSigningPKCS7PasswordCallback(PK11SlotInfo * /*slot*/, PRBool /*retry*/, void *arg)
 {
@@ -950,22 +939,18 @@ bool Signing::Sign(OStringBuffer& rCMSHexBuffer)
     return false;
 #else
     // Create the PKCS#7 object.
-    css::uno::Sequence<sal_Int8> aDerEncoded = m_xCertificate->getEncoded();
-    if (!aDerEncoded.hasElements())
+    css::uno::Sequence<sal_Int8> aDerEncoded;
+    if (m_rSigningContext.m_xCertificate.is())
     {
-        SAL_WARN("svl.crypto", "Crypto::Signing: empty certificate");
-        return false;
+        aDerEncoded = m_rSigningContext.m_xCertificate->getEncoded();
+        if (!aDerEncoded.hasElements())
+        {
+            SAL_WARN("svl.crypto", "Crypto::Signing: empty certificate");
+            return false;
+        }
     }
 
 #if USE_CRYPTO_NSS
-    CERTCertificate *cert = CERT_DecodeCertFromPackage(reinterpret_cast<char *>(aDerEncoded.getArray()), aDerEncoded.getLength());
-
-    if (!cert)
-    {
-        SAL_WARN("svl.crypto", "CERT_DecodeCertFromPackage failed");
-        return false;
-    }
-
     std::vector<unsigned char> aHashResult;
     {
         comphelper::Hash aHash(comphelper::HashType::SHA256);
@@ -980,6 +965,33 @@ bool Signing::Sign(OStringBuffer& rCMSHexBuffer)
     digest.len = aHashResult.size();
 
     PRTime now = PR_Now();
+
+    // The context unit is milliseconds, PR_Now() unit is microseconds.
+    if (m_rSigningContext.m_nSignatureTime)
+    {
+        now = m_rSigningContext.m_nSignatureTime * 1000;
+    }
+    else
+    {
+        m_rSigningContext.m_nSignatureTime = now / 1000;
+    }
+
+    if (!m_rSigningContext.m_xCertificate.is())
+    {
+        m_rSigningContext.m_aDigest = aHashResult;
+        // No certificate is provided: don't actually sign -- just update the context with the
+        // parameters for the signing and return.
+        return false;
+    }
+
+    CERTCertificate *cert = CERT_DecodeCertFromPackage(reinterpret_cast<char *>(aDerEncoded.getArray()), aDerEncoded.getLength());
+
+    if (!cert)
+    {
+        SAL_WARN("svl.crypto", "CERT_DecodeCertFromPackage failed");
+        return false;
+    }
+
     NSSCMSSignedData *cms_sd(nullptr);
     NSSCMSSignerInfo *cms_signer(nullptr);
     NSSCMSMessage *cms_msg = CreateCMSMessage(nullptr, &cms_sd, &cms_signer, cert, &digest);
@@ -2381,6 +2393,18 @@ bool Signing::Verify(SvStream& rStream,
 #endif
 }
 
+void Signing::appendHex(sal_Int8 nInt, OStringBuffer& rBuffer)
+{
+    static const char pHexDigits[] = { '0', '1', '2', '3', '4', '5', '6', '7',
+                                           '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+    rBuffer.append( pHexDigits[ (nInt >> 4) & 15 ] );
+    rBuffer.append( pHexDigits[ nInt & 15 ] );
+}
+
+bool CertificateOrName::Is() const
+{
+    return m_xCertificate.is() || !m_aName.isEmpty();
+}
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

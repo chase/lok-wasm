@@ -10095,8 +10095,8 @@ fi
 if test \( "$cross_compiling" = yes -a -z "$PYTHON_FOR_BUILD" \) -o "$enable_python" = internal; then
     SYSTEM_PYTHON=
     PYTHON_VERSION_MAJOR=3
-    PYTHON_VERSION_MINOR=8
-    PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.20
+    PYTHON_VERSION_MINOR=9
+    PYTHON_VERSION=${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.21
     if ! grep -q -i python.*${PYTHON_VERSION} ${SRC_ROOT}/download.lst; then
         AC_MSG_ERROR([PYTHON_VERSION ${PYTHON_VERSION} but no matching file in download.lst])
     fi
@@ -10733,7 +10733,7 @@ dnl ===================================================================
 ICU_MAJOR=73
 ICU_MINOR=2
 ICU_CFLAGS_internal="-I${WORKDIR}/UnpackedTarball/icu/source/i18n -I${WORKDIR}/UnpackedTarball/icu/source/common"
-ICU_LIBS_internal="-L${WORKDIR}/UnpackedTarball/icu/source/lib"
+ICU_LIBS_internal="-L${WORKDIR}/UnpackedTarball/icu/source/lib -licuuc"
 libo_CHECK_SYSTEM_MODULE([icu],[ICU],[icu-i18n >= 66])
 if test "$SYSTEM_ICU" = TRUE; then
     AC_LANG_PUSH([C++])

@@ -66,6 +66,10 @@ COMPHELPER_DLLPUBLIC bool isForkedChild();
 COMPHELPER_DLLPUBLIC void setLocalRendering(bool bLocalRendering = true);
 COMPHELPER_DLLPUBLIC bool isLocalRendering();
 
+/// Used by SlideshowLayerRenderer for signaling that a slide rendering is occurring.
+COMPHELPER_DLLPUBLIC void setSlideshowRendering(bool bSlideshowRendering);
+COMPHELPER_DLLPUBLIC bool isSlideshowRendering();
+
 /// Check whether clients want a part number in an invalidation payload.
 COMPHELPER_DLLPUBLIC bool isPartInInvalidation();
 /// Set whether clients want a part number in an invalidation payload.
@@ -137,6 +141,13 @@ COMPHELPER_DLLPUBLIC void setBlockedCommandList(const char* blockedCommandList);
 COMPHELPER_DLLPUBLIC void setAnyInputCallback(std::function<bool(void*)> pAnyInputCallback,
                                               void* pData);
 COMPHELPER_DLLPUBLIC bool anyInput();
+
+// These allow setting callbacks, so that set/get of a LOK view is possible even in code that is
+// below sfx2.
+COMPHELPER_DLLPUBLIC void setViewSetter(std::function<void(int)> pViewSetter);
+COMPHELPER_DLLPUBLIC void setView(int nView);
+COMPHELPER_DLLPUBLIC void setViewGetter(std::function<int()> pViewGetter);
+COMPHELPER_DLLPUBLIC int getView();
 }
 
 #endif // INCLUDED_COMPHELPER_LOK_HXX

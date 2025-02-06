@@ -129,6 +129,7 @@
 #include "impviewframe.hxx"
 #include <vcl/commandinfoprovider.hxx>
 #include <vcl/svapp.hxx>
+#include <svl/cryptosign.hxx>
 
 #define ShellClass_SfxViewFrame
 #include <sfxslots.hxx>
@@ -940,7 +941,8 @@ void SfxViewFrame::StateReload_Impl( SfxItemSet& rSet )
                     rSet.DisableItem( nWhich );
                 else
                 {
-                    const SfxBoolItem* pItem = pSh->GetMedium()->GetItemSet().GetItem(SID_EDITDOC, false);
+                    SfxMedium* pMedium = pSh->GetMedium();
+                    const SfxBoolItem* pItem = pMedium ? pMedium->GetItemSet().GetItem(SID_EDITDOC, false) : nullptr;
                     if ( pItem && !pItem->GetValue() )
                         rSet.DisableItem( nWhich );
                     else
@@ -1263,12 +1265,15 @@ const SvBorder& SfxViewFrame::GetBorderPixelImpl() const
 
 void SfxViewFrame::AppendReadOnlyInfobar()
 {
+    if (officecfg::Office::Common::Misc::ViewerAppMode::get())
+        return;
+
     bool bSignPDF = m_xObjSh->IsSignPDF();
     bool bSignWithCert = false;
     if (bSignPDF)
     {
-        SfxObjectShell* pObjectShell = GetObjectShell();
-        uno::Reference<security::XCertificate> xCertificate = pObjectShell->GetSignPDFCertificate();
+        SfxViewShell* pViewShell = GetViewShell();
+        uno::Reference<security::XCertificate> xCertificate = pViewShell->GetSignPDFCertificate().m_xCertificate;
         bSignWithCert = xCertificate.is();
     }
 
@@ -1341,6 +1346,9 @@ void SfxViewFrame::HandleSecurityInfobar(const OUString& sSecondaryMessage)
 
 void SfxViewFrame::AppendContainsMacrosInfobar()
 {
+    if (officecfg::Office::Common::Misc::ViewerAppMode::get())
+        return;
+
     SfxObjectShell_Impl* pObjImpl = m_xObjSh->Get_Impl();
 
     // what's the difference between pObjImpl->documentStorageHasMacros() and pObjImpl->aMacroMode.hasMacroLibrary() ?
@@ -3314,8 +3322,7 @@ void SfxViewFrame::MiscState_Impl(SfxItemSet &rSet)
                 case SID_RECORDMACRO :
                 {
                     const OUString& sName{GetObjectShell()->GetFactory().GetFactoryName()};
-                    bool bMacrosDisabled = officecfg::Office::Common::Security::Scripting::DisableMacrosExecution::get();
-                    if (bMacrosDisabled ||
+                    if (SvtSecurityOptions::IsMacroDisabled() ||
                          !officecfg::Office::Common::Misc::MacroRecorderMode::get() ||
                          ( sName!="swriter" && sName!="scalc" ) )
                     {

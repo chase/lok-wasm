@@ -325,7 +325,7 @@ SwSpellPopup::SwSpellPopup(
         // words could be added.
         uno::Reference< linguistic2::XDictionary >  xDic( LinguMgr::GetStandardDic() );
         if (xDic.is())
-            xDic->setActive( true );
+            xDic->setActive(!comphelper::LibreOfficeKit::isActive());
 
         m_aDics = xDicList->getDictionaries();
 
@@ -366,8 +366,10 @@ SwSpellPopup::SwSpellPopup(
             }
         }
     }
-    m_xPopupMenu->EnableItem(m_nAddMenuId, (nItemId - MN_DICTIONARIES_START) > 1);
-    m_xPopupMenu->EnableItem(m_nAddId, (nItemId - MN_DICTIONARIES_START) == 1);
+
+    sal_uInt16 nDiff = nItemId - MN_DICTIONARIES_START;
+    m_xPopupMenu->EnableItem(m_nAddMenuId, nDiff > 2);
+    m_xPopupMenu->EnableItem(m_nAddId, nDiff == 2);
 
     // MACRO: [MACRO-1497] Language Guessing Breaks SpellPopUp {
     // since we currently only support english just turning it off
@@ -600,9 +602,8 @@ void SwSpellPopup::InitItemCommands(const css::uno::Sequence< OUString >& aSugge
         m_xPopupMenu->SetItemCommand(nItemId, sCommandString);
     }
 
-    PopupMenu *pMenu = m_xPopupMenu->GetPopupMenu(m_nLangSelectionMenuId);
     m_xPopupMenu->SetItemCommand(m_nLangSelectionMenuId, ".uno:SetSelectionLanguageMenu");
-    if(pMenu)
+    if (PopupMenu *pMenu = m_xPopupMenu->GetPopupMenu(m_nLangSelectionMenuId))
     {
         for (const auto& item : m_aLangTable_Text)
         {
@@ -615,9 +616,8 @@ void SwSpellPopup::InitItemCommands(const css::uno::Sequence< OUString >& aSugge
         pMenu->SetItemCommand(MN_SET_SELECTION_MORE, ".uno:FontDialog?Page:string=font");
     }
 
-    pMenu = m_xPopupMenu->GetPopupMenu(m_nLangParaMenuId);
     m_xPopupMenu->SetItemCommand(m_nLangParaMenuId, ".uno:SetParagraphLanguageMenu");
-    if(pMenu)
+    if (PopupMenu* pMenu = m_xPopupMenu->GetPopupMenu(m_nLangParaMenuId))
     {
         for (const auto& item : m_aLangTable_Paragraph)
         {
@@ -628,6 +628,20 @@ void SwSpellPopup::InitItemCommands(const css::uno::Sequence< OUString >& aSugge
         pMenu->SetItemCommand(MN_SET_PARA_NONE, ".uno:LanguageStatus?Language:string=Paragraph_LANGUAGE_NONE");
         pMenu->SetItemCommand(MN_SET_PARA_RESET, ".uno:LanguageStatus?Language:string=Paragraph_RESET_LANGUAGES");
         pMenu->SetItemCommand(MN_SET_PARA_MORE, ".uno:FontDialogForParagraph");
+    }
+
+    OUString sCommandString = ".uno:AddToWordbook?Wordbook:string=" + m_aDicNameSingle;
+    m_xPopupMenu->SetItemCommand(m_nAddId, sCommandString);
+    m_xPopupMenu->SetItemCommand(m_nAddMenuId, sCommandString);
+    if (PopupMenu *pMenu = m_xPopupMenu->GetPopupMenu(m_nAddMenuId))
+    {
+        for (sal_uInt16 i = 0, nItemCount = pMenu->GetItemCount(); i < nItemCount; ++i)
+        {
+            sal_uInt16 nItemId = pMenu->GetItemId(i);
+            OUString sDict = pMenu->GetItemText(nItemId);
+            sCommandString = ".uno:AddToWordbook?Wordbook:string=" + sDict;
+            pMenu->SetItemCommand(nItemId, sCommandString);
+        }
     }
 }
 
@@ -776,9 +790,7 @@ void SwSpellPopup::Execute( sal_uInt16 nId )
     }
     else if ((MN_DICTIONARIES_START <= nId && nId <= MN_DICTIONARIES_END) || nId == m_nAddId)
     {
-        OUString sWord( m_xSpellAlt->getWord() );
         OUString aDicName;
-
         if (MN_DICTIONARIES_START <= nId && nId <= MN_DICTIONARIES_END)
         {
             PopupMenu *pMenu = m_xPopupMenu->GetPopupMenu(m_nAddMenuId);
@@ -787,24 +799,8 @@ void SwSpellPopup::Execute( sal_uInt16 nId )
         else
             aDicName = m_aDicNameSingle;
 
-        uno::Reference< linguistic2::XDictionary >      xDic;
-        uno::Reference< linguistic2::XSearchableDictionaryList >  xDicList( LinguMgr::GetDictionaryList() );
-        if (xDicList.is())
-            xDic = xDicList->getDictionaryByName( aDicName );
-
-        if (xDic.is())
-        {
-            linguistic::DictionaryError nAddRes = linguistic::AddEntryToDic(xDic, sWord, false, OUString());
-            // save modified user-dictionary if it is persistent
-            uno::Reference< frame::XStorable >  xSavDic( xDic, uno::UNO_QUERY );
-            if (xSavDic.is())
-                xSavDic->store();
-
-            if (linguistic::DictionaryError::NONE != nAddRes && !xDic->getEntry(sWord).is())
-            {
-                SvxDicError(m_pSh->GetView().GetFrameWeld(), nAddRes);
-            }
-        }
+        SfxStringItem aDictString(FN_PARAM_1, aDicName);
+        m_pSh->GetView().GetViewFrame().GetDispatcher()->ExecuteList(SID_ADD_TO_WORDBOOK, SfxCallMode::SYNCHRON, { &aDictString });
     }
     else if ( nId == MN_EXPLANATION_LINK && !m_sExplanationLink.isEmpty() )
     {

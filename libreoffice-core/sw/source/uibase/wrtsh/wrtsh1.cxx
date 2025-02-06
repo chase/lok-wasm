@@ -36,6 +36,7 @@
 #include <tools/bigint.hxx>
 #include <svtools/insdlg.hxx>
 #include <sfx2/ipclient.hxx>
+#include <editeng/editeng.hxx>
 #include <editeng/editobj.hxx>
 #include <editeng/formatbreakitem.hxx>
 #include <editeng/svxacorr.hxx>
@@ -2243,7 +2244,8 @@ void SwWrtShell::SetShowHeaderFooterSeparator( FrameControlType eControl, bool b
 void SwWrtShell::InsertPostIt(SwFieldMgr& rFieldMgr, const SfxRequest& rReq)
 {
     SwPostItField* pPostIt = dynamic_cast<SwPostItField*>(rFieldMgr.GetCurField());
-
+    bool bNew = !(pPostIt && pPostIt->GetTyp()->Which() == SwFieldIds::Postit);
+    if (bNew || GetView().GetPostItMgr()->IsAnswer() || comphelper::LibreOfficeKit::isActive())
     {
         const SvxPostItAuthorItem* pAuthorItem = rReq.GetArg<SvxPostItAuthorItem>(SID_ATTR_POSTIT_AUTHOR);
         OUString sAuthor;
@@ -2267,6 +2269,7 @@ void SwWrtShell::InsertPostIt(SwFieldMgr& rFieldMgr, const SfxRequest& rReq)
             Outliner aOutliner(&pDocSh->GetPool(), OutlinerMode::TextObject);
             SwPostItHelper::ImportHTML(aOutliner, pHtmlItem->GetValue());
             oTextPara = aOutliner.CreateParaObject();
+            sText = aOutliner.GetEditEngine().GetText();
         }
 
         // If we have a text already registered for answer, use that
@@ -2280,7 +2283,10 @@ void SwWrtShell::InsertPostIt(SwFieldMgr& rFieldMgr, const SfxRequest& rReq)
             }
             const EditTextObject& rTextObject = pAnswer->GetTextObject();
             if (rTextObject.GetParagraphCount() != 1 || !rTextObject.GetText(0).isEmpty())
+            {
                 oTextPara = *pAnswer;
+                sText = rTextObject.GetText();
+            }
         }
 
         if ( HasSelection() && !IsTableMode() )
@@ -2336,6 +2342,11 @@ void SwWrtShell::InsertPostIt(SwFieldMgr& rFieldMgr, const SfxRequest& rReq)
             }
         }
 
+        // Defer broadcast of postit field update from layout until oTextPara has been
+        // applied to the field's associated postit window
+        if (oTextPara)
+            StartAction();
+
         rFieldMgr.InsertField( aData );
 
         Push();
@@ -2343,11 +2354,12 @@ void SwWrtShell::InsertPostIt(SwFieldMgr& rFieldMgr, const SfxRequest& rReq)
         pPostIt = static_cast<SwPostItField*>(rFieldMgr.GetCurField());
 
         if (pPostIt && oTextPara)
-        {
             pPostIt->SetTextObject(*oTextPara);
-        }
 
         Pop(SwCursorShell::PopMode::DeleteCurrent); // Restore cursor position
+
+        if (oTextPara)
+            EndAction();
     }
 
     // Client has disabled annotations rendering, no need to

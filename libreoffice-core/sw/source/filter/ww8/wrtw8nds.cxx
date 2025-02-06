@@ -3495,6 +3495,17 @@ void MSWordExportBase::OutputSectionNode( const SwSectionNode& rSectionNode )
     }
 }
 
+// don't need to broadcast modification
+static void SetAttrNoBroadcast(SwContentNode& rNode, const SfxPoolItem& rItem)
+{
+    const bool bModifyNotifyDisabled = rNode.IsModifyLocked();
+    if (!bModifyNotifyDisabled)
+        rNode.LockModify();
+    rNode.SetAttr(rItem);
+    if (!bModifyNotifyDisabled)
+        rNode.UnlockModify();
+}
+
 // tdf#121561: During export of the ODT file with TOC inside into DOCX format,
 // the TOC title is being exported as regular paragraph. We should surround it
 // with <w:sdt><w:sdtPr><w:sdtContent> to make it (TOC title) recognizable
@@ -3556,12 +3567,8 @@ void MSWordExportBase::UpdateTocSectionNodeProperties(const SwSectionNode& rSect
         SfxGrabBagItem aGrabBag(RES_PARATR_GRABBAG);
         aGrabBag.GetGrabBag()["SdtPr"] <<= aSdtPrPropertyValues;
 
-        // create temp attr set
-        SwAttrSet aSet(pNode->GetSwAttrSet());
-        aSet.Put(aGrabBag);
-
         // set new attr to node
-        const_cast<SwContentNode*>(pNode)->SetAttr(aSet);
+        SetAttrNoBroadcast(*const_cast<SwContentNode*>(pNode), aGrabBag);
     }
 
     // set flag for the next node after TOC
@@ -3576,12 +3583,8 @@ void MSWordExportBase::UpdateTocSectionNodeProperties(const SwSectionNode& rSect
             SfxGrabBagItem aGrabBag(RES_PARATR_GRABBAG);
             aGrabBag.GetGrabBag()["ParaSdtEndBefore"] <<= true;
 
-            // create temp attr set
-            SwAttrSet aSet(pNodeAfterToc->GetSwAttrSet());
-            aSet.Put(aGrabBag);
-
             // set new attr to node
-            const_cast<SwContentNode*>(pNodeAfterToc)->SetAttr(aSet);
+            SetAttrNoBroadcast(*const_cast<SwContentNode*>(pNodeAfterToc), aGrabBag);
         }
     }
 }

@@ -403,6 +403,23 @@ CPPUNIT_TEST_FIXTURE(ScExportTest2, testTdf95640_xlsx_to_xlsx)
                 "customList"_ostr, "Low,Medium,High");
 }
 
+CPPUNIT_TEST_FIXTURE(ScExportTest2, testSortConditionRef)
+{
+    // Ascending sortCondition reference detected wrong without fix.
+    // - Expected: B3:B2
+    // - Actual  : A3:A2
+    // - In <>, attribute 'ref' of '//x:worksheet/x:autoFilter/x:sortState/x:sortCondition' incorrect value.
+    createScDoc("xlsx/sortconditionref.xlsx");
+
+    save("Calc Office Open XML");
+    xmlDocUniquePtr pDoc = parseExport("xl/worksheets/sheet1.xml");
+
+    assertXPath(pDoc, "//x:worksheet/x:autoFilter"_ostr, "ref"_ostr, "B2");
+
+    assertXPath(pDoc, "//x:worksheet/x:autoFilter/x:sortState/x:sortCondition"_ostr, "ref"_ostr,
+                "B3:B2");
+}
+
 CPPUNIT_TEST_FIXTURE(ScExportTest2, testDateAutofilterXLSX)
 {
     // XLSX Roundtripping autofilter with date list
@@ -534,6 +551,19 @@ CPPUNIT_TEST_FIXTURE(ScExportTest2, testAutofilterTop10XLSX)
     CPPUNIT_ASSERT(pDoc);
     assertXPath(pDoc, "//x:autoFilter/x:filterColumn"_ostr, "colId"_ostr, "0");
     assertXPath(pDoc, "//x:autoFilter/x:filterColumn/x:top10"_ostr, "val"_ostr, "4");
+}
+
+CPPUNIT_TEST_FIXTURE(ScExportTest2, testAutofilterColButton)
+{
+    // Without fix it will fail
+    // - Expression: !xmlGetProp(pXmlNode, BAD_CAST(rAttribute.getStr()))
+    // - In <>, XPath '//x:autoFilter/x:filterColumn' unexpected 'hiddenButton' attribute
+    createScDoc("ods/autofilter-colbutton.ods");
+
+    save("Calc Office Open XML");
+    xmlDocUniquePtr pDoc = parseExport("xl/worksheets/sheet1.xml");
+    CPPUNIT_ASSERT(pDoc);
+    assertXPathNoAttribute(pDoc, "//x:autoFilter/x:filterColumn"_ostr, "hiddenButton"_ostr);
 }
 
 CPPUNIT_TEST_FIXTURE(ScExportTest2, testTdf88657ODS)

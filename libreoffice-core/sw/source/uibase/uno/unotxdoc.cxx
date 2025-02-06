@@ -3375,6 +3375,8 @@ void SwXTextDocument::getPostIts(tools::JsonWriter& rJsonWriter)
 {
     SolarMutexGuard aGuard;
     auto commentsNode = rJsonWriter.startArray("comments");
+    if (!m_pDocShell)
+        return;
     for (auto const& sidebarItem : *m_pDocShell->GetView()->GetPostItMgr())
     {
         sw::annotation::SwAnnotationWin* pWin = sidebarItem->mpPostIt.get();
@@ -3487,6 +3489,15 @@ OString SwXTextDocument::getViewRenderState(SfxViewShell* pViewShell)
                 aState.append('S');
             if (pVOpt->GetDocColor() == svtools::ColorConfig::GetDefaultColor(svtools::DOCCOLOR, 1))
                 aState.append('D');
+
+            if (pView->IsSpotlightParaStyles() || pView->IsSpotlightCharStyles())
+            {
+                aState.append('H');
+                if (pView->IsSpotlightParaStyles())
+                    aState.append('P');
+                if (pView->IsSpotlightCharStyles())
+                    aState.append('C');
+            }
 
             aState.append(';');
 

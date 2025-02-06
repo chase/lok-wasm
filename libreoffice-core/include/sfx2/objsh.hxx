@@ -102,13 +102,14 @@ namespace com::sun::star::embed { class XStorage; }
 namespace com::sun::star::frame { class XModel; }
 namespace com::sun::star::graphic { class XGraphic; }
 namespace com::sun::star::io { class XStream; }
-namespace com::sun::star::script { class XLibraryContainer; }
+namespace com::sun::star::script { class XStorageBasedLibraryContainer ; }
 namespace com::sun::star::security { class XCertificate; }
 namespace com::sun::star::security { class XDocumentDigitalSignatures; }
 namespace com::sun::star::security { struct DocumentSignatureInformation; }
 namespace com::sun::star::task { class XInteractionHandler; }
 namespace com::sun::star::lang { class XComponent; }
 namespace com::sun::star::text { class XTextRange; }
+namespace svl::crypto { class CertificateOrName; }
 
 #define SFX_TITLE_TITLE    0
 #define SFX_TITLE_FILENAME 1
@@ -145,6 +146,7 @@ namespace o3tl
 }
 
 namespace weld { class Window; }
+namespace svl::crypto { class SigningContext; }
 
 enum class HiddenWarningFact
 {
@@ -366,7 +368,7 @@ public:
         const css::uno::Reference<css::security::XDocumentDigitalSignatures>& xSigner
         = css::uno::Reference<css::security::XDocumentDigitalSignatures>());
 
-    bool SignDocumentContentUsingCertificate(const css::uno::Reference<css::security::XCertificate>& xCertificate);
+    bool SignDocumentContentUsingCertificate(svl::crypto::SigningContext& rSigningContext);
     bool ResignDocument(css::uno::Sequence< css::security::DocumentSignatureInformation >& rSignaturesInfo);
 
     void SignSignatureLine(weld::Window* pDialogParent, const OUString& aSignatureLineId,
@@ -568,9 +570,9 @@ public:
     sal_uInt16                  GetAutoStyleFilterIndex() const;
     bool                        HasBasic() const;
     BasicManager*               GetBasicManager() const;
-    css::uno::Reference< css::script::XLibraryContainer >
+    css::uno::Reference< css::script::XStorageBasedLibraryContainer >
                                 GetBasicContainer();
-    css::uno::Reference< css::script::XLibraryContainer >
+    css::uno::Reference< css::script::XStorageBasedLibraryContainer >
                                 GetDialogContainer();
     StarBASIC*                  GetBasic() const;
 
@@ -803,9 +805,6 @@ public:
 
     /// Is this read-only object shell opened via .uno:SignPDF?
     bool IsSignPDF() const;
-
-    /// Gets the certificate that is already picked by the user but not yet used for signing.
-    css::uno::Reference<css::security::XCertificate> GetSignPDFCertificate() const;
 
     /// Gets grab-bagged password info to unprotect change tracking with verification
     css::uno::Sequence< css::beans::PropertyValue > GetDocumentProtectionFromGrabBag() const;

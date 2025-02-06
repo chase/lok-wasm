@@ -38,7 +38,6 @@
 #include <com/sun/star/lang/Locale.hpp>
 #include <com/sun/star/util/XURLTransformer.hpp>
 #include <osl/file.hxx>
-#include <rtl/cipher.h>
 #include <rtl/strbuf.hxx>
 #include <rtl/ustring.hxx>
 #include <tools/gen.hxx>
@@ -65,20 +64,10 @@
 
 class FontSubsetInfo;
 class ZCodec;
-class EncHashTransporter;
 struct BitStreamState;
 namespace vcl::font { class PhysicalFontFace; }
 class SvStream;
 class SvMemoryStream;
-
-// the maximum password length
-constexpr sal_Int32 ENCRYPTED_PWD_SIZE = 32;
-constexpr sal_Int32 MD5_DIGEST_SIZE = 16;
-// security 128 bit
-constexpr sal_Int32 SECUR_128BIT_KEY = 16;
-// maximum length of MD5 digest input, in step 2 of algorithm 3.1
-// PDF spec ver. 1.4: see there for details
-constexpr sal_Int32 MAXIMUM_RC4_KEY_LENGTH = SECUR_128BIT_KEY + 3 + 2;
 
 namespace vcl::pdf
 {
@@ -490,6 +479,11 @@ struct PDFScreen : public PDFAnnotation
     }
 };
 
+struct PDFWidgetCopy
+{
+    sal_Int32 m_nObject = -1;
+};
+
 struct PDFWidget : public PDFAnnotation
 {
     PDFWriter::WidgetType       m_eType;
@@ -576,7 +570,7 @@ typedef ::std::variant<ObjReference, ObjReferenceObj, MCIDReference> PDFStructur
 struct PDFStructureElement
 {
     sal_Int32                                           m_nObject;
-    ::std::optional<PDFWriter::StructElement>           m_oType;
+    std::optional<vcl::pdf::StructElement> m_oType;
     OString                                        m_aAlias;
     sal_Int32                                           m_nOwnElement; // index into structure vector
     sal_Int32                                           m_nParentElement; // index into structure vector
@@ -678,6 +672,8 @@ struct PDFDocumentAttachedFile
     sal_Int32 mnObjectId;
 };
 
+class IPDFEncryptor;
+
 } // end pdf namespace
 
 class PDFWriterImpl final : public VirtualDevice, public PDFObjectContainer
@@ -687,8 +683,8 @@ class PDFWriterImpl final : public VirtualDevice, public PDFObjectContainer
 public:
     friend struct vcl::pdf::PDFPage;
 
-    const char* getStructureTag( PDFWriter::StructElement );
-    static const char* getAttributeTag( PDFWriter::StructAttribute eAtr );
+    const char* getStructureTag(vcl::pdf::StructElement eElement);
+    static const char* getAttributeTag(PDFWriter::StructAttribute eAtr );
     static const char* getAttributeValueTag( PDFWriter::StructAttributeValue eVal );
 
     // returns true if compression was done
@@ -768,9 +764,10 @@ private:
     /* structure elements (object ids) that should have ID */
     std::unordered_set<sal_Int32> m_StructElemObjsWithID;
 
-    /* contains all widgets used in the PDF
-     */
-    std::vector<PDFWidget>              m_aWidgets;
+    /* contains all widgets used in the PDF */
+    std::vector<PDFWidget> m_aWidgets;
+    std::vector<PDFWidgetCopy> m_aCopiedWidgets;
+
     /* maps radio group id to index of radio group control in m_aWidgets */
     std::map< sal_Int32, sal_Int32 >    m_aRadioGroupWidgets;
     /* unordered_map for field names, used to ensure unique field names */
@@ -810,6 +807,8 @@ private:
 
     ExternalPDFStreams m_aExternalPDFStreams;
 
+    std::shared_ptr<IPDFEncryptor> m_pPDFEncryptor;
+
     /* output redirection; e.g. to accumulate content streams for
        XObjects
      */
@@ -825,6 +824,8 @@ private:
 
     ::comphelper::Hash                      m_DocDigest;
 
+    std::unordered_map<std::string_view, sal_Int32> m_aNamespacesMap;
+
     sal_uInt64 getCurrentFilePosition()
     {
         sal_uInt64 nPosition{};
@@ -835,25 +836,7 @@ private:
         }
         return nPosition;
     }
-/*
-variables for PDF security
-i12626
-*/
-/* used to cipher the stream data and for password management */
-    rtlCipher                               m_aCipher;
-    /* pad string used for password in Standard security handler */
-    static const sal_uInt8                  s_nPadString[ENCRYPTED_PWD_SIZE];
 
-    /* the encryption key, formed with the user password according to algorithm 3.2, maximum length is 16 bytes + 3 + 2
-    for 128 bit security   */
-    sal_Int32                               m_nKeyLength; // key length, 16 or 5
-    sal_Int32                               m_nRC4KeyLength; // key length, 16 or 10, to be input to the algorithm 3.1
-
-    /* set to true if the following stream must be encrypted, used inside writeBuffer() */
-    bool                                    m_bEncryptThisStream;
-
-    /* the numerical value of the access permissions, according to PDF spec, must be signed */
-    sal_Int32                               m_nAccessPermissions;
     /* string to hold the PDF creation date */
     OString                            m_aCreationDateString;
     /* string to hold the PDF creation date, for PDF/A metadata */
@@ -861,22 +844,16 @@ i12626
     /* the buffer where the data are encrypted, dynamically allocated */
     std::vector<sal_uInt8>                  m_vEncryptionBuffer;
 
-    void addRoleMap(OString aAlias, PDFWriter::StructElement eType);
+    void addRoleMap(OString aAlias, vcl::pdf::StructElement eType);
 
-    /* this function implements part of the PDF spec algorithm 3.1 in encryption, the rest (the actual encryption) is in PDFWriterImpl::writeBuffer */
     void checkAndEnableStreamEncryption( sal_Int32 nObject ) override;
 
-    void disableStreamEncryption() override { m_bEncryptThisStream = false; };
+    void disableStreamEncryption() override;
 
     /* */
     void enableStringEncryption( sal_Int32 nObject );
 
-// test if the encryption is active, if yes than encrypt the unicode string  and add to the OStringBuffer parameter
-    void appendUnicodeTextStringEncrypt( const OUString& rInString, const sal_Int32 nInObjectNumber, OStringBuffer& rOutBuffer );
-
-    void appendLiteralStringEncrypt( std::u16string_view rInString, const sal_Int32 nInObjectNumber, OStringBuffer& rOutBuffer, rtl_TextEncoding nEnc = RTL_TEXTENCODING_ASCII_US );
-    void appendLiteralStringEncrypt( std::string_view rInString, const sal_Int32 nInObjectNumber, OStringBuffer& rOutBuffer );
-
+private:
     /* creates fonts and subsets that will be emitted later */
     void registerGlyph(const sal_GlyphId, const vcl::font::PhysicalFontFace*, const LogicalFontInstance* pFont, const std::vector<sal_Ucs>&, sal_Int32, sal_uInt8&, sal_Int32&);
     void registerSimpleGlyph(const sal_GlyphId, const vcl::font::PhysicalFontFace*, const std::vector<sal_Ucs>&, sal_Int32, sal_uInt8&, sal_Int32&);
@@ -905,6 +882,8 @@ i12626
     void writeJPG( const JPGEmit& rEmit );
     /// Writes the form XObject proxy for the image.
     void writeReferenceXObject(const ReferenceXObjectEmit& rEmit);
+
+    void mergeAnnotationsFromExternalPage(filter::PDFObjectElement* pPage,  std::map<sal_Int32, sal_Int32>& rCopiedResourcesMap);
 
     /* tries to find the bitmap by its id and returns its emit data if exists,
        else creates a new emit data block */
@@ -997,6 +976,8 @@ i12626
     //check if internal dummy container are needed in the structure elements
     void addInternalStructureContainer( PDFStructureElement& rEle );
     //<---i94258
+    // writes namespaces
+    void emitNamespaces();
     // writes document structure
     sal_Int32 emitStructure( PDFStructureElement& rEle );
     // writes structure parent tree
@@ -1010,6 +991,8 @@ i12626
     // creates a PKCS7 object using the ByteRange and overwrite /Contents
     // of the signature dictionary
     bool finalizeSignature();
+    //writes encrypt
+    sal_Int32 emitEncrypt();
     // writes xref and trailer
     bool emitTrailer();
     // emits info dict (if applicable)
@@ -1072,14 +1055,18 @@ i12626
     void drawEmphasisMark(  tools::Long nX, tools::Long nY, const tools::PolyPolygon& rPolyPoly, bool bPolyLine, const tools::Rectangle& rRect1, const tools::Rectangle& rRect2 );
 
     /* true if PDF/A-1a or PDF/A-1b is output */
-    bool            m_bIsPDF_A1;
+    bool m_bIsPDF_A1 = false;
     /* true if PDF/A-2a is output */
-    bool            m_bIsPDF_A2;
+    bool m_bIsPDF_A2 = false;
+    /* true if PDF/A-3 is output */
+    bool m_bIsPDF_A3 = false;
+    /* true if PDF/A-4 is output */
+    bool m_bIsPDF_A4 = false;
+
+    sal_Int32 m_nPDFA_Version = 0;
 
     /* PDF/UA support enabled */
-    bool m_bIsPDF_UA;
-
-    bool            m_bIsPDF_A3;
+    bool m_bIsPDF_UA = false;
 
     PDFWriter&      m_rOuterFace;
 
@@ -1088,34 +1075,7 @@ i12626
     methods for PDF security
 
     pad a password according  algorithm 3.2, step 1 */
-    static void padPassword( std::u16string_view i_rPassword, sal_uInt8* o_pPaddedPW );
-    /* algorithm 3.2: compute an encryption key */
-    static bool computeEncryptionKey( EncHashTransporter*,
-                                      vcl::PDFWriter::PDFEncryptionProperties& io_rProperties,
-                                      sal_Int32 i_nAccessPermissions
-                                     );
-    /* algorithm 3.3: computing the encryption dictionary'ss owner password value ( /O ) */
-    static bool computeODictionaryValue( const sal_uInt8* i_pPaddedOwnerPassword, const sal_uInt8* i_pPaddedUserPassword,
-                                         std::vector< sal_uInt8 >& io_rOValue,
-                                         sal_Int32 i_nKeyLength
-                                        );
-    /* algorithm 3.4 or 3.5: computing the encryption dictionary's user password value ( /U ) revision 2 or 3 of the standard security handler */
-    static bool computeUDictionaryValue( EncHashTransporter* i_pTransporter,
-                                         vcl::PDFWriter::PDFEncryptionProperties& io_rProperties,
-                                         sal_Int32 i_nKeyLength,
-                                         sal_Int32 i_nAccessPermissions
-                                        );
-
-    static void computeDocumentIdentifier( std::vector< sal_uInt8 >& o_rIdentifier,
-                                           const vcl::PDFWriter::PDFDocInfo& i_rDocInfo,
-                                           const OString& i_rCString1,
-                                           const css::util::DateTime& rCreationMetaDate,
-                                           OString& o_rCString2
-                                          );
-    static sal_Int32 computeAccessPermissions( const vcl::PDFWriter::PDFEncryptionProperties& i_rProperties,
-                                               sal_Int32& o_rKeyLength, sal_Int32& o_rRC4KeyLength );
     void setupDocInfo();
-    bool prepareEncryption( const css::uno::Reference< css::beans::XMaterialHolder >& );
 
     // helper for playMetafile
     void implWriteGradient( const tools::PolyPolygon& rPolyPoly, const Gradient& rGradient,
@@ -1135,10 +1095,6 @@ public:
     PDFWriterImpl( const PDFWriter::PDFWriterContext& rContext, const css::uno::Reference< css::beans::XMaterialHolder >&, PDFWriter& );
     ~PDFWriterImpl() override;
     void dispose() override;
-
-    static css::uno::Reference< css::beans::XMaterialHolder >
-           initEncryption( const OUString& i_rOwnerPassword,
-                           const OUString& i_rUserPassword );
 
     /* document structure */
     void newPage( double nPageWidth , double nPageHeight, PDFWriter::Orientation eOrientation );
@@ -1326,7 +1282,7 @@ public:
     void createNote( const tools::Rectangle& rRect, const PDFNote& rNote, sal_Int32 nPageNr );
     // structure elements
     sal_Int32 ensureStructureElement();
-    void initStructureElement(sal_Int32 id, PDFWriter::StructElement eType, std::u16string_view rAlias);
+    void initStructureElement(sal_Int32 id, vcl::pdf::StructElement eType, std::u16string_view rAlias);
     void beginStructureElement(sal_Int32 id);
     void endStructureElement();
     bool setCurrentStructureElement( sal_Int32 nElement );

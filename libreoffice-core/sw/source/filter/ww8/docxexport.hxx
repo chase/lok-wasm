@@ -281,9 +281,6 @@ private:
     /// Writes word/vbaProject.bin.
     void WriteVBA();
 
-    /// return true if Page Layout is set as Mirrored
-    bool isMirroredMargin();
-
 public:
     /// All xml namespaces to be used at the top of any text .xml file (main doc, headers, footers,...)
     rtl::Reference<sax_fastparser::FastAttributeList> MainXmlNamespaces();
@@ -307,7 +304,27 @@ public:
     DocxSdrExport& SdrExporter() { return *m_pSdrExport; }
 
     /// Set the document default tab stop.
-    void setDefaultTabStop( int stop ) { m_aSettings.defaultTabStop = stop; }
+    void setDefaultTabStop( int stop ) {
+        // MACRO: M-1345 Fix Indentation Size {
+
+        if (m_aSettings.defaultTabStop == 0) {
+            m_aSettings.defaultTabStop = stop;
+        } else {
+            // Temporary solution to prevent massive tab stop lengths
+            m_aSettings.defaultTabStop = std::min(m_aSettings.defaultTabStop, stop);
+        }
+
+        // Alternative solution to prevent excessive tab stop lengths
+        /*
+        if (m_aSettings.defaultTabStop != 0) return;
+        m_aSettings.defaultTabStop = stop;
+        */
+
+        // If the tab length is greater then 2 inches, set the tab length to 0.5 inches
+        if (m_aSettings.defaultTabStop > 3000) { m_aSettings.defaultTabStop = 720; }
+
+        // MACRO: }
+    }
 
     const ::sax_fastparser::FSHelperPtr& GetFS() const { return mpFS; }
 
@@ -320,6 +337,9 @@ public:
 
     // needed in docxsdrexport.cxx and docxattributeoutput.cxx
     sal_Int32 getWordCompatibilityModeFromGrabBag() const;
+
+    /// return true if Page Layout is set as Mirrored
+    bool isMirroredMargin();
 
 private:
     DocxExport( const DocxExport& ) = delete;

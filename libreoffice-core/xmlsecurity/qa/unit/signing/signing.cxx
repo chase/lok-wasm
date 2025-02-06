@@ -58,6 +58,7 @@
 #include <comphelper/propertyvalue.hxx>
 #include <vcl/filter/PDFiumLibrary.hxx>
 #include <vcl/scheduler.hxx>
+#include <svl/cryptosign.hxx>
 
 using namespace com::sun::star;
 
@@ -159,7 +160,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testDescription)
         return;
     OUString aDescription("SigningTest::testDescription");
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, aDescription, nSecurityId, false);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, aDescription, nSecurityId, false);
 
     // Read back the signature and make sure that the description survives the roundtrip.
     aManager.read(/*bUseTempStream=*/true);
@@ -190,7 +193,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testECDSA)
     if (!xCertificate.is())
         return;
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, "", nSecurityId, false);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, "", nSecurityId, false);
 
     // Read back the signature and make sure that it's valid.
     aManager.read(/*bUseTempStream=*/true);
@@ -224,7 +229,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testECDSAOOXML)
     if (!xCertificate.is())
         return;
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, "", nSecurityId,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, "", nSecurityId,
                  /*bAdESCompliant=*/false);
 
     // Read back the signature and make sure that it's valid.
@@ -259,7 +266,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testECDSAPDF)
     if (!xCertificate.is())
         return;
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, "", nSecurityId,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, "", nSecurityId,
                  /*bAdESCompliant=*/true);
 
     // Read back the signature and make sure that it's valid.
@@ -301,7 +310,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testOOXMLDescription)
         return;
     OUString aDescription("SigningTest::testDescription");
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, aDescription, nSecurityId, false);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, aDescription, nSecurityId, false);
 
     // Read back the signature and make sure that the description survives the roundtrip.
     aManager.read(/*bUseTempStream=*/true);
@@ -334,7 +345,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testOOXMLAppend)
     if (!xCertificate.is())
         return;
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, OUString(), nSecurityId, false);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, OUString(), nSecurityId, false);
 
     // Read back the signatures and make sure that we have the expected amount.
     aManager.read(/*bUseTempStream=*/true);
@@ -756,15 +769,19 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testPDFAddVisibleSignature)
     {
         return;
     }
-    SdrView* pView = SfxViewShell::Current()->GetDrawView();
-    svx::SignatureLineHelper::setShapeCertificate(pView, aCertificates[0]);
+    SfxViewShell* pViewShell = SfxViewShell::Current();
+    svl::crypto::CertificateOrName aCertificateOrName;
+    aCertificateOrName.m_xCertificate = aCertificates[0];
+    svx::SignatureLineHelper::setShapeCertificate(pViewShell, aCertificateOrName);
 
     // the document is modified now, but Sign function can't show SaveAs dialog
     // in unit test, so just clear the modified
     pObjectShell->SetModified(false);
 
     // When: do the actual signing.
-    pObjectShell->SignDocumentContentUsingCertificate(aCertificates[0]);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = aCertificates[0];
+    pObjectShell->SignDocumentContentUsingCertificate(aSigningContext);
 
     // Then: count the # of shapes on the signature widget/annotation.
     std::unique_ptr<vcl::pdf::PDFiumDocument> pPdfDocument = parsePDFExport();
@@ -856,7 +873,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testXAdESNotype)
     if (!xCertificate.is())
         return;
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
                  /*bAdESCompliant=*/true);
 
     // Write to storage.
@@ -911,7 +930,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testXAdES)
     if (!xCertificate.is())
         return;
     sal_Int32 nSecurityId;
-    aManager.add(xCertificate, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aManager.add(aSigningContext, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
                  /*bAdESCompliant=*/true);
 
     // Write to storage.
@@ -965,7 +986,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testSigningMultipleTimes_ODT)
         if (!xCertificate.is())
             return;
         sal_Int32 nSecurityId;
-        aManager.add(xCertificate, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
+        svl::crypto::SigningContext aSigningContext;
+        aSigningContext.m_xCertificate = xCertificate;
+        aManager.add(aSigningContext, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
                      /*bAdESCompliant=*/true);
 
         // Read back the signature and make sure that it's valid.
@@ -978,7 +1001,7 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testSigningMultipleTimes_ODT)
                                  rInformations[0].nStatus);
         }
 
-        aManager.add(xCertificate, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
+        aManager.add(aSigningContext, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
                      /*bAdESCompliant=*/true);
         aManager.read(/*bUseTempStream=*/true);
         {
@@ -989,7 +1012,7 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testSigningMultipleTimes_ODT)
                                  rInformations[1].nStatus);
         }
 
-        aManager.add(xCertificate, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
+        aManager.add(aSigningContext, mxSecurityContext, /*rDescription=*/OUString(), nSecurityId,
                      /*bAdESCompliant=*/true);
         aManager.read(/*bUseTempStream=*/true);
         {
@@ -1038,7 +1061,9 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testSigningMultipleTimes_OOXML)
             return;
 
         sal_Int32 nSecurityId;
-        aManager.add(xCertificate, mxSecurityContext, "", nSecurityId, /*bAdESCompliant=*/false);
+        svl::crypto::SigningContext aSigningContext;
+        aSigningContext.m_xCertificate = xCertificate;
+        aManager.add(aSigningContext, mxSecurityContext, "", nSecurityId, /*bAdESCompliant=*/false);
         aManager.read(/*bUseTempStream=*/true);
         {
             std::vector<SignatureInformation>& rInformations
@@ -1048,7 +1073,7 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testSigningMultipleTimes_OOXML)
                                  rInformations[0].nStatus);
         }
 
-        aManager.add(xCertificate, mxSecurityContext, "", nSecurityId, /*bAdESCompliant=*/false);
+        aManager.add(aSigningContext, mxSecurityContext, "", nSecurityId, /*bAdESCompliant=*/false);
         aManager.read(/*bUseTempStream=*/true);
         {
             std::vector<SignatureInformation>& rInformations
@@ -1058,7 +1083,7 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testSigningMultipleTimes_OOXML)
                                  rInformations[1].nStatus);
         }
 
-        aManager.add(xCertificate, mxSecurityContext, "", nSecurityId, /*bAdESCompliant=*/false);
+        aManager.add(aSigningContext, mxSecurityContext, "", nSecurityId, /*bAdESCompliant=*/false);
         aManager.read(/*bUseTempStream=*/true);
         {
             std::vector<SignatureInformation>& rInformations
@@ -1182,11 +1207,14 @@ CPPUNIT_TEST_FIXTURE(SigningTest, testImplicitScriptSign)
     OUString aDescription;
     sal_Int32 nSecurityId;
     bool bAdESCompliant = true;
-    aScriptManager.add(xCertificate, mxSecurityContext, aDescription, nSecurityId, bAdESCompliant);
+    svl::crypto::SigningContext aSigningContext;
+    aSigningContext.m_xCertificate = xCertificate;
+    aScriptManager.add(aSigningContext, mxSecurityContext, aDescription, nSecurityId,
+                       bAdESCompliant);
     aScriptManager.read(/*bUseTempStream=*/true, /*bCacheLastSignature=*/false);
     aScriptManager.write(bAdESCompliant);
     aManager.setScriptingSignatureStream(xScriptingStream);
-    aManager.add(xCertificate, mxSecurityContext, aDescription, nSecurityId, bAdESCompliant);
+    aManager.add(aSigningContext, mxSecurityContext, aDescription, nSecurityId, bAdESCompliant);
     aManager.read(/*bUseTempStream=*/true, /*bCacheLastSignature=*/false);
     aManager.write(bAdESCompliant);
 
