@@ -166,17 +166,9 @@ sal_Bool WriterFilter::filter(const uno::Sequence<beans::PropertyValue>& rDescri
         bool bSkipImages
             = aMediaDesc.getUnpackedValueOrDefault("FilterOptions", OUString()) == "SkipImages";
 
-        uno::Reference<io::XInputStream> xInputStream;
-        try
-        {
-            // use the oox.core.FilterDetect implementation to extract the decrypted ZIP package
-            rtl::Reference<::oox::core::FilterDetect> xDetector(
-                new ::oox::core::FilterDetect(m_xContext));
-            xInputStream = xDetector->extractUnencryptedPackage(aMediaDesc);
-        }
-        catch (uno::Exception&)
-        {
-        }
+        // MACRO: Don't support encrypted files so skip the this step {
+        uno::Reference<io::XInputStream> xInputStream( aMediaDesc[ utl::MediaDescriptor::PROP_INPUTSTREAM ], uno::UNO_QUERY );
+        // MACRO: }
 
         if (!xInputStream.is())
             return false;

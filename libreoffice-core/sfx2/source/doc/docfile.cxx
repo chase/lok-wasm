@@ -139,6 +139,12 @@
 
 #include <memory>
 
+// MACRO: {
+#include <cppuhelper/weak.hxx>
+#include <com/sun/star/io/XAsyncOutputMonitor.hpp>
+#include <cppuhelper/queryinterface.hxx>
+// MACRO: }
+
 using namespace ::com::sun::star;
 using namespace ::com::sun::star::graphic;
 using namespace ::com::sun::star::uno;
@@ -163,6 +169,98 @@ struct ReadOnlyMediumEntry
 };
 
 }
+
+// MACRO: No-Op Stream {
+namespace
+{
+
+class NoOpStream : public cppu::OWeakObject,
+                  public io::XStream,
+                  public io::XSeekable,
+                  public io::XInputStream,
+                  public io::XOutputStream,
+                  public io::XTruncate,
+                  public io::XAsyncOutputMonitor
+{
+public:
+    NoOpStream() {}
+    virtual ~NoOpStream() override {}
+
+    // XInterface
+    virtual uno::Any SAL_CALL queryInterface(const uno::Type& rType) override
+    {
+        uno::Any aReturn = ::cppu::queryInterface(
+            rType,
+            static_cast<io::XStream*>(this),
+            static_cast<io::XSeekable*>(this),
+            static_cast<io::XInputStream*>(this),
+            static_cast<io::XOutputStream*>(this),
+            static_cast<io::XTruncate*>(this),
+            static_cast<io::XAsyncOutputMonitor*>(this));
+
+        if (aReturn.hasValue())
+            return aReturn;
+
+        return OWeakObject::queryInterface(rType);
+    }
+
+    virtual void SAL_CALL acquire() noexcept override { OWeakObject::acquire(); }
+    virtual void SAL_CALL release() noexcept override { OWeakObject::release(); }
+
+    // XStream
+    virtual uno::Reference<io::XInputStream> SAL_CALL getInputStream() override 
+    { throw uno::RuntimeException(); }
+    
+    virtual uno::Reference<io::XOutputStream> SAL_CALL getOutputStream() override 
+    { throw uno::RuntimeException(); }
+
+    // XSeekable
+    virtual void SAL_CALL seek(sal_Int64) override 
+    { throw uno::RuntimeException(); }
+    
+    virtual sal_Int64 SAL_CALL getPosition() override 
+    { throw uno::RuntimeException(); }
+    
+    virtual sal_Int64 SAL_CALL getLength() override 
+    { throw uno::RuntimeException(); }
+
+    // XInputStream
+    virtual sal_Int32 SAL_CALL readBytes(uno::Sequence<sal_Int8>&, sal_Int32) override 
+    { throw uno::RuntimeException(); }
+    
+    virtual sal_Int32 SAL_CALL readSomeBytes(uno::Sequence<sal_Int8>&, sal_Int32) override 
+    { throw uno::RuntimeException(); }
+    
+    virtual void SAL_CALL skipBytes(sal_Int32) override 
+    { throw uno::RuntimeException(); }
+    
+    virtual sal_Int32 SAL_CALL available() override 
+    { throw uno::RuntimeException(); }
+    
+    virtual void SAL_CALL closeInput() override 
+    { throw uno::RuntimeException(); }
+
+    // XOutputStream
+    virtual void SAL_CALL writeBytes(const uno::Sequence<sal_Int8>&) override 
+    { throw uno::RuntimeException(); }
+    
+    virtual void SAL_CALL flush() override 
+    { throw uno::RuntimeException(); }
+    
+    virtual void SAL_CALL closeOutput() override 
+    { throw uno::RuntimeException(); }
+
+    // XTruncate
+    virtual void SAL_CALL truncate() override 
+    { throw uno::RuntimeException(); }
+
+    // XAsyncOutputMonitor
+    virtual void SAL_CALL waitForCompletion() override 
+    { throw uno::RuntimeException(); }
+};
+
+}
+// MACRO: }
 
 static std::mutex g_chkReadOnlyGlobalMutex;
 static bool g_bChkReadOnlyTaskRunning = false;
@@ -406,6 +504,9 @@ public:
     bool m_bNotifyWhenEditable = false;
     /// if true, xStorage is an inner package and not directly from xStream
     bool m_bODFWholesomeEncryption = false;
+    // MACRO: {
+    bool m_bIsExpandedStorage = false;
+    // MACRO: }
 
     OUString m_aName;
     OUString m_aLogicName;
@@ -1911,6 +2012,8 @@ uno::Reference < embed::XStorage > SfxMedium::GetStorage( bool bCreateTempFile )
         pImpl->xStorage.clear();
     }
 
+    // MACRO: Disable version list loading to prevent loading twice {
+#if 0
     // TODO/LATER: Get versionlist on demand
     if ( pImpl->xStorage.is() )
     {
@@ -1985,6 +2088,8 @@ uno::Reference < embed::XStorage > SfxMedium::GetStorage( bool bCreateTempFile )
         if ( pImpl->m_pInStream )
             pImpl->m_pInStream->Seek( 0 );
     }
+#endif
+// MACRO: }
 
     pImpl->bIsStorage = pImpl->xStorage.is();
     return pImpl->xStorage;
@@ -2998,6 +3103,21 @@ void SfxMedium::GetMedium_Impl()
             if (pImpl->m_bInputStreamIsReadOnly)
                 GetItemSet().Put( SfxBoolItem( SID_DOC_READONLY, true ) );
         }
+        // MACRO: Special expanded load case for `file://`, because docx loading _strongly_ expects to be from a file with a stream
+        else if ( GetName().endsWith("?expanded") )
+        {
+            TransformItems( SID_OPENDOC, GetItemSet(), xProps );
+            utl::MediaDescriptor aMedium( xProps );
+            rtl::Reference< NoOpStream > aStream = new NoOpStream();
+            pImpl->xStream = aStream;
+            pImpl->xInputStream = aStream;
+            aMedium[utl::MediaDescriptor::PROP_STREAM] <<= pImpl->xStream;
+            aMedium[utl::MediaDescriptor::PROP_INPUTSTREAM] <<= pImpl->xInputStream;
+            GetItemSet().Put( SfxUnoAnyItem( SID_STREAM, Any( pImpl->xStream ) ) );
+            GetItemSet().Put( SfxUnoAnyItem( SID_INPUTSTREAM, Any( pImpl->xInputStream ) ) );
+            pImpl->m_bIsExpandedStorage = true;
+        }
+        // MACRO: }
         else
         {
             TransformItems( SID_OPENDOC, GetItemSet(), xProps );
@@ -3044,7 +3164,9 @@ void SfxMedium::GetMedium_Impl()
                 pImpl->xInputStream = pImpl->xStream->getInputStream();
         }
 
-        if ( !bFromTempFile )
+        // MACRO: {
+        if ( !bFromTempFile && !pImpl->m_bIsExpandedStorage )
+        // MACRO: }
         {
             //TODO/MBA: need support for SID_STREAM
             if ( pImpl->xStream.is() )
@@ -3058,7 +3180,9 @@ void SfxMedium::GetMedium_Impl()
     if ( !GetErrorIgnoreWarning() && !pImpl->xStream.is() && !pImpl->xInputStream.is() )
         SetError(ERRCODE_IO_ACCESSDENIED);
 
-    if ( !GetErrorIgnoreWarning() && !pImpl->m_pInStream )
+    // MACRO: {
+    if ( !pImpl->m_bIsExpandedStorage && !GetErrorIgnoreWarning() && !pImpl->m_pInStream )
+    // MACRO: }
     {
         if ( pImpl->xStream.is() )
             pImpl->m_pInStream = utl::UcbStreamHelper::CreateStream( pImpl->xStream );
@@ -4027,7 +4151,7 @@ OUString GetLogicBase(const INetURLObject& rURL, std::unique_ptr<SfxMedium_Impl>
 {
     OUString aLogicBase;
 
-#if HAVE_FEATURE_MACOSX_SANDBOX
+#if HAVE_FEATURE_MACOSX_SANDBOX || defined(EMSCRIPTEN)
     // In a sandboxed environment we don't want to attempt to create temporary files in the same
     // directory where the user has selected an output file to be stored. The sandboxed process has
     // permission only to create the specifically named output file in that directory.

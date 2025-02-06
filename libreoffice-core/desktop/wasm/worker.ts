@@ -130,7 +130,7 @@ function runLoop() {
 
 const globalHandler: GlobalMethod = {
   load: function (name: string, blob: Blob): DocumentRef | null {
-    const doc = new lok.Document(`file://${lok.mountBlob(name, blob)}`);
+    const doc = new lok.Document(`file://${lok.mountBlob(name, blob)}?expanded`);
     const ref = doc.ref();
     lok.unmountBlob();
 
@@ -655,6 +655,11 @@ const handler: DocumentMethodHandler<Document> = {
   getExpandedPart: function (doc: Document, _viewId: ViewId, path: string) {
     return doc.getExpandedPart(path);
   },
+
+  setIsExpandedStorage: function (doc: Document, _viewId: ViewId, expanded: boolean) {
+    doc.setIsExpandedStorage(expanded);
+  },
+
   listExpandedParts: function (doc: Document, _viewId: ViewId) {
     return doc.listExpandedParts();
   },

@@ -80,6 +80,10 @@
 #include <comphelper/servicehelper.hxx>
 #include <utility>
 
+// MACRO: {
+#include <comphelper/storagehelper.hxx>
+// MACRO: }
+
 using namespace osl;
 using namespace cppu;
 using namespace ucbhelper;
@@ -1196,7 +1200,9 @@ void ZipPackage::WriteManifest( ZipOutputStream& aZipOut, const std::vector< uno
     rtl::Reference<ZipPackageBuffer> pBuffer = new ZipPackageBuffer;
 
     pEntry->sPath = "META-INF/manifest.xml";
-    pEntry->nMethod = DEFLATED;
+    // MACRO: {
+    pEntry->nMethod = comphelper::OStorageHelper::IsExpandedStorage() ? STORED : DEFLATED;
+    // MACRO: }
     pEntry->nCrc = -1;
     pEntry->nSize = pEntry->nCompressedSize = -1;
     pEntry->nTime = ZipOutputStream::getCurrentDosTime();
@@ -1209,9 +1215,18 @@ void ZipPackage::WriteManifest( ZipOutputStream& aZipOut, const std::vector< uno
     // the manifest.xml is never encrypted - so pass an empty reference
     ZipOutputStream::setEntry(pEntry);
     aZipOut.writeLOC(pEntry);
-    ZipOutputEntry aZipEntry(aZipOut.getStream(), m_xContext, *pEntry, nullptr, /*bEncrypt*/false);
-    aZipEntry.write(pBuffer->getSequence());
-    aZipEntry.closeEntry();
+    // MACRO: {
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        aZipOut.rawWrite(pBuffer->getSequence());
+    }
+    else
+    {
+        ZipOutputEntry aZipEntry(aZipOut.getStream(), m_xContext, *pEntry, nullptr, /*bEncrypt*/false);
+        aZipEntry.write(pBuffer->getSequence());
+        aZipEntry.closeEntry();
+    }
+    // MACRO: }
     aZipOut.rawCloseEntry();
 }
 
@@ -1221,7 +1236,9 @@ void ZipPackage::WriteContentTypes( ZipOutputStream& aZipOut, const std::vector<
     rtl::Reference<ZipPackageBuffer> pBuffer = new ZipPackageBuffer;
 
     pEntry->sPath = "[Content_Types].xml";
-    pEntry->nMethod = DEFLATED;
+    // MACRO: {
+    pEntry->nMethod = comphelper::OStorageHelper::IsExpandedStorage() ? STORED : DEFLATED;
+    // MACRO: }
     pEntry->nCrc = -1;
     pEntry->nSize = pEntry->nCompressedSize = -1;
     pEntry->nTime = ZipOutputStream::getCurrentDosTime();
@@ -1267,9 +1284,18 @@ void ZipPackage::WriteContentTypes( ZipOutputStream& aZipOut, const std::vector<
     // there is no encryption in this format currently
     ZipOutputStream::setEntry(pEntry);
     aZipOut.writeLOC(pEntry);
-    ZipOutputEntry aZipEntry(aZipOut.getStream(), m_xContext, *pEntry, nullptr, /*bEncrypt*/false);
-    aZipEntry.write(pBuffer->getSequence());
-    aZipEntry.closeEntry();
+    // MACRO: {
+    if (comphelper::OStorageHelper::IsExpandedStorage())
+    {
+        aZipOut.rawWrite(pBuffer->getSequence());
+    }
+    else
+    {
+        ZipOutputEntry aZipEntry(aZipOut.getStream(), m_xContext, *pEntry, nullptr, /*bEncrypt*/false);
+        aZipEntry.write(pBuffer->getSequence());
+        aZipEntry.closeEntry();
+    }
+    // MACRO: }
     aZipOut.rawCloseEntry();
 }
 
@@ -1595,6 +1621,7 @@ void SAL_CALL ZipPackage::commitChanges()
             throw WrappedTargetException(THROW_WHERE "Temporary file should be connectable!",
                     getXWeak(), anyEx );
         }
+        SAL_WARN("lok", "mode " << m_eMode << " URL: " << m_aURL);
 
         if ( m_eMode == e_IMode_XStream )
         {
@@ -1713,6 +1740,7 @@ void SAL_CALL ZipPackage::commitChanges()
                                                         RTL_TEXTENCODING_UTF8 );
                     // if the file is still not corrupted, it can become after the next step
                     aContent.executeCommand ("transfer", Any(aInfo) );
+                    SAL_WARN("transfer", sTempURL);
                 }
                 catch ( const css::uno::Exception& )
                 {

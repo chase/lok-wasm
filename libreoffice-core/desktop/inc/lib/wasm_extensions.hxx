@@ -1,6 +1,5 @@
 #pragma once
 
-#include <oox/helper/expandedstorage.hxx>
 #include <sal/types.h>
 #include <LibreOfficeKit/LibreOfficeKit.h>
 #include <LibreOfficeKit/LibreOfficeKitEnums.h>
@@ -116,17 +115,9 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
     std::string getPageColor();
     std::string getPageOrientation();
 
-    _LibreOfficeKitDocument* loadFromExpanded(LibreOfficeKit* pThis,
-                                              desktop::ExpandedDocument expandedDoc,
-                                              const int documentId = 0,
-                                              const bool readOnly = false);
-
-    std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
-    getExpandedPart(const std::string& path) const;
-    void removePart(const std::string& path) const;
-    std::vector<std::pair<const std::string, const std::string>> listParts() const;
-    std::vector<std::pair<std::string, std::string>> save();
+    void save();
     std::optional<std::string> getCursor(int viewId);
+    void setIsExpandedStorage(bool expanded);
 };
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit

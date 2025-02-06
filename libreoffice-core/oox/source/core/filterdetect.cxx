@@ -37,6 +37,7 @@
 #include <com/sun/star/beans/NamedValue.hpp>
 #include <o3tl/string_view.hxx>
 #include <utility>
+#include <sal/log.hxx>
 
 using namespace ::com::sun::star;
 
@@ -422,11 +423,14 @@ OUString SAL_CALL FilterDetect::detect( Sequence< PropertyValue >& rMediaDescSeq
     {
         aMediaDescriptor.addInputStream();
 
+        // MACRO: Don't support encrypted files so skip the this step {
+        Reference<XInputStream> xInputStream( aMediaDescriptor[ MediaDescriptor::PROP_INPUTSTREAM ], UNO_QUERY );
         /*  Get the unencrypted input stream. This may include creation of a
             temporary file that contains the decrypted package. This temporary
             file will be stored in the 'ComponentData' property of the media
             descriptor. */
-        Reference< XInputStream > xInputStream( extractUnencryptedPackage( aMediaDescriptor ), UNO_SET_THROW );
+        // Reference< XInputStream > xInputStream( extractUnencryptedPackage( aMediaDescriptor ), UNO_SET_THROW );
+        // MACRO: }
 
         // stream must be a ZIP package
         ZipStorage aZipStorage(mxContext, xInputStream,

@@ -1455,8 +1455,15 @@ bool ToolBox::ImplCalcItem()
                 bool bText;
 
                 // check if image and/or text exists
+// MACRO: Don't load images we never see, calculate sizing we never use {
+#if defined(EMSCRIPTEN)
+                bImage = false;
+                bText = false;
+#else
                 bImage = !!item.maImage;
                 bText = !item.maText.isEmpty();
+#endif
+// MACRO: }
                 ButtonType tmpButtonType = determineButtonType( &item, meButtonType ); // default to toolbox setting
                 if ( bImage || bText )
                 {

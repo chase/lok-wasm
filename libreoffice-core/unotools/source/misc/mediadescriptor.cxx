@@ -217,15 +217,27 @@ css::uno::Sequence< css::beans::NamedValue > MediaDescriptor::requestAndVerifyDo
 
 bool MediaDescriptor::addInputStream()
 {
+// MACRO: Lock files are pointless in WASM {
+#ifdef EMSCRIPTEN
+    return impl_addInputStream( false );
+#else
     return impl_addInputStream( true );
+#endif
+// MACRO: }
 }
 
 /*-----------------------------------------------*/
 bool MediaDescriptor::addInputStreamOwnLock()
 {
+// MACRO: Lock files are pointless in WASM {
+#ifdef EMSCRIPTEN
+    return impl_addInputStream( false );
+#else
     const bool bLock = !utl::ConfigManager::IsFuzzing()
         && officecfg::Office::Common::Misc::UseDocumentSystemFileLocking::get();
     return impl_addInputStream(bLock);
+#endif
+// MACRO: }
 }
 
 /*-----------------------------------------------*/

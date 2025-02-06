@@ -41,12 +41,14 @@ $(packimages_DIR)/%_links.txt : $(packimages_DIR)/sorted.lst
 	$(call gb_Helper_replace_if_different_and_touch,$@.tmp,$@)
 
 $(packimages_DIR)/images_%.zip : \
-		$(packimages_DIR)/sorted.lst \
-		$(packimages_DIR)/commandimagelist.ilst \
-		$(packimages_DIR)/sourceimagelist.ilst \
-		$(SRCDIR)/wizards/source/imagelists/imagelists.ilst \
-		$(packimages_DIR)/%_links.txt \
-		$(call gb_Helper_get_imagelists) \
+# MACRO: Don't include images we don't see
+		# $(packimages_DIR)/sorted.lst \
+		# $(packimages_DIR)/commandimagelist.ilst \
+		# $(packimages_DIR)/sourceimagelist.ilst \
+		# $(SRCDIR)/wizards/source/imagelists/imagelists.ilst \
+		# $(packimages_DIR)/%_links.txt \
+		# $(call gb_Helper_get_imagelists) \
+# MACRO: }
 		| $(call gb_ExternalExecutable_get_dependencies,python)
 	$(call gb_Output_announce,$(subst $(WORKDIR)/,,$@),$(true),PRL,2)
 	$(call gb_Trace_StartRange,$(subst $(WORKDIR)/,,$@),PRL)

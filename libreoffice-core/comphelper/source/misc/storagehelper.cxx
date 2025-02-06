@@ -72,6 +72,18 @@ using namespace ::com::sun::star;
 
 namespace comphelper {
 
+// MACRO: {
+static bool bIsExpandedStorage = false;
+bool OStorageHelper::IsExpandedStorage()
+{
+    return bIsExpandedStorage;
+}
+
+void OStorageHelper::SetIsExpandedStorage(bool bIsExpanded)
+{
+    bIsExpandedStorage = bIsExpanded;
+}
+// MACRO: }
 
 uno::Reference< lang::XSingleServiceFactory > OStorageHelper::GetStorageFactory(
                             const uno::Reference< uno::XComponentContext >& rxContext )

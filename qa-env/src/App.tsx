@@ -46,7 +46,9 @@ async function fileOpen(files: FileList | null) {
   if (oldDoc) {
     cleanup(oldDoc);
   }
+  console.time('load');
   const doc = await loadDocFunc(name, blob);
+  console.timeEnd('load');
   if (!doc) {
     console.error('failure!');
     return;
@@ -162,9 +164,10 @@ function App() {
             class="h-4 w-4"
             type="checkbox"
             checked
-            onChange={(evt) =>
-              (loadDocFunc = evt.target.checked ? unzipLoadDoc : loadDocument)
-            }
+            onChange={(evt) => {
+              loadDocFunc = evt.target.checked ? unzipLoadDoc : loadDocument;
+              getDoc()?.setIsExpandedStorage(evt.target.checked);
+            }}
           />{' '}
           Expanded
         </label>

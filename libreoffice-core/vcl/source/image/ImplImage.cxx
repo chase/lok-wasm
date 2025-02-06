@@ -104,6 +104,8 @@ Size ImplImage::getSizePixel()
     Size aRet;
     if (!isSizeEmpty())
         aRet = maSizePixel;
+    // MACRO: Disable loading stock images we never see and prevent expensive layout costs {
+#if 0
     else if (isStock())
     {
         if (loadStockAtScale(nullptr, maBitmapEx))
@@ -116,6 +118,8 @@ Size ImplImage::getSizePixel()
         else
             SAL_WARN("vcl", "Failed to load stock icon " << maStockName);
     }
+#endif
+// MACRO: }
     return aRet;
 }
 

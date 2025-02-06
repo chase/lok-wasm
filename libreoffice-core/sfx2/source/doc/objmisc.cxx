@@ -963,6 +963,11 @@ void SfxObjectShell::BreakMacroSign_Impl( bool bBreakMacroSign )
 
 void SfxObjectShell::CheckSecurityOnLoading_Impl()
 {
+    // MACRO: Always disable, skip checks {
+    pImpl->aMacroMode.disallowMacroExecution();
+    return; 
+    // MACRO: }
+   
     if (GetErrorCode() == ERRCODE_IO_BROKENPACKAGE)
     {   // safety first: don't run any macros from broken package.
         pImpl->aMacroMode.disallowMacroExecution();
@@ -1152,11 +1157,13 @@ void SfxObjectShell::FinishedLoading( SfxLoadedFlags nFlags )
         if( !bSetModifiedTRUE && IsEnableSetModified() )
             SetModified( false );
 
-        if (!comphelper::OStorageHelper::IsExpandedStorage())
-        {
-            CheckSecurityOnLoading_Impl();
-        }
-
+// MACRO: Disable unncessary security checks, we never allow macros
+#ifdef EMSCRIPTEN
+            pImpl->aMacroMode.disallowMacroExecution();
+#else
+        CheckSecurityOnLoading_Impl();
+#endif
+// MACRO: }
 
         bHasName = true; // the document is loaded, so the name should already available
         GetTitle( SFX_TITLE_DETECT );

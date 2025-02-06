@@ -636,6 +636,8 @@ VclBuilder::VclBuilder(vcl::Window* pParent, const OUString& sUIDir, const OUStr
         }
     }
 
+// MACRO: Don't load images we never see {
+#if not defined(EMSCRIPTEN)
     //Set button images when everything has been imported
     std::set<OUString> aImagesToBeRemoved;
     for (auto const& elem : m_pParserState->m_aButtonImageWidgetMaps)
@@ -720,13 +722,14 @@ VclBuilder::VclBuilder(vcl::Window* pParent, const OUString& sUIDir, const OUStr
             m_pParserState->m_aImageSizeMap.erase(aFind);
         }
     }
-
     //There may be duplicate use of an Image, so we used a set to collect and
     //now we can remove them from the tree after their final munge
     for (auto const& elem : aImagesToBeRemoved)
     {
         delete_by_name(elem);
     }
+#endif
+// MACRO: }
 
     //Set button menus when everything has been imported
     for (auto const& elem : m_pParserState->m_aButtonMenuMaps)

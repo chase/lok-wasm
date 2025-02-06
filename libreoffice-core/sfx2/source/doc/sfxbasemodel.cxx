@@ -4030,6 +4030,8 @@ OUString SAL_CALL SfxBaseModel::getTitle()
     SfxModelGuard aGuard( *this );
 
     OUString aResult = impl_getTitleHelper()->getTitle ();
+// MACRO: We never display the internal title
+#if 0
     if ( !m_pData->m_bExternalTitle && m_pData->m_pObjectShell )
     {
         SfxMedium* pMedium = m_pData->m_pObjectShell->GetMedium();
@@ -4070,7 +4072,8 @@ OUString SAL_CALL SfxBaseModel::getTitle()
         if ( m_pData->m_pObjectShell->GetDocumentSignatureState() == SignatureState::OK )
             aResult += SfxResId(RID_XMLSEC_DOCUMENTSIGNED);
     }
-
+#endif
+// MACRO: }
     return aResult;
 }
 

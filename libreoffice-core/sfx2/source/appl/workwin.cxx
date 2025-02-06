@@ -1240,7 +1240,9 @@ void SfxWorkWindow::UpdateObjectBars_Impl2()
         }
     }
 
-    UpdateStatusBar_Impl();
+    // MACRO: Skip unnecessary config load {
+    // UpdateStatusBar_Impl();
+    // MACRO: }
 
     // unlocking automatically forces Layout
     xLayoutManager->unlock();

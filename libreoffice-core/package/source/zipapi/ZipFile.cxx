@@ -1393,6 +1393,7 @@ sal_Int32 ZipFile::readCEN()
             aEntry.nCompressedSize = nCompressedSize;
             aEntry.nSize = nSize;
             aEntry.nOffset = nOffset;
+            SAL_WARN("dump", "path " << aEntry.sPath << " size " << aEntry.nSize);
 
             if (o3tl::checked_multiply<sal_Int64>(aEntry.nOffset, -1, aEntry.nOffset))
                 throw ZipException("Integer-overflow");

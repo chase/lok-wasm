@@ -13,7 +13,6 @@
 #include <comphelper/storagehelper.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <lib/init.hxx>
-#include <oox/helper/expandedstorage.hxx>
 #include <sal/log.hxx>
 #include <sot/stg.hxx>
 #include <unotools/mediadescriptor.hxx>
@@ -194,7 +193,7 @@ WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc,
 
     LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
 
-    return ext->loadFromExpanded(pThis, expandedDoc, documentId, readOnly);
+    return nullptr;
 }
 
 void ExpandedDocument::addPart(std::string path, std::string content)
@@ -202,162 +201,17 @@ void ExpandedDocument::addPart(std::string path, std::string content)
     parts.emplace_back(std::move(path), std::move(content));
 }
 
-_LibreOfficeKitDocument*
-WasmDocumentExtension::loadFromExpanded(LibreOfficeKit* /* pThis */,
-                                        desktop::ExpandedDocument expandedDoc, const int documentId,
-                                        const bool readOnly)
-{
-    using namespace com::sun::star;
-    uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
-
-    if (!xContext)
-    {
-        return nullptr;
-    }
-
-    uno::Reference<frame::XDesktop2> xComponentLoader = frame::Desktop::create(xContext);
-
-    if (!xComponentLoader.is())
-    {
-        SAL_WARN("lok", "ComponentLoader is not available");
-        return nullptr;
-    }
-
-    // Parts of the import pipeline expect a stream
-    // this stream isn't actually used, but is required to be passed along
-    uno::Reference<io::XInputStream> xEmptyInputStream(
-        new comphelper::VectorInputStream(std::make_shared<std::vector<sal_Int8>>()));
-
-    uno::Reference<oox::ExpandedStorage> storage(
-        new oox::ExpandedStorage(xContext, xEmptyInputStream));
-
-    auto it = expandedDoc.parts.begin();
-    while (it != expandedDoc.parts.end())
-    {
-        if (it->content.length() == 0 || it->path.length() == 0)
-            continue;
-        storage->addPart(std::move(it->path), std::move(it->content));
-        it = expandedDoc.parts.erase(it);
-    }
-
-    storage->readRelationshipInfo();
-    // Is this necesarry ?
-    storage->setPropertyValue("OpenMode", uno::Any(ucb::OpenMode::ALL));
-    storage->setPropertyValue("Version", uno::Any(OUString("1")));
-    storage->setPropertyValue("MS Word 2007 XML", uno::Any(OUString("1")));
-
-    uno::Reference<embed::XStorage> xStorage(storage, uno::UNO_QUERY);
-    storage->acquire();
-    auto storageBase = std::shared_ptr<oox::StorageBase>(storage.get());
-
-    // ExpandedStorage can represent both a BaseStorage and an XStorage
-    //
-    // Unlike conventional XStorage we don't want to be constantly re-initializing
-    // a storage object since the file content is stored in memory.
-    // Thus we set a storageBase and xStorage globals to be used
-    // throughout the load process.
-    comphelper::OStorageHelper::SetIsExpandedStorage(true);
-    comphelper::OStorageHelper::SetExpandedStorage(xStorage);
-
-    /*
-        storage instance MUST be set before storage base
-        instance and base are the same objects, just casted differently
-        instance is stored in an uno::Reference while base is stored in a shared_ptr
-
-        if the base is released first (as the shared_ptr is set), the uno reference
-        has a bad time when it tries to access a null object at with it's pointer
-    */
-    comphelper::OStorageHelper::SetExpandedStorageInstance(storage);
-    comphelper::OStorageHelper::SetExpandedStorageBase(storageBase);
-
-    utl::MediaDescriptor aMediaDescriptor;
-
-    // Expanded Storage only supports .DOCX
-    aMediaDescriptor[utl::MediaDescriptor::PROP_FILTERNAME]
-        <<= OUString("MS Word 2007 XML"); // just hardcode this for now
-    aMediaDescriptor[utl::MediaDescriptor::PROP_MACROEXECUTIONMODE]
-        <<= document::MacroExecMode::NEVER_EXECUTE;
-    // We don't have a general document input stream,
-    // so we pass in an empty one. Down the line its crucial we
-    // check if we are currently loading from expanded storage
-    // and use the storage instead of the stream
-    aMediaDescriptor[utl::MediaDescriptor::PROP_INPUTSTREAM] <<= xEmptyInputStream;
-    // Silences various exceptions
-    aMediaDescriptor[utl::MediaDescriptor::PROP_SILENT] <<= true;
-
-    if (readOnly)
-    {
-        aMediaDescriptor[utl::MediaDescriptor::PROP_READONLY] <<= true;
-        // disable comments which are still enabled with read only:
-        aMediaDescriptor[utl::MediaDescriptor::PROP_VIEWONLY] <<= true;
-    }
-
-    {
-        SolarMutexGuard aGuard;
-        try
-        {
-            Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
-            SfxViewShell::SetCurrentDocId(ViewShellDocId(documentId));
-            uno::Reference<lang::XComponent> xComponent = xComponentLoader->loadComponentFromURL(
-                "private:stream", "_blank", documentId,
-                aMediaDescriptor.getAsConstPropertyValueList());
-
-            if (!xComponent.is())
-            {
-                SAL_WARN("lok", "Could not load in memory doc");
-                return nullptr;
-            }
-
-            return new LibLODocument_Impl(xComponent, documentId);
-        }
-        catch (const uno::Exception& /*exception*/)
-        {
-            uno::Any exAny(getCaughtException());
-            SAL_WARN("lok", "Failed to load to in-memory stream: " + exceptionToString(exAny));
-        }
-    }
-    SAL_WARN("lok", "Failed to load to in-memory stream");
-    return nullptr;
-}
-
-std::optional<std::pair<std::string, std::shared_ptr<std::vector<sal_Int8>>>>
-WasmDocumentExtension::getExpandedPart(const std::string& path) const
-{
-    return comphelper::OStorageHelper::GetExpandedStorageInstance()->getPart(path);
-}
-void WasmDocumentExtension::removePart(const std::string& path) const
-{
-    return comphelper::OStorageHelper::GetExpandedStorageInstance()->removePart(path);
-}
-
-std::vector<std::pair<const std::string, const std::string>>
-WasmDocumentExtension::listParts() const
-{
-    return comphelper::OStorageHelper::GetExpandedStorageInstance()->listParts();
-}
-
-std::vector<std::pair<std::string, std::string>> WasmDocumentExtension::save()
+void WasmDocumentExtension::save()
 {
     SfxViewFrame* viewFrame = SfxViewFrame::Current();
     if (!viewFrame)
     {
-        return {};
+        return;
     }
 
+    // TODO: investigate why we used this?
     viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
-
-    // TODO: @synoet it shouldn't be necessary to commit relationships seperately
-    // from the implCommit call from save. But there is some funky behavior going on
-    // with relationship ptr's not existing if called from within save.
-    // Accessing the relationship access for the document.xml.rels file's shared_ptr shows
-    // up as a nullptr, even though in previous and later method invocations it is a valid pointer
-    // even within the same expanded storage instance.
-    // Investigate more post Aug 1st.
-    comphelper::OStorageHelper::GetExpandedStorageInstance()->commitRelationships();
-
-    auto files
-        = comphelper::OStorageHelper::GetExpandedStorageInstance()->getRecentlyChangedFiles();
-    return files;
+    // TODO: implement
 }
 
 std::optional<std::string> WasmDocumentExtension::getCursor(int viewId)
@@ -375,4 +229,10 @@ std::optional<std::string> WasmDocumentExtension::getCursor(int viewId)
     }
     return {};
 }
+
+void WasmDocumentExtension::setIsExpandedStorage(bool expanded)
+{
+    comphelper::OStorageHelper::SetIsExpandedStorage(expanded);
+}
+
 }

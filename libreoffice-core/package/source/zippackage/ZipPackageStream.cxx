@@ -478,7 +478,10 @@ bool ZipPackageStream::saveChild(
     pTempEntry->nPathLen = static_cast<sal_Int16>( OUStringToOString( pTempEntry->sPath, RTL_TEXTENCODING_UTF8 ).getLength() );
 
     const bool bToBeEncrypted = m_bToBeEncrypted && (rEncryptionKey.hasElements() || m_bHaveOwnKey);
-    const bool bToBeCompressed = bToBeEncrypted || m_bToBeCompressed;
+    // MACRO: {
+    // const bool bToBeCompressed = !comphelper::OStorageHelper::IsExpandedStorage() && ( bToBeEncrypted || m_bToBeCompressed );
+    const bool bToBeCompressed = false;
+    // MACRO: }
 
     auto pPropSet = aPropSet.getArray();
     pPropSet[PKG_MNFST_MEDIATYPE].Name = "MediaType";

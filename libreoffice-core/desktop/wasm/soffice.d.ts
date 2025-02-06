@@ -269,6 +269,7 @@ export declare class Document {
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
   setAuthor(author: string): void;
+  setIsExpandedStorage(expanded: boolean): void;
   getExpandedPart(path: string): ExpandedPart | null;
   listExpandedParts(): Array<ExpandedPart>;
 
