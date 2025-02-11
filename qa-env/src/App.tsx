@@ -166,7 +166,6 @@ function App() {
             checked
             onChange={(evt) => {
               loadDocFunc = evt.target.checked ? unzipLoadDoc : loadDocument;
-              getDoc()?.setIsExpandedStorage(evt.target.checked);
             }}
           />{' '}
           Expanded

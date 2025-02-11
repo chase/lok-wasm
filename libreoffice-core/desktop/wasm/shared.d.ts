@@ -194,7 +194,6 @@ export type DocumentWithViewMethods = {
   setAuthor(author: string): void;
 
   getExpandedPart(path: string): { path: string; content: ArrayBuffer } | null;
-  setIsExpandedStorage(expanded: boolean): void;
   listExpandedParts(): Array<{ path: string; sha: string }>;
   getRedlineTextRange(id: number): RectArray[] | undefined;
   getCursor(): string | undefined;

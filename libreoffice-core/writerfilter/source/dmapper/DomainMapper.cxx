@@ -91,6 +91,10 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <sal/log.hxx>
 #include <tools/UnitConversion.hxx>
+// MACRO: {
+#include <com/sun/star/embed/StorageFormats.hpp>
+#include "../../../package/source/xstor/xstorage.hxx"
+// MACRO: }
 
 using namespace ::com::sun::star;
 using namespace oox;
@@ -148,12 +152,16 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
         m_pImpl->SetDocumentSettingsProperty("EmptyDbFieldHidesPara",uno::Any(false));
     }
 
+    // MACRO: {
+    OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString());
+    // MACRO: }
     // Initialize RDF metadata, to be able to add statements during the import.
     try
     {
         uno::Reference<rdf::XDocumentMetadataAccess> xDocumentMetadataAccess(xModel, uno::UNO_QUERY_THROW);
+    // MACRO: {
         uno::Reference<embed::XStorage> xStorage = comphelper::OStorageHelper::GetTemporaryStorage();
-        OUString aBaseURL = rMediaDesc.getUnpackedValueOrDefault("URL", OUString());
+    // MACRO: }
         const uno::Reference<frame::XModel> xModel_(xModel,
             uno::UNO_QUERY_THROW);
         const uno::Reference<rdf::XURI> xBaseURI(sfx2::createBaseURI(xContext, xModel_, aBaseURL, u""));
@@ -183,12 +191,27 @@ DomainMapper::DomainMapper( const uno::Reference< uno::XComponentContext >& xCon
         }
     }
 
-    //import document properties
-    try
+    // MACRO: {
+    if (aBaseURL.endsWith("?expanded"))
+    {
+        OStorage* pStorage = new OStorage(xInputStream, embed::ElementModes::READ,
+                                        uno::Sequence<beans::PropertyValue>(), xContext,
+                                        embed::StorageFormats::OFOPXML);
+        pStorage->SetIsExpandedStorage(true, aBaseURL);
+        uno::Reference< embed::XStorage > xStorage(cppu::getXWeak(pStorage), uno::UNO_QUERY_THROW);
+        m_pImpl->m_xDocumentStorage = xStorage;
+    }
+    else
     {
         m_pImpl->m_xDocumentStorage = comphelper::OStorageHelper::GetStorageOfFormatFromInputStream(
             OFOPXML_STORAGE_FORMAT_STRING, xInputStream, xContext, bRepairStorage);
+    }
+    // MACRO: }
 
+    //import document properties
+    try
+    {
+        // MACRO: Moved storage creation outside of try to support expanded storage
         uno::Reference< uno::XInterface > xTemp = xContext->getServiceManager()->createInstanceWithContext(
                                 "com.sun.star.document.OOXMLDocumentPropertiesImporter",
                                 xContext);

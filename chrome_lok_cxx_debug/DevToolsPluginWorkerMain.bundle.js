@@ -961,8 +961,9 @@ function formatUnoSequence(wasm, value) {
     const size = impl.$("nElements").asUint32();
     const elements = impl.$("elements");
     const result = [];
+    const typeName = unwrapTemplateTypeName(value.typeNames[0]);
     for (let i = 0; i < size; i++) {
-        result.push(elements.$(i));
+        result.push(elements.castChildAtIndexTo(i, typeName));
     }
     return result;
 }

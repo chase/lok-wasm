@@ -124,6 +124,11 @@ struct OStorage_Impl
     bool                        m_bListCreated;
     bool                        m_bRepairPackage = false;
 
+    // MACRO: {
+    bool                        m_bIsExpandedStorage = false;
+    OUString                    m_aOriginalURL;
+    // MACRO: }
+
     /// Count of registered modification listeners
     oslInterlockedCount         m_nModifiedListenerCount;
     bool                        HasModifiedListener() const
@@ -320,6 +325,8 @@ public:
     void ChildIsDisposed( const css::uno::Reference< css::uno::XInterface >& xChild );
 
     sal_Int32 GetRefCount_Impl() const { return m_refCount; }
+
+    void SetIsExpandedStorage(bool bIsExpanded, const OUString& aOriginalURL);
 
     //  XInterface
 

@@ -361,8 +361,7 @@ public:
         }
     }
 
-    DocumentClient(desktop::ExpandedDocument expandedDoc, std::string name,
-                   std::optional<bool> readOnly)
+    DocumentClient(std::string name, val partList, std::optional<bool> readOnly)
         : ref_(++document_id_counter)
     {
         desktop::WasmOfficeExtension* officeExt
@@ -693,15 +692,6 @@ public:
 
     void setCurrentView(int viewId) { doc_->setView(viewId); }
 
-    // NOTE: Disabled until unoembind startup cost is under 1s
-    /*
-    css::uno::Reference<css::lang::XComponent> getXComponent(int viewId)
-    {
-        doc_->setView(viewId);
-        return static_cast<desktop::WasmDocumentExtension*>(doc_->get())->mxComponent;
-    }
-    */
-
     void setClientVisibleArea(int viewId, int x, int y, int width, int height)
     {
         doc_->setView(viewId);
@@ -824,10 +814,6 @@ public:
     val getOutline() { return writer()->getOutline(); }
     val gotoOutline(int idx) { return writer()->gotoOutline(idx); }
     void setAuthor(std::string author) { doc_->setAuthor(author.c_str()); }
-
-    void setIsExpandedStorage(bool expanded) {
-        ext()->setIsExpandedStorage(expanded);
-    }
 
     sal_Int32 addExternalUndo() { return writer()->addExternalUndo(); };
     sal_Int32 getNextUndoId() const { return writer()->getNextUndoId(); };
@@ -1059,13 +1045,9 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("replace", &wasm::ITextRanges::replace)
         .function("replaceAll", &wasm::ITextRanges::replaceAll);
 
-    class_<desktop::ExpandedDocument>("ExpandedDocument")
-        .constructor()
-        .function("addPart", &desktop::ExpandedDocument::addPart);
-
     class_<DocumentClient>("Document")
         .constructor<std::string>()
-        .constructor<desktop::ExpandedDocument, std::string, std::optional<bool>>()
+        .constructor<std::string, val, std::optional<bool>>()
         .function("valid", &DocumentClient::valid)
         .function("save", &DocumentClient::save)
         .function("saveAs", &DocumentClient::saveAs)
@@ -1117,7 +1099,6 @@ EMSCRIPTEN_BINDINGS(lok)
         .function("getOutline", &DocumentClient::getOutline)
         .function("setAuthor", &DocumentClient::setAuthor)
         .function("newView", &DocumentClient::newView)
-        .function("setIsExpandedStorage", &DocumentClient::setIsExpandedStorage)
         .function("addExternalUndo", &DocumentClient::addExternalUndo)
         .function("getNextUndoId", &DocumentClient::getNextUndoId)
         .function("getNextRedoId", &DocumentClient::getNextRedoId)

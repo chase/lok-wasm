@@ -210,54 +210,91 @@ public:
 
     // XStream
     virtual uno::Reference<io::XInputStream> SAL_CALL getInputStream() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "getInputStream");
+        return uno::Reference<io::XInputStream>(this); 
+    }
     
     virtual uno::Reference<io::XOutputStream> SAL_CALL getOutputStream() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "getOutputStream");
+        return uno::Reference<io::XOutputStream>(this); 
+    }
 
     // XSeekable
     virtual void SAL_CALL seek(sal_Int64) override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "seek"); 
+    }
     
     virtual sal_Int64 SAL_CALL getPosition() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "getPosition");
+        return 0; 
+    }
     
     virtual sal_Int64 SAL_CALL getLength() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "getLength");
+        return 0; 
+    }
 
     // XInputStream
     virtual sal_Int32 SAL_CALL readBytes(uno::Sequence<sal_Int8>&, sal_Int32) override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "readBytes");
+        return 0; 
+    }
     
     virtual sal_Int32 SAL_CALL readSomeBytes(uno::Sequence<sal_Int8>&, sal_Int32) override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "readSomeBytes");
+        return 0; 
+    }
     
     virtual void SAL_CALL skipBytes(sal_Int32) override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "skipBytes"); 
+    }
     
     virtual sal_Int32 SAL_CALL available() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "available");
+        return 0; 
+    }
     
     virtual void SAL_CALL closeInput() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "closeInput"); 
+    }
 
     // XOutputStream
     virtual void SAL_CALL writeBytes(const uno::Sequence<sal_Int8>&) override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "writeBytes"); 
+    }
     
     virtual void SAL_CALL flush() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "flush"); 
+    }
     
     virtual void SAL_CALL closeOutput() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "closeOutput"); 
+    }
 
     // XTruncate
     virtual void SAL_CALL truncate() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "truncate"); 
+    }
 
     // XAsyncOutputMonitor
     virtual void SAL_CALL waitForCompletion() override 
-    { throw uno::RuntimeException(); }
+    { 
+        SAL_WARN("noop", "waitForCompletion"); 
+    }
 };
 
 }
@@ -3110,13 +3147,13 @@ void SfxMedium::GetMedium_Impl()
             TransformItems( SID_OPENDOC, GetItemSet(), xProps );
             utl::MediaDescriptor aMedium( xProps );
             rtl::Reference< NoOpStream > aStream = new NoOpStream();
+            pImpl->m_bIsExpandedStorage = true;
             pImpl->xStream = aStream;
             pImpl->xInputStream = aStream;
             aMedium[utl::MediaDescriptor::PROP_STREAM] <<= pImpl->xStream;
             aMedium[utl::MediaDescriptor::PROP_INPUTSTREAM] <<= pImpl->xInputStream;
             GetItemSet().Put( SfxUnoAnyItem( SID_STREAM, Any( pImpl->xStream ) ) );
             GetItemSet().Put( SfxUnoAnyItem( SID_INPUTSTREAM, Any( pImpl->xInputStream ) ) );
-            pImpl->m_bIsExpandedStorage = true;
         }
         // MACRO: }
         else

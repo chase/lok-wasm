@@ -74,6 +74,11 @@ $(eval $(call gb_Library_add_exception_objects,package2,\
 	package/source/zippackage/ZipPackageFolderEnumeration \
 	package/source/zippackage/ZipPackageSink \
 	package/source/zippackage/ZipPackageStream \
+	package/source/mempackage/MemPackage \
+	package/source/mempackage/MemPackageEntry \
+	package/source/mempackage/MemPackageStream \
+	package/source/mempackage/MemPackageFolder \
+	package/source/mempackage/MemPackageFolderEnumeration \
 ))
 
 ifneq ($(SYSTEM_ZLIB),)

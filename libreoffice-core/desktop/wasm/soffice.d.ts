@@ -154,22 +154,10 @@ export type ITextRanges = {
   replaceAll(text: string): void;
 };
 
-export declare class ExpandedDocPart {
-  constructor(path: string, content: string): void;
-}
-
-export declare class ExpandedDocument {
-  constructor(): void;
-  addPart(path: string, name: ArrayBuffer): void;
-  delete(): void;
-}
-
-export type ExpandedPart = { path: string; content: ArrayBuffer };
-
 /** Embind document class, see main_wasm.cxx */
 export declare class Document {
   constructor(path: string): void;
-  constructor(expanded: ExpandedDocument, name: string, readOnly: boolean): void;
+  constructor(path: string, partList: [path: string, url: string][], readOnly: boolean): void;
   delete(): void;
 
   valid(): boolean;
@@ -269,9 +257,6 @@ export declare class Document {
   getOutline(): OutlineItem[];
   gotoOutline(index: number): RectArray;
   setAuthor(author: string): void;
-  setIsExpandedStorage(expanded: boolean): void;
-  getExpandedPart(path: string): ExpandedPart | null;
-  listExpandedParts(): Array<ExpandedPart>;
 
   addExternalUndo(): number;
   getNextUndoId(): number;
@@ -313,8 +298,6 @@ export interface Module extends EmscriptenModule {
   readUnlink(path: string): Uint8Array;
 
   Document: typeof Document;
-  ExpandedPart: typeof ExpandedPart;
-  ExpandedDocument: typeof ExpandedDocument;
 
   /** preloads LOK */
   preload(): void;

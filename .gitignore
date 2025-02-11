@@ -16,3 +16,4 @@ libreoffice-core/debug
 /emsdk
 mutagen.yml.lock
 /build
+.aider*

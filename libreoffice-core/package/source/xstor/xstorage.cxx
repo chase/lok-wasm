@@ -60,6 +60,7 @@
 #include "xstorage.hxx"
 #include "owriteablestream.hxx"
 #include "switchpersistencestream.hxx"
+#include <MemPackage.hxx>
 
 using namespace ::com::sun::star;
 
@@ -365,13 +366,28 @@ void OStorage_Impl::RemoveReadOnlyWrap( const OStorage& aStorage )
     }
 }
 
+void OStorage::SetIsExpandedStorage(bool bIsExpanded, const OUString& aOriginalURL)
+{
+    if (!m_pImpl)
+        return;
+
+    m_pImpl->m_bIsExpandedStorage = bIsExpanded;
+    m_pImpl->m_aOriginalURL = aOriginalURL;
+}
+
 void OStorage_Impl::OpenOwnPackage()
 {
     SAL_WARN_IF( !m_bIsRoot, "package.xstor", "Opening of the package has no sense!" );
 
     ::osl::MutexGuard aGuard( m_xMutex->GetMutex() );
 
-    if ( !m_xPackageFolder.is() )
+    if (m_bIsExpandedStorage)
+    {
+        auto* pPackage = new MemPackage(m_xContext, comphelper::OStorageHelper::TransferFromExpandedStorage(m_aOriginalURL));
+        m_xPackageFolder.set(pPackage->getRootFolder());
+        m_xPackage.set(std::move(pPackage));
+    }
+    else if ( !m_xPackageFolder.is() )
     {
         if ( !m_xPackage.is() )
         {

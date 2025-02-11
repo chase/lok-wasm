@@ -63,7 +63,8 @@ WasmDocumentExtension::WasmDocumentExtension(css::uno::Reference<css::lang::XCom
 
 void WasmDocumentExtension::paintTiles(uint32_t startIndex, uint32_t endIndex)
 {
-    if (!tileRendererData_.has_value()) return;
+    if (!tileRendererData_.has_value())
+        return;
     auto& d = tileRendererData_.value();
 
     // this shouldn't happen except for after the tile renderer is stopped
@@ -77,8 +78,8 @@ void WasmDocumentExtension::paintTiles(uint32_t startIndex, uint32_t endIndex)
     {
         uint32_t byteOffset = (i - startIndex) * d.tileAllocSize;
         auto rect = tileIndexToTwipsRect(i, d.widthTileStride, d.tileDimTwips);
-        d.doc->pClass->paintTile(d.doc, &d.paintedTiles[byteOffset], d.tileSize,
-                                    d.tileSize, rect[0], rect[1], rect[2], rect[3]);
+        d.doc->pClass->paintTile(d.doc, &d.paintedTiles[byteOffset], d.tileSize, d.tileSize,
+                                 rect[0], rect[1], rect[2], rect[3]);
     }
 }
 
@@ -183,24 +184,6 @@ std::string WasmDocumentExtension::getPageOrientation()
     return bIsLandscape ? "landscape" : "portrait";
 }
 
-_LibreOfficeKitDocument*
-WasmOfficeExtension::documentExpandedLoad(desktop::ExpandedDocument expandedDoc,
-                                          std::string /* name */ /* why is this unused? */,
-                                          const int documentId, const bool readOnly)
-{
-    LibreOfficeKitDocument* pDoc = NULL;
-    desktop::WasmDocumentExtension* ext = static_cast<desktop::WasmDocumentExtension*>(pDoc);
-
-    LibreOfficeKit* pThis = static_cast<LibreOfficeKit*>(this);
-
-    return nullptr;
-}
-
-void ExpandedDocument::addPart(std::string path, std::string content)
-{
-    parts.emplace_back(std::move(path), std::move(content));
-}
-
 void WasmDocumentExtension::save()
 {
     SfxViewFrame* viewFrame = SfxViewFrame::Current();
@@ -230,9 +213,12 @@ std::optional<std::string> WasmDocumentExtension::getCursor(int viewId)
     return {};
 }
 
-void WasmDocumentExtension::setIsExpandedStorage(bool expanded)
+_LibreOfficeKitDocument* WasmOfficeExtension::loadDocumentFromExpanded(std::string name,
+                                                                       const int documentId,
+                                                                       const bool readOnly,
+                                                                       const bool loadInPlace)
 {
-    comphelper::OStorageHelper::SetIsExpandedStorage(expanded);
+    return nullptr;
 }
 
 }

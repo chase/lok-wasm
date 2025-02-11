@@ -73,15 +73,25 @@ using namespace ::com::sun::star;
 namespace comphelper {
 
 // MACRO: {
-static bool bIsExpandedStorage = false;
-bool OStorageHelper::IsExpandedStorage()
+// Global map to store expanded storage contents
+static std::unordered_map<OUString, std::unordered_map<std::string, std::string>> gExpandedStorages;
+
+void OStorageHelper::TransferToExpandedStorage(std::u16string_view aPath, std::unordered_map<std::string, std::string>&& contents)
 {
-    return bIsExpandedStorage;
+    // Store the contents in the global map using the path as key
+    gExpandedStorages[OUString(aPath)] = std::move(contents);
 }
 
-void OStorageHelper::SetIsExpandedStorage(bool bIsExpanded)
+std::unordered_map<std::string, std::string> OStorageHelper::TransferFromExpandedStorage(std::u16string_view aPath)
 {
-    bIsExpandedStorage = bIsExpanded;
+    // Look up the contents in the global map
+    auto it = gExpandedStorages.find(OUString(aPath));
+    if (it != gExpandedStorages.end())
+    {
+        return it->second;
+    }
+    
+    return {};
 }
 // MACRO: }
 

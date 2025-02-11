@@ -176,19 +176,12 @@ COMPHELPER_DLLPUBLIC OString exceptionToString(css::uno::Any const & caughtEx);
    Logs an message along with a nicely formatted version of the current exception.
    This must be called as the FIRST thing in a catch block.
 */
-#if defined SAL_LOG_INFO
-#define TOOLS_INFO_EXCEPTION(area, stream) \
-    do { \
-        css::uno::Any tools_warn_exception( DbgGetCaughtException() ); \
-        SAL_INFO(area, stream << " " << exceptionToString(tools_warn_exception)); \
-    } while (false)
-#else
+// MACRO: {
 #define TOOLS_INFO_EXCEPTION(area, stream) \
     do { \
         SAL_INFO(area, stream); \
     } while (false)
 #endif
-
-#endif
+// MACRO: }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

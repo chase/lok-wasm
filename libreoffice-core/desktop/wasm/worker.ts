@@ -25,7 +25,6 @@ import type {
   Comment,
   Document,
   DocumentRef,
-  ExpandedPart,
   HeaderFooterRect,
   ITextRanges,
   ParagraphStyle,
@@ -113,7 +112,10 @@ function run() {
   runLoop();
 }
 
+let inLoop = false;
 function runLoop() {
+  if (inLoop) return;
+  inLoop = true;
   lok.yield();
   if (currentDocumentUnderRender) {
     const [ref, viewId] = currentDocumentUnderRender;
@@ -125,12 +127,13 @@ function runLoop() {
       isAlreadyIdle = true;
     }
   }
+  inLoop = false;
   requestAnimationFrame(runLoop);
 }
 
 const globalHandler: GlobalMethod = {
   load: function (name: string, blob: Blob): DocumentRef | null {
-    const doc = new lok.Document(`file://${lok.mountBlob(name, blob)}?expanded`);
+    const doc = new lok.Document(`file://${lok.mountBlob(name, blob)}`);
     const ref = doc.ref();
     lok.unmountBlob();
 
@@ -143,18 +146,13 @@ const globalHandler: GlobalMethod = {
     run();
     return ref;
   },
+
   loadFromExpandedParts: function (
     name: string,
-    data: Array<ExpandedPart>,
+    partList: [path: string, url: string][],
     readOnly: boolean,
   ) {
-    const { Document, ExpandedDocument } = lok;
-    const expandedDoc = new ExpandedDocument();
-    for (const part of data) {
-      expandedDoc.addPart(part.path, part.content);
-    }
-
-    const doc = new Document(expandedDoc, name, readOnly);
+    const doc = new lok.Document(`file:///${name}?expanded`, partList, readOnly);
     const ref = doc.ref();
 
     if (!doc.valid()) {
@@ -652,17 +650,6 @@ const handler: DocumentMethodHandler<Document> = {
     return doc.setAuthor(author);
   },
 
-  getExpandedPart: function (doc: Document, _viewId: ViewId, path: string) {
-    return doc.getExpandedPart(path);
-  },
-
-  setIsExpandedStorage: function (doc: Document, _viewId: ViewId, expanded: boolean) {
-    doc.setIsExpandedStorage(expanded);
-  },
-
-  listExpandedParts: function (doc: Document, _viewId: ViewId) {
-    return doc.listExpandedParts();
-  },
   updateComment: function (
     doc: Document,
     viewId: ViewId,

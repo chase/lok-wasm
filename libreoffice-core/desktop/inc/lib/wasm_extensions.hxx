@@ -80,26 +80,6 @@ struct TileRendererData
 // the next closest solution
 static TileRendererData* g_activeTileRenderData = nullptr;
 
-struct ExpandedPart
-{
-    std::string path;
-    std::string content;
-
-    ExpandedPart(std::string path_, std::string content_)
-        : path(std::move(path_))
-        , content(std::move(content_)) {};
-};
-
-struct ExpandedDocument
-{
-    std::vector<ExpandedPart> parts;
-
-    ExpandedDocument() {};
-
-public:
-    void addPart(std::string path, std::string content);
-};
-
 struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 {
     // technically, we could support multiple views, but realistically we never do
@@ -117,14 +97,12 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
     void save();
     std::optional<std::string> getCursor(int viewId);
-    void setIsExpandedStorage(bool expanded);
 };
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit
 {
-    _LibreOfficeKitDocument* documentExpandedLoad(desktop::ExpandedDocument expandedDoc,
-                                                  std::string name, const int documentId = 0,
-                                                  const bool readOnly = false);
+    _LibreOfficeKitDocument* loadDocumentFromExpanded(std::string name, const int documentId = 0,
+                                                      const bool readOnly = false,
+                                                      const bool loadInPlace = true);
 };
-
 }

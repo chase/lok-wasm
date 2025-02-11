@@ -25,6 +25,8 @@
 #include <comphelper/comphelperdllapi.h>
 #include <memory>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 inline constexpr OUString PACKAGE_STORAGE_FORMAT_STRING = u"PackageFormat"_ustr;
 inline constexpr OUString ZIP_STORAGE_FORMAT_STRING = u"ZipFormat"_ustr;
@@ -198,8 +200,8 @@ public:
     GetODFVersionFromStorage(const css::uno::Reference<css::embed::XStorage>& xStorage);
 
     // MACRO: {
-    static bool IsExpandedStorage();
-    static void SetIsExpandedStorage(bool bIsExpanded);
+    static void TransferToExpandedStorage( std::u16string_view aPath, std::unordered_map<std::string, std::string>&& contents);
+    static std::unordered_map<std::string, std::string> TransferFromExpandedStorage( std::u16string_view aPath );
     // MACRO: }
 };
 

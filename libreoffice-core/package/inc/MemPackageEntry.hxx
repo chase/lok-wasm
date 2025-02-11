@@ -1,0 +1,74 @@
+/* -*- Mode: C++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * This file is part of the LibreOffice project.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
+#ifndef INCLUDED_PACKAGE_INC_MEMPACKAGEENTRY_HXX
+#define INCLUDED_PACKAGE_INC_MEMPACKAGEENTRY_HXX
+
+#include <com/sun/star/container/XChild.hpp>
+#include <com/sun/star/container/XNamed.hpp>
+#include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/beans/XPropertySet.hpp>
+#include <com/sun/star/lang/XServiceInfo.hpp>
+#include <com/sun/star/uno/XComponentContext.hpp>
+#include <cppuhelper/implbase.hxx>
+
+class MemPackageFolder;
+
+class MemPackageEntry : public cppu::WeakImplHelper
+<
+    css::container::XNamed,
+    css::container::XChild,
+    css::beans::XPropertySet,
+    css::lang::XServiceInfo
+>
+{
+protected:
+    css::uno::Reference<css::uno::XComponentContext> m_xContext;
+    OUString m_sName;
+    bool m_bIsFolder;
+    OUString m_sMediaType;
+    MemPackageFolder* m_pParent;
+
+public:
+    MemPackageEntry();
+    virtual ~MemPackageEntry() override;
+
+    const OUString& GetMediaType() const { return m_sMediaType; }
+    void SetMediaType(const OUString& sNewType) { m_sMediaType = sNewType; }
+    void doSetParent(MemPackageFolder* pNewParent);
+    bool IsFolder() const { return m_bIsFolder; }
+    void SetFolder(bool bSetFolder) { m_bIsFolder = bSetFolder; }
+
+    void clearParent() { m_pParent = nullptr; }
+
+    // XNamed
+    virtual OUString SAL_CALL getName() override;
+    virtual void SAL_CALL setName(const OUString& aName) override;
+
+    // XChild
+    virtual css::uno::Reference<css::uno::XInterface> SAL_CALL getParent() override;
+    virtual void SAL_CALL setParent(const css::uno::Reference<css::uno::XInterface>& Parent) override;
+
+    // XPropertySet
+    virtual css::uno::Reference<css::beans::XPropertySetInfo> SAL_CALL getPropertySetInfo() override;
+    virtual void SAL_CALL setPropertyValue(const OUString& aPropertyName, const css::uno::Any& aValue) override = 0;
+    virtual css::uno::Any SAL_CALL getPropertyValue(const OUString& PropertyName) override = 0;
+    virtual void SAL_CALL addPropertyChangeListener(const OUString& aPropertyName, 
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& xListener) override;
+    virtual void SAL_CALL removePropertyChangeListener(const OUString& aPropertyName,
+        const css::uno::Reference<css::beans::XPropertyChangeListener>& aListener) override;
+    virtual void SAL_CALL addVetoableChangeListener(const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
+    virtual void SAL_CALL removeVetoableChangeListener(const OUString& PropertyName,
+        const css::uno::Reference<css::beans::XVetoableChangeListener>& aListener) override;
+};
+
+#endif
+
+/* vim:set shiftwidth=4 softtabstop=4 expandtab: */ 
