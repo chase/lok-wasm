@@ -14,7 +14,6 @@ import type {
   RectArray,
   TileRenderData,
   DocumentRef,
-  ExpandedPart,
 } from "./soffice";
 export type GlobalMessage = {
   /** load the document with the file name `name` and content `blob`
@@ -22,9 +21,12 @@ export type GlobalMessage = {
   load(name: string, blob: Blob): DocumentRef | null;
   loadFromExpandedParts(
     name: string,
-    data: Array<ExpandedPart>,
+    partList: [path: string, part: ArrayBuffer][],
     readOnly: boolean,
+    loadInPlace: boolean,
   ): DocumentRef | null;
+  /** convert the document to the provided `outputFormat` and return the converted document as an ArrayBuffer */
+  convert(file: ArrayBuffer, format: "docx" | "doc", outputFormat: "docx" | "pdf" | "rtf"): ArrayBuffer;
   preload(): void;
   setIsMacOSForConfig(): void;
 };
@@ -193,8 +195,6 @@ export type DocumentWithViewMethods = {
 
   setAuthor(author: string): void;
 
-  getExpandedPart(path: string): { path: string; content: ArrayBuffer } | null;
-  listExpandedParts(): Array<{ path: string; sha: string }>;
   getRedlineTextRange(id: number): RectArray[] | undefined;
   getCursor(): string | undefined;
 

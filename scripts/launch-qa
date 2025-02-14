@@ -6,7 +6,7 @@ BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")"/.. &>/dev/null && pwd)
 EXTENSION_PATH="$BASE_DIR/chrome_lok_cxx_debug"
 DEV_PID=""
 CHROME_PID=""
-PROFILE_PATH="$(mktemp -d)"
+PROFILE_PATH="$BASE_DIR/.qa-env-profile"
 
 cleanup() {
     if [ -n "$CHROME_PID" ]; then
@@ -98,6 +98,7 @@ fi
 mkdir -p "$PROFILE_PATH"
 
 "$CHROME_PATH" \
+    --user-data-dir="$PROFILE_PATH" \
     --load-extension="$EXTENSION_PATH" \
     --no-first-run \
     --no-default-browser-check \

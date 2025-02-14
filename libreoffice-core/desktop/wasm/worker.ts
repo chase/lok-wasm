@@ -149,10 +149,11 @@ const globalHandler: GlobalMethod = {
 
   loadFromExpandedParts: function (
     name: string,
-    partList: [path: string, url: string][],
+    partList: [path: string, part: ArrayBuffer][],
     readOnly: boolean,
+    loadInPlace: boolean,
   ) {
-    const doc = new lok.Document(`file:///${name}?expanded`, partList, readOnly);
+    const doc = new lok.Document(`file:///${name}?expanded`, partList, readOnly, loadInPlace);
     const ref = doc.ref();
 
     if (!doc.valid()) {
@@ -174,6 +175,14 @@ const globalHandler: GlobalMethod = {
   setIsMacOSForConfig: function (): void {
     lok.setIsMacOSForConfig();
   },
+
+  convert: function (
+    file: ArrayBuffer,
+    format: "docx" | "doc",
+    outputFormat: "docx" | "pdf" | "rtf"
+  ): ArrayBuffer {
+    return lok.convert(file, format, outputFormat);
+  }
 };
 
 const handler: DocumentMethodHandler<Document> = {

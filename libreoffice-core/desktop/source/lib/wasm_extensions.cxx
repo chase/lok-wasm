@@ -9,7 +9,6 @@
 #include <comphelper/diagnose_ex.hxx>
 #include <comphelper/processfactory.hxx>
 #include <comphelper/seqstream.hxx>
-#include <comphelper/vecstream.hxx>
 #include <comphelper/storagehelper.hxx>
 #include <cppuhelper/exc_hlp.hxx>
 #include <lib/init.hxx>
@@ -34,6 +33,13 @@
 #include <rtl/ustring.hxx>
 #include <rtl/string.hxx>
 #include <svx/svxids.hrc>
+#include <tools/stream.hxx>
+#include <unotools/streamwrap.hxx>
+#include <com/sun/star/beans/PropertyValue.hpp>
+#include <com/sun/star/frame/XStorable.hpp>
+#include <com/sun/star/lang/XComponent.hpp>
+#include <com/sun/star/util/XCloseable.hpp>
+#include <comphelper/propertyvalue.hxx>
 
 namespace desktop
 {
@@ -192,7 +198,6 @@ void WasmDocumentExtension::save()
         return;
     }
 
-    // TODO: investigate why we used this?
     viewFrame->GetBindings().ExecuteSynchron(SID_SAVEDOC);
     // TODO: implement
 }
@@ -213,12 +218,122 @@ std::optional<std::string> WasmDocumentExtension::getCursor(int viewId)
     return {};
 }
 
-_LibreOfficeKitDocument* WasmOfficeExtension::loadDocumentFromExpanded(std::string name,
-                                                                       const int documentId,
-                                                                       const bool readOnly,
-                                                                       const bool loadInPlace)
+_LibreOfficeKitDocument* WasmOfficeExtension::loadDocument(std::string url, const int documentId,
+                                                           const bool readOnly,
+                                                           const bool loadInPlace)
 {
+    using namespace com::sun::star;
+    using namespace utl;
+    uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+    uno::Reference<frame::XDesktop2> xComponentLoader = frame::Desktop::create(xContext);
+
+    uno::Sequence<css::beans::PropertyValue> aFilterOptions{
+        comphelper::makePropertyValue(MediaDescriptor::PROP_FILTERNAME,
+                                      OUString("MS Word 2007 XML")),
+        comphelper::makePropertyValue(MediaDescriptor::PROP_MACROEXECUTIONMODE,
+                                      document::MacroExecMode::NEVER_EXECUTE),
+        comphelper::makePropertyValue(MediaDescriptor::PROP_ASTEMPLATE, false),
+        comphelper::makePropertyValue(MediaDescriptor::PROP_SILENT, true),
+        comphelper::makePropertyValue(MediaDescriptor::PROP_READONLY, readOnly),
+        // disables comments which are still enabled with just read-only
+        comphelper::makePropertyValue(MediaDescriptor::PROP_VIEWONLY, readOnly)
+    };
+
+    try
+    {
+        Application::SetDialogCancelMode(DialogCancelMode::LOKSilent);
+        SfxViewShell::SetCurrentDocId(ViewShellDocId(documentId));
+        uno::Reference<lang::XComponent> xComponent(xComponentLoader->loadComponentFromURL(
+            OStringToOUString(url, RTL_TEXTENCODING_UTF8),
+            loadInPlace ? u"_default"_ustr : u"_blank"_ustr, 0, aFilterOptions));
+        if (!xComponent.is())
+        {
+            SAL_WARN("lok", "Failed to load document");
+            return nullptr;
+        }
+
+        return new LibLODocument_Impl(xComponent, documentId);
+    }
+    catch (const uno::Exception& /*exception*/)
+    {
+        uno::Any exAny(getCaughtException());
+        SAL_WARN("lok", "Failed to load document: " + exceptionToString(exAny));
+    }
+
     return nullptr;
+}
+
+bool WasmOfficeExtension::convert(std::vector<int8_t> data, std::string format,
+                                  std::string outputFormat, SvMemoryStream& aOutStream)
+{
+    using namespace com::sun::star;
+    uno::Reference<uno::XComponentContext> xContext = comphelper::getProcessComponentContext();
+    uno::Reference<frame::XDesktop2> xComponentLoader = frame::Desktop::create(xContext);
+    OUString sFormat = OUString::createFromAscii(format.c_str());
+    OUString sOutputFormat = OUString::createFromAscii(outputFormat.c_str());
+    SvMemoryStream aInStream(data.data(), data.size(), StreamMode::READ);
+    uno::Reference<io::XInputStream> xIn = new utl::OSeekableInputStreamWrapper(aInStream);
+    uno::Reference<io::XOutputStream> xOut = new utl::OOutputStreamWrapper(aOutStream);
+
+    uno::Sequence<css::beans::PropertyValue> aInputFilterOptions{
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_FILTERNAME, sFormat),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_MACROEXECUTIONMODE,
+                                      document::MacroExecMode::NEVER_EXECUTE),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_ASTEMPLATE, false),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_SILENT, true),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_READONLY, true),
+        // disables comments which are still enabled with just read-only
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_VIEWONLY, true),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_HIDDEN, true),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_INPUTSTREAM, xIn)
+    };
+
+    uno::Sequence<css::beans::PropertyValue> aOutputFilterOptions{
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_FILTERNAME, sOutputFormat),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_MACROEXECUTIONMODE,
+                                      document::MacroExecMode::NEVER_EXECUTE),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_ASTEMPLATE, false),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_SILENT, true),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_READONLY, true),
+        // disables comments which are still enabled with just read-only
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_VIEWONLY, true),
+        comphelper::makePropertyValue(utl::MediaDescriptor::PROP_OUTPUTSTREAM, xOut)
+    };
+
+    static constexpr OUString sStreamURL = u"private:stream"_ustr;
+    uno::Reference<frame::XStorable> xStorable;
+    try
+    {
+        xStorable.set(xComponentLoader->loadComponentFromURL(sStreamURL, u"_blank"_ustr, 0,
+                                                             aInputFilterOptions),
+                      uno::UNO_QUERY);
+        if (!xStorable.is())
+        {
+            SAL_WARN("lok", "Failed to load document");
+            return false;
+        }
+    }
+    catch (const uno::Exception& /*exception*/)
+    {
+        SAL_WARN("lok", "Failed to load document");
+        return false;
+    }
+
+    bool success = false;
+    try
+    {
+        xStorable->storeToURL(sStreamURL, aOutputFilterOptions);
+        success = true;
+    }
+    catch (const uno::Exception& /*exception*/)
+    {
+        SAL_WARN("lok", "Failed to store document");
+    }
+
+    uno::Reference<util::XCloseable> xCloseable(xStorable, uno::UNO_QUERY);
+    xCloseable->close(false);
+
+    return success;
 }
 
 }

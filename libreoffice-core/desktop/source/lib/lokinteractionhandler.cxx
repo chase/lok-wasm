@@ -431,17 +431,19 @@ sal_Bool SAL_CALL LOKInteractionHandler::handleInteractionRequest(
     if (handlePasswordRequest(rContinuations, request))
         return true;
 
-    if (handleFilterOptionsRequest(xRequest))
-        return true;
+    // MACRO: {
+    // if (handleFilterOptionsRequest(xRequest))
+    //     return true;
 
-    if (handleMacroConfirmationRequest(xRequest))
-        return true;
+    // if (handleMacroConfirmationRequest(xRequest))
+    //     return true;
 
-    if (handlePackageReparationRequest(xRequest))
-        return true;
+    // if (handlePackageReparationRequest(xRequest))
+    //     return true;
 
-    if (handleLoadReadOnlyRequest(xRequest))
-        return true;
+    // if (handleLoadReadOnlyRequest(xRequest))
+    //     return true;
+    // MACRO: }
 
     // TODO: perform more interactions 'for real' like the above
     selectApproved(rContinuations);

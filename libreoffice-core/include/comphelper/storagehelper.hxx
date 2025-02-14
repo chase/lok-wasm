@@ -200,8 +200,8 @@ public:
     GetODFVersionFromStorage(const css::uno::Reference<css::embed::XStorage>& xStorage);
 
     // MACRO: {
-    static void TransferToExpandedStorage( std::u16string_view aPath, std::unordered_map<std::string, std::string>&& contents);
-    static std::unordered_map<std::string, std::string> TransferFromExpandedStorage( std::u16string_view aPath );
+    static void TransferToExpandedStorage( OUString aPath, std::unordered_map<std::string, std::vector<int8_t>>&& contents);
+    static std::unordered_map<std::string, std::vector<int8_t>> TransferFromExpandedStorage( OUString aPath );
     // MACRO: }
 };
 

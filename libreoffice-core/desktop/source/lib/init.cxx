@@ -858,23 +858,6 @@ OUString lcl_getCurrentDocumentMimeType(const LibLODocument_Impl* pDocument)
     return pFilter->GetMimeType();
 }
 
-// Gets an undo manager to enter and exit undo context. Needed by ToggleOrientation
-css::uno::Reference< css::document::XUndoManager > getUndoManager( const css::uno::Reference< css::frame::XFrame >& rxFrame )
-{
-    const css::uno::Reference< css::frame::XController >& xController = rxFrame->getController();
-    if ( xController.is() )
-    {
-        const css::uno::Reference< css::frame::XModel >& xModel = xController->getModel();
-        if ( xModel.is() )
-        {
-            const css::uno::Reference< css::document::XUndoManagerSupplier > xSuppUndo( xModel, css::uno::UNO_QUERY_THROW );
-            return css::uno::Reference< css::document::XUndoManager >( xSuppUndo->getUndoManager(), css::uno::UNO_SET_THROW );
-        }
-    }
-
-    return css::uno::Reference< css::document::XUndoManager > ();
-}
-
 // Adjusts page margins for Writer doc. Needed by ToggleOrientation
 void ExecuteMarginLRChange(
     const tools::Long nPageLeftMargin,
@@ -1027,101 +1010,6 @@ void toggleOrientation(
     setPageSize(pThis, pPageSizeItem->GetSize().Height(), pPageSizeItem->GetSize().Width());
 }
 // MACRO: }
-
-// Main function which toggles page orientation of the Writer doc. Needed by ToggleOrientation
-void ExecuteOrientationChange()
-{
-    SfxViewFrame* pViewFrm = SfxViewFrame::Current();
-    if (!pViewFrm)
-        return;
-
-    std::unique_ptr<SvxPageItem> pPageItem(new SvxPageItem(SID_ATTR_PAGE));
-
-    // 1mm in twips rounded
-    // This should be in sync with MINBODY in sw/source/uibase/sidebar/PageMarginControl.hxx
-    constexpr tools::Long MINBODY = o3tl::toTwips(1, o3tl::Length::mm);
-
-    css::uno::Reference< css::document::XUndoManager > mxUndoManager(
-                getUndoManager( pViewFrm->GetFrame().GetFrameInterface() ) );
-
-    if ( mxUndoManager.is() )
-        mxUndoManager->enterUndoContext( "" );
-
-    SfxPoolItemHolder aResult;
-    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_SIZE, aResult);
-    std::unique_ptr<SvxSizeItem> pPageSizeItem(static_cast<const SvxSizeItem*>(aResult.getItem())->Clone());
-
-    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_LRSPACE, aResult);
-    std::unique_ptr<SvxLongLRSpaceItem> pPageLRMarginItem(static_cast<const SvxLongLRSpaceItem*>(aResult.getItem())->Clone());
-
-    pViewFrm->GetBindings().GetDispatcher()->QueryState(SID_ATTR_PAGE_ULSPACE, aResult);
-    std::unique_ptr<SvxLongULSpaceItem> pPageULMarginItem(static_cast<const SvxLongULSpaceItem*>(aResult.getItem())->Clone());
-
-    {
-        bool bIsLandscape = pPageSizeItem->GetSize().Width() > pPageSizeItem->GetSize().Height();
-
-        // toggle page orientation
-        pPageItem->SetLandscape(!bIsLandscape);
-
-
-        // swap the width and height of the page size
-        const tools::Long nRotatedWidth = pPageSizeItem->GetSize().Height();
-        const tools::Long nRotatedHeight = pPageSizeItem->GetSize().Width();
-        pPageSizeItem->SetSize(Size(nRotatedWidth, nRotatedHeight));
-
-
-        // apply changed attributes
-        if (SfxViewShell::Current())
-        {
-            SfxViewShell::Current()->GetDispatcher()->ExecuteList(SID_ATTR_PAGE_SIZE,
-                SfxCallMode::RECORD, { pPageSizeItem.get(), pPageItem.get() });
-        }
-    }
-
-
-    // check, if margin values still fit to the changed page size.
-    // if not, adjust margin values
-    {
-        const tools::Long nML = pPageLRMarginItem->GetLeft();
-        const tools::Long nMR = pPageLRMarginItem->GetRight();
-        const tools::Long nTmpPW = nML + nMR + MINBODY;
-
-        const tools::Long nPW  = pPageSizeItem->GetSize().Width();
-
-        if ( nTmpPW > nPW )
-        {
-            if ( nML <= nMR )
-            {
-                ExecuteMarginLRChange( pPageLRMarginItem->GetLeft(), nMR - (nTmpPW - nPW ), pPageLRMarginItem.get() );
-            }
-            else
-            {
-                ExecuteMarginLRChange( nML - (nTmpPW - nPW ), pPageLRMarginItem->GetRight(), pPageLRMarginItem.get() );
-            }
-        }
-
-        const tools::Long nMT = pPageULMarginItem->GetUpper();
-        const tools::Long nMB = pPageULMarginItem->GetLower();
-        const tools::Long nTmpPH = nMT + nMB + MINBODY;
-
-        const tools::Long nPH  = pPageSizeItem->GetSize().Height();
-
-        if ( nTmpPH > nPH )
-        {
-            if ( nMT <= nMB )
-            {
-                ExecuteMarginULChange( pPageULMarginItem->GetUpper(), nMB - ( nTmpPH - nPH ), pPageULMarginItem.get() );
-            }
-            else
-            {
-                ExecuteMarginULChange( nMT - ( nTmpPH - nPH ), pPageULMarginItem->GetLower(), pPageULMarginItem.get() );
-            }
-        }
-    }
-
-    if ( mxUndoManager.is() )
-        mxUndoManager->leaveUndoContext();
-}
 
 void hideSidebar()
 {
@@ -2140,7 +2028,7 @@ void CallbackFlushHandler::queue(const int type, CallbackData& aCallbackData)
     scheduleFlush();
 }
 
-bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& aCallbackData)
+bool CallbackFlushHandler::processInvalidateTilesEvent(int /* type */, CallbackData& aCallbackData)
 {
     RectangleAndPart rcNew = aCallbackData.getRectangleAndPart();
     if (rcNew.isEmpty())
@@ -2179,8 +2067,8 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
 
     if (rcNew.isInfinite())
     {
-        SAL_INFO("lok", "Have Empty [" << type << "]: [" << aCallbackData.getPayload()
-                                       << "] so removing all with part " << rcNew.m_nPart << ".");
+        // SAL_INFO("lok", "Have Empty [" << type << "]: [" << aCallbackData.getPayload()
+        //                                << "] so removing all with part " << rcNew.m_nPart << ".");
         removeAll(LOK_CALLBACK_INVALIDATE_TILES, [&rcNew](const CallbackData& elemData) {
             // Remove exiting if new is all-encompassing, or if of the same part.
             return ((rcNew.m_nPart == -1 || rcNew.m_nPart == elemData.getRectangleAndPart().m_nPart)
@@ -2262,7 +2150,7 @@ bool CallbackFlushHandler::processInvalidateTilesEvent(int type, CallbackData& a
     return false;
 }
 
-bool CallbackFlushHandler::processWindowEvent(int type, CallbackData& aCallbackData)
+bool CallbackFlushHandler::processWindowEvent(int /* type */, CallbackData& aCallbackData)
 {
     const OString& payload = aCallbackData.getPayload();
 
@@ -2310,9 +2198,6 @@ bool CallbackFlushHandler::processWindowEvent(int type, CallbackData& aCallbackD
             // we found a invalidate-all window callback
             if (invAllExist)
             {
-                SAL_INFO("lok.dialog", "Skipping queue ["
-                                           << type << "]: [" << payload
-                                           << "] since whole window needs to be invalidated.");
                 return true;
             }
 
@@ -2340,8 +2225,6 @@ bool CallbackFlushHandler::processWindowEvent(int type, CallbackData& aCallbackD
                     {
                         if (aNewRect == aOldRect)
                         {
-                            SAL_INFO("lok.dialog", "Duplicate rect [" << aNewRect.toString()
-                                                                      << "]. Skipping new.");
                             // We have a rectangle in the queue already that makes the current Callback useless.
                             currentIsRedundant = true;
                             return false;
@@ -2349,17 +2232,11 @@ bool CallbackFlushHandler::processWindowEvent(int type, CallbackData& aCallbackD
                         // new one engulfs the old one?
                         else if (aNewRect.Contains(aOldRect))
                         {
-                            SAL_INFO("lok.dialog",
-                                     "New rect [" << aNewRect.toString() << "] engulfs old ["
-                                                  << aOldRect.toString() << "]. Replacing old.");
                             return true;
                         }
                         // old one engulfs the new one?
                         else if (aOldRect.Contains(aNewRect))
                         {
-                            SAL_INFO("lok.dialog",
-                                     "Old rect [" << aOldRect.toString() << "] engulfs new ["
-                                                  << aNewRect.toString() << "]. Skipping new.");
                             // We have a rectangle in the queue already that makes the current Callback useless.
                             currentIsRedundant = true;
                             return false;
@@ -2367,13 +2244,7 @@ bool CallbackFlushHandler::processWindowEvent(int type, CallbackData& aCallbackD
                         else
                         {
                             // Overlapping rects.
-                            const tools::Rectangle aPreMergeRect = aNewRect;
                             aNewRect.Union(aOldRect);
-                            SAL_INFO("lok.dialog", "Merging rects ["
-                                                       << aPreMergeRect.toString() << "] & ["
-                                                       << aOldRect.toString() << "] = ["
-                                                       << aNewRect.toString()
-                                                       << "]. Replacing old.");
                             return true;
                         }
                     }
@@ -2905,8 +2776,10 @@ static LibreOfficeKitDocument* lo_documentLoad(LibreOfficeKit* pThis, const char
     return lo_documentLoadWithOptions(pThis, pURL, nullptr);
 }
 
-static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* pThis, const char* pURL, const char* pOptions)
+// MACRO: {
+static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* /* pThis */, const char* /* pURL */, const char* /* pOptions */)
 {
+#if 0
     comphelper::ProfileZone aZone("lo_documentLoadWithOptions");
 
     SolarMutexGuard aGuard;
@@ -3196,8 +3069,11 @@ static LibreOfficeKitDocument* lo_documentLoadWithOptions(LibreOfficeKit* pThis,
         TOOLS_INFO_EXCEPTION("lok", "Document can't be loaded");
     }
 
+#endif
+
     return nullptr;
 }
+// MACRO: }
 
 static int lo_runMacro(LibreOfficeKit* pThis, const char *pURL)
 {
@@ -4416,16 +4292,6 @@ inline static ITiledRenderable* getDocumentPointer(LibreOfficeKitDocument* pThis
         return nullptr;
     }
     return pDoc;
-}
-
-inline static void writeInfoLog(const int nPart, const int nMode,
-    const int nTileWidth, const int nTileHeight, const int nTilePosX, const int nTilePosY,
-    const int nCanvasWidth, const int nCanvasHeight)
-{
-    SAL_INFO( "lok.tiledrendering", "paintPartTile: painting @ " << nPart << " : " << nMode << " ["
-               << nTileWidth << "x" << nTileHeight << "]@("
-               << nTilePosX << ", " << nTilePosY << ") to ["
-               << nCanvasWidth << "x" << nCanvasHeight << "]px" );
 }
 
 inline static int getFirstViewIdAsFallback(LibreOfficeKitDocument* pThis)
@@ -8155,6 +8021,8 @@ static bool initialize_uno(const OUString& aAppProgramURL)
     return true;
 }
 
+// MACRO: {
+#if 0
 // pre-unipoll version.
 static void lo_startmain(void*)
 {
@@ -8169,6 +8037,8 @@ static void lo_startmain(void*)
 
     Application::ReleaseSolarMutex();
 }
+#endif
+// MACRO: }
 
 // unipoll version.
 static void lo_runLoop(LibreOfficeKit* /*pThis*/,
@@ -8375,8 +8245,14 @@ static void preloadData()
     SAL_WARN("lok", "Preload language");
     // force load language singleton
     SvtLanguageTable::HasLanguageType(LANGUAGE_SYSTEM);
-    (void)LanguageTag::isValidBcp47(u"en-US"_ustr, nullptr);
-
+    // MACRO: {
+    auto aLanguage = u"en-US"_ustr;
+    (void)LanguageTag::isValidBcp47(aLanguage, nullptr);
+    SfxLokHelper::setLoadLanguage(aLanguage);
+    SfxLokHelper::setDefaultLanguage(aLanguage);
+    comphelper::LibreOfficeKit::setLanguageTag(LanguageTag(aLanguage));
+    comphelper::LibreOfficeKit::setLocale(LanguageTag(aLanguage));
+    // MACRO: }
 
     SAL_WARN("lok", "Preload fonts???");
     // Initialize fonts.

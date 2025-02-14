@@ -17,3 +17,4 @@ libreoffice-core/debug
 mutagen.yml.lock
 /build
 .aider*
+.qa-env-profile

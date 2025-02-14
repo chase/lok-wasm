@@ -74,18 +74,18 @@ namespace comphelper {
 
 // MACRO: {
 // Global map to store expanded storage contents
-static std::unordered_map<OUString, std::unordered_map<std::string, std::string>> gExpandedStorages;
+static std::unordered_map<OUString, std::unordered_map<std::string, std::vector<int8_t>>> gExpandedStorages;
 
-void OStorageHelper::TransferToExpandedStorage(std::u16string_view aPath, std::unordered_map<std::string, std::string>&& contents)
+void OStorageHelper::TransferToExpandedStorage(OUString aPath, std::unordered_map<std::string, std::vector<int8_t>>&& contents)
 {
     // Store the contents in the global map using the path as key
-    gExpandedStorages[OUString(aPath)] = std::move(contents);
+    gExpandedStorages[aPath] = std::move(contents);
 }
 
-std::unordered_map<std::string, std::string> OStorageHelper::TransferFromExpandedStorage(std::u16string_view aPath)
+std::unordered_map<std::string, std::vector<int8_t>> OStorageHelper::TransferFromExpandedStorage(OUString aPath)
 {
     // Look up the contents in the global map
-    auto it = gExpandedStorages.find(OUString(aPath));
+    auto it = gExpandedStorages.find(aPath);
     if (it != gExpandedStorages.end())
     {
         return it->second;

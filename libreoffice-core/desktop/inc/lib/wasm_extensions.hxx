@@ -8,6 +8,7 @@
 #include <desktop/dllapi.h>
 #include <vector>
 #include <com/sun/star/lang/XComponent.hpp>
+#include <tools/stream.hxx>
 
 // This makes direct extensions to lib/init.cxx much easier to expose in main_wasm.cxx
 
@@ -101,8 +102,10 @@ struct DESKTOP_DLLPUBLIC WasmDocumentExtension : public _LibreOfficeKitDocument
 
 struct DESKTOP_DLLPUBLIC WasmOfficeExtension : public _LibreOfficeKit
 {
-    _LibreOfficeKitDocument* loadDocumentFromExpanded(std::string name, const int documentId = 0,
-                                                      const bool readOnly = false,
-                                                      const bool loadInPlace = true);
+    _LibreOfficeKitDocument* loadDocument(std::string url, const int documentId,
+                                          const bool readOnly, const bool loadInPlace);
+
+    bool convert(std::vector<int8_t> data, std::string format, std::string outputFormat,
+                 SvMemoryStream& aOutStream);
 };
 }

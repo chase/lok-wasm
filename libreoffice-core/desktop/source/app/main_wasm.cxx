@@ -47,6 +47,7 @@
 #include <cppuhelper/implbase.hxx>
 #include <rtl/ref.hxx>
 #include <tools/json_writer.hxx>
+#include <comphelper/storagehelper.hxx>
 
 namespace
 {
@@ -81,7 +82,34 @@ lok::Office* instance()
 
 //static
 void preload() { instance(); }
-void yield() { if (GetpApp()) GetpApp()->Yield(); }
+void yield()
+{
+    if (GetpApp())
+        GetpApp()->Yield();
+}
+
+val svMemoryStreamToVal(SvMemoryStream& stream)
+{
+    const void* pData = stream.GetData();
+    sal_uInt64 nSize = stream.GetSize();
+    uintptr_t nStart = reinterpret_cast<uintptr_t>(pData);
+    return val::module_property("HEAPU8").call<val>("slice", nStart, nStart + nSize)["buffer"];
+}
+
+val convert(val data, std::string format, std::string outputFormat)
+{
+    desktop::WasmOfficeExtension* officeExt
+        = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
+    std::vector<int8_t> vecData(data["byteLength"].as<size_t>());
+    val::global("Uint8Array")
+        .new_(data)
+        .call<void>("copyTo", val(typed_memory_view(vecData.size(), vecData.data())));
+
+    SvMemoryStream aOutStream;
+    if (officeExt->convert(vecData, format, outputFormat, aOutStream))
+        return svMemoryStreamToVal(aOutStream);
+    return val::undefined();
+}
 
 static constexpr std::string_view TEXT_PLAIN = "text/plain";
 
@@ -361,13 +389,35 @@ public:
         }
     }
 
-    DocumentClient(std::string name, val partList, std::optional<bool> readOnly)
+    DocumentClient(std::string name, val parts, std::optional<bool> readOnly,
+                   std::optional<bool> loadInPlace)
         : ref_(++document_id_counter)
     {
         desktop::WasmOfficeExtension* officeExt
             = static_cast<desktop::WasmOfficeExtension*>(instance()->get());
-        auto doc
-            = officeExt->documentExpandedLoad(expandedDoc, name, ref_, readOnly.value_or(false));
+
+        std::unordered_map<std::string, std::vector<int8_t>> partMap;
+        const int length = parts["length"].as<int>();
+        for (int i = 0; i < length; i++)
+        {
+            val part = parts[i];
+            std::string path = part[0].as<std::string>();
+            val arrayBuffer = part[1];
+            std::vector<int8_t> data;
+            val uint8Array = val::global("Uint8Array").new_(arrayBuffer);
+            const int byteLength = uint8Array["byteLength"].as<int>();
+            data.resize(byteLength);
+            val memoryView = val::global("Uint8Array")
+                                 .new_(val::module_property("HEAP8").call<val>(
+                                     "subarray", reinterpret_cast<uintptr_t>(data.data()),
+                                     reinterpret_cast<uintptr_t>(data.data() + byteLength)));
+            memoryView.call<void>("set", uint8Array);
+            partMap[path] = std::move(data);
+        }
+        comphelper::OStorageHelper::TransferToExpandedStorage(OUString::fromUtf8(name), std::move(partMap));
+
+        auto doc = officeExt->loadDocument(name, ref_, readOnly.value_or(false),
+                                           loadInPlace.value_or(false));
         lok::Document* aDoc = new lok::Document(doc);
         doc_ = aDoc;
 
@@ -390,6 +440,7 @@ public:
             SAL_WARN("wasm", "Failed to setup undo listener");
         }
     }
+
     ~DocumentClient()
     {
         using namespace css::uno;
@@ -414,10 +465,9 @@ public:
                             filterOptions.has_value() ? filterOptions->c_str() : nullptr);
     }
 
-    val save()
+    void save()
     {
         ext()->save();
-        return {};
     }
 
     int getParts() { return doc_->getParts(); }
@@ -1031,6 +1081,7 @@ EMSCRIPTEN_BINDINGS(lok)
     function("preload", &preload);
     function("freeSafeString", &freeSafeString);
     function("yield", &yield);
+    function("convert", &convert);
 
     class_<wasm::ITextRanges>("TextRanges")
         .smart_ptr<std::shared_ptr<wasm::ITextRanges>>("TextRanges")
@@ -1047,7 +1098,7 @@ EMSCRIPTEN_BINDINGS(lok)
 
     class_<DocumentClient>("Document")
         .constructor<std::string>()
-        .constructor<std::string, val, std::optional<bool>>()
+        .constructor<std::string, val, std::optional<bool>, std::optional<bool>>()
         .function("valid", &DocumentClient::valid)
         .function("save", &DocumentClient::save)
         .function("saveAs", &DocumentClient::saveAs)

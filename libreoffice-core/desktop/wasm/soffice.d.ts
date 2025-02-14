@@ -157,7 +157,7 @@ export type ITextRanges = {
 /** Embind document class, see main_wasm.cxx */
 export declare class Document {
   constructor(path: string): void;
-  constructor(path: string, partList: [path: string, url: string][], readOnly: boolean): void;
+  constructor(path: string, partList: [path: string, part: ArrayBuffer][], readOnly: boolean, loadInPlace: boolean): void;
   delete(): void;
 
   valid(): boolean;
@@ -298,6 +298,9 @@ export interface Module extends EmscriptenModule {
   readUnlink(path: string): Uint8Array;
 
   Document: typeof Document;
+
+  /** converts the document to the provided `format` and returns the converted document as an ArrayBuffer */
+  convert(file: ArrayBuffer, format: "docx" | "doc", outputFormat: "docx" | "pdf" | "rtf"): ArrayBuffer;
 
   /** preloads LOK */
   preload(): void;
