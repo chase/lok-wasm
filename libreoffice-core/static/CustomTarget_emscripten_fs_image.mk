@@ -1472,8 +1472,7 @@ gb_emscripten_fs_image_files += \
 
 endif # !ENABLE_WASM_STRIP_CHART
 
-$(foreach theme,$(WITH_THEMES), \
-    $(eval gb_emscripten_fs_image_files += $(INSTROOT)/$(LIBO_SHARE_FOLDER)/config/images_$(theme).zip))
+# MACRO: No images
 
 # MACRO: Split out fonts to a separate build {
 gb_emscripten_fs_font_image_autoinstall :=

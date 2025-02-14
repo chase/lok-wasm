@@ -3,9 +3,9 @@ arch=$(uname -m)
 emsdk_version=3.1.73
 
 if [[ "$arch" == "arm64" || "$arch" == "aarch64" ]]; then
-  docker build -t lok-wasm:$emsdk_version --build-arg ARCH=-arm64 --build-arg VER=$emsdk_version .
+  docker build -q -t lok-wasm:$emsdk_version --build-arg ARCH=-arm64 --build-arg VER=$emsdk_version .
 else
-  docker build -t lok-wasm:$emsdk_version --build-arg VER=$emsdk_version .
+  docker build -q -t lok-wasm:$emsdk_version --build-arg VER=$emsdk_version .
 fi
 mkdir -p .cache .npm
 
@@ -22,4 +22,4 @@ exec docker run \
   -u $(id -u):$(id -g) \
   -w / \
   lok-wasm:$emsdk_version \
-  bash
+  bash "$@"

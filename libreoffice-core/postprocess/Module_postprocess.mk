@@ -17,12 +17,7 @@ $(eval $(call gb_Module_add_targets,postprocess,\
 	CustomTarget_registry \
 	Rdb_services \
 ))
-ifeq ($(gb_Side),host)
-$(eval $(call gb_Module_add_targets,postprocess,\
-	CustomTarget_images \
-	Package_images \
-))
-endif
+# MACRO: No images
 
 $(eval $(call gb_Module_add_l10n_targets,postprocess,\
 	Package_registry \

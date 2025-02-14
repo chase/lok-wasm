@@ -34,6 +34,30 @@
                     ]
                 }
             },
+            "osx": {
+                "problemMatcher": [
+                    {
+                        "base": "$gcc",
+                        "fileLocation": "relative",
+                        "pattern": {
+                            "regexp": "^/([^:]+):(\\d+):(\\d+):\\s+([^:]+):\\s+(.*)$",
+                            "file": 1,
+                            "line": 2,
+                            "column": 3,
+                            "message": 5,
+                            "severity": 4
+                        }
+                    }
+                ],
+                "options": {
+                    "shell": {
+                        "executable": "${workspaceFolder}/in-docker",
+                        "args": [
+                            "-c"
+                        ]
+                    }
+                }
+            }
         }
     ]
 }

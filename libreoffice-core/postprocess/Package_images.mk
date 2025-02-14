@@ -9,8 +9,6 @@
 
 $(eval $(call gb_Package_Package,postprocess_images,$(call gb_CustomTarget_get_workdir,postprocess/images)))
 
-$(eval $(call gb_Package_add_files,postprocess_images,$(LIBO_SHARE_FOLDER)/config,\
-	$(foreach theme,$(WITH_THEMES),images_$(theme).zip) \
-))
+# MACRO: No images
 
 # vim: set noet sw=4 ts=4:
