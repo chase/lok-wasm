@@ -24,7 +24,7 @@ ifneq ($(filter arm64 aarch64,$(shell uname -m)),)
 gb_UnoApiTarget_UNOIDLWRITEDEPS :=
 gb_UnoApiTarget_UNOIDLWRITECOMMAND := ([ ! -e $(WORKDIR)/UnoApiTarget/offapi.rdb ] && tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot-for-build.tgz -C $(WORKDIR) && \
 tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot.tgz -C $(WORKDIR) && \
-cp -r $(SRCDIR)/headertarget_updates $(WORKDIR)/UnoApiTarget/offapi && \
+cp -rf $(SRCDIR)/headertarget_updates/* $(WORKDIR)/UnoApiHeadersTarget/offapi && \
 touch $(WORKDIR)/Executable/unoidl-write.run) || true
 gb_UnoApiTarget_UNOIDLCHECKDEPS :=
 gb_UnoApiTarget_UNOIDLCHECKCOMMAND := ([ ! -e $(WORKDIR)/UnoApiTarget/offapi.rdb ] && touch $(WORKDIR)/Executable/unoidl-check.run) || true
@@ -161,7 +161,7 @@ define gb_UnoApiHeadersTarget__command
 	([ ! -d $(WORKDIR)/UnoApiHeadersTarget/offapi ] && \
 	tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot-for-build.tgz -C $(WORKDIR) && \
 	tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot.tgz -C $(WORKDIR) && \
-	cp -r $(SRCDIR)/headertarget_updates $(WORKDIR)/UnoApiTarget/offapi && \
+	cp -rf $(SRCDIR)/headertarget_updates/* $(WORKDIR)/UnoApiHeadersTarget/offapi && \
 	touch $(1)) || true;
 
 endef
