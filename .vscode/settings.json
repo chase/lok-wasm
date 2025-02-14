@@ -1,0 +1,30 @@
+{
+    "search.exclude": {
+        "${workspaceFolder}/libreoffice-core/compile_commands.json": true,
+        "${workspaceFolder}/libreoffice-core/dictionaries/": true,
+        "${workspaceFolder}/libreoffice-core/helpcontent2/": true,
+        "${workspaceFolder}/libreoffice-core/icon-themes/": true,
+        "${workspaceFolder}/libreoffice-core/translations/": true
+    },
+    "files.watcherExclude": {
+        "${workspaceFolder}/libreoffice-core/dictionaries/": true,
+        "${workspaceFolder}/libreoffice-core/helpcontent2/": true,
+        "${workspaceFolder}/libreoffice-core/icon-themes/": true,
+        "${workspaceFolder}/libreoffice-core/translations/": true
+    },
+    "C_Cpp.default.compileCommands": [
+        "${workspaceFolder}/libreoffice-core/compile_commands.json",
+    ],
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/libreoffice-core/workdir/UnpackedTarball/**"
+    ],
+    "C_Cpp.default.browse.limitSymbolsToIncludedHeaders": true,
+    "C_Cpp.default.cppStandard": "c++20",
+    "files.associations": {
+        "*.hdl": "cpp",
+        "*.ipp": "cpp",
+        "*.tcc": "cpp",
+        "*.patch.[0-9]": "diff",
+        "fstream": "cpp"
+    }
+}
