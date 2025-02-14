@@ -1157,7 +1157,12 @@ bool SfxObjectShell::SaveTo_Impl
 {
     SAL_INFO( "sfx.doc", "saving \"" << rMedium.GetName() << "\"" );
 
-    UpdateDocInfoForSave();
+    // MACRO: We don't need to update the doc info for expanded storage {
+    if (!rMedium.GetName().endsWith("?expanded"))
+    {
+        UpdateDocInfoForSave();
+    }
+    // MACRO: }
 
     ModifyBlocker_Impl aMod(this);
     // tdf#41063, tdf#135244: prevent jumping to cursor at any temporary modification
