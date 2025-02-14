@@ -1,0 +1,20 @@
+#!/bin/bash
+
+BASE_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE:-$0}")"/.. &>/dev/null && pwd)
+UNOAPI_DIR="$BASE_DIR/libreoffice-core/workdir/UnoApiHeadersTarget"
+UPDATE_DIR="$BASE_DIR/libreoffice-core/headertarget_updates"
+UPDATES=(
+    "com/sun/star/document/XGraphicStorageHandler"
+)
+APIS=(
+    "comprehensive"
+    "normal"
+)
+
+for UPDATE in "${UPDATES[@]}"; do
+    for API in "${APIS[@]}"; do
+        mkdir -p "$(dirname "$UPDATE_DIR/$API/$UPDATE")"
+        cp "$UNOAPI_DIR/offapi/$API/$UPDATE.hdl" "$UPDATE_DIR/$API/$UPDATE.hdl"
+        cp "$UNOAPI_DIR/offapi/$API/$UPDATE.hpp" "$UPDATE_DIR/$API/$UPDATE.hpp"
+    done
+done

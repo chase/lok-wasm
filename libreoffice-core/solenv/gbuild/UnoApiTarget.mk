@@ -22,8 +22,9 @@
 # MACRO: arm64 segfault workaround {
 ifneq ($(filter arm64 aarch64,$(shell uname -m)),)
 gb_UnoApiTarget_UNOIDLWRITEDEPS :=
-gb_UnoApiTarget_UNOIDLWRITECOMMAND := ([ ! -e $(WORKDIR)/UnoApiTarget/offapi.rdb ] && tar --skip-old-files -xzf /libreoffice-core/uno-snapshot-for-build.tgz -C $(WORKDIR) && \
-tar --skip-old-files -xzf /libreoffice-core/uno-snapshot.tgz -C $(WORKDIR) && \
+gb_UnoApiTarget_UNOIDLWRITECOMMAND := ([ ! -e $(WORKDIR)/UnoApiTarget/offapi.rdb ] && tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot-for-build.tgz -C $(WORKDIR) && \
+tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot.tgz -C $(WORKDIR) && \
+cp -r $(SRCDIR)/headertarget_updates $(WORKDIR)/UnoApiTarget/offapi && \
 touch $(WORKDIR)/Executable/unoidl-write.run) || true
 gb_UnoApiTarget_UNOIDLCHECKDEPS :=
 gb_UnoApiTarget_UNOIDLCHECKCOMMAND := ([ ! -e $(WORKDIR)/UnoApiTarget/offapi.rdb ] && touch $(WORKDIR)/Executable/unoidl-check.run) || true
@@ -158,8 +159,9 @@ gb_UnoApiHeadersTarget_CPPUMAKERCOMMAND := $(call gb_Executable_get_command,cppu
 ifneq ($(filter arm64 aarch64,$(shell uname -m)),)
 define gb_UnoApiHeadersTarget__command
 	([ ! -d $(WORKDIR)/UnoApiHeadersTarget/offapi ] && \
-	tar --skip-old-files -xzf /libreoffice-core/uno-snapshot-for-build.tgz -C $(WORKDIR) && \
-	tar --skip-old-files -xzf /libreoffice-core/uno-snapshot.tgz -C $(WORKDIR) && \
+	tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot-for-build.tgz -C $(WORKDIR) && \
+	tar --skip-old-files -xzf $(SRCDIR)/uno-snapshot.tgz -C $(WORKDIR) && \
+	cp -r $(SRCDIR)/headertarget_updates $(WORKDIR)/UnoApiTarget/offapi && \
 	touch $(1)) || true;
 
 endef
